@@ -21,17 +21,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +42,10 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+			if err != nil {
+				t.Fatalf("Error while getting a dgraph client: %v", err)
+			}
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
@@ -53,6 +57,7 @@ func TestSystem(t *testing.T) {
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 	t.Run("facets with order", wrap(FacetOrderTest))
+	t.Run("facets on scalar list", wrap(FacetsOnScalarList))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
 	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
@@ -82,6 +87,22 @@ func TestSystem(t *testing.T) {
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 	t.Run("reverse count index", wrap(ReverseCountIndex))
+	t.Run("type predicate check", wrap(TypePredicateCheck))
+	t.Run("internal predicate check", wrap(InternalPredicateCheck))
+	t.Run("infer schema as list", wrap(InferSchemaAsList))
+	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
+	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
+	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
+	t.Run("count index concurrent setdel", wrap(CountIndexConcurrentSetDelUIDList))
+	t.Run("count index concurrent setdel scalar predicate",
+		wrap(CountIndexConcurrentSetDelScalarPredicate))
+	t.Run("count index delete on non list predicate", wrap(CountIndexNonlistPredicateDelete))
+	t.Run("Reverse count index delete", wrap(ReverseCountIndexDelete))
+	t.Run("overwrite uid predicates", wrap(OverwriteUidPredicates))
+	t.Run("overwrite uid predicates across txns", wrap(OverwriteUidPredicatesMultipleTxn))
+	t.Run("overwrite uid predicates reverse index", wrap(OverwriteUidPredicatesReverse))
+	t.Run("delete and query same txn", wrap(DeleteAndQuerySameTxn))
+	t.Run("add and query zero datetime value", wrap(AddAndQueryZeroTimeValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -138,12 +159,18 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 
 	//var respUser User
 	testutil.CompareJSON(t, fmt.Sprintf(`
-{"direct":[
-  {
-    "uid":"%s",
-    "access.to":[
-    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}]}]}
-`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
+	{
+		"direct":[
+			{
+				"uid":"%s",
+				"access.to":{
+					"uid":"%s",
+					"access.to|inherit": false,
+					"access.to|permission": "WRITE"
+				}
+			}
+		]
+	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
@@ -158,9 +185,8 @@ func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{
-		Schema: `xid: string @index(exact) .`,
-	}))
+	op := &api.Operation{Schema: `xid: string @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
@@ -235,7 +261,8 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: [uid] @reverse ."}))
+	op := &api.Operation{Schema: "link: [uid] @reverse ."}
+	require.NoError(t, c.Alter(ctx, op))
 	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte("_:a <link> _:b ."),
@@ -282,7 +309,8 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 
 func NormalizeEdgeCasesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "xid: string @index(exact) ."}))
+	op := &api.Operation{Schema: "xid: string @index(exact) ."}
+	require.NoError(t, c.Alter(ctx, op))
 
 	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -359,9 +387,8 @@ func NormalizeEdgeCasesTest(t *testing.T, c *dgo.Dgraph) {
 func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{
-		Schema: `name: string @index(exact) .`,
-	}))
+	op := &api.Operation{Schema: `name: string @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -394,40 +421,113 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{
-		  "q": [
-		    {
-		      "friend": [
-		        {
-		          "friend|age": 15,
-		          "friend|car": "Tesla",
-		          "name": "Charlie"
-		        },
-		        {
-		          "name": "Bubble"
-		        },
-		        {
-		          "friend|age": 13,
-		          "friend|car": "Honda",
-		          "name": "Bob"
-		        },
-		        {
-		          "friend|age": 20,
-		          "friend|car": "Hyundai",
-		          "name": "Abc"
-		        }
-		      ],
-		      "name": "Alice"
-		    }
-		  ]
-		}`, string(resp.Json))
+	testutil.CompareJSON(t, `
+	{
+		"q":[
+			{
+				"friend":[
+					{
+						"name":"Charlie",
+						"friend|age": 15,
+						"friend|car": "Tesla"
+					},
+					{
+						"name":"Bubble"
+					},
+					{
+						"name":"Bob",
+						"friend|age": 13,
+						"friend|car": "Honda"
+					},
+					{
+						"name":"Abc",
+						"friend|age": 20,
+						"friend|car": "Hyundai"
+					}
+				],
+				"name":"Alice"
+			}
+		]
+	}
+	`, string(resp.Json))
+}
 
+func FacetsOnScalarList(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `
+	name: string @index(exact) .
+	friend: [string] .
+	`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetJson: []byte(`
+			{
+				"name":"Alice",
+				"friend": ["Joshua", "David", "Josh"],
+				"friend|from": {
+					"0": "school",
+					"2": "college"
+				},
+				"friend|age": {
+					"1": 20,
+					"2": 21
+				}
+			}
+		`),
+	})
+	require.NoError(t, err)
+
+	const friendQuery = `
+	{
+		q(func: eq(name, "Alice")) {
+			name
+			friend @facets
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, friendQuery)
+	var res struct {
+		Q []struct {
+			Friend     []string          `json:"friend"`
+			FriendFrom map[string]string `json:"friend|from"`
+			FriendAge  map[string]int    `json:"friend|age"`
+		} `json:"q"`
+	}
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Json, &res))
+	require.Equal(t, 1, len(res.Q))
+	require.Equal(t, 3, len(res.Q[0].Friend))
+	require.Equal(t, 2, len(res.Q[0].FriendFrom))
+	require.Equal(t, 2, len(res.Q[0].FriendAge))
+	// Validate facets.
+	friends := res.Q[0].Friend
+	friendFrom := res.Q[0].FriendFrom
+	friendAge := res.Q[0].FriendAge
+	for i, friend := range friends {
+		_, ok1 := friendFrom[strconv.Itoa(i)]
+		_, ok2 := friendAge[strconv.Itoa(i)]
+		if friend == "David" {
+			require.True(t, !ok1 && ok2)
+		} else if friend == "Josh" {
+			require.True(t, ok1 && ok2)
+		} else if friend == "Joshua" {
+			require.True(t, ok1 && !ok2)
+		} else {
+			require.True(t, false, "FacetsOnScalarList: should not reach here")
+		}
+	}
 }
 
 // Shows fix for issue #1918.
 func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) @lang ."}))
+	op := &api.Operation{Schema: "name: string @index(exact) @lang ."}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -494,14 +594,33 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `
-	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
-		`, string(resp.Json))
+		{
+			"q":[
+				{
+					"name":"Michael",
+					"friend":[
+						{
+							"name":"Charlie"
+						},
+						{
+							"name":"Alice",
+							"friend|since":"2014-01-02T00:00:00Z"
+						},
+						{
+							"name":"Sang Hyun",
+							"friend|since":"2012-01-02T00:00:00Z"
+						}
+					]
+				}
+			]
+		}
+	`, string(resp.Json))
 }
 
 func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "married: bool ."}))
+	op := &api.Operation{Schema: "married: bool ."}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
@@ -514,16 +633,9 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	michael := assigned.Uids["michael"]
 
-	resp, err := c.NewTxn().Query(ctx, `schema{}`)
-	require.NoError(t, err)
-	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
-		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"married","type":"bool"},`+
-		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]`),
-		string(resp.Json))
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `{"predicate":"friend","type":"uid","list":true},` +
+		`{"predicate":"married","type":"bool"},` +
+		`{"predicate":"name","type":"default"}`})
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -536,25 +648,14 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	resp, err = c.NewTxn().Query(ctx, `schema{}`)
-	require.NoError(t, err)
-	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
-		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]`),
-		string(resp.Json))
-}
-
-func asJson(schema string) string {
-	return fmt.Sprintf(`{"schema":%v}`, schema)
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `{"predicate":"friend","type":"uid","list":true},` +
+		`{"predicate":"name","type":"default"}`})
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "text: string @index(fulltext) ."}))
+	op := &api.Operation{Schema: "text: string @index(fulltext) ."}
+	require.NoError(t, c.Alter(ctx, op))
 
 	texts := []string{"bat man", "aqua man", "bat cave", "bat", "man", "aqua", "cave"}
 	var rdfs bytes.Buffer
@@ -622,7 +723,8 @@ func JSONBlankNode(t *testing.T, c *dgo.Dgraph) {
 func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`}))
+	op := &api.Operation{Schema: `pred: string @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	uids, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:blank <pred> "first" .`),
@@ -642,7 +744,8 @@ func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":"first"}]}`, string(resp.Json))
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
+	op = &api.Operation{Schema: `pred: [string] @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":["first"]}]}`, string(resp.Json))
@@ -708,14 +811,16 @@ func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
+	op := &api.Operation{Schema: `pred: [string] @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
-	err = c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
+	op = &api.Operation{Schema: `pred: string @index(exact) .`}
+	err = c.Alter(ctx, op)
 	require.NoError(t, err)
 }
 
@@ -770,7 +875,8 @@ func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @lang .`})
+	op := &api.Operation{Schema: `name: string @index(exact) @lang .`}
+	err := c.Alter(ctx, op)
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -833,9 +939,12 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
+		to: [uid] .
+		name: string .
+
 		type Node {
-			to: uid
-			name: string
+			to
+			name
 		}
 `
 
@@ -917,7 +1026,9 @@ func testTimeValue(t *testing.T, c *dgo.Dgraph, timeBytes []byte) {
 
 	q := `query test($id: string) {
 		  me(func: uid($id)) {
-			friend @facets
+			friend @facets {
+				uid
+			}
 		  }
 		}`
 
@@ -981,9 +1092,10 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `name: string @index(hash) .`,
-	})))
+	}
+	require.NoError(t, (c.Alter(ctx, op)))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1016,12 +1128,13 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
 			loc: [geo] @index(geo) .
 		`,
-	}))
+	}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1038,14 +1151,14 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1063,12 +1176,13 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
 			per: [string] @index(trigram) .
 		`,
-	}))
+	}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1085,14 +1199,14 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `{
 		q(func: regexp(per, /^rea.*$/)) {
 			name
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1110,12 +1224,13 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
 			per: [string] @index(trigram) .
 		`,
-	}))
+	}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1132,7 +1247,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			_:c <per> "write" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
 		query search($term: string){
@@ -1140,7 +1255,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 				name
 			}
 		}`, map[string]string{"$term": "/^rea.*$/"})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1158,11 +1273,8 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
-		Schema: `
-			name: string @index(exact) .
-		`,
-	}))
+	op := &api.Operation{Schema: `name: string @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1177,7 +1289,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			_:a <friend> _:b  .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	a := au.Uids["a"]
 	b := au.Uids["b"]
@@ -1190,7 +1302,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			name
 		}
 	}`, map[string]string{"$alice": a})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1211,7 +1323,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$bob": b})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1238,7 +1350,7 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 			}
 		}
 	}`, map[string]string{"$friends": friends})
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 	{
 		"q": [
@@ -1262,11 +1374,8 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 func MathGe(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
-		Schema: `
-			name: string @index(exact) .
-		`,
-	}))
+	op := &api.Operation{Schema: `name: string @index(exact) .`}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1278,7 +1387,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			_:c <name> "Foobar" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	// Try GraphQL variable with filter at root.
 	resp, err := c.NewTxn().Query(context.Background(), `
@@ -1288,7 +1397,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 			hasChildren: math(containerCount >= 1)
 		}
 	}`)
-	check(t, err)
+	require.NoError(t, err)
 	testutil.CompareJSON(t, `
 		{
 		  "q": [
@@ -1317,7 +1426,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d2 <start> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	var ids []string
 	for key, uid := range assigned.Uids {
@@ -1336,11 +1445,11 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			me(func: has(end)) { uid }
 			you(func: has(end)) { count(uid) }
 		}`)
-		check(t, err)
+		require.NoError(t, err)
 		t.Logf("resp: %s\n", resp.GetJson())
 		m := make(map[string][]U)
 		err = json.Unmarshal(resp.GetJson(), &m)
-		check(t, err)
+		require.NoError(t, err)
 		uids := m["me"]
 		var result []string
 		for _, uid := range uids {
@@ -1365,7 +1474,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	`, ids[len(ids)-1]))
 	t.Logf("deleteMu: %+v\n", deleteMu)
 	_, err = txn.Mutate(ctx, deleteMu)
-	check(t, err)
+	require.NoError(t, err)
 
 	txn = c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1385,7 +1494,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:d <end> "" .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, 1, len(assigned.Uids))
 	for _, uid := range assigned.Uids {
@@ -1404,11 +1513,8 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, c.Alter(ctx, &api.Operation{
-		Schema: `
-			follow: [uid] @reverse .
-		`,
-	}))
+	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
+	require.NoError(t, c.Alter(ctx, op))
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -1422,7 +1528,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 			_:bob <follow> _:carol .
 		`),
 	})
-	check(t, err)
+	require.NoError(t, err)
 
 	type F struct {
 		Name string `json:"name"`
@@ -1434,12 +1540,12 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 		fwd(func: has(follow)) { name }
 		rev(func: has(~follow)) { name }
 		}`)
-	check(t, err)
+	require.NoError(t, err)
 
 	t.Logf("resp: %s\n", resp.GetJson())
 	m := make(map[string][]F)
 	err = json.Unmarshal(resp.GetJson(), &m)
-	check(t, err)
+	require.NoError(t, err)
 
 	fwds := m["fwd"]
 	revs := m["rev"]
@@ -1507,12 +1613,13 @@ func RestoreReservedPreds(t *testing.T, c *dgo.Dgraph) {
 func DropData(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			name: string @index(term) .
 			follow: [uid] @reverse .
 		`,
-	}))
+	}
+	require.NoError(t, c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1565,8 +1672,10 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
+			name: string .
+
 			type Person {
-				name: string
+				name
 			}
 		`,
 	}))
@@ -1575,8 +1684,8 @@ func DropType(t *testing.T, c *dgo.Dgraph) {
 	query := `schema(type: Person) {}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"types":[{"name":"Person",
-		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+	testutil.CompareJSON(t, `{"types":[{"name":"Person", "fields":[{"name":"name"}]}]}`,
+		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		DropOp:    api.Operation_TYPE,
@@ -1596,6 +1705,276 @@ func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DropValue must not be empty")
+}
+
+func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	maxUID := 100
+	txnTotal := uint64(1000)
+	txnCur := uint64(0)
+
+	insertedMap := make(map[int]struct{})
+	var l sync.Mutex
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := 2 + int(r.Int31n(int32(maxUID))) // 1 id subject id.
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to inserted uid with err: %s", err)
+				}
+				if err == nil { // Successful insertion.
+					l.Lock()
+					if _, ok := insertedMap[id]; !ok {
+						insertedMap[id] = struct{}{}
+					}
+					l.Unlock()
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q := fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, len(insertedMap))
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Now start deleting UIDs.
+	var insertedUids []int
+	for uid := range insertedMap {
+		insertedUids = append(insertedUids, uid)
+	}
+	// Avoid deleting at least one uid. There might be a scenario where all inserted uids
+	// are deleted and we are querying for 0 count, which results in error.
+	insertedCount := len(insertedMap)
+	insertedUids = insertedUids[:len(insertedUids)-1]
+	deletedMap := make(map[int]struct{})
+	txnCur = uint64(0)
+
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := insertedUids[r.Intn(len(insertedUids))]
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <0x%x> .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to delete uid with err: %s", err)
+				}
+				if err == nil { // Successful deletion.
+					l.Lock()
+					if _, ok := deletedMap[id]; !ok {
+						deletedMap[id] = struct{}{}
+					}
+					l.Unlock()
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q = fmt.Sprintf(`{
+		me(func: eq(count(friend), %d)) {
+			uid
+		}
+	}`, insertedCount-len(deletedMap))
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Delete all friends now.
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<0x1> <friend> * .")),
+	}
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "mutation to delete all friends should have been succeeded")
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[]}`, string(resp.GetJson()))
+}
+
+func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `name: string @index(exact) @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	txnTotal := uint64(100)
+	txnCur := uint64(0)
+
+	numRoutines := 10
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				if atomic.AddUint64(&txnCur, 1) > txnTotal {
+					break
+				}
+				id := int(r.Int31n(int32(10000)))
+				mu := &api.Mutation{
+					CommitNow: true,
+				}
+
+				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <name> \"name%d\" .", id))
+				_, err := dg.NewTxn().Mutate(context.Background(), mu)
+				if err != nil && err != dgo.ErrAborted {
+					require.Fail(t, "unable to inserted uid with err: %s", err)
+				}
+			}
+		}(c, &wg)
+	}
+	wg.Wait()
+
+	q := `{
+		q(func: eq(count(name), 1)) {
+			name
+		}
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	var s struct {
+		Q []struct {
+			Name string `json:"name"`
+		} `json:q`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &s))
+	require.Equal(t, 1, len(s.Q))
+	require.Contains(t, s.Q[0].Name, "name")
+
+	// Now delete the inserted name.
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<0x1> <name> \"%s\" .", s.Q[0].Name)),
+	}
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "mutation to delete name should have been succeeded")
+
+	// Querying should return 0 uids.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"q":[]}`, string(resp.GetJson()))
+}
+
+func CountIndexNonlistPredicateDelete(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `name: string @index(exact) @count .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	// Insert single record for uid 0x1.
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <name> \"name1\" ."),
+	}
+
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to insert name for first time")
+
+	// query it using count index.
+	q := `{
+		q(func: eq(count(name), 1)) {
+			uid
+		}
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+
+	// Delete by some other name.
+	mu = &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <name> \"othername\" ."),
+	}
+
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to delete other name")
+
+	// Query it using count index.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
+}
+
+func ReverseCountIndexDelete(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `friend: [uid] @count @reverse .`
+
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	mu := &api.Mutation{
+		CommitNow: true,
+	}
+	mu.SetNquads = []byte(`
+	<0x1> <friend> <0x2> .
+	<0x1> <friend> <0x3> .`)
+	_, err = c.NewTxn().Mutate(ctx, mu)
+	require.NoError(t, err, "unable to insert friends")
+
+	q := `{
+		me(func: eq(count(~friend), 1)) {
+			uid
+		}
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x2"}, {"uid": "0x3"}]}`, string(resp.GetJson()))
+
+	// Delete one friend for <0x1>.
+	mu = &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <friend> <0x2> ."),
+	}
+	_, err = c.NewTxn().Mutate(ctx, mu)
+	require.NoError(t, err, "unable to delete friend")
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err, "the query should have succeeded")
+	testutil.CompareJSON(t, `{"me":[{"uid": "0x3"}]}`, string(resp.GetJson()))
+
 }
 
 func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
@@ -1634,7 +2013,7 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 			mu.SetJson = []byte(`{"uid": "_:b", "friend": [{"uid": "` + id + `"}]}`)
 			for i := 0; i < 10; i++ {
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err == nil || err != y.ErrAborted {
+				if err == nil || err != dgo.ErrAborted {
 					break
 				}
 			}
@@ -1653,4 +2032,436 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
 	require.NoError(t, err, "the query should have succeeded")
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
+}
+
+func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
+	// Reject schema updates if the types have missing predicates.
+
+	// Update is rejected because name is not in the schema.
+	op := &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+	}`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Update is accepted because name is not in the schema but is present in the same
+	// update.
+	op = &api.Operation{}
+	op.Schema = `
+	name: string .
+
+	type Person {
+		name
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	// Type with reverse predicate is not accepted if the original predicate does not exist.
+	op = &api.Operation{}
+	op.Schema = `
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema does not contain a matching predicate for field")
+
+	// Type with reverse predicate is accepted if the original predicate exists.
+	op = &api.Operation{}
+	op.Schema = `
+	parent: [uid] @reverse .
+
+	type Person {
+		name
+		<~parent>
+	}`
+	ctx = context.Background()
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
+}
+
+func InternalPredicateCheck(t *testing.T, c *dgo.Dgraph) {
+	// Schema update is rejected because uid is reserved for internal use.
+	op := &api.Operation{}
+	op.Schema = `uid: string .`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:bob <uid> "bobId" .`),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
+}
+
+func InferSchemaAsList(t *testing.T, c *dgo.Dgraph) {
+	txn := c.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:bob <name> "Bob" .
+		_:bob <name> "Bob Marley" .
+		_:alice <nickname> "Alice" .
+		_:carol <nickname> "Carol" .`),
+	})
+
+	require.NoError(t, err)
+	query := `schema(preds: [name, nickname]) {
+		list
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"schema": [{"predicate":"name", "list":true},
+		{"predicate":"nickname"}]}`, string(resp.Json))
+}
+
+func InferSchemaAsListJSON(t *testing.T, c *dgo.Dgraph) {
+	txn := c.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetJson: []byte(`
+			[{"name": ["Bob","Bob Marley"]}, {"nickname": "Alice"}, {"nickname": "Carol"}]`),
+	})
+
+	require.NoError(t, err)
+	query := `schema(preds: [name, nickname]) {
+		list
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"schema": [{"predicate":"name", "list":true},
+		{"predicate":"nickname"}]}`, string(resp.Json))
+}
+
+func ForceSchemaAsListJSON(t *testing.T, c *dgo.Dgraph) {
+	txn := c.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetJson: []byte(`
+			[{"name": ["Bob"]}, {"nickname": "Alice"}, {"nickname": "Carol"}]`),
+	})
+
+	require.NoError(t, err)
+	query := `schema(preds: [name, nickname]) {
+		list
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"schema": [{"predicate":"name", "list":true},
+		{"predicate":"nickname"}]}`, string(resp.Json))
+}
+
+func ForceSchemaAsSingleJSON(t *testing.T, c *dgo.Dgraph) {
+	txn := c.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetJson: []byte(`
+			[{"person": {"name": "Bob"}}, {"nickname": "Alice"}, {"nickname": "Carol"}]`),
+	})
+
+	require.NoError(t, err)
+	query := `schema(preds: [person, nickname]) {
+		list
+	}`
+	resp, err := c.NewReadOnlyTxn().Query(context.Background(), query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
+		string(resp.Json))
+}
+
+func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	q := `{
+  me(func: eq(name, Alice)) {
+	name
+	best_friend {
+		name
+	}
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+		string(resp.GetJson()))
+
+	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
+	upsertMutation := &api.Mutation{
+		SetNquads: []byte(`
+		_:carol <name> "Carol" .
+		uid(alice) <best_friend> _:carol .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
+		string(resp.GetJson()))
+}
+
+func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid @reverse .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	q := `{
+  me(func: eq(name, Alice)) {
+	name
+	best_friend {
+		name
+	}
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+		string(resp.GetJson()))
+
+	reverseQuery := `{
+		reverse(func: has(~best_friend)) {
+			name
+			~best_friend {
+				name
+			}
+		}}`
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
+	upsertMutation := &api.Mutation{
+		SetNquads: []byte(`
+		_:carol <name> "Carol" .
+		uid(alice) <best_friend> _:carol .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
+	// Delete the triples and verify the reverse edge is gone.
+	upsertQuery = `query {
+		alice as var(func: eq(name, Alice))
+		carol as var(func: eq(name, Carol)) }`
+	upsertMutation = &api.Mutation{
+		DelNquads: []byte(`
+		uid(alice) <best_friend> uid(carol) .`),
+	}
+	req = &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[]}`,
+		string(resp.GetJson()))
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+}
+
+func OverwriteUidPredicatesMultipleTxn(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	resp, err := c.NewTxn().Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	alice := resp.Uids["alice"]
+	bob := resp.Uids["bob"]
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		DelNquads: []byte(fmt.Sprintf("<%s> <best_friend> <%s> .", alice, bob)),
+	})
+	require.NoError(t, err)
+
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf(`<%s> <best_friend> _:carl .
+		_:carl <name> "Carl" .`, alice)),
+	})
+	require.NoError(t, err)
+	err = txn.Commit(context.Background())
+	require.NoError(t, err)
+
+	query := fmt.Sprintf(`{
+		me(func:uid(%s)) {
+			name
+			best_friend {
+				name
+			}
+		}
+	}`, alice)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carl"}}]}`,
+		string(resp.GetJson()))
+}
+
+func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
+	// Set the schema.
+	ctx := context.Background()
+	op := &api.Operation{
+		Schema: `name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	// Add data and commit the transaction.
+	txn := c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .`),
+	})
+	require.NoError(t, err)
+
+	// Create a new transaction. Delete data and verify queries using the same transaction
+	// see the change.
+	upsertQuery := `query { bob as var(func: eq(name, Bob)) }`
+	upsertMutation := &api.Mutation{
+		DelNquads: []byte(`
+		uid(bob) <name> * .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+	}
+	txn2 := c.NewTxn()
+	_, err = txn2.Do(ctx, req)
+	require.NoError(t, err)
+
+	q := `{ me(func: has(name)) { name } }`
+	resp, err := txn2.Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+	require.NoError(t, txn2.Commit(ctx))
+
+	// Verify that changes are reflected after the transaction is committed.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
+		string(resp.GetJson()))
+}
+
+func AddAndQueryZeroTimeValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `val: datetime .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:value <val> "0000-01-01T00:00:00Z" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const datetimeQuery = `
+	{
+		q(func: has(val)) {
+			val
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, datetimeQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{
+		"q": [
+		  {
+			"val": "0000-01-01T00:00:00Z"
+		  }
+		]
+	  }`, string(resp.Json))
 }

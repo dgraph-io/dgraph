@@ -17,15 +17,15 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -56,15 +56,18 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 		fields = s.Fields
 	} else {
 		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
-			"lang"}
+			"lang", "noconflict"}
 	}
 
+	myGid := groups().groupId()
 	for _, attr := range predicates {
 		// This can happen after a predicate is moved. We don't delete predicate from schema state
 		// immediately. So lets ignore this predicate.
-		if servesTablet, err := groups().ServesTabletReadOnly(attr); err != nil {
+		gid, err := groups().BelongsToReadOnly(attr, 0)
+		if err != nil {
 			return nil, err
-		} else if !servesTablet {
+		}
+		if myGid != gid {
 			continue
 		}
 
@@ -85,26 +88,29 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 		return nil
 	}
 	schemaNode.Predicate = attr
+	ctx := context.Background()
 	for _, field := range fields {
 		switch field {
 		case "type":
 			schemaNode.Type = typ.Name()
 		case "index":
-			schemaNode.Index = schema.State().IsIndexed(attr)
+			schemaNode.Index = schema.State().IsIndexed(ctx, attr)
 		case "tokenizer":
-			if schema.State().IsIndexed(attr) {
-				schemaNode.Tokenizer = schema.State().TokenizerNames(attr)
+			if schema.State().IsIndexed(ctx, attr) {
+				schemaNode.Tokenizer = schema.State().TokenizerNames(ctx, attr)
 			}
 		case "reverse":
-			schemaNode.Reverse = schema.State().IsReversed(attr)
+			schemaNode.Reverse = schema.State().IsReversed(ctx, attr)
 		case "count":
-			schemaNode.Count = schema.State().HasCount(attr)
+			schemaNode.Count = schema.State().HasCount(ctx, attr)
 		case "list":
 			schemaNode.List = schema.State().IsList(attr)
 		case "upsert":
 			schemaNode.Upsert = schema.State().HasUpsert(attr)
 		case "lang":
 			schemaNode.Lang = schema.State().HasLang(attr)
+		case "noconflict":
+			schemaNode.NoConflict = schema.State().HasNoConflict(attr)
 		default:
 			//pass
 		}
@@ -116,7 +122,7 @@ func populateSchema(attr string, fields []string) *pb.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid, err := groups().BelongsToReadOnly(attr)
+		gid, err := groups().BelongsToReadOnly(attr, 0)
 		if err != nil {
 			return err
 		}
@@ -181,9 +187,8 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) (
 	ctx, span := otrace.StartSpan(ctx, "worker.GetSchemaOverNetwork")
 	defer span.End()
 
-	if err := x.HealthCheck(); err != nil {
-		return nil, err
-	}
+	// There was a health check here which is not needed. The health check should be done by the
+	// receiver of the request, not the sender.
 
 	if len(schema.Predicates) == 0 && len(schema.Types) > 0 {
 		return nil, nil

@@ -20,8 +20,7 @@ import "sync"
 
 // Options contains options for the postings package.
 type Options struct {
-	Mu             sync.Mutex
-	AllottedMemory float64
+	sync.Mutex
 
 	CommitFraction float64
 }

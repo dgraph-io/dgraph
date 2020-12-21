@@ -56,8 +56,7 @@ func (i Item) Errorf(format string, args ...interface{}) error {
 }
 
 func (i Item) String() string {
-	switch i.Typ {
-	case ItemEOF:
+	if i.Typ == ItemEOF {
 		return "EOF"
 	}
 	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.line, i.column)
@@ -376,10 +375,10 @@ const (
 	quote = '"'
 )
 
-// IsEscChar returns true if the run is an escape character (ECHAR ::= '\' [vtbnrf"'\])
+// IsEscChar returns true if the run is an escape character (ECHAR ::= '\' [uvtbnrf"'\])
 func (l *Lexer) IsEscChar(r rune) bool {
 	switch r {
-	case 'v', 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+	case 'u', 'v', 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
 		return true
 	}
 	return false

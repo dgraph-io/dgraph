@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -27,9 +28,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -38,8 +39,32 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var raftIndex uint64
 var ts uint64
+
+func commitTs(startTs uint64) uint64 {
+	commit := timestamp()
+	od := &pb.OracleDelta{
+		MaxAssigned: atomic.LoadUint64(&ts),
+	}
+	od.Txns = append(od.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
+	posting.Oracle().ProcessDelta(od)
+	return commit
+}
+
+func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	startTs := timestamp()
+	txn := posting.Oracle().RegisterStartTs(startTs)
+	l = txn.Store(l)
+	err := l.AddMutationWithIndex(context.Background(), edge, txn)
+	require.NoError(t, err)
+
+	commit := commitTs(startTs)
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, commit))
+	require.NoError(t, writer.Flush())
+}
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
@@ -67,7 +92,7 @@ func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	require.NoError(t, err)
 }
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.GetNoStore(key)
+	l, err := posting.GetNoStore(key, math.MaxUint64)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
@@ -133,19 +158,17 @@ func initTest(t *testing.T, schemaStr string) {
 }
 
 func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
-	dg := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	testutil.DropAll(t, dg)
 
-	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
+	err = dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
 	populateClusterGraph(t, dg)
 
 	return dg
-}
-
-func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
-	qs := queryState{cache: nil}
-	return qs.helpProcessTask(context.Background(), query, gid)
 }
 
 func TestProcessTask(t *testing.T) {
@@ -178,29 +201,6 @@ func TestProcessTask(t *testing.T) {
 		}`,
 		string(resp.Json),
 	)
-}
-
-// newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
-	x.AssertTrue(uids == nil || srcFunc == nil)
-	// TODO: Change later, hacky way to make the tests work
-	var srcFun *pb.SrcFunction
-	if len(srcFunc) > 0 {
-		srcFun = new(pb.SrcFunction)
-		srcFun.Name = srcFunc[0]
-		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
-	}
-	q := &pb.Query{
-		UidList: &pb.List{Uids: uids},
-		SrcFunc: srcFun,
-		Attr:    attr,
-		ReadTs:  timestamp(),
-	}
-	// It will have either nothing or attr, lang
-	if len(srcFunc) > 0 && srcFunc[1] != "" {
-		q.Langs = []string{srcFunc[1]}
-	}
-	return q
 }
 
 func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*api.Response, error) {
@@ -362,7 +362,6 @@ func TestProcessTaskIndex(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
-	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
@@ -374,6 +373,9 @@ func TestMain(m *testing.M) {
 	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
 	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
 	gr.tablets[""] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
@@ -383,7 +385,8 @@ func TestMain(m *testing.M) {
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
-	posting.Init(ps)
+	// Not using posting list cache
+	posting.Init(ps, 0)
 	Init(ps)
 
 	os.Exit(m.Run())

@@ -1,0 +1,16 @@
+type User {
+	id: ID!
+	name: String!
+}
+
+input UserInput {
+	name: String!
+}
+
+type Mutation {
+	addMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "POST",
+		body: "{ data: $input }"
+	})
+}

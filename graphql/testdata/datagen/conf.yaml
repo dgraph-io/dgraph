@@ -1,0 +1,12 @@
+graphqlServerUrl: http://localhost:8080/graphql
+authorizationHeader: Authorization
+jwt: <auth-jwt-here>
+restaurantDataFilePath: data/file5.json
+# 0 means no timeout
+httpTimeout: 0
+maxErrorsInRestaurantAddition: 10
+maxDishes4AnyRestaurant: 3
+#data:
+#  cities: cities.json
+#  restaurants: restaurants.json
+#  dishes: dish.json

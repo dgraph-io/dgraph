@@ -24,6 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -41,7 +43,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range result.Preds {
-		State().Set(update.Predicate, *update)
+		State().Set(update.Predicate, update)
 	}
 	return nil
 }
@@ -69,6 +71,8 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		schema.Count = true
 	case "upsert":
 		schema.Upsert = true
+	case "noconflict":
+		schema.NoConflict = true
 	case "lang":
 		if t != types.StringID || schema.List {
 			return next.Errorf("@lang directive can only be specified for string type."+
@@ -335,7 +339,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 			typeUpdate.Fields = fields
 			return typeUpdate, nil
 		case itemText:
-			field, err := parseTypeField(it)
+			field, err := parseTypeField(it, typeUpdate.TypeName)
 			if err != nil {
 				return nil, err
 			}
@@ -349,11 +353,19 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	return nil, errors.Errorf("Shouldn't reach here.")
 }
 
-func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
+func parseTypeField(it *lex.ItemIterator, typeName string) (*pb.SchemaUpdate, error) {
 	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
 	var list bool
-
 	it.Next()
+
+	// Simplified type definitions only require the field name. If a new line is found,
+	// proceed to the next field in the type.
+	if it.Item().Typ == itemNewLine {
+		return field, nil
+	}
+
+	// For the sake of backwards-compatibility, process type definitions in the old format,
+	// but ignore the information after the colon.
 	if it.Item().Typ != itemColon {
 		return nil, it.Item().Errorf("Missing colon in type declaration. Got %v", it.Item().Val)
 	}
@@ -368,14 +380,9 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 		return nil, it.Item().Errorf("Missing field type in type declaration. Got %v",
 			it.Item().Val)
 	}
-	field.ValueType = getType(it.Item().Val)
-	if field.ValueType == pb.Posting_OBJECT {
-		field.ObjectTypeName = it.Item().Val
-	}
 
 	it.Next()
 	if it.Item().Typ == itemExclamationMark {
-		field.NonNullable = true
 		it.Next()
 	}
 
@@ -383,29 +390,21 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 		if it.Item().Typ != itemRightSquare {
 			return nil, it.Item().Errorf("Expected matching square bracket. Got %v", it.Item().Val)
 		}
-		field.List = true
 		it.Next()
 
 		if it.Item().Typ == itemExclamationMark {
-			field.NonNullableList = true
 			it.Next()
 		}
 	}
 
 	if it.Item().Typ != itemNewLine {
-		return nil, it.Item().Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Expected new line after field declaration. Got %v",
+			it.Item().Val)
 	}
 
+	glog.Warningf("Type declaration for type %s includes deprecated information about field type "+
+		"for field %s which will be ignored.", typeName, field.Predicate)
 	return field, nil
-}
-
-func getType(typeName string) pb.Posting_ValType {
-	typ, ok := types.TypeForName(strings.ToLower(typeName))
-	if ok {
-		return pb.Posting_ValType(typ)
-	}
-
-	return pb.Posting_OBJECT
 }
 
 // ParsedSchema represents the parsed schema and type updates.

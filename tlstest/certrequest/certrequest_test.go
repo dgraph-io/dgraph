@@ -4,15 +4,18 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
-	dg := testutil.DgraphClient(testutil.SockAddr)
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.Error(t, err, "The authentication handshake should have failed")
 }
 
@@ -30,7 +33,7 @@ func TestAccessWithCaCert(t *testing.T) {
 func TestCurlAccessWithCaCert(t *testing.T) {
 	// curl over plaintext should fail
 	curlPlainTextArgs := []string{
-		"https://localhost:8180/alter",
+		"https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlPlainTextArgs, &testutil.CurlFailureConfig{
@@ -39,7 +42,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 	})
 
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

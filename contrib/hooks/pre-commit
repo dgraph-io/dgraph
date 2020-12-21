@@ -1,7 +1,0 @@
-#!/bin/bash
-
-/bin/bash .git/hooks/govet.sh
-echo
-/bin/bash .git/hooks/golint.sh
-
-

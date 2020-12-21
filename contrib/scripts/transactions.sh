@@ -1,6 +1,6 @@
 #!/bin/bash
 
-basedir=$GOPATH/src/github.com/dgraph-io/dgraph
+basedir=$(dirname "${BASH_SOURCE[0]}")/../..
 contrib=$basedir/contrib
 set -e
 
@@ -27,3 +27,5 @@ pushd $contrib/integration/mutates
 go build . && ./mutates --add --alpha=localhost:9180
 ./mutates --alpha=localhost:9180
 popd
+
+stopCluster

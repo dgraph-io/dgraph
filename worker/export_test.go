@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -33,41 +35,38 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	gqlSchema = "type Example { name: String }"
 )
 
 var personType = &pb.TypeUpdate{
 	TypeName: "Person",
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate:   "name",
-			ValueType:   pb.Posting_STRING,
-			NonNullable: true,
+			Predicate: "name",
 		},
 		{
-			Predicate:       "friend",
-			ValueType:       pb.Posting_UID,
-			List:            true,
-			NonNullable:     true,
-			NonNullableList: true,
+			Predicate: "friend",
 		},
 		{
-			Predicate:      "friend_not_served",
-			ValueType:      pb.Posting_OBJECT,
-			List:           true,
-			ObjectTypeName: "Person",
+			Predicate: "~friend",
+		},
+		{
+			Predicate: "friend_not_served",
 		},
 	},
 }
@@ -85,7 +84,13 @@ func populateGraphExport(t *testing.T) {
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
+		`<7> <name> "node_to_delete" .`,
+		fmt.Sprintf("<8> <dgraph.graphql.schema> \"%s\" .", gqlSchema),
+		`<8> <dgraph.graphql.xid> "dgraph.graphql.schema" .`,
+		`<8> <dgraph.type> "dgraph.graphql" .`,
 	}
+	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
+	edgeToDelete := `<7> <name> "node_to_delete" .`
 	idMap := map[string]uint64{
 		"1": 1,
 		"2": 2,
@@ -93,10 +98,11 @@ func populateGraphExport(t *testing.T) {
 		"4": 4,
 		"5": 5,
 		"6": 6,
+		"7": 7,
 	}
 
 	l := &lex.Lexer{}
-	for _, edge := range rdfEdges {
+	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
@@ -104,12 +110,21 @@ func populateGraphExport(t *testing.T) {
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
-		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		if set {
+			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		} else {
+			delEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		}
 	}
+
+	for _, edge := range rdfEdges {
+		processEdge(edge, true)
+	}
+	processEdge(edgeToDelete, false)
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
-	schema.ParseBytes([]byte(schemaStr), 1)
+	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
 	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
@@ -118,41 +133,47 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	require.NoError(t, err)
 	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	err = txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	txn.Set(x.SchemaKey("friend_not_served"), val)
+	require.NoError(t, txn.Set(x.SchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(x.SchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.TypeKey("Person"), val)
-	require.NoError(t, err)
+	require.NoError(t, txn.Set(x.TypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	populateGraphExport(t)
+
+	// Drop age predicate after populating DB.
+	// age should not exist in the exported schema.
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	require.NoError(t, txn.Delete(x.SchemaKey("age")))
+	require.NoError(t, txn.CommitAt(1, nil))
 }
 
-func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles []string) {
+func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles, gqlSchema []string) {
 	searchDir := bdir
 	err := filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() {
 			return nil
 		}
 		if path != bdir {
-			if strings.Contains(path, "schema") {
+			switch {
+			case strings.Contains(path, "gql_schema"):
+				gqlSchema = append(gqlSchema, path)
+			case strings.Contains(path, "schema"):
 				schemaFiles = append(schemaFiles, path)
-			} else {
+			default:
 				dataFiles = append(dataFiles, path)
 			}
 		}
@@ -188,9 +209,25 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.True(t, proto.Equal(result.Types[0], personType))
 }
 
+func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
+	require.Equal(t, 1, len(gqlSchemaFiles))
+	file := gqlSchemaFiles[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	require.Equal(t, gqlSchema, buf.String())
+}
+
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, `
+		name: string @index(exact) .
+		age: int .
+		`)
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -203,10 +240,11 @@ func TestExportRdf(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
+	files, err := export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -281,11 +319,12 @@ func TestExportRdf(t *testing.T) {
 	require.Equal(t, 9, count)
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, "name: string @index(exact) .")
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -299,10 +338,11 @@ func TestExportJson(t *testing.T) {
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
 	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json"}
-	err = export(context.Background(), &req)
+	files, err := export(context.Background(), &req)
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
+	require.Equal(t, len(files), len(fileList)+len(schemaFileList)+len(gqlSchema))
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -326,29 +366,70 @@ func TestExportJson(t *testing.T) {
 `
 	gotJson, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
-	require.JSONEq(t, wantJson, string(gotJson))
+	var expected interface{}
+	err = json.Unmarshal([]byte(wantJson), &expected)
+	require.NoError(t, err)
+
+	var actual interface{}
+	err = json.Unmarshal(gotJson, &actual)
+	require.NoError(t, err)
+	require.ElementsMatch(t, expected, actual)
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
+
+const exportRequest = `mutation export($format: String!) {
+	export(input: {format: $format}) {
+		exportedFiles
+		response {
+			code
+		}
+	}
+}`
 
 func TestExportFormat(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	err = testutil.CheckForGraphQLEndpointToReady(t)
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
+	params := testutil.GraphQLParams{
+		Query:     exportRequest,
+		Variables: map[string]interface{}{"format": "json"},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.NotEqual(t, resp.StatusCode, http.StatusOK)
+	testutil.RequireNoGraphQLErrors(t, resp)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
+	params.Variables["format"] = "rdf"
+	b, err = json.Marshal(params)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	testutil.RequireNoGraphQLErrors(t, resp)
+
+	params.Variables["format"] = "xml"
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result *testutil.GraphQLResponse
+	err = json.Unmarshal(b, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Errors)
 }
 
 type skv struct {
@@ -468,7 +549,7 @@ func TestToSchema(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		list, err := toSchema(testCase.skv.attr, testCase.skv.schema)
+		list, err := toSchema(testCase.skv.attr, &testCase.skv.schema)
 		require.NoError(t, err)
 		require.Equal(t, testCase.expected, string(list.Kv[0].Value))
 	}

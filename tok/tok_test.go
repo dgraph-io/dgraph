@@ -66,7 +66,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := BuildTokens("Stemming works!", GetLangTokenizer(tokenizer, "en"))
+	tokens, err := BuildTokens("Stemming works!", GetTokenizerForLang(tokenizer, "en"))
 	require.Nil(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -134,7 +134,7 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := BuildTokens("Katzen und Auffassung und Auffassung", GetLangTokenizer(tokenizer, "de"))
+	tokens, err := BuildTokens("Katzen und Auffassung und Auffassung", GetTokenizerForLang(tokenizer, "de"))
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -152,6 +152,18 @@ func TestTermTokenizer(t *testing.T) {
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
+
+	// TEMPORARILY COMMENTED OUT AS THIS IS THE IDEAL BEHAVIOUR. WE ARE NOT THERE YET.
+	/*
+		tokens, err = BuildTokens("Barack Obama made Obamacare", tokenizer)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(tokens))
+		require.Equal(t, []string{
+			encodeToken("barack obama", id),
+			encodeToken("made", id),
+			encodeToken("obamacare", id),
+		})
+	*/
 }
 
 func TestTrigramTokenizer(t *testing.T) {
@@ -216,7 +228,7 @@ func TestFullTextTokenizerCJKChinese(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("他是一个薪水很高的商人", GetLangTokenizer(tokenizer, "zh"))
+	got, err := BuildTokens("他是一个薪水很高的商人", GetTokenizerForLang(tokenizer, "zh"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()
@@ -241,7 +253,7 @@ func TestFullTextTokenizerCJKKorean(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("그는 큰 급여를 가진 사업가입니다.", GetLangTokenizer(tokenizer, "ko"))
+	got, err := BuildTokens("그는 큰 급여를 가진 사업가입니다.", GetTokenizerForLang(tokenizer, "ko"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()
@@ -261,7 +273,7 @@ func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	got, err := BuildTokens("彼は大きな給与を持つ実業家です", GetLangTokenizer(tokenizer, "ja"))
+	got, err := BuildTokens("彼は大きな給与を持つ実業家です", GetTokenizerForLang(tokenizer, "ja"))
 	require.NoError(t, err)
 
 	id := tokenizer.Identifier()
@@ -285,6 +297,24 @@ func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 	checkSortedAndUnique(t, got)
 }
 
+func TestTermTokenizeCJKChinese(t *testing.T) {
+	tokenizer, ok := GetTokenizer("term")
+	require.True(t, ok)
+	require.NotNil(t, tokenizer)
+
+	got, err := BuildTokens("第一轮 第二轮 第一轮", GetTokenizerForLang(tokenizer, "zh"))
+	require.NoError(t, err)
+
+	id := tokenizer.Identifier()
+	wantToks := []string{
+		encodeToken("第一轮", id),
+		encodeToken("第二轮", id),
+	}
+	require.Equal(t, wantToks, got)
+	checkSortedAndUnique(t, got)
+
+}
+
 func checkSortedAndUnique(t *testing.T, tokens []string) {
 	if !sort.StringsAreSorted(tokens) {
 		t.Error("tokens were not sorted")
@@ -298,4 +328,8 @@ func checkSortedAndUnique(t *testing.T, tokens []string) {
 		}
 		set[tok] = struct{}{}
 	}
+}
+
+func BenchmarkTermTokenizer(b *testing.B) {
+	b.Skip() // tmp
 }

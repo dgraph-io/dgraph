@@ -18,6 +18,7 @@ package conn
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -25,13 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
-	"golang.org/x/net/context"
 )
 
 func (n *Node) run(wg *sync.WaitGroup) {
@@ -43,7 +42,7 @@ func (n *Node) run(wg *sync.WaitGroup) {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
@@ -65,12 +64,10 @@ func TestProposal(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.Open(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	store := raftwal.Init(db, 0, 0)
+	store := raftwal.Init(dir)
 
 	rc := &pb.RaftContext{Id: 1}
-	n := NewNode(rc, store)
+	n := NewNode(rc, store, nil)
 
 	peers := []raft.Peer{{ID: n.Id}}
 	n.SetRaft(raft.StartNode(n.Cfg, peers))

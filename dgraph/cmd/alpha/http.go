@@ -21,18 +21,22 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -40,7 +44,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
-
 	"google.golang.org/grpc/metadata"
 )
 
@@ -143,20 +146,6 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	return durationValue, nil
 }
 
-// Write response body, transparently compressing if necessary.
-func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
-	var out io.Writer = w
-
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
-	return out.Write(b)
-}
-
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -189,25 +178,36 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
+
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
-	case "application/json":
-		if err := json.Unmarshal(body, &params); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-
-	case "application/graphql+-":
-		params.Query = string(body)
-
-	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphql+-")
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
-	ctx = attachAccessJwt(ctx, r)
+	switch mediaType {
+	case "application/json":
+		if err := json.Unmarshal(body, &params); err != nil {
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
+			return
+		}
+	case "application/graphql+-", "application/dql":
+		params.Query = string(body)
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
+			"Supported content types are application/json, application/graphql+-,application/dql")
+		return
+	}
+
+	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
+	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
@@ -250,19 +250,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-
-	var out bytes.Buffer
-	writeEntry := func(key string, js []byte) {
-		out.WriteRune('"')
-		out.WriteString(key)
-		out.WriteRune('"')
-		out.WriteRune(':')
-		out.Write(js)
-	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
+		Metrics: resp.Metrics,
 	}
 	js, err := json.Marshal(e)
 	if err != nil {
@@ -270,13 +264,21 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out.WriteRune('{')
+	var out bytes.Buffer
+	writeEntry := func(key string, js []byte) {
+		x.Check2(out.WriteRune('"'))
+		x.Check2(out.WriteString(key))
+		x.Check2(out.WriteRune('"'))
+		x.Check2(out.WriteRune(':'))
+		x.Check2(out.Write(js))
+	}
+	x.Check2(out.WriteRune('{'))
 	writeEntry("data", resp.Json)
-	out.WriteRune(',')
+	x.Check2(out.WriteRune(','))
 	writeEntry("extensions", js)
-	out.WriteRune('}')
+	x.Check2(out.WriteRune('}'))
 
-	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+	if _, err := x.WriteResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,
 		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
@@ -308,22 +310,26 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req *api.Request
 	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
+	mediaType, contentTypeParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid Content-Type")
+	}
+	if charset, ok := contentTypeParams["charset"]; ok && strings.ToLower(charset) != "utf-8" {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported charset. "+
+			"Supported charset is UTF-8")
+		return
+	}
+
+	switch mediaType {
 	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
 		if err := json.Unmarshal(body, &ms); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			jsonErr := convertJSONError(string(body), err)
+			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
 
-		mu := &api.Mutation{}
-		req = &api.Request{Mutations: []*api.Mutation{mu}}
-		if setJSON, ok := ms["set"]; ok && setJSON != nil {
-			mu.SetJson = setJSON.bs
-		}
-		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
-			mu.DeleteJson = delJSON.bs
-		}
+		req = &api.Request{}
 		if queryText, ok := ms["query"]; ok && queryText != nil {
 			req.Query, err = strconv.Unquote(string(queryText.bs))
 			if err != nil {
@@ -331,11 +337,54 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if condText, ok := ms["cond"]; ok && condText != nil {
-			mu.Cond, err = strconv.Unquote(string(condText.bs))
-			if err != nil {
-				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+
+		// JSON API support both keys 1. mutations  2. set,delete,cond
+		// We want to maintain the backward compatibility of the API here.
+		extractMutation := func(jsMap map[string]*skipJSONUnmarshal) (*api.Mutation, error) {
+			mu := &api.Mutation{}
+			empty := true
+			if setJSON, ok := jsMap["set"]; ok && setJSON != nil {
+				empty = false
+				mu.SetJson = setJSON.bs
+			}
+			if delJSON, ok := jsMap["delete"]; ok && delJSON != nil {
+				empty = false
+				mu.DeleteJson = delJSON.bs
+			}
+			if condText, ok := jsMap["cond"]; ok && condText != nil {
+				mu.Cond, err = strconv.Unquote(string(condText.bs))
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if empty {
+				return nil, nil
+			}
+
+			return mu, nil
+		}
+		if mu, err := extractMutation(ms); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		} else if mu != nil {
+			req.Mutations = append(req.Mutations, mu)
+		}
+		if mus, ok := ms["mutations"]; ok && mus != nil {
+			var mm []map[string]*skipJSONUnmarshal
+			if err := json.Unmarshal(mus.bs, &mm); err != nil {
+				jsonErr := convertJSONError(string(mus.bs), err)
+				x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 				return
+			}
+
+			for _, m := range mm {
+				if mu, err := extractMutation(m); err != nil {
+					x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+					return
+				} else if mu != nil {
+					req.Mutations = append(req.Mutations, mu)
+				}
 			}
 		}
 
@@ -359,12 +408,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	req.StartTs = startTs
 	req.CommitNow = commitNow
 
-	ctx := attachAccessJwt(context.Background(), r)
+	ctx := x.AttachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// Add cost to the header.
+	w.Header().Set(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
@@ -385,6 +436,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = resp.Uids
+	mp["queries"] = json.RawMessage(resp.Json)
 	response["data"] = mp
 
 	js, err := json.Marshal(response)
@@ -393,7 +445,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -441,7 +493,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func handleAbort(startTs uint64) (map[string]interface{}, error) {
@@ -452,7 +504,7 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 
 	_, err := worker.CommitOverNetwork(context.Background(), tc)
 	switch err {
-	case y.ErrAborted:
+	case dgo.ErrAborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
@@ -509,19 +561,6 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 	return response, nil
 }
 
-func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
-	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			md = metadata.New(nil)
-		}
-
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
-	return ctx
-}
-
 func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
@@ -537,22 +576,77 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
+	runInBackground, err := parseBool(r, "runInBackground")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	op.RunInBackground = runInBackground
+
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
 	fwd := r.Header.Get("X-Forwarded-For")
 	if len(fwd) > 0 {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
-	md := metadata.New(nil)
-	// Pass in an auth token, if present.
-	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
-	ctx := metadata.NewIncomingContext(context.Background(), md)
-	ctx = attachAccessJwt(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present.
+	ctx := x.AttachAuthToken(context.Background(), r)
+	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 
+	writeSuccessResponse(w, r)
+}
+
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	if commonHandler(w, r) {
+		return
+	}
+
+	b := readRequest(w, r)
+	if b == nil {
+		return
+	}
+
+	gqlReq := &schema.Request{
+		Query: `
+		mutation updateGqlSchema($sch: String!) {
+			updateGQLSchema(input: {
+				set: {
+					schema: $sch
+				}
+			}) {
+				gqlSchema {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": string(b)},
+	}
+
+	response := resolveWithAdminServer(gqlReq, r, adminServer)
+	if len(response.Errors) > 0 {
+		x.SetStatus(w, x.Error, response.Errors.Error())
+		return
+	}
+
+	writeSuccessResponse(w, r)
+}
+
+func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
+	adminServer web.IServeGraphQL) *schema.Response {
+	md := metadata.New(nil)
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
+
+	return adminServer.Resolve(ctx, gqlReq)
+}
+
+func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {
 	res := map[string]interface{}{}
 	data := map[string]interface{}{}
 	data["code"] = x.Success
@@ -565,7 +659,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
@@ -576,4 +670,54 @@ type skipJSONUnmarshal struct {
 func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
 	sju.bs = bs
 	return nil
+}
+
+// convertJSONError adds line and character information to the JSON error.
+// Idea taken from: https://bit.ly/2moFIVS
+func convertJSONError(input string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if jsonError, ok := err.(*json.SyntaxError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	if jsonError, ok := err.(*json.UnmarshalTypeError); ok {
+		line, character, lcErr := jsonLineAndChar(input, int(jsonError.Offset))
+		if lcErr != nil {
+			return err
+		}
+		return errors.Errorf("Error parsing JSON at line %d, character %d: %v\n", line, character,
+			jsonError.Error())
+	}
+
+	return err
+}
+
+func jsonLineAndChar(input string, offset int) (line int, character int, err error) {
+	lf := rune(0x0A)
+
+	if offset > len(input) || offset < 0 {
+		return 0, 0, errors.Errorf("Couldn't find offset %d within the input.", offset)
+	}
+
+	line = 1
+	for i, b := range input {
+		if b == lf {
+			line++
+			character = 0
+		}
+		character++
+		if i == offset {
+			break
+		}
+	}
+
+	return line, character, nil
 }

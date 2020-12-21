@@ -19,15 +19,16 @@ package live
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -38,7 +39,6 @@ var zeroService = testutil.SockAddrZero
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
-	tmpDir      string
 )
 
 // Just check the first and last entries and assumes everything in between is okay.
@@ -100,11 +100,11 @@ func TestLiveLoadJSONFileEmpty(t *testing.T) {
 
 	pipeline := [][]string{
 		{"echo", "[]"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file ran successfully")
 }
 
@@ -112,11 +112,25 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	checkLoadedData(t)
+}
+
+func TestLiveLoadCanUseAlphaForAssigningUids(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
+			"--alpha", alphaService, "--zero", alphaService, "-u", "groot", "-p", "password"},
+	}
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t)
@@ -127,11 +141,11 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON stream exited with error")
 
 	checkLoadedData(t)
@@ -148,11 +162,11 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 	fileList := strings.Join(files, ",")
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
-			"--alpha", alphaService, "--zero", zeroService},
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading multiple JSON files exited with error")
 
 	checkLoadedData(t)
@@ -162,7 +176,11 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	var err error
+	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		log.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

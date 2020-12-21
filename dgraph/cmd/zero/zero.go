@@ -17,6 +17,8 @@
 package zero
 
 import (
+	"context"
+	"crypto/tls"
 	"io"
 	"math"
 	"strings"
@@ -24,13 +26,13 @@ import (
 	"time"
 
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -55,6 +57,7 @@ type Server struct {
 
 	NumReplicas int
 	state       *pb.MembershipState
+	nextRaftId  uint64
 
 	nextLeaseId uint64
 	nextTxnTs   uint64
@@ -64,11 +67,16 @@ type Server struct {
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
-	closer         *y.Closer  // Used to tell stream to close.
+	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
+
+	// tls client config used to connect with zero internally
+	tlsClientConfig *tls.Config
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+
+	checkpointPerGroup map[uint32]uint64
 }
 
 // Init initializes the zero server.
@@ -82,22 +90,24 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
+	s.nextRaftId = 1
 	s.nextLeaseId = 1
 	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
-	s.closer = y.NewCloser(2) // grpc and http
+	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+	s.checkpointPerGroup = make(map[uint32]uint64)
 
 	go s.rebalanceTablets()
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	glog.V(2).Infof("Starting telemetry data collection...")
+	glog.V(2).Infof("Starting telemetry data collection for zero...")
 	start := time.Now()
 
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 10)
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
@@ -109,17 +119,18 @@ func (s *Server) periodicallyPostTelemetry() {
 			continue
 		}
 		ms := s.membershipState()
-		t := newTelemetry(ms)
+		t := telemetry.NewZero(ms)
 		if t == nil {
 			continue
 		}
 		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-		err := t.post()
-		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		err := t.Post()
 		if err == nil {
 			lastPostedAt = time.Now()
+		} else {
+			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
 }
@@ -215,22 +226,28 @@ func (s *Server) hasLeader(gid uint32) bool {
 func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
+
 	s.state = state
+	s.nextRaftId = x.Max(s.nextRaftId, s.state.MaxRaftId+1)
+
 	if state.Zeros == nil {
 		state.Zeros = make(map[uint64]*pb.Member)
 	}
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*pb.Group)
 	}
+
 	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
-			conn.GetPools().Connect(m.Addr)
+			conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 		}
+
 		if g.Tablets == nil {
 			g.Tablets = make(map[string]*pb.Tablet)
 		}
 	}
+
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
@@ -332,7 +349,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 
 	s.RLock()
 	defer s.RUnlock()
-	// There is only one member.
+	// There is only one member. We use for loop because we don't know what the mid is.
 	for mid, dstMember := range dst.Members {
 		group, has := s.state.Groups[dstMember.GroupId]
 		if !has {
@@ -371,8 +388,8 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 			continue
 		}
 
-		s := float64(srcTablet.Space)
-		d := float64(dstTablet.Space)
+		s := float64(srcTablet.OnDiskBytes)
+		d := float64(dstTablet.OnDiskBytes)
 		if dstTablet.Remove || (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
 			proposal := &pb.ZeroProposal{
@@ -432,7 +449,7 @@ func (s *Server) Connect(ctx context.Context,
 		}
 		return cs, err
 	}
-	if len(m.Addr) == 0 {
+	if m.Addr == "" {
 		return &emptyConnectionState, errors.Errorf("NO_ADDR: No address provided: %+v", m)
 	}
 
@@ -450,7 +467,7 @@ func (s *Server) Connect(ctx context.Context,
 			switch {
 			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
-				conn.GetPools().Connect(m.Addr)
+				conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 				return &pb.ConnectionState{
 					State:  ms,
 					Member: member,
@@ -475,7 +492,7 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
-	conn.GetPools().Connect(m.Addr)
+	conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 
 	createProposal := func() *pb.ZeroProposal {
 		s.Lock()
@@ -489,7 +506,14 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 		if m.Id == 0 {
-			m.Id = s.state.MaxRaftId + 1
+			// In certain situations, the proposal can be sent and return with an error.
+			// However,  Dgraph will keep retrying the proposal. To avoid assigning duplicating
+			// IDs, the couter is incremented every time a proposal is created.
+			m.Id = s.nextRaftId
+			s.nextRaftId += 1
+			proposal.MaxRaftId = m.Id
+		} else if m.Id >= s.nextRaftId {
+			s.nextRaftId = m.Id + 1
 			proposal.MaxRaftId = m.Id
 		}
 
@@ -510,6 +534,12 @@ func (s *Server) Connect(ctx context.Context,
 			// We don't have this server in the list.
 			if len(group.Members) < s.NumReplicas {
 				// We need more servers here, so let's add it.
+				proposal.Member = m
+				return proposal
+			} else if m.ForceGroupId {
+				// If the group ID was taken from the group_id file, force the member
+				// to be in this group even if the group is at capacity. This should
+				// not happen if users properly initialize a cluster after a bulk load.
 				proposal.Member = m
 				return proposal
 			}
@@ -560,7 +590,7 @@ func (s *Server) ShouldServe(
 	ctx, span := otrace.StartSpan(ctx, "Zero.ShouldServe")
 	defer span.End()
 
-	if len(tablet.Predicate) == 0 {
+	if tablet.Predicate == "" {
 		return resp, errors.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
 	if tablet.GroupId == 0 && !tablet.ReadOnly {
@@ -570,7 +600,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
+	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
@@ -585,8 +615,7 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
-	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
-	tablet.Force = false
+
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
@@ -609,6 +638,14 @@ func (s *Server) ShouldServe(
 
 // UpdateMembership updates the membership of the given group.
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
+	// Only Zero leader would get these membership updates.
+	if ts := group.GetCheckpointTs(); ts > 0 {
+		for _, m := range group.GetMembers() {
+			s.Lock()
+			s.checkpointPerGroup[m.GetGroupId()] = ts
+			s.Unlock()
+		}
+	}
 	proposals, err := s.createProposals(group)
 	if err != nil {
 		// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
@@ -772,6 +809,6 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 	if err != nil {
 		return errors.Wrapf(err, "while proposing enterprise license state to cluster")
 	}
-	glog.Infof("Enterprise license state proposed to the cluster")
+	glog.Infof("Enterprise license proposed to the cluster %+v", proposal)
 	return nil
 }

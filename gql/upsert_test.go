@@ -467,3 +467,67 @@ func TestConditionalUpsertErrWrongIf(t *testing.T) {
 	_, err := ParseMutation(query)
 	require.Contains(t, err.Error(), "Expected @if, found [@fi]")
 }
+
+func TestMultipleMutation(t *testing.T) {
+	query := `
+upsert {
+  mutation @if(eq(len(m), 1)) {
+    set {
+      uid(m) <age> "45" .
+    }
+  }
+
+  mutation @if(not(eq(len(m), 1))) {
+    set {
+      uid(f) <age> "45" .
+    }
+  }
+
+  mutation {
+    set {
+      _:user <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+    }
+  }
+}`
+	req, err := ParseMutation(query)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(req.Mutations))
+}
+
+func TestMultipleMutationDifferentOrder(t *testing.T) {
+	query := `
+upsert {
+  mutation @if(eq(len(m), 1)) {
+    set {
+      uid(m) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+    }
+  }
+
+  mutation @if(not(eq(len(m), 1))) {
+    set {
+      uid(f) <age> "45" .
+    }
+  }
+
+  mutation {
+    set {
+      _:user <age> "45" .
+    }
+  }
+}`
+	req, err := ParseMutation(query)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(req.Mutations))
+}

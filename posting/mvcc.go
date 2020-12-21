@@ -21,19 +21,149 @@ import (
 	"encoding/hex"
 	"math"
 	"strconv"
+	"sync"
 	"sync/atomic"
+	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
+
+// incrRollupi is used to batch keys for rollup incrementally.
+type incrRollupi struct {
+	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
+	keysCh chan *[][]byte
+	// keysPool is sync.Pool to share the batched keys to rollup.
+	keysPool *sync.Pool
+	count    uint64
+}
 
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
+	// ErrInvalidKey is returned when trying to read a posting list using
+	// an invalid key (e.g the key to a single part of a larger multi-part list).
+	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
+
+	// IncrRollup is used to batch keys for rollup incrementally.
+	IncrRollup = &incrRollupi{
+		keysCh: make(chan *[][]byte),
+		keysPool: &sync.Pool{
+			New: func() interface{} {
+				return new([][]byte)
+			},
+		},
+	}
 )
+
+// rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
+func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
+	l, err := GetNoStore(key, math.MaxUint64)
+	if err != nil {
+		return err
+	}
+
+	kvs, err := l.Rollup(nil)
+	if err != nil {
+		return err
+	}
+	// Clear the list from the cache after a rollup.
+	RemoveCacheFor(key)
+
+	const N = uint64(1000)
+	if glog.V(2) {
+		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
+			glog.V(2).Infof("Rolled up %d keys", count)
+		}
+	}
+	return writer.Write(&bpb.KVList{Kv: kvs})
+}
+
+func (ir *incrRollupi) addKeyToBatch(key []byte) {
+	batch := ir.keysPool.Get().(*[][]byte)
+	*batch = append(*batch, key)
+	if len(*batch) < 16 {
+		ir.keysPool.Put(batch)
+		return
+	}
+
+	select {
+	case ir.keysCh <- batch:
+	default:
+		// Drop keys and build the batch again. Lossy behavior.
+		*batch = (*batch)[:0]
+		ir.keysPool.Put(batch)
+	}
+}
+
+// Process will rollup batches of 64 keys in a go routine.
+func (ir *incrRollupi) Process(closer *z.Closer) {
+	defer closer.Done()
+
+	writer := NewTxnWriter(pstore)
+	defer writer.Flush()
+
+	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
+	limiter := time.NewTicker(100 * time.Millisecond)
+	defer limiter.Stop()
+	cleanupTick := time.NewTicker(5 * time.Minute)
+	defer cleanupTick.Stop()
+	forceRollupTick := time.NewTicker(500 * time.Millisecond)
+	defer forceRollupTick.Stop()
+
+	var batch *[][]byte
+
+	doRollup := func() {
+		currTs := time.Now().Unix()
+		for _, key := range *batch {
+			hash := z.MemHash(key)
+			if elem := m[hash]; currTs-elem >= 10 {
+				// Key not present or Key present but last roll up was more than 10 sec ago.
+				// Add/Update map and rollup.
+				m[hash] = currTs
+				if err := ir.rollUpKey(writer, key); err != nil {
+					glog.Warningf("Error %v rolling up key %v\n", err, key)
+				}
+			}
+		}
+		// clear the batch and put it back in Sync keysPool
+		*batch = (*batch)[:0]
+		ir.keysPool.Put(batch)
+	}
+
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case <-cleanupTick.C:
+			currTs := time.Now().UnixNano()
+			for hash, ts := range m {
+				// Remove entries from map which have been there for there more than 10 seconds.
+				if currTs-ts >= int64(10*time.Second) {
+					delete(m, hash)
+				}
+			}
+		case <-forceRollupTick.C:
+			batch = ir.keysPool.Get().(*[][]byte)
+			if len(*batch) > 0 {
+				doRollup()
+			} else {
+				ir.keysPool.Put(batch)
+			}
+		case batch = <-ir.keysCh:
+			doRollup()
+			// throttle to 1 batch = 64 rollups per 100 ms.
+			<-limiter.C
+		}
+	}
+}
 
 // ShouldAbort returns whether the transaction should be aborted.
 func (txn *Txn) ShouldAbort() bool {
@@ -58,17 +188,17 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	ctx.StartTs = txn.StartTs
+
 	for key := range txn.conflicts {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
 		fps := strconv.FormatUint(key, 36)
-		if !x.HasString(ctx.Keys, fps) {
-			ctx.Keys = append(ctx.Keys, fps)
-		}
+		ctx.Keys = append(ctx.Keys, fps)
 	}
-	txn.Unlock()
+	ctx.Keys = x.Unique(ctx.Keys)
 
+	txn.Unlock()
 	txn.Update()
 	txn.cache.fillPreds(ctx, gid)
 }
@@ -127,7 +257,38 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+// ResetCache will clear all the cached list.
+func ResetCache() {
+	lCache.Clear()
+}
+
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	// TODO: investigate if this can be done by calling Set with a nil value.
+	lCache.Del(key)
+}
+
+// RemoveCachedKeys will delete the cached list by this txn.
+func (txn *Txn) RemoveCachedKeys() {
+	if txn == nil || txn.cache == nil {
+		return
+	}
+	for key := range txn.cache.deltas {
+		lCache.Del(key)
+	}
+}
+
+func WaitForCache() {
+	// TODO Investigate if this is needed and why Jepsen tests fail with the cache enabled.
+	// lCache.Wait()
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
+	if plist == nil {
+		return errors.Errorf("cannot unmarshal value to a nil posting list of key %s",
+			hex.Dump(item.Key()))
+	}
+
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
 			// empty pl
@@ -141,10 +302,35 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read using using the main key because the information needed
+		// to access the whole list is stored there.
+		// The function returns a nil list instead. This is safe to do because all
+		// public methods of the List object are no-ops and the list is being already
+		// accessed via the main key in the places where this code is reached (e.g rollups).
+		return nil, ErrInvalidKey
+	}
+
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
+
+	// We use the following block of code to trigger incremental rollup on this key.
+	deltaCount := 0
+	defer func() {
+		if deltaCount > 0 {
+			IncrRollup.addKeyToBatch(key)
+		}
+	}()
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -167,18 +353,24 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
+
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
-				x.Check(pl.Unmarshal(val))
+				if err := pl.Unmarshal(val); err != nil {
+					return err
+				}
 				pl.CommitTs = item.Version()
 				for _, mpost := range pl.Postings {
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
 					mpost.CommitTs = item.Version()
+				}
+				if l.mutationMap == nil {
+					l.mutationMap = make(map[uint64]*pb.PostingList)
 				}
 				l.mutationMap[pl.CommitTs] = pl
 				return nil
@@ -186,6 +378,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if err != nil {
 				return nil, err
 			}
+			deltaCount++
 		case BitSchemaPosting:
 			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
@@ -201,9 +394,32 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-// TODO: We should only create a posting list with a specific readTs.
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	cachedVal, ok := lCache.Get(key)
+	if ok {
+		l, ok := cachedVal.(*List)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			return lCopy, nil
+		}
+	}
+
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
 	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
@@ -214,5 +430,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+	l, err := ReadPostingList(key, itr)
+	if err != nil {
+		return l, err
+	}
+	lCache.Set(key, l, 0)
+	return l, nil
 }

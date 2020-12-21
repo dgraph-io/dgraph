@@ -1,0 +1,10 @@
+{
+    __type(name: "TestDeprecatedObject") {
+        name
+        fields(includeDeprecated: false) {
+            name
+            isDeprecated
+            deprecationReason
+        }
+    }
+}

@@ -22,9 +22,10 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,6 +51,30 @@ func TestParseCountValError(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Count of a variable is not allowed")
+}
+
+func TestParseQueryNamedQuery(t *testing.T) {
+	query := `
+query works() {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryNameQueryWithoutBrackers(t *testing.T) {
+	query := `
+query works {
+  q(func: has(name)) {
+    name
+  }
+}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
 }
 
 func TestParseVarError(t *testing.T) {
@@ -147,7 +172,8 @@ func TestParseQueryExpandForward(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _forward_ has been deprecated")
 }
 
 func TestParseQueryExpandReverse(t *testing.T) {
@@ -156,6 +182,35 @@ func TestParseQueryExpandReverse(t *testing.T) {
 		var(func: uid( 0x0a)) {
 			friends {
 				expand(_reverse_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Argument _reverse_ has been deprecated")
+}
+
+func TestParseQueryExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryExpandMultipleTypes(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(Person, Relative)
 			}
 		}
 	}
@@ -440,8 +495,8 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - ln(c))
-				q as math(c*-1+-b+(-b*c))
+				d as math(exp(a + b + 1.0) - ln(c))
+				q as math(c*-1.0+-b+(-b*c))
 			}
 		}
 	}
@@ -466,7 +521,7 @@ func TestParseQueryWithVarValAggNested4(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(exp(a + b + 1) - max(c,ln(c)) + sqrt(a%b))
+				d as math(exp(a + b + 1.0) - max(c,ln(c)) + sqrt(a%b))
 			}
 		}
 	}
@@ -515,16 +570,16 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(cond(a <= 10, exp(a + b + 1), ln(c)) + 10*a)
-				e as math(cond(a!=10, exp(a + b + 1), ln(d)))
-				f as math(cond(a==10, exp(a + b + 1), ln(e)))
+				d as math(cond(a <= 10.0, exp(a + b + 1.0), ln(c)) + 10*a)
+				e as math(cond(a!=10.0, exp(a + b + 1.0), ln(d)))
+				f as math(cond(a==10.0, exp(a + b + 1.0), ln(e)))
 			}
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
-	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 1E+01 a))",
+	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 10 a))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.EqualValues(t, "(cond (!= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln d))",
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
@@ -544,7 +599,7 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(a + b * c / a + exp(a + b + 1) - ln(c))
+				d as math(a + b * c / a + exp(a + b + 1.0) - ln(c))
 			}
 		}
 	}
@@ -1592,6 +1647,22 @@ func TestParse_alias1(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"type.object.name.hi"})
 }
 
+func TestParseBadAlias(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x0a)) {
+				name: type.object.name.en: after_colon
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid colon after alias declaration")
+}
+
 func TestParse_block(t *testing.T) {
 	query := `
 		{
@@ -1728,6 +1799,34 @@ func TestParseSchemaTypeMulti(t *testing.T) {
 	require.Equal(t, len(res.Schema.Types), 2)
 	require.Equal(t, res.Schema.Types[0], "Person")
 	require.Equal(t, res.Schema.Types[1], "Animal")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaSpecialChars(t *testing.T) {
+	query := `
+		schema (pred: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 2)
+	require.Equal(t, len(res.Schema.Types), 0)
+	require.Equal(t, res.Schema.Predicates[0], "Person")
+	require.Equal(t, res.Schema.Predicates[1], "人物")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeSpecialChars(t *testing.T) {
+	query := `
+		schema (type: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "人物")
 	require.Equal(t, len(res.Schema.Fields), 0)
 }
 
@@ -2006,6 +2105,23 @@ func TestParseStringVarInFilter(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, "v0.7.3/beta", res.Query[0].Children[0].Filter.Func.Args[0].Value)
+}
+
+func TestParseVarInFacet(t *testing.T) {
+	query := `
+query works($since: string = "2018") {
+  q(func: has(works_in)) @cascade {
+    name
+    works_in @facets @facets(gt(since, $since)) {
+      name
+    }
+  }
+}`
+
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "2018", res.Query[0].Children[1].FacetsFilter.Func.Args[0].Value)
 }
 
 func TestParseVariablesError1(t *testing.T) {
@@ -2877,6 +2993,21 @@ func TestLangsInvalid9(t *testing.T) {
 		"The * symbol cannot be used as a valid language inside functions")
 }
 
+func TestLangsInvalid10(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@.:*
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
@@ -3119,6 +3250,22 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 	require.Equal(t, "SchooL", res.Query[0].Children[0].GroupbyAttrs[1].Alias)
 }
 
+func TestParseGroupbyWithAliasForError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(first: 10, SchooL: school) {
+				count(uid)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(), "Can't use keyword first as alias in groupby")
+}
+
 func TestParseGroupbyError(t *testing.T) {
 	// predicates not allowed inside groupby.
 	query := `
@@ -3304,8 +3451,78 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
-	require.True(t, res.Query[0].Children[0].FacetDesc)
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+}
+
+func TestParseOrderbyMultipleFacets(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: since) {
+				name
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+}
+
+func TestParseOrderbyMultipleFacetsWithAlias(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: since, score, location:from) {
+				name
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+	require.Equal(t, 4, len(res.Query[0].Children[0].Facets.Param))
+	require.Nil(t, res.Query[0].Children[0].FacetsFilter)
+	require.Empty(t, res.Query[0].Children[0].FacetVar)
+	for _, param := range res.Query[0].Children[0].Facets.Param {
+		if param.Key == "from" {
+			require.Equal(t, "location", param.Alias)
+			break
+		}
+	}
+}
+
+func TestParseOrderbySameFacetsMultipleTimes(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: closeness) {
+				name
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(),
+		"Sorting by facet: [closeness] can only be done once")
 }
 
 func TestParseOrderbyFacet(t *testing.T) {
@@ -3666,7 +3883,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	{
 		me(func: uid(0x1)) {
 			name
-			friend(first:5, orderasc: name@en:fr) {
+			friend(first:5, orderasc: name@en) {
 				name@en
 			}
 		}
@@ -3677,7 +3894,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "name", res.Query[0].Children[1].Order[0].Attr)
-	require.Equal(t, []string{"en", "fr"}, res.Query[0].Children[1].Order[0].Langs)
+	require.Equal(t, []string{"en"}, res.Query[0].Children[1].Order[0].Langs)
 }
 
 func TestParseQueryWithAttrLang2(t *testing.T) {
@@ -4130,19 +4347,6 @@ func TestFilterVarErr(t *testing.T) {
 	require.Contains(t, err.Error(), "Unexpected var()")
 }
 
-func TestEqUidFunctionErr(t *testing.T) {
-	query := `
-		{
-			me(func: eq(path_id, uid(x))) {
-				name
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
-}
-
 func TestAggRoot1(t *testing.T) {
 	query := `
 		{
@@ -4389,10 +4593,23 @@ func TestInvalidValUsage(t *testing.T) {
 	require.Contains(t, err.Error(), "Query syntax invalid.")
 }
 
+func TestOrderWithMultipleLangFail(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x1), orderasc: name@en:fr, orderdesc: lastname@ci, orderasc: salary) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting by an attribute: [name@en:fr] can only be done on one language")
+}
+
 func TestOrderWithLang(t *testing.T) {
 	query := `
 	{
-		me(func: uid(0x1), orderasc: name@en:fr:., orderdesc: lastname@ci, orderasc: salary) {
+		me(func: uid(0x1), orderasc: name@en, orderdesc: lastname@ci, orderasc: salary) {
 			name
 		}
 	}
@@ -4403,7 +4620,7 @@ func TestOrderWithLang(t *testing.T) {
 	require.Equal(t, 1, len(res.Query))
 	orders := res.Query[0].Order
 	require.Equal(t, "name", orders[0].Attr)
-	require.Equal(t, []string{"en", "fr", "."}, orders[0].Langs)
+	require.Equal(t, []string{"en"}, orders[0].Langs)
 	require.Equal(t, "lastname", orders[1].Attr)
 	require.Equal(t, []string{"ci"}, orders[1].Langs)
 	require.Equal(t, "salary", orders[2].Attr)
@@ -4627,16 +4844,150 @@ func TestParseGraphQLVarArray(t *testing.T) {
 		require.Equal(t, 1, len(gq.Query))
 		require.Equal(t, "eq", gq.Query[0].Func.Name)
 		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
-		found := false
+		var found bool
 		for _, val := range tc.vars {
+			found = false
 			for _, arg := range gq.Query[0].Func.Args {
 				if val == arg.Value {
 					found = true
 					break
 				}
 			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
 		}
-		require.True(t, found, "vars not matched: %v", tc.vars)
+	}
+}
+
+func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
+	tests := []struct {
+		q    string
+		vars map[string]string
+		args int
+	}{
+		// uid_in test cases (uids and predicate inside uid_in are dummy)
+		{q: `query test($a: string){q(func: uid_in(director.film, [$a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 1},
+		{q: `query test($a: string, $b: string){q(func: uid_in(director.film, [$a, $b])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a", "$b": "0x4e9545"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, [$a, "0x4e9545"])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, ["0x4e9545", $a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+	}
+	for _, tc := range tests {
+		gq, err := Parse(Request{Str: tc.q, Variables: tc.vars})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(gq.Query))
+		require.Equal(t, "uid_in", gq.Query[0].Func.Name)
+		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
+		var found bool
+		for _, val := range tc.vars {
+			found = false
+			for _, arg := range gq.Query[0].Func.Args {
+				if val == arg.Value {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
+		}
+	}
+}
+
+func TestUidInWithNoParseErrors(t *testing.T) {
+	query := `{
+		schoolVar as q(func: uid(5000))
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, uid(schoolVar))) {
+				name
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestUidInWithParseErrors(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expectedErr error
+	}{
+		{
+			description: "uid_in query with without argument",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Empty Argument"),
+		},
+		{
+			description: "uid_in query with without argument (2)",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("uid_in function expects an argument, got none"),
+		},
+		{
+			description: "query with nested uid without variable",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(5000))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
+		},
+		{
+			description: "query with nested uid with variable and constant",
+			query: `{
+				uidVar as q(func: uid( 5000))
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(uidVar, 5001))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects only uid variable, got UID"),
+		},
+		{
+			description: "query with nested uid with two variables",
+			query: `{
+				uidVar1 as q(func: uid( 5000))
+				uidVar2 as q(func: uid( 5000))
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, uid(uidVar1, uidVar2))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 2"),
+		},
+		{
+			description: "query with nested uid with gql variable",
+			query: `query queryWithGQL($schoolUID: string = "5001"){
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid( $schoolUID))) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			_, err := Parse(Request{Str: test.query})
+			require.Contains(t, err.Error(), test.expectedErr.Error())
+		})
 	}
 }
 
@@ -4765,75 +5116,340 @@ func TestTypeFilterInPredicate(t *testing.T) {
 	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
 }
 
-func TestTypeInRoot(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) @type(Person) {
-			name
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "name", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Filter.Func.Args[0].Value)
-}
-
-func TestTypeInPredicate(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				name
+func TestParseExpandType(t *testing.T) {
+	query := `
+	{
+		var(func: has(name)) {
+			expand(Person,Animal) {
+				uid
 			}
 		}
-	}`
-	gq, err := Parse(Request{Str: q})
+	}
+`
+	gq, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
-	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
-
+	require.Equal(t, "expand", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "Person,Animal", gq.Query[0].Children[0].Expand)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
+	require.Equal(t, "uid", gq.Query[0].Children[0].Children[0].Attr)
 }
 
-func TestMultipleTypeDirectives(t *testing.T) {
-	q := `
-	query {
-		me(func: uid(0x01)) {
-			friend @type(Person) {
-				pet @type(Animal) {
-					name
+func TestParseVarAfterCountQry(t *testing.T) {
+	query := `
+		{
+			q(func: allofterms(name@en, "steven spielberg")) {
+				director.film {
+					u1 as count(uid)
+					genre {
+						u2 as math(1)
+					}
+			  	}
+			}
+
+			sum() {
+				totalMovies: sum(val(u1))
+				totalGenres: sum(val(u2))
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestRecurseWithArgs(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad")) @recurse(depth: $hello , loop: true) {
+		}
+	}`
+	gq, err := Parse(Request{Str: query, Variables: map[string]string{"$hello": "1"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1 , loop: $hello) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $_hello_hello, loop: $hello1_heelo1) {
+		}
+	}`
+	gq, err = Parse(Request{Str: query, Variables: map[string]string{"$_hello_hello": "1",
+		"$hello1_heelo1": "true"}})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+}
+
+func TestRecurseWithArgsWithError(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: true) {
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: $hello) {
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable $hello not defined")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "sd", "$hello1": "true"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should be type of integer")
+
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: $hello, loop: $hello1) {
+		}
+	}`
+	_, err = Parse(Request{Str: query, Variables: map[string]string{"$hello": "1", "$hello1": "tre"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should be type of boolean")
+}
+
+func TestRecurse(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: true) {
+		}
+	}`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].RecurseArgs.Depth, uint64(1))
+	require.Equal(t, gq.Query[0].RecurseArgs.AllowLoop, true)
+}
+
+func TestRecurseWithError(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: hello, loop: true) {
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value inside depth should be type of integer")
+	query = `
+	{
+		me(func: eq(name, "sad"))@recurse(depth: 1, loop: tre) {
+		}
+	}`
+	_, err = Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value inside loop should be type of boolean")
+}
+func TestParseExpandFilter(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(type(Person)) {
+					uid
 				}
 			}
-		}
-	}`
-	gq, err := Parse(Request{Str: q})
+		}`
+
+	gq, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(gq.Query))
-	require.Equal(t, "uid", gq.Query[0].Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children))
-	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
-
 	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+}
 
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
-	require.Equal(t, "pet", gq.Query[0].Children[0].Children[0].Attr)
+func TestParseExpandFilterErr(t *testing.T) {
+	query := `
+		{
+			q(func: eq(name, "Frodo")) {
+				expand(_all_) @filter(has(Person)) {
+					uid
+				}
+			}
+		}`
 
-	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
-	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
-	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}
+
+func TestFilterWithDollar(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "$yo")
+}
+
+func TestFilterWithDollarError(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, $yo)) {
+		  name
+		  description
+		}
+	  }
+	`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+}
+
+func TestFilterWithVar(t *testing.T) {
+	query := `query data($a: string = "dgraph")
+	{
+		data(func: eq(name, "Bob"), first:5) @filter(eq(description, $a)) {
+			name
+			description
+		  }
+	}`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "dgraph")
+}
+
+func TestFilterWithEmpty(t *testing.T) {
+	query := `{
+		names(func: has(name)) @filter(eq(name, "")) {
+		  count(uid)
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
+}
+
+func TestCascade(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade {
+		  name
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "__all__")
+}
+
+func TestCascadeParameterized(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade(name, age) {
+		  name
+		  age
+		  dob
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "name")
+	require.Equal(t, gq.Query[0].Cascade[1], "age")
+}
+
+func TestBadCascadeParameterized(t *testing.T) {
+	badQueries := []string{
+		`{
+			names(func: has(name)) @cascade( {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade) {
+			  name
+			  age
+			  dob
+			}
+		 }`,
+		`{
+			names(func: has(name)) @cascade() {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(name,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,name) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+	}
+
+	for _, query := range badQueries {
+		_, err := Parse(Request{
+			Str: query,
+		})
+		require.Error(t, err)
+	}
+}
+
+func TestEmptyId(t *testing.T) {
+	q := "query me($a: string) { q(func: uid($a)) { name }}"
+	r := Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "   "},
+	}
+	_, err := Parse(r)
+	require.Error(t, err, "ID cannot be empty")
 }

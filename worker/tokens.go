@@ -17,18 +17,19 @@
 package worker
 
 import (
-	"github.com/dgraph-io/badger"
-
 	"bytes"
+	"context"
 
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
-func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
+func verifyStringIndex(ctx context.Context, attr string, funcType FuncType) (string, bool) {
 	var requiredTokenizer tok.Tokenizer
 	switch funcType {
 	case fullTextSearchFn:
@@ -39,12 +40,12 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 		requiredTokenizer = tok.TermTokenizer{}
 	}
 
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return requiredTokenizer.Name(), false
 	}
 
 	id := requiredTokenizer.Identifier()
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(ctx, attr) {
 		if t.Identifier() == id {
 			return requiredTokenizer.Name(), true
 		}
@@ -52,11 +53,11 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 	return requiredTokenizer.Name(), false
 }
 
-func verifyCustomIndex(attr string, tokenizerName string) bool {
-	if !schema.State().IsIndexed(attr) {
+func verifyCustomIndex(ctx context.Context, attr string, tokenizerName string) bool {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return false
 	}
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(ctx, attr) {
 		if t.Identifier() >= tok.IdentCustom && t.Name() == tokenizerName {
 			return true
 		}
@@ -76,15 +77,15 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	return tok.GetTermTokens(funcArgs)
 }
 
-func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
+func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
+	tokenizers := schema.State().Tokenizer(ctx, attr)
 	for _, t := range tokenizers {
-		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
+		// If function is eq and we found a tokenizer that's !Lossy(), lets return it
 		switch f {
 		case "eq":
 			// For equality, find a non-lossy tokenizer.
@@ -104,42 +105,61 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		return nil, errors.Errorf("Attribute:%s does not have proper index for comparison", attr)
 	}
 
-	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
+	// If we didn't find a !isLossy() tokenizer for eq function on string type predicates,
+	// then let's see if we can find a non-trigram tokenizer
+	if typ, err := schema.State().TypeOf(attr); err == nil && typ == types.StringID {
+		for _, t := range tokenizers {
+			if t.Identifier() != tok.IdentTrigram {
+				return t, nil
+			}
+		}
+	}
+
+	// otherwise, lets return the first one.
 	return tokenizers[0], nil
 }
 
-// getInequalityTokens gets tokens ge / le compared to given token using the first sortable
+// getInequalityTokens gets tokens ge/le/between compared to given tokens using the first sortable
 // index that is found for the predicate.
-func getInequalityTokens(readTs uint64, attr, f string,
-	ineqValue types.Val) ([]string, string, error) {
-	tokenizer, err := pickTokenizer(attr, f)
+// In case of ge/gt/le/lt/eq len(ineqValues) should be 1, else(between) len(ineqValues) should be 2.
+func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang string,
+	ineqValues []types.Val) ([]string, []string, error) {
+
+	tokenizer, err := pickTokenizer(ctx, attr, f)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	// Get the token for the value passed in function.
 	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tok.GetLangTokenizer(tokenizer, "en"))
-	if err != nil {
-		return nil, "", err
-	}
+	tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
 
-	switch {
-	case len(ineqTokens) == 0:
-		return nil, "", nil
+	var ineqTokensFinal []string
+	for _, ineqValue := range ineqValues {
+		ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
-	case f == "eq" &&
-		(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
-		break
+		switch {
+		case len(ineqTokens) == 0:
+			return nil, nil, nil
 
-	case len(ineqTokens) > 1:
-		return nil, "", errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
-	}
-	ineqToken := ineqTokens[0]
+		// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
+		case f == "eq" &&
+			(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
+			break
 
-	if f == "eq" {
-		return []string{ineqToken}, ineqToken, nil
+		case len(ineqTokens) > 1:
+			return nil, nil, errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
+		}
+
+		ineqToken := ineqTokens[0]
+		ineqTokensFinal = append(ineqTokensFinal, ineqToken)
+
+		if f == "eq" {
+			return []string{ineqToken}, ineqTokensFinal, nil
+		}
 	}
 
 	// If some new index key was written as part of same transaction it won't be on disk
@@ -148,9 +168,9 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
-	seekKey := x.IndexKey(attr, ineqToken)
+	seekKey := x.IndexKey(attr, ineqTokensFinal[0])
 
-	isgeOrGt := f == "ge" || f == "gt"
+	isgeOrGt := f == "ge" || f == "gt" || f == "between"
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
@@ -159,37 +179,54 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	defer itr.Close()
 
 	// used for inequality comparison below
-	ineqTokenInBytes := []byte(ineqToken)
+	ineqTokenInBytes1 := []byte(ineqTokensFinal[0])
+
+	var ineqTokenInBytes2 []byte
+	if f == "between" {
+		ineqTokenInBytes2 = []byte(ineqTokensFinal[1])
+	}
 
 	var out []string
+LOOP:
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
 		k, err := x.Parse(key)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 
 		switch {
 		// if its lossy then we handle inequality comparison later
 		// in handleCompareFunction
 		case tokenizer.IsLossy():
+			if f == "between" && bytes.Compare([]byte(k.Term), ineqTokenInBytes2) > 0 {
+				break LOOP
+			}
 			out = append(out, k.Term)
 
 		// for non Lossy lets compare for inequality (gt & lt)
 		// to see if key needs to be included
 		case f == "gt":
-			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) > 0 {
 				out = append(out, k.Term)
 			}
 		case f == "lt":
-			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) < 0 {
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) < 0 {
 				out = append(out, k.Term)
+			}
+		case f == "between":
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes1) >= 0 &&
+				bytes.Compare([]byte(k.Term), ineqTokenInBytes2) <= 0 {
+				out = append(out, k.Term)
+			} else { // We should break out of loop as soon as we are out of between range.
+				break LOOP
 			}
 		default:
 			// for le or ge or any other fn consider the key
 			out = append(out, k.Term)
 		}
 	}
-	return out, ineqToken, nil
+
+	return out, ineqTokensFinal, nil
 }

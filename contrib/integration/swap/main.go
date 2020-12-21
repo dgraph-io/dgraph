@@ -28,10 +28,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -78,7 +79,8 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := testutil.DgraphClientWithGroot(*alpha)
+	c, err := testutil.DgraphClientWithGroot(*alpha)
+	x.Check(err)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
@@ -366,7 +368,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			panic(fmt.Sprintf(`query: %s\n
+			x.Panic(errors.Errorf(`query: %s\n
 			Uids in index for %q didn't match
 			calculated: %v. Len: %d
 				got:        %v

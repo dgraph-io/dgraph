@@ -1,0 +1,14 @@
+query {
+	queryCuisine (first: 100) {
+		id
+		name
+		restaurants (first: 100) {
+			name
+			rating
+			dishes (first: 100) {
+				name
+				price
+			}
+		}
+	}
+}

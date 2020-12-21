@@ -36,6 +36,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	var results *pb.List
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
+		First:  int(arg.q.First),
 	}
 	if intersect.Size() > 0 {
 		opts.Intersect = intersect
@@ -43,7 +44,7 @@ func uidsForRegex(attr string, arg funcArgs,
 
 	uidsForTrigram := func(trigram string) (*pb.List, error) {
 		key := x.IndexKey(attr, trigram)
-		pl, err := posting.GetNoStore(key)
+		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
 			return nil, err
 		}

@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -223,5 +224,5 @@ func (i *certInfo) Format(f fmt.State, c rune) {
 		str = str[:p]
 	}
 
-	f.Write([]byte(str))
+	x.Check2(f.Write([]byte(str)))
 }

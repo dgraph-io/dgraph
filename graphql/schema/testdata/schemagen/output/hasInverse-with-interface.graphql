@@ -1,0 +1,635 @@
+#######################
+# Input Schema
+#######################
+
+type Author {
+	id: ID!
+	name: String! @search(by: [hash])
+	questions(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question] @hasInverse(field: author)
+	answers(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer] @hasInverse(field: author)
+	questionsAggregate(filter: QuestionFilter): QuestionAggregateResult
+	answersAggregate(filter: AnswerFilter): AnswerAggregateResult
+}
+
+interface Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author!
+}
+
+type Question implements Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: questions)
+	answered: Boolean
+}
+
+type Answer implements Post {
+	id: ID!
+	text: String @search(by: [fulltext])
+	datePublished: DateTime @search
+	author(filter: AuthorFilter): Author! @hasInverse(field: answers)
+	markedUseful: Boolean
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
+enum DgraphIndex {
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
+}
+
+input Int64Filter {
+	eq: Int64
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
+}
+
+input StringHashFilter {
+	eq: String
+	in: [String]
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAnswerPayload {
+	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
+}
+
+type AddAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type AddQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
+}
+
+type AnswerAggregateResult {
+	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
+}
+
+type AuthorAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type DeleteAnswerPayload {
+	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	msg: String
+	numUids: Int
+}
+
+type DeleteAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	msg: String
+	numUids: Int
+}
+
+type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	msg: String
+	numUids: Int
+}
+
+type DeleteQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	msg: String
+	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
+}
+
+type QuestionAggregateResult {
+	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
+}
+
+type UpdateAnswerPayload {
+	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
+}
+
+type UpdateQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum AnswerHasFilter {
+	text
+	datePublished
+	author
+	markedUseful
+}
+
+enum AnswerOrderable {
+	text
+	datePublished
+}
+
+enum AuthorHasFilter {
+	name
+	questions
+	answers
+}
+
+enum AuthorOrderable {
+	name
+}
+
+enum PostHasFilter {
+	text
+	datePublished
+	author
+}
+
+enum PostOrderable {
+	text
+	datePublished
+}
+
+enum QuestionHasFilter {
+	text
+	datePublished
+	author
+	answered
+}
+
+enum QuestionOrderable {
+	text
+	datePublished
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddAnswerInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	markedUseful: Boolean
+}
+
+input AddAuthorInput {
+	name: String!
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input AddQuestionInput {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef!
+	answered: Boolean
+}
+
+input AnswerFilter {
+	id: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	has: AnswerHasFilter
+	and: [AnswerFilter]
+	or: [AnswerFilter]
+	not: AnswerFilter
+}
+
+input AnswerOrder {
+	asc: AnswerOrderable
+	desc: AnswerOrderable
+	then: AnswerOrder
+}
+
+input AnswerPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
+}
+
+input AnswerRef {
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	markedUseful: Boolean
+}
+
+input AuthorFilter {
+	id: [ID!]
+	name: StringHashFilter
+	has: AuthorHasFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
+	not: AuthorFilter
+}
+
+input AuthorOrder {
+	asc: AuthorOrderable
+	desc: AuthorOrderable
+	then: AuthorOrder
+}
+
+input AuthorPatch {
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input AuthorRef {
+	id: ID
+	name: String
+	questions: [QuestionRef]
+	answers: [AnswerRef]
+}
+
+input PostFilter {
+	id: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	has: PostHasFilter
+	and: [PostFilter]
+	or: [PostFilter]
+	not: PostFilter
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+}
+
+input PostRef {
+	id: ID!
+}
+
+input QuestionFilter {
+	id: [ID!]
+	text: StringFullTextFilter
+	datePublished: DateTimeFilter
+	has: QuestionHasFilter
+	and: [QuestionFilter]
+	or: [QuestionFilter]
+	not: QuestionFilter
+}
+
+input QuestionOrder {
+	asc: QuestionOrderable
+	desc: QuestionOrderable
+	then: QuestionOrder
+}
+
+input QuestionPatch {
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
+}
+
+input QuestionRef {
+	id: ID
+	text: String
+	datePublished: DateTime
+	author: AuthorRef
+	answered: Boolean
+}
+
+input UpdateAnswerInput {
+	filter: AnswerFilter!
+	set: AnswerPatch
+	remove: AnswerPatch
+}
+
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: AuthorPatch
+	remove: AuthorPatch
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PostPatch
+	remove: PostPatch
+}
+
+input UpdateQuestionInput {
+	filter: QuestionFilter!
+	set: QuestionPatch
+	remove: QuestionPatch
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
+	getQuestion(id: ID!): Question
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
+	getAnswer(id: ID!): Answer
+	queryAnswer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	aggregateAnswer(filter: AnswerFilter): AnswerAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
+	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
+	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
+	addAnswer(input: [AddAnswerInput!]!): AddAnswerPayload
+	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
+	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
+}
+

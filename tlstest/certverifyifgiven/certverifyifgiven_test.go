@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -36,7 +36,7 @@ func TestAccessWithClientCert(t *testing.T) {
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -49,7 +49,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt",
 		"--cert", "../tls/client.acl.crt",
 		"--key", "../tls/client.acl.key",
-		"https://localhost:8180/alter",
+		"https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

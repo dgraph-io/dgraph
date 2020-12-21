@@ -34,10 +34,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
@@ -50,16 +53,18 @@ type jepsenTest struct {
 	timeLimit         int
 	concurrency       string
 	rebalanceInterval string
+	nemesisInterval   string
 	localBinary       string
 	nodes             string
+	replicas          int
 	skew              string
 	testCount         int
+	deferDbTeardown   bool
 }
 
-const (
-	testPass = iota
-	testFail
-	testIncomplete
+var (
+	errTestFail       = errors.New("test failed")
+	errTestIncomplete = errors.New("test incomplete")
 )
 
 var (
@@ -110,21 +115,31 @@ var (
 		"Number of concurrent workers per test. \"6n\" means 6 workers per node.")
 	rebalanceInterval = pflag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
+	nemesisInterval = pflag.String("nemesis-interval", "10",
+		"Roughly how long to wait (in seconds) between nemesis operations.")
 	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
 	nodes     = pflag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	replicas  = pflag.Int("replicas", 3, "How many replicas of data should dgraph store?")
 	skew      = pflag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
-	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
-		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
+	jaeger    = pflag.StringP("jaeger", "j", "",
+		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger."+
+			" Otherwise set to http://jaeger:14268.")
+	jaegerSaveTraces = pflag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
+	deferDbTeardown  = pflag.Bool("defer-db-teardown", false,
+		"Wait until user input to tear down DB nodes")
 
 	// Jepsen control flags
 	doUp       = pflag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
 	doUpOnly   = pflag.BoolP("up-only", "U", false, "Do --up and exit.")
 	doDown     = pflag.BoolP("down", "d", false, "Stop the Jepsen cluster after tests run.")
 	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
-	doServe    = pflag.Bool("serve", true, "Serve the test results page (lein run serve).")
 	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
+
+	// Option to run each test with a new cluster. This appears to mitigate flakiness.
+	refreshCluster = pflag.Bool("refresh-cluster", false,
+		"Down and up the cluster before each test.")
 
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
@@ -136,6 +151,12 @@ var (
 	testAll = pflag.Bool("test-all", false,
 		"Run the following workload and nemesis combinations: "+
 			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
+	exitOnFailure = pflag.BoolP("exit-on-failure", "e", false,
+		"Don't run any more tests after a failure.")
+)
+
+const (
+	maxRetries = 5
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -159,10 +180,10 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 }
 
-func jepsenUp() {
-	cmd := command("./up.sh",
-		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
-	cmd.Dir = *jepsenRoot + "/docker/"
+func jepsenUp(jepsenPath string) {
+	cmd := command("./up.sh", "--dev", "--daemon",
+		"--compose", "../dgraph/docker/docker-compose.yml")
+	cmd.Dir = jepsenPath + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	env := os.Environ()
@@ -172,28 +193,78 @@ func jepsenUp() {
 	}
 }
 
-func jepsenDown() {
+func jepsenDown(jepsenPath string) {
 	cmd := command("docker-compose",
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
 		"down")
-	cmd.Dir = *jepsenRoot + "/docker/"
+	cmd.Dir = jepsenPath + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		log.Fatal(err)
+		switch {
+		case strings.Contains(err.Error(), "Couldn't find env file"):
+			// This is OK. Probably tried to call down before up was ever called.
+		default:
+			log.Println(err)
+		}
 	}
 }
 
-func jepsenServe() {
-	cmd := command(
-		"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
-		"lein", "run", "serve")
-	// Ignore output and errors. It's okay if "lein run serve" already ran before.
-	_ = cmd.Run()
+func jepsenServe() error {
+	// Check if the page is already up
+	checkServing := func() error {
+		url := jepsenURL()
+		_, err := http.Get(url) // nolint:gosec
+		return err
+	}
+	if err := checkServing(); err == nil {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	errCh := make(chan error)
+	go func() {
+		// If this runs for the first time it takes about a minute before
+		// starting in order to fetch and install dependencies.
+		cmd := command(
+			"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
+			"lein", "run", "serve")
+		if *dryRun {
+			wg.Done()
+			errCh <- nil
+			return
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stdout
+		// lein run serve runs indefinitely, so there's no need to wait for the
+		// command to finish.
+		_ = cmd.Start()
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-time.After(5 * time.Minute):
+				wg.Done()
+				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
+				return
+			case <-ticker.C:
+				if err := checkServing(); err == nil {
+					ticker.Stop()
+					wg.Done()
+					errCh <- nil
+					return
+				}
+			default:
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+	wg.Wait()
+	return <-errCh
 }
 
-func openJepsenBrowser() {
+func jepsenURL() string {
 	cmd := command(
 		"docker", "inspect", "--format",
 		`{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}`,
@@ -204,11 +275,10 @@ func openJepsenBrowser() {
 		log.Fatal(err)
 	}
 	port := strings.TrimSpace(out.String())
-	jepsenUrl := "http://localhost:" + port
-	browser.Open(jepsenUrl)
+	return "http://localhost:" + port
 }
 
-func runJepsenTest(test *jepsenTest) int {
+func runJepsenTest(test *jepsenTest) error {
 	dockerCmd := []string{
 		"docker", "exec", "jepsen-control",
 		"/bin/bash", "-c",
@@ -224,16 +294,19 @@ func runJepsenTest(test *jepsenTest) int {
 		"--time-limit", strconv.Itoa(test.timeLimit),
 		"--concurrency", test.concurrency,
 		"--rebalance-interval", test.rebalanceInterval,
+		"--nemesis-interval", test.nemesisInterval,
 		"--local-binary", test.localBinary,
 		"--nodes", test.nodes,
+		"--replicas", strconv.Itoa(test.replicas),
 		"--test-count", strconv.Itoa(test.testCount),
 	}
 	if test.nemesis == "skew-clock" {
 		testCmd = append(testCmd, "--skew", test.skew)
 	}
 	if *jaeger != "" {
-		testCmd = append(testCmd, "--dgraph-jaeger-collector", *jaeger)
-		testCmd = append(testCmd, "--tracing", *jaeger+"/api/traces")
+		testCmd = append(testCmd,
+			"--dgraph-jaeger-collector", *jaeger,
+			"--tracing", *jaeger+"/api/traces")
 	}
 	dockerCmd = append(dockerCmd, strings.Join(testCmd, " "))
 
@@ -261,38 +334,33 @@ func runJepsenTest(test *jepsenTest) int {
 		// TODO The exit code could probably be checked instead of checking the output.
 		// Check jepsen source to be sure.
 		if strings.Contains(out.String(), "Analysis invalid") {
-			return testFail
+			return errTestFail
 		}
-		return testIncomplete
+		return errTestIncomplete
 	}
 	if strings.Contains(out.String(), "Everything looks good!") {
-		return testPass
+		return nil
 	}
-	return testIncomplete
+	return errTestIncomplete
 }
 
 func inCi() bool {
 	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
-func tcStart(testName string) func(pass int) {
-	if !inCi() {
-		return func(int) {}
+func saveJaegerTracesToJepsen(jepsenPath string) {
+	dst := path.Join(jepsenPath, "dgraph", "store", "current", "jaeger")
+	cmd := command("sudo", "docker", "cp", "jaeger:/working/jaeger", dst)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
 	}
-	now := time.Now()
-	fmt.Printf("##teamcity[testStarted name='%v']\n", testName)
-	return func(pass int) {
-		durMs := time.Since(now).Nanoseconds() / 1e6
-		switch pass {
-		case testPass:
-			fmt.Printf("##teamcity[testFinished name='%v' duration='%v']\n", testName, durMs)
-		case testFail:
-			fmt.Printf("##teamcity[testFailed='%v' duration='%v']\n", testName, durMs)
-		case testIncomplete:
-			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n",
-				testName, durMs)
-		}
+	absDst, err := os.Readlink(dst)
+	if err != nil {
+		log.Fatal(err)
 	}
+	log.Printf("Saved Jaeger traces to %v\n", absDst)
 }
 
 func main() {
@@ -308,7 +376,6 @@ func main() {
 		fmt.Printf("$ %v --jepsen-root $JEPSEN_ROOT --test-all\n", os.Args[0])
 	}
 	pflag.Parse()
-
 	if *jepsenRoot == "" {
 		log.Fatal("--jepsen-root must be set.")
 	}
@@ -316,12 +383,14 @@ func main() {
 		log.Fatal("GOPATH must be set.")
 	}
 
+	shouldOpenPage := *web && !*dryRun
+
 	if *doDownOnly {
-		jepsenDown()
+		jepsenDown(*jepsenRoot)
 		os.Exit(0)
 	}
 	if *doUpOnly {
-		jepsenUp()
+		jepsenUp(*jepsenRoot)
 		os.Exit(0)
 	}
 
@@ -340,18 +409,24 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
-	if *doUp {
-		jepsenUp()
+	if *doDown && !*refreshCluster {
+		jepsenDown(*jepsenRoot)
 	}
-	if *doServe {
-		go jepsenServe()
-		if *web && !*dryRun {
-			openJepsenBrowser()
+	if *doUp && !*refreshCluster {
+		jepsenUp(*jepsenRoot)
+	}
+
+	if !*refreshCluster {
+		if err := jepsenServe(); err != nil {
+			log.Fatal(err)
 		}
-	}
-	if *web && !*dryRun && *jaeger != "" {
-		// Open Jaeger UI
-		browser.Open("http://localhost:16686")
+		if shouldOpenPage {
+			url := jepsenURL()
+			browser.Open(url)
+			if *jaeger != "" {
+				browser.Open("http://localhost:16686")
+			}
+		}
 	}
 
 	workloads := strings.Split(*workload, " ")
@@ -359,23 +434,59 @@ func main() {
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
-			tcEnd := tcStart(fmt.Sprintf("Workload:%v,Nemeses:%v", w, n))
-			status := runJepsenTest(&jepsenTest{
-				workload:          w,
-				nemesis:           n,
-				timeLimit:         *timeLimit,
-				concurrency:       *concurrency,
-				rebalanceInterval: *rebalanceInterval,
-				localBinary:       *localBinary,
-				nodes:             *nodes,
-				skew:              *skew,
-				testCount:         *testCount,
-			})
-			tcEnd(status)
-		}
-	}
+			tries := 0
+		retryLoop:
+			for {
+				if *refreshCluster {
+					jepsenDown(*jepsenRoot)
+					jepsenUp(*jepsenRoot)
+					if err := jepsenServe(); err != nil {
+						log.Fatal(err)
+					}
+					// Sleep for 10 seconds to let the cluster start before running the test.
+					time.Sleep(10 * time.Second)
+				}
 
-	if *doDown {
-		jepsenDown()
+				err := runJepsenTest(&jepsenTest{
+					workload:          w,
+					nemesis:           n,
+					timeLimit:         *timeLimit,
+					concurrency:       *concurrency,
+					rebalanceInterval: *rebalanceInterval,
+					nemesisInterval:   *nemesisInterval,
+					localBinary:       *localBinary,
+					nodes:             *nodes,
+					replicas:          *replicas,
+					skew:              *skew,
+					testCount:         *testCount,
+					deferDbTeardown:   *deferDbTeardown,
+				})
+
+				switch err {
+				case nil:
+					break retryLoop
+				case errTestFail:
+					if *jaegerSaveTraces {
+						saveJaegerTracesToJepsen(*jepsenRoot)
+					}
+					if *exitOnFailure {
+						os.Exit(1)
+					}
+					defer os.Exit(1)
+					break retryLoop
+				case errTestIncomplete:
+					// Retry incomplete tests. Sometimes tests fail due to temporary errors.
+					tries++
+					if tries == maxRetries {
+						fmt.Fprintf(os.Stderr, "Test with workload %s and nemesis %s could not "+
+							"start after maximum number of retries", w, n)
+						defer os.Exit(1)
+						break retryLoop
+					} else {
+						continue
+					}
+				}
+			}
+		}
 	}
 }

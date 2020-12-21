@@ -21,29 +21,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
 )
 
-func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
-}
-
 func setSchema(schema string) {
-	err := client.Alter(context.Background(), &api.Operation{
-		Schema: schema,
-	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{
+			Schema: schema,
+		})
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Second)
 	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 }
 
 func dropPredicate(pred string) {
@@ -72,10 +69,34 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:      query,
+		RespFormat: api.Request_RDF,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(res.Rdf), err
+}
+
 func processQueryNoErr(t *testing.T, query string) string {
 	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
 	return res
+}
+
+// processQueryForMetrics works like processQuery but returns metrics instead of response.
+func processQueryForMetrics(t *testing.T, query string) *api.Metrics {
+	txn := client.NewTxn()
+	defer txn.Discard(context.Background())
+
+	res, err := txn.Query(context.Background(), query)
+	require.NoError(t, err)
+	return res.Metrics
 }
 
 func processQueryWithVars(t *testing.T, query string,
@@ -96,7 +117,7 @@ func processQueryWithVars(t *testing.T, query string,
 	return string(jsonResponse), err
 }
 
-func addTriplesToCluster(triples string) {
+func addTriplesToCluster(triples string) error {
 	txn := client.NewTxn()
 	ctx := context.Background()
 	defer txn.Discard(ctx)
@@ -105,10 +126,7 @@ func addTriplesToCluster(triples string) {
 		SetNquads: []byte(triples),
 		CommitNow: true,
 	})
-	if err != nil {
-		panic(fmt.Sprintf("Could not add triples. Got error %v", err.Error()))
-	}
-
+	return err
 }
 
 func deleteTriplesInCluster(triples string) {
@@ -125,14 +143,14 @@ func deleteTriplesInCluster(triples string) {
 	}
 }
 
-func addGeoPointToCluster(uid uint64, pred string, point []float64) {
+func addGeoPointToCluster(uid uint64, pred string, point []float64) error {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Point', 'coordinates':[%v, %v]}"^^<geo:geojson> .`,
 		uid, pred, point[0], point[1])
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
-func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) {
+func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) error {
 	coordinates := "["
 	for i, ring := range polygon {
 		coordinates += "["
@@ -154,10 +172,10 @@ func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Polygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, pred, coordinates)
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
-func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
+func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 	coordinates := "["
 	for i, polygon := range polygons {
 		coordinates += "["
@@ -187,47 +205,70 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 	triple := fmt.Sprintf(
 		`<%d> <geometry> "{'type':'MultiPolygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, coordinates)
-	addTriplesToCluster(triple)
+	return addTriplesToCluster(triple)
 }
 
 const testSchema = `
 type Person {
-	name: string
-	pet: Animal
+	name
+	pet
+	friend
+	gender
+	alive
 }
 
 type Animal {
-	name: string
+	name
 }
 
 type CarModel {
-	make: string
-	model: string
-	year: int
-	previous_model: CarModel
+	make
+	model
+	year
+	previous_model
+	<~previous_model>
+}
+
+type Object {
+	name
+	owner
 }
 
 type SchoolInfo {
-	name: string
-	abbr: string
-	school: [uid]
-	district: [uid]
-	state: [uid]
-	county: [uid]
+	name
+	abbr
+	school
+	district
+	state
+	county
 }
 
 type User {
-	name: string
-	password: password
+	name
+	password
+	gender
+	friend
+	alive
 }
 
 type Node {
-	node: uid
-	name: string
+	node
+	name
+}
+
+type Speaker {
+	name
+	language
 }
 
 name                           : string @index(term, exact, trigram) @count @lang .
+name_lang                      : string @lang .
+lang_type                      : string @index(exact) .
+name_lang_index                : string @index(exact) @lang .
+alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
+alias_lang                     : string @index(exact) @lang .
+abbr                           : string .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
 film.film.initial_release_date : dateTime @index(year) .
@@ -242,8 +283,8 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
+pet_name                       : [string] @index(exact) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
-noindex_name                   : string .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
@@ -264,6 +305,26 @@ previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
 number                         : int @index(int) .
+district                       : [uid] .
+state                          : [uid] .
+county                         : [uid] .
+firstName                      : string .
+lastName                       : string .
+newname                        : string @index(exact, term) .
+newage                         : int .
+boss                           : uid .
+newfriend                      : [uid] .
+owner                          : [uid] .
+noconflict_pred                : string @noconflict .
+noindex_name                   : string .
+noindex_age                    : int .
+noindex_dob                    : datetime .
+noindex_alive                  : bool .
+noindex_salary                 : float .
+language                       : [string] .
+score                          : [int] @index(int) .
+average                        : [float] @index(float) .
+gender						   : string .
 `
 
 func populateCluster() {
@@ -275,7 +336,7 @@ func populateCluster() {
 	setSchema(testSchema)
 	testutil.AssignUids(100000)
 
-	addTriplesToCluster(`
+	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
@@ -339,16 +400,59 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
-
+		<10101> <name_lang> "zon"@sv .
+		<10101> <name_lang> "öffnen"@de .
+		<10101> <name_lang_index> "zon"@sv .
+		<10101> <name_lang_index> "öffnen"@de .
+		<10101> <lang_type> "Test" .
+		<10102> <name_lang> "öppna"@sv .
+		<10102> <name_lang> "zumachen"@de .
+		<10102> <name_lang_index> "öppna"@sv .
+		<10102> <name_lang_index> "zumachen"@de .
+		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
 		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
 		<11003> <name> "No. 5 the film"@en .
 		<11100> <name> "expand" .
 
+		<51> <name> "A" .
+		<52> <name> "B" .
+		<53> <name> "C" .
+		<54> <name> "D" .
+		<55> <name> "E" .
+		<56> <name> "F" .
+		<57> <name> "G" .
+		<58> <name> "H" .
+		<59> <name> "I" .
+		<60> <name> "J" .
+
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
+		<2> <noindex_name> "King Lear's name not indexed" .
+		<3> <noindex_name> "Margaret's name not indexed" .
+		<4> <noindex_name> "Leonard's name not indexed" .
+
+		<1> <noindex_age> "21" .
+		<2> <noindex_age> "22" .
+		<3> <noindex_age> "23" .
+		<4> <noindex_age> "24" .
+
+		<1> <noindex_dob> "1810-11-01" .
+		<2> <noindex_dob> "1710-11-01" .
+		<3> <noindex_dob> "1610-11-01" .
+		<4> <noindex_dob> "1510-11-01" .
+
+		<1> <noindex_alive> "true" .
+		<2> <noindex_alive> "false" .
+		<3> <noindex_alive> "false" .
+		<4> <noindex_alive> "true" .
+
+		<1> <noindex_salary> "501.23" .
+		<2> <noindex_salary> "589.04" .
+		<3> <noindex_salary> "459.47" .
+		<4> <noindex_salary> "967.68" .
 
 		<1> <friend> <23> .
 		<1> <friend> <24> .
@@ -446,6 +550,12 @@ func populateCluster() {
 		<31> <alias> "Allan Matt" .
 		<101> <alias> "John Oliver" .
 
+		<23> <alias_lang> "Zambo Alice"@en .
+		<24> <alias_lang> "John Alice"@en .
+		<25> <alias_lang> "Bob Joe"@en .
+		<31> <alias_lang> "Allan Matt"@en .
+		<101> <alias_lang> "John Oliver"@en .
+
 		<1> <bin_data> "YmluLWRhdGE=" .
 
 		<1> <graduation> "1932-01-01" .
@@ -512,6 +622,10 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<23> <dgraph.type> "Person" .
+		<24> <dgraph.type> "Person" .
+		<25> <dgraph.type> "Person" .
+		<31> <dgraph.type> "Person" .
 		<32> <dgraph.type> "SchoolInfo" .
 		<33> <dgraph.type> "SchoolInfo" .
 		<34> <dgraph.type> "SchoolInfo" .
@@ -543,37 +657,170 @@ func populateCluster() {
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
 
+		<202> <name> "Car" .
 		<202> <make> "Toyota" .
 		<202> <year> "2009" .
 		<202> <model> "Prius" .
 		<202> <model> "プリウス"@jp .
+		<202> <owner> <203> .
 		<202> <dgraph.type> "CarModel" .
+		<202> <dgraph.type> "Object" .
+
+		<203> <owner_name> "Owner of Prius" .
+		<203> <dgraph.type> "Person" .
+
+		# data for regexp testing
+		_:luke <firstName> "Luke" .
+		_:luke <lastName> "Skywalker" .
+		_:leia <firstName> "Princess" .
+		_:leia <lastName> "Leia" .
+		_:han <firstName> "Han" .
+		_:han <lastName> "Solo" .
+		_:har <firstName> "Harrison" .
+		_:har <lastName> "Ford" .
+		_:ss <firstName> "Steven" .
+		_:ss <lastName> "Spielberg" .
+
+		<501> <newname> "P1" .
+		<502> <newname> "P2" .
+		<503> <newname> "P3" .
+		<504> <newname> "P4" .
+		<505> <newname> "P5" .
+		<506> <newname> "P6" .
+		<507> <newname> "P7" .
+		<508> <newname> "P8" .
+		<509> <newname> "P9" .
+		<510> <newname> "P10" .
+		<511> <newname> "P11" .
+		<512> <newname> "P12" .
+
+		<501> <newage> "21" .
+		<502> <newage> "22" .
+		<503> <newage> "23" .
+		<504> <newage> "24" .
+		<505> <newage> "25" .
+		<506> <newage> "26" .
+		<507> <newage> "27" .
+		<508> <newage> "28" .
+		<509> <newage> "29" .
+		<510> <newage> "30" .
+		<511> <newage> "31" .
+		<512> <newage> "32" .
+
+		<501> <newfriend> <502> .
+		<501> <newfriend> <503> .
+		<501> <boss> <504> .
+		<502> <newfriend> <505> .
+		<502> <newfriend> <506> .
+		<503> <newfriend> <507> .
+		<503> <newfriend> <508> .
+		<504> <newfriend> <509> .
+		<504> <newfriend> <510> .
+		<502> <boss> <510> .
+		<510> <newfriend> <511> .
+		<510> <newfriend> <512> .
+
+		<51> <connects> <52>  (weight=11) .
+		<51> <connects> <53>  (weight=1) .
+		<51> <connects> <54>  (weight=10) .
+
+		<53> <connects> <51>  (weight=10) .
+		<53> <connects> <52>  (weight=10) .
+		<53> <connects> <54>  (weight=1) .
+
+		<52> <connects> <51>  (weight=10) .
+		<52> <connects> <53>  (weight=10) .
+		<52> <connects> <54>  (weight=10) .
+
+		<54> <connects> <51>  (weight=10) .
+		<54> <connects> <52>  (weight=2) .
+		<54> <connects> <53>  (weight=10) .
+		<54> <connects> <55>  (weight=1) .
+
+
+		# tests for testing hop behavior for shortest path queries
+		<56> <connects> <57> (weight=1) .
+		<56> <connects> <58> (weight=1) .
+		<58> <connects> <59> (weight=1) .
+		<59> <connects> <60> (weight=1) .
+
+		# data for testing between operator.
+		<20000> <score> "90" .
+		<20000> <score> "56" .
+		<20000> <average> "46.93" .
+		<20000> <average> "55.10" .
+		<20000> <pet_name> "little master" .
+		<20000> <pet_name> "master blaster" .
+
+		<20001> <score> "68" .
+		<20001> <score> "85" .
+		<20001> <average> "35.20" .
+		<20001> <average> "49.33" .
+		<20001> <pet_name> "mahi" .
+		<20001> <pet_name> "ms" .
 	`)
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+	}
 
-	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
-	addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
-	addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
-	addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
+	err = addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
+	err = addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add geo point to the cluster. Got error %v", err.Error()))
+	}
 
-	addGeoPolygonToCluster(23, "loc", [][][]float64{
+	err = addGeoPolygonToCluster(23, "loc", [][][]float64{
 		{{0.0, 0.0}, {2.0, 0.0}, {2.0, 2.0}, {0.0, 2.0}, {0.0, 0.0}},
 	})
-	addGeoPolygonToCluster(5104, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5104, "geometry", [][][]float64{
 		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
 			{-121.6, 37.1}},
 	})
-	addGeoPolygonToCluster(5105, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5105, "geometry", [][][]float64{
 		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
 			{-122.04, 37.43}, {-122.06, 37.37}},
 	})
-	addGeoPolygonToCluster(5106, "geometry", [][][]float64{
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
+	err = addGeoPolygonToCluster(5106, "geometry", [][][]float64{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
 			{-122.25, 37.49}},
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add geo polygon to the cluster. Got error %v",
+			err.Error()))
+	}
 
-	addGeoMultiPolygonToCluster(5107, [][][][]float64{
+	err = addGeoMultiPolygonToCluster(5107, [][][][]float64{
 		{{{-74.29504394531249, 40.19146303804063}, {-74.59716796875, 40.39258071969131},
 			{-74.6466064453125, 40.20824570152502}, {-74.454345703125, 40.06125658140474},
 			{-74.28955078125, 40.17467622056341}, {-74.29504394531249, 40.19146303804063}}},
@@ -581,6 +828,10 @@ func populateCluster() {
 			{-74.0478515625, 40.66813955408042}, {-73.98193359375, 40.772221877329024},
 			{-74.102783203125, 40.8595252289932}}},
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not able to add multi polygon to the cluster. Got error %v",
+			err.Error()))
+	}
 
 	// Add data for regex tests.
 	nextId := uint64(0x2000)
@@ -595,12 +846,16 @@ func populateCluster() {
 			<%d> <value> "%s" .
 			<0x1234> <pattern> <%d> .
 		`, nextId, p, nextId)
-		addTriplesToCluster(triples)
+		err = addTriplesToCluster(triples)
+		if err != nil {
+			panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+		}
+
 		nextId++
 	}
 
 	// Add data for datetime tests
-	addTriplesToCluster(`
+	err = addTriplesToCluster(`
 		<301> <created_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28T14:41:57+30:00) .
 		<302> <created_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
 		<303> <created_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-29) .
@@ -617,4 +872,8 @@ func populateCluster() {
 		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
 	`)
+	if err != nil {
+		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
+	}
+
 }

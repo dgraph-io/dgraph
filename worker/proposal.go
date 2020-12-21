@@ -17,7 +17,9 @@
 package worker
 
 import (
-	"fmt"
+	"context"
+	"encoding/binary"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,7 +33,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
@@ -44,14 +45,13 @@ func newTimeout(retry int) time.Duration {
 	return timeout
 }
 
+// limiter is initialized as part of worker Init.
 var limiter rateLimiter
 
-func init() {
-	go limiter.bleed()
-}
-
 type rateLimiter struct {
-	iou int32
+	iou int
+	max int
+	c   *sync.Cond
 }
 
 // Instead of using the time/rate package, we use this simple one, because that
@@ -59,18 +59,16 @@ type rateLimiter struct {
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed() {
-	ctx := context.Background()
-
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
 	for range tick.C {
-		if atomic.AddInt32(&rl.iou, -1) >= 0 {
-			<-pendingProposals
-			ostats.Record(ctx, x.PendingProposals.M(-1))
-		} else {
-			atomic.AddInt32(&rl.iou, 1)
-		}
+		rl.c.L.Lock()
+		iou := rl.iou
+		rl.c.L.Unlock()
+		// Pending proposals is tracking ious.
+		ostats.Record(context.Background(), x.PendingProposals.M(int64(iou)))
+		rl.c.Broadcast()
 	}
 }
 
@@ -78,31 +76,41 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
 	weight := 1 << uint(retry) // Use an exponentially increasing weight.
-	for i := 0; i < weight; i++ {
+	c := rl.c
+	c.L.Lock()
+
+	for {
+		if rl.iou+weight <= rl.max {
+			rl.iou += weight
+			c.L.Unlock()
+			return nil
+		}
+		c.Wait()
+		// We woke up after some time. Let's check if the context is done.
 		select {
-		case pendingProposals <- struct{}{}:
-			ostats.Record(context.Background(), x.PendingProposals.M(1))
 		case <-ctx.Done():
+			c.L.Unlock()
 			return ctx.Err()
+		default:
 		}
 	}
-	return nil
 }
 
 // Done would slowly bleed the retries out.
 func (rl *rateLimiter) decr(retry int) {
-	if retry == 0 {
-		<-pendingProposals
-		ostats.Record(context.Background(), x.PendingProposals.M(-1))
-		return
-	}
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
-	atomic.AddInt32(&rl.iou, int32(weight))
+
+	rl.c.L.Lock()
+	// decr() performs opposite of incr().
+	// It reduces the rl.iou by weight as incr increases it by weight.
+	rl.iou -= weight
+	rl.c.L.Unlock()
+	rl.c.Broadcast()
 }
 
 // uniqueKey is meant to be unique across all the replicas.
-func uniqueKey() string {
-	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
+func uniqueKey() uint64 {
+	return uint64(groups().Node.Id)<<32 | uint64(groups().Node.Rand.Uint32())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -134,31 +142,44 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	var noTimeout bool
 
 	checkTablet := func(pred string) error {
-		if tablet, err := groups().Tablet(pred); err != nil {
+		tablet, err := groups().Tablet(pred)
+		switch {
+		case err != nil:
 			return err
-		} else if tablet == nil || tablet.GroupId == 0 {
+		case tablet == nil || tablet.GroupId == 0:
 			return errNonExistentTablet
-		} else if tablet.GroupId != groups().groupId() {
+		case tablet.GroupId != groups().groupId():
 			return errUnservedTablet
+		default:
+			return nil
 		}
-		return nil
 	}
 
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
+	ctx = schema.GetWriteContext(ctx)
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
 			if err := checkTablet(edge.Attr); err != nil {
 				return err
 			}
-			su, ok := schema.State().Get(edge.Attr)
+			su, ok := schema.State().Get(ctx, edge.Attr)
 			if !ok {
+				// We don't allow mutations for reserved predicates if the schema for them doesn't
+				// already exist.
+				if x.IsReservedPredicate(edge.Attr) {
+					return errors.Errorf("Can't store predicate `%s` as it is prefixed with "+
+						"`dgraph.` which is reserved as the namespace for dgraph's internal "+
+						"types/predicates.",
+						edge.Attr)
+				}
 				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {
 				return err
 			}
 		}
+
 		for _, schema := range proposal.Mutations.Schema {
 			if err := checkTablet(schema.Predicate); err != nil {
 				return err
@@ -168,20 +189,23 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 			noTimeout = true
 		}
-		for _, typ := range proposal.Mutations.Types {
-			if err := checkType(typ); err != nil {
-				return err
-			}
-		}
 	}
 
 	// Let's keep the same key, so multiple retries of the same proposal would
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	proposal.Key = key
-	span := otrace.FromContext(ctx)
+	data := make([]byte, 8+proposal.Size())
+	binary.BigEndian.PutUint64(data, key)
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	if err != nil {
+		return err
+	}
 
+	// Trim data to the new size after Marshal.
+	data = data[:8+sz]
+
+	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")
 	defer stop()
 
@@ -194,14 +218,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			ErrCh: errCh,
 			Ctx:   cctx,
 		}
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%x]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
-		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
-		data, err := proposal.Marshal()
-		if err != nil {
-			return err
-		}
+		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
+
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
 		}
@@ -248,7 +269,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	//
 	// Let's try 3 times before giving up.
 
-	for i := 0; i < 3; i++ {
+	proposeWithLimit := func(i int) error {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
 		switch {
@@ -257,13 +278,19 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			// below. We should always propose it irrespective of how many pending proposals there
 			// might be.
 		default:
+			span.Annotatef(nil, "incr with %d", i)
 			if err := limiter.incr(ctx, i); err != nil {
 				return err
 			}
+			// We have now acquired slots in limiter. We MUST release them before we retry this
+			// proposal, otherwise we end up with dining philosopher problem.
 			defer limiter.decr(i)
 		}
+		return propose(newTimeout(i))
+	}
 
-		if err := propose(newTimeout(i)); err != errInternalRetry {
+	for i := 0; i < 3; i++ {
+		if err := proposeWithLimit(i); err != errInternalRetry {
 			return err
 		}
 	}

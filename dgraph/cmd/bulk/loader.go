@@ -24,15 +24,21 @@ import (
 	"hash/adler32"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,11 +51,13 @@ type options struct {
 	DataFiles        string
 	DataFormat       string
 	SchemaFile       string
+	GqlSchemaFile    string
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       uint64
+	PartitionBufSize int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumReducers      int
@@ -60,15 +68,28 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	ClientDir        string
+	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int
 
 	shardOutputDirs []string
+
+	// ........... Badger options ..........
+	// EncryptionKey is the key used for encryption. Enterprise only feature.
+	EncryptionKey x.SensitiveByteSlice
+	// BadgerCompression is the compression algorithm to use while writing to badger.
+	BadgerCompression bo.CompressionType
+	// BadgerCompressionlevel is the compression level to use while writing to badger.
+	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {
-	opt           options
+	opt           *options
 	prog          *progress
 	xids          *xidmap.XidMap
 	schema        *schemaStore
@@ -76,7 +97,8 @@ type state struct {
 	readerChunkCh chan *bytes.Buffer
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
-	writeTs       uint64 // All badger writes use this timestamp
+	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	writeTs       uint64       // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -85,15 +107,26 @@ type loader struct {
 	zero    *grpc.ClientConn
 }
 
-func newLoader(opt options) *loader {
-	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+func newLoader(opt *options) *loader {
+	if opt == nil {
+		log.Fatalf("Cannot create loader with nil options.")
+	}
 
+	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+	x.Check(err)
+	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure())
+	}
+	if tlsConf != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
@@ -103,7 +136,7 @@ func newLoader(opt options) *loader {
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
 	}
-	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
+	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -130,13 +163,19 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string) *schema.ParsedSchema {
-	f, err := os.Open(filename)
+func readSchema(opt *options) *schema.ParsedSchema {
+	f, err := os.Open(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
-	var r io.Reader = f
-	if filepath.Ext(filename) == ".gz" {
-		r, err = gzip.NewReader(f)
+
+	key := opt.EncryptionKey
+	if !opt.Encrypted {
+		key = nil
+	}
+	r, err := enc.GetReader(key, f)
+	x.Check(err)
+	if filepath.Ext(opt.SchemaFile) == ".gz" {
+		r, err = gzip.NewReader(r)
 		x.Check(err)
 	}
 
@@ -150,7 +189,15 @@ func readSchema(filename string) *schema.ParsedSchema {
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
-	ld.xids = xidmap.New(ld.zero, nil)
+	var db *badger.DB
+	if len(ld.opt.ClientDir) > 0 {
+		x.Check(os.MkdirAll(ld.opt.ClientDir, 0700))
+
+		var err error
+		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
+	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
@@ -186,12 +233,16 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done(nil)
 
-			r, cleanup := chunker.FileReader(file)
+			key := ld.opt.EncryptionKey
+			if !ld.opt.Encrypted {
+				key = nil
+			}
+			r, cleanup := chunker.FileReader(file, key)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType, 1000)
+			chunk := chunker.NewChunker(loadType, 1000)
 			for {
-				chunkBuf, err := chunker.Chunk(r)
+				chunkBuf, err := chunk.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}
@@ -205,6 +256,9 @@ func (ld *loader) mapStage() {
 	}
 	x.Check(thr.Finish())
 
+	// Send the graphql triples
+	ld.processGqlSchema(loadType)
+
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
@@ -213,13 +267,64 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	x.Check(ld.xids.Flush())
+	if db != nil {
+		x.Check(db.Close())
+	}
 	ld.xids = nil
+}
+
+func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
+	if ld.opt.GqlSchemaFile == "" {
+		return
+	}
+
+	f, err := os.Open(ld.opt.GqlSchemaFile)
+	x.Check(err)
+	defer f.Close()
+
+	key := ld.opt.EncryptionKey
+	if !ld.opt.Encrypted {
+		key = nil
+	}
+	r, err := enc.GetReader(key, f)
+	x.Check(err)
+	if filepath.Ext(ld.opt.GqlSchemaFile) == ".gz" {
+		r, err = gzip.NewReader(r)
+		x.Check(err)
+	}
+
+	buf, err := ioutil.ReadAll(r)
+	x.Check(err)
+
+	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
+	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
+	_:gqlschema <dgraph.graphql.schema> %s .
+	`
+
+	jsonSchema := `{
+		"dgraph.type": "dgraph.graphql",
+		"dgraph.graphql.xid": "dgraph.graphql.schema",
+		"dgraph.graphql.schema": %s
+	}`
+
+	gqlBuf := &bytes.Buffer{}
+	schema := strconv.Quote(string(buf))
+	switch loadType {
+	case chunker.RdfFormat:
+		x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, schema))))
+	case chunker.JsonFormat:
+		x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, schema))))
+	}
+	ld.readerChunkCh <- gqlBuf
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	r := reducer{state: ld.state}
+	r := reducer{
+		state:     ld.state,
+		streamIds: make(map[string]uint32),
+	}
 	x.Check(r.run())
 }
 
@@ -254,6 +359,11 @@ func (ld *loader) writeSchema() {
 func (ld *loader) cleanup() {
 	for _, db := range ld.dbs {
 		x.Check(db.Close())
+	}
+	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
+		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }

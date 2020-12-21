@@ -24,6 +24,11 @@ import (
 )
 
 const nanoSecondsInSec = 1000000000
+const dateFormatY = "2006" // time.longYear
+const dateFormatYM = "2006-01"
+const dateFormatYMD = "2006-01-02"
+const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
+const dateTimeFormat = "2006-01-02T15:04:05"
 
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
@@ -190,28 +195,23 @@ func ValueForType(id TypeID) Val {
 // ParseTime parses the time from string trying various datetime formats.
 // By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
-		return t, err
+	if len(val) == len(dateFormatY) {
+		return time.Parse(dateFormatY, val)
+	}
+	if len(val) == len(dateFormatYM) {
+		return time.Parse(dateFormatYM, val)
+	}
+	if len(val) == len(dateFormatYMD) {
+		return time.Parse(dateFormatYMD, val)
+	}
+	if len(val) > len(dateTimeFormat) && val[len(dateFormatYMD)] == 'T' &&
+		(val[len(val)-1] == 'Z' || val[len(val)-3] == ':') {
+		// https://tools.ietf.org/html/rfc3339#section-5.6
+		return time.Parse(time.RFC3339, val)
 	}
 	if t, err := time.Parse(dateFormatYMDZone, val); err == nil {
 		return t, err
 	}
-	// try without timezone
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYMD, val); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateFormatYM, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatY, val)
+	// Try without timezone.
+	return time.Parse(dateTimeFormat, val)
 }
-
-const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
-const dateFormatYMD = "2006-01-02"
-const dateFormatYM = "2006-01"
-const dateFormatY = "2006"
-const dateTimeFormat = "2006-01-02T15:04:05"

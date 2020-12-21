@@ -1,0 +1,8 @@
+{
+    schemaType: __type(name: "__Schema") {
+        name,
+        fields {
+            name,
+        }
+    }
+}

@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -27,11 +28,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 )
 
 const (
-	predicateMoveTimeout = 20 * time.Minute
+	predicateMoveTimeout = 120 * time.Minute
 )
 
 /*
@@ -103,8 +103,9 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if tab == nil {
 		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
-	msg := fmt.Sprintf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
-		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
+	msg := fmt.Sprintf("Going to move predicate: [%v], size: [ondisk: %v, uncompressed: %v]"+
+		" from group %d to %d\n", predicate, humanize.IBytes(uint64(tab.OnDiskBytes)),
+		humanize.IBytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup)
 	glog.Info(msg)
 	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
@@ -139,10 +140,12 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	p := &pb.ZeroProposal{}
 	p.Tablet = &pb.Tablet{
-		GroupId:   dstGroup,
-		Predicate: predicate,
-		Space:     tab.Space,
-		Force:     true,
+		GroupId:           dstGroup,
+		Predicate:         predicate,
+		OnDiskBytes:       tab.OnDiskBytes,
+		UncompressedBytes: tab.UncompressedBytes,
+		Force:             true,
+		MoveTs:            in.TxnTs,
 	}
 	msg = fmt.Sprintf("Move at Alpha done. Now proposing: %+v", p)
 	span.Annotate(nil, msg)
@@ -155,7 +158,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	// Now that the move has happened, we can delete the predicate from the source group.
+	// Now that the move has happened, we can delete the predicate from the source group. But before
+	// doing that, we should ensure the source group understands that the predicate is now being
+	// served by the destination group. For that, we pass in the expected checksum for the source
+	// group. Only once the source group membership checksum matches, would the source group delete
+	// the predicate. This ensures that it does not service any transaction after deletion of data.
+	checksums := s.groupChecksums()
+	in.ExpectedChecksum = checksums[in.SourceGid]
 	in.DestGid = 0 // Indicates deletion of predicate in the source group.
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",
@@ -190,7 +199,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	for k, v := range s.state.Groups {
 		space := int64(0)
 		for _, tab := range v.Tablets {
-			space += tab.Space
+			space += tab.OnDiskBytes
 		}
 		groups = append(groups, kv{k, space})
 	}
@@ -210,7 +219,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 			return
 		}
 		// We move the predicate only if the difference between size of both machines is
-		// atleast 10% of src group.
+		// atleast 10% of dst group.
 		if float64(sizeDiff) < 0.1*float64(groups[0].size) {
 			continue
 		}
@@ -226,9 +235,9 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
-			if tab.Space <= sizeDiff/2 && tab.Space > size {
+			if tab.OnDiskBytes <= sizeDiff/2 && tab.OnDiskBytes > size {
 				predicate = tab.Predicate
-				size = tab.Space
+				size = tab.OnDiskBytes
 			}
 		}
 		if len(predicate) > 0 {

@@ -1,0 +1,1142 @@
+- name: "Add one node"
+  gqlquery: |
+    mutation addUserSecret($secret: AddUserSecretInput!) {
+      addUserSecret(input: [$secret]) {
+        userSecret {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "secret":
+      { "aSecret": "it is",
+        "ownedBy": "user1"
+      }
+    }
+  uids: |
+    { "UserSecret1": "0x123" }
+  authquery: |-
+    query {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
+        uid
+      }
+      UserSecret1 as var(func: uid(0x123))
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    { "UserSecret": [ { "uid": "0x123" }] }  
+
+- name: "Add multiple nodes"
+  gqlquery: |
+    mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
+      addUserSecret(input: $secrets) {
+        userSecret {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "secrets": 
+      [
+        { "aSecret": "it is", "ownedBy": "user1" },
+        { "aSecret": "another", "ownedBy": "user1" } 
+      ]
+    }
+  uids: |
+    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+  authquery: |-
+    query {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
+        uid
+      }
+      UserSecret1 as var(func: uid(0x123, 0x456))
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    { "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ] } 
+
+- name: "Add one node that fails auth"
+  gqlquery: |
+    mutation addUserSecret($secret: AddUserSecretInput!) {
+      addUserSecret(input: [$secret]) {
+        userSecret {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "secret":
+      { "aSecret": "it is",
+        "ownedBy": "user2"
+      }
+    }
+  uids: |
+    { "UserSecret1": "0x123" }
+  authquery: |-
+    query {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
+        uid
+      }
+      UserSecret1 as var(func: uid(0x123))
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    { "UserSecret": [ ] }  
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+- name: "Add multiple nodes that fails auth"
+  gqlquery: |
+    mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
+      addUserSecret(input: $secrets) {
+        userSecret {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "secrets": 
+      [
+        { "aSecret": "it is", "ownedBy": "user1" },
+        { "aSecret": "another", "ownedBy": "user2" } 
+      ]
+    }
+  uids: |
+    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+  authquery: |-
+    query {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
+        uid
+      }
+      UserSecret1 as var(func: uid(0x123, 0x456))
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    { "UserSecret": [ { "uid": "0x123" }] } 
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+- name: "Add multiple nodes of different types"
+  gqlquery: |
+    mutation addColumn($col: AddColumnInput!) {
+      addColumn(input: [$col]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col":
+      { "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "title": "a ticket" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+    }
+  json: |
+    { "Project2": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Column1": "0x456", "Ticket3": "0x789" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
+        uid
+      }
+      Ticket3 as var(func: uid(0x789))
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ],
+      "Ticket": [ { "uid": "0x789" } ]
+    }
+
+- name: "Add multiple nodes of different types that fails auth"
+  gqlquery: |
+    mutation addColumn($col: AddColumnInput!) {
+      addColumn(input: [$col]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col":
+      {
+        "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "title": "a ticket" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+    }
+  json: |
+    { "Project2": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Column1": "0x456", "Ticket3": "0x789" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
+        uid
+      }
+      Ticket3 as var(func: uid(0x789))
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    { "Ticket": [ { "uid": "0x789" } ]}
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+- name: "Add multiples of multiple nodes of different types"
+  gqlquery: |
+    mutation addColumn($col1: AddColumnInput!, $col2: AddColumnInput!) {
+      addColumn(input: [$col1, $col2]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col1":
+      { "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "title": "a ticket" } ]
+      },
+      "col2":
+      { "inProject": { "projID": "0x123" },
+        "name": "another column",
+        "tickets": [ { "title": "another ticket" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+    }
+  json: |
+    {
+      "Project2": [ { "uid": "0x123" } ],
+      "Project5": [ { "uid": "0x123" } ]
+    }
+  uids: |
+    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456, 0x459))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
+        uid
+      }
+      Ticket3 as var(func: uid(0x789, 0x799))
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" }, { "uid": "0x459" } ],
+      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
+    }
+
+- name: "Add multiples of multiple nodes of different types that fails auth"
+  gqlquery: |
+    mutation addColumn($col1: AddColumnInput!, $col2: AddColumnInput!) {
+      addColumn(input: [$col1, $col2]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col1":
+      { "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "title": "a ticket" } ]
+      },
+      "col2":
+      { "inProject": { "projID": "0x123" },
+        "name": "another column",
+        "tickets": [ { "title": "another ticket" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+    }
+  json: |
+    {
+      "Project2": [ { "uid": "0x123" } ],
+      "Project5": [ { "uid": "0x123" } ]
+    }
+  uids: |
+    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456, 0x459))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
+        uid
+      }
+      Ticket3 as var(func: uid(0x789, 0x799))
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ],
+      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
+    }
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+# See comments about additional deletes in add_mutation_test.yaml.
+# Because of those additional deletes, for example, when we add a column and
+# link it to an existing ticket, we remove that ticket from the column it was
+# attached to ... so we need authorization to update that column as well
+# as to add the new column.
+- name: "Add with auth on additional delete"
+  gqlquery: |
+    mutation addColumn($col: AddColumnInput!) {
+      addColumn(input: [$col]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col":
+      { "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "id": "0x789" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
+        uid
+      }
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Project2": [ { "uid": "0x123" } ],
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ],
+      "Column4.auth": [ { "uid": "0x799" } ]
+    }
+  uids: |
+    { "Column1": "0x456" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ]
+    }
+
+- name: "Add with auth on additional delete that fails"
+  gqlquery: |
+    mutation addColumn($col: AddColumnInput!) {
+      addColumn(input: [$col]) {
+        column {
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "col":
+      { "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "id": "0x789" } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+        uid
+      }
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
+        uid
+      }
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Project2": [ { "uid": "0x123" } ],
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ]
+    }
+  uids: |
+    { "Column1": "0x456" }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ]
+    }
+  error:
+    { "message": "couldn't rewrite query for mutation addColumn because authorization failed" }
+
+- name: "Add with deep auth on additional delete"
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1",
+        "pwd": "Password",
+        "columns": [ {
+          "name": "a column",
+          "tickets": [ { "id": "0x789" } ]
+        } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
+        uid
+      }
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ],
+      "Column4.auth": [ { "uid": "0x799" } ]
+    }
+  uids: |
+    {
+      "Project1": "0x123",
+      "Column2": "0x456"
+    }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
+        uid
+      }
+      Project3 as var(func: uid(0x123))
+      ProjectAuth4 as var(func: uid(Project3)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ],
+      "Project": [ { "uid": "0x123" } ]
+    }
+
+- name: "Add with deep auth on additional delete that fails"
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1",
+        "pwd": "Password",
+        "columns": [ {
+          "name": "a column",
+          "tickets": [ { "id": "0x789" } ]
+        } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(ColumnAuth5)) {
+        uid
+      }
+      ColumnAuth5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+    }
+  json: |
+    {
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ]
+    }
+  uids: |
+    {
+      "Project1": "0x123",
+      "Column2": "0x456"
+    }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      ColumnAuth2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
+        uid
+      }
+      Project3 as var(func: uid(0x123))
+      ProjectAuth4 as var(func: uid(Project3)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+  authjson: |
+    {
+      "Column": [ { "uid": "0x456" } ],
+      "Project": [ { "uid": "0x123" } ]
+    }
+  error:
+    { "message": "couldn't rewrite query for mutation addProject because authorization failed" }
+
+- name: "Add with top level RBAC false."
+  gqlquery: |
+    mutation addLog($log: AddLogInput!) {
+      addLog(input: [$log]) {
+        log {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "pwd": "password",
+        "logs": "log123",
+        "random": "random123"
+      }
+    }
+  uids: |
+    { "Log1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+
+- name: "Add with top level RBAC true."
+  gqlquery: |
+    mutation addLog($log: AddLogInput!) {
+      addLog(input: [$log]) {
+        log {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "log":
+      {
+        "pwd": "something",
+        "logs": "log123",
+        "random": "random123"
+      }
+    }
+  uids: |
+    { "Log1": "0x123" }
+  skipauth: true
+
+- name: "Add with top level OR RBAC true."
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1",
+        "pwd": "somepassword"
+      }
+    }
+  uids: |
+    {
+      "Project1": "0x123"
+    }
+  skipauth: true
+
+- name: "Add with top level OR RBAC false."
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1",
+        "pwd": "password"
+      }
+    }
+  uids: |
+    {
+      "Project1": "0x123"
+    }
+  authquery: |-
+    query {
+      Project(func: uid(Project1)) @filter(uid(ProjectAuth2)) {
+        uid
+      }
+      Project1 as var(func: uid(0x123))
+      ProjectAuth2 as var(func: uid(Project1)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+  authjson: |
+    {
+      "Project": [ { "uid": "0x123" } ]
+    }
+
+- name: "Add with top level And RBAC true."
+  gqlquery: |
+    mutation addIssue($issue: AddIssueInput!) {
+      addIssue(input: [$issue]) {
+        issue {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "issue":
+      { "msg": "log123",
+        "random": "random123",
+        "owner": {
+           "username" : "user1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  length: "2"
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Issue1": "0x789" }
+  authquery: |-
+    query {
+      Issue(func: uid(Issue1)) @filter(uid(IssueAuth2)) {
+        uid
+      }
+      Issue1 as var(func: uid(0x789))
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
+    }
+  authjson: |
+    { "Issue": [ { "uid": "0x789" }] }
+
+- name: "Add with top level And RBAC false."
+  gqlquery: |
+    mutation addIssue($issue: AddIssueInput!) {
+      addIssue(input: [$issue]) {
+        issue {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "issue":
+      { "msg": "log123",
+        "random": "random123",
+        "owner": {
+           "username" : "user1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  length: "2"
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Issue1": "0x789" }
+  authquery: |-
+    query {
+      Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: uid(0x789))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
+    }
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+- name: "Add with top level not RBAC false."
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+  uids: |
+    { "ComplexLog1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+- name: "Add with top level not RBAC true."
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexLog {
+          id
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+  uids: |
+    { "ComplexLog1": "0x123" }
+  skipauth: true
+
+- name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
+  gqlquery: |
+    mutation addQuestion($question: [AddQuestionInput!]!) {
+      addQuestion(input: $question) {
+        question{
+          id
+          text
+          author{
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    { "question":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        },
+        "answered": true
+      }]
+    }
+  uids: |
+    {"Question1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
+        uid
+      }
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"Question": [ {"uid": "0x123"}]}
+- name: "Adding node for a Type that inherits auth rules from an interface fails."
+  gqlquery: |
+    mutation addQuestion($question: [AddQuestionInput!]!) {
+      addQuestion(input: $question) {
+        question{
+          id
+          text
+          author{
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    { "question":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        },
+        "answered": false
+      }]
+    }
+  uids: |
+    {"Question1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
+        uid
+      }
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"Question": [ ], "Author": [ { "uid" : "0x456"} ] }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+- name: "Add type with having RBAC rule on interface successfully"
+  gqlquery: |
+    mutation addFbPost($post: [AddFbPostInput!]!){
+      addFbPost(input: $post){
+        fbPost {
+          text
+          author {
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ROLE: "ADMIN"
+  variables: |
+    { "post":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        }
+      }]
+    }
+  uids: |
+    {"FbPost1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      FbPost(func: uid(FbPost1)) @filter(uid(FbPostAuth2)) {
+        uid
+      }
+      FbPost1 as var(func: uid(0x123))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"FbPost": [ {"uid": "0x123"}]}
+
+- name: "Add type with Having RBAC rule on interface failed"
+  gqlquery: |
+    mutation addFbPost($post: [AddFbPostInput!]!){
+      addFbPost(input: $post){
+        fbPost{
+          text
+          author {
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ROLE: "USER"
+  variables: |
+    { "post": 
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        }
+      }]
+    }
+  uids: |
+    {"FbPost1": "0x123", "Author1": "0x456" }
+  error:
+    {"message" : "mutation failed because authorization failed"}
+  

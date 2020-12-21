@@ -1,0 +1,13 @@
+{
+  q(func: eq(count(director.film), 3)) {
+    count: count(uid)
+  }
+}
+---
+{
+  "q": [
+    {
+      "count": 5847
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+-
+  name: "Type Authorization OR (dgquery, dgquery) filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      queryUser(filter: {username: {eq: "user1"}}, order: {asc: username}) {
+        username
+        isPublic
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization OR (dgquery, rbac) filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+
+-
+  name: "Type Authorization AND (dgquery, rbac) filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getIssue(id: "0x1") {
+        msg
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization AND (dgquery, dgquery) filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getMovie(id: "0x1") {
+        name
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getTicket(id: "0x1") {
+        title
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization RBAC filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getLog(id: "0x1") {
+        logs
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+
+-
+  name: "Type Authorization filter at deep node, rbac rules false"
+  gqlquery: |
+    query {
+      queryProject(filter: {name: {eq: "Project1"}}, order: {asc: name}) {
+        name
+        columns(filter: {name: {eq: "Column1"}, order: {asc: name})
+          name
+          tickets(filter: {name: {eq: "Ticket1", order: {asc: title}) {
+            id
+            title
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getUser(username: "user1") {
+        username
+        age
+        disabled
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at deep node, rbac rules false"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+            age 
+            disabled
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization OR (dgquery, rbac) filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+
+-
+  name: "Type Authorization AND (dgquery, rbac) filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getIssue(id: "0x1") {
+        msg
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization AND filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getMovie(id: "0x1") {
+        name
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getTicket(id: "0x1") {
+        title
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Type Authorization RBAC filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getLog(id: "0x1") {
+        logs
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+
+-
+  name: "Type Authorization filter at deep node, rbac rules true"
+  gqlquery: |
+    query {
+      queryProject(filter: {name: {eq: "Project1"}}, order: {asc: name}) {
+        name
+        columns(filter: {name: {eq: "Column1"}, order: {asc: name})
+          name
+          tickets(filter: {name: {eq: "Ticket1", order: {asc: title}) {
+            id
+            title
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getUser(username: "user1") {
+        username
+        age
+        disabled
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at deep node, rbac rules true"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+            age 
+            disabled
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+    }
+

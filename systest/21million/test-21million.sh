@@ -1,10 +1,10 @@
-#!/bin/bash -e
+#!/bin/bash
 
+set -e
 readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
-QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="$GOPATH/src/github.com/dgraph-io/benchmarks"
+BENCHMARKS_REPO="${BENCHMARKS_REPO:-$(go env GOPATH)/src/github.com/dgraph-io/benchmarks}"
 SCHEMA_FILE="$BENCHMARKS_REPO/data/21million.schema"
 DATA_FILE="$BENCHMARKS_REPO/data/21million.rdf.gz"
 
@@ -18,10 +18,13 @@ function Info {
 function DockerCompose {
     docker-compose -p dgraph "$@"
 }
+function DgraphLive {
+    dgraph live "$@"
+}
 
-HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET=
+HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET= MODE=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet,mode:" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
@@ -31,6 +34,7 @@ while true; do
         --savedir)      SAVEDIR=${2,,}; shift  ;;
         --load-only)    LOAD_ONLY=yes          ;;
         --quiet)        QUIET=yes              ;;
+        --mode)         MODE=${2,,}; shift  ;;
         --)             shift; break           ;;
     esac
     shift
@@ -38,7 +42,7 @@ done
 
 if [[ $HELP ]]; then
     cat <<EOF
-usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path]
+usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path] [--mode=<normal|ludicrous|none>]
 
 options:
 
@@ -52,6 +56,9 @@ options:
                     for easier post-test review
     --load-only     load data but do not run tests
     --quiet         just report which queries differ, without a diff
+    --mode          normal = run dgraph in normal mode
+                    none = run dgraph in normal mode
+                    ludicrous = run dgraph in ludicrous mode
 EOF
     exit 0
 fi
@@ -65,6 +72,17 @@ fi
 # if already re-using it from a previous run
 if [[ $LOADER == none && -z $CLEANUP ]]; then
     CLEANUP=servers
+fi
+
+if [[ $MODE == ludicrous ]]; then
+    Info "removing old data (if any)"
+    DockerCompose down -v --remove-orphans
+    function DockerCompose {
+        docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
+    }
+    function DgraphLive {
+        dgraph live --ludicrous_mode "$@"
+    }
 fi
 
 # default to cleaning up both services and volume
@@ -98,16 +116,22 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load --rm alpha1 \
+    DockerCompose run --rm -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
         bash -s <<EOF
+            mkdir -p /data/alpha1
+            mkdir -p /data/alpha2
+            mkdir -p /data/alpha3
             /gobin/dgraph bulk --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                               --format=rdf --zero=zero1:5180 --out=/data/alpha1/bulk
-            mv /data/alpha1/bulk/0/p /data/alpha1
+                               --format=rdf --zero=zero1:5180 --out=/data/zero1/bulk \
+                               --reduce_shards 3 --map_shards 9
+            mv /data/zero1/bulk/0/p /data/alpha1
+            mv /data/zero1/bulk/1/p /data/alpha2
+            mv /data/zero1/bulk/2/p /data/alpha3
 EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate alpha1
+DockerCompose up -d --force-recreate --remove-orphans alpha1 alpha2 alpha3
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
@@ -117,9 +141,13 @@ sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
-    dgraph live --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
+    DgraphLive --schema=$SCHEMA_FILE --files=$DATA_FILE \
+                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --ludicrous_mode
+    if [[ $MODE == ludicrous ]]; then
+        sleep 300
+    fi
 fi
+
 
 if [[ $LOAD_ONLY ]]; then
     Info "exiting after data load"
@@ -138,20 +166,28 @@ if [[ ! -z "$TEAMCITY_VERSION" ]]; then
 fi
 go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
+if [[ $FOUND_DIFFS -eq 0 ]]; then
+    Info "no diffs found in query results"
+else
+    Info "Cluster logs for alpha1"
+    docker logs alpha1
+    Info "Cluster logs for alpha2"
+    docker logs alpha2
+    Info "Cluster logs for alpha3"
+    docker logs alpha3
+    Info "Cluster logs for zero1"
+    docker logs zero1
+    Info "found some diffs in query results"
+fi
+
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
-    DockerCompose down -v
+    DockerCompose down -v --remove-orphans
 elif [[ $CLEANUP == none ]]; then
     Info "leaving up zero and alpha"
 else
     Info "bringing down zero and alpha only"
-    DockerCompose down
-fi
-
-if [[ $FOUND_DIFFS -eq 0 ]]; then
-    Info "no diffs found in query results"
-else
-    Info "found some diffs in query results"
+    DockerCompose down --remove-orphans
 fi
 
 exit $FOUND_DIFFS

@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -120,11 +121,12 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
 
-		if qt == QueryTypeWithin {
+		switch qt {
+		case QueryTypeWithin:
 			require.Len(t, toks, 1)
-		} else if qt == QueryTypeContains {
+		case QueryTypeContains:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
-		} else {
+		default:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)
@@ -245,6 +247,16 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
+
+	// Test with a different polygon (Sudan)
+	sudan, err := loadPolygon("testdata/sudan.json")
+	require.NoError(t, err)
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{0, 0})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(sudan))
 }
 
 /*
@@ -396,4 +408,23 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
 	require.True(t, qd.MatchesFilter(poly))
+}
+
+func BenchmarkMatchesFilterContainsPoint(b *testing.B) {
+	us, _ := loadPolygon("testdata/us.json")
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{
+			(rand.Float64() * 360) - 180,
+			(rand.Float64() * 180) - 90})
+
+		d, _ := wkb.Marshal(p, binary.LittleEndian)
+		src := ValueForType(GeoID)
+		src.Value = []byte(d)
+		gd, _ := Convert(src, StringID)
+		gb := gd.Value.(string)
+		_, qd, _ := queryTokens(QueryTypeContains, gb, 0.0)
+		qd.contains(us)
+	}
 }

@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -36,16 +36,34 @@ import (
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := testutil.DgraphClient("localhost:9180")
+	dg1, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
-		Schema: "value: int .",
+		Schema: `
+			value: int .
+			name: string .
+			address: string @index(term) .`,
 	}))
 
-	err := testutil.DockerStop("alpha2")
+	t.Logf("Stopping alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
+
+	// Update the name predicate to include an index.
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
+		Schema: `name: string @index(term) .`,
+	}))
+
+	// Delete the address predicate.
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
+		DropOp:    api.Operation_ATTR,
+		DropValue: "address",
+	}))
 
 	for i := 1; i <= 200; i++ {
 		err := testutil.RetryMutation(dg1, &api.Mutation{
@@ -54,15 +72,23 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+	t.Logf("Mutations done.\n")
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
-	err = testutil.DockerStart("alpha2")
+	t.Logf("Starting alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
-	dg2 := testutil.DgraphClient("localhost:9182")
+	// Wait for the container to start.
+	time.Sleep(time.Second * 2)
+	dg2, err := testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	verifySnapshot(t, dg2, 200)
 
-	err = testutil.DockerStop("alpha2")
+	t.Logf("Stopping alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
 
 	for i := 201; i <= 400; i++ {
@@ -74,10 +100,14 @@ func TestSnapshot(t *testing.T) {
 	}
 	_ = waitForSnapshot(t, snapshotTs)
 
-	err = testutil.DockerStart("alpha2")
+	t.Logf("Starting alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
-	dg2 = testutil.DgraphClient("localhost:9182")
+	dg2, err = testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
 	verifySnapshot(t, dg2, 400)
 }
 
@@ -103,12 +133,36 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 		sum += item["value"]
 	}
 	require.Equal(t, expectedSum, sum)
+
+	// Perform a query using the updated index in the schema.
+	q2 := `
+	{
+		names(func: anyofterms(name, Mike)) {
+			name
+		}
+	}`
+	resMap = make(map[string][]map[string]int)
+	_, err = testutil.RetryQuery(dg, q2)
+	require.NoError(t, err)
+
+	// Trying to perform a query using the address index should not work since that
+	// predicate was deleted.
+	q3 := `
+	{
+		addresses(func: anyofterms(address, Mike)) {
+			address
+		}
+	}`
+	resMap = make(map[string][]map[string]int)
+	_, err = testutil.RetryBadQuery(dg, q3)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Attribute address is not indexed")
 }
 
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
-		res, err := http.Get("http://localhost:6180/state")
+		res, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
 		require.NoError(t, err)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()

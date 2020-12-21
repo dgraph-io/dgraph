@@ -1,0 +1,19 @@
+type Car {
+	id: ID!
+	name: String!
+}
+
+type User {
+	id: ID!
+	name: String @custom(http: {
+		url: "http://mock:8888/userNames",
+		method: "GET",
+		body: "{uid: $id}"
+	})
+	age: Int! @search
+	cars: [Car] @custom(http: {
+		url: "http://mock:8888/cars",
+		method: "GET",
+		body: "{uid: $id}"
+	})
+}

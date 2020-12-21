@@ -26,10 +26,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -44,17 +45,25 @@ type XidMap struct {
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
+	wg     sync.WaitGroup
+
+	kvBuf  []kv
+	kvChan chan []kv
 }
 
 type shard struct {
 	sync.RWMutex
 	block
 
-	uidMap map[string]uint64
+	tree *z.Tree
 }
 
 type block struct {
 	start, end uint64
+}
+
+type kv struct {
+	key, value []byte
 }
 
 // assign assumes the write lock is already acquired.
@@ -71,21 +80,29 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 
 // New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
-// assignment operations.
-func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
+// assignment operations. XidMap creates the temporary buffers inside dir directory. The caller must
+// ensure that the dir exists.
+func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
+		kvChan:    make(chan []kv, 64),
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
-			uidMap: make(map[string]uint64),
+			tree: z.NewTree(),
 		}
 	}
+
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = db.NewWriteBatch()
+
+		for i := 0; i < 16; i++ {
+			xm.wg.Add(1)
+			go xm.dbWriter()
+		}
 
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
@@ -100,7 +117,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
 					// No need to acquire a lock. This is all serial access.
-					sh.uidMap[key] = uid
+					sh.tree.Set(farm.Fingerprint64([]byte(key)), uid)
 					return nil
 				})
 				if err != nil {
@@ -121,8 +138,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
-			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e5})
+			glog.V(2).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
 				backoff = initBackoff
@@ -142,9 +159,33 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
-	fp := farm.Fingerprint32([]byte(xid))
-	idx := fp % uint32(len(m.shards))
+	fp := z.MemHashString(xid)
+	idx := fp % uint64(len(m.shards))
 	return m.shards[idx]
+}
+
+func (m *XidMap) CheckUid(xid string) bool {
+	sh := m.shardFor(xid)
+	sh.RLock()
+	defer sh.RUnlock()
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
+	return uid != 0
+}
+
+func (m *XidMap) SetUid(xid string, uid uint64) {
+	sh := m.shardFor(xid)
+	sh.Lock()
+	defer sh.Unlock()
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), uid)
+}
+
+func (m *XidMap) dbWriter() {
+	defer m.wg.Done()
+	for buf := range m.kvChan {
+		for _, kv := range buf {
+			x.Panic(m.writer.Set(kv.key, kv.value))
+		}
+	}
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings. It also returns if
@@ -152,7 +193,8 @@ func (m *XidMap) shardFor(xid string) *shard {
 func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh := m.shardFor(xid)
 	sh.RLock()
-	uid := sh.uidMap[xid]
+
+	uid := sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	sh.RUnlock()
 	if uid > 0 {
 		return uid, false
@@ -161,21 +203,25 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid = sh.uidMap[xid]
+	uid = sh.tree.Get(farm.Fingerprint64([]byte(xid)))
 	if uid > 0 {
 		return uid, false
 	}
 
 	newUid := sh.assign(m.newRanges)
-	sh.uidMap[xid] = newUid
+	sh.tree.Set(farm.Fingerprint64([]byte(xid)), newUid)
 
 	if m.writer != nil {
 		var uidBuf [8]byte
 		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
-			panic(err)
+		m.kvBuf = append(m.kvBuf, kv{key: []byte(xid), value: uidBuf[:]})
+
+		if len(m.kvBuf) == 64 {
+			m.kvChan <- m.kvBuf
+			m.kvBuf = make([]kv, 0, 64)
 		}
 	}
+
 	return newUid, true
 }
 
@@ -191,7 +237,9 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 		if prev >= max {
 			return
 		}
-		atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max)
+		if atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max) {
+			return
+		}
 	}
 }
 
@@ -228,8 +276,25 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	// While running bulk loader, this method is called at the completion of map phase. After this
+	// method returns xidmap of bulk loader is made nil. But xidmap still show up in memory profiles
+	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of
+	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
+	// TODO: find why xidmap is not getting GCed without below line.
+	m.shards = nil
 	if m.writer == nil {
 		return nil
 	}
+	glog.Infof("Writing xid map to DB")
+	defer func() {
+		glog.Infof("Finished writing xid map to DB")
+	}()
+
+	if len(m.kvBuf) > 0 {
+		m.kvChan <- m.kvBuf
+	}
+	close(m.kvChan)
+	m.wg.Wait()
+
 	return m.writer.Flush()
 }

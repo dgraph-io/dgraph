@@ -17,16 +17,16 @@
 package worker
 
 import (
+	"context"
 	"encoding/hex"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
@@ -54,7 +54,7 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
-	gid, err := groups().BelongsToReadOnly(q.Order[0].Attr)
+	gid, err := groups().BelongsToReadOnly(q.Order[0].Attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
@@ -88,7 +88,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	ctx, span := otrace.StartSpan(ctx, "worker.Sort")
 	defer span.End()
 
-	gid, err := groups().BelongsToReadOnly(s.Order[0].Attr)
+	gid, err := groups().BelongsToReadOnly(s.Order[0].Attr, s.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
 	}
@@ -175,6 +175,10 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 }
 
 func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	if ctx.Err() != nil {
+		return resultWithError(ctx.Err())
+	}
+
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
@@ -197,11 +201,11 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	}
 
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(order.Attr) {
+	if !schema.State().IsIndexed(ctx, order.Attr) {
 		return resultWithError(errors.Errorf("Attribute %s is not indexed.", order.Attr))
 	}
 
-	tokenizers := schema.State().Tokenizer(order.Attr)
+	tokenizers := schema.State().Tokenizer(ctx, order.Attr)
 	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -223,11 +227,26 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		return resultWithError(errors.Errorf("Attribute %s is not sortable.", order.Attr))
 	}
 
+	var prefix []byte
+	if len(order.Langs) > 0 {
+		// Only one languge is allowed.
+		lang := order.Langs[0]
+		tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
+		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)
+		if !ok {
+			return resultWithError(errors.Errorf(
+				"Failed to get tokenizer for Attribute %s for language %s.", order.Attr, lang))
+		}
+		prefix = langTokenizer.Prefix()
+	} else {
+		prefix = []byte{tokenizer.Identifier()}
+	}
+
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
 	iterOpt.Reverse = order.Desc
-	iterOpt.Prefix = x.IndexKey(order.Attr, string(tokenizer.Identifier()))
+	iterOpt.Prefix = x.IndexKey(order.Attr, string(prefix))
 	txn := pstore.NewTransactionAt(ts.ReadTs, false)
 	defer txn.Discard()
 	var seekKey []byte
@@ -236,7 +255,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		seekKey = nil // Would automatically seek to iterOpt.Prefix.
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
+		prefix[len(prefix)-1]++
+		seekKey = x.IndexKey(order.Attr, string(prefix))
 	}
 	itr := txn.NewIterator(iterOpt)
 	defer itr.Close()
@@ -390,7 +410,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		if err := types.Sort(vals, ul, desc); err != nil {
+		if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 			return err
 		}
 		// Paginate
@@ -437,6 +457,8 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.
 	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	resCh := make(chan *sortresult, 2)
 	go func() {
 		select {
@@ -529,7 +551,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 	key := x.IndexKey(order.Attr, token)
 	// Don't put the Index keys in memory.
-	pl, err := posting.GetNoStore(key)
+	pl, err := posting.GetNoStore(key, ts.GetReadTs())
 	if err != nil {
 		return err
 	}
@@ -549,6 +571,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		listOpt := posting.ListOptions{
 			Intersect: ul,
 			ReadTs:    ts.ReadTs,
+			First:     0, // TODO: Should we set the first N here?
 		}
 		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
 		if err != nil {
@@ -686,6 +709,14 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	values := make([][]types.Val, 0, lenList)
 	multiSortVals := make([]types.Val, 0, lenList)
 	order := ts.Order[0]
+
+	var lang string
+	if langCount := len(order.Langs); langCount == 1 {
+		lang = order.Langs[0]
+	} else if langCount > 1 {
+		return nil, errors.Errorf("Sorting on multiple language is not supported.")
+	}
+
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
@@ -703,7 +734,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc})
+	err := types.Sort(values, &uids, []bool{order.Desc}, lang)
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {
@@ -717,7 +748,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	readTs uint64) (types.Val, error) {
 	// Don't put the values in memory
-	pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	pl, err := posting.GetNoStore(x.DataKey(attr, uid), readTs)
 	if err != nil {
 		return types.Val{}, err
 	}

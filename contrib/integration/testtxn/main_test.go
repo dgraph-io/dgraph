@@ -29,13 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 type state struct {
@@ -43,12 +42,12 @@ type state struct {
 }
 
 var s state
-var addr string = testutil.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	testutil.AssignUids(200)
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.CheckfNoTrace(err)
 	s.dg = dg
 
 	r := m.Run()
@@ -172,7 +171,7 @@ func TestTxnRead4(t *testing.T) {
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish2"}`, uid))
-	assigned, err = txn3.Mutate(context.Background(), mu)
+	_, err = txn3.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -213,37 +212,26 @@ func TestTxnRead5(t *testing.T) {
 
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	// We don't supply startTs, it should be fetched from zero by dgraph alpha.
-	req := api.Request{
-		Query: q,
-	}
 
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	dc := api.NewDgraphClient(conn)
-
-	resp, err := dc.Query(context.Background(), &req)
+	txn = s.dg.NewReadOnlyTxn()
+	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
-	mu = &api.Mutation{}
+	mu = &api.Mutation{CommitNow: true}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
-	muReq := api.Request{
-		Mutations: []*api.Mutation{mu},
-		CommitNow: true,
-	}
-	res, err := dc.Query(context.Background(), &muReq)
+	txn = s.dg.NewTxn()
+	res, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
 	x.AssertTrue(res.Txn.StartTs > 0)
-	resp, err = dc.Query(context.Background(), &req)
+	txn = s.dg.NewReadOnlyTxn()
+	resp, err = txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -419,9 +407,7 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	txn = s.dg.NewTxn()
 	q := `{ me(func: eq(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
-	if err != nil {
-		log.Fatalf("Error while running query: %v\n", err)
-	}
+	require.NoError(t, err)
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"},{"uid":"%s"}]}`, uid1, uid2))
 	require.Equal(t, expectedResp, resp.Json)
 }
@@ -438,7 +424,6 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 
 	txn := s.dg.NewTxn()
-
 	mu := &api.Mutation{
 		CommitNow: true,
 		SetJson:   []byte(`{"name": "Manish"}`),
@@ -740,14 +725,15 @@ query countAnswers($num: int) {
 )
 
 func TestCountIndexConcurrentTxns(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	x.Check(err)
 	err = txn0.Commit(ctxb)
 	x.Check(err)
@@ -769,7 +755,7 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	require.Error(t, err,
 		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
 
-	// retry the mutatiton
+	// retry the mutation
 	txn3 := dg.NewTxn()
 	_, err = txn3.Mutate(ctxb, &mu)
 	x.Check(err)
@@ -796,14 +782,15 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 }
 
 func TestCountIndexSerialTxns(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	require.NoError(t, err)
 	err = txn0.Commit(ctxb)
 	require.NoError(t, err)
@@ -845,14 +832,15 @@ func TestCountIndexSerialTxns(t *testing.T) {
 }
 
 func TestCountIndexSameTxn(t *testing.T) {
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	x.Check(err)
 	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
-	_, err := txn0.Mutate(ctxb, &mu)
+	_, err = txn0.Mutate(ctxb, &mu)
 	x.Check(err)
 	err = txn0.Commit(ctxb)
 	x.Check(err)
@@ -925,9 +913,23 @@ func TestConcurrentQueryMutate(t *testing.T) {
 	t.Logf("Done\n")
 }
 
+func TestTxnDiscardBeforeCommit(t *testing.T) {
+	testutil.DropAll(t, s.dg)
+	alterSchema(s.dg, "name: string .")
+
+	txn := s.dg.NewTxn()
+	mu := &api.Mutation{
+		SetNquads: []byte(`_:1 <name> "abc" .`),
+	}
+	_, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err, "unable to mutate")
+
+	err = txn.Discard(context.Background())
+	// Since client is discarding this transaction server should not throw ErrAborted err.
+	require.NotEqual(t, err, dgo.ErrAborted)
+}
+
 func alterSchema(dg *dgo.Dgraph, schema string) {
-	op := api.Operation{}
-	op.Schema = schema
-	err := dg.Alter(ctxb, &op)
-	x.Check(err)
+	op := api.Operation{Schema: schema}
+	x.Check(dg.Alter(ctxb, &op))
 }

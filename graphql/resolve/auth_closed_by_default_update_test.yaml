@@ -1,0 +1,49 @@
+- name: "Update with top level And RBAC false - type with Auth "
+  gqlquery: |
+    mutation updateIssue($issue: UpdateIssueInput!) {
+      updateIssue(input: $issue) {
+        issue {
+          id
+        }
+      }
+    }
+  variables: |
+    { "issue":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "random": "random456"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateIssue()
+    }
+  error:
+    { "message": "couldn't rewrite mutation updateIssue because a valid JWT is required but was not provided" }
+
+- name: "Update with top level And RBAC false - type without auth"
+  gqlquery: |
+    mutation updateTodo($todo: UpdateTodoInput!) {
+      updateTodo(input: $todo) {
+        todo {
+          id
+        }
+      }
+    }
+  variables: |
+    { "todo":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "text": "GraphQL"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateTodo()
+    }
+  error:
+    { "message": "couldn't rewrite mutation updateTodo because a valid JWT is required but was not provided" }

@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +51,7 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 }
 
 type School struct {
-	Name string `json:",omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type address struct {
@@ -78,13 +78,17 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 
 func (exp *Experiment) verify() {
 	// insert the data into dgraph
-	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	if err != nil {
+		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
 	ctx := context.Background()
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
 
-	_, err := dg.NewTxn().Mutate(ctx,
+	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
 	require.NoError(exp.t, err, "mutation failed")
 
@@ -130,14 +134,14 @@ func TestNquadsFromJson1(t *testing.T) {
 name
 age
 married
-address 
+address
 }}`,
 		expected: `{"alice": [
 {"name": "Alice",
 "age": 26,
 "married": true,
 "address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
+]}
 `}
 	exp.verify()
 }
@@ -183,11 +187,6 @@ friend {
 	exp.verify()
 }
 
-func outputNq(nqs []*api.NQuad) {
-	for _, nq := range nqs {
-		fmt.Printf("%v\n", nq)
-	}
-}
 func TestNquadsFromJson3(t *testing.T) {
 	p := Person{
 		Name: "Alice",
@@ -206,11 +205,11 @@ func TestNquadsFromJson3(t *testing.T) {
 		schema: "name: string @index(exact) .",
 		query: `{alice(func: eq(name, "Alice")) {
 name
-school {Name}
+school {name}
 }}`,
 		expected: `{"alice":[{
 "name":"Alice",
-"school": [{"Name":"Wellington Public School"}]
+"school": [{"name":"Wellington Public School"}]
 }]}`,
 	}
 	exp.verify()
@@ -501,7 +500,6 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 	for _, n := range nq {
 		glog.Infof("%v", n)
-
 	}
 
 	checkFacets(t, nq, "mobile", []*api.Facet{
@@ -545,6 +543,189 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "friend", 1)
+}
+
+// Test valid facets json.
+func TestNquadsFromJsonFacets3(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua", "David", "Josh"],
+			"friend|from": {
+				"0": "school",
+				"2": "college"
+			},
+			"friend|age": {
+				"1": 20,
+				"2": 21
+			}
+		}
+	]`
+
+	nqs, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(nqs))
+	for _, nq := range nqs {
+		predVal := nq.ObjectValue.GetStrVal()
+		switch predVal {
+		case "Alice":
+			require.Equal(t, 0, len(nq.Facets))
+		case "Joshua":
+			require.Equal(t, 1, len(nq.Facets))
+		case "David":
+			require.Equal(t, 1, len(nq.Facets))
+		case "Josh":
+			require.Equal(t, 2, len(nq.Facets))
+		}
+	}
+}
+
+// Test invalid facet format with scalar list predicate.
+func TestNquadsFromJsonFacets4(t *testing.T) {
+	type input struct {
+		Name     string
+		ErrorOut bool
+		Json     string
+	}
+
+	inputs := []input{
+		{
+			"facets_should_be_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": 20
+				}
+			]`,
+		},
+		{
+			"predicate_should_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": "Joshua",
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"only_scalar_values_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"0": {
+							"1": 20
+						}
+					}
+				}
+			]`,
+		},
+		{
+			"invalid_key_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"a": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"predicate_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": null,
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"empty_scalar_list",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": [],
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"facet_map_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": null
+				}
+			]`,
+		},
+		{
+			"facet_vales_should_not_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": ["20"]
+				}
+			]`,
+		},
+		{
+			// Facets with higher index will be ignored.
+			"facet_map_with_index_greater_than_scalarlist_length",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": {
+						"100": 30,
+						"20": 28
+					}
+				}
+			]`,
+		},
+	}
+
+	for _, input := range inputs {
+		_, err := Parse([]byte(input.Json), SetNquads)
+		if input.ErrorOut {
+			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		} else {
+			require.NoError(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		}
+	}
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {
@@ -632,4 +813,145 @@ func TestSetNquadNilValue(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(nq))
+}
+
+func BenchmarkNoFacets(b *testing.B) {
+	json := []byte(`[
+	{
+		"uid":123,
+		"flguid":123,
+		"is_validate":"xxxxxxxxxx",
+		"createDatetime":"xxxxxxxxxx",
+		"contains":{
+			"createDatetime":"xxxxxxxxxx",
+			"final_individ":"xxxxxxxxxx",
+			"cm_bad_debt":"xxxxxxxxxx",
+			"cm_bill_address1":"xxxxxxxxxx",
+			"cm_bill_address2":"xxxxxxxxxx",
+			"cm_bill_city":"xxxxxxxxxx",
+			"cm_bill_state":"xxxxxxxxxx",
+			"cm_zip":"xxxxxxxxxx",
+			"zip5":"xxxxxxxxxx",
+			"cm_customer_id":"xxxxxxxxxx",
+			"final_gaid":"xxxxxxxxxx",
+			"final_hholdid":"xxxxxxxxxx",
+			"final_firstname":"xxxxxxxxxx",
+			"final_middlename":"xxxxxxxxxx",
+			"final_surname":"xxxxxxxxxx",
+			"final_gender":"xxxxxxxxxx",
+			"final_ace_prim_addr":"xxxxxxxxxx",
+			"final_ace_sec_addr":"xxxxxxxxxx",
+			"final_ace_urb":"xxxxxxxxxx",
+			"final_ace_city_llidx":"xxxxxxxxxx",
+			"final_ace_state":"xxxxxxxxxx",
+			"final_ace_postal_code":"xxxxxxxxxx",
+			"final_ace_zip4":"xxxxxxxxxx",
+			"final_ace_dpbc":"xxxxxxxxxx",
+			"final_ace_checkdigit":"xxxxxxxxxx",
+			"final_ace_iso_code":"xxxxxxxxxx",
+			"final_ace_cart":"xxxxxxxxxx",
+			"final_ace_lot":"xxxxxxxxxx",
+			"final_ace_lot_order":"xxxxxxxxxx",
+			"final_ace_rec_type":"xxxxxxxxxx",
+			"final_ace_remainder":"xxxxxxxxxx",
+			"final_ace_dpv_cmra":"xxxxxxxxxx",
+			"final_ace_dpv_ftnote":"xxxxxxxxxx",
+			"final_ace_dpv_status":"xxxxxxxxxx",
+			"final_ace_foreigncode":"xxxxxxxxxx",
+			"final_ace_match_5":"xxxxxxxxxx",
+			"final_ace_match_9":"xxxxxxxxxx",
+			"final_ace_match_un":"xxxxxxxxxx",
+			"final_ace_zip_move":"xxxxxxxxxx",
+			"final_ace_ziptype":"xxxxxxxxxx",
+			"final_ace_congress":"xxxxxxxxxx",
+			"final_ace_county":"xxxxxxxxxx",
+			"final_ace_countyname":"xxxxxxxxxx",
+			"final_ace_factype":"xxxxxxxxxx",
+			"final_ace_fipscode":"xxxxxxxxxx",
+			"final_ace_error_code":"xxxxxxxxxx",
+			"final_ace_stat_code":"xxxxxxxxxx",
+			"final_ace_geo_match":"xxxxxxxxxx",
+			"final_ace_geo_lat":"xxxxxxxxxx",
+			"final_ace_geo_lng":"xxxxxxxxxx",
+			"final_ace_ageo_pla":"xxxxxxxxxx",
+			"final_ace_geo_blk":"xxxxxxxxxx",
+			"final_ace_ageo_mcd":"xxxxxxxxxx",
+			"final_ace_cgeo_cbsa":"xxxxxxxxxx",
+			"final_ace_cgeo_msa":"xxxxxxxxxx",
+			"final_ace_ap_lacscode":"xxxxxxxxxx",
+			"final_dsf_businessflag":"xxxxxxxxxx",
+			"final_dsf_dropflag":"xxxxxxxxxx",
+			"final_dsf_throwbackflag":"xxxxxxxxxx",
+			"final_dsf_seasonalflag":"xxxxxxxxxx",
+			"final_dsf_vacantflag":"xxxxxxxxxx",
+			"final_dsf_deliverytype":"xxxxxxxxxx",
+			"final_dsf_dt_curbflag":"xxxxxxxxxx",
+			"final_dsf_dt_ndcbuflag":"xxxxxxxxxx",
+			"final_dsf_dt_centralflag":"xxxxxxxxxx",
+			"final_dsf_dt_doorslotflag":"xxxxxxxxxx",
+			"final_dsf_dropcount":"xxxxxxxxxx",
+			"final_dsf_nostatflag":"xxxxxxxxxx",
+			"final_dsf_educationalflag":"xxxxxxxxxx",
+			"final_dsf_rectyp":"xxxxxxxxxx",
+			"final_mailability_score":"xxxxxxxxxx",
+			"final_occupancy_score":"xxxxxxxxxx",
+			"final_multi_type":"xxxxxxxxxx",
+			"final_deceased_flag":"xxxxxxxxxx",
+			"final_dnm_flag":"xxxxxxxxxx",
+			"final_dnc_flag":"xxxxxxxxxx",
+			"final_dnf_flag":"xxxxxxxxxx",
+			"final_prison_flag":"xxxxxxxxxx",
+			"final_nursing_home_flag":"xxxxxxxxxx",
+			"final_date_of_birth":"xxxxxxxxxx",
+			"final_date_of_death":"xxxxxxxxxx",
+			"vip_number":"xxxxxxxxxx",
+			"vip_store_no":"xxxxxxxxxx",
+			"vip_division":"xxxxxxxxxx",
+			"vip_phone_number":"xxxxxxxxxx",
+			"vip_email_address":"xxxxxxxxxx",
+			"vip_first_name":"xxxxxxxxxx",
+			"vip_last_name":"xxxxxxxxxx",
+			"vip_gender":"xxxxxxxxxx",
+			"vip_status":"xxxxxxxxxx",
+			"vip_membership_date":"xxxxxxxxxx",
+			"vip_expiration_date":"xxxxxxxxxx",
+			"cm_date_addr_chng":"xxxxxxxxxx",
+			"cm_date_entered":"xxxxxxxxxx",
+			"cm_name":"xxxxxxxxxx",
+			"cm_opt_on_acct":"xxxxxxxxxx",
+			"cm_origin":"xxxxxxxxxx",
+			"cm_orig_acq_source":"xxxxxxxxxx",
+			"cm_phone_number":"xxxxxxxxxx",
+			"cm_phone_number2":"xxxxxxxxxx",
+			"cm_problem_cust":"xxxxxxxxxx",
+			"cm_rm_list":"xxxxxxxxxx",
+			"cm_rm_rented_list":"xxxxxxxxxx",
+			"cm_tax_code":"xxxxxxxxxx",
+			"email_address":"xxxxxxxxxx",
+			"esp_email_id":"xxxxxxxxxx",
+			"esp_sub_date":"xxxxxxxxxx",
+			"esp_unsub_date":"xxxxxxxxxx",
+			"cm_user_def_1":"xxxxxxxxxx",
+			"cm_user_def_7":"xxxxxxxxxx",
+			"do_not_phone":"xxxxxxxxxx",
+			"company_num":"xxxxxxxxxx",
+			"customer_id":"xxxxxxxxxx",
+			"load_date":"xxxxxxxxxx",
+			"activity_date":"xxxxxxxxxx",
+			"email_address_hashed":"xxxxxxxxxx",
+			"event_id":"",
+			"contains":{
+				"uid": 123,
+				"flguid": 123,
+				"is_validate":"xxxxxxxxxx",
+				"createDatetime":"xxxxxxxxxx"
+			}
+		}
+	}]`)
+
+	// we're parsing 125 nquads at a time, so the MB/s == MNquads/s
+	b.SetBytes(125)
+	for n := 0; n < b.N; n++ {
+		Parse([]byte(json), SetNquads)
+	}
 }

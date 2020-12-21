@@ -19,14 +19,26 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
 // Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupResponse, error) {
 	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
+	return nil, x.ErrNotSupported
+}
+
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
+	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
+	return x.ErrNotSupported
+}
+
+func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+	[]*Manifest, error) {
+
 	return nil, x.ErrNotSupported
 }

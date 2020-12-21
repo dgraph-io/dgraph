@@ -18,6 +18,8 @@ package conn
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -26,17 +28,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -48,6 +51,12 @@ var (
 type Node struct {
 	x.SafeMutex
 
+	// Applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to BadgerDB).
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	Applied y.WaterMark
+
 	joinLock sync.Mutex
 
 	// Used to keep track of lin read requests.
@@ -58,35 +67,34 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	Cfg         *raft.Config
-	MyAddr      string
-	Id          uint64
-	peers       map[uint64]string
-	confChanges map[uint64]chan error
-	messages    chan sendmsg
-	RaftContext *pb.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	StartTime       time.Time
+	Cfg             *raft.Config
+	MyAddr          string
+	Id              uint64
+	peers           map[uint64]string
+	confChanges     map[uint64]chan error
+	messages        chan sendmsg
+	RaftContext     *pb.RaftContext
+	Store           *raftwal.DiskStorage
+	Rand            *rand.Rand
+	tlsClientConfig *tls.Config
 
 	Proposals proposals
-	// applied is used to keep track of the applied RAFT proposals.
-	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to BadgerDB).
-	Applied y.WaterMark
 
 	heartbeatsOut int64
 	heartbeatsIn  int64
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
 	n := &Node{
-		Id:     rc.Id,
-		MyAddr: rc.Addr,
-		Store:  store,
+		StartTime: time.Now(),
+		Id:        rc.Id,
+		MyAddr:    rc.Addr,
+		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
 			ElectionTick:             20, // 2s if we call Tick() every 100 ms.
@@ -129,13 +137,14 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
-		RaftContext: rc,
-		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
-		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq, 100),
+		Applied:         y.WaterMark{Name: "Applied watermark"},
+		RaftContext:     rc,
+		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges:     make(map[uint64]chan error),
+		messages:        make(chan sendmsg, 100),
+		peers:           make(map[uint64]string),
+		requestCh:       make(chan linReadReq, 100),
+		tlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -233,7 +242,7 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 }
 
 // Send sends the given RAFT message from this node.
-func (n *Node) Send(msg raftpb.Message) {
+func (n *Node) Send(msg *raftpb.Message) {
 	x.AssertTruef(n.Id != msg.To, "Sending message to itself")
 	data, err := msg.Marshal()
 	x.Check(err)
@@ -274,7 +283,7 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 // SaveToStorage saves the hard state, entries, and snapshot to persistent storage, in that order.
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+func (n *Node) SaveToStorage(h *raftpb.HardState, es []raftpb.Entry, s *raftpb.Snapshot) {
 	for {
 		if err := n.Store.Save(h, es, s); err != nil {
 			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
@@ -313,11 +322,7 @@ func (n *Node) PastLife() (uint64, bool, error) {
 		restart = true
 	}
 
-	var num int
-	num, rerr = n.Store.NumEntries()
-	if rerr != nil {
-		return 0, false, rerr
-	}
+	num := n.Store.NumEntries()
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
@@ -519,7 +524,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 
@@ -535,15 +540,15 @@ func (n *Node) DeletePeer(pid uint64) {
 
 var errInternalRetry = errors.New("Retry proposal again")
 
-func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) error {
+func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	ch := make(chan error, 1)
 	id := n.storeConfChange(ch)
 	// TODO: Delete id from the map.
-	pb.ID = id
-	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
+	conf.ID = id
+	if err := n.Raft().ProposeConfChange(cctx, conf); err != nil {
 		if cctx.Err() != nil {
 			return errInternalRetry
 		}
@@ -612,11 +617,16 @@ type linReadReq struct {
 var errReadIndex = errors.Errorf(
 	"Cannot get linearized read (time expired or no configured leader)")
 
+var readIndexOk, readIndexTotal uint64
+
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
 
+	if num := atomic.AddUint64(&readIndexTotal, 1); num%1000 == 0 {
+		glog.V(2).Infof("ReadIndex Total: %d\n", num)
+	}
 	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
@@ -631,6 +641,8 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
+		} else if num := atomic.AddUint64(&readIndexOk, 1); num%1000 == 0 {
+			glog.V(2).Infof("ReadIndex OK: %d\n", num)
 		}
 		err := n.Applied.WaitForMark(ctx, index)
 		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
@@ -642,7 +654,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 }
 
 // RunReadIndexLoop runs the RAFT index in a loop.
-func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func(activeRctx []byte) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel
@@ -661,7 +673,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx, rs.RequestCtx) {
-				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
+				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx)
 				goto again
 			}
 			return rs.Index, nil
@@ -696,7 +708,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			glog.V(4).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {

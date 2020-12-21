@@ -18,12 +18,14 @@ package x
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgo/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // WriteFileSync is the same as bufio.WriteFile, but syncs the data before closing.
@@ -88,7 +90,7 @@ func FindDataFiles(str string, ext []string) []string {
 			glog.Errorf("File or directory does not exist: %s", str)
 			return []string{}
 		}
-		x.Check(err)
+		Check(err)
 
 		if fi.IsDir() {
 			matchFn := func(f string) bool {
@@ -106,33 +108,95 @@ func FindDataFiles(str string, ext []string) []string {
 	return list
 }
 
+// ErrMissingDir is thrown by IsMissingOrEmptyDir if the given path is a
+// missing or empty directory.
+var ErrMissingDir = errors.Errorf("missing or empty directory")
+
 // IsMissingOrEmptyDir returns true if the path either does not exist
 // or is a directory that is empty.
-func IsMissingOrEmptyDir(path string) (bool, error) {
-	fi, err := os.Stat(path)
+func IsMissingOrEmptyDir(path string) (err error) {
+	var fi os.FileInfo
+	fi, err = os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil
+			err = ErrMissingDir
+			return
 		}
-		return false, err
+		return
 	}
 
 	if !fi.IsDir() {
-		return false, nil
+		return
 	}
 
-	file, err := os.Open(path)
-	defer file.Close()
+	var file *os.File
+	file, err = os.Open(path)
 	if err != nil {
-		return false, err
+		return
 	}
+	defer func() {
+		cerr := file.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = file.Readdir(1)
 	if err == nil {
-		return false, nil
+		return
 	} else if err != io.EOF {
-		return false, err
+		return
 	}
 
-	return true, nil
+	err = ErrMissingDir
+	return
+}
+
+// WriteGroupIdFile writes the given group ID to the group_id file inside the given
+// postings directory.
+func WriteGroupIdFile(pdir string, group_id uint32) error {
+	if group_id == 0 {
+		return errors.Errorf("ID written to group_id file must be a positive number")
+	}
+
+	groupFile := filepath.Join(pdir, GroupIdFileName)
+	f, err := os.OpenFile(groupFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil
+	}
+	if _, err := f.WriteString(strconv.Itoa(int(group_id))); err != nil {
+		return err
+	}
+	if _, err := f.WriteString("\n"); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ReadGroupIdFile reads the file at the given path and attempts to retrieve the
+// group ID stored in it.
+func ReadGroupIdFile(pdir string) (uint32, error) {
+	path := filepath.Join(pdir, GroupIdFileName)
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if info.IsDir() {
+		return 0, errors.Errorf("Group ID file at %s is a directory", path)
+	}
+
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	groupId, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 0, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(groupId), nil
 }

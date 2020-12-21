@@ -28,9 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 
@@ -188,7 +188,9 @@ func mutate(c *dgo.Dgraph) error {
 			continue
 		}
 		payload := make([]byte, 16+rand.Intn(16))
-		rand.Read(payload)
+		if _, err := rand.Read(payload); err != nil {
+			return err
+		}
 		rdfs += fmt.Sprintf("_:node <attr_%c> \"%s\" .\n", char, url.QueryEscape(string(payload)))
 	}
 	if _, err := r.txn.Mutate(ctx, &api.Mutation{

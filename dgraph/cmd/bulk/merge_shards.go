@@ -26,19 +26,47 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func mergeMapShardsIntoReduceShards(opt options) {
-	mapShards := shardDirs(opt.TmpDir)
+const (
+	mapShardDir    = "map_output"
+	reduceShardDir = "shards"
+	bufferDir         = "buffer"
+)
+
+func mergeMapShardsIntoReduceShards(opt *options) {
+	if opt == nil {
+		fmt.Printf("Nil options passed to merge shards phase.\n")
+		os.Exit(1)
+	}
+
+	shardDirs := readShardDirs(filepath.Join(opt.TmpDir, mapShardDir))
+	if len(shardDirs) == 0 {
+		fmt.Printf(
+			"No map shards found. Possibly caused by empty data files passed to the bulk loader.\n")
+		os.Exit(1)
+	}
+
+	// First shard is handled differently because it contains reserved predicates.
+	firstShard := shardDirs[0]
+	// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
+	shardDirs = shardDirs[1:]
+	sortBySize(shardDirs)
 
 	var reduceShards []string
 	for i := 0; i < opt.ReduceShards; i++ {
-		shardDir := filepath.Join(opt.TmpDir, "shards", fmt.Sprintf("shard_%d", i))
-		x.Check(os.MkdirAll(shardDir, 0755))
+		shardDir := filepath.Join(opt.TmpDir, reduceShardDir, fmt.Sprintf("shard_%d", i))
+		x.Check(os.MkdirAll(shardDir, 0750))
 		reduceShards = append(reduceShards, shardDir)
 	}
 
+	// Put the first map shard in the first reduce shard since it contains all the reserved
+	// predicates.
+	reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
+	fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
+	x.Check(os.Rename(firstShard, reduceShard))
+
 	// Heuristic: put the largest map shard into the smallest reduce shard
 	// until there are no more map shards left. Should be a good approximation.
-	for _, shard := range mapShards {
+	for _, shard := range shardDirs {
 		sortBySize(reduceShards)
 		reduceShard := filepath.Join(
 			reduceShards[len(reduceShards)-1], filepath.Base(shard))
@@ -47,18 +75,20 @@ func mergeMapShardsIntoReduceShards(opt options) {
 	}
 }
 
-func shardDirs(tmpDir string) []string {
-	dir, err := os.Open(filepath.Join(tmpDir, "shards"))
+func readShardDirs(d string) []string {
+	_, err := os.Stat(d)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	dir, err := os.Open(d)
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
-	dir.Close()
+	x.Check(dir.Close())
 	for i, shard := range shards {
-		shards[i] = filepath.Join(tmpDir, "shards", shard)
+		shards[i] = filepath.Join(d, shard)
 	}
-
-	// Allow largest shards to be shuffled first.
-	sortBySize(shards)
+	sort.Strings(shards)
 	return shards
 }
 

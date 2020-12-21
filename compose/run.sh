@@ -1,7 +1,7 @@
 #!/bin/bash
 
 readonly ME=${0##*/}
-readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+DGRAPH_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 readonly COMPOSE_FILE="./docker-compose.yml"
 
 if [[ $1 == "-h" || $1 == "--help" ]]; then
@@ -47,4 +47,5 @@ Info "rebuilding dgraph ..."
 # The up command handles that automatically
 
 Info "bringing up containers"
-docker-compose -p dgraph up --force-recreate --remove-orphans
+docker-compose -p dgraph down
+docker-compose --compatibility -p dgraph up --force-recreate --remove-orphans

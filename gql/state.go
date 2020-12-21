@@ -63,6 +63,7 @@ const (
 	itemRightSquare
 	itemComma
 	itemMathOp
+	itemStar
 )
 
 // lexIdentifyBlock identifies whether it is an upsert block
@@ -184,9 +185,10 @@ func lexContent(l *lex.Lexer, leftRune, rightRune rune, returnTo lex.StateFn) le
 			depth++
 		case rightRune:
 			depth--
-			if depth < 0 {
+			switch {
+			case depth < 0:
 				return l.Errorf("Unopened %c found", rightRune)
-			} else if depth == 0 {
+			case depth == 0:
 				l.Emit(itemUpsertBlockOpContent)
 				return returnTo
 			}
@@ -251,6 +253,8 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightSquare)
 		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
+		case r == lsThan:
+			return lexIRIRef
 		case isNameBegin(r):
 			return lexArgName
 		case r == '#':
@@ -444,6 +448,8 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			return lexDirectiveOrLangList
 		case r == lsThan:
 			return lexIRIRef
+		case r == star:
+			l.Emit(itemStar)
 		default:
 			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}
@@ -584,19 +590,20 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(isNameSuffix)
 	// l.Pos would be index of the end of operation type + 1.
 	word := l.Input[l.Start:l.Pos]
-	if word == "mutation" {
+	switch word {
+	case "mutation":
 		l.Emit(itemOpType)
 		return lexInsideMutation
-	} else if word == "fragment" {
+	case "fragment":
 		l.Emit(itemOpType)
 		return lexQuery
-	} else if word == "query" {
+	case "query":
 		l.Emit(itemOpType)
 		return lexQuery
-	} else if word == "schema" {
+	case "schema":
 		l.Emit(itemOpType)
 		return lexInsideSchema
-	} else {
+	default:
 		return l.Errorf("Invalid operation type: %s", word)
 	}
 }

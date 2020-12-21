@@ -34,6 +34,10 @@ type keywords struct {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return
+	}
 	x.Check2(w.Write([]byte(
 		"Dgraph browser is available for running separately using the dgraph-ratel binary")))
 }
@@ -41,50 +45,77 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if r.Method != "GET" {
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	if r.Method != http.MethodGet {
 		http.Error(w, x.ErrorInvalidMethod, http.StatusBadRequest)
 		return
 	}
 
 	var kws keywords
 	predefined := []string{
+		"@cascade",
 		"@facets",
 		"@filter",
+		"@if",
+		"@normalize",
 		"after",
 		"allofterms",
 		"alloftext",
 		"and",
 		"anyofterms",
 		"anyoftext",
+		"as",
+		"avg",
+		"ceil",
+		"cond",
 		"contains",
 		"count",
 		"delete",
 		"eq",
 		"exact",
+		"exp",
 		"expand",
 		"first",
+		"floor",
 		"fulltext",
 		"func",
 		"ge",
-		"id",
+		"gt",
 		"index",
 		"intersects",
 		"le",
+		"len",
+		"ln",
+		"logbase",
+		"lt",
+		"math",
+		"max",
+		"min",
 		"mutation",
 		"near",
+		"not",
 		"offset",
 		"or",
 		"orderasc",
 		"orderdesc",
+		"pow",
 		"recurse",
 		"regexp",
 		"reverse",
 		"schema",
+		"since",
 		"set",
+		"sqrt",
+		"sum",
 		"term",
 		"tokenizer",
+		"type",
 		"uid",
 		"within",
+		"upsert",
 	}
 
 	for _, w := range predefined {

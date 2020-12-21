@@ -26,7 +26,7 @@ import (
 	"github.com/golang/glog"
 )
 
-type matchFunc func(types.Val, stringFilter) bool
+type matchFunc func(types.Val, *stringFilter) bool
 
 type stringFilter struct {
 	funcName  string
@@ -36,10 +36,16 @@ type stringFilter struct {
 	match     matchFunc
 	ineqValue types.Val
 	eqVals    []types.Val
+	tokName   string
 }
 
-func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.List {
+func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb.List {
 	rv := &pb.List{}
+	if filter == nil {
+		// Handle a nil filter as filtering all the elements out.
+		return rv
+	}
+
 	for i := 0; i < len(values); i++ {
 		for j := 0; j < len(values[i]); j++ {
 			if filter.match(values[i][j], filter) {
@@ -52,7 +58,7 @@ func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.
 	return rv
 }
 
-func defaultMatch(value types.Val, filter stringFilter) bool {
+func defaultMatch(value types.Val, filter *stringFilter) bool {
 	tokenMap := map[string]bool{}
 	for _, t := range filter.tokens {
 		tokenMap[t] = false
@@ -78,33 +84,28 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 	return cnt > 0
 }
 
-func ineqMatch(value types.Val, filter stringFilter) bool {
-	if len(filter.eqVals) == 0 {
-		return types.CompareVals(filter.funcName, value, filter.ineqValue)
+func ineqMatch(value types.Val, filter *stringFilter) bool {
+	if filter.funcName == eq {
+		for _, v := range filter.eqVals {
+			if types.CompareVals(filter.funcName, value, v) {
+				return true
+			}
+		}
+		return false
+	} else if filter.funcName == between {
+		return types.CompareVals("ge", value, filter.eqVals[0]) &&
+			types.CompareVals("le", value, filter.eqVals[1])
 	}
 
-	for _, v := range filter.eqVals {
-		if types.CompareVals(filter.funcName, value, v) {
-			return true
-		}
-	}
-	return false
+	return types.CompareVals(filter.funcName, value, filter.eqVals[0])
 }
 
-func tokenizeValue(value types.Val, filter stringFilter) []string {
-	var tokName string
-	switch filter.funcType {
-	case standardFn:
-		tokName = "term"
-	case fullTextSearchFn:
-		tokName = "fulltext"
-	}
-
-	tokenizer, found := tok.GetTokenizer(tokName)
+func tokenizeValue(value types.Val, filter *stringFilter) []string {
+	tokenizer, found := tok.GetTokenizer(filter.tokName)
 	// tokenizer was used in previous stages of query processing, it has to be available
 	x.AssertTrue(found)
 
-	tokens, err := tok.BuildTokens(value.Value, tok.GetLangTokenizer(tokenizer, filter.lang))
+	tokens, err := tok.BuildTokens(value.Value, tok.GetTokenizerForLang(tokenizer, filter.lang))
 	if err != nil {
 		glog.Errorf("Error while building tokens: %s", err)
 		return []string{}
