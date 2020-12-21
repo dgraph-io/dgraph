@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Using Kubernetes"
+weight = 6
 [menu.main]
     parent = "deploy"
-    weight = 6
 +++
 
 The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
@@ -245,7 +245,6 @@ alpha:
         vlog: mmap
       postings: /dgraph/data/p
       wal: /dgraph/data/w
-      lru_mb: 2048
 zero:
   configFile:
     config.yaml: |
@@ -642,7 +641,7 @@ remove the node in this order:
 
 1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
    the cluster (see [More about Dgraph Zero]({{< relref
-   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   "/deploy/dgraph-zero" >}})). The removed instance will immediately stop
    running. Any further attempts to join the cluster will fail for that instance
    since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
@@ -661,7 +660,7 @@ configuration to be updated.
 ## Kubernetes and Bulk Loader
 
 You may want to initialize a new cluster with an existing data set such as data
-from the [Dgraph Bulk Loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}}). You can use [Init
+from the [Dgraph Bulk Loader]({{< relref "deploy/fast-data-loading/bulk-loader.md" >}}). You can use [Init
 Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 

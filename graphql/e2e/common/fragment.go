@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -161,6 +163,51 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					id
 				}
 			}
+			qc2: queryCharacter {
+				... on Human {
+					name
+					n: name
+				}
+			}
+			qc3: queryCharacter {
+				... on Droid{
+					__typename
+					primaryFunction
+				}
+				... on Employee {
+					__typename
+					ename
+				}
+				... on Human {
+					__typename
+					name
+				}
+			}
+			qcRep1: queryCharacter {
+				name
+				... on Human {
+					name
+					totalCredits
+				}
+				... on Droid {
+					name
+					primaryFunction
+				}
+			}
+			qcRep2: queryCharacter {
+				... on Human {
+					totalCredits
+				}
+				name
+				... on Droid {
+					primaryFunction
+					name
+				}
+			}
+			qcRep3: queryCharacter {
+				...characterName1
+				...characterName2
+			}
 			queryThing {
 				__typename
 				... on ThingOne {
@@ -218,6 +265,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		fragment droidAppearsIn on Droid {
 			appearsIn
 		}
+		fragment characterName1 on Character {
+			name
+		}
+		fragment characterName2 on Character {
+			name
+		}
 		`,
 	}
 
@@ -269,6 +322,53 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"id": "%s"
 			}
 		],
+		"qc2":[
+			{
+				"name": "Han",
+				"n": "Han"
+			},
+			{
+			}
+		],
+		"qc3":[
+			{
+				"__typename":"Human",
+				"ename":"Han_employee",
+				"name":"Han"
+			},
+			{
+				"__typename":"Droid",
+				"primaryFunction":"Robot"
+			}
+		],
+		"qcRep1": [
+            {
+				"name": "Han",
+                "totalCredits": 10
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
+		],
+		"qcRep2": [
+            {
+                "totalCredits": 10,
+                "name": "Han"
+            },
+            {
+                "name": "R2-D2",
+                "primaryFunction": "Robot"
+            }
+		],
+		"qcRep3": [
+            {
+                "name": "Han"
+            },
+            {
+                "name": "R2-D2"
+            }
+		],
 		"queryThing":[
 			{
 				"__typename": "ThingOne",
@@ -308,6 +408,121 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 	deleteThingOne(t, thingOneId)
 	deleteThingTwo(t, thingTwoId)
+}
+
+func fragmentInQueryOnUnion(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	homeId, dogId, parrotId, plantId := addHome(t, humanID)
+
+	queryHomeParams := &GraphQLParams{
+		Query: `query {
+			queryHome {
+				members {
+					__typename
+					... on Animal {
+						category
+					}
+					... on Dog {
+						id
+						breed
+					}
+					... on Parrot {
+						repeatsWords
+					}
+					... on Employee {
+						ename
+					}
+					... on Character {
+						id
+					}
+					... on Human {
+						name
+					}
+					... on Plant {
+						id
+					}
+				}
+			}
+			qh: queryHome {
+				members {
+					... on Animal {
+						__typename
+					}
+					... on Dog {
+						breed
+					}
+					... on Human {
+						name
+					}
+					... on Plant {
+						breed
+					}
+				}
+			}
+		}
+		`,
+	}
+
+	gqlResponse := queryHomeParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHomeExpected := fmt.Sprintf(`
+	{
+	  "queryHome": [
+		{
+		  "members": [
+			{
+			  "__typename": "Human",
+			  "ename": "Han_employee",
+			  "id": "%s",
+			  "name": "Han"
+			},
+			{
+			  "__typename": "Dog",
+			  "category": "Mammal",
+			  "id": "%s",
+			  "breed": "German Shephard"
+			},
+			{
+			  "__typename": "Parrot",
+			  "category": "Bird",
+			  "repeatsWords": [
+				"Good Morning!",
+				"squawk"
+			  ]
+			},
+			{
+			  "__typename": "Plant",
+			  "id": "%s"
+			}
+		  ]
+		}
+	  ],
+	  "qh": [
+		{
+		  "members": [
+			{
+			  "name": "Han"
+			},
+			{
+			  "__typename": "Dog",
+			  "breed": "German Shephard"
+			},
+			{
+			  "__typename": "Parrot"
+			},
+			{
+			  "breed": "Flower"
+			}
+		  ]
+		}
+	  ]
+	}`, humanID, dogId, plantId)
+	testutil.CompareJSON(t, queryHomeExpected, string(gqlResponse.Data))
+
+	cleanupStarwars(t, newStarship.ID, humanID, "")
+	deleteHome(t, homeId, dogId, parrotId, plantId)
 }
 
 func fragmentInQueryOnObject(t *testing.T) {

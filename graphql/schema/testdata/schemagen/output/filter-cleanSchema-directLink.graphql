@@ -3,18 +3,22 @@
 #######################
 
 type X {
-	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	f1(filter: YFilter, first: Int, offset: Int): [Y] @dgraph(pred: "f1")
 	name: String
 	id: ID
+	f1Aggregate(filter: YFilter): YAggregateResult
 }
 
 type Y {
-	f2(first: Int, offset: Int): [Z] @dgraph(pred: "~f2")
+	f2(filter: ZFilter, first: Int, offset: Int): [Z] @dgraph(pred: "~f2")
 	f1(filter: XFilter, order: XOrder, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f2Aggregate(filter: ZFilter): ZAggregateResult
+	f1Aggregate(filter: XFilter): XAggregateResult
 }
 
 type Z {
-	f2(first: Int, offset: Int): [Y] @dgraph(pred: "f2")
+	f2(filter: YFilter, first: Int, offset: Int): [Y] @dgraph(pred: "f2")
+	f2Aggregate(filter: YFilter): YAggregateResult
 }
 
 #######################
@@ -33,6 +37,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -48,6 +77,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -82,6 +112,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -89,13 +197,20 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -103,6 +218,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -111,6 +227,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -119,6 +236,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -127,6 +245,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -145,14 +264,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -164,8 +286,25 @@ type AddXPayload {
 	numUids: Int
 }
 
+type AddZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
 type DeleteXPayload {
 	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
+	msg: String
+	numUids: Int
+}
+
+type DeleteYPayload {
+	y(filter: YFilter, first: Int, offset: Int): [Y]
+	msg: String
+	numUids: Int
+}
+
+type DeleteZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
 	msg: String
 	numUids: Int
 }
@@ -173,6 +312,25 @@ type DeleteXPayload {
 type UpdateXPayload {
 	x(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
 	numUids: Int
+}
+
+type UpdateZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
+type XAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type YAggregateResult {
+	count: Int
+}
+
+type ZAggregateResult {
+	count: Int
 }
 
 #######################
@@ -214,8 +372,8 @@ input UpdateXInput {
 input XFilter {
 	id: [ID!]
 	has: XHasFilter
-	and: XFilter
-	or: XFilter
+	and: [XFilter]
+	or: [XFilter]
 	not: XFilter
 }
 
@@ -240,8 +398,8 @@ input YFilter {
 
 input ZFilter {
 	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
+	and: [ZFilter]
+	or: [ZFilter]
 	not: ZFilter
 }
 
@@ -252,8 +410,11 @@ input ZFilter {
 type Query {
 	getX(id: ID!): X
 	queryX(filter: XFilter, order: XOrder, first: Int, offset: Int): [X]
-	queryY(first: Int, offset: Int): [Y]
-	queryZ(first: Int, offset: Int): [Z]
+	aggregateX(filter: XFilter): XAggregateResult
+	queryY(filter: YFilter, first: Int, offset: Int): [Y]
+	aggregateY(filter: YFilter): YAggregateResult
+	queryZ(filter: ZFilter, first: Int, offset: Int): [Z]
+	aggregateZ(filter: ZFilter): ZAggregateResult
 }
 
 #######################
@@ -264,5 +425,7 @@ type Mutation {
 	addX(input: [AddXInput!]!): AddXPayload
 	updateX(input: UpdateXInput!): UpdateXPayload
 	deleteX(filter: XFilter!): DeleteXPayload
+	deleteY(filter: YFilter!): DeleteYPayload
+	deleteZ(filter: ZFilter!): DeleteZPayload
 }
 

@@ -18,15 +18,18 @@ package schema
 
 import (
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	dschema "github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	_ "github.com/vektah/gqlparser/v2/validator/rules"
 	"gopkg.in/yaml.v2"
 )
 
@@ -76,6 +79,7 @@ func TestSchemaString(t *testing.T) {
 
 	for _, testFile := range files {
 		t.Run(testFile.Name(), func(t *testing.T) {
+
 			inputFileName := inputDir + testFile.Name()
 			str1, err := ioutil.ReadFile(inputFileName)
 			require.NoError(t, err)
@@ -125,7 +129,7 @@ func TestSchemas(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
 				_, errlist := NewHandler(sch.Input, false)
-				if diff := cmp.Diff(sch.Errlist, errlist); diff != "" {
+				if diff := cmp.Diff(sch.Errlist, errlist, cmpopts.IgnoreUnexported(gqlerror.Error{})); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
 			})
@@ -306,4 +310,11 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 				"every field in this test applies @search wrongly and should raise an error")
 		})
 	}
+}
+
+func TestMain(m *testing.M) {
+	// set up the lambda url for unit tests
+	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
+	// now run the tests
+	os.Exit(m.Run())
 }

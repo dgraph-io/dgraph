@@ -1,11 +1,10 @@
 +++
 title = "Index of Directives"
+weight = 11
 [menu.main]
-  url = "/graphql/directives/"
   name = "Directives"
   identifier = "directives"
   parent = "graphql"
-  weight = 11
 +++
 
 The list of all directives supported by Dgraph.
@@ -45,13 +44,27 @@ Reference: [Subscriptions](/graphql/subscriptions)
 
 ### @secret
 
-TODO - After adding docs for password type.
+`@secret` directive is used to store secret information, it gets encrypted and then stored in Dgraph.
+
+Reference: [Password Type](/graphql/schema/types/#password-type)
 
 ### @auth
 
 `@auth` allows you to define how to apply authorization rules on the queries/mutation for a type.
 
 Reference: [Auth directive](/graphql/authorization/directive)
+
+### @generate
+
+The `@generate` directive is used to specify which GraphQL APIs are generated for a type.
+
+Reference: [Generate directive](/graphql/schema/generate)
+
+### @lambda
+
+The `@lambda` directive allows you to call custom JavaScript resolvers. The `@lambda` queries, mutations, and fields are resolved through the lambda functions implemented on a given lambda server.
+
+Reference: [Lambda directive](/graphql/lambda/directive)
 
 ### @custom
 

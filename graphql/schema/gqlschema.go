@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 )
 
 const (
@@ -34,23 +34,56 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective       = "dgraph"
-	dgraphTypeArg         = "type"
-	dgraphPredArg         = "pred"
+	dgraphDirective = "dgraph"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
+
 	idDirective           = "id"
+	subscriptionDirective = "withSubscription"
 	secretDirective       = "secret"
 	authDirective         = "auth"
 	customDirective       = "custom"
 	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective      = "cascade"
-	cascadeArg            = "fields"
-	SubscriptionDirective = "withSubscription"
+	lambdaDirective       = "lambda"
+
+	generateDirective       = "generate"
+	generateQueryArg        = "query"
+	generateGetField        = "get"
+	generateQueryField      = "query"
+	generatePasswordField   = "password"
+	generateAggregateField  = "aggregate"
+	generateMutationArg     = "mutation"
+	generateAddField        = "add"
+	generateUpdateField     = "update"
+	generateDeleteField     = "delete"
+	generateSubscriptionArg = "subscription"
+
+	cascadeDirective = "cascade"
+	cascadeArg       = "fields"
+
+	cacheControlDirective = "cacheControl"
+	CacheControlHeader    = "Cache-Control"
 
 	// custom directive args and fields
-	dqlArg = "dql"
-	mode   = "mode"
-	BATCH  = "BATCH"
-	SINGLE = "SINGLE"
+	dqlArg      = "dql"
+	httpArg     = "http"
+	httpUrl     = "url"
+	httpMethod  = "method"
+	httpBody    = "body"
+	httpGraphql = "graphql"
+	mode        = "mode"
+	BATCH       = "BATCH"
+	SINGLE      = "SINGLE"
+
+	// geo type names and fields
+	Point        = "Point"
+	Polygon      = "Polygon"
+	MultiPolygon = "MultiPolygon"
+	Latitude     = "latitude"
+	Longitude    = "longitude"
+	Points       = "points"
+	Coordinates  = "coordinates"
+	Polygons     = "polygons"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -74,6 +107,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -89,6 +147,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -123,6 +182,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -130,13 +267,20 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -144,6 +288,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -152,6 +297,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -160,6 +306,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -168,6 +315,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -186,14 +334,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 `
 )
@@ -230,31 +381,37 @@ var numUids = &ast.FieldDefinition{
 // search arg -> supported GraphQL type
 // == supported Dgraph index -> GraphQL type it applies to
 var supportedSearches = map[string]searchTypeIndex{
-	"int":      {"Int", "int"},
-	"int64":    {"Int64", "int"},
-	"float":    {"Float", "float"},
-	"bool":     {"Boolean", "bool"},
-	"hash":     {"String", "hash"},
-	"exact":    {"String", "exact"},
-	"term":     {"String", "term"},
-	"fulltext": {"String", "fulltext"},
-	"trigram":  {"String", "trigram"},
-	"regexp":   {"String", "trigram"},
-	"year":     {"DateTime", "year"},
-	"month":    {"DateTime", "month"},
-	"day":      {"DateTime", "day"},
-	"hour":     {"DateTime", "hour"},
+	"int":          {"Int", "int"},
+	"int64":        {"Int64", "int"},
+	"float":        {"Float", "float"},
+	"bool":         {"Boolean", "bool"},
+	"hash":         {"String", "hash"},
+	"exact":        {"String", "exact"},
+	"term":         {"String", "term"},
+	"fulltext":     {"String", "fulltext"},
+	"trigram":      {"String", "trigram"},
+	"regexp":       {"String", "trigram"},
+	"year":         {"DateTime", "year"},
+	"month":        {"DateTime", "month"},
+	"day":          {"DateTime", "day"},
+	"hour":         {"DateTime", "hour"},
+	"point":        {"Point", "geo"},
+	"polygon":      {"Polygon", "geo"},
+	"multiPolygon": {"MultiPolygon", "geo"},
 }
 
-// GraphQL scalar type -> default search arg
+// GraphQL scalar/object type -> default search arg
 // used if the schema specifies @search without an arg
 var defaultSearches = map[string]string{
-	"Boolean":  "bool",
-	"Int":      "int",
-	"Int64":    "int64",
-	"Float":    "float",
-	"String":   "term",
-	"DateTime": "year",
+	"Boolean":      "bool",
+	"Int":          "int",
+	"Int64":        "int64",
+	"Float":        "float",
+	"String":       "term",
+	"DateTime":     "year",
+	"Point":        "point",
+	"Polygon":      "polygon",
+	"MultiPolygon": "multiPolygon",
 }
 
 // graphqlSpecScalars holds all the scalar types supported by the graphql spec.
@@ -282,6 +439,13 @@ var orderable = map[string]bool{
 	"DateTime": true,
 }
 
+// GraphQL types that can be summed. Types that have a well defined addition function.
+var summable = map[string]bool{
+	"Int":   true,
+	"Int64": true,
+	"Float": true,
+}
+
 var enumDirectives = map[string]bool{
 	"trigram": true,
 	"hash":    true,
@@ -291,32 +455,38 @@ var enumDirectives = map[string]bool{
 
 // index name -> GraphQL input filter for that index
 var builtInFilters = map[string]string{
-	"bool":     "Boolean",
-	"int":      "IntFilter",
-	"int64":    "Int64Filter",
-	"float":    "FloatFilter",
-	"year":     "DateTimeFilter",
-	"month":    "DateTimeFilter",
-	"day":      "DateTimeFilter",
-	"hour":     "DateTimeFilter",
-	"term":     "StringTermFilter",
-	"trigram":  "StringRegExpFilter",
-	"regexp":   "StringRegExpFilter",
-	"fulltext": "StringFullTextFilter",
-	"exact":    "StringExactFilter",
-	"hash":     "StringHashFilter",
+	"bool":         "Boolean",
+	"int":          "IntFilter",
+	"int64":        "Int64Filter",
+	"float":        "FloatFilter",
+	"year":         "DateTimeFilter",
+	"month":        "DateTimeFilter",
+	"day":          "DateTimeFilter",
+	"hour":         "DateTimeFilter",
+	"term":         "StringTermFilter",
+	"trigram":      "StringRegExpFilter",
+	"regexp":       "StringRegExpFilter",
+	"fulltext":     "StringFullTextFilter",
+	"exact":        "StringExactFilter",
+	"hash":         "StringHashFilter",
+	"point":        "PointGeoFilter",
+	"polygon":      "PolygonGeoFilter",
+	"multiPolygon": "PolygonGeoFilter",
 }
 
-// GraphQL scalar -> Dgraph scalar
-var scalarToDgraph = map[string]string{
-	"ID":       "uid",
-	"Boolean":  "bool",
-	"Int":      "int",
-	"Int64":    "int",
-	"Float":    "float",
-	"String":   "string",
-	"DateTime": "dateTime",
-	"Password": "password",
+// GraphQL in-built type -> Dgraph scalar
+var inbuiltTypeToDgraph = map[string]string{
+	"ID":           "uid",
+	"Boolean":      "bool",
+	"Int":          "int",
+	"Int64":        "int",
+	"Float":        "float",
+	"String":       "string",
+	"DateTime":     "dateTime",
+	"Password":     "password",
+	"Point":        "geo",
+	"Polygon":      "geo",
+	"MultiPolygon": "geo",
 }
 
 func ValidatorNoOp(
@@ -333,13 +503,108 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:       searchValidation,
 	dgraphDirective:       dgraphDirectiveValidation,
 	idDirective:           idValidation,
+	subscriptionDirective: ValidatorNoOp,
 	secretDirective:       passwordValidation,
+	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
 	customDirective:       customDirectiveValidation,
 	remoteDirective:       ValidatorNoOp,
 	deprecatedDirective:   ValidatorNoOp,
-	SubscriptionDirective: ValidatorNoOp,
-	// Just go get it printed into generated schema
-	authDirective: ValidatorNoOp,
+	lambdaDirective:       lambdaDirectiveValidation,
+	generateDirective:     ValidatorNoOp,
+}
+
+// directiveLocationMap stores the directives and their locations for the ones which can be
+// applied at type level in the user supplied schema. It is used during validation.
+var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
+	inverseDirective:      nil,
+	searchDirective:       nil,
+	dgraphDirective:       {ast.Object: true, ast.Interface: true},
+	idDirective:           nil,
+	subscriptionDirective: {ast.Object: true, ast.Interface: true},
+	secretDirective:       {ast.Object: true, ast.Interface: true},
+	authDirective:         {ast.Object: true, ast.Interface: true},
+	customDirective:       nil,
+	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
+		ast.InputObject: true, ast.Enum: true},
+	cascadeDirective:  nil,
+	generateDirective: {ast.Object: true, ast.Interface: true},
+}
+
+// Struct to store parameters of @generate directive
+type GenerateDirectiveParams struct {
+	generateGetQuery       bool
+	generateFilterQuery    bool
+	generatePasswordQuery  bool
+	generateAggregateQuery bool
+	generateAddMutation    bool
+	generateUpdateMutation bool
+	generateDeleteMutation bool
+	generateSubscription   bool
+}
+
+func parseGenerateDirectiveParams(defn *ast.Definition) *GenerateDirectiveParams {
+	ret := &GenerateDirectiveParams{
+		generateGetQuery:       true,
+		generateFilterQuery:    true,
+		generatePasswordQuery:  true,
+		generateAggregateQuery: true,
+		generateAddMutation:    true,
+		generateUpdateMutation: true,
+		generateDeleteMutation: true,
+		generateSubscription:   false,
+	}
+
+	if dir := defn.Directives.ForName(generateDirective); dir != nil {
+
+		if queryArg := dir.Arguments.ForName(generateQueryArg); queryArg != nil {
+			if getField := queryArg.Value.Children.ForName(generateGetField); getField != nil {
+				if getFieldVal, err := getField.Value(nil); err == nil {
+					ret.generateGetQuery = getFieldVal.(bool)
+				}
+			}
+			if queryField := queryArg.Value.Children.ForName(generateQueryField); queryField != nil {
+				if queryFieldVal, err := queryField.Value(nil); err == nil {
+					ret.generateFilterQuery = queryFieldVal.(bool)
+				}
+			}
+			if passwordField := queryArg.Value.Children.ForName(generatePasswordField); passwordField != nil {
+				if passwordFieldVal, err := passwordField.Value(nil); err == nil {
+					ret.generatePasswordQuery = passwordFieldVal.(bool)
+				}
+			}
+			if aggregateField := queryArg.Value.Children.ForName(generateAggregateField); aggregateField != nil {
+				if aggregateFieldVal, err := aggregateField.Value(nil); err == nil {
+					ret.generateAggregateQuery = aggregateFieldVal.(bool)
+				}
+			}
+		}
+
+		if mutationArg := dir.Arguments.ForName(generateMutationArg); mutationArg != nil {
+			if addField := mutationArg.Value.Children.ForName(generateAddField); addField != nil {
+				if addFieldVal, err := addField.Value(nil); err == nil {
+					ret.generateAddMutation = addFieldVal.(bool)
+				}
+			}
+			if updateField := mutationArg.Value.Children.ForName(generateUpdateField); updateField != nil {
+				if updateFieldVal, err := updateField.Value(nil); err == nil {
+					ret.generateUpdateMutation = updateFieldVal.(bool)
+				}
+			}
+			if deleteField := mutationArg.Value.Children.ForName(generateDeleteField); deleteField != nil {
+				if deleteFieldVal, err := deleteField.Value(nil); err == nil {
+					ret.generateDeleteMutation = deleteFieldVal.(bool)
+				}
+			}
+		}
+
+		if subscriptionArg := dir.Arguments.ForName(generateSubscriptionArg); subscriptionArg != nil {
+			if subscriptionVal, err := subscriptionArg.Value.Value(nil); err == nil {
+				ret.generateSubscription = subscriptionVal.(bool)
+			}
+		}
+	}
+
+	return ret
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
@@ -365,7 +630,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 
 // expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
 // implementing types
-func expandSchema(doc *ast.SchemaDocument) {
+func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
@@ -384,6 +649,15 @@ func expandSchema(doc *ast.SchemaDocument) {
 	// interface.
 	for _, defn := range doc.Definitions {
 		if defn.Kind == ast.Object && len(defn.Interfaces) > 0 {
+			fieldSeen := make(map[string]string)
+			// fieldSeen a map from field name to interface name in which the field was seen.
+			defFields := make(map[string]int64)
+			// defFields is used to keep track of fields in the defn before any inherited fields are added to it.
+			for _, d := range defn.Fields {
+				defFields[d.Name]++
+			}
+			initialDefFields := defn.Fields
+			// initialDefFields store initial field definitions of the type.
 			for _, implements := range defn.Interfaces {
 				i, ok := interfaces[implements]
 				if !ok {
@@ -392,9 +666,34 @@ func expandSchema(doc *ast.SchemaDocument) {
 				}
 				fields := make([]*ast.FieldDefinition, 0, len(i.Fields))
 				for _, field := range i.Fields {
-					// Creating a copy here is important, otherwise arguments like filter, order
-					// etc. are added multiple times if the pointer is shared.
-					fields = append(fields, copyAstFieldDef(field))
+					// If field name is repeated multiple times in type then it will result in validation error later.
+					if defFields[field.Name] == 1 {
+						if field.Type.String() != initialDefFields.ForName(field.Name).Type.String() {
+							return gqlerror.ErrorPosf(defn.Position, "For type %s to implement interface"+
+								" %s the field %s must have type %s", defn.Name, i.Name, field.Name, field.Type.String())
+						}
+						if fieldSeen[field.Name] == "" {
+							// Overwrite the existing field definition in type with the field definition of interface
+							*defn.Fields.ForName(field.Name) = *field
+						} else if field.Type.NamedType != IDType {
+							// If field definition is already written,just add interface definition in type
+							// It will later results in validation error because of repeated fields
+							fields = append(fields, copyAstFieldDef(field))
+						}
+					} else if field.Type.NamedType == IDType && fieldSeen[field.Name] != "" {
+						// If ID type is already seen in any other interface then we don't copy it again
+						// And validator won't throw error for id types later
+						if field.Type.String() != defn.Fields.ForName(field.Name).Type.String() {
+							return gqlerror.ErrorPosf(defn.Position, "field %s is of type %s in interface %s"+
+								" and is of type %s in interface %s",
+								field.Name, field.Type.String(), i.Name, defn.Fields.ForName(field.Name).Type.String(), fieldSeen[field.Name])
+						}
+					} else {
+						// Creating a copy here is important, otherwise arguments like filter, order
+						// etc. are added multiple times if the pointer is shared.
+						fields = append(fields, copyAstFieldDef(field))
+					}
+					fieldSeen[field.Name] = i.Name
 				}
 				defn.Fields = append(fields, defn.Fields...)
 				passwordDirective := i.Directives.ForName("secret")
@@ -407,6 +706,7 @@ func expandSchema(doc *ast.SchemaDocument) {
 
 	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
 	doc.Directives = append(doc.Directives, docExtras.Directives...)
+	return nil
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
@@ -543,37 +843,64 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 		defn := sch.Types[key]
+		if defn.Kind == ast.Union {
+			// TODO: properly check the case of reverse predicates (~) with union members and clean
+			// them from unionRef or unionFilter as required.
+			addUnionReferenceType(sch, defn)
+			addUnionFilterType(sch, defn)
+			addUnionMemberTypeEnum(sch, defn)
+			continue
+		}
+
 		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
 			continue
 		}
 
+		params := parseGenerateDirectiveParams(defn)
+
 		// Common types to both Interface and Object.
 		addReferenceType(sch, defn)
-		addPatchType(sch, defn)
-		addUpdateType(sch, defn)
-		addUpdatePayloadType(sch, defn)
-		addDeletePayloadType(sch, defn)
+
+		if params.generateUpdateMutation {
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+		}
+
+		if params.generateDeleteMutation {
+			addDeletePayloadType(sch, defn)
+		}
 
 		switch defn.Kind {
 		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
-			addUpdateMutation(sch, defn)
-			addDeleteMutation(sch, defn)
+			if params.generateUpdateMutation {
+				addUpdateMutation(sch, defn)
+			}
+			if params.generateDeleteMutation {
+				addDeleteMutation(sch, defn)
+			}
 
 		case ast.Object:
 			// types and inputs needed for mutations
-			addInputType(sch, defn)
-			addAddPayloadType(sch, defn)
-			addMutations(sch, defn)
+			if params.generateAddMutation {
+				addInputType(sch, defn)
+				addAddPayloadType(sch, defn)
+			}
+			addMutations(sch, defn, params)
 		}
 
 		// types and inputs needed for query and search
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		addQueries(sch, defn)
+		addAggregationResultType(sch, defn)
+		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
+		// We need to call this at last as aggregateFields
+		// should not be part of HasFilter or UpdatePayloadType etc.
+		addAggregateFields(sch, defn)
 	}
 }
 
@@ -589,7 +916,7 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 		nt := f.Type.Name()
 		enum := sch.Types[nt] != nil && sch.Types[nt].Kind == "ENUM"
 		// Lets skip scalar types and enums.
-		if _, ok := scalarToDgraph[nt]; ok || enum {
+		if _, ok := inbuiltTypeToDgraph[nt]; ok || enum {
 			def.Fields[i] = f
 			i++
 			continue
@@ -597,7 +924,6 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 
 		seen[def.Name] = true
 		cleanupInput(sch, sch.Types[nt], seen)
-		seen[def.Name] = false
 
 		// If after calling cleanup on an input type, it got deleted then it doesn't need to be
 		// in the fields for this type anymore.
@@ -609,39 +935,52 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
-	if len(def.Fields) == 0 {
+	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
+	// input UpdateTypeInput {
+	//		filter: TypeFilter!
+	// }
+	// In this case, UpdateTypeInput should also be deleted.
+	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
 		delete(sch.Types, def.Name)
 	}
 }
 
 func cleanSchema(sch *ast.Schema) {
-	// Let's go over inputs of the type TRef, TPatch and AddTInput and delete the ones which
+	// Let's go over inputs of the type TRef, TPatch AddTInput, UpdateTInput and delete the ones which
 	// don't have field inside them.
 	for k := range sch.Types {
 		if strings.HasSuffix(k, "Ref") || strings.HasSuffix(k, "Patch") ||
-			(strings.HasPrefix(k, "Add") && strings.HasSuffix(k, "Input")) {
+			((strings.HasPrefix(k, "Add") || strings.HasPrefix(k, "Update")) && strings.HasSuffix(k, "Input")) {
 			cleanupInput(sch, sch.Types[k], map[string]bool{})
 		}
 	}
 
-	// Let's go over mutations and cleanup those which don't have AddTInput defined in the schema
+	// Let's go over mutations and cleanup those which don't have AddTInput/UpdateTInput defined in the schema
 	// anymore.
 	i := 0 // helps us overwrite the array with valid entries.
 	for _, field := range sch.Mutation.Fields {
 		custom := field.Directives.ForName("custom")
-		// We would only modify add type queries.
-		if custom != nil || !strings.HasPrefix(field.Name, "add") {
+		// We would only modify add/update
+		if custom != nil || !(strings.HasPrefix(field.Name, "add") || strings.HasPrefix(field.Name, "update")) {
 			sch.Mutation.Fields[i] = field
 			i++
 			continue
 		}
 
-		// addT type mutations have an input which is AddTInput so if that doesn't exist anymore,
-		// we can delete the AddTPayload and also skip this mutation.
-		typ := field.Name[3:]
-		input := sch.Types["Add"+typ+"Input"]
-		if input == nil {
-			delete(sch.Types, "Add"+typ+"Payload")
+		// addT / updateT type mutations have an input which is AddTInput / UpdateTInput so if that doesn't exist anymore,
+		// we can delete the AddTPayload / UpdateTPayload and also skip this mutation.
+
+		var typeName, input string
+		if strings.HasPrefix(field.Name, "add") {
+			typeName = field.Name[3:]
+			input = "Add" + typeName + "Input"
+		} else if strings.HasPrefix(field.Name, "update") {
+			typeName = field.Name[6:]
+			input = "Update" + typeName + "Input"
+		}
+
+		if sch.Types[input] == nil {
+			delete(sch.Types, input)
 			continue
 		}
 		sch.Mutation.Fields[i] = field
@@ -649,6 +988,60 @@ func cleanSchema(sch *ast.Schema) {
 
 	}
 	sch.Mutation.Fields = sch.Mutation.Fields[:i]
+}
+
+func addUnionReferenceType(schema *ast.Schema, defn *ast.Definition) {
+	refTypeName := defn.Name + "Ref"
+	refType := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: refTypeName,
+	}
+	for _, typName := range defn.Types {
+		refType.Fields = append(refType.Fields, &ast.FieldDefinition{
+			Name: CamelCase(typName) + "Ref",
+			// the TRef for every member type is guaranteed to exist because member types can
+			// only be objects types, and a TRef is always generated for an object type
+			Type: &ast.Type{NamedType: typName + "Ref"},
+		})
+	}
+	schema.Types[refTypeName] = refType
+}
+
+func addUnionFilterType(schema *ast.Schema, defn *ast.Definition) {
+	filterName := defn.Name + "Filter"
+	filter := &ast.Definition{
+		Kind: ast.InputObject,
+		Name: defn.Name + "Filter",
+		Fields: []*ast.FieldDefinition{
+			// field for selecting the union member type to report back
+			{
+				Name: "memberTypes",
+				Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "Type", NonNull: true}},
+			},
+		},
+	}
+	// adding fields for specifying type filter for each union member type
+	for _, typName := range defn.Types {
+		filter.Fields = append(filter.Fields, &ast.FieldDefinition{
+			Name: CamelCase(typName) + "Filter",
+			// the TFilter for every member type is guaranteed to exist because each member type
+			// will either have an ID field or some other kind of field causing it to have hasFilter
+			Type: &ast.Type{NamedType: typName + "Filter"},
+		})
+	}
+	schema.Types[filterName] = filter
+}
+
+func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
+	enumName := defn.Name + "Type"
+	enum := &ast.Definition{
+		Kind: ast.Enum,
+		Name: enumName,
+	}
+	for _, typName := range defn.Types {
+		enum.EnumValues = append(enum.EnumValues, &ast.EnumValueDefinition{Name: typName})
+	}
+	schema.Types[enumName] = enum
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
@@ -764,10 +1157,9 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName(customDirective)
-		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if custom != nil {
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -777,8 +1169,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 		addFilterArgument(schema, fld)
 
 		// Ordering and pagination, however, only makes sense for fields of
-		// list types (not scalar lists).
-		if _, scalar := scalarToDgraph[fld.Type.Name()]; !scalar && fld.Type.Elem != nil {
+		// list types (not scalar lists or enum lists).
+		if isTypeList(fld) && !isEnumList(fld, schema) {
 			addOrderArgument(schema, fld)
 
 			// Pagination even makes sense when there's no orderables because
@@ -788,13 +1180,48 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+// addAggregateFields adds aggregate fields for fields which are of
+// type list of object. eg. If defn is like
+// type T {fiedldA : [A]}
+// The following aggregate field is added to type T
+// fieldAAggregate(filter : AFilter) : AAggregateResult
+// These fields are added to support aggregate queries like count, avg, min
+func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
+	for _, fld := range defn.Fields {
+		// Aggregate Fields only makes sense for fields of
+		// list types of kind Object or Interface
+		// (not scalar lists or not singleton types or lists of other kinds).
+		if isTypeList(fld) && !hasCustomOrLambda(fld) &&
+			(schema.Types[fld.Type.Name()].Kind == ast.Object ||
+				schema.Types[fld.Type.Name()].Kind == ast.Interface) {
+			aggregateField := &ast.FieldDefinition{
+				Name: fld.Name + "Aggregate",
+				Type: &ast.Type{
+					NamedType: fld.Type.Name() + "AggregateResult",
+				},
+			}
+			addFilterArgumentForField(schema, aggregateField, fld.Type.Name())
+			defn.Fields = append(defn.Fields, aggregateField)
+		}
+	}
+}
+
 func addFilterArgument(schema *ast.Schema, fld *ast.FieldDefinition) {
-	fldType := fld.Type.Name()
-	if hasFilterable(schema.Types[fldType]) {
+	addFilterArgumentForField(schema, fld, fld.Type.Name())
+}
+
+func addFilterArgumentForField(schema *ast.Schema, fld *ast.FieldDefinition, fldTypeName string) {
+	// Don't add filters for inbuilt types like String, Point, Polygon ...
+	if _, ok := inbuiltTypeToDgraph[fldTypeName]; ok {
+		return
+	}
+
+	fldType := schema.Types[fldTypeName]
+	if fldType.Kind == ast.Union || hasFilterable(fldType) {
 		fld.Arguments = append(fld.Arguments,
 			&ast.ArgumentDefinition{
 				Name: "filter",
-				Type: &ast.Type{NamedType: fldType + "Filter"},
+				Type: &ast.Type{NamedType: fldTypeName + "Filter"},
 			})
 	}
 }
@@ -809,7 +1236,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) {
 			continue
 		}
 		filter.EnumValues = append(filter.EnumValues,
@@ -854,14 +1281,30 @@ func getFilterTypes(schema *ast.Schema, fld *ast.FieldDefinition, filterName str
 	for i, search := range searchArgs {
 		filterNames[i] = builtInFilters[search]
 
+		// For enum type, if the index is "hash" or "exact", we construct filter named
+		// enumTypeName_hash/ enumTypeName_exact from StringHashFilter/StringExactFilter
+		// by replacing the Argument type.
 		if (search == "hash" || search == "exact") && schema.Types[fld.Type.Name()].Kind == ast.Enum {
 			stringFilterName := fmt.Sprintf("String%sFilter", strings.Title(search))
 			var l ast.FieldList
 
 			for _, i := range schema.Types[stringFilterName].Fields {
+				enumTypeName := fld.Type.Name()
+				var typ *ast.Type
+
+				if i.Type.Elem == nil {
+					typ = &ast.Type{
+						NamedType: enumTypeName,
+					}
+				} else {
+					typ = &ast.Type{
+						Elem: &ast.Type{NamedType: enumTypeName},
+					}
+				}
+
 				l = append(l, &ast.FieldDefinition{
 					Name:         i.Name,
-					Type:         fld.Type,
+					Type:         typ,
 					Description:  i.Description,
 					DefaultValue: i.DefaultValue,
 				})
@@ -953,8 +1396,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	// if the filter has more than one field or if it has one non-id field.
 	if (len(filter.Fields) == 1 && !isID(filter.Fields[0])) || len(filter.Fields) > 1 {
 		filter.Fields = append(filter.Fields,
-			&ast.FieldDefinition{Name: "and", Type: &ast.Type{NamedType: filterName}},
-			&ast.FieldDefinition{Name: "or", Type: &ast.Type{NamedType: filterName}},
+			&ast.FieldDefinition{Name: "and", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
+			&ast.FieldDefinition{Name: "or", Type: &ast.Type{Elem: &ast.Type{NamedType: filterName}}},
 		)
 	}
 
@@ -969,20 +1412,42 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[filterName] = filter
 }
 
+// hasFilterable Returns whether TypeFilter for a defn will be generated or not.
+// It returns true if any field have search arguments or it is an `ID` field or
+// there is atleast one non-custom filter which would be the part of the has filter.
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
 		})
 }
 
+// Returns if given field is a list of type
+// This returns true for list of all non scalar types
+func isTypeList(fld *ast.FieldDefinition) bool {
+	_, scalar := inbuiltTypeToDgraph[fld.Type.Name()]
+	return !scalar && fld.Type.Elem != nil
+}
+
+// Returns true if given field is a list of enum
+func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
+	typeDefn := sch.Types[fld.Type.Name()]
+	return typeDefn.Kind == "ENUM" && fld.Type.Elem != nil
+}
+
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool {
-			// lists can't be ordered and NamedType will be empty for lists,
-			// so it will return false for list fields
-			return orderable[fld.Type.NamedType]
-		})
+	return fieldAny(defn.Fields, isOrderable)
+}
+
+func isOrderable(fld *ast.FieldDefinition) bool {
+	// lists can't be ordered and NamedType will be empty for lists,
+	// so it will return false for list fields
+	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+}
+
+// Returns true if the field is of type which can be summed. Eg: int, int64, float
+func isSummable(fld *ast.FieldDefinition) bool {
+	return summable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
 func hasID(defn *ast.Definition) bool {
@@ -1035,17 +1500,23 @@ func getDefaultSearchIndex(fldName string) string {
 func getSearchArgs(fld *ast.FieldDefinition) []string {
 	search := fld.Directives.ForName(searchDirective)
 	id := fld.Directives.ForName(idDirective)
+	fldType := fld.Type.Name()
 	if search == nil {
 		if id == nil {
 			return nil
 		}
+		switch fldType {
 		// If search directive wasn't supplied but id was, then hash is the only index
-		// that we apply.
-		return []string{"hash"}
+		// that we apply for string.
+		case "String":
+			return []string{"hash"}
+		default:
+			return []string{getDefaultSearchIndex(fldType)}
+		}
 	}
 	if len(search.Arguments) == 0 ||
 		len(search.Arguments.ForName(searchArgs).Value.Children) == 0 {
-		return []string{getDefaultSearchIndex(fld.Type.Name())}
+		return []string{getDefaultSearchIndex(fldType)}
 	}
 	val := search.Arguments.ForName(searchArgs).Value
 	res := make([]string, len(val.Children))
@@ -1103,7 +1574,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if fld.Type.NamedType != "" && orderable[fld.Type.NamedType] {
+		if isOrderable(fld) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1114,7 +1585,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1145,7 +1616,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -1172,7 +1643,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: camelCase(defn.Name),
+		Name: CamelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1194,10 +1665,74 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
+	aggregationResultTypeName := defn.Name + "AggregateResult"
+
+	var aggregateFields []*ast.FieldDefinition
+
+	countField := &ast.FieldDefinition{
+		Name: "count",
+		Type: &ast.Type{NamedType: "Int"},
+	}
+
+	aggregateFields = append(aggregateFields, countField)
+
+	// Add Maximum and Minimum fields for fields which have an ordering defined
+	// Maximum and Minimum fields are added for fields which are of type int, int64,
+	// float, string, datetime .
+	for _, fld := range defn.Fields {
+		// Creating aggregateFieldType to store type of the aggregate fields like
+		// max, min, avg, sum of scalar fields.
+		aggregateFieldType := &ast.Type{
+			NamedType: fld.Type.NamedType,
+			NonNull:   false,
+			// Explicitly setting NonNull to false as AggregateResultType is not used
+			// as input type and the fields may not be always needed.
+		}
+
+		// Adds titleMax, titleMin fields for a field of name title.
+		if isOrderable(fld) {
+			minField := &ast.FieldDefinition{
+				Name: fld.Name + "Min",
+				Type: aggregateFieldType,
+			}
+			maxField := &ast.FieldDefinition{
+				Name: fld.Name + "Max",
+				Type: aggregateFieldType,
+			}
+			aggregateFields = append(aggregateFields, minField, maxField)
+		}
+
+		// Adds scoreSum and scoreAvg field for a field of name score.
+		// The type of scoreAvg is Float irrespective of the type of score.
+		if isSummable(fld) {
+			sumField := &ast.FieldDefinition{
+				Name: fld.Name + "Sum",
+				Type: aggregateFieldType,
+			}
+			avgField := &ast.FieldDefinition{
+				Name: fld.Name + "Avg",
+				Type: &ast.Type{
+					// Average should always be of type Float
+					NamedType: "Float",
+					NonNull:   false,
+				},
+			}
+			aggregateFields = append(aggregateFields, sumField, avgField)
+		}
+	}
+
+	schema.Types[aggregationResultTypeName] = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   aggregationResultTypeName,
+		Fields: aggregateFields,
+	}
+}
+
+func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && !hasXIDField {
+	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
 
@@ -1220,24 +1755,24 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 			},
 		})
 	}
-	if hasXIDField {
-		name := xidTypeFor(defn)
+	if hasXIDField && defn.Kind != "INTERFACE" {
+		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
 			Type: &ast.Type{
-				NamedType: "String",
+				NamedType: dtype,
 				NonNull:   !hasIDField,
 			},
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
-	if subs != nil {
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil || generateSubscription {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -1251,8 +1786,25 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	subs := defn.Directives.ForName(SubscriptionDirective)
-	if subs != nil {
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil || generateSubscription {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
+}
+
+func addAggregationQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
+	qry := &ast.FieldDefinition{
+		Name: "aggregate" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name + "AggregateResult",
+		},
+	}
+	addFilterArgumentForField(schema, qry, defn.Name)
+
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	subs := defn.Directives.ForName(subscriptionDirective)
+	if subs != nil || generateSubscription {
 		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 	}
 
@@ -1296,13 +1848,29 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition) {
-	addGetQuery(schema, defn)
-	addPasswordQuery(schema, defn)
-	addFilterQuery(schema, defn)
+func addQueries(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
+	if params.generateGetQuery {
+		addGetQuery(schema, defn, params.generateSubscription)
+	}
+
+	if params.generatePasswordQuery {
+		addPasswordQuery(schema, defn)
+	}
+
+	if params.generateFilterQuery {
+		addFilterQuery(schema, defn, params.generateSubscription)
+	}
+
+	if params.generateAggregateQuery {
+		addAggregationQuery(schema, defn, params.generateSubscription)
+	}
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
+	if schema.Types["Add"+defn.Name+"Input"] == nil {
+		return
+	}
+
 	add := &ast.FieldDefinition{
 		Name: "add" + defn.Name,
 		Type: &ast.Type{
@@ -1369,18 +1937,21 @@ func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
 	schema.Mutation.Fields = append(schema.Mutation.Fields, del)
 }
 
-func addMutations(schema *ast.Schema, defn *ast.Definition) {
-	if schema.Types["Add"+defn.Name+"Input"] == nil {
-		return
+func addMutations(schema *ast.Schema, defn *ast.Definition, params *GenerateDirectiveParams) {
+	if params.generateAddMutation {
+		addAddMutation(schema, defn)
 	}
-	addAddMutation(schema, defn)
-	addUpdateMutation(schema, defn)
-	addDeleteMutation(schema, defn)
+	if params.generateUpdateMutation {
+		addUpdateMutation(schema, defn)
+	}
+	if params.generateDeleteMutation {
+		addDeleteMutation(schema, defn)
+	}
 }
 
 func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinition {
-	if schema.Types[fld.Type.Name()].Kind == ast.Object ||
-		schema.Types[fld.Type.Name()].Kind == ast.Interface {
+	fieldTypeKind := schema.Types[fld.Type.Name()].Kind
+	if fieldTypeKind == ast.Object || fieldTypeKind == ast.Interface || fieldTypeKind == ast.Union {
 		newDefn := &ast.FieldDefinition{
 			Name: fld.Name,
 		}
@@ -1414,9 +1985,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1455,9 +2026,9 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName(customDirective)
-		// Fields with @custom directive should not be part of mutation input, hence we skip them.
-		if custom != nil {
+		// Fields with @custom/@lambda directive should not be part of mutation input,
+		// hence we skip them.
+		if hasCustomOrLambda(fld) {
 			continue
 		}
 
@@ -1607,7 +2178,9 @@ func genArgumentString(arg *ast.Argument) string {
 }
 
 func generateInputString(typ *ast.Definition) string {
-	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+	return fmt.Sprintf("%sinput %s%s {\n%s}\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		genFieldsString(typ.Fields))
 }
 
 func generateEnumString(typ *ast.Definition) string {
@@ -1654,6 +2227,12 @@ func generateObjectString(typ *ast.Definition) string {
 		genFieldsString(typ.Fields))
 }
 
+func generateUnionString(typ *ast.Definition) string {
+	return fmt.Sprintf("%sunion %s%s = %s\n",
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
+		strings.Join(typ.Types, " | "))
+}
+
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
 // built by completeSchema, and so contains an original set of definitions, the
 // definitions from schemaExtras and generated types, queries and mutations.
@@ -1670,8 +2249,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 
 	printed := make(map[string]bool)
 
-	// original defs can only be types and enums, print those in the same order
-	// as the original schema.
+	// original defs can only be interface, type, union, enum or input.
+	// print those in the same order as the original schema.
 	for _, typName := range originalTypes {
 		if isQueryOrMutation(typName) {
 			// These would be printed later in schema.Query and schema.Mutation
@@ -1683,6 +2262,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
 		case ast.Object:
 			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
+		case ast.Union:
+			x.Check2(original.WriteString(generateUnionString(typ) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
 		case ast.InputObject:
@@ -1788,13 +2369,13 @@ func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
 
-func xidTypeFor(defn *ast.Definition) string {
+func xidTypeFor(defn *ast.Definition) (string, string) {
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			return fld.Name
+			return fld.Name, fld.Type.Name()
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
@@ -1810,7 +2391,7 @@ func isGraphqlSpecScalar(typ string) bool {
 	return ok
 }
 
-func camelCase(x string) string {
+func CamelCase(x string) string {
 	if x == "" {
 		return ""
 	}

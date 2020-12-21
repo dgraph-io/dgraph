@@ -1,9 +1,9 @@
 +++
 title = "Search and Filtering"
+weight = 5
 [menu.main]
     parent = "schema"
     identifier = "schema-search"
-    weight = 5   
 +++
 
 The `@search` directive tells Dgraph what search to build into your GraphQL API.
@@ -301,3 +301,307 @@ query {
 ```
 
 which is helpful for example if the enums are something like product codes where regular expressions can match a number of values. 
+
+### Geolocation
+
+There are 3 Geolocation types: `Point`, `Polygon` and `MultiPolygon`. All of them are searchable. 
+
+The following table lists the generated filters for each type when you include `@search` on the corresponding field:
+
+| type | constructed searches |
+|----------|----------------------|
+| `Point` | `near`, `within` |
+| `Polygon` | `near`, `within`, `contains`, `intersects` |
+| `MultiPolygon` | `near`, `within`, `contains`, `intersects` |
+
+#### Example
+
+Take for example a `Hotel` type that has a `location` and an `area`:
+
+```graphql
+type Hotel {
+  id: ID!
+  name: String!
+  location: Point @search
+  area: Polygon @search
+}
+```
+
+#### near
+
+The `near` filter matches all entities where the location given by a field is within a distance `meters` from a coordinate.
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        near: {
+            coordinate: {
+                latitute: 37.771935, 
+                longitude: -122.469829
+            }, 
+            distance: 1000
+        }
+    }
+}) {
+  name
+}
+```
+
+#### within
+
+The `within` filter matches all entities where the location given by a field is within a defined `polygon`.
+
+```graphql
+queryHotel(filter: {
+    location: { 
+        within: {
+            polygon: {
+                coordinates: [{
+                    points: [{
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }, {
+                        latitude: 15.15,
+                        longitude: 16.16
+                    }, {
+                        latitude: 20.20,
+                        longitude: 21.21
+                    }, {
+                        latitude: 11.11,
+                        longitude: 22.22
+                    }]
+                }],
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+#### contains
+
+The `contains` filter matches all entities where the `Polygon` or `MultiPolygon` field contains another given `point` or `polygon`.
+
+{{% notice "tip" %}}
+Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
+{{% /notice %}}
+
+A `contains` example using `point`:
+
+```graphql
+queryHotel(filter: {
+    area: { 
+        contains: {
+            point: {
+              latitude: 0.5,
+              longitude: 2.5
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+A `contains` example using `polygon`:
+
+```graphql
+ queryHotel(filter: {
+    area: { 
+        contains: {
+            polygon: {
+                coordinates: [{
+                  points:[{
+                    latitude: 37.771935, 
+                    longitude: -122.469829
+                  }]
+                }],
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+#### intersects 
+
+The `intersects` filter matches all entities where the `Polygon` or `MultiPolygon` field intersects another given `polygon` or `multiPolygon`.
+
+{{% notice "tip" %}}
+Only one `polygon` or `multiPolygon` can be given inside the `IntersectsFilter` at a time.
+{{% /notice %}}
+
+```graphql
+  queryHotel(filter: {
+    area: {
+      intersects: {
+        multiPolygon: {
+          polygons: [{
+            coordinates: [{
+              points: [{
+                latitude: 11.11,
+                longitude: 22.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 11.11,
+                longitude: 22.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }, {
+            coordinates: [{
+              points: [{
+                latitude: 91.11,
+                longitude: 92.22
+              }, {
+                latitude: 15.15,
+                longitude: 16.16
+              }, {
+                latitude: 20.20,
+                longitude: 21.21
+              }, {
+                latitude: 91.11,
+                longitude: 92.22
+              }]
+            }, {
+              points: [{
+                latitude: 11.18,
+                longitude: 22.28
+              }, {
+                latitude: 15.18,
+                longitude: 16.18
+              }, {
+                latitude: 20.28,
+                longitude: 21.28
+              }, {
+                latitude: 11.18,
+                longitude: 22.28
+              }]
+            }]
+          }]
+        }
+      }
+    }
+  }) {
+    name
+  }
+```
+
+### Union
+
+Unions can be queried only as a field of a type. Union queries can't be ordered, but you can filter and paginate them.
+
+{{% notice "note" %}}
+Union queries do not support the `order` argument.
+The results will be ordered by the `uid` of each node in ascending order.
+{{% /notice %}}
+
+For example, the following schema will enable to query the `members` union field in the `Home` type with filters and pagination.
+
+```graphql
+union HomeMember = Dog | Parrot | Human
+
+type Home {
+  id: ID!
+  address: String
+  
+  members(filter: HomeMemberFilter, first: Int, offset: Int): [HomeMember]
+}
+
+# Not specifying a field in the filter input will be considered as a null value for that field.
+input HomeMemberFilter {
+	# `homeMemberTypes` is used to specify which types to report back.
+	homeMemberTypes: [HomeMemberType]
+
+	# specifying a null value for this field means query all dogs
+	dogFilter: DogFilter
+
+	# specifying a null value for this field means query all parrots
+	parrotFilter: ParrotFilter
+	# note that there is no HumanFilter because the Human type wasn't filterable
+}
+
+enum HomeMemberType {
+	dog
+	parrot
+	human
+}
+
+input DogFilter {
+	id: [ID!]
+	category: Category_hash
+	breed: StringTermFilter
+	and: DogFilter
+	or: DogFilter
+	not: DogFilter
+}
+
+input ParrotFilter {
+	id: [ID!]
+	category: Category_hash
+	and: ParrotFilter
+	or: ParrotFilter
+	not: ParrotFilter
+}
+```
+
+{{% notice "tip" %}}
+Not specifying any filter at all or specifying any of the `null` values for a filter will query all members.
+{{% /notice %}}
+
+
+
+The same example, but this time with filter and pagination arguments:
+
+```graphql
+query {
+  queryHome {
+    address
+    members (
+      filter: {
+		homeMemberTypes: [dog, parrot] # means we don't want to query humans
+		dogFilter: {
+			# means in Dogs, we only want to query "German Shepherd" breed
+			breed: { allofterms: "German Shepherd"}
+		}
+		# not specifying any filter for parrots means we want to query all parrots
+      }
+      first: 5
+      offset: 10
+    ) {
+      ... on Animal {
+        category
+      }
+      ... on Dog {
+        breed
+      }
+      ... on Parrot {
+        repeatsWords
+      }
+      ... on HomeMember {
+        name
+      }
+    }
+  }
+}
+```

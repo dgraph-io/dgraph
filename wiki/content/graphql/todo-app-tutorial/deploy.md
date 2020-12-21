@@ -1,8 +1,8 @@
 +++
 title = "Deploying on Slash GraphQL"
+weight = 6
 [menu.main]
     parent = "todo-app-tutorial"
-    weight = 6   
 +++
 
 *You can join the waitlist for Slash GraphQL [here](https://dgraph.io/slash-graphql).*

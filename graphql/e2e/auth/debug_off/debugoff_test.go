@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dgrijalva/jwt-go/v4"
+
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -71,7 +73,7 @@ func TestAddGQL(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -112,11 +114,11 @@ func TestAddMutationWithXid(t *testing.T) {
 
 	// Add the tweet for the first time.
 	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Re-adding the tweet should fail.
 	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)
@@ -135,9 +137,9 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
 	for _, algo := range jwtAlgo {
-		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem")
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "../sample_public_key.pem", false)
 		if err != nil {
 			panic(err)
 		}

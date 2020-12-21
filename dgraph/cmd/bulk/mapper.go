@@ -58,7 +58,8 @@ type shardState struct {
 
 func newMapperBuffer(opt *options) *z.Buffer {
 	sz := float64(opt.MapBufSize) * 1.1
-	buf, err := z.NewBufferWith(int(sz), 2*int(opt.MapBufSize), z.UseMmap)
+	buf, err := z.NewBufferWithDir(int(sz), 2*int(opt.MapBufSize), z.UseMmap,
+		filepath.Join(opt.TmpDir, bufferDir))
 	x.Check(err)
 	return buf
 }
@@ -180,22 +181,22 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}
 
 	var bufSize int64
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
 		if bufSize < m.opt.PartitionBufSize {
-			continue
+			return nil
 		}
 		sz := len(header.PartitionKeys)
 		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
 			// We already have this key.
-			continue
+			return nil
 		}
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
-	}
+		return nil
+	})
+
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
@@ -206,16 +207,16 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	slice, next = []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+
+	err = cbuf.SliceIterate(func(slice []byte) error {
 		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
 		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
 
 		_, err = w.Write(slice)
-		x.Check(err)
-	}
+		return err
+	})
+	x.Check(err)
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
@@ -248,7 +249,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 		for i := range m.shards {
 			sh := &m.shards[i]
-			if uint64(sh.cbuf.Len()) >= m.opt.MapBufSize {
+			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
@@ -260,7 +261,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if sh.cbuf.Len() > 0 {
+		if sh.cbuf.LenNoPadding() > 0 {
 			sh.mu.Lock() // One write at a time.
 			m.writeMapEntriesToFile(sh.cbuf, i)
 		} else {

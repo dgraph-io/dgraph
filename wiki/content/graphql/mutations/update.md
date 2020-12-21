@@ -1,9 +1,9 @@
 +++
 title = "Update Mutations"
+weight = 3
 [menu.main]
     parent = "graphql-mutations"
     name = "Update"
-    weight = 3   
 +++
 
 Update Mutations allows you to update existing objects of a particular type. It allows to filter nodes and, set and remove any field belonging to a type.

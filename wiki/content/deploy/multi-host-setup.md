@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Multi Host Setup"
+weight = 5
 [menu.main]
     parent = "deploy"
-    weight = 5
 +++
 
 ## Using Docker Swarm

@@ -65,17 +65,17 @@ type ProposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	all map[string]*ProposalCtx
+	all map[uint64]*ProposalCtx
 }
 
-func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
-	if len(key) == 0 {
+func (p *proposals) Store(key uint64, pctx *ProposalCtx) bool {
+	if key == 0 {
 		return false
 	}
 	p.Lock()
 	defer p.Unlock()
 	if p.all == nil {
-		p.all = make(map[string]*ProposalCtx)
+		p.all = make(map[uint64]*ProposalCtx)
 	}
 	if _, has := p.all[key]; has {
 		return false
@@ -84,21 +84,21 @@ func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
 	return true
 }
 
-func (p *proposals) Ctx(key string) context.Context {
+func (p *proposals) Ctx(key uint64) context.Context {
 	if pctx := p.Get(key); pctx != nil {
 		return pctx.Ctx
 	}
 	return context.Background()
 }
 
-func (p *proposals) Get(key string) *ProposalCtx {
+func (p *proposals) Get(key uint64) *ProposalCtx {
 	p.RLock()
 	defer p.RUnlock()
 	return p.all[key]
 }
 
-func (p *proposals) Delete(key string) {
-	if len(key) == 0 {
+func (p *proposals) Delete(key uint64) {
+	if key == 0 {
 		return
 	}
 	p.Lock()
@@ -106,8 +106,8 @@ func (p *proposals) Delete(key string) {
 	delete(p.all, key)
 }
 
-func (p *proposals) Done(key string, err error) {
-	if len(key) == 0 {
+func (p *proposals) Done(key uint64, err error) {
+	if key == 0 {
 		return
 	}
 	p.Lock()

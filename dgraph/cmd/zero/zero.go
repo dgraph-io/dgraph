@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"math"
 	"strings"
@@ -69,8 +70,13 @@ type Server struct {
 	closer         *z.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
+	// tls client config used to connect with zero internally
+	tlsClientConfig *tls.Config
+
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+
+	checkpointPerGroup map[uint32]uint64
 }
 
 // Init initializes the zero server.
@@ -92,6 +98,7 @@ func (s *Server) Init() {
 	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+	s.checkpointPerGroup = make(map[uint32]uint64)
 
 	go s.rebalanceTablets()
 }
@@ -229,15 +236,18 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*pb.Group)
 	}
+
 	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
-			conn.GetPools().Connect(m.Addr)
+			conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 		}
+
 		if g.Tablets == nil {
 			g.Tablets = make(map[string]*pb.Tablet)
 		}
 	}
+
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
@@ -339,7 +349,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 
 	s.RLock()
 	defer s.RUnlock()
-	// There is only one member.
+	// There is only one member. We use for loop because we don't know what the mid is.
 	for mid, dstMember := range dst.Members {
 		group, has := s.state.Groups[dstMember.GroupId]
 		if !has {
@@ -378,8 +388,8 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 			continue
 		}
 
-		s := float64(srcTablet.Space)
-		d := float64(dstTablet.Space)
+		s := float64(srcTablet.OnDiskBytes)
+		d := float64(dstTablet.OnDiskBytes)
 		if dstTablet.Remove || (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
 			proposal := &pb.ZeroProposal{
@@ -457,7 +467,7 @@ func (s *Server) Connect(ctx context.Context,
 			switch {
 			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
-				conn.GetPools().Connect(m.Addr)
+				conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 				return &pb.ConnectionState{
 					State:  ms,
 					Member: member,
@@ -482,7 +492,7 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
-	conn.GetPools().Connect(m.Addr)
+	conn.GetPools().Connect(m.Addr, s.tlsClientConfig)
 
 	createProposal := func() *pb.ZeroProposal {
 		s.Lock()
@@ -501,6 +511,9 @@ func (s *Server) Connect(ctx context.Context,
 			// IDs, the couter is incremented every time a proposal is created.
 			m.Id = s.nextRaftId
 			s.nextRaftId += 1
+			proposal.MaxRaftId = m.Id
+		} else if m.Id >= s.nextRaftId {
+			s.nextRaftId = m.Id + 1
 			proposal.MaxRaftId = m.Id
 		}
 
@@ -625,6 +638,14 @@ func (s *Server) ShouldServe(
 
 // UpdateMembership updates the membership of the given group.
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
+	// Only Zero leader would get these membership updates.
+	if ts := group.GetCheckpointTs(); ts > 0 {
+		for _, m := range group.GetMembers() {
+			s.Lock()
+			s.checkpointPerGroup[m.GetGroupId()] = ts
+			s.Unlock()
+		}
+	}
 	proposals, err := s.createProposals(group)
 	if err != nil {
 		// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy

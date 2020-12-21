@@ -300,7 +300,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
         livenessProbe:
           httpGet:
             path: /health?live=1

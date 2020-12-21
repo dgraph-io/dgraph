@@ -1,73 +1,65 @@
-# This file sets up the cluster required by the tests in this directory.
+# Auto-generated with: [./compose -a 3 -z 1 -r 1 -w --port_offset=0 --expose_ports=false --mem= --names=false -O ../systest/group-delete/docker-compose.yml]
+#
 version: "3.5"
 services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha2:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha2
+    labels:
+      cluster: test
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  alpha3:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha3
+    labels:
+      cluster: test
+    ports:
+    - "8080"
+    - "9080"
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
-    container_name: bank-dg0.1
-    working_dir: /data/dg0.1
-    ports:
-      - 5180:5180
-      - 6180:6180
+    working_dir: /data/zero1
     labels:
       cluster: test
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --bindall --logtostderr
-
-  dg1:
-    image: dgraph/dgraph:latest
-    container_name: bank-dg1
-    working_dir: /data/dg1
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
     ports:
-      - 8180:8180
-      - 9180:9180
-    labels:
-      cluster: test
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --logtostderr
-      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  dg2:
-    image: dgraph/dgraph:latest
-    container_name: bank-dg2
-    working_dir: /data/dg2
-    depends_on:
-      - dg1
+    - "5080"
+    - "6080"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8182:8182
-      - 9182:9182
-    labels:
-      cluster: test
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --logtostderr
-      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  dg3:
-    image: dgraph/dgraph:latest
-    container_name: bank-dg3
-    working_dir: /data/dg3
-    depends_on:
-      - dg2
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8183:8183
-      - 9183:9183
-    labels:
-      cluster: test
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
-      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr
+      -v=2 --bindall
+volumes: {}

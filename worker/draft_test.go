@@ -21,7 +21,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -30,15 +29,12 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions(dir)
-	return badger.Open(opt)
-}
-
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
@@ -46,20 +42,20 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	delta := &pb.OracleDelta{}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
 	proposal := pb.Proposal{Delta: delta}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := badger.OpenManaged(badger.DefaultOptions(dir))
-	require.NoError(t, err)
-	ds := raftwal.Init(db, 0, 0)
-	defer ds.Closer.SignalAndWait()
+	ds := raftwal.Init(dir)
+	defer ds.Close()
 
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry

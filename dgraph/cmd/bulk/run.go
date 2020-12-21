@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/worker"
+
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -108,18 +110,21 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
-		"The compression level for Badger. A higher value uses more resources.")
+	flag.String("badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "0,100",
+	flag.String("badger.cache_percentage", "70,30",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
-
+	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
 
 func run() {
+	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -147,16 +152,13 @@ func run() {
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
 		// Badger options
-		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
+		BadgerCompression:      ctype,
+		BadgerCompressionLevel: clevel,
 	}
 
 	x.PrintVersion()
 	if opt.Version {
 		os.Exit(0)
-	}
-	if opt.BadgerCompressionLevel < 0 {
-		fmt.Printf("Invalid compression level: %d. It should be non-negative",
-			opt.BadgerCompressionLevel)
 	}
 
 	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
@@ -186,6 +188,18 @@ func run() {
 		if !opt.Encrypted && !opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
+		}
+
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = tlsConf
+		if !worker.EnterpriseEnabled() {
+			// Crash since the enterprise license is not enabled..
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			log.Printf("Encryption feature enabled.")
 		}
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
@@ -243,6 +257,7 @@ func run() {
 	go func() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
@@ -275,6 +290,12 @@ func run() {
 	if opt.CleanupTmp {
 		defer os.RemoveAll(opt.TmpDir)
 	}
+
+	// Create directory for temporary buffers used in map-reduce phase
+	bufDir := filepath.Join(opt.TmpDir, bufferDir)
+	x.Check(os.RemoveAll(bufDir))
+	x.Check(os.MkdirAll(bufDir, 0700))
+	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {

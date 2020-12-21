@@ -249,6 +249,9 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
+		//
+		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
+		// example?
 		if schema.IsPreDefPredChanged(update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
@@ -289,6 +292,28 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	return result, nil
 }
 
+// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// This helper record lets us know during backup that a DROP operation was performed and that we
+// need to write this information in backup manifest. So that while restoring from a backup series,
+// we can create an exact replica of the system which existed at the time the last backup was taken.
+// Note that if the server crashes after the DROP operation & before this helper record is inserted,
+// then restoring from the incremental backup of such a DB would restore even the dropped
+// data back.
+func insertDropRecord(ctx context.Context, dropOp string) error {
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
+		&api.Request{
+			Mutations: []*api.Mutation{{
+				Set: []*api.NQuad{{
+					Subject:     "_:r",
+					Predicate:   "dgraph.drop.op",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: dropOp}},
+				}},
+			}},
+			CommitNow: true,
+		}, NoAuthorize)
+	return err
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
@@ -321,6 +346,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
+		// insert a helper record for backup & restore, indicating that drop_all was done
+		err = insertDropRecord(ctx, "DROP_ALL;")
+		if err != nil {
+			return empty, err
+		}
+
 		// insert empty GraphQL schema, so all alphas get notified to
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
@@ -343,6 +374,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_DATA
 		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_data was done
+		err = insertDropRecord(ctx, "DROP_DATA;")
 		if err != nil {
 			return empty, err
 		}
@@ -386,6 +423,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_attr was done
+		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
 		return empty, err
 	}
 
@@ -407,7 +450,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	result, err := parseSchemaFromAlterOperation(op)
-	if err != nil {
+	if err == errIndexingInProgress {
+		// Make the client wait a bit.
+		time.Sleep(time.Second)
+		return nil, err
+
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -889,18 +937,20 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 			healthAll = append(healthAll, p.HealthInfo())
 		}
 	}
+
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
-		Instance:   "alpha",
-		Address:    x.WorkerConfig.MyAddr,
-		Status:     "healthy",
-		Group:      strconv.Itoa(int(worker.GroupId())),
-		Version:    x.Version(),
-		Uptime:     int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho:   time.Now().Unix(),
-		Ongoing:    worker.GetOngoingTasks(),
-		Indexing:   schema.GetIndexingPredicates(),
-		EeFeatures: ee.GetEEFeaturesList(),
+		Instance:    "alpha",
+		Address:     x.WorkerConfig.MyAddr,
+		Status:      "healthy",
+		Group:       strconv.Itoa(int(worker.GroupId())),
+		Version:     x.Version(),
+		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:    time.Now().Unix(),
+		Ongoing:     worker.GetOngoingTasks(),
+		Indexing:    schema.GetIndexingPredicates(),
+		EeFeatures:  ee.GetEEFeaturesList(),
+		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
 	var err error
@@ -1021,10 +1071,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
-		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
-		qc.latency.AssignTimestamp = time.Since(start)
+	if isMutation && req.StartTs == 0 {
+		if x.WorkerConfig.LudicrousMode {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		} else {
+			start := time.Now()
+			req.StartTs = worker.State.GetTimestamp(false)
+			qc.latency.AssignTimestamp = time.Since(start)
+		}
 	}
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -1312,7 +1366,7 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Admin operations.")
 
 func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 	ipAddr, err := x.HasWhitelistedIP(ctx)

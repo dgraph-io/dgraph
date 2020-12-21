@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Binary Backups"
+weight = 1
 [menu.main]
     parent = "enterprise-features"
-    weight = 1
 +++
 
 {{% notice "note" %}}
@@ -248,6 +248,117 @@ mutation {
 }
 ```
 
+## Listing Backups
+
+The GraphQL admin interface includes the `listBackups` endpoint that lists the
+backups in the given location along with the information included in their
+`manifests.json` files. An example of a request to list the backups in the
+`/data/backup` location is included below:
+
+```
+query backup() {
+	listBackups(input: {location: "/data/backup"}) {
+		backupId
+		backupNum
+		encrypted
+		groups {
+			groupId
+			predicates
+		}
+		path
+		since
+		type
+	}
+}
+```
+
+The listBackups input can contain the following fields. Only the `location`
+field is required.
+
+```
+input ListBackupsInput {
+	"""
+	Destination for the backup: e.g. Minio or S3 bucket.
+	"""
+	location: String!
+
+	"""
+	Access key credential for the destination.
+	"""
+	accessKey: String
+
+	"""
+	Secret key credential for the destination.
+	"""
+	secretKey: String
+
+	"""
+	AWS session token, if required.
+	"""
+	sessionToken: String
+
+	"""
+	Whether the destination doesn't require credentials (e.g. S3 public bucket).
+	"""
+	anonymous: Boolean
+}
+```
+
+The output is of the `Manifest` type, which contains the fields below. The
+fields correspond to the fields inside the `manifest.json` files.
+
+```
+type Manifest {
+	"""
+	Unique ID for the backup series.
+	"""
+	backupId: String
+
+	"""
+	Number of this backup within the backup series. The full backup always has a value of one.
+	"""
+	backupNum: Int
+
+	"""
+	Whether this backup was encrypted.
+	"""
+	encrypted: Boolean
+
+	"""
+	List of groups and the predicates they store in this backup.
+	"""
+	groups: [BackupGroup]
+
+	"""
+	Path to the manifest file.
+	"""
+	path: String
+
+	"""
+	The timestamp at which this backup was taken. The next incremental backup will
+	start from this timestamp.
+	"""
+	since: Int
+
+	"""
+	The type of backup, either full or incremental.
+	"""
+	type: String
+}
+
+type BackupGroup {
+	"""
+	The ID of the cluster group.
+	"""
+	groupId: Int
+
+	"""
+	List of predicates assigned to the group.
+	"""
+	predicates: [String]
+}
+```
+
 ### Automating Backups
 
 You can use the provided endpoint to automate backups, however, there are a few
@@ -271,21 +382,21 @@ Encrypted backups are a Enterprise feature that are available from v20.03.1 and 
 Starting with v20.07.0, we also added support for Encrypted Backups using encryption keys sitting on Vault.
 
 
-## New flag “Encrypted” in manifest.json
+### New flag “Encrypted” in manifest.json
 
 A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
 
 For a series of full and incremental backups, per the current design, we don't allow the mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
 
 
-## AES And Chaining with Gzip
+### AES And Chaining with Gzip
 
 If encryption is turned on an Alpha server, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 
-## Backup
+### Backup
 
 Backup is an online tool, meaning it is available when Alpha server is running. For encrypted backups, the Alpha server must be configured with the “encryption_key_file”. Starting with v20.07.0, the Alpha server can alternatively be configured to interface with Vault server to obtain keys.
 
@@ -293,13 +404,16 @@ Backup is an online tool, meaning it is available when Alpha server is running. 
 `encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-## Restore from Backup
-To restore from a backup, execute the following mutation on `/admin` endpoint.
+### Online restore
+
+To restore from a backup to a live cluster, execute a mutation on the `/admin`
+endpoint with the following format.
 
 ```graphql
 mutation{
   restore(input:{
     location: "/path/to/backup/directory",
+    backupId: "id_of_backup_to_restore"'
   }){
     message
     code
@@ -307,7 +421,23 @@ mutation{
   }
 }
 ```
-Restore can be performed from Amazon S3 / Minio or from a local directory. Below is the `RestoreInput` to be passed into the mutation.
+
+Online restores only require you to send this request. The UID and timestamp
+leases are updated accordingly. The latest backup to be restored should contain
+the same number of groups in its manifest.json file as the cluster to which it
+is being restored.
+
+{{% notice "note" %}}
+When using backups made from a Dgraph cluster that uses encryption (so backups are encrypted),
+you need to use the same key from that original cluster when doing a restore process.
+Dgraph's [Encryption at Rest]({{< relref "enterprise-features/encryption-at-rest.md" >}}) uses a symmetric-key
+algorithm where the same key is used for both encryption and decryption, so the encryption key from that
+cluster is needed for the restore process.
+{{% /notice %}}
+
+Restore can be performed from Amazon S3 / Minio or from a local directory. Below
+is the documentation for the fields inside `RestoreInput` that can be passed into
+the mutation.
 
 ```graphql
 input RestoreInput {
@@ -322,6 +452,12 @@ input RestoreInput {
 		If missing, it defaults to the latest series.
 		"""
 		backupId: String
+        
+		"""
+		Number of the backup within the backup series to be restored. Backups with a greater value
+		will be ignored. If the value is zero or is missing, the entire series will be restored.
+		"""
+		backupNum: Int
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
@@ -383,10 +519,25 @@ input RestoreInput {
 }
 ```
 
-## Restore using `dgraph restore`
+Restore requests will return immediately without waiting for the operation to
+finish. The `restoreId` value included in the response can be used to query for
+the state of the restore operation via the `restoreStatus` endpoint. The request
+should be sent to the same alpha to which the original restore request was sent.
+Below is an example of how to perform the query.
+
+```
+query status() {
+	restoreStatus(restoreId: 8) {
+		status
+		errors
+	}
+}
+```
+
+### Offline restore using `dgraph restore`
 
 {{% notice "note" %}}
-`dgraph restore` is being deprecated, please use GraphQL api for Restoring from Backup.
+`dgraph restore` is being deprecated, please use GraphQL API for Restoring from Backup.
 {{% /notice %}}
 
 The restore utility is a standalone tool today. A new flag `--encryption_key_file` is added to the restore utility so it can decrypt the backup. This file must contain the same key that was used for encryption during backup.

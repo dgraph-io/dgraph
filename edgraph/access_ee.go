@@ -16,7 +16,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -74,9 +76,8 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
-		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		glog.Errorf("Authentication from address %s failed: %v", addr, err)
+		return nil, x.ErrorInvalidLogin
 	}
 	glog.Infof("%s logged in successfully", user.UserID)
 
@@ -137,7 +138,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 		if user == nil {
 			return nil, errors.Errorf("unable to authenticate through refresh token: "+
-				"user not found for id %v", userId)
+				"invalid username or password")
 		}
 
 		glog.Infof("Authenticated user %s through refresh token", userId)
@@ -154,10 +155,10 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	if user == nil {
 		return nil, errors.Errorf("unable to authenticate through password: "+
-			"user not found for id %v", request.Userid)
+			"invalid username or passowrd")
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, x.ErrorInvalidLogin
 	}
 	return user, nil
 }
@@ -382,7 +383,7 @@ var aclPrefixes = [][]byte{
 	x.PredicatePrefix("dgraph.xid"),
 }
 
-// ResetAcl clears the aclCachePtr and upserts the Groot account.
+// clears the aclCachePtr and upserts the Groot account.
 func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
@@ -398,7 +399,9 @@ func ResetAcl(closer *z.Closer) {
 	upsertGuardians := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
-				guid as var(func: eq(dgraph.xid, "%s"))
+				guid as guardians(func: eq(dgraph.xid, "%s")){
+					uid
+				}
 			}
 		`, x.GuardiansId)
 		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
@@ -413,11 +416,44 @@ func ResetAcl(closer *z.Closer) {
 			},
 		}
 
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
-			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+
+		// Structs to parse guardians group uid from query response
+		type groupNode struct {
+			Uid string `json:"uid"`
 		}
 
-		glog.Infof("Successfully upserted the guardian group")
+		type groupQryResp struct {
+			GuardiansGroup []groupNode `json:"guardians"`
+		}
+
+		if err != nil {
+			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+		}
+		var groupResp groupQryResp
+		var guardiansGroupUid string
+		if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
+			return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
+		}
+		if len(groupResp.GuardiansGroup) == 0 {
+			// no guardians group found
+			// Extract guardians group uid from mutation
+			newGroupUidMap := resp.GetUids()
+			guardiansGroupUid = newGroupUidMap["newgroup"]
+		} else if len(groupResp.GuardiansGroup) == 1 {
+			// we found a guardians group
+			guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
+		} else {
+			return errors.Wrap(err, "Multiple guardians group found")
+		}
+
+		guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
+		if err != nil {
+			return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
+		}
+		atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
+
+		glog.Infof("Successfully upserted the guardians group")
 		return nil
 	}
 
@@ -425,7 +461,9 @@ func ResetAcl(closer *z.Closer) {
 	upsertGroot := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
-				grootid as var(func: eq(dgraph.xid, "%s"))
+				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+					uid
+				}
 				guid as var(func: eq(dgraph.xid, "%s"))
 			}
 		`, x.GrootId, x.GuardiansId)
@@ -447,9 +485,42 @@ func ResetAcl(closer *z.Closer) {
 			},
 		}
 
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+		if err != nil {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}
+
+		// Structs to parse groot user uid from query response
+		type userNode struct {
+			Uid string `json:"uid"`
+		}
+
+		type userQryResp struct {
+			GrootUser []userNode `json:"grootUser"`
+		}
+
+		var grootUserUid string
+		var userResp userQryResp
+		if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+			return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
+		}
+		if len(userResp.GrootUser) == 0 {
+			// no groot user found from query
+			// Extract uid of created groot user from mutation
+			newUserUidMap := resp.GetUids()
+			grootUserUid = newUserUidMap["newuser"]
+		} else if len(userResp.GrootUser) == 1 {
+			// we found a groot user
+			grootUserUid = userResp.GrootUser[0].Uid
+		} else {
+			return errors.Wrap(err, "Multiple groot users found")
+		}
+
+		grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
+		if err != nil {
+			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
+		}
+		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
 
 		glog.Infof("Successfully upserted groot account")
 		return nil

@@ -25,11 +25,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -185,7 +185,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 			continue
 		}
 		defns = append(defns, defn.Name)
-		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface || defn.Kind == ast.Union {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
@@ -194,7 +194,9 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
-	expandSchema(doc)
+	if gqlErr = expandSchema(doc); gqlErr != nil {
+		return nil, gqlerror.List{gqlErr}
+	}
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
@@ -218,6 +220,16 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
+
+	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrl
+	if metaInfo != nil && metaInfo.JWKUrl != "" {
+		metaInfo.InitHttpClient()
+		fetchErr := metaInfo.FetchJWKs()
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
 	}
 
 	handler := &handler{
@@ -415,7 +427,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" {
+				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
 					continue
 				}
 
@@ -437,8 +449,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object, ast.Interface:
-					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+				case ast.Object, ast.Interface, ast.Union:
+					if isGeoType(f.Type) {
+						typStr = inbuiltTypeToDgraph[f.Type.Name()]
+						var indexes []string
+						if f.Directives.ForName(searchDirective) != nil {
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+					} else {
+						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
+					}
 
 					if parentInt == nil {
 						if strings.HasPrefix(fname, "~") {
@@ -457,7 +479,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, scalarToDgraph[f.Type.Name()], suffix,
+						prefix, inbuiltTypeToDgraph[f.Type.Name()], suffix,
 					)
 
 					var indexes []string
@@ -466,7 +488,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
-						indexes = append(indexes, "hash")
+						switch f.Type.Name() {
+						case "Int", "Int64":
+							indexes = append(indexes, "int")
+						case "Float":
+							indexes = append(indexes, "float")
+						case "String":
+							indexes = append(indexes, "hash")
+						}
 					}
 
 					if search != nil {

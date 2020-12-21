@@ -197,11 +197,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
-	case "application/graphql+-":
+	case "application/graphql+-", "application/dql":
 		params.Query = string(body)
 	default:
 		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphql+-")
+			"Supported content types are application/json, application/graphql+-,application/dql")
 		return
 	}
 
@@ -589,10 +589,8 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
-	md := metadata.New(nil)
-	// Pass in an auth token, if present.
-	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+	// Pass in PoorMan's auth, ACL and IP information if present.
+	ctx := x.AttachAuthToken(context.Background(), r)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {

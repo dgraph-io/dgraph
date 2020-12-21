@@ -1,10 +1,11 @@
 +++
 date = "2017-09-10T22:25:17+11:00"
 title = "Concurrent mutations and conflicts"
+weight = 12
 [menu.main]
     parent = "howto"
-    weight = 12
 +++
+
 This how-to guide provides an example on how to handle concurrent modifications using a multi-threaded Java Program. The example demonstrates [transaction]({{< relref "clients/overview.md#transactions" >}}) conflicts in Dgraph.
 
 Steps to run this example are as follows.

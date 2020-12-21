@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "JSON Mutation Format"
+weight = 10
 [menu.main]
     parent = "mutations"
-    weight = 10
 +++
 
 Mutations can also be specified using JSON objects. This can allow mutations to
@@ -11,8 +11,11 @@ be expressed in a more natural way. It also eliminates the need for apps to
 have custom serialisation code, since most languages already have a JSON
 marshalling library.
 
-When Dgraph receives a mutation as a JSON object, it first converts in into
-multiple RDFs that are then processed as normal.
+When Dgraph receives a mutation as a JSON object, it first converts it into an 
+internal edge format that is then processed into Dgraph.
+
+> JSON  -> Edges -> Posting list \
+> RDF   -> Edges -> Posting list
 
 Each JSON object represents a single node in the graph.
 

@@ -15,6 +15,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"os"
 	"time"
 
@@ -33,15 +34,24 @@ var Restore x.SubCommand
 // LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
+var ExportBackup x.SubCommand
+
 var opt struct {
-	backupId, location, pdir, zero string
-	key                            x.SensitiveByteSlice
-	forceZero                      bool
+	backupId    string
+	compression string
+	location    string
+	pdir        string
+	zero        string
+	key         x.SensitiveByteSlice
+	forceZero   bool
+	destination string
+	format      string
 }
 
 func init() {
 	initRestore()
 	initBackupLs()
+	initExportBackup()
 }
 
 func initRestore() {
@@ -101,6 +111,10 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 
 	flag := Restore.Cmd.Flags()
+	flag.StringVar(&opt.compression, "badger.compression", "snappy",
+		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
+			"level (if applicable) for the postings directory. none would disable compression,"+
+			" while zstd:1 would set zstd compression at level 1.")
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
@@ -112,6 +126,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
+	x.RegisterClientTLSFlags(flag)
 	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
@@ -185,21 +200,29 @@ func runRestoreCmd() error {
 
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
-
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		zero, err := grpc.DialContext(ctx, opt.zero,
-			grpc.WithBlock(),
-			grpc.WithInsecure())
+		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
+		x.Checkf(err, "Unable to generate helper TLS config")
+		callOpts := []grpc.DialOption{grpc.WithBlock()}
+		if tlsConfig != nil {
+			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+		} else {
+			callOpts = append(callOpts, grpc.WithInsecure())
+		}
+
+		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
 		if err != nil {
 			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
 	}
 
+	ctype, clevel := x.ParseCompression(opt.compression)
+
 	start = time.Now()
-	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key)
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key, ctype, clevel)
 	if result.Err != nil {
 		return result.Err
 	}
@@ -246,4 +269,39 @@ func runLsbackupCmd() error {
 	}
 
 	return nil
+}
+
+func initExportBackup() {
+	ExportBackup.Cmd = &cobra.Command{
+		Use:   "export_backup",
+		Short: "Export data inside single full or incremental backup.",
+		Long:  ``,
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(ExportBackup.Conf).Stop()
+			if err := runExportBackup(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	flag := ExportBackup.Cmd.Flags()
+	flag.StringVarP(&opt.location, "location", "l", "",
+		"Sets the location of the backup. Only file URIs are supported for now.")
+	flag.StringVarP(&opt.destination, "destination", "d", "",
+		"The folder to which export the backups.")
+	flag.StringVarP(&opt.format, "format", "f", "rdf",
+		"The format of the export output. Accepts a value of either rdf or json")
+	enc.RegisterFlags(flag)
+}
+
+func runExportBackup() error {
+	var err error
+	if opt.key, err = enc.ReadKey(ExportBackup.Conf); err != nil {
+		return err
+	}
+
+	exporter := worker.BackupExporter{}
+	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }

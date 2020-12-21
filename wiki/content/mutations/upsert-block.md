@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Upsert Block"
+weight = 11
 [menu.main]
     parent = "mutations"
-    weight = 11
 +++
 
 The upsert block allows performing queries and mutations in a single request. The upsert
@@ -130,7 +130,7 @@ We can achieve the same result using `json` dataset as follows:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid\\n name} }",
+  "query": "{ q(func: eq(email, \"user@company1.io\")) {v as uid, name} }",
   "set": {
     "uid": "uid(v)",
     "name": "first last",

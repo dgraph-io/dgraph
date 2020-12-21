@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "graphql-mutations"
     identifier = "mutations-overview"
-    weight = 1   
 +++
 
 Mutation allows us to modify server-side data, and it also returns an object based on the operation performed. It can be used to insert, update, or delete data. Dgraph automatically generates GraphQL mutation for each type that you define in your schema. The mutation field returns an object type that allows you to query for nested fields. This can be useful for fetching an object's new state after an add/update or get the old state of an object before a delete.
@@ -124,7 +124,9 @@ mutation ($post: AddPostInput!, $author: AddAuthorInput!) {
   }
 }
 ```
+
 Variables:
+
 ```json
 {
   "author": {
@@ -138,6 +140,81 @@ Variables:
 	"author": {
 	  "name": "A.N. Author"
 	}
+  }
+}
+```
+
+## Union mutations
+
+Mutations can be used to add a node to a `union` field in a type. 
+
+For the following schema, 
+
+```graphql
+enum Category {
+  Fish
+  Amphibian
+  Reptile
+  Bird
+  Mammal
+  InVertebrate
+}
+
+interface Animal {
+  id: ID!
+  category: Category @search
+}
+
+type Dog implements Animal {
+  breed: String @search
+}
+
+type Parrot implements Animal {
+  repeatsWords: [String]
+}
+
+type Human {
+  name: String!
+  pets: [Animal!]!
+}
+
+union HomeMember = Dog | Parrot | Human
+
+type Home {
+  id: ID!
+  address: String
+  members: [HomeMember]
+}
+```
+
+This is the mutation for adding `members` to the `Home` type:
+
+```graphql
+mutation {
+  addHome(input: [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": Mammal, "breed": "German Shephard"} },
+            { "parrotRef": { "category": Bird, "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo"} }
+          ]
+        }
+      ]) {
+    home {
+      address
+      members {
+        ... on Dog {
+          breed
+        }
+        ... on Parrot {
+          repeatsWords
+        }
+        ... on Human {
+          name
+        }
+      }
+    }
   }
 }
 ```

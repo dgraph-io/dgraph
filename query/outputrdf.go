@@ -75,6 +75,19 @@ func (b *rdfBuilder) castToRDF(sg *SubGraph) error {
 
 // rdfForSubgraph generates RDF and appends to the output parameter.
 func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
+	// handle the case of recurse queries
+	// Do not generate RDF if all the children of sg null uidMatrix
+	nonNullChild := false
+	for _, ch := range sg.Children {
+		if len(ch.uidMatrix) != 0 {
+			nonNullChild = true
+		}
+	}
+
+	if len(sg.Children) > 0 && !nonNullChild {
+		return nil
+	}
+
 	for i, uid := range sg.SrcUIDs.Uids {
 		if sg.Params.IgnoreResult {
 			// Skip ignored values.
@@ -101,7 +114,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 		case len(sg.counts) > 0:
 			// Add count rdf.
 			b.rdfForCount(uid, sg.counts[i], sg)
-		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0:
+		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0 && len(sg.Children) > 0:
 			// Add posting list relation.
 			b.rdfForUIDList(uid, sg.uidMatrix[i], sg)
 		case i < len(sg.valueMatrix):
@@ -113,7 +126,7 @@ func (b *rdfBuilder) rdfForSubgraph(sg *SubGraph) error {
 
 func (b *rdfBuilder) writeRDF(subject uint64, predicate []byte, object []byte) {
 	// add subject
-	b.writeTriple([]byte(fmt.Sprintf("%#x", subject)))
+	x.Check2(b.buf.Write(x.ToHex(subject, true)))
 	x.Check(b.buf.WriteByte(' '))
 	// add predicate
 	b.writeTriple(predicate)
@@ -149,21 +162,13 @@ func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) 
 			continue
 		}
 		// Build object.
-		b.writeRDF(
-			subject,
-			[]byte(sg.fieldName()),
-			buildTriple([]byte(fmt.Sprintf("%#x", destUID))))
+		b.writeRDF(subject, []byte(sg.fieldName()), x.ToHex(destUID, true))
 	}
 }
 
 // rdfForValueList returns rdf for the value list.
+// Ignore RDF's for the attirbute `uid`.
 func (b *rdfBuilder) rdfForValueList(subject uint64, valueList *pb.ValueList, attr string) {
-	if attr == "uid" {
-		b.writeRDF(subject,
-			[]byte(attr),
-			buildTriple([]byte(fmt.Sprintf("%#x", subject))))
-		return
-	}
 	for _, destValue := range valueList.Values {
 		val, err := convertWithBestEffort(destValue, attr)
 		if err != nil {

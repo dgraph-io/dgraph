@@ -20,11 +20,11 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
-func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
+func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
 		if value.Definition == nil || value.ExpectedType == nil {
 			return
@@ -33,16 +33,16 @@ func listTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 		if value.Kind == ast.Variable {
 			return
 		}
+		// If the expected value is a list (ExpectedType.Elem != nil) && the value is not of list type,
+		// then we need to coerce the value to a list, otherwise, we can return here as we do below.
 
-		// ExpectedType.Elem will be not nil if it is of list type. Otherwise
-		// it will be nil. So it's safe to say that value.Kind should be list
 		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
 			return
 		}
-
-		addError(validator.Message("Value provided %s is incompatible with expected type %s",
-			value.String(),
-			value.ExpectedType.String()), validator.At(value.Position))
+		val := *value
+		child := &ast.ChildValue{Value: &val}
+		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
+		*value = valueNew
 	})
 }
 
@@ -94,7 +94,7 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil || value.Kind == ast.Variable {
+		if value.Definition == nil || value.ExpectedType == nil || value.Kind == ast.Variable || value.Kind == ast.ListValue {
 			return
 		}
 

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Triples"
+weight = 1
 [menu.main]
     parent = "mutations"
-    weight = 1
 +++
 
 A mutation that adds triples is done with the `set` keyword.

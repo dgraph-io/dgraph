@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -69,7 +68,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.DB, bindall bool) {
+func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	if x.WorkerConfig.MyAddr == "" {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
@@ -88,8 +87,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 
 	if x.WorkerConfig.RaftId == 0 {
-		id, err := raftwal.RaftId(walStore)
-		x.Check(err)
+		id := walStore.Uint(raftwal.RaftId)
 		x.WorkerConfig.RaftId = id
 
 		// If the w directory already contains raft information, ignore the proposed
@@ -139,14 +137,14 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
-	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
+	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.GroupId, uint64(gid))
+
+	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
-	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
 
 	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
@@ -156,6 +154,9 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 	gr.proposeInitialTypes()
+
+	x.UpdateHealthStatus(true)
+	glog.Infof("Server is ready")
 }
 
 func (g *groupi) Ctx() context.Context {
@@ -229,12 +230,16 @@ func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
-	ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
-	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
-	cancel()
-	if err != nil {
+	var ts *pb.AssignedIds
+	for {
+		ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
+		var err error
+		ts, err = Timestamps(ctx, &pb.Num{Val: 1})
+		cancel()
+		if err == nil {
+			break
+		}
 		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
-		return
 	}
 
 	m.StartTs = ts.StartId
@@ -322,7 +327,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.GetPools().Connect(member.Addr)
+				conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
 			}
 		}
 		for _, tablet := range group.Tablets {
@@ -335,7 +340,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	}
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.GetPools().Connect(member.Addr)
+			conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
 		}
 	}
 	if !foundSelf {
@@ -648,7 +653,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.GetPools().Connect(mz.GetAddr())
+				return conn.GetPools().Connect(mz.GetAddr(), x.WorkerConfig.TLSClientConfig)
 			}
 		}
 		return nil
@@ -673,7 +678,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.GetPools().Connect(addr)
+			pl = conn.GetPools().Connect(addr, x.WorkerConfig.TLSClientConfig)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -707,6 +712,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 		if snap, err := g.Node.Snapshot(); err == nil {
 			group.SnapshotTs = snap.ReadTs
 		}
+		group.CheckpointTs = atomic.LoadUint64(&g.Node.checkpointTs)
 	}
 
 	pl := g.connToZeroLeader()
@@ -1023,6 +1029,9 @@ func (g *groupi) processOracleDeltaStream() {
 				if err == nil {
 					break
 				}
+				if g.Ctx().Err() != nil {
+					break
+				}
 				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
 					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
@@ -1048,13 +1057,11 @@ func EnterpriseEnabled() bool {
 	if !enc.EeBuild {
 		return false
 	}
-	g := groups()
-	if g.state == nil {
-		return g.askZeroForEE()
+	state := GetMembershipState()
+	if state == nil {
+		return groups().askZeroForEE()
 	}
-	g.RLock()
-	defer g.RUnlock()
-	return g.state.GetLicense().GetEnabled()
+	return state.GetLicense().GetEnabled()
 }
 
 func (g *groupi) askZeroForEE() bool {
@@ -1113,7 +1120,7 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 		if len(members) == 0 {
 			return fmt.Errorf("Unable to find any servers for group: %d", group)
 		}
-		pool := conn.GetPools().Connect(members[0])
+		pool := conn.GetPools().Connect(members[0], x.WorkerConfig.TLSClientConfig)
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.

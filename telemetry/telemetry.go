@@ -67,7 +67,7 @@ func NewZero(ms *pb.MembershipState) *Telemetry {
 		t.NumAlphas += len(g.GetMembers())
 		for _, tablet := range g.GetTablets() {
 			t.NumTablets++
-			t.DiskUsageMB += tablet.GetSpace()
+			t.DiskUsageMB += tablet.GetOnDiskBytes()
 		}
 	}
 	t.DiskUsageMB /= (1 << 20)

@@ -6,6 +6,7 @@ interface Movie {
 	id: ID!
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "directed.movies")
+	directorAggregate(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type OscarMovie implements Movie {
@@ -13,12 +14,14 @@ type OscarMovie implements Movie {
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "directed.movies")
 	year: Int!
+	directorAggregate(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type Director {
 	id: ID!
 	name: String!
 	directed(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie] @dgraph(pred: "~directed.movies")
+	directedAggregate(filter: OscarMovieFilter): OscarMovieAggregateResult
 }
 
 #######################
@@ -37,6 +40,31 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 """
 scalar DateTime
 
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
 enum DgraphIndex {
 	int
 	int64
@@ -52,6 +80,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -86,6 +115,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -93,13 +200,20 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -107,6 +221,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -115,6 +230,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -123,6 +239,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -131,6 +248,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -149,14 +267,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -189,6 +310,28 @@ type DeleteOscarMoviePayload {
 	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	msg: String
 	numUids: Int
+}
+
+type DirectorAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type MovieAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type OscarMovieAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+	yearMin: Int
+	yearMax: Int
+	yearSum: Int
+	yearAvg: Float
 }
 
 type UpdateDirectorPayload {
@@ -256,8 +399,8 @@ input AddOscarMovieInput {
 input DirectorFilter {
 	id: [ID!]
 	has: DirectorHasFilter
-	and: DirectorFilter
-	or: DirectorFilter
+	and: [DirectorFilter]
+	or: [DirectorFilter]
 	not: DirectorFilter
 }
 
@@ -279,8 +422,8 @@ input DirectorRef {
 input MovieFilter {
 	id: [ID!]
 	has: MovieHasFilter
-	and: MovieFilter
-	or: MovieFilter
+	and: [MovieFilter]
+	or: [MovieFilter]
 	not: MovieFilter
 }
 
@@ -302,8 +445,8 @@ input MovieRef {
 input OscarMovieFilter {
 	id: [ID!]
 	has: OscarMovieHasFilter
-	and: OscarMovieFilter
-	or: OscarMovieFilter
+	and: [OscarMovieFilter]
+	or: [OscarMovieFilter]
 	not: OscarMovieFilter
 }
 
@@ -351,10 +494,13 @@ input UpdateOscarMovieInput {
 type Query {
 	getMovie(id: ID!): Movie
 	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	aggregateMovie(filter: MovieFilter): MovieAggregateResult
 	getOscarMovie(id: ID!): OscarMovie
 	queryOscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	aggregateOscarMovie(filter: OscarMovieFilter): OscarMovieAggregateResult
 	getDirector(id: ID!): Director
 	queryDirector(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	aggregateDirector(filter: DirectorFilter): DirectorAggregateResult
 }
 
 #######################

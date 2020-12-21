@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "More about Dgraph Alpha"
+weight = 7
 [menu.main]
     parent = "deploy"
-    weight = 7
 +++
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.

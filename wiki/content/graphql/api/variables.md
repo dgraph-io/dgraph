@@ -1,10 +1,10 @@
 +++
 title = "GraphQL Variables"
+weight = 3
 [menu.main]
     parent = "api"
     name = "GraphQL Variables"
     identifier = "graphql-variables"
-    weight = 3   
 +++
 
 Variables provides the benefit to simplify the GraphQL queries and mutations by allowing us to pass data into separate variables. A GraphQL request can be split into two sections: Query and Variables.

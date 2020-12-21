@@ -451,10 +451,24 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
 						return err
 					}
-					if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
-						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-						break
+					switch srcFn.fname {
+					case "eq":
+						for _, eqToken := range srcFn.eqTokens {
+							if types.CompareVals(srcFn.fname, val, eqToken) {
+								uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+								break
+							}
+						}
+					case "between":
+						if types.CompareBetween(val, srcFn.eqTokens[0], srcFn.eqTokens[1]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
+					default:
+						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
+							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						}
 					}
+
 				} else {
 					vl.Values = append(vl.Values, newValue)
 				}
@@ -687,6 +701,18 @@ func (qs *queryState) handleUidPostings(
 		return nil
 	}
 
+	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
+	// calculate) to work correctly. But we have seen some panics while forming DataKey in
+	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
+	// from here when srcFn.n != len(q.UidList.Uids).
+	switch srcFn.fnType {
+	case notAFunction, compareScalarFn, hasFn, uidInFn:
+		if srcFn.n != len(q.UidList.GetUids()) {
+			return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
+				"handleUidPostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+		}
+	}
+
 	// Divide the task into many goroutines.
 	numGo, width := x.DivideAndRule(srcFn.n)
 	x.AssertTrue(width > 0)
@@ -775,6 +801,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
+					First:     int(args.q.First),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -957,6 +984,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
+		First:    int(q.First),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
@@ -1316,8 +1344,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 		}
 	case arg.srcFn.fname == between:
 		compareFunc := func(dst types.Val) bool {
-			return types.CompareVals("ge", dst, arg.srcFn.eqTokens[0]) &&
-				types.CompareVals("le", dst, arg.srcFn.eqTokens[1])
+			return types.CompareBetween(dst, arg.srcFn.eqTokens[0], arg.srcFn.eqTokens[1])
 		}
 		if err := filterRow(0, compareFunc); err != nil {
 			return err

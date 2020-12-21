@@ -80,6 +80,14 @@ const (
 	}
 
 	"""
+	PersistedQuery contains the query and sha256hash of the query.
+	"""
+	type PersistedQuery @dgraph(type: "dgraph.graphql.persisted_query") {
+		query: String! @dgraph(pred: "dgraph.graphql.p_query")
+		sha256Hash: String! @id @dgraph(pred: "dgraph.graphql.p_sha256hash")
+	}
+
+	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -202,10 +210,13 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 
 		"""
-		Destination for the backup: e.g. Minio or S3 bucket or /absolute/path
+		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
 		"""
 		destination: String
 
@@ -249,12 +260,12 @@ const (
 	}
 
 	input ConfigInput {
-
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be
-		more than specified here. (default -1 means no set limit)
+		Estimated memory the caches can take. Actual usage by the process would be
+		more than specified here. The caches will be updated according to the
+		cache_percentage flag.
 		"""
-		lruMb: Float
+		cacheMb: Float
 
 		"""
 		True value of logRequest enables logging of all the requests coming to alphas.
@@ -268,7 +279,7 @@ const (
 	}
 
 	type Config {
-		lruMb: Float
+		cacheMb: Float
 	}
 
 	` + adminTypes + `
@@ -312,7 +323,7 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
-		
+
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `
@@ -326,48 +337,49 @@ var (
 	commonAdminQueryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Query,
+		resolve.LoggingMWQuery,
 	}
 	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
 	// admin server unless some exceptional behaviour is required
 	commonAdminMutationMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Mutation,
+		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
-		"restoreStatus": commonAdminQueryMWs,
 		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":            {resolve.IpWhitelistingMW4Query},
-		"queryUser":             {resolve.IpWhitelistingMW4Query},
-		"getGroup":              {resolve.IpWhitelistingMW4Query},
-		"getCurrentUser":        {resolve.IpWhitelistingMW4Query},
-		"getUser":               {resolve.IpWhitelistingMW4Query},
-		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query},
-		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query},
+		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":          commonAdminMutationMWs,
 		"config":          commonAdminMutationMWs,
 		"draining":        commonAdminMutationMWs,
 		"export":          commonAdminMutationMWs,
-		"login":           {resolve.IpWhitelistingMW4Mutation},
+		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"restore":         commonAdminMutationMWs,
 		"shutdown":        commonAdminMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":                   {resolve.IpWhitelistingMW4Mutation},
-		"addGroup":                  {resolve.IpWhitelistingMW4Mutation},
-		"updateUser":                {resolve.IpWhitelistingMW4Mutation},
-		"updateGroup":               {resolve.IpWhitelistingMW4Mutation},
-		"deleteUser":                {resolve.IpWhitelistingMW4Mutation},
-		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation},
-		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation},
+		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addGroup":                  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
@@ -422,7 +434,7 @@ type adminServer struct {
 	resolver *resolve.RequestResolver
 
 	// The mutex that locks schema update operations
-	mux sync.Mutex
+	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
@@ -521,7 +533,13 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-
+		server.mux.RLock()
+		if newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+			server.mux.RUnlock()
+			return
+		}
+		server.mux.RUnlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
@@ -572,9 +590,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
-		}).
-		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveRestoreStatus)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

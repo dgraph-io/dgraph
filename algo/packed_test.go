@@ -44,7 +44,7 @@ func TestMergeSorted1Packed(t *testing.T) {
 func printPack(t *testing.T, pack *pb.UidPack) {
 	for _, block := range pack.Blocks {
 		t.Logf("[%x]Block base: %d. Num uids: %d. Deltas: %x\n",
-			pack.Allocator, block.Base, block.NumUids, block.Deltas)
+			pack.AllocRef, block.Base, block.NumUids, block.Deltas)
 	}
 }
 

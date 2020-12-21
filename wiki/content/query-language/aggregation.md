@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Aggregation"
+weight = 11
 [menu.main]
     parent = "query-language"
-    weight = 11
 +++
 
 Syntax Example: `AG(val(varName))`

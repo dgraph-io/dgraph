@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
-// getOrigins retrive the origins from the arguments and returns the retrived origins if
+// getOrigins retrieve the origins from the arguments and returns the retrieved origins if
 // the provided origins are valid.
 func getOrigins(m schema.Mutation) ([]string, error) {
 	out := []string{}
@@ -66,7 +66,7 @@ func resolveReplaceAllowedCORSOrigins(ctx context.Context, m schema.Mutation) (*
 	}, true
 }
 
-// resolveGetCors retrives cors details from the database.
+// resolveGetCors retrieves cors details from the database.
 func resolveGetCors(ctx context.Context, q schema.Query) *resolve.Resolved {
 	origins, err := edgraph.GetCorsOrigins(ctx)
 	if err != nil {
