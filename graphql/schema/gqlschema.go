@@ -1732,7 +1732,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && !hasXIDField {
+	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
 
@@ -1755,7 +1755,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField {
+	if hasXIDField && defn.Kind != "INTERFACE" {
 		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
