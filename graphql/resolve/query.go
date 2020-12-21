@@ -19,6 +19,8 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strconv"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -30,6 +32,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var errNotScalar = errors.New("provided value is not a scalar, can't convert it to string")
+
 // A QueryResolver can resolve a single query.
 type QueryResolver interface {
 	Resolve(ctx context.Context, query schema.Query) *Resolved
@@ -37,7 +41,7 @@ type QueryResolver interface {
 
 // A QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query,
 type QueryRewriter interface {
-	Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
+	Rewrite(ctx context.Context, q schema.Query) ([]*gql.GraphQuery, error)
 }
 
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from
@@ -69,41 +73,88 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
+	resolverTrace := &schema.ResolverTrace{
+		Path:       []interface{}{query.ResponseName()},
+		ParentType: "Query",
+		FieldName:  query.ResponseName(),
+		ReturnType: query.Type().String(),
+	}
+	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
+	timer.Start()
+	defer timer.Stop()
+
 	resolved := qr.rewriteAndExecute(ctx, query)
 	if resolved.Data == nil {
 		resolved.Data = map[string]interface{}{query.Name(): nil}
 	}
 
 	qr.resultCompleter.Complete(ctx, resolved)
+	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
+	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved
 }
 
 func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Query) *Resolved {
+	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	ext := &schema.Extensions{
+		Tracing: &schema.Trace{
+			Execution: &schema.ExecutionTrace{
+				Resolvers: []*schema.ResolverTrace{
+					{Dgraph: []*schema.LabeledOffsetDuration{dgraphQueryDuration}},
+				},
+			},
+		},
+	}
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:  map[string]interface{}{query.Name(): nil},
-			Field: query,
-			Err:   err,
+			Data:       map[string]interface{}{query.DgraphAlias(): nil},
+			Field:      query,
+			Err:        err,
+			Extensions: ext,
 		}
 	}
 
-	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
-	if err != nil {
-		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
-			query.ResponseName()))
+	var qry string
+	vars := make(map[string]string)
+
+	// DQL queries don't need any rewriting, as they are already in DQL form
+	if query.QueryType() == schema.DQLQuery {
+		qry = query.DQLQuery()
+		args := query.Arguments()
+		for k, v := range args {
+			// dgoapi.Request{}.Vars accepts only string values for variables,
+			// so need to convert all variable values to string
+			vStr, err := convertScalarToString(v)
+			if err != nil {
+				return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string",
+					k))
+			}
+			// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+			vars["$"+k] = vStr
+		}
+	} else {
+		dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
+				query.ResponseName()))
+		}
+		qry = dgraph.AsString(dgQuery)
 	}
 
-	resp, err := qr.executor.Execute(ctx,
-		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
+	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+	queryTimer.Start()
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
+	queryTimer.Stop()
+
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
+	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
 	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
-	resolved.Extensions =
-		&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
+	resolved.Extensions = ext
 
 	return resolved
 }
@@ -122,4 +173,27 @@ func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
 		Field: q,
 		Err:   schema.AppendGQLErrs(err, err2),
 	}
+}
+
+// converts scalar values received from GraphQL arguments to go string
+// If it is a scalar only possible cases are: string, bool, int64, float64 and nil.
+func convertScalarToString(val interface{}) (string, error) {
+	var str string
+	switch v := val.(type) {
+	case string:
+		str = v
+	case bool:
+		str = strconv.FormatBool(v)
+	case int64:
+		str = strconv.FormatInt(v, 10)
+	case float64:
+		str = strconv.FormatFloat(v, 'f', -1, 64)
+	case json.Number:
+		str = v.String()
+	case nil:
+		str = ""
+	default:
+		return "", errNotScalar
+	}
+	return str, nil
 }

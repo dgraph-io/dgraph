@@ -42,7 +42,7 @@ func TestAccessWithClientCert(t *testing.T) {
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -56,7 +56,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt",
 		"--cert", "../tls/client.acl.crt",
 		"--key", "../tls/client.acl.key",
-		"https://localhost:8180/alter",
+		"https://" + testutil.SockAddrHttp + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -87,7 +87,7 @@ func TestGQLAdminHealthWithClientCert(t *testing.T) {
 	}
 
 	healthCheckQuery := []byte(`{"query":"query {\n health {\n status\n }\n}"}`)
-	gqlAdminEndpoint := "https://localhost:8180/admin"
+	gqlAdminEndpoint := "https://" + testutil.SockAddrHttp + "/admin"
 	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
 	require.NoError(t, err, "Failed to create request : %v", err)
 	req.Header.Set("Content-Type", "application/json")
@@ -120,7 +120,7 @@ func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
 	}
 
 	healthCheckQuery := []byte(`{"query":"query {\n health {\n message\n status\n }\n}"}`)
-	gqlAdminEndpoint := "https://localhost:8180/admin"
+	gqlAdminEndpoint := "https://" + testutil.SockAddrHttp + "/admin"
 	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
 	require.NoError(t, err, "Failed to create request : %v", err)
 	req.Header.Set("Content-Type", "application/json")

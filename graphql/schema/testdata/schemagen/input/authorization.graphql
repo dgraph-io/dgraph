@@ -1,4 +1,5 @@
-type Todo @auth(
+type Todo @secret(field: "pwd") @auth(
+    password: { rule: "{$ROLE: { eq: \"Admin\" } }"},
     query: {
         or: [
             { rule: """

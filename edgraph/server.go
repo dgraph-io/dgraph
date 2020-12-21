@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,9 +37,9 @@ import (
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -96,6 +98,16 @@ var (
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// graphQLSchemaNode represents the node which contains GraphQL schema
+type graphQLSchemaNode struct {
+	Uid    string `json:"uid"`
+	Schema string `json:"dgraph.graphql.schema"`
+}
+
+type existingGQLSchemaQryResp struct {
+	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -127,120 +139,103 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
-// Alter handles requests to change the schema or remove parts or all of the data.
-func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
-	defer span.End()
-	span.Annotatef(nil, "Alter operation: %+v", op)
+// GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
+// If multiple schema nodes were found, it returns an error.
+func GetGQLSchema() (uid, graphQLSchema string, err error) {
+	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+		&api.Request{
+			Query: `
+			query {
+			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+				uid
+				dgraph.graphql.schema
+			  }
+			}`})
+	if err != nil {
+		return "", "", err
+	}
 
-	// Always print out Alter operations because they are important and rare.
-	glog.Infof("Received ALTER op: %+v", op)
+	var result existingGQLSchemaQryResp
+	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
+		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+	}
 
+	if len(result.ExistingGQLSchema) == 0 {
+		// no schema has been stored yet in Dgraph
+		return "", "", nil
+	} else if len(result.ExistingGQLSchema) == 1 {
+		// we found an existing GraphQL schema
+		gqlSchemaNode := result.ExistingGQLSchema[0]
+		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
+	}
+
+	// found multiple GraphQL schema nodes, this should never happen
+	return "", "", worker.ErrMultipleGraphQLSchemaNodes
+}
+
+// UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
+// It first validates and parses the dgraphSchema given in input. If that fails,
+// it returns an error. All this is done on the alpha on which the update request is received.
+// Then it sends an update request to the worker, which is executed only on Group-1 leader.
+func UpdateGQLSchema(ctx context.Context, gqlSchema,
+	dgraphSchema string) (*pb.UpdateGraphQLSchemaResponse, error) {
+	var err error
+	parsedDgraphSchema := &schema.ParsedSchema{}
+
+	// The schema could be empty if it only has custom types/queries/mutations.
+	if dgraphSchema != "" {
+		op := &api.Operation{Schema: dgraphSchema}
+		if err = validateAlterOperation(ctx, op); err != nil {
+			return nil, err
+		}
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+			return nil, err
+		}
+	}
+
+	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
+		StartTs:       worker.State.GetTimestamp(false),
+		GraphqlSchema: gqlSchema,
+		DgraphPreds:   parsedDgraphSchema.Preds,
+		DgraphTypes:   parsedDgraphSchema.Types,
+	})
+}
+
+// validateAlterOperation validates the given operation for alter.
+func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
-		return nil, errors.Errorf("Operation must have at least one field set")
+		return errors.Errorf("Operation must have at least one field set")
 	}
-	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
-		return empty, err
+		return err
 	}
 
 	if isDropAll(op) && op.DropOp == api.Operation_DATA {
-		return nil, errors.Errorf("Only one of DropAll and DropData can be true")
+		return errors.Errorf("Only one of DropAll and DropData can be true")
 	}
 
 	if !isMutationAllowed(ctx) {
-		return nil, errors.Errorf("No mutations allowed by server.")
+		return errors.Errorf("No mutations allowed by server.")
 	}
-	if err := isAlterAllowed(ctx); err != nil {
+	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
-		return nil, err
+		return err
 	}
 
 	if err := authorizeAlter(ctx, op); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
-		return nil, err
+		return err
 	}
 
-	defer glog.Infof("ALTER op: %+v done", op)
+	return nil
+}
 
-	// StartTs is not needed if the predicate to be dropped lies on this server but is required
-	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	if isDropAll(op) {
-		if len(op.DropValue) > 0 {
-			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
-		}
-
-		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, m)
-
-		// recreate the admin account after a drop all operation
-		ResetAcl()
-		return empty, err
-	}
-
-	if op.DropOp == api.Operation_DATA {
-		if len(op.DropValue) > 0 {
-			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
-		}
-
-		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, m)
-
-		// recreate the admin account after a drop data operation
-		ResetAcl()
-		return empty, err
-	}
-
-	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
-		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
-			return empty, errors.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
-		}
-
-		var attr string
-		if len(op.DropAttr) > 0 {
-			attr = op.DropAttr
-		} else {
-			attr = op.DropValue
-		}
-
-		// Reserved predicates cannot be dropped.
-		if x.IsReservedPredicate(attr) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
-				attr)
-			return empty, err
-		}
-
-		nq := &api.NQuad{
-			Subject:     x.Star,
-			Predicate:   attr,
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
-		}
-		wnq := &gql.NQuad{NQuad: nq}
-		edge, err := wnq.ToDeletePredEdge()
-		if err != nil {
-			return empty, err
-		}
-		edges := []*pb.DirectedEdge{edge}
-		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, m)
-		return empty, err
-	}
-
-	if op.DropOp == api.Operation_TYPE {
-		if len(op.DropValue) == 0 {
-			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
-		}
-
-		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
-		_, err := query.ApplyMutations(ctx, m)
-		return empty, err
-	}
-
+// parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
+// struct, and performs some checks to make sure that the schema is valid.
+func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -248,16 +243,18 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	result, err := schema.Parse(op.Schema)
 	if err != nil {
-		return empty, err
+		return nil, err
 	}
 
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefinedPredicateChanged(update.Predicate, update) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
-				update.Predicate)
-			return nil, err
+		//
+		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
+		// example?
+		if schema.IsPreDefPredChanged(update) {
+			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" modified", update.Predicate)
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -276,12 +273,190 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for _, typ := range result.Types {
-		// Users are not allowed to create types in reserved namespace.
-		if x.IsReservedType(typ.TypeName) {
+		// Pre-defined types cannot be altered but let the update go through
+		// if the update is equal to the existing one.
+		if schema.IsPreDefTypeChanged(typ) {
+			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
+				typ.TypeName)
+		}
+
+		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
+		// types for which the update should go through if the update is equal to the existing one.
+		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
 				typ.TypeName)
 		}
+	}
+
+	return result, nil
+}
+
+// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// This helper record lets us know during backup that a DROP operation was performed and that we
+// need to write this information in backup manifest. So that while restoring from a backup series,
+// we can create an exact replica of the system which existed at the time the last backup was taken.
+// Note that if the server crashes after the DROP operation & before this helper record is inserted,
+// then restoring from the incremental backup of such a DB would restore even the dropped
+// data back.
+func insertDropRecord(ctx context.Context, dropOp string) error {
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
+		&api.Request{
+			Mutations: []*api.Mutation{{
+				Set: []*api.NQuad{{
+					Subject:     "_:r",
+					Predicate:   "dgraph.drop.op",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: dropOp}},
+				}},
+			}},
+			CommitNow: true,
+		}, NoAuthorize)
+	return err
+}
+
+// Alter handles requests to change the schema or remove parts or all of the data.
+func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
+	defer span.End()
+	span.Annotatef(nil, "Alter operation: %+v", op)
+
+	// Always print out Alter operations because they are important and rare.
+	glog.Infof("Received ALTER op: %+v", op)
+
+	// check if the operation is valid
+	if err := validateAlterOperation(ctx, op); err != nil {
+		return nil, err
+	}
+
+	defer glog.Infof("ALTER op: %+v done", op)
+
+	empty := &api.Payload{}
+
+	// StartTs is not needed if the predicate to be dropped lies on this server but is required
+	// if it lies on some other machine. Let's get it for safety.
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	if isDropAll(op) {
+		if len(op.DropValue) > 0 {
+			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
+		}
+
+		m.DropOp = pb.Mutations_ALL
+		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_all was done
+		err = insertDropRecord(ctx, "DROP_ALL;")
+		if err != nil {
+			return empty, err
+		}
+
+		// insert empty GraphQL schema, so all alphas get notified to
+		// reset their in-memory GraphQL schema
+		_, err = UpdateGQLSchema(ctx, "", "")
+		// recreate the admin account after a drop all operation
+		ResetAcl(nil)
+		ResetCors(nil)
+		return empty, err
+	}
+
+	if op.DropOp == api.Operation_DATA {
+		if len(op.DropValue) > 0 {
+			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
+		}
+
+		// query the GraphQL schema and keep it in memory, so it can be inserted again
+		_, graphQLSchema, err := GetGQLSchema()
+		if err != nil {
+			return empty, err
+		}
+
+		m.DropOp = pb.Mutations_DATA
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_data was done
+		err = insertDropRecord(ctx, "DROP_DATA;")
+		if err != nil {
+			return empty, err
+		}
+
+		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
+		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
+		// recreate the admin account after a drop data operation
+		ResetAcl(nil)
+		ResetCors(nil)
+		return empty, err
+	}
+
+	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
+		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
+			return empty, errors.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+		}
+
+		var attr string
+		if len(op.DropAttr) > 0 {
+			attr = op.DropAttr
+		} else {
+			attr = op.DropValue
+		}
+
+		// Pre-defined predicates cannot be dropped.
+		if x.IsPreDefinedPredicate(attr) {
+			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" dropped", attr)
+		}
+
+		nq := &api.NQuad{
+			Subject:     x.Star,
+			Predicate:   attr,
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
+		}
+		wnq := &gql.NQuad{NQuad: nq}
+		edge, err := wnq.ToDeletePredEdge()
+		if err != nil {
+			return empty, err
+		}
+		edges := []*pb.DirectedEdge{edge}
+		m.Edges = edges
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// insert a helper record for backup & restore, indicating that drop_attr was done
+		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
+		return empty, err
+	}
+
+	if op.DropOp == api.Operation_TYPE {
+		if len(op.DropValue) == 0 {
+			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
+		}
+
+		// Pre-defined types cannot be dropped.
+		if x.IsPreDefinedType(op.DropValue) {
+			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
+				op.DropValue)
+		}
+
+		m.DropOp = pb.Mutations_TYPE
+		m.DropValue = op.DropValue
+		_, err := query.ApplyMutations(ctx, m)
+		return empty, err
+	}
+
+	result, err := parseSchemaFromAlterOperation(op)
+	if err == errIndexingInProgress {
+		// Make the client wait a bit.
+		time.Sleep(time.Second)
+		return nil, err
+
+	} else if err != nil {
+		return nil, err
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
@@ -294,15 +469,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	for !op.RunInBackground {
-		if ctx.Err() != nil {
-			return empty, ctx.Err()
-		}
-		if !schema.State().IndexingInProgress() {
-			break
-		}
-		time.Sleep(time.Second * 2)
+	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+		return empty, err
 	}
+
 	return empty, nil
 }
 
@@ -317,9 +487,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = worker.State.GetTimestamp(false)
-	}
 
 	start := time.Now()
 	defer func() {
@@ -331,7 +498,9 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	// update mutations from the query results before assigning UIDs
-	updateMutations(qc)
+	if err := updateMutations(qc); err != nil {
+		return err
+	}
 
 	newUids, err := query.AssignUids(ctx, qc.gmuList)
 	if err != nil {
@@ -372,12 +541,21 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if x.WorkerConfig.LudicrousMode {
 		// Mutations are automatically committed in case of ludicrous mode, so we don't
 		// need to manually commit.
+		if resp.Txn == nil {
+			return errors.Wrapf(err, "Txn Context is nil")
+		}
 		resp.Txn.Keys = resp.Txn.Keys[:0]
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
-
+	// calculateMutationMetrics calculate cost for the mutation.
+	calculateMutationMetrics := func() {
+		cost := uint64(len(newUids) + len(edges))
+		resp.Metrics.NumUids["mutation_cost"] = cost
+		resp.Metrics.NumUids["_total"] = resp.Metrics.NumUids["_total"] + cost
+	}
 	if !qc.req.CommitNow {
+		calculateMutationMetrics()
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
@@ -422,7 +600,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// CommitNow was true, no need to send keys.
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
-
+	calculateMutationMetrics()
 	return nil
 }
 
@@ -471,7 +649,7 @@ func buildUpsertQuery(qc *queryContext) string {
 // updateMutations updates the mutation and replaces uid(var) and val(var) with
 // their values or a blank node, in case of an upsert.
 // We use the values stored in qc.uidRes and qc.valRes to update the mutation.
-func updateMutations(qc *queryContext) {
+func updateMutations(qc *queryContext) error {
 	for i, condVar := range qc.condVars {
 		gmu := qc.gmuList[i]
 		if len(condVar) != 0 {
@@ -483,9 +661,15 @@ func updateMutations(qc *queryContext) {
 			}
 		}
 
-		updateUIDInMutations(gmu, qc)
-		updateValInMutations(gmu, qc)
+		if err := updateUIDInMutations(gmu, qc); err != nil {
+			return err
+		}
+		if err := updateValInMutations(gmu, qc); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // findMutationVars finds all the variables used in mutation block and stores them
@@ -605,20 +789,26 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 
 		newNQuads = append(newNQuads, nq)
 	}
+	qc.nquadsCount += len(newNQuads)
 	return newNQuads
 }
 
-// updateValInMuations does following transformations:
+// updateValInMutations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
-func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
+func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
+	if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+			qc.nquadsCount, x.Config.MutationsNQuadLimit)
+	}
+	return nil
 }
 
 // updateUIDInMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
+func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	// usedMutationVars keeps track of variables that are used in mutations.
 	getNewVals := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
@@ -660,9 +850,15 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 				}
 
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
+				qc.nquadsCount++
+			}
+			if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+					qc.nquadsCount, x.Config.MutationsNQuadLimit)
 			}
 		}
 	}
+
 	gmu.Del = gmuDel
 
 	// Update the values in mutation block from the query block.
@@ -671,6 +867,12 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 		newSubs := getNewVals(nq.Subject)
 		newObs := getNewVals(nq.ObjectId)
 
+		qc.nquadsCount += len(newSubs) * len(newObs)
+		if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
+				qc.nquadsCount, x.Config.MutationsNQuadLimit)
+		}
+
 		for _, s := range newSubs {
 			for _, o := range newObs {
 				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
@@ -678,6 +880,7 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) {
 		}
 	}
 	gmu.Set = gmuSet
+	return nil
 }
 
 // queryContext is used to pass around all the variables needed
@@ -708,6 +911,11 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
+	// nquadsCount maintains numbers of nquads which would be inserted as part of this request.
+	// In some cases(mostly upserts), numbers of nquads to be inserted can to huge(we have seen upto
+	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
+	// a single request.
+	nquadsCount int
 }
 
 // Health handles /health and /health?all requests.
@@ -729,18 +937,20 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 			healthAll = append(healthAll, p.HealthInfo())
 		}
 	}
+
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
-		Instance:   "alpha",
-		Address:    x.WorkerConfig.MyAddr,
-		Status:     "healthy",
-		Group:      strconv.Itoa(int(worker.GroupId())),
-		Version:    x.Version(),
-		Uptime:     int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho:   time.Now().Unix(),
-		Ongoing:    worker.GetOngoingTasks(),
-		Indexing:   schema.GetIndexingPredicates(),
-		EeFeatures: ee.GetEEFeaturesList(),
+		Instance:    "alpha",
+		Address:     x.WorkerConfig.MyAddr,
+		Status:      "healthy",
+		Group:       strconv.Itoa(int(worker.GroupId())),
+		Version:     x.Version(),
+		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:    time.Now().Unix(),
+		Ongoing:     worker.GetOngoingTasks(),
+		Indexing:    schema.GetIndexingPredicates(),
+		EeFeatures:  ee.GetEEFeaturesList(),
+		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
 	var err error
@@ -766,7 +976,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	var jsonState bytes.Buffer
 	if err := m.Marshal(&jsonState, ms); err != nil {
 		return nil, errors.Errorf("Error marshalling state information to JSON")
@@ -856,14 +1066,19 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 			return
 		}
 	}
+
 	// We use defer here because for queries, startTs will be
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
-		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
-		qc.latency.AssignTimestamp = time.Since(start)
+	if isMutation && req.StartTs == 0 {
+		if x.WorkerConfig.LudicrousMode {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		} else {
+			start := time.Now()
+			req.StartTs = worker.State.GetTimestamp(false)
+			qc.latency.AssignTimestamp = time.Since(start)
+		}
 	}
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
@@ -882,13 +1097,18 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	grpc.SendHeader(ctx, md)
 	return resp, nil
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
 	if len(qc.req.Query) == 0 {
+		// No query, so make the query cost 0.
+		resp.Metrics = &api.Metrics{
+			NumUids: map[string]uint64{"_total": 0},
+		}
 		return resp, nil
 	}
 	if ctx.Err() != nil {
@@ -941,6 +1161,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		if err = authorizeSchemaQuery(ctx, &er); err != nil {
+			return resp, err
+		}
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
 			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
@@ -956,6 +1179,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 			respMap["types"] = formatTypes(er.Types)
 		}
 		resp.Json, err = json.Marshal(respMap)
+	} else if qc.req.RespFormat == api.Request_RDF {
+		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
 	}
@@ -1141,13 +1366,21 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Admin operations.")
 
-func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
+func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
+	ipAddr, err := x.HasWhitelistedIP(ctx)
+	if err != nil {
+		return nil, err
 	}
+	glog.Infof("Got %s request from: %q\n", tag, ipAddr)
+	if err = hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+}
+
+func hasPoormansAuth(ctx context.Context) error {
 	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}

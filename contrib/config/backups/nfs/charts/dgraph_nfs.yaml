@@ -1,0 +1,16 @@
+backups:
+  nfs:
+    enabled: true
+    mountPath: &path /dgraph/backups
+  full:
+    enabled: true
+    debug: true
+  incremental:
+    enabled: true
+    debug: true
+  destination: *path
+alpha:
+  configFile:
+    config.hcl: |
+      whitelist = "10.0.0.0/8,172.0.0.0/8,192.168.0.0/16"
+      lru_mb    = 2048

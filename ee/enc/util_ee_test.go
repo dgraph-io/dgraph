@@ -41,8 +41,9 @@ func resetConfig(config *viper.Viper) {
 	config.Set(vaultAddr, "http://localhost:8200")
 	config.Set(vaultRoleIDFile, "")
 	config.Set(vaultSecretIDFile, "")
-	config.Set(vaultPath, "dgraph")
+	config.Set(vaultPath, "secret/data/dgraph")
 	config.Set(vaultField, "enc_key")
+	config.Set(vaultFormat, "base64")
 }
 
 // TODO: The function below allows instantiating a real Vault server. But results in go.mod issues.
@@ -116,6 +117,15 @@ func TestNewKeyReader(t *testing.T) {
 	k, err = kr.readKey()
 	require.Nil(t, k)
 	require.Error(t, err)
+
+	// Bad vault_format. Must be raw or base64.
+	resetConfig(config)
+	config.Set(vaultRoleIDFile, "./test-fixtures/dummy_role_id_file")
+	config.Set(vaultSecretIDFile, "./test-fixtures/dummy_secret_id_file")
+	config.Set(vaultFormat, "foo") // error.
+	kr, err = newKeyReader(config)
+	require.Error(t, err)
+	require.Nil(t, kr)
 
 	// RoleID and SecretID given but RoleID file and SecretID file exists and is valid.
 	resetConfig(config)

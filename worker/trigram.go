@@ -36,6 +36,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	var results *pb.List
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
+		First:  int(arg.q.First),
 	}
 	if intersect.Size() > 0 {
 		opts.Intersect = intersect

@@ -7,7 +7,7 @@ Requires=dgraph-zero.service
 [Service]
 Type=simple
 WorkingDirectory=/var/lib/dgraph
-ExecStart=/usr/bin/bash -c 'dgraph alpha --lru_mb 2048 -p /var/lib/dgraph/p -w /var/lib/dgraph/w'
+ExecStart=/usr/bin/bash -c 'dgraph alpha -p /var/lib/dgraph/p -w /var/lib/dgraph/w'
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal

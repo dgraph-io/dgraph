@@ -25,8 +25,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
 func validateUrl(rawURL string) error {
@@ -41,12 +41,16 @@ func validateUrl(rawURL string) error {
 	return nil
 }
 
+type IntrospectionRequest struct {
+	Query string `json:"query"`
+}
+
 // introspectRemoteSchema introspectes remote schema
 func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchema, error) {
 	if err := validateUrl(url); err != nil {
 		return nil, err
 	}
-	param := &Request{
+	param := &IntrospectionRequest{
 		Query: introspectionQuery,
 	}
 
@@ -351,38 +355,55 @@ func missingRemoteTypeError(typName string) error {
 
 func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 	localSchema *ast.Schema) error {
-	expandedTypes, err := expandType(remoteType, remoteTypes)
+	_, err := expandType(remoteType, remoteTypes)
 	if err != nil {
 		return err
 	}
-	return matchRemoteTypes(expandedTypes, localSchema)
+	return matchRemoteTypes(localSchema, remoteTypes)
 }
 
-func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) error {
-	for typeName, fields := range expandedTypes {
-		localType, ok := schema.Types[typeName]
-		if !ok {
-			return errors.Errorf(
-				"Unable to find remote type %s in the local schema",
-				typeName,
-			)
-		}
-		for _, field := range fields {
-			localField := localType.Fields.ForName(field.Name)
-			if localField == nil {
-				return errors.Errorf(
-					"%s field for the remote type %s is not present in the local type %s",
-					field.Name, localType.Name, localType.Name,
-				)
-			}
-			if localField.Type.String() != field.Type.String() {
-				return errors.Errorf(
-					"expected type for the field %s is %s but got %s in type %s",
-					field.Name,
-					field.Type.String(),
-					localField.Type.String(),
-					typeName,
-				)
+func matchRemoteTypes(schema *ast.Schema, remoteTypes map[string]*types) error {
+	for typeName, def := range schema.Types {
+		origTyp := schema.Types[typeName]
+		remoteDir := origTyp.Directives.ForName(remoteDirective)
+		if remoteDir != nil {
+			{
+				remoteType, ok := remoteTypes[def.Name]
+				fields := def.Fields
+				if !ok {
+					return errors.Errorf(
+						"Unable to find local type %s in the remote schema",
+						typeName,
+					)
+				}
+				remoteFields := remoteType.Fields
+				if remoteFields == nil {
+					// Get fields for INPUT_OBJECT
+					remoteFields = remoteType.InputFields
+				}
+				for _, field := range fields {
+					var remoteField *gqlField = nil
+					for _, rf := range remoteFields {
+						if rf.Name == field.Name {
+							remoteField = rf
+						}
+					}
+					if remoteField == nil {
+						return errors.Errorf(
+							"%s field for the local type %s is not present in the remote type %s",
+							field.Name, typeName, remoteType.Name,
+						)
+					}
+					if remoteField.Type.String() != field.Type.String() {
+						return errors.Errorf(
+							"expected type for the field %s is %s but got %s in type %s",
+							remoteField.Name,
+							remoteField.Type.String(),
+							field.Type.String(),
+							typeName,
+						)
+					}
+				}
 			}
 		}
 	}

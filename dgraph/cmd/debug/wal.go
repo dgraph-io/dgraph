@@ -25,35 +25,51 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
+	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
+	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-func printEntry(es raftpb.Entry, pending map[uint64]bool) {
+func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	var buf bytes.Buffer
+	defer func() {
+		fmt.Printf("%s\n", buf.Bytes())
+	}()
 	fmt.Fprintf(&buf, "%d . %d . %v . %-6s .", es.Term, es.Index, es.Type,
 		humanize.Bytes(uint64(es.Size())))
 	if es.Type == raftpb.EntryConfChange {
-		fmt.Printf("%s\n", buf.Bytes())
 		return
 	}
-	var pr pb.Proposal
-	var zpr pb.ZeroProposal
-	if err := pr.Unmarshal(es.Data); err == nil {
-		printAlphaProposal(&buf, &pr, pending)
-	} else if err := zpr.Unmarshal(es.Data); err == nil {
-		printZeroProposal(&buf, &zpr)
+	if len(es.Data) == 0 {
+		return
+	}
+	var err error
+	if isZero {
+		var zpr pb.ZeroProposal
+		if err = zpr.Unmarshal(es.Data[8:]); err == nil {
+			printZeroProposal(&buf, &zpr)
+			return
+		}
 	} else {
-		fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
-		return
+		var pr pb.Proposal
+		if err = pr.Unmarshal(es.Data[8:]); err == nil {
+			printAlphaProposal(&buf, &pr, pending)
+			return
+		}
 	}
-	fmt.Printf("%s\n", buf.Bytes())
+	fmt.Fprintf(&buf, " Unable to parse Proposal: %v", err)
 }
 
-func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
+type RaftStore interface {
+	raft.Storage
+	Checkpoint() (uint64, error)
+	HardState() (raftpb.HardState, error)
+}
+
+func printBasic(store RaftStore) (uint64, uint64) {
 	fmt.Println()
 	snap, err := store.Snapshot()
 	if err != nil {
@@ -100,13 +116,18 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 	lastIdx, err := store.LastIndex()
 	if err != nil {
 		fmt.Printf("Got error while retrieving last index: %v\n", err)
-		return
 	}
 	startIdx := snap.Metadata.Index + 1
 	fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
+	return startIdx, lastIdx
+}
 
+func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage, groupId uint32) {
+	startIdx, lastIdx := printBasic(store)
+
+	commitTs := db.MaxVersion()
 	// In case we need to truncate raft entries.
-	batch := db.NewWriteBatch()
+	batch := db.NewWriteBatchAt(commitTs)
 	defer batch.Cancel()
 	var numTruncates int
 
@@ -134,7 +155,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 					log.Fatalf("Unable to set data: %+v", err)
 				}
 			default:
-				printEntry(ent, pending)
+				printEntry(ent, pending, groupId == 0)
 			}
 			startIdx = x.Max(startIdx, ent.Index)
 		}
@@ -149,7 +170,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 	}
 }
 
-func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
+func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
 	snap, err := store.Snapshot()
 	x.Checkf(err, "Unable to get snapshot")
 	cs := snap.Metadata.ConfState
@@ -197,7 +218,6 @@ func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
 		if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
 			return err
 		}
-
 		data, err = hs.Marshal()
 		if err != nil {
 			return err
@@ -264,7 +284,7 @@ func handleWal(db *badger.DB) error {
 	for rid := range rids {
 		for gid := range gids {
 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
-			store := raftwal.Init(db, rid, gid)
+			store := raftmigrate.Init(db, rid, gid)
 			switch {
 			case len(opt.wsetSnapshot) > 0:
 				err := overwriteSnapshot(db, store)
@@ -272,7 +292,7 @@ func handleWal(db *badger.DB) error {
 				return err
 
 			default:
-				printRaft(db, store)
+				printRaft(db, store, gid)
 			}
 			store.Closer.SignalAndWait()
 		}

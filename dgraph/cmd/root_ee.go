@@ -22,6 +22,7 @@ func init() {
 	subcommands = append(subcommands,
 		&backup.Restore,
 		&backup.LsBackup,
+		&backup.ExportBackup,
 		&acl.CmdAcl,
 	)
 }
