@@ -192,26 +192,17 @@ func overwriteSnapshot(store *raftwal.DiskStorage) error {
 }
 
 func handleWal(store *raftwal.DiskStorage) error {
-	_, err := store.HardState()
-	if err != nil {
-		return err
-	}
-
 	rid := store.Uint(raftwal.RaftId)
 	gid := store.Uint(raftwal.GroupId)
 
 	fmt.Printf("Raft Id = %d Groupd Id = %d\n", rid, gid)
 	switch {
 	case len(opt.wsetSnapshot) > 0:
-		err = overwriteSnapshot(store)
-		if err != nil {
-			return err
-		}
+		return overwriteSnapshot(store)
 	case opt.wtruncateUntil != 0:
 		store.TruncateEntriesUntil(opt.wtruncateUntil)
 	default:
 		printRaft(store)
 	}
-
 	return nil
 }

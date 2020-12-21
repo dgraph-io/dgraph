@@ -890,7 +890,6 @@ func run() {
 		return
 	}
 
-	// If this is a new format WAL, print and return.
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)
 		x.Check(err)

@@ -116,6 +116,10 @@ func (l *wal) truncateEntriesUntil(lastIdx uint64) {
 			if entry.Index() >= lastIdx {
 				return
 			}
+
+			// Truncate the data of normal Raft entries.
+			// Setting DataOffset to 0 means that the data field for this entry
+			// will never be accessed.
 			if entry.Type() == uint64(raftpb.EntryNormal) {
 				entry.SetDataOffset(0)
 			}
