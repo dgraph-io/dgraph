@@ -2,19 +2,10 @@
 # Input Schema
 #######################
 
-interface LibraryItem {
-	refID: String! @id
-}
-
-type Book implements LibraryItem {
-	refID: String! @id
-	title: String
-	author: String
-}
-
-type Library {
-	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
+interface Student {
+	rollNo: String! @id
+	regNo: ID!
+	name: String!
 }
 
 #######################
@@ -277,61 +268,22 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	numUids: Int
-}
-
-type AddLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	numUids: Int
-}
-
-type BookAggregateResult {
-	count: Int
-	refIDMin: String
-	refIDMax: String
-	titleMin: String
-	titleMax: String
-	authorMin: String
-	authorMax: String
-}
-
-type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type DeleteStudentPayload {
+	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
 	msg: String
 	numUids: Int
 }
 
-type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	msg: String
-	numUids: Int
-}
-
-type DeleteLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	msg: String
-	numUids: Int
-}
-
-type LibraryAggregateResult {
+type StudentAggregateResult {
 	count: Int
+	rollNoMin: String
+	rollNoMax: String
+	nameMin: String
+	nameMax: String
 }
 
-type LibraryItemAggregateResult {
-	count: Int
-	refIDMin: String
-	refIDMax: String
-}
-
-type UpdateBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	numUids: Int
-}
-
-type UpdateLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+type UpdateStudentPayload {
+	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
 	numUids: Int
 }
 
@@ -339,112 +291,48 @@ type UpdateLibraryPayload {
 # Generated Enums
 #######################
 
-enum BookHasFilter {
-	refID
-	title
-	author
+enum StudentHasFilter {
+	rollNo
+	name
 }
 
-enum BookOrderable {
-	refID
-	title
-	author
-}
-
-enum LibraryHasFilter {
-	items
-}
-
-enum LibraryItemHasFilter {
-	refID
-}
-
-enum LibraryItemOrderable {
-	refID
+enum StudentOrderable {
+	rollNo
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddBookInput {
-	refID: String!
-	title: String
-	author: String
+input StudentFilter {
+	rollNo: StringHashFilter
+	regNo: [ID!]
+	has: StudentHasFilter
+	and: [StudentFilter]
+	or: [StudentFilter]
+	not: StudentFilter
 }
 
-input AddLibraryInput {
-	items: [LibraryItemRef]
+input StudentOrder {
+	asc: StudentOrderable
+	desc: StudentOrderable
+	then: StudentOrder
 }
 
-input BookFilter {
-	refID: StringHashFilter
-	has: BookHasFilter
-	and: [BookFilter]
-	or: [BookFilter]
-	not: BookFilter
+input StudentPatch {
+	name: String
 }
 
-input BookOrder {
-	asc: BookOrderable
-	desc: BookOrderable
-	then: BookOrder
+input StudentRef {
+	regNo: ID
+	rollNo: String @id
 }
 
-input BookPatch {
-	title: String
-	author: String
-}
-
-input BookRef {
-	refID: String
-	title: String
-	author: String
-}
-
-input LibraryFilter {
-	has: LibraryHasFilter
-	and: [LibraryFilter]
-	or: [LibraryFilter]
-	not: LibraryFilter
-}
-
-input LibraryItemFilter {
-	refID: StringHashFilter
-	has: LibraryItemHasFilter
-	and: [LibraryItemFilter]
-	or: [LibraryItemFilter]
-	not: LibraryItemFilter
-}
-
-input LibraryItemOrder {
-	asc: LibraryItemOrderable
-	desc: LibraryItemOrderable
-	then: LibraryItemOrder
-}
-
-input LibraryItemRef {
-	refID: String! @id
-}
-
-input LibraryPatch {
-	items: [LibraryItemRef]
-}
-
-input LibraryRef {
-	items: [LibraryItemRef]
-}
-
-input UpdateBookInput {
-	filter: BookFilter!
-	set: BookPatch
-	remove: BookPatch
-}
-
-input UpdateLibraryInput {
-	filter: LibraryFilter!
-	set: LibraryPatch
-	remove: LibraryPatch
+input UpdateStudentInput {
+	filter: StudentFilter!
+	set: StudentPatch
+	remove: StudentPatch
 }
 
 #######################
@@ -452,13 +340,9 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
+	getStudent(regNo: ID): Student
+	queryStudent(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	aggregateStudent(filter: StudentFilter): StudentAggregateResult
 }
 
 #######################
@@ -466,12 +350,7 @@ type Query {
 #######################
 
 type Mutation {
-	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
-	updateBook(input: UpdateBookInput!): UpdateBookPayload
-	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
-	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
-	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
+	updateStudent(input: UpdateStudentInput!): UpdateStudentPayload
+	deleteStudent(filter: StudentFilter!): DeleteStudentPayload
 }
 
