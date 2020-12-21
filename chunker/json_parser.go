@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	simdjson "github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -594,6 +595,125 @@ const (
 	// deleted.
 	DeleteNquads
 )
+
+func isScalar(tag simdjson.Tag) bool {
+	return tag != simdjson.TagObjectStart && tag != simdjson.TagObjectEnd &&
+		tag != simdjson.TagArrayStart && tag != simdjson.TagArrayEnd
+}
+
+func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
+	if !simdjson.SupportedCPU() {
+		return errors.New("CPU doesn't support simdjson for fast parsing")
+	}
+
+	tape, err := simdjson.Parse(b, nil)
+	if err != nil {
+		return err
+	}
+
+	// deep is a lifo stack for holding { and [ tags and keeping track of how
+	// deeply nested we are when reading the tape
+	deep := make([]simdjson.Tag, 0)
+	// open becomes true when we've parsed a key and are looking for a value
+	open := false
+	quad := &api.NQuad{}
+	iter := tape.Iter()
+
+	stop := func(v interface{}, err error) {
+		switch val := v.(type) {
+		case string:
+			quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{val}}
+		case int64:
+			quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{val}}
+		case float64:
+			quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{val}}
+		case bool:
+			quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{val}}
+		case uint64:
+			// TODO: there's no api.Value_* struct for uint64, so i'm just
+			//       converting it to int64... this may not be the best way
+			quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(val)}}
+		case nil:
+			return
+		}
+		buf.Push(quad)
+		open = false
+		quad = &api.NQuad{}
+	}
+
+	subject := getNextBlank()
+
+	for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
+		next := iter.PeekNextTag()
+
+		switch tag {
+		case simdjson.TagString:
+			if !open {
+				if isScalar(next) {
+					open = true
+					quad.Subject = subject
+					quad.Predicate, _ = iter.String()
+					quad.Predicate, quad.Lang = x.PredicateLang(quad.Predicate)
+				}
+			} else {
+				stop(iter.String())
+			}
+
+		case simdjson.TagInteger:
+			if !open {
+			} else {
+				stop(iter.Int())
+			}
+
+		case simdjson.TagUint:
+			if !open {
+			} else {
+				stop(iter.Uint())
+			}
+
+		case simdjson.TagFloat:
+			if !open {
+			} else {
+				stop(iter.Float())
+			}
+
+		case simdjson.TagBoolTrue:
+			fallthrough
+		case simdjson.TagBoolFalse:
+			if !open {
+			} else {
+				stop(iter.Bool())
+			}
+
+		case simdjson.TagNull:
+			if !open {
+			} else {
+				stop(nil, nil)
+			}
+
+		case simdjson.TagObjectStart:
+			deep = append(deep, tag)
+
+		case simdjson.TagObjectEnd:
+			deep = deep[:len(deep)-1]
+
+		case simdjson.TagArrayStart:
+			deep = append(deep, tag)
+
+		case simdjson.TagArrayEnd:
+			deep = deep[:len(deep)-1]
+
+		case simdjson.TagRoot:
+		case simdjson.TagEnd:
+			goto done
+		}
+
+		fmt.Println(tag, next, open, deep)
+	}
+
+done:
+	return nil
+}
 
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
