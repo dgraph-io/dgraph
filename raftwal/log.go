@@ -72,6 +72,11 @@ func (e entry) Index() uint64      { return binary.BigEndian.Uint64(e[8:]) }
 func (e entry) DataOffset() uint64 { return binary.BigEndian.Uint64(e[16:]) }
 func (e entry) Type() uint64       { return binary.BigEndian.Uint64(e[24:]) }
 
+func (e entry) SetTerm(term uint64)         { binary.BigEndian.PutUint64(e, term) }
+func (e entry) SetIndex(index uint64)       { binary.BigEndian.PutUint64(e[8:], index) }
+func (e entry) SetDataOffset(offset uint64) { binary.BigEndian.PutUint64(e[16:], offset) }
+func (e entry) SetType(type_ uint64)        { binary.BigEndian.PutUint64(e[24:], type_) }
+
 func marshalEntry(b []byte, term, index, do, typ uint64) {
 	x.AssertTrue(len(b) == entrySize)
 

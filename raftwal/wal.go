@@ -104,6 +104,25 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	return entries
 }
 
+func (l *wal) truncateEntriesUntil(lastIdx uint64) {
+	files := append(l.files, l.current)
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		for idx := 0; idx < maxNumEntries; idx++ {
+			entry := file.getEntry(idx)
+			if entry.Index() >= lastIdx {
+				return
+			}
+			if entry.Type() == uint64(raftpb.EntryNormal) {
+				entry.SetDataOffset(0)
+			}
+		}
+	}
+}
+
 // AddEntries adds the entries to the log. If there are entries in the log with the same index
 // they will be overwritten and the entries after that zeroed out from the log.
 func (l *wal) AddEntries(entries []raftpb.Entry) error {

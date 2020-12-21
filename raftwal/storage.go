@@ -368,6 +368,10 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 	return nil
 }
 
+func (w *DiskStorage) TruncateEntriesUntil(lastIdx uint64) {
+	w.wal.truncateEntriesUntil(lastIdx)
+}
+
 func (w *DiskStorage) NumLogFiles() int {
 	return len(w.wal.files)
 }
