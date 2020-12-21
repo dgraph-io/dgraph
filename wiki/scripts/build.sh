@@ -9,6 +9,12 @@
 
 set -e
 
+# Important for clean builds on Netlify
+if ! git remote | grep -q origin ; then
+    git remote add origin https://github.com/dgraph-io/dgraph.git
+    git fetch --all
+fi
+
 GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST="${HOST:-https://dgraph.io/docs}"
@@ -31,34 +37,17 @@ NEW_THEME="${NEW_THEME:-master}"
 
 # these versions use new theme
 NEW_VERSIONS=(
+        'v20.11'
+        'master'
         'v20.07'
-	'master'
 )
 
 # these versions use old theme
 OLD_VERSIONS=(
 	'v20.03.4'
-	'v20.03.3'
-	'v20.03.1'
-	'v20.03.0'
 	'v1.2.2'
-	'v1.2.1'
-	'v1.2.0'
 	'v1.1.1'
-	'v1.1.0'
 	'v1.0.18'
-	'v1.0.17'
-	'v1.0.16'
-	'v1.0.15'
-	'v1.0.14'
-	'v1.0.13'
-	'v1.0.12'
-	'v1.0.11'
-	'v1.0.10'
-	'v1.0.9'
-	'v1.0.8'
-	'v1.0.7'
-	'v1.0.6'
 )
 
 VERSIONS_ARRAY=("${NEW_VERSIONS[@]}" "${OLD_VERSIONS[@]}")

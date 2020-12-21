@@ -44,7 +44,6 @@ var (
 	pstore       *badger.DB
 	workerServer *grpc.Server
 	raftServer   conn.RaftServer
-	rt           *restoreTracker
 
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
@@ -59,7 +58,6 @@ func workerPort() int {
 // Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
-	rt = newRestoreTracker()
 	// needs to be initialized after group config
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
 	go limiter.bleed()
@@ -71,10 +69,8 @@ func Init(ps *badger.DB) {
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 
-	tlsConf, err := x.LoadServerTLSConfigForInternalPort(x.WorkerConfig.TLSInterNodeEnabled, x.WorkerConfig.TLSDir)
-	x.Check(err)
-	if tlsConf != nil {
-		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConf)))
+	if x.WorkerConfig.TLSServerConfig != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
 	}
 	workerServer = grpc.NewServer(grpcOpts...)
 }

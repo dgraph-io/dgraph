@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -52,13 +53,25 @@ type authRewriter struct {
 	hasCascade bool
 }
 
+// The struct is used as a return type for buildCommonAuthQueries function.
+type commonAuthQueryVars struct {
+	// Stores queries of the form
+	// var(func: uid(Ticket)) {
+	//		User as Ticket.assignedTo
+	// }
+	parentQry *gql.GraphQuery
+	// Stores queries which aggregate filters and auth rules. Eg.
+	// // User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
+	selectionQry *gql.GraphQuery
+}
+
 // NewQueryRewriter returns a new QueryRewriter.
 func NewQueryRewriter() QueryRewriter {
 	return &queryRewriter{}
 }
 
 func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
-	rn := authRw.selector(field.Type())
+	rn := authRw.selector(field.ConstructedFor())
 	if rn != nil {
 		return true
 	}
@@ -84,10 +97,18 @@ func hasCascadeDirective(field schema.Field) bool {
 	return false
 }
 
+// Returns the auth selector to be used depending on the query type.
+func getAuthSelector(queryType schema.QueryType) func(t schema.Type) *schema.RuleNode {
+	if queryType == schema.PasswordQuery {
+		return passwordAuthSelector
+	}
+	return queryAuthSelector
+}
+
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
-	gqlQuery schema.Query) (*gql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
 
 	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
 
@@ -102,7 +123,7 @@ func (qr *queryRewriter) Rewrite(
 	authRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
-		selector:      queryAuthSelector,
+		selector:      getAuthSelector(gqlQuery.QueryType()),
 		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",
 	}
 	authRw.hasAuthRules = hasAuthRules(gqlQuery, authRw)
@@ -139,7 +160,7 @@ func (qr *queryRewriter) Rewrite(
 	}
 }
 
-func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
+func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery {
 
 	// Get the type which the count query is written for
 	mainType := query.ConstructedFor()
@@ -151,25 +172,98 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) *gql.GraphQuery {
 
 	// Add filter
 	filter, _ := query.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery, mainType, filter)
-
-	// Add selection set. Currently, it will only be count
-	for _, f := range query.SelectionSet() {
-		if f.Name() == "count" {
-			child := &gql.GraphQuery{
-				Alias: f.DgraphAlias(),
-				Attr:  "count(uid)",
-			}
-			dgQuery.Children = append(dgQuery.Children, child)
-		}
-	}
+	_ = addFilter(dgQuery[0], mainType, filter)
 
 	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
 
-	return dgQuery
+	// mainQuery is the query with Attr: query.Name()
+	// It is the first query in dgQuery list.
+	mainQuery := dgQuery[0]
+
+	// Changing mainQuery Attr name to var. This is used in the final aggregate<Type> query.
+	mainQuery.Attr = "var"
+
+	finalMainQuery := &gql.GraphQuery{
+		Attr: query.Name() + "()",
+	}
+	// Add selection set to mainQuery and finalMainQuery.
+	isAggregateFieldVisited := make(map[string]bool)
+	// isAggregateFunctionVisited stores if the aggregate function for a field has been added or not.
+	// So the map entries would contain keys as nameMin, ageMin, nameName, etc.
+	isAggregateFunctionVisited := make(map[string]bool)
+
+	// Add count field to aggregateQuery by default. This is done to ensure that null is
+	// returned in case the count of nodes is 0.
+	child := &gql.GraphQuery{
+		Var:  "countVar",
+		Attr: "count(uid)",
+	}
+	finalQueryChild := &gql.GraphQuery{
+		Alias: "count",
+		Attr:  "max(val(countVar))",
+	}
+	mainQuery.Children = append(mainQuery.Children, child)
+	finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+
+	for _, f := range query.SelectionSet() {
+		// fldName stores Name of the field f.
+		fldName := f.Name()
+		if _, visited := isAggregateFunctionVisited[fldName]; visited {
+			continue
+		}
+		isAggregateFunctionVisited[fldName] = true
+		if fldName == "count" {
+			// We continue in case of a count field in Aggregate Query as count has already
+			// been added by default just before the for loop.
+			continue
+		}
+
+		// Handle other aggregate functions than count
+		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+
+		// TODO(GRAPHQL-887) :Fix Maximum and Minimum Aggregate DQL functions in case of no data
+		for _, function := range aggregateFunctions {
+			// A field can have at maximum one of the aggregation functions as suffix
+			if strings.HasSuffix(fldName, function) {
+				// constructedForDgraphPredicate stores the Dgraph predicate for which aggregate function has been queried.
+				constructedForDgraphPredicate := f.DgraphPredicateForAggregateField()
+				// constructedForField contains the field for which aggregate function has been queried.
+				// As all aggregate functions have length 3, removing last 3 characters from fldName.
+				constructedForField := fldName[:len(fldName)-3]
+				// isAggregateFieldVisited ensures that a field is added to Var query at maximum once.
+				// If a field has already been added to the var query, don't add it again.
+				// Eg. Even if scoreMax and scoreMin are queried, the query will contain only one expression
+				// of the from, "scoreVar as Tweets.score"
+				if !isAggregateFieldVisited[constructedForField] {
+					child := &gql.GraphQuery{
+						Var:  constructedForField + "Var",
+						Attr: constructedForDgraphPredicate,
+					}
+					// The var field is added to mainQuery. This adds the following DQL query.
+					// var(func: type(Tweets)) {
+					//        scoreVar as Tweets.score
+					// }
+					mainQuery.Children = append(mainQuery.Children, child)
+					isAggregateFieldVisited[constructedForField] = true
+				}
+				finalQueryChild := &gql.GraphQuery{
+					Alias: fldName,
+					Attr:  strings.ToLower(function) + "(val(" + constructedForField + "Var))",
+				}
+				// This adds the following DQL query
+				// aggregateTweets() {
+				//        scoreMin : min(val(scoreVar))
+				// }
+				finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
+				break
+			}
+		}
+	}
+
+	return append([]*gql.GraphQuery{finalMainQuery}, dgQuery...)
 }
 
-func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error) {
+func passwordQuery(m schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
 	xid, uid, err := m.IDArgValue()
 	if err != nil {
 		return nil, err
@@ -177,15 +271,25 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 
 	dgQuery := rewriteAsGet(m, uid, xid, authRw)
 
+	// Handle empty dgQuery
+	if strings.HasSuffix(dgQuery[0].Attr, "()") {
+		return dgQuery, nil
+	}
+
+	// mainQuery is the query with check<Type>Password as Attr.
+	// It is the first in the list of dgQuery.
+	mainQuery := dgQuery[0]
+
 	queriedType := m.Type()
 	name := queriedType.PasswordField().Name()
 	predicate := queriedType.DgraphPredicate(name)
 	password := m.ArgValue(name).(string)
 
+	// This adds the checkPwd function
 	op := &gql.GraphQuery{
 		Attr:   "checkPwd",
-		Func:   dgQuery.Func,
-		Filter: dgQuery.Filter,
+		Func:   mainQuery.Func,
+		Filter: mainQuery.Filter,
 		Children: []*gql.GraphQuery{{
 			Var: "pwd",
 			Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
@@ -210,17 +314,13 @@ func passwordQuery(m schema.Query, authRw *authRewriter) (*gql.GraphQuery, error
 		}},
 	}
 
-	if dgQuery.Filter != nil {
-		ft.Child = append(ft.Child, dgQuery.Filter)
+	if mainQuery.Filter != nil {
+		ft.Child = append(ft.Child, mainQuery.Filter)
 	}
 
-	dgQuery.Filter = ft
+	mainQuery.Filter = ft
 
-	qry := &gql.GraphQuery{
-		Children: []*gql.GraphQuery{dgQuery, op},
-	}
-
-	return qry, nil
+	return append(dgQuery, op), nil
 }
 
 func intersection(a, b []uint64) []uint64 {
@@ -271,35 +371,48 @@ func addUID(dgQuery *gql.GraphQuery) {
 	dgQuery.Children = append(dgQuery.Children, uidChild)
 }
 
-func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
+func rewriteAsQueryByIds(
+	field schema.Field,
+	uids []uint64,
+	authRw *authRewriter) []*gql.GraphQuery {
 	rbac := authRw.evaluateStaticRules(field.Type())
-	dgQuery := &gql.GraphQuery{
+	dgQuery := []*gql.GraphQuery{{
 		Attr: field.Name(),
-	}
+	}}
 
 	if rbac == schema.Negative {
-		dgQuery.Attr = dgQuery.Attr + "()"
+		dgQuery[0].Attr = dgQuery[0].Attr + "()"
 		return dgQuery
 	}
 
-	dgQuery.Func = &gql.Function{
+	dgQuery[0].Func = &gql.Function{
 		Name: "uid",
 		UID:  uids,
 	}
 
 	if ids := idFilter(extractQueryFilter(field), field.Type().IDField()); ids != nil {
-		addUIDFunc(dgQuery, intersection(ids, uids))
+		addUIDFunc(dgQuery[0], intersection(ids, uids))
 	}
 
-	addArgumentsToField(dgQuery, field)
-	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-	addUID(dgQuery)
-	addCascadeDirective(dgQuery, field)
+	addArgumentsToField(dgQuery[0], field)
+
+	// The function getQueryByIds is called for passwordQuery or fetching query result types
+	// after making a mutation. In both cases, we want the selectionSet to use the `query` auth
+	// rule. queryAuthSelector function is used as selector before calling addSelectionSetFrom function.
+	// The original selector function of authRw is stored in oldAuthSelector and used after returning
+	// from addSelectionSetFrom function.
+	oldAuthSelector := authRw.selector
+	authRw.selector = queryAuthSelector
+	selectionAuth := addSelectionSetFrom(dgQuery[0], field, authRw)
+	authRw.selector = oldAuthSelector
+
+	addUID(dgQuery[0])
+	addCascadeDirective(dgQuery[0], field)
 
 	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
-		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
+		dgQuery = append(dgQuery, selectionAuth...)
 	}
 
 	return dgQuery
@@ -314,57 +427,31 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
-func addFilterToField(dgQuery *gql.GraphQuery, field schema.Field) {
-	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery, field.Type(), filter)
-}
-
 func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
-	if query.Attr != "" {
-		addTypeFilter(query, field.Type())
-		return
-	}
-
-	var rootQuery *gql.GraphQuery
-	for _, q := range query.Children {
-		if q.Attr == field.Name() {
-			rootQuery = q
-			break
-		}
-		for _, cq := range q.Children {
-			if cq.Attr == field.Name() {
-				rootQuery = cq
-				break
-			}
-		}
-	}
-
-	if rootQuery != nil {
-		addTypeFilter(rootQuery, field.Type())
-	}
+	addTypeFilter(query, field.Type())
 }
 
 func rewriteAsGet(
-	field schema.Field,
+	query schema.Query,
 	uid uint64,
 	xid *string,
-	auth *authRewriter) *gql.GraphQuery {
+	auth *authRewriter) []*gql.GraphQuery {
 
-	var dgQuery *gql.GraphQuery
-	rbac := auth.evaluateStaticRules(field.Type())
+	var dgQuery []*gql.GraphQuery
+	rbac := auth.evaluateStaticRules(query.Type())
 
 	// If Get query is for Type and none of the authrules are satisfied, then it is
 	// caught here but in case of interface, we need to check validity on each
 	// implementing type as Rules for the interface are made empty.
 	if rbac == schema.Negative {
-		return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
+		return []*gql.GraphQuery{{Attr: query.Name() + "()"}}
 	}
 
 	// For interface, empty query should be returned if Auth rules are
 	// not satisfied even for a single implementing type
-	if field.Type().IsInterface() {
+	if query.Type().IsInterface() {
 		implementingTypesHasFailedRules := false
-		implementingTypes := field.Type().ImplementingTypes()
+		implementingTypes := query.Type().ImplementingTypes()
 		for _, typ := range implementingTypes {
 			if auth.evaluateStaticRules(typ) != schema.Negative {
 				implementingTypesHasFailedRules = true
@@ -372,21 +459,21 @@ func rewriteAsGet(
 		}
 
 		if !implementingTypesHasFailedRules {
-			return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
+			return []*gql.GraphQuery{{Attr: query.Name() + "()"}}
 		}
 	}
 
 	if xid == nil {
-		dgQuery = rewriteAsQueryByIds(field, []uint64{uid}, auth)
+		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
 
 		// Add the type filter to the top level get query. When the auth has been written into the
 		// query the top level get query may be present in query's children.
-		addTopLevelTypeFilter(dgQuery, field)
+		addTopLevelTypeFilter(dgQuery[0], query)
 
 		return dgQuery
 	}
 
-	xidArgName := field.XIDArg()
+	xidArgName := query.XIDArg()
 	eqXidFunc := &gql.Function{
 		Name: "eq",
 		Args: []gql.Arg{
@@ -396,32 +483,38 @@ func rewriteAsGet(
 	}
 
 	if uid > 0 {
-		dgQuery = &gql.GraphQuery{
-			Attr: field.Name(),
+		dgQuery = []*gql.GraphQuery{{
+			Attr: query.Name(),
 			Func: &gql.Function{
 				Name: "uid",
 				UID:  []uint64{uid},
 			},
-		}
-		dgQuery.Filter = &gql.FilterTree{
+		}}
+		dgQuery[0].Filter = &gql.FilterTree{
 			Func: eqXidFunc,
 		}
 
 	} else {
-		dgQuery = &gql.GraphQuery{
-			Attr: field.Name(),
+		dgQuery = []*gql.GraphQuery{{
+			Attr: query.Name(),
 			Func: eqXidFunc,
-		}
+		}}
 	}
-	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
-	addUID(dgQuery)
-	addTypeFilter(dgQuery, field.Type())
-	addCascadeDirective(dgQuery, field)
 
-	dgQuery = auth.addAuthQueries(field.Type(), dgQuery, rbac)
+	// Apply query auth rules even for password query
+	oldAuthSelector := auth.selector
+	auth.selector = queryAuthSelector
+	selectionAuth := addSelectionSetFrom(dgQuery[0], query, auth)
+	auth.selector = oldAuthSelector
+
+	addUID(dgQuery[0])
+	addTypeFilter(dgQuery[0], query.Type())
+	addCascadeDirective(dgQuery[0], query)
+
+	dgQuery = auth.addAuthQueries(query.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
-		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
+		dgQuery = append(dgQuery, selectionAuth...)
 	}
 
 	return dgQuery
@@ -429,7 +522,10 @@ func rewriteAsGet(
 
 // Adds common RBAC and UID, Type rules to DQL query.
 // This function is used by rewriteAsQuery and aggregateQuery functions
-func addCommonRules(field schema.Field, fieldType schema.Type, authRw *authRewriter) (*gql.GraphQuery, schema.RuleResult) {
+func addCommonRules(
+	field schema.Field,
+	fieldType schema.Type,
+	authRw *authRewriter) ([]*gql.GraphQuery, schema.RuleResult) {
 	rbac := authRw.evaluateStaticRules(fieldType)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
@@ -437,7 +533,7 @@ func addCommonRules(field schema.Field, fieldType schema.Type, authRw *authRewri
 
 	if rbac == schema.Negative {
 		dgQuery.Attr = dgQuery.Attr + "()"
-		return dgQuery, rbac
+		return []*gql.GraphQuery{dgQuery}, rbac
 	}
 
 	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
@@ -459,24 +555,28 @@ func addCommonRules(field schema.Field, fieldType schema.Type, authRw *authRewri
 	} else {
 		addTypeFunc(dgQuery, fieldType.DgraphName())
 	}
-	return dgQuery, rbac
+	return []*gql.GraphQuery{dgQuery}, rbac
 }
 
-func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
+func rewriteAsQuery(field schema.Field, authRw *authRewriter) []*gql.GraphQuery {
 	dgQuery, rbac := addCommonRules(field, field.Type(), authRw)
 	if rbac == schema.Negative {
 		return dgQuery
 	}
 
-	addArgumentsToField(dgQuery, field)
-	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-	addUID(dgQuery)
-	addCascadeDirective(dgQuery, field)
+	addArgumentsToField(dgQuery[0], field)
+	selectionAuth := addSelectionSetFrom(dgQuery[0], field, authRw)
+	// we don't need to query uid for auth queries, as they always have at least one field in their
+	// selection set.
+	if !authRw.writingAuth() {
+		addUID(dgQuery[0])
+	}
+	addCascadeDirective(dgQuery[0], field)
 
 	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
-		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
+		return append(dgQuery, selectionAuth...)
 	}
 
 	return dgQuery
@@ -493,8 +593,8 @@ func (authRw *authRewriter) writingAuth() bool {
 // original query and the auth.
 func (authRw *authRewriter) addAuthQueries(
 	typ schema.Type,
-	dgQuery *gql.GraphQuery,
-	rbacEval schema.RuleResult) *gql.GraphQuery {
+	dgQuery []*gql.GraphQuery,
+	rbacEval schema.RuleResult) []*gql.GraphQuery {
 
 	// There's no need to recursively inject auth queries into other auth queries, so if
 	// we are already generating an auth query, there's nothing to add.
@@ -517,17 +617,17 @@ func (authRw *authRewriter) addAuthQueries(
 
 		var qrys []*gql.GraphQuery
 		var filts []*gql.FilterTree
-		implementingTypesHasQueryAuthRules := false
+		implementingTypesHasAuthRules := false
 		for _, object := range implementingTypes {
 
 			// It could be the case that None of implementing Types have Auth Rules, which clearly
 			// indicates that neither the interface, nor any of the implementing type has its own
 			// Auth rules.
 			// ImplementingTypeHasAuthRules is set to true even if one of the implemented type have
-			// query Auth rules or Interface has its own Query auth rule, in the latter case, all the
+			// Auth rules or Interface has its own auth rule, in the latter case, all the
 			// implemented types must have inherited those auth rules.
-			if object.AuthRules().Rules != nil && object.AuthRules().Rules.Query != nil {
-				implementingTypesHasQueryAuthRules = true
+			if object.AuthRules().Rules != nil {
+				implementingTypesHasAuthRules = true
 			}
 
 			// First Check if the Auth Rules of the given type are satisfied or not.
@@ -561,14 +661,14 @@ func (authRw *authRewriter) addAuthQueries(
 			}).rewriteAuthQueries(object)
 
 			// If there is no Auth Query for the Given type then it means that
-			// neither the inherited interface, nor this type has any query Auth rules.
+			// neither the inherited interface, nor this type has any Auth rules.
 			// In this case the query must return all the nodes of this type.
 			// then simply we need to Put uid(Todo1) with OR in the main query filter.
 			if len(objAuthQueries) == 0 {
 				objfilter = &gql.FilterTree{
 					Func: &gql.Function{
 						Name: "uid",
-						Args: []gql.Arg{gql.Arg{Value: queryVar, IsValueVar: false, IsGraphQLVar: false}},
+						Args: []gql.Arg{{Value: queryVar, IsValueVar: false, IsGraphQLVar: false}},
 					},
 				}
 				filts = append(filts, objfilter)
@@ -580,10 +680,10 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// For an interface having Auth rules in some of the implementing types, len(qrys) = 0
 		// indicates that None of the type satisfied the Auth rules, We must return Empty Query here.
-		if implementingTypesHasQueryAuthRules == true && len(qrys) == 0 {
-			return &gql.GraphQuery{
-				Attr: dgQuery.Attr + "()",
-			}
+		if implementingTypesHasAuthRules == true && len(qrys) == 0 {
+			return []*gql.GraphQuery{{
+				Attr: dgQuery[0].Attr + "()",
+			}}
 		}
 
 		// Join all the queries in qrys using OR filter and
@@ -605,7 +705,7 @@ func (authRw *authRewriter) addAuthQueries(
 
 		// Adding the case of Query on interface in which None of the implementing type have
 		// Auth Query Rules, in that case, we also return simple query.
-		if typ.IsInterface() == true && implementingTypesHasQueryAuthRules == false {
+		if typ.IsInterface() == true && implementingTypesHasAuthRules == false {
 			return dgQuery
 		}
 
@@ -623,16 +723,21 @@ func (authRw *authRewriter) addAuthQueries(
 	// build a query like
 	//   Todo1 as var(func: ... ) @filter(...)
 	// that has the filter from the user query in it.  This is then used as
-	// the starting point for both the user query and the auth query.
+	// the starting point for other auth queries.
 	//
 	// We already have the query, so just copy it and modify the original
 	varQry := &gql.GraphQuery{
 		Var:    authRw.varName,
 		Attr:   "var",
-		Func:   dgQuery.Func,
-		Filter: dgQuery.Filter,
+		Func:   dgQuery[0].Func,
+		Filter: dgQuery[0].Filter,
 	}
 
+	// build the root auth query like
+	//   TodoRoot as var(func: uid(Todo1), orderasc: ..., first: ..., offset: ...) @filter(... type auth queries ...)
+	// that has the order and pagination params from user query in it and filter set to auth
+	// queries built for this type. This is then used as the starting point for user query and
+	// auth queries for children.
 	rootQry := &gql.GraphQuery{
 		Var:  authRw.parentVarName,
 		Attr: "var",
@@ -641,25 +746,34 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
+		Order:  dgQuery[0].Order, // we need the order here for pagination to work correctly
+		Args:   dgQuery[0].Args,  // this gets pagination from user query to root query
 	}
 
-	dgQuery.Filter = nil
+	// The user query doesn't need the filter and pagination parameters anymore,
+	// as they have been taken care of by the var and root queries generated above.
+	// But, tt still needs the order parameter, even though it is also applied in root query.
+	// So, not setting order to nil.
+	dgQuery[0].Filter = nil
+	dgQuery[0].Args = nil
 
-	// The user query starts from the var query generated above and is filtered
-	// by the the filter generated from auth processing, so now we build
-	//   queryTodo(func: uid(Todo1)) @filter(...auth-queries...) { ... }
-	dgQuery.Func = &gql.Function{
+	// The user query starts from the root query generated above and so gets filtered
+	// input from auth processing, so now we build
+	//   queryTodo(func: uid(TodoRoot), ...) { ... }
+	dgQuery[0].Func = &gql.Function{
 		Name: "uid",
 		Args: []gql.Arg{{Value: authRw.parentVarName}},
 	}
 
-	// The final query that includes the user's filter and auth processsing is thus like
+	// The final query that includes the user's filter and auth processing is thus like
 	//
 	// queryTodo(func: uid(Todo1)) @filter(uid(Todo2) AND uid(Todo3)) { ... }
 	// Todo1 as var(func: ... ) @filter(...)
 	// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
 	// Todo3 as var(func: uid(Todo1)) @cascade { ...auth query 2... }
-	return &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery, rootQry, varQry}, fldAuthQueries...)}
+	ret := append(dgQuery, rootQry, varQry)
+	ret = append(ret, fldAuthQueries...)
+	return ret
 }
 
 func (authRw *authRewriter) addVariableUIDFunc(q *gql.GraphQuery) {
@@ -681,6 +795,16 @@ func queryAuthSelector(t schema.Type) *schema.RuleNode {
 	}
 
 	return auth.Rules.Query
+}
+
+// passwordAuthSelector is used as auth selector for checkPassword queries
+func passwordAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.Password
 }
 
 func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQuery, *gql.FilterTree) {
@@ -778,11 +902,11 @@ func (authRw *authRewriter) rewriteRuleNode(
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
 		varName := authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
 		r1 := rewriteAsQuery(qry, authRw)
-		r1.Var = varName
-		r1.Attr = "var"
-		r1.Cascade = append(r1.Cascade, "__all__")
+		r1[0].Var = varName
+		r1[0].Attr = "var"
+		r1[0].Cascade = append(r1[0].Cascade, "__all__")
 
-		return []*gql.GraphQuery{r1}, &gql.FilterTree{
+		return []*gql.GraphQuery{r1[0]}, &gql.FilterTree{
 			Func: &gql.Function{
 				Name: "uid",
 				Args: []gql.Arg{{Value: varName}},
@@ -835,6 +959,228 @@ func buildTypeFunc(typ string) *gql.Function {
 	}
 }
 
+// Builds parentQry for auth rules and selectionQry to aggregate all filter and
+// auth rules. This is used to build common auth rules by addSelectionSetFrom and
+// buildAggregateFields function.
+func buildCommonAuthQueries(
+	f schema.Field,
+	auth *authRewriter,
+	parentSelectionName string) commonAuthQueryVars {
+	// This adds the following query.
+	//	var(func: uid(Ticket1)) {
+	//		User4 as Ticket.assignedTo
+	//	}
+	// where `Ticket1` is the nodes selected at parent level after applying auth and `User4` is the
+	// nodes we need on the current level.
+	parentQry := &gql.GraphQuery{
+		Func: &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: parentSelectionName}},
+		},
+		Attr:     "var",
+		Children: []*gql.GraphQuery{{Attr: f.ConstructedForDgraphPredicate(), Var: auth.varName}},
+	}
+
+	// This query aggregates all filters and auth rules and is used by root query to filter
+	// the final nodes for the current level.
+	// User3 as var(func: uid(User4)) @filter((eq(User.username, "User1") AND (...Auth Filter))))
+	selectionQry := &gql.GraphQuery{
+		Var:  auth.parentVarName,
+		Attr: "var",
+		Func: &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: auth.varName}},
+		},
+	}
+
+	return commonAuthQueryVars{
+		parentQry:    parentQry,
+		selectionQry: selectionQry,
+	}
+}
+
+// buildAggregateFields builds DQL queries for aggregate fields like count, avg, max etc.
+// It returns related DQL fields and Auth Queries which are then added to the final DQL query
+// by the caller.
+// fieldAlias is being passed along with the field as it depends on the number of times we have
+// encountered that field till now.
+func buildAggregateFields(
+	f schema.Field,
+	fieldAlias string,
+	auth *authRewriter) ([]*gql.GraphQuery, []*gql.GraphQuery) {
+	constructedForType := f.ConstructedFor()
+	constructedForDgraphPredicate := f.ConstructedForDgraphPredicate()
+
+	// aggregateChildren contains the count query field and mainField (described below).
+	// otherAggregateChildren contains other min,max,sum,avg fields.
+	// These fields are considered separately as filters (auth and other filters) need to
+	// be added to count fields and mainFields but not for other aggregate fields.
+	var aggregateChildren []*gql.GraphQuery
+	var otherAggregateChildren []*gql.GraphQuery
+	// mainField contains the queried Aggregate Field and has all var fields inside it.
+	// Eg. the mainQuery for
+	// postsAggregate {
+	//   titleMin
+	// }
+	// is
+	// postsAggregate : Author.posts {
+	//   postsAggregate_titleVar as Post.title
+	//   ... other queried aggregate fields
+	// }
+	mainField := &gql.GraphQuery{
+		Alias: fieldAlias,
+		Attr:  constructedForDgraphPredicate,
+	}
+
+	// Filter for aggregate Fields. This is added to all count aggregate fields
+	// and mainField
+	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
+	_ = addFilter(mainField, constructedForType, fieldFilter)
+
+	// addedAggregateFields is a map from aggregate field name to boolean
+	addedAggregateField := make(map[string]bool)
+	// isAggregateFieldVisited is a map from field name to boolean. It is used to
+	// ensure that a field is added to Var query at maximum once.
+	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
+	// contain "scoreVar as Tweets.score" only once.
+	isAggregateFieldVisited := make(map[string]bool)
+
+	// Add the default count field. Count field is part of an AggregateField by default
+	// as this makes it possible to return null field in case the count of nodes is 0
+	aggregateChild := &gql.GraphQuery{
+		Alias: "count_" + fieldAlias,
+		Attr:  "count(" + constructedForDgraphPredicate + ")",
+	}
+	// Add filter to count aggregation field.
+	_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+	aggregateChildren = append(aggregateChildren, aggregateChild)
+
+	// Iterate over fields queried inside aggregate.
+	for _, aggregateField := range f.SelectionSet() {
+		// Don't add the same field twice
+		if _, isAddedAggregateField := addedAggregateField[aggregateField.DgraphAlias()]; isAddedAggregateField {
+			continue
+		}
+		addedAggregateField[aggregateField.DgraphAlias()] = true
+
+		// As count fields are always part of an AggregateField by
+		// default (added just before this for loop). We continue
+		// in case of a count field.
+		if aggregateField.DgraphAlias() == "count" {
+			continue
+		}
+		// Handle other aggregate functions than count
+		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+		for _, function := range aggregateFunctions {
+			aggregateFldName := aggregateField.Name()
+			// A field can have at maximum one aggregation function as suffix.
+			if strings.HasSuffix(aggregateFldName, function) {
+				// constructedForField contains the field name for which aggregate function
+				// has been queried. Eg. name for nameMax. Removing last 3 characters as all
+				// aggregation functions have length 3
+				constructedForField := aggregateFldName[:len(aggregateFldName)-3]
+				// constructedForDgraphPredicate stores the Dgraph predicate for which aggregate function
+				// has been queried. Eg. Post.name for nameMin
+				constructedForDgraphPredicateField := aggregateField.DgraphPredicateForAggregateField()
+				// Adding the corresponding var field if it has not been added before. isAggregateFieldVisited
+				// ensures that a var queried is added at maximum once.
+				if !isAggregateFieldVisited[constructedForField] {
+					child := &gql.GraphQuery{
+						Var:  fieldAlias + "_" + constructedForField + "Var",
+						Attr: constructedForDgraphPredicateField,
+					}
+					// The var field is added to mainQuery. This adds the following DQL query.
+					// postsAggregate : Author.posts {
+					//   postsAggregate_nameVar as Post.name
+					// }
+					mainField.Children = append(mainField.Children, child)
+					isAggregateFieldVisited[constructedForField] = true
+				}
+				aggregateChild := &gql.GraphQuery{
+					Alias: aggregateFldName + "_" + fieldAlias,
+					Attr:  strings.ToLower(function) + "(val(" + fieldAlias + "_" + constructedForField + "Var))",
+				}
+				// This adds the following DQL query
+				// nameMin_postsAggregate : min(val(postsAggregate_nameVar))
+				otherAggregateChildren = append(otherAggregateChildren, aggregateChild)
+				break
+			}
+		}
+	}
+	// mainField is only added as an aggregate child if it has any children fields inside it.
+	// This ensures that if only count aggregation field is there, the mainField is not added.
+	// As mainField contains only var fields. It is not needed in case of count.
+	if len(mainField.Children) > 0 {
+		aggregateChildren = append([]*gql.GraphQuery{mainField}, aggregateChildren...)
+	}
+	rbac := auth.evaluateStaticRules(constructedForType)
+	if rbac == schema.Negative {
+		return nil, nil
+	}
+	var parentVarName, parentQryName string
+	if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+		parentVarName = auth.parentVarName
+		parentQryName = auth.varName
+		auth.parentVarName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+		auth.varName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+	}
+	var fieldAuth, retAuthQueries []*gql.GraphQuery
+	var authFilter *gql.FilterTree
+	if rbac == schema.Uncertain {
+		fieldAuth, authFilter = auth.rewriteAuthQueries(constructedForType)
+	}
+	// At this stage aggregateChildren only contains the count aggregate fields and
+	// possibly mainField. Auth filters are added to count aggregation fields and
+	// mainField. Adding filters only for mainField is sufficient for other aggregate
+	// functions as the aggregation functions use var from mainField.
+
+	// Adds auth queries. The variable authQueriesAppended ensures that auth queries are
+	// appended only once. This also merges auth filters and any other filters of count
+	// aggregation fields / mainField.
+	if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+		commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentVarName)
+		// add child filter to parent query, auth filters to selection query and
+		// selection query as a filter to child
+		commonAuthQueryVars.selectionQry.Filter = authFilter
+		var authQueriesAppended = false
+		for _, aggregateChild := range aggregateChildren {
+			if !authQueriesAppended {
+				commonAuthQueryVars.parentQry.Children[0].Filter = aggregateChild.Filter
+				retAuthQueries = append(retAuthQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
+				authQueriesAppended = true
+			}
+			aggregateChild.Filter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
+				},
+			}
+		}
+		// Restore the auth state after processing is done.
+		auth.parentVarName = parentVarName
+		auth.varName = parentQryName
+	}
+	// otherAggregation Children are appended to aggregationChildren to return them.
+	// This step is performed at the end to ensure that auth and other filters are
+	// not added to them.
+	aggregateChildren = append(aggregateChildren, otherAggregateChildren...)
+	retAuthQueries = append(retAuthQueries, fieldAuth...)
+	return aggregateChildren, retAuthQueries
+}
+
+// Generate Unique Dgraph Alias for the field based on number of time it has been
+// seen till now in the given query at current level. If it is seen first time then simply returns the field's DgraphAlias,
+// and if  it is seen let's say 3rd time  then return "fieldAlias.3" where "fieldAlias"
+// is the  DgraphAlias of the field.
+func generateUniqueDgraphAlias(f schema.Field, fieldSeenCount map[string]int) string {
+	alias := f.DgraphAlias()
+	if fieldSeenCount[alias] == 0 {
+		return alias
+	}
+	return alias + "." + strconv.Itoa(fieldSeenCount[alias])
+}
+
+// TODO(GRAPHQL-874), Optimise Query rewriting in case of multiple alias with same filter.
 // addSelectionSetFrom adds all the selections from field into q, and returns a list
 // of extra queries needed to satisfy auth requirements
 func addSelectionSetFrom(
@@ -858,7 +1204,7 @@ func addSelectionSetFrom(
 			len(selSet) == 1 &&
 			selSet[0].Name() == schema.Typename {
 			q.Children = append(q.Children, &gql.GraphQuery{
-				//we don't need this for auth queries because they are added by us used for internal purposes.
+				// we don't need this for auth queries because they are added by us used for internal purposes.
 				// Querying it for them would just add an overhead which we can avoid.
 				Attr:  "uid",
 				Alias: "dgraph.uid",
@@ -869,16 +1215,17 @@ func addSelectionSetFrom(
 	// These fields might not have been requested by the user directly as part of the query but
 	// are required in the body template for other fields requested within the query. We must
 	// fetch them from Dgraph.
-	requiredFields := make(map[string]bool)
-	// addedFields is a map from field name to bool
-	addedFields := make(map[string]bool)
-	// fieldAdded is a map from field's dgraph alias to bool
-	fieldAdded := make(map[string]bool)
+	requiredFields := make(map[string]schema.FieldDefinition)
+	// fieldSeenCount is a map from field's dgraph alias to integer.
+	// It stores the number of times a field was encountered
+	// in the query till now.
+	fieldSeenCount := make(map[string]int)
+
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
 		if hasCustom {
-			for k := range rf {
-				requiredFields[k] = true
+			for dgAlias, fieldDef := range rf {
+				requiredFields[dgAlias] = fieldDef
 			}
 			// This field is resolved through a custom directive so its selection set doesn't need
 			// to be part of query rewriting.
@@ -891,8 +1238,20 @@ func addSelectionSetFrom(
 			continue
 		}
 
+		// Handle aggregation queries
+		if f.IsAggregateField() {
+			fieldAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
+			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, fieldAlias, auth)
+
+			authQueries = append(authQueries, aggregateAuthQueries...)
+			q.Children = append(q.Children, aggregateChildren...)
+			// As all child fields inside aggregate have been looked at. We can continue
+			fieldSeenCount[f.DgraphAlias()]++
+			continue
+		}
+
 		child := &gql.GraphQuery{
-			Alias: f.DgraphAlias(),
+			Alias: generateUniqueDgraphAlias(f, fieldSeenCount),
 		}
 
 		if f.Type().Name() == schema.IDType {
@@ -916,9 +1275,9 @@ func addSelectionSetFrom(
 		var parentVarName, parentQryName string
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 			parentVarName = auth.parentVarName
-			parentQryName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
-			auth.parentVarName = parentQryName
-			auth.varName = parentQryName
+			parentQryName = auth.varName
+			auth.parentVarName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+			auth.varName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
 		}
 
 		var selectionAuth []*gql.GraphQuery
@@ -926,20 +1285,19 @@ func addSelectionSetFrom(
 			selectionAuth = addSelectionSetFrom(child, f, auth)
 		}
 
-		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-			// Restore the state after processing is done.
-			auth.parentVarName = parentVarName
-			auth.varName = parentQryName
+		restoreAuthState := func() {
+			if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+				// Restore the auth state after processing is done.
+				auth.parentVarName = parentVarName
+				auth.varName = parentQryName
+			}
 		}
 
-		// skip if we have already added a query for this field in DQL. It helps make sure that if
-		// a field is being asked twice or more, each time with a new alias, then we only add it
-		// once in DQL query.
-		if _, ok := fieldAdded[f.DgraphAlias()]; ok {
+		if f.Type().IsInbuiltOrEnumType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
+			restoreAuthState()
 			continue
 		}
-		fieldAdded[f.DgraphAlias()] = true
-		addedFields[f.Name()] = true
+		fieldSeenCount[f.DgraphAlias()]++
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -970,6 +1328,7 @@ func addSelectionSetFrom(
 		} else if rbac == schema.Negative {
 			// If RBAC rules are evaluated to Negative, we don't write queries for deeper levels.
 			// Hence we don't need to do any further processing for this field.
+			restoreAuthState()
 			continue
 		}
 
@@ -978,73 +1337,38 @@ func addSelectionSetFrom(
 			fieldAuth, authFilter = auth.rewriteAuthQueries(f.Type())
 		}
 
-		if authFilter != nil {
-			if child.Filter == nil {
-				child.Filter = authFilter
-			} else {
-				child.Filter = &gql.FilterTree{
-					Op:    "and",
-					Child: []*gql.FilterTree{child.Filter, authFilter},
-				}
-			}
-		}
-
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-			// This adds the following query.
-			//	var(func: uid(Ticket)) {
-			//		User as Ticket.assignedTo
-			//	}
-			// where `Ticket` is the nodes selected at parent level and `User` is the nodes we
-			// need on the current level.
-			parentQry := &gql.GraphQuery{
-				Func: &gql.Function{
-					Name: "uid",
-					Args: []gql.Arg{{Value: auth.parentVarName}},
-				},
-				Attr:     "var",
-				Children: []*gql.GraphQuery{{Attr: f.DgraphPredicate(), Var: parentQryName}},
-			}
-
-			// This query aggregates all filters and auth rules and is used by root query to filter
-			// the final nodes for the current level.
-			// User6 as var(func: uid(User2), orderasc: ...) @filter((eq(User.username, "User1") AND (...Auth Filter))))
-			filtervarName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
-			selectionQry := &gql.GraphQuery{
-				Var:  filtervarName,
-				Attr: "var",
-				Func: &gql.Function{
-					Name: "uid",
-					Args: []gql.Arg{{Value: parentQryName}},
-				},
-			}
-
-			addFilterToField(selectionQry, f)
-			selectionQry.Filter = child.Filter
-			authQueries = append(authQueries, parentQry, selectionQry)
+			commonAuthQueryVars := buildCommonAuthQueries(f, auth, parentVarName)
+			// add child filter to parent query, auth filters to selection query and
+			// selection query as a filter to child
+			commonAuthQueryVars.parentQry.Children[0].Filter = child.Filter
+			commonAuthQueryVars.selectionQry.Filter = authFilter
 			child.Filter = &gql.FilterTree{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: filtervarName}},
+					Args: []gql.Arg{{Value: commonAuthQueryVars.selectionQry.Var}},
 				},
 			}
+			authQueries = append(authQueries, commonAuthQueryVars.parentQry, commonAuthQueryVars.selectionQry)
 		}
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
+		restoreAuthState()
 	}
 
 	// Sort the required fields before adding them to q.Children so that the query produced after
 	// rewriting has a predictable order.
 	rfset := make([]string, 0, len(requiredFields))
-	for fname := range requiredFields {
-		rfset = append(rfset, fname)
+	for dgAlias := range requiredFields {
+		rfset = append(rfset, dgAlias)
 	}
 	sort.Strings(rfset)
 
 	// Add fields required by other custom fields which haven't already been added as a
 	// child to be fetched from Dgraph.
-	for _, fname := range rfset {
-		if _, ok := addedFields[fname]; !ok {
-			f := field.Type().Field(fname)
+	for _, dgAlias := range rfset {
+		if fieldSeenCount[dgAlias] == 0 {
+			f := requiredFields[dgAlias]
 			child := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),
 			}
@@ -1225,14 +1549,45 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 			//                       we are here ^^
 			// ->
 			// @filter(anyofterms(Post.title, "GraphQL") AND ... )
-			ft := buildFilter(typ, filter[field].(map[string]interface{}))
-			ands = append(ands, ft)
+
+			// The value of the and argument can be either an object or an array, hence we handle
+			// both.
+			// ... and: {}
+			// ... and: [{}]
+			switch v := filter[field].(type) {
+			case map[string]interface{}:
+				ft := buildFilter(typ, v)
+				ands = append(ands, ft)
+			case []interface{}:
+				for _, obj := range v {
+					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ands = append(ands, ft)
+				}
+			}
 		case "or":
 			// title: { anyofterms: "GraphQL" }, or: { ... }
 			//                       we are here ^^
 			// ->
 			// @filter(anyofterms(Post.title, "GraphQL") OR ... )
-			or = buildFilter(typ, filter[field].(map[string]interface{}))
+
+			// The value of the or argument can be either an object or an array, hence we handle
+			// both.
+			// ... or: {}
+			// ... or: [{}]
+			switch v := filter[field].(type) {
+			case map[string]interface{}:
+				or = buildFilter(typ, v)
+			case []interface{}:
+				ors := make([]*gql.FilterTree, 0, len(v))
+				for _, obj := range v {
+					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ors = append(ors, ft)
+				}
+				or = &gql.FilterTree{
+					Child: ors,
+					Op:    "or",
+				}
+			}
 		case "not":
 			// title: { anyofterms: "GraphQL" }, not: { isPublished: true}
 			//                       we are here ^^
@@ -1378,7 +1733,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 	}
 
 	var andFt *gql.FilterTree
-	if len(ands) == 1 {
+	if len(ands) == 0 {
+		return or
+	} else if len(ands) == 1 {
 		andFt = ands[0]
 	} else if len(ands) > 1 {
 		andFt = &gql.FilterTree{
@@ -1485,6 +1842,8 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 			return arg
 		}
 		return fmt.Sprintf("%q", arg)
+	case float64, float32:
+		return fmt.Sprintf("\"%v\"", arg)
 	default:
 		return fmt.Sprintf("%v", arg)
 	}

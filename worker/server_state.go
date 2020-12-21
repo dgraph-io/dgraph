@@ -98,8 +98,8 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		s.WALstore = raftwal.Init(Config.WALDir)
-		// TODO: Add encryption back to WALStore.
+		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.WorkerConfig.EncryptionKey)
+		x.Check(err)
 	}
 	{
 		// Postings directory
@@ -126,6 +126,8 @@ func (s *ServerState) initStorage() {
 		// zero out from memory
 		opt.EncryptionKey = nil
 	}
+	// Temp directory
+	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
 
 	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)

@@ -249,7 +249,7 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 
 	// Also increase curSize.
 	enc.curSize += uint64(len(sv))
-	if size := enc.alloc.Size() + enc.curSize; size > maxEncodedSize {
+	if size := uint64(enc.alloc.Size()) + enc.curSize; size > maxEncodedSize {
 		return fmt.Errorf("estimated response size: %d is bigger than threshold: %d",
 			size, maxEncodedSize)
 	}

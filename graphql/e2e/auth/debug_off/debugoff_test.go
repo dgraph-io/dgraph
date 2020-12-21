@@ -2,10 +2,11 @@ package debugoff
 
 import (
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -72,7 +73,7 @@ func TestAddGQL(t *testing.T) {
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -113,11 +114,11 @@ func TestAddMutationWithXid(t *testing.T) {
 
 	// Add the tweet for the first time.
 	gqlResponse := addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Re-adding the tweet should fail.
 	gqlResponse = addTweetsParams.ExecuteAsPost(t, common.GraphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	common.RequireNoGQLErrors(t, gqlResponse)
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)

@@ -162,11 +162,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
@@ -177,20 +174,16 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
+    {
       "Column": [ { "uid": "0x456" } ],
-      "Ticket": [ { "uid": "0x789" } ] 
-    }  
+      "Ticket": [ { "uid": "0x789" } ]
+    }
 
 - name: "Add multiple nodes of different types that fails auth"
   gqlquery: |
@@ -231,11 +224,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
@@ -246,13 +236,9 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
@@ -293,9 +279,9 @@
       }
     }
   json: |
-    { 
+    {
       "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ] 
+      "Project5": [ { "uid": "0x123" } ]
     }
   uids: |
     { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
@@ -309,11 +295,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
@@ -324,20 +307,16 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
+    {
       "Column": [ { "uid": "0x456" }, { "uid": "0x459" } ],
-      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ] 
-    }  
+      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
+    }
 
 - name: "Add multiples of multiple nodes of different types that fails auth"
   gqlquery: |
@@ -372,9 +351,9 @@
       }
     }
   json: |
-    { 
+    {
       "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ] 
+      "Project5": [ { "uid": "0x123" } ]
     }
   uids: |
     { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
@@ -388,11 +367,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
@@ -403,25 +379,21 @@
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
+    {
       "Column": [ { "uid": "0x456" } ],
-      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ] 
-    }   
+      "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
 # See comments about additional deletes in add_mutation_test.yaml.
-# Because of those additional deletes, for example, when we add a column and 
+# Because of those additional deletes, for example, when we add a column and
 # link it to an existing ticket, we remove that ticket from the column it was
 # attached to ... so we need authorization to update that column as well
 # as to add the new column.
@@ -464,15 +436,12 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Project2": [ { "uid": "0x123" } ],
       "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
@@ -490,18 +459,15 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
-      "Column": [ { "uid": "0x456" } ] 
+    {
+      "Column": [ { "uid": "0x456" } ]
     }
-  
+
 - name: "Add with auth on additional delete that fails"
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
@@ -541,15 +507,12 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Project2": [ { "uid": "0x123" } ],
       "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
@@ -566,17 +529,14 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
-      "Column": [ { "uid": "0x456" } ] 
-    }  
+    {
+      "Column": [ { "uid": "0x456" } ]
+    }
   error:
     { "message": "couldn't rewrite query for mutation addColumn because authorization failed" }
 
@@ -592,10 +552,11 @@
   jwtvar:
     USER: "user1"
   variables: |
-    { 
+    {
       "proj": {
         "name": "Project1",
-        "columns": [ { 
+        "pwd": "Password",
+        "columns": [ {
           "name": "a column",
           "tickets": [ { "id": "0x789" } ]
         } ]
@@ -619,23 +580,20 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
       "Column4.auth": [ { "uid": "0x799" } ]
     }
   uids: |
-    { 
+    {
       "Project1": "0x123",
-      "Column2": "0x456" 
+      "Column2": "0x456"
     }
   authquery: |-
     query {
@@ -647,11 +605,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
         uid
@@ -660,13 +615,11 @@
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
+    {
       "Column": [ { "uid": "0x456" } ],
       "Project": [ { "uid": "0x123" } ]
     }
@@ -683,10 +636,11 @@
   jwtvar:
     USER: "user1"
   variables: |
-    { 
+    {
       "proj": {
         "name": "Project1",
-        "columns": [ { 
+        "pwd": "Password",
+        "columns": [ {
           "name": "a column",
           "tickets": [ { "id": "0x789" } ]
         } ]
@@ -710,20 +664,17 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   json: |
-    { 
+    {
       "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
-    { 
+    {
       "Project1": "0x123",
       "Column2": "0x456"
     }
@@ -737,11 +688,8 @@
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
       Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
         uid
@@ -750,16 +698,14 @@
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
-    { 
+    {
       "Column": [ { "uid": "0x456" } ],
       "Project": [ { "uid": "0x123" } ]
-    }  
+    }
   error:
     { "message": "couldn't rewrite query for mutation addProject because authorization failed" }
 
@@ -776,7 +722,9 @@
     USER: "user1"
   variables: |
     { "log":
-      { "logs": "log123",
+      {
+        "pwd": "password",
+        "logs": "log123",
         "random": "random123"
       }
     }
@@ -800,7 +748,9 @@
     USER: "user1"
   variables: |
     { "log":
-      { "logs": "log123",
+      {
+        "pwd": "something",
+        "logs": "log123",
         "random": "random123"
       }
     }
@@ -823,7 +773,8 @@
   variables: |
     {
       "proj": {
-        "name": "Project1"
+        "name": "Project1",
+        "pwd": "somepassword"
       }
     }
   uids: |
@@ -847,7 +798,8 @@
   variables: |
     {
       "proj": {
-        "name": "Project1"
+        "name": "Project1",
+        "pwd": "password"
       }
     }
   uids: |
@@ -863,9 +815,7 @@
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
   authjson: |
@@ -919,7 +869,6 @@
       Issue1 as var(func: uid(0x789))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
   authjson: |
@@ -971,7 +920,6 @@
       Issue1 as var(func: uid(0x789))
       Issue2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
     }
   error:
@@ -1021,3 +969,174 @@
   uids: |
     { "ComplexLog1": "0x123" }
   skipauth: true
+
+- name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
+  gqlquery: |
+    mutation addQuestion($question: [AddQuestionInput!]!) {
+      addQuestion(input: $question) {
+        question{
+          id
+          text
+          author{
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    { "question":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        },
+        "answered": true
+      }]
+    }
+  uids: |
+    {"Question1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
+        uid
+      }
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"Question": [ {"uid": "0x123"}]}
+- name: "Adding node for a Type that inherits auth rules from an interface fails."
+  gqlquery: |
+    mutation addQuestion($question: [AddQuestionInput!]!) {
+      addQuestion(input: $question) {
+        question{
+          id
+          text
+          author{
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  variables: |
+    { "question":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        },
+        "answered": false
+      }]
+    }
+  uids: |
+    {"Question1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
+        uid
+      }
+      Question1 as var(func: uid(0x123))
+      QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
+        id : uid
+      }
+      QuestionAuth3 as var(func: uid(Question1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"Question": [ ], "Author": [ { "uid" : "0x456"} ] }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+- name: "Add type with having RBAC rule on interface successfully"
+  gqlquery: |
+    mutation addFbPost($post: [AddFbPostInput!]!){
+      addFbPost(input: $post){
+        fbPost {
+          text
+          author {
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ROLE: "ADMIN"
+  variables: |
+    { "post":
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        }
+      }]
+    }
+  uids: |
+    {"FbPost1": "0x123", "Author1": "0x456" }
+  authquery: |-
+    query {
+      FbPost(func: uid(FbPost1)) @filter(uid(FbPostAuth2)) {
+        uid
+      }
+      FbPost1 as var(func: uid(0x123))
+      FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
+        dgraph.type
+        author : Post.author @filter(eq(Author.name, "user1")) {
+          name : Author.name
+        }
+      }
+    }
+  authjson: |
+    {"FbPost": [ {"uid": "0x123"}]}
+
+- name: "Add type with Having RBAC rule on interface failed"
+  gqlquery: |
+    mutation addFbPost($post: [AddFbPostInput!]!){
+      addFbPost(input: $post){
+        fbPost{
+          text
+          author {
+            name
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+    ROLE: "USER"
+  variables: |
+    { "post": 
+      [{
+        "text": "A Question",
+        "pwd": "password",
+        "author": {
+          "name": "user1"
+        }
+      }]
+    }
+  uids: |
+    {"FbPost1": "0x123", "Author1": "0x456" }
+  error:
+    {"message" : "mutation failed because authorization failed"}
+  

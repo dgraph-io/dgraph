@@ -81,7 +81,7 @@ upsert {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -109,7 +109,7 @@ upsert {
 	require.Equal(t, 1, len(result.Queries["q"]))
 
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -183,7 +183,7 @@ func TestUpsertExampleJSON(t *testing.T) {
     amount
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -205,6 +205,7 @@ func TestUpsertExampleJSON(t *testing.T) {
 
 func TestUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string .`))
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
 
 	// Mutation with wrong name
@@ -235,7 +236,7 @@ func TestUpsertExample0JSON(t *testing.T) {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -256,7 +257,7 @@ func TestUpsertExample0JSON(t *testing.T) {
 	require.Equal(t, []string{"name"}, splitPreds(mr.preds))
 
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -473,7 +474,7 @@ upsert {
     oldest
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "56")
@@ -506,7 +507,7 @@ upsert {
     age
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user1")
 }
@@ -565,7 +566,7 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user2")
 
@@ -602,7 +603,7 @@ upsert {
     }
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user2")
 }
@@ -649,7 +650,7 @@ friend: uid @reverse .`))
     oldest
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "56")
@@ -675,7 +676,7 @@ friend: uid @reverse .`))
     age
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user1")
 }
@@ -726,7 +727,7 @@ friend: uid @reverse .`))
     }
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user2")
 
@@ -751,7 +752,7 @@ friend: uid @reverse .`))
     }
   }
 }`
-	res, _, err = queryWithTs(q3, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q3, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user2")
 }
@@ -788,7 +789,7 @@ upsert {
     name
   }
 }`
-	res, _, err := queryWithTs(q, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user1")
 	require.Contains(t, res, "user2")
@@ -864,7 +865,7 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(q, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q, "application/dql", "", 0)
 	require.NoError(t, err)
 	expected := `
 {
@@ -959,7 +960,7 @@ upsert {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -987,7 +988,7 @@ upsert {
 	require.Equal(t, 1, len(result.Queries["q"]))
 
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -1028,7 +1029,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -1052,7 +1053,7 @@ func TestConditionalUpsertExample0JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 1, len(result.Queries["q"]))
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -1122,7 +1123,7 @@ upsert {
     works_with
   }
 }`
-	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1","color":"red"},`+
 		`{"name":"user2","works_for":"company1","color":"red"}]}}`, res)
@@ -1177,12 +1178,12 @@ upsert {
 	mr, err = mutationWithTs(m4, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1"},`+
 		`{"name":"user2","works_for":"company1"}]}}`, res)
 
-	res, _, err = queryWithTs(fmt.Sprintf(q2, "company2"), "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(fmt.Sprintf(q2, "company2"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_for":"company2","color":"blue"},`+
 		`{"name":"user4","works_for":"company2","color":"blue"}]}}`, res)
@@ -1219,12 +1220,12 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(fmt.Sprintf(q1, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user2","works_with":[{"name":"user3"},{"name":"user4"}]},`+
 		`{"name":"user1","works_with":[{"name":"user3"},{"name":"user4"}]}]}}`, res)
 
-	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_with":[{"name":"user1"},{"name":"user2"}]},`+
 		`{"name":"user4","works_with":[{"name":"user1"},{"name":"user2"}]}]}}`, res)
@@ -1255,12 +1256,12 @@ upsert {
 	require.Equal(t, 1, len(result.Queries["user1"]))
 	require.Equal(t, 1, len(result.Queries["user2"]))
 
-	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_with":[{"name":"user4"}]},`+
 		`{"name":"user2","works_with":[{"name":"user4"},{"name":"user3"}]}]}}`, res)
 
-	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_with":[{"name":"user2"}]},`+
 		`{"name":"user4","works_with":[{"name":"user1"},{"name":"user2"}]}]}}`, res)
@@ -1301,7 +1302,7 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user5","email":"user5@company1.io",`+
 		`"works_for":"company1","works_with":[{"name":"user3"},{"name":"user4"}]}]}}`, res)
@@ -1467,7 +1468,7 @@ upsert {
     content
   }
 }`
-	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "post4")
 
@@ -1496,7 +1497,7 @@ upsert {
 	require.NoError(t, err)
 
 	// post4 shouldn't exist anymore
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "post4")
 }
@@ -1560,7 +1561,7 @@ amount: float .`))
     loc
   }
 }`
-	expectedRes, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m2 := `
@@ -1603,7 +1604,7 @@ upsert {
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Queries["q"]))
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
@@ -1643,7 +1644,7 @@ upsert {
 		_, err = mutationWithTs(m, "application/rdf", false, true, 0)
 		require.NoError(t, err)
 
-		got, _, err := queryWithTs(q, "application/graphql+-", "", 0)
+		got, _, err := queryWithTs(q, "application/dql", "", 0)
 		require.NoError(t, err)
 
 		require.JSONEq(t, fmt.Sprintf(`{"data":{"q":[{"amount":%d}]}}`, count), got)
@@ -1736,7 +1737,7 @@ amount: float .`))
     amount
   }
 }`
-	expectedRes, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	return expectedRes
@@ -1772,7 +1773,7 @@ upsert {
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, res, expectedRes)
 }
@@ -1807,7 +1808,7 @@ upsert {
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	// There should be no change
 	testutil.CompareJSON(t, res, expectedRes)
@@ -1842,7 +1843,7 @@ upsert {
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "amount")
 }
@@ -1879,7 +1880,7 @@ upsert {
 	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -1935,7 +1936,7 @@ upsert {
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Queries["q"]))
 
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -2040,7 +2041,7 @@ upsert {
     amount
   }
 }`
-	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "San Francisco")
 	require.Contains(t, res, "user1")
@@ -2068,7 +2069,7 @@ upsert {
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 3, len(result.Queries["q"]))
 
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "San Francisco")
 	require.NotContains(t, res, "Fuller Street, SF")
@@ -2118,7 +2119,7 @@ upsert {
       count(~game_answer)
     }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "count(~game_answer)")
 }
@@ -2168,7 +2169,7 @@ upsert {
 
 func TestEmptyRequest(t *testing.T) {
 	// We are using the dgo client in this test here to test the grpc interface
-	dg, err := testutil.DgraphClientWithGroot("localhost:9180")
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err, "error while getting a dgraph client")
 
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
@@ -2258,7 +2259,7 @@ upsert {
     name
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -2280,7 +2281,7 @@ upsert {
     name
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	expectedRes = `
@@ -2344,7 +2345,7 @@ upsert {
     name
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -2401,7 +2402,7 @@ upsert {
     count
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -2445,7 +2446,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"count"}, splitPreds(mr.preds))
 
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	expectedRes = `
 {
   "data": {
@@ -2484,7 +2485,7 @@ email: [string] @index(exact) @upsert .`))
     uid
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	var result struct {
 		Data struct {
@@ -2557,7 +2558,7 @@ upsert {
 	require.True(t, len(mr.keys) == 0)
 	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
 
-	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(res), &result))
 	require.Equal(t, 1, len(result.Data.Q))
@@ -2615,7 +2616,7 @@ func TestJsonOldAndNewAPI(t *testing.T) {
       }
     }
   }`
-	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `
   {
@@ -2694,7 +2695,7 @@ func TestJsonNewAPI(t *testing.T) {
       }
     }
   }`
-	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `
   {
@@ -2762,7 +2763,7 @@ func TestUpsertMultiValueJson(t *testing.T) {
     works_with
   }
 }`
-	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/dql", "", 0)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1","color":"red"},`+
 		`{"name":"user2","works_for":"company1","color":"red"}]}}`, res)
@@ -2847,7 +2848,7 @@ upsert {
     version
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	res, _, err := queryWithTs(q1, "application/dql", "", 0)
 	expectedRes := `
 {
   "data": {
@@ -2904,6 +2905,6 @@ upsert {
     number
   }
 }`
-	_, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	_, _, err = queryWithTs(q2, "application/dql", "", 0)
 	require.NoError(t, err)
 }

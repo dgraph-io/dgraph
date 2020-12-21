@@ -366,7 +366,14 @@ func TestExportJson(t *testing.T) {
 `
 	gotJson, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
-	require.JSONEq(t, wantJson, string(gotJson))
+	var expected interface{}
+	err = json.Unmarshal([]byte(wantJson), &expected)
+	require.NoError(t, err)
+
+	var actual interface{}
+	err = json.Unmarshal(gotJson, &actual)
+	require.NoError(t, err)
+	require.ElementsMatch(t, expected, actual)
 
 	checkExportSchema(t, schemaFileList)
 	checkExportGqlSchema(t, gqlSchema)
@@ -387,6 +394,9 @@ func TestExportFormat(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	err = testutil.CheckForGraphQLEndpointToReady(t)
+	require.NoError(t, err)
+
 	params := testutil.GraphQLParams{
 		Query:     exportRequest,
 		Variables: map[string]interface{}{"format": "json"},

@@ -257,6 +257,10 @@
             "upsert": true
         },
         {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate":"dgraph.graphql.p_query",
             "type":"string"
         },
@@ -383,7 +387,11 @@
             "type": "uid"
         },
         {
+            "index": true,
             "predicate": "post1.numLikes",
+            "tokenizer": [
+                "int"
+            ],
             "type": "int"
         },
         {
@@ -395,6 +403,16 @@
                 "trigram"
             ],
             "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
         },
         {
             "predicate": "pwd",
@@ -451,6 +469,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "test.dgraph.author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "test.dgraph.employee.en.ename",
             "type": "string"
         },
@@ -473,6 +500,65 @@
         {
             "predicate": "职业",
             "type": "string"
+        },
+        {
+            "predicate": "Book.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Book.desc",
+            "type": "string"
+        },
+        {
+            "predicate": "Section.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Chapter.name",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Section.sectionId",
+            "tokenizer": [
+                "float"
+            ],
+            "type": "float",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Book.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Section.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
         }
     ],
     "types": [
@@ -875,7 +961,14 @@
                 },
                 {
                     "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
                 }
+
             ],
             "name": "post1"
         },
@@ -920,6 +1013,9 @@
                 },
                 {
                     "name": "test.dgraph.author.posts"
+                },
+                {
+                    "name": "test.dgraph.author.qualification"
                 }
             ],
             "name": "test.dgraph.author"
@@ -931,6 +1027,48 @@
                 }
             ],
             "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Book.name"
+                },
+                {
+                    "name": "Book.desc"
+                },
+                {
+                    "name": "Book.bookId"
+                }
+            ],
+            "name": "Book"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Chapter.name"
+                },
+                {
+                    "name": "Chapter.bookId"
+                },
+                {
+                    "name": "Chapter.chapterId"
+                }
+            ],
+            "name": "Chapter"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Section.sectionId"
+                },
+                {
+                    "name": "Section.chapterId"
+                },
+                {
+                    "name": "Section.name"
+                }
+            ],
+            "name": "Section"
         }
     ]
 }

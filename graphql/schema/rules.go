@@ -25,10 +25,10 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 func init() {
@@ -44,9 +44,9 @@ func init() {
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
-	validator.AddRule("Check for list type value", listTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
+	validator.AddRule("Input Coercion to List", listInputCoercion)
 
 }
 
@@ -306,6 +306,7 @@ func typeNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 			forbiddenTypeNames["Update"+defName+"Input"] = true
 			forbiddenTypeNames["Update"+defName+"Payload"] = true
 			forbiddenTypeNames["Delete"+defName+"Input"] = true
+			forbiddenTypeNames[defName+"AggregateResult"] = true
 
 			if defn.Kind == ast.Object {
 				forbiddenTypeNames["Add"+defName+"Input"] = true
@@ -454,7 +455,7 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 }
 
 // This could be removed once the following gqlparser bug is fixed:
-// 	https://github.com/vektah/gqlparser/issues/128
+// 	https://github.com/dgraph-io/gqlparser/issues/128
 func directiveLocationCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	var errs []*gqlerror.Error
 	for _, dir := range defn.Directives {
@@ -783,6 +784,13 @@ func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.Li
 				"you cannot declare a field with this name.",
 			typ.Name, field.Name, field.Name)}
 	}
+	// ensure that there are not fields with "Aggregate" as suffix
+	if strings.HasSuffix(field.Name, "Aggregate") {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: Aggregate is a reserved keyword and "+
+				"you cannot declare a field with Aggregate as suffix.",
+			typ.Name, field.Name)}
+	}
 
 	return nil
 }
@@ -820,7 +828,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	invFieldArg := dir.Arguments.ForName("field")
 	if invFieldArg == nil {
 		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 		errs = append(errs,
 			gqlerror.ErrorPosf(
 				dir.Position,
@@ -948,7 +956,7 @@ func validateSearchArg(searchArg string,
 	switch {
 	case !ok:
 		// This check can be removed once gqlparser bug
-		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: the argument to @search %s isn't valid."+
@@ -1010,7 +1018,7 @@ func searchValidation(
 	}
 
 	// This check can be removed once gqlparser bug
-	// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+	// #107(https://github.com/dgraph-io/gqlparser/issues/107) is fixed.
 	if arg.Value.Kind != ast.ListValue {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
@@ -1643,7 +1651,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		//		*	multiple args with same name at the same level in query, etc.
 		// will get checked with the default validation itself.
 		// Added an issue in gqlparser to allow building ast.Schema from Introspection response
-		// similar to graphql-js utilities: https://github.com/vektah/gqlparser/issues/125
+		// similar to graphql-js utilities: https://github.com/dgraph-io/gqlparser/issues/125
 		// Once that is closed, we should be able to do this.
 		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphql.Raw})
 		if gqlErr != nil {
@@ -1983,12 +1991,15 @@ func idValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
-	if field.Type.String() == "String!" {
+	if field.Type.String() == "String!" ||
+		field.Type.String() == "Int!" ||
+		field.Type.String() == "Int64!" ||
+		field.Type.String() == "Float!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 

@@ -265,7 +265,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash` |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.
@@ -402,17 +402,23 @@ Syntax Example: `between(predicate, startDateValue, endDateValue)`
 
 Schema Types: Scalar types, including `dateTime`, `int`, `float` and `string`
 
-Index Required: `dateTime`
+Index Required: `dateTime`, `int`, `float`, and `exact` on strings
 
-Returns nodes that match a range of `dateTime` values. The `between` function
-performs a range check to improve query efficiency, helping to prevent a
-wide-ranging `dateTime` query on a large set of data from running slowly.
+Returns nodes that match an inclusive range of indexed values. The `between`
+keyword performs a range check on the index to improve query efficiency,
+helping to prevent a wide-ranging query on a large set of data from running
+slowly.
 
-Query Example: Movies released between 1976 and 1983, listed by genre.
+A common use case for the `between` keyword is to search within a
+dataset indexed by `dateTime`. The following example query demonstrates this
+use case.
+
+Query Example: Movies released between the start of 1976 and the end of 1983,
+listed by genre.
 
 {{< runnable >}}
 {
-  me(func: between(initial_release_date, "1976-01-01", "1983-01-01")) {
+  me(func: between(initial_release_date, "1976-01-01", "1983-12-31")) {
     name@en
     genre {
       name@en
@@ -437,8 +443,11 @@ For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For 
 
 `uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
-Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+{{% notice "tip" %}}
+If the UID of a node is known, values for the node can be read directly.
+{{% /notice %}}
 
+Query Example: The films of Priyanka Chopra by known UID.
 {{< runnable >}}
 {
   films(func: uid(0x2c964)) {
@@ -451,8 +460,6 @@ Query Example: If the UID of a node is known, values for the node can be read di
   }
 }
 {{< /runnable >}}
-
-
 
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}

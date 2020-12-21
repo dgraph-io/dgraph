@@ -16,7 +16,7 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 	return &addGroupRewriter{}
 }
 
-// Rewrite rewrites schema.Mutation into GraphQL+- upsert mutations only for Group type.
+// Rewrite rewrites schema.Mutation into dql upsert mutations only for Group type.
 // It ensures that only the last rule out of all duplicate rules in input is preserved.
 // A rule is duplicate if it has same predicate name as another rule.
 func (mrw *addGroupRewriter) Rewrite(
@@ -42,7 +42,7 @@ func (mrw *addGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.AddRewriter)(mrw)).FromMutationResult(ctx, mutation, assigned, result)
 }

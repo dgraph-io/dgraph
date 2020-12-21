@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/viper"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -32,7 +34,12 @@ import (
 
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	conf := viper.GetViper()
+	conf.Set("tls_cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
+
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
@@ -42,10 +49,17 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
+
+	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -56,6 +70,11 @@ func TestLoaderXidmap(t *testing.T) {
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

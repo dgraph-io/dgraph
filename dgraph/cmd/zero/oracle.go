@@ -47,20 +47,19 @@ type Oracle struct {
 	keyCommit   *z.Tree // fp(key) -> commitTs. Used to detect conflict.
 	maxAssigned uint64  // max transaction assigned by us.
 
-	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
-	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan pb.OracleDelta
 	updates     chan *pb.OracleDelta
 	doneUntil   y.WaterMark
-	syncMarks   []syncMark
 }
 
 // Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.keyCommit = z.NewTree(1 << 30)
+	// Remove the older btree file, before creating NewTree, as it may contain stale data leading
+	// to wrong results.
+	o.keyCommit = z.NewTree()
 	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
@@ -69,15 +68,13 @@ func (o *Oracle) Init() {
 
 // oracle close releases the memory associated with btree used for keycommit.
 func (o *Oracle) close() {
-	o.keyCommit.Release()
 }
 
 func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.keyCommit.Release()
-	o.keyCommit = z.NewTree(1 << 30)
+	o.keyCommit.Reset()
 }
 
 // TODO: This should be done during proposal application for Txn status.
@@ -100,21 +97,36 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
+	var timer x.Timer
+	timer.Start()
+
 	o.Lock()
 	defer o.Unlock()
+
+	// Set startTxnTs so that every txn with start ts less than this, would be aborted.
+	o.startTxnTs = minTs
+
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
 			delete(o.commits, ts)
 		}
 	}
+	timer.Record("commits")
+
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
-	o.keyCommit.DeleteBelow(minTs)
-	o.tmax = minTs
 	stats := o.keyCommit.Stats()
-	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
-		", pages:%d\n", minTs, len(o.commits), stats.NumPages)
+	if stats.Occupancy < 50.0 {
+		return
+	}
+	o.keyCommit.DeleteBelow(minTs)
+	timer.Record("deleteBelow")
+	glog.V(2).Infof("Purged below ts:%d, len(o.commits):%d, keyCommit: [before: %+v, after: %+v].\n",
+		minTs, len(o.commits), stats, o.keyCommit.Stats())
+	if timer.Total() > time.Second {
+		glog.V(2).Infof("Purge %s\n", timer.String())
+	}
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
@@ -255,7 +267,6 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
-	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
 
@@ -474,26 +485,6 @@ func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 			return errServerShutDown
 		}
 	}
-}
-
-// SyncedUntil returns the timestamp up to which all the nodes have synced.
-func (s *Server) SyncedUntil() uint64 {
-	s.orc.Lock()
-	defer s.orc.Unlock()
-	// Find max index with timestamp less than tmax
-	var idx int
-	for i, sm := range s.orc.syncMarks {
-		idx = i
-		if sm.ts >= s.orc.tmax {
-			break
-		}
-	}
-	var syncUntil uint64
-	if idx > 0 {
-		syncUntil = s.orc.syncMarks[idx-1].index
-	}
-	s.orc.syncMarks = s.orc.syncMarks[idx:]
-	return syncUntil
 }
 
 // TryAbort attempts to abort the given transactions which are not already committed..

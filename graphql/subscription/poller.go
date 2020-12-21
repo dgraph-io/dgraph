@@ -34,7 +34,7 @@ import (
 
 // Poller is used to poll user subscription query.
 type Poller struct {
-	sync.Mutex
+	sync.RWMutex
 	resolver       *resolve.RequestResolver
 	pollRegistry   map[uint64]map[uint64]subscriber
 	subscriptionID uint64
@@ -66,9 +66,12 @@ type subscriber struct {
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
 func (p *Poller) AddSubscriber(
 	req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
+	p.RLock()
+	resolver := p.resolver
+	p.RUnlock()
 
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
-	err := p.resolver.ValidateSubscription(req)
+	err := resolver.ValidateSubscription(req)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +94,7 @@ func (p *Poller) AddSubscriber(
 	defer p.Unlock()
 
 	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
-	res := p.resolver.Resolve(ctx, req)
+	res := resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}
@@ -114,10 +117,9 @@ func (p *Poller) AddSubscriber(
 		expiry: customClaims.StandardClaims.ExpiresAt.Time, updateCh: updateCh}
 	p.pollRegistry[bucketID] = subscriptions
 
-	if len(subscriptions) != 1 {
-		// Already there is subscription for this bucket. So,no need to poll the server. We can
-		// use the existing polling routine to publish the update.
-
+	if ok {
+		// Already there is a running go routine for this bucket. So,no need to poll the server.
+		// We can use the existing polling routine to publish the update.
 		return &SubscriberResponse{
 			BucketID:       bucketID,
 			SubscriptionID: subscriptionID,
@@ -152,7 +154,10 @@ type pollRequest struct {
 }
 
 func (p *Poller) poll(req *pollRequest) {
+	p.RLock()
 	resolver := p.resolver
+	p.RUnlock()
+
 	pollID := uint64(0)
 	for {
 		pollID++
@@ -176,11 +181,12 @@ func (p *Poller) poll(req *pollRequest) {
 				// Don't update if there is no change in response.
 				continue
 			}
-			// Every thirty poll. We'll check there is any active subscription for the
-			// current poll. If not we'll terminate this poll.
+			// Every second poll, we'll check if there is any active subscription for the
+			// current goroutine. If not we'll terminate this poll.
 			p.Lock()
 			subscribers, ok := p.pollRegistry[req.bucketID]
 			if !ok || len(subscribers) == 0 {
+				delete(p.pollRegistry, req.bucketID)
 				p.Unlock()
 				return
 			}
@@ -200,6 +206,7 @@ func (p *Poller) poll(req *pollRequest) {
 		if !ok || len(subscribers) == 0 {
 			// There is no subscribers to push the update. So, kill the current polling
 			// go routine.
+			delete(p.pollRegistry, req.bucketID)
 			p.Unlock()
 			return
 		}

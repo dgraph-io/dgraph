@@ -32,28 +32,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -191,10 +191,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -276,6 +277,8 @@ input StringHashFilter {
 
 type AbstractAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type AddMessagePayload {
@@ -297,6 +300,14 @@ type DeleteMessagePayload {
 
 type MessageAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	contentMin: String
+	contentMax: String
+	authorMin: String
+	authorMax: String
+	datePostedMin: DateTime
+	datePostedMax: DateTime
 }
 
 type UpdateAbstractPayload {
@@ -342,8 +353,8 @@ enum MessageOrderable {
 input AbstractFilter {
 	id: [ID!]
 	has: AbstractHasFilter
-	and: AbstractFilter
-	or: AbstractFilter
+	and: [AbstractFilter]
+	or: [AbstractFilter]
 	not: AbstractFilter
 }
 
@@ -371,8 +382,8 @@ input AddMessageInput {
 input MessageFilter {
 	id: [ID!]
 	has: MessageHasFilter
-	and: MessageFilter
-	or: MessageFilter
+	and: [MessageFilter]
+	or: [MessageFilter]
 	not: MessageFilter
 }
 

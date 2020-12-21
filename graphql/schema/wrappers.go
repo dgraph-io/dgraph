@@ -26,14 +26,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
 )
 
-// Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
+// Wrap the github.com/dgraph-io/gqlparser/ast defintions so that the bulk of the GraphQL
 // algorithm and interface is dependent on behaviours we expect from a GraphQL schema
 // and validation, but not dependent the exact structure in the gqlparser.
 //
@@ -126,7 +126,7 @@ type Field interface {
 	Skip() bool
 	Include() bool
 	Cascade() []string
-	HasCustomDirective() (bool, map[string]bool)
+	HasCustomDirective() (bool, map[string]FieldDefinition)
 	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
@@ -141,6 +141,10 @@ type Field interface {
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
 	EnumValues() []string
+	ConstructedFor() Type
+	ConstructedForDgraphPredicate() string
+	DgraphPredicateForAggregateField() string
+	IsAggregateField() bool
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -155,7 +159,6 @@ type Mutation interface {
 // A Query is a field (from the schema's Query type) from an Operation
 type Query interface {
 	Field
-	ConstructedFor() Type
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
@@ -188,6 +191,7 @@ type Type interface {
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
 	IsGeo() bool
+	IsInbuiltOrEnumType() bool
 	fmt.Stringer
 }
 
@@ -786,7 +790,7 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 	}
 }
 
-// AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
+// AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
@@ -870,6 +874,11 @@ func (f *field) IsAuthQuery() bool {
 	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
+func (f *field) IsAggregateField() bool {
+	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") &&
+		strings.HasSuffix(f.Type().Name(), "AggregateResult")
+}
+
 func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -938,7 +947,21 @@ func (f *field) Cascade() []string {
 	return fields
 }
 
-func (f *field) HasCustomDirective() (bool, map[string]bool) {
+func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map[string]FieldDefinition {
+	res := make(map[string]FieldDefinition, len(requiredFieldNames))
+	parentType := &astType{
+		typ:             &ast.Type{NamedType: sibling.field.ObjectDefinition.Name},
+		inSchema:        sibling.op.inSchema,
+		dgraphPredicate: sibling.op.inSchema.dgraphPredicate,
+	}
+	for rfName := range requiredFieldNames {
+		fieldDef := parentType.Field(rfName)
+		res[fieldDef.DgraphAlias()] = fieldDef
+	}
+	return res
+}
+
+func (f *field) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
 		return false, nil
@@ -976,7 +999,7 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	}
 
 	if graphqlArg == nil {
-		return true, rf
+		return true, toRequiredFieldDefs(rf, f)
 	}
 	modeVal := ""
 	modeArg := httpArg.Value.Children.ForName(mode)
@@ -994,7 +1017,7 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 			return true, nil
 		}
 	}
-	return true, rf
+	return true, toRequiredFieldDefs(rf, f)
 }
 
 func (f *field) HasLambdaDirective() bool {
@@ -1036,13 +1059,24 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 		}
 	}
 	if xidArgName != "" {
-		xidArgVal, ok := f.ArgValue(xidArgName).(string)
-		pos := f.field.GetPosition()
-		if !ok {
-			err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
-				xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
-			return
+		var ok bool
+		var xidArgVal string
+		switch v := f.ArgValue(xidArgName).(type) {
+		case int64:
+			xidArgVal = strconv.FormatInt(v, 10)
+		case float64:
+			xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
+		case string:
+			xidArgVal = v
+		default:
+			pos := f.field.GetPosition()
+			if !ok {
+				err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
+					xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+				return
+			}
 		}
+
 		xid = &xidArgVal
 	}
 
@@ -1092,6 +1126,11 @@ func (f *field) AbstractType() bool {
 
 func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
+}
+
+func (t *astType) IsInbuiltOrEnumType() bool {
+	_, ok := inbuiltTypeToDgraph[t.Name()]
+	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
@@ -1304,6 +1343,10 @@ func (q *query) IsAuthQuery() bool {
 	return (*field)(q).field.Arguments.ForName("dgraph.uid") != nil
 }
 
+func (q *query) IsAggregateField() bool {
+	return (*field)(q).IsAggregateField()
+}
+
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
@@ -1361,7 +1404,7 @@ func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
-func (q *query) HasCustomDirective() (bool, map[string]bool) {
+func (q *query) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	return (*field)(q).HasCustomDirective()
 }
 
@@ -1405,14 +1448,36 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (m *mutation) ConstructedFor() Type {
+	return (*field)(m).ConstructedFor()
+}
+
+// In case the field f is of type <Type>Aggregate, the Type is retunred.
+// In all other case the function returns the type of field f.
+func (f *field) ConstructedFor() Type {
+	if !f.IsAggregateField() {
+		return f.Type()
+	}
+
+	// f has type of the form <SomeTypeName>AggregateResult
+	fieldName := f.Type().Name()
+	typeName := fieldName[:len(fieldName)-15]
+	return &astType{
+		typ: &ast.Type{
+			NamedType: typeName,
+		},
+		inSchema:        f.op.inSchema,
+		dgraphPredicate: f.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (q *query) ConstructedFor() Type {
 	if q.QueryType() != AggregateQuery {
 		return q.Type()
 	}
-
 	// Its of type AggregateQuery
-	queryName := q.Type().Name()
-	typeName := queryName[:len(queryName)-15]
+	fieldName := q.Type().Name()
+	typeName := fieldName[:len(fieldName)-15]
 	return &astType{
 		typ: &ast.Type{
 			NamedType: typeName,
@@ -1420,6 +1485,67 @@ func (q *query) ConstructedFor() Type {
 		inSchema:        q.op.inSchema,
 		dgraphPredicate: q.op.inSchema.dgraphPredicate,
 	}
+}
+
+func (m *mutation) ConstructedForDgraphPredicate() string {
+	return (*field)(m).ConstructedForDgraphPredicate()
+}
+
+func (q *query) ConstructedForDgraphPredicate() string {
+	return (*field)(q).ConstructedForDgraphPredicate()
+}
+
+// In case, the field f is of type <Type>Aggregate it returns dgraph predicate of the Type.
+// In all other cases it returns dgraph predicate of the field.
+func (f *field) ConstructedForDgraphPredicate() string {
+	if !f.IsAggregateField() {
+		return f.DgraphPredicate()
+	}
+	// Remove last 9 characters of the field name.
+	// Eg. to get "FieldName" from "FieldNameAggregate"
+	fldName := f.Name()
+	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][fldName[:len(fldName)-9]]
+}
+
+func (m *mutation) DgraphPredicateForAggregateField() string {
+	return (*field)(m).DgraphPredicateForAggregateField()
+}
+
+func (q *query) DgraphPredicateForAggregateField() string {
+	return (*field)(q).DgraphPredicateForAggregateField()
+}
+
+// In case, the field f is of name <Name>Max / <Name>Min / <Name>Sum / <Name>Avg ,
+// it returns corresponding dgraph predicate name.
+// In all other cases it returns dgraph predicate of the field.
+func (f *field) DgraphPredicateForAggregateField() string {
+	aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
+
+	fldName := f.Name()
+	var isAggregateFunction bool = false
+	for _, function := range aggregateFunctions {
+		if strings.HasSuffix(fldName, function) {
+			isAggregateFunction = true
+		}
+	}
+	if !isAggregateFunction {
+		return f.DgraphPredicate()
+	}
+	// aggregateResultTypeName contains name of the type in which the aggregate field is defined,
+	// it will be of the form <Type>AggregateResult
+	// we need to obtain the type name from <Type> from <Type>AggregateResult
+	aggregateResultTypeName := f.field.ObjectDefinition.Name
+
+	// If aggregateResultTypeName is found to not end with AggregateResult, just return DgraphPredicate()
+	if !strings.HasSuffix(aggregateResultTypeName, "AggregateResult") {
+		// This is an extra precaution and ideally, the code should not reach over here.
+		return f.DgraphPredicate()
+	}
+	mainTypeName := aggregateResultTypeName[:len(aggregateResultTypeName)-15]
+	// Remove last 3 characters of the field name.
+	// Eg. to get "FieldName" from "FieldNameMax"
+	// As all Aggregate functions are of length 3, removing last 3 characters from fldName
+	return f.op.inSchema.dgraphPredicate[mainTypeName][fldName[:len(fldName)-3]]
 }
 
 func (q *query) QueryType() QueryType {
@@ -1517,7 +1643,7 @@ func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
 }
 
-func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
+func (m *mutation) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	return (*field)(m).HasCustomDirective()
 }
 
@@ -1637,6 +1763,10 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 
 func (m *mutation) IsAuthQuery() bool {
 	return (*field)(m).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (m *mutation) IsAggregateField() bool {
+	return (*field)(m).IsAggregateField()
 }
 
 func (t *astType) AuthRules() *TypeAuth {
