@@ -84,6 +84,12 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 			jsonValue = jsonInt
 			valueType = api.Facet_INT
 		}
+	case int64:
+		jsonValue = v
+		valueType = api.Facet_INT
+	case float64:
+		jsonValue = v
+		valueType = api.Facet_FLOAT
 	case bool:
 		jsonValue = v
 		valueType = api.Facet_BOOL
@@ -202,6 +208,13 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return err
 		}
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
+
+	case int64:
+		if v == 0 && op == DeleteNquads {
+			nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
+			return nil
+		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
 
 	case string:
 		// Default value is considered as S P * deletion.
@@ -401,6 +414,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			uid = uint64(ui)
 
+		case int64:
+			uid = uint64(uidVal)
+
 		case string:
 			s := stripSpaces(uidVal)
 			if len(uidVal) == 0 {
@@ -475,6 +491,12 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
 		switch v := v.(type) {
+		case int64, float64:
+			if err := handleBasicType(pred, v, op, &nq); err != nil {
+				return mr, err
+			}
+			buf.Push(&nq)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
@@ -522,7 +544,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				}
 
 				switch iv := item.(type) {
-				case string, float64, json.Number:
+				case string, float64, json.Number, int64:
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
@@ -597,11 +619,6 @@ const (
 	DeleteNquads
 )
 
-func isScalar(tag simdjson.Tag) bool {
-	return tag != simdjson.TagObjectStart && tag != simdjson.TagObjectEnd &&
-		tag != simdjson.TagArrayStart && tag != simdjson.TagArrayEnd
-}
-
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
 		return errors.New("CPU doesn't support simdjson for fast parsing")
@@ -611,43 +628,95 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if err != nil {
 		return err
 	}
-
-	// deep is a LIFO stack for holding '{' and '[' tags and keeping track of
-	// how deeply nested we are when reading the tape
-	deep := make([]simdjson.Tag, 0)
-	// open becomes true when we've parsed a key and are looking for a value
-	open := false
-	quad := &api.NQuad{}
 	iter := tape.Iter()
+
+	data, err := iter.Interface()
+	if err != nil {
+		return err
+	}
+
+restart:
+	switch d := data.(type) {
+	case map[string]interface{}:
+		mr, err := buf.mapToNquads(d, op, "")
+		buf.checkForDeletion(mr, d, op)
+		return err
+	case []interface{}:
+		if len(d) == 1 {
+			data = d[0]
+			goto restart
+		}
+		for _, o := range d {
+			if _, ok := o.(map[string]interface{}); !ok {
+				return errors.Errorf("only array of map allowed at root")
+			}
+			mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+			if err != nil {
+				return err
+			}
+			buf.checkForDeletion(mr, o.(map[string]interface{}), op)
+		}
+	}
+	return nil
+}
+
+type walk struct {
+	open bool
+	quad *api.NQuad
+	deep []simdjson.Tag
+	buff *NQuadBuffer
+}
+
+func newWalk(buff *NQuadBuffer) *walk {
+	return &walk{
+		buff: buff,
+		quad: &api.NQuad{},
+	}
+}
+
+func (w *walk) push() {
+	w.open = false
+	w.buff.Push(w.quad)
+	w.quad = &api.NQuad{}
+}
+
+func (buf *NQuadBuffer) FastestParseJSON(b []byte, op int) error {
+	if !simdjson.SupportedCPU() {
+		return errors.New("CPU doesn't support simdjson for fast parsing")
+	}
+
+	tape, err := simdjson.Parse(b, nil)
+	if err != nil {
+		return err
+	}
+
+	iter := tape.Iter()
+	walk := newWalk(buf)
 
 	stop := func(v interface{}, err error) {
 		switch val := v.(type) {
 		case string:
-			quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{val}}
+			walk.quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{val}}
 		case int64:
-			quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{val}}
+			walk.quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{val}}
 		case float64:
-			quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{val}}
+			walk.quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{val}}
 		case bool:
-			quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{val}}
+			walk.quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{val}}
 		case uint64:
 			// TODO: there's no api.Value_* struct for uint64, so i'm just
 			//       converting it to int64... this may not be the best way
-			quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(val)}}
-		case nil:
-			return
+			walk.quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(val)}}
 		}
-		buf.Push(quad)
-		open = false
-		quad = &api.NQuad{}
+		walk.push()
 	}
 
 	geop := func() error {
-		// verify that this is a geo object: should always have a "type" field
 		iter.AdvanceInto()
 		if t, _ := iter.String(); t != "type" {
 			return nil
 		}
+
 		iter.AdvanceInto()
 		geoType := ""
 		if geoType, _ = iter.String(); geoType != "Point" &&
@@ -661,7 +730,6 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 
 		for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
 			switch tag {
-
 			case simdjson.TagString:
 				s, _ := iter.String()
 				if s == "coordinates" {
@@ -684,107 +752,92 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 				coords = coords + "]"
 
 			case simdjson.TagObjectStart:
-				// TODO: this shouldn't happen, shouldn't be any nested objects
-				//       within a geo object (just a nested coordinates array)
 			case simdjson.TagObjectEnd:
+				// geojson.Geometry requires a json.RawMessage for its
+				// Coordinate so even though we've already "parsed" this
+				// json we convert it back for this
 				c := json.RawMessage(coords)
 				g := &geojson.Geometry{
 					Type:        "Point",
 					Coordinates: &c,
 				}
-
 				o, err := g.Decode()
 				if err != nil {
 					return err
 				}
-
 				v, err := types.ObjectValue(types.GeoID, o)
 				if err != nil {
 					return err
 				}
-
-				quad.ObjectValue = v
-				buf.Push(quad)
-				open = false
-				quad = &api.NQuad{}
-
+				walk.quad.ObjectValue = v
+				walk.push()
 				return nil
 			}
 		}
 	}
 
-	subject := getNextBlank()
+	subj := getNextBlank()
 
 	for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
 		switch tag {
 		case simdjson.TagString:
-			if !open {
-				open = true
-				quad.Subject = subject
-				quad.Predicate, _ = iter.String()
-				quad.Predicate, quad.Lang = x.PredicateLang(quad.Predicate)
+			if !walk.open {
+				walk.open = true
+				walk.quad.Subject = subj
+				walk.quad.Predicate, _ = iter.String()
+				walk.quad.Predicate, walk.quad.Lang = x.PredicateLang(walk.quad.Predicate)
 			} else {
 				stop(iter.String())
 			}
 
 		case simdjson.TagInteger:
-			if !open {
-			} else {
+			if walk.open {
 				stop(iter.Int())
 			}
 
 		case simdjson.TagUint:
-			if !open {
-			} else {
+			if walk.open {
 				stop(iter.Uint())
 			}
 
 		case simdjson.TagFloat:
-			if !open {
-			} else {
+			if walk.open {
 				stop(iter.Float())
 			}
 
 		case simdjson.TagBoolTrue:
 			fallthrough
 		case simdjson.TagBoolFalse:
-			if !open {
-			} else {
+			if walk.open {
 				stop(iter.Bool())
 			}
 
 		case simdjson.TagNull:
-			if !open {
-			} else {
-				stop(nil, nil)
+			if walk.open {
+				walk.open = false
+				walk.quad = &api.NQuad{}
 			}
 
 		case simdjson.TagObjectStart:
-			deep = append(deep, tag)
-			if len(deep) > 1 {
-				if err := geop(); err != nil {
-					return err
-				}
+			walk.deep = append(walk.deep, tag)
+			if len(walk.deep) > 1 {
+				geop()
 			}
 
 		case simdjson.TagObjectEnd:
-			deep = deep[:len(deep)-1]
+			walk.deep = walk.deep[:len(walk.deep)-1]
 
 		case simdjson.TagArrayStart:
-			deep = append(deep, tag)
+			walk.deep = append(walk.deep, tag)
 
 		case simdjson.TagArrayEnd:
-			deep = deep[:len(deep)-1]
+			walk.deep = walk.deep[:len(walk.deep)-1]
 
 		case simdjson.TagRoot:
 		case simdjson.TagEnd:
-			goto done
+			return nil
 		}
-
-		fmt.Println(tag, iter.PeekNextTag(), open, deep)
 	}
-
-done:
 	return nil
 }
 
@@ -794,6 +847,9 @@ done:
 //
 // going to keep this here until i'm done with simdjson and we decide which
 // path to take
+//
+// NOTE: it appears like jsoniter can't handle root-level arrays, like the Json4
+//       test--might be better to avoid this library
 func (buf *NQuadBuffer) TestParseJSON(b []byte, op int) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	buffer := bytes.NewBuffer(b)
