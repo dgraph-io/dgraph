@@ -58,6 +58,8 @@ func init() {
 	flag.StringP("output_data", "o", "sql.rdf", "The data output file")
 	flag.StringP("separator", "p", ".", "The separator for constructing predicate names")
 	flag.BoolP("quiet", "q", false, "Enable quiet mode to suppress the warning logs")
+	flag.StringP("host", "", "localhost", "The hostname or IP address of the database server.")
+	flag.StringP("port", "", "3306", "The port of the database server.")
 }
 
 func run(conf *viper.Viper) error {
@@ -67,6 +69,8 @@ func run(conf *viper.Viper) error {
 	tables := conf.GetString("tables")
 	schemaOutput := conf.GetString("output_schema")
 	dataOutput := conf.GetString("output_data")
+	host := conf.GetString("host")
+	port := conf.GetString("port")
 	quiet = conf.GetBool("quiet")
 	separator = conf.GetString("separator")
 
@@ -93,7 +97,7 @@ func run(conf *viper.Viper) error {
 
 	initDataTypes()
 
-	pool, err := getPool(user, db, password)
+	pool, err := getPool(host, port, user, password, db)
 	if err != nil {
 		return err
 	}

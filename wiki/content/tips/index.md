@@ -1,5 +1,9 @@
 +++
-title = "GraphQL+-: Tips and Tricks"
+title = "DQL: Tips and Tricks"
+[menu.main]
+  identifier = "tips"
+  parent = "dql"
+  weight = 5
 +++
 
 ## Get Sample Data
@@ -58,9 +62,9 @@ Use the `has` function among the value variables to search on non-indexed predic
 
 ## Sort edge by nested node values
 
-Dgraph [sorting]({{< relref "query-language/index.md#sorting" >}}) is based on a single
+Dgraph [sorting]({{< relref "query-language/sorting.md" >}}) is based on a single
 level of the subgraph. To sort a level by the values of a deeper level, use
-[query variables]({{ relref "query-language/index.md#query-variables" }}) to bring
+[query variables]({{< relref "query-language/query-variables.md" >}}) to bring
 nested values up to the level of the edge to be sorted.
 
 Example: Get all actors from a Steven Spielberg movie sorted alphabetically.
@@ -114,6 +118,28 @@ Example: Get all unique genres from all of the movies directed by Steven Spielbe
 
   q(func: uid(genres)) {
     name@.
+  }
+}
+{{< /runnable >}}
+
+## Usage of checkpwd boolean
+
+Store the result of `checkpwd` in a query variable and then match it against `1` (`checkpwd` is `true`) or `0` (`checkpwd` is `false`).
+
+{{< runnable >}}
+{  
+  exampleData(func: has(email)) {
+    uid
+    email
+    check as checkpwd(pass, "1bdfhJHb!fd")
+  }
+  userMatched(func: eq(val(check), 1)) {
+    uid
+    email
+  }
+  userIncorrect(func: eq(val(check), 0)) {
+    uid
+    email
   }
 }
 {{< /runnable >}}

@@ -24,22 +24,27 @@ import (
 	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
+	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
-	pstore           *badger.DB
-	workerServer     *grpc.Server
-	raftServer       conn.RaftServer
-	pendingProposals chan struct{}
+	pstore       *badger.DB
+	workerServer *grpc.Server
+	raftServer   conn.RaftServer
+
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
@@ -54,17 +59,33 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	pendingProposals = make(chan struct{}, x.WorkerConfig.NumPendingProposals)
-	workerServer = grpc.NewServer(
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
+	go limiter.bleed()
+
+	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+
+	if x.WorkerConfig.TLSServerConfig != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
+	}
+	workerServer = grpc.NewServer(grpcOpts...)
 }
 
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+}
+
+func (w *grpcWorker) Subscribe(
+	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
+	// Subscribe on given prefixes.
+	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+		return stream.Send(kvs)
+	}, req.GetPrefixes()...)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
@@ -97,9 +118,55 @@ func BlockingStop() {
 	glog.Infof("Stopping group...")
 	groups().closer.SignalAndWait()
 
+	// Update checkpoint so that proposals are not replayed after the server restarts.
+	glog.Infof("Updating RAFT state before shutting down...")
+	if err := groups().Node.updateRaftProgress(); err != nil {
+		glog.Warningf("Error while updating RAFT progress before shutdown: %v", err)
+	}
+
 	glog.Infof("Stopping node...")
 	groups().Node.closer.SignalAndWait()
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+}
+
+// UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
+func UpdateCacheMb(memoryMB int64) error {
+	glog.Infof("Updating cacheMb to %d", memoryMB)
+	if memoryMB < 0 {
+		return errors.Errorf("cache_mb must be non-negative")
+	}
+
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)
+	if err != nil {
+		return err
+	}
+	plCacheSize := (cachePercent[0] * (memoryMB << 20)) / 100
+	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
+	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
+
+	posting.UpdateMaxCost(plCacheSize)
+	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update block cache size")
+	}
+	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
+		return errors.Wrapf(err, "cannot update index cache size")
+	}
+	return nil
+}
+
+// UpdateLogRequest updates value of x.WorkerConfig.LogRequest.
+func UpdateLogRequest(val bool) {
+	if val {
+		atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
+		return
+	}
+
+	atomic.StoreInt32(&x.WorkerConfig.LogRequest, 0)
+}
+
+// LogRequestEnabled returns true if logging of requests is enabled otherwise false.
+func LogRequestEnabled() bool {
+	return atomic.LoadInt32(&x.WorkerConfig.LogRequest) > 0
 }

@@ -17,22 +17,24 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/badger/v2"
+	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -56,7 +58,7 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	}
 	pk, err := x.Parse(kvs[0].Key)
 	if err != nil {
-		return err
+		return errors.Errorf("while parsing KV: %+v, got error: %v", kvs[0], err)
 	}
 	return schema.Load(pk.Attr)
 }
@@ -68,14 +70,17 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	size := 0
 	var pk x.ParsedKey
 
-	for kvBatch := range kvs {
-		for _, kv := range kvBatch.Kv {
+	for kvPayload := range kvs {
+		buf := z.BufferFrom(kvPayload.GetData())
+		err := buf.SliceIterate(func(s []byte) error {
+			kv := &bpb.KV{}
+			x.Check(kv.Unmarshal(s))
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
 				pk, err = x.Parse(kv.Key)
 				if err != nil {
-					return err
+					return errors.Errorf("while parsing kv: %+v, got error: %v", kv, err)
 				}
 
 				if !pk.IsSchema() {
@@ -100,6 +105,10 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				proposal = &pb.Proposal{}
 				size = 0
 			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 	if size > 0 {
@@ -140,20 +149,29 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		che <- batchAndProposeKeyValues(ctx, kvs)
 	}()
 	for {
-		kvBatch, err := stream.Recv()
+		kvBuf, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
-			stream.SendAndClose(payload)
+			if err := stream.SendAndClose(payload); err != nil {
+				glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
+				return err
+			}
 			break
 		}
 		if err != nil {
 			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
-		count += len(kvBatch.Kv)
+		glog.V(2).Infof("Received batch of size: %s\n", humanize.IBytes(uint64(len(kvBuf.Data))))
+
+		buf := z.BufferFrom(kvBuf.Data)
+		buf.SliceIterate(func(_ []byte) error {
+			count++
+			return nil
+		})
 
 		select {
-		case kvs <- kvBatch:
+		case kvs <- kvBuf:
 		case <-ctx.Done():
 			close(kvs)
 			<-che
@@ -187,19 +205,28 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate
 	}
+
 	if in.DestGid == 0 {
 		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
-		p := &pb.Proposal{CleanPredicate: in.Predicate}
+		// Expected Checksum ensures that all the members of this group would block until they get
+		// the latest membership status where this predicate now belongs to another group. So they
+		// know that they are no longer serving this predicate, before they delete it from their
+		// state. Without this checksum, the members could end up deleting the predicate and then
+		// serve a request asking for that predicate, causing Jepsen failures.
+		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
-	if gid, err := groups().BelongsTo(in.Predicate); err != nil {
+
+	gid, err := groups().BelongsTo(in.Predicate)
+	switch {
+	case err != nil:
 		return &emptyPayload, err
-	} else if gid == 0 {
+	case gid == 0:
 		return &emptyPayload, errNonExistentTablet
-	} else if gid != groups().groupId() {
+	case gid != groups().groupId():
 		return &emptyPayload, errUnservedTablet
 	}
 
@@ -207,7 +234,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	err := movePredicateHelper(ctx, in)
+	err = movePredicateHelper(ctx, in)
 	if err != nil {
 		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
 	}
@@ -215,6 +242,15 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 }
 
 func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
+	// Note: Manish thinks it *should* be OK for a predicate receiver to not have to stop other
+	// operations like snapshots and rollups. Note that this is the sender. This should stop other
+	// operations.
+	closer, err := groups().Node.startTask(opPredMove)
+	if err != nil {
+		return errors.Wrapf(err, "unable to start task opPredMove")
+	}
+	defer closer.Done()
+
 	span := otrace.FromContext(ctx)
 
 	pl := groups().Leader(in.DestGid)
@@ -222,7 +258,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
 	}
 	c := pb.NewWorkerClient(pl.Get())
-	s, err := c.ReceivePredicate(ctx)
+	out, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "while calling ReceivePredicate")
 	}
@@ -235,25 +271,32 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	// Send schema first.
 	schemaKey := x.SchemaKey(in.Predicate)
 	item, err := txn.Get(schemaKey)
-	if err == badger.ErrKeyNotFound {
+	switch {
+	case err == badger.ErrKeyNotFound:
 		// The predicate along with the schema could have been deleted. In that case badger would
 		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	} else if err != nil {
+	case err != nil:
 		return err
-	} else {
+	default:
 		val, err := item.ValueCopy(nil)
 		if err != nil {
 			return err
 		}
-		kvs := &pb.KVS{}
+		buf := z.NewBuffer(1024)
+		defer buf.Release()
+
 		kv := &bpb.KV{}
 		kv.Key = schemaKey
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
-		kvs.Kv = append(kvs.Kv, kv)
-		if err := s.Send(kvs); err != nil {
-			return err
+		badger.KVToBuffer(kv, buf)
+
+		kvs := &pb.KVS{
+			Data: buf.Bytes(),
+		}
+		if err := out.Send(kvs); err != nil {
+			return errors.Errorf("while sending: %v", err)
 		}
 	}
 
@@ -270,22 +313,25 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kvs, err := l.Rollup()
+		kvs, err := l.Rollup(itr.Alloc)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
 		}
 		return &bpb.KVList{Kv: kvs}, err
 	}
-	stream.Send = func(list *bpb.KVList) error {
-		return s.Send(&pb.KVS{Kv: list.Kv})
+	stream.Send = func(buf *z.Buffer) error {
+		kvs := &pb.KVS{
+			Data: buf.Bytes(),
+		}
+		return out.Send(kvs)
 	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
-	if err := stream.Orchestrate(ctx); err != nil {
+	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 
-	payload, err := s.CloseAndRecv()
+	payload, err := out.CloseAndRecv()
 	if err != nil {
 		return err
 	}

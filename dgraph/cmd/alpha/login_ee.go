@@ -21,15 +21,12 @@ package alpha
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
-	"strconv"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"google.golang.org/grpc/peer"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,18 +34,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		// add remote addr as peer info so that the remote address can be logged inside Server.Login
-		if intPort, convErr := strconv.Atoi(port); convErr == nil {
-			ctx = peer.NewContext(ctx, &peer.Peer{
-				Addr: &net.TCPAddr{
-					IP:   net.ParseIP(ip),
-					Port: intPort,
-				},
-			})
-		}
-	}
+	// Pass in PoorMan's auth, IP information if present.
+	ctx := x.AttachRemoteIP(context.Background(), r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	body := readRequest(w, r)
 	loginReq := api.LoginRequest{}
@@ -80,7 +68,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := writeResponse(w, r, js); err != nil {
+	if _, err := x.WriteResponse(w, r, js); err != nil {
 		glog.Errorf("Error while writing response: %v", err)
 	}
 }

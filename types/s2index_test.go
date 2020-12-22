@@ -85,18 +85,6 @@ func TestIndexCellsPoint(t *testing.T) {
 	require.Equal(t, c.ToToken(), "808fb9f81")
 }
 
-func printCells(cu s2.CellUnion) {
-	for _, c := range cu {
-		cell := s2.CellFromCellID(c)
-		area := EarthArea(cell.ExactArea())
-		r := cell.RectBound()
-		top := r.Vertex(0).Distance(r.Vertex(1))
-		side := r.Vertex(1).Distance(r.Vertex(2))
-		fmt.Printf("Level: %d, Cell: %s, area: %s, boundary: %s x %s\n", c.Level(), c.ToToken(),
-			area, EarthDistance(top), EarthDistance(side))
-	}
-}
-
 func TestIndexCellsPolygon(t *testing.T) {
 	p, err := loadPolygon("testdata/zip.json")
 	require.NoError(t, err)
@@ -153,18 +141,6 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
 	require.Len(t, keys, 67)
-}
-
-func testCover(file string, max int) {
-	fmt.Printf("Testing %s with max %d\n", file, max)
-	p, err := loadPolygon(file)
-	if err != nil {
-		return
-	}
-	l, _ := loopFromPolygon(p.(*geom.Polygon))
-	cu := coverLoop(l, MinCellLevel, MaxCellLevel, max)
-	printCells(cu)
-	printCoverAccuracy(l, cu)
 }
 
 func printCoverAccuracy(l *s2.Loop, cu s2.CellUnion) {

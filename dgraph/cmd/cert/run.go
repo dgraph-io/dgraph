@@ -84,7 +84,7 @@ func run() error {
 		curve:   Cert.Conf.GetString("elliptic-curve"),
 	}
 
-	return createCerts(opt)
+	return createCerts(&opt)
 }
 
 // listCerts handles the subcommand of "dgraph cert ls".

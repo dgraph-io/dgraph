@@ -149,7 +149,7 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 
 	// Since our clockwise check was approximate, we check the cap and reverse if needed.
 	if l.CapBound().Radius().Degrees() > 90 {
-		l = loopFromRing(r, !reverse)
+		l.Invert()
 	}
 	return l, nil
 }

@@ -21,18 +21,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
-
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/counter"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/debuginfo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
+	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -73,7 +76,8 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &counter.Increment, &migrate.Migrate,
+	&debug.Debug, &increment.Increment, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
+	&raftmigrate.RaftMigrate,
 }
 
 func initCmds() {
@@ -127,11 +131,14 @@ func initCmds() {
 			x.CheckfNoTrace(os.Chdir(cwd))
 		}
 
-		cfg := rootConf.GetString("config")
-		if cfg == "" {
-			return
-		}
 		for _, sc := range subcommands {
+			// Set config file is provided for each subcommand, this is done
+			// for individual subcommand because each subcommand has its own config
+			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`.
+			cfg := sc.Conf.GetString("config")
+			if cfg == "" {
+				continue
+			}
 			sc.Conf.SetConfigFile(cfg)
 			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
 			setGlogFlags(sc.Conf)
@@ -152,18 +159,17 @@ func setGlogFlags(conf *viper.Viper) {
 	}
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
-		if stringValue, ok := conf.Get(gflag).(string); ok {
-			// Special handling for log_backtrace_at flag because the flag is of
-			// type tracelocation. The nil value for tracelocation type is
-			// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
-			// But we can't set nil value for the flag because of
-			// https://github.com/golang/glog/blob/master/glog.go#L374
-			// Skip setting value if log_backstrace_at is nil in config.
-			if gflag == "log_backtrace_at" && stringValue == ":0" {
-				continue
-			}
-			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
+		stringValue := conf.GetString(gflag)
+		// Special handling for log_backtrace_at flag because the flag is of
+		// type tracelocation. The nil value for tracelocation type is
+		// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
+		// But we can't set nil value for the flag because of
+		// https://github.com/golang/glog/blob/master/glog.go#L374
+		// Skip setting value if log_backstrace_at is nil in config.
+		if gflag == "log_backtrace_at" && (stringValue == "0" || stringValue == ":0") {
+			continue
 		}
+		x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 	}
 }
 

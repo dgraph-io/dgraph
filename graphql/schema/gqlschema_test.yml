@@ -1,0 +1,3104 @@
+invalid_schemas:
+  -
+    name: "More than 1 id field"
+    input: |
+      type P {
+        id1: ID!
+        id2: ID!
+        id3: ID!
+      }
+    errlist: [
+      {"message":"Fields id1, id2 and id3 are listed as IDs for type P, but a type can have only one ID field. Pick a single field as the ID for type P.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
+      {"message":"Type P; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.", "locations":[{"line":1, "column":6}]}
+    ]
+
+  - name: "Geo field with invalid argument in @search."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search(by: [int])
+      }
+    errlist: [
+      {"message":"Type Hotel; Field location: has the @search directive but the argument int doesn't apply to field type Point.  Search by int applies to fields of type Int. Fields of type Point are searchable by just @search.", "locations":[ { "line": 4, "column":20}]},
+    ]
+
+  -
+    name: "UID as a field name"
+    input: |
+      type P {
+        uid: String
+      }
+    errlist: [
+      {"message":"Type P; Field uid: uid is a reserved keyword and you cannot declare a field with this name.", "locations": [{"line":2, "column": 3}]},
+    ]
+
+  -
+    name: "Query, Mutation in initial schema"
+    input: |
+      type Query {
+        getAuthor(id: ID): Author!
+      }
+      type Mutation {
+        getAuthor(id: ID): Author!
+      }
+    errlist: [
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields
+      with @custom/@lambda directive. Other fields are built automatically for you. Found Query getAuthor
+      without @custom/@lambda.", "locations":[{"line":1, "column":6}]},
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields with
+      @custom/@lambda directive. Other fields are built automatically for you. Found Mutation getAuthor
+      without @custom/@lambda.", "locations":[{"line":4, "column":6}]},
+    ]
+
+  -
+    name: "No ID list of any kind"
+    input: |
+      type A {
+        f: [ID]
+        name: String
+      }
+    errlist: [
+      {"message": "Type A; Field f: ID lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+
+  -
+    name: "No nested list of any kind"
+    input: |
+      type A {
+        f: [[String]]
+      }
+    errlist: [
+      {"message": "Type A; Field f: Nested lists are invalid.", "locations": [{"line":2, "column": 3}]}
+    ]
+
+  -
+    name: "Enum indexes clash trigram and regexp"
+    input: |
+      type T {
+        f: E @search(by: [trigram, regexp])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the argument to @search 'trigram' is the same as the index 'regexp' provided before and shouldn't be used together",
+      "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "Enum indexes clash hash and exact"
+    input: |
+      type T {
+        f: E @search(by: [hash, exact])
+      }
+      enum E {
+        A
+      }
+    errlist: [
+      {"message": "Type T; Field f: the arguments 'hash' and 'exact' can't be used together as arguments to @search.", "locations": [{"line": 2, "column": 9}]}
+    ]
+
+  -
+    name: "Reference type that is not in input schema"
+    input: |
+      type T {
+          f: Author
+      }
+    errlist: [
+      {"message": "Undefined type Author.", "locations": [{"line": 2, "column": 8}]}
+    ]
+
+  -
+    name: "Unsupported definitions in initial schema"
+    input: |
+      scalar Int
+      interface P {
+        t: T!
+      }
+      union Q = R | S | T
+      input U {
+        x: X!
+      }
+    errlist: [
+    {"message":"You can't add scalar definitions. Only type, interface, union, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Interface"
+    input: |
+      interface I {
+        f: String
+      }
+      union U = I
+    errlist: [
+      {"message":"UNION type \"I\" must be OBJECT.", "locations":[{"line":4, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Scalar"
+    input: |
+      union U = String
+    errlist: [
+      {"message":"UNION type \"String\" must be OBJECT.", "locations":[{"line":1, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Enum"
+    input: |
+      enum E {
+        E1
+        E2
+      }
+      union U = E
+    errlist: [
+      {"message":"UNION type \"E\" must be OBJECT.", "locations":[{"line":5, "column":7}]}
+    ]
+
+  -
+    name: "union members can't be non-object types - Input Object"
+    input: |
+      input I {
+        f: String
+      }
+      union U = I
+    errlist: [
+      {"message":"UNION type \"I\" must be OBJECT.", "locations":[{"line":4, "column":7}]}
+    ]
+
+  -
+    name: "union can't be used with @dgraph(type: ...)"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @dgraph(type: "U") = X | Y
+    errlist: [
+      {"message":"Type U; has the @dgraph directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @withSubscription"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @withSubscription = X | Y
+    errlist: [
+      { "message": "Type U; has the @withSubscription directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @secret"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @secret(field: "f2") = X | Y
+    errlist: [
+      { "message": "Type U; has the @secret directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @auth"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U @auth(query: {}) = X | Y
+    errlist: [
+      { "message": "Type U; has the @auth directive, but it is not applicable on types of UNION kind.", "locations":[{"line":7, "column":10}]}
+    ]
+
+  -
+    name: "union can't be used with @hasInverse, @search, @id"
+    input: |
+      type X {
+        f1: String
+      }
+      type Y {
+        f2: Int
+      }
+      union U = X | Y
+      type Z {
+        f: U @hasInverse(field: "f1") @search @id
+      }
+    errlist: [
+      { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
+      { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
+      { "message": "Type Z; Field f: with @id directive must be of type String!, Int!, Int64! or Float!, not U", "locations": [{"line":9, "column":42}]}
+    ]
+
+  -
+    name: "Typename is reserved word"
+    input: |
+      type String {
+        id: ID!
+      }
+      type X {
+        f: Int
+      }
+      union Query = X
+      interface Mutation {
+        f: ID!
+      }
+      input Subscription {
+       name: String
+      }
+      enum uid {
+        E1
+        E2
+      }
+    errlist: [
+      {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
+      {"message":"Query is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":7, "column":7}]},
+      {"message":"Mutation is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":8, "column":11}]},
+      {"message":"Subscription is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":11, "column":7}]},
+      {"message":"uid is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":14, "column":6}]},
+    ]
+
+  - name: "Point is reserved word"
+    input: |
+      type Point {
+        id: ID!
+      }
+    errlist: [
+      { "message": "Point is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
+    ]
+
+  -
+    name: "More than 1 errors"
+    input: |
+      type X {
+        i1: ID!
+        i2: ID!
+        i3: ID!
+        l1: [X]!
+        l2: [ID]
+      }
+    errlist: [
+      {"message":"Fields i1, i2, i3 and l2 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}, {"line":6, "column": 3}]},
+      {"message": "Type X; Field l2: ID lists are invalid.", "locations": [{"line": 6, "column": 3}]}
+    ]
+
+  -
+    name: "Non linking inverse directive with correct field type"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author
+      }
+      type Author {
+        posts: [Post!]! @hasInverse(field: likedBy)
+      }
+    errlist: [
+      {"message": "Type Post; Field author: @hasInverse should be consistant. Post.author is the inverse of Author.posts, but Author.posts is the inverse of Post.likedBy.", "locations": [{"line": 2, "column": 20}]}
+    ]
+
+  -
+    name: "Multiple hasInverse to one field"
+    input: |
+      type Post {
+        author: Author! @hasInverse(field: "posts")
+        likedBy: Author @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
+      }
+    errlist: [
+      {"message": "Type Post; Field likedBy: @hasInverse should be consistant. Post.likedBy is the inverse of Author.posts, but Author.posts is the inverse of Post.author.", "locations": [{"line": 3, "column": 20}]}
+    ]
+
+  -
+    name: "Non linking inverse directives"
+    input: |
+      type X {
+        f1: P @hasInverse(field: "f1")
+        f2: String
+      }
+      type P {
+        f1: X @hasInverse(field: "f2")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse should be consistant. X.f1 is the inverse of P.f1, but P.f1 is the inverse of X.f2.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f1: @hasInverse is required to link the fields of same type, but the field f2 is of the type String instead of P. To link these make sure the fields are of the same type.", "locations":[{"line":6, "column":10}]},
+    ]
+
+  -
+    name: "Inverse Directive on non object field"
+    input: |
+      type X {
+        f1: String @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: Field f1 is of type String, but @hasInverse directive only applies to fields with object types.", "locations":[{"line":2, "column":3}]},
+    ]
+
+  -
+    name: "Inverse Directive doesn't have field argument"
+    input: |
+      type X {
+        f1: X @hasInverse
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse directive doesn't have field argument.", "locations":[{"line":2, "column":10}]},
+    ]
+
+  -
+    name: "hasInverse on non existing field"
+    input: |
+      type X {
+        f1: [P!]! @hasInverse(field: "f2")
+      }
+      type P  {
+        f1: String
+      }
+    errlist: [
+      {"message":"Type X; Field f1: inverse field f2 doesn't exist for type P.", "locations":[{"line":2, "column":14}]},
+    ]
+
+  -
+    name: "ID can't have the @search directive"
+    input: |
+      type X {
+        id: ID! @search
+        name: String
+      }
+      type Y {
+        id: ID! @search(by: [term])
+        name: String
+      }
+    errlist: [
+      {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
+      "locations":[{"line":2, "column":12}]},
+      {"message": "Type Y; Field id: has the @search directive but the argument term doesn't
+          apply to field type ID.  Search by term applies to fields of type String. Fields of type
+          ID can't have the @search directive.",
+      "locations":[{"line":6, "column":12}]}
+      ]
+
+  -
+    name: "Search will error on type that can't have the @search"
+    input: |
+      type X {
+        y: Y @search
+      }
+      type Y {
+        y: String
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but fields of type Y
+          can't have the @search directive.",
+      "locations":[{"line":2, "column":9}]}
+      ]
+
+  -
+    name: "Search (with arg) will error that can't have the @search"
+    input: |
+      type X {
+        y: Y @search(by: [term])
+      }
+      type Y {
+        y: String
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
+          apply to field type Y.  Search by term applies to fields of type String. Fields of
+          type Y can't have the @search directive.",
+      "locations":[{"line":2, "column":9}]}
+      ]
+
+  -
+    name: "Search with wrong arg with error on default search type"
+    input: |
+      type X {
+        y: Int @search(by: [term])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument term doesn't
+          apply to field type Int.  Search by term applies to fields of type String. Fields of
+          type Int are searchable by just @search.",
+      "locations":[{"line":2, "column":11}]}
+      ]
+
+  -
+    name: "Search with wrong arg (int) with error on default search type (Int64)"
+    input: |
+      type X {
+        y: Int64 @search(by: [int])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument int doesn't
+          apply to field type Int64.  Search by int applies to fields of type Int. Fields of
+          type Int64 are searchable by just @search.",
+       "locations":[{"line":2, "column":13}]}
+    ]
+
+  -
+    name: "Search with wrong arg with error on search type"
+    input: |
+      type X {
+        y: String @search(by: [day])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument day doesn't
+          apply to field type String.  Search by day applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with wrong arg for the index"
+    input: |
+      type X {
+        y: String @search(by: [hash, hour])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the @search directive but the argument hour doesn't
+          apply to field type String.  Search by hour applies to fields of type DateTime. Fields
+          of type String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search without []"
+    input: |
+      type X {
+        y: String @search(by: hash)
+      }
+    errlist: [
+      {"message": "Type X; Field y: the @search directive requires a list argument,
+          like @search(by: [hash])",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't allow hash and exact together"
+    input: |
+      type X {
+        y: String @search(by: [hash, exact])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the arguments 'hash' and 'exact' can't be
+          used together as arguments to @search.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search with multiple datetime index"
+    input: |
+      type X {
+        y: DateTime @search(by: [hour, month])
+      }
+    errlist: [
+      {"message": "Type X; Field y: has the search directive on DateTime. DateTime
+           allows only one argument for @search.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Search doesn't allow trigram and regexp together"
+    input: |
+      type X {
+        y: String @search(by: [trigram, regexp])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search 'trigram' is the same as
+          the index 'regexp' provided before and shouldn't be used together",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Search doesn't accept bogus args"
+    input: |
+      type X {
+        y: String @search(by: [bogus])
+      }
+    errlist: [
+      {"message": "Type X; Field y: the argument to @search bogus isn't valid.Fields of type
+          String can have @search by exact, fulltext, hash, regexp, term and trigram.",
+      "locations":[{"line":2, "column":14}]}
+      ]
+
+  -
+    name: "Type implements an interface which wasn't defined"
+    input: |
+      type X implements Y {
+        y: String
+      }
+    errlist: [
+      {"message": Undefined type "Y".,
+      "locations":[{"line":1, "column":6}]}
+      ]
+
+  -
+    name: "Type implements an interface with the field name repeated but different type"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+        id: String
+        y: String
+      }
+    errlist: [
+      {"message": "For type X to implement interface Y the field id must have type ID",
+      "locations":[{"line":4, "column":6}]}
+      ]
+
+  -
+    name: "Type implements an interface with no field of its own"
+    input: |
+      interface Y {
+        id: ID
+      }
+      type X implements Y {
+      }
+    errlist: [
+      {"message": "expected at least one definition, found }",
+      "locations":[{"line":5, "column":1}]}
+      ]
+
+  -
+    name: "Type implements from two interfaces where both have ID with different type"
+    input: |
+      interface X {
+        id: ID!
+      }
+      interface Y {
+        id: ID
+      }
+      type Z implements X & Y {
+        name: String
+      }
+    errlist: [
+      {"message": "field id is of type ID in interface Y and is of type ID! in interface X",
+      "locations":[{"line":7, "column":6}]}
+      ]
+
+  -
+    name: "List of Boolean is not allowed"
+    input: |
+      type X {
+        q: [Boolean]
+      }
+    errlist: [
+      {"message": "Type X; Field q: Boolean lists are invalid.",
+      "locations":[{"line":2, "column":3}]}
+      ]
+
+  -
+    name: "ID field can't have @dgraph directive"
+    input: |
+      type X {
+        id: ID @dgraph(pred: "X.id")
+        name: String
+      }
+    errlist: [
+      {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't
+          have the @dgraph directive.",
+      "locations":[{"line":2, "column":11}]}
+    ]
+
+  -
+    name: "Field with @id directive has wrong type"
+    input: |
+      type X {
+        f1: [String] @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not [String]",
+      "locations":[{"line":2, "column":17}]}
+      ]
+
+  -
+    name: "Field with @id directive should be mandatory"
+    input: |
+      type X {
+        f1: String @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not String",
+      "locations":[{"line":2, "column":15}]}
+      ]
+
+  -
+    name: "Field with multiple @id directives should not be allowed"
+    input: |
+      type X {
+        f1: String! @id
+        f2: String! @id
+      }
+    errlist: [
+      {"message": "Type X: fields f1 and f2 have the @id directive, but a type can
+        have only one field with @id. Pick a single field with @id for type X.",
+      "locations":[{"line":2, "column":3},{"line":3, "column":3}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(type: "f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with no argument on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should
+      not be empty.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument type on field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(pred: 2)
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument for @dgraph directive should be of type String.",
+      "locations":[{"line":2, "column":16}]}
+      ]
+
+  -
+    name: "Dgraph directive with wrong argument on type produces an error"
+    input: |
+      type X @dgraph(pred: "X") {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should not be empty.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+  -
+    name: "Dgraph directive with no argument on type produces an error"
+    input: |
+      type X @dgraph {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should not be empty.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+  -
+    name: "Dgraph directive with wrong argument type on type produces an error"
+    input: |
+      type X @dgraph(type: 2) {
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; type argument for @dgraph directive should of type String.",
+      "locations":[{"line":1, "column":9}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument on scalar field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(pred:"~movie")
+        f2: String! @dgraph(pred:"<~movie>")
+      }
+    errlist: [
+      {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":2, "column":3}]},
+      {"message": "Type X; Field f2 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":3, "column":3}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument on field without a corresponding reverse field is an error"
+    input: |
+      type Y {
+        g1: String!
+      }
+
+      type X {
+        f1: [Y!] @dgraph(pred:"~movie")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument: ~movie is not supported as forward edge doesn't exist for type Y.",
+      "locations":[{"line":6, "column":13}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1") @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse in forward direction
+      produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1") @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing an interface produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      type Y implements Person {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y or Person to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing multiple interfaces produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      interface Student {
+        ids: String! @id
+      }
+
+      type Y implements Person & Student {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y, Person or Student to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Field with a dgraph directive with reverse pred argument should be a list"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: X @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: with a dgraph directive that starts with ~ should be of type
+      list.",
+      "locations":[{"line":5, "column":10}]}
+    ]
+
+
+  -
+    name: "Empty field in secret directive"
+    input: |
+      type X @secret(field:""){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; Argument \"field\" of secret directive is empty",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "Multiple secret directive"
+    input: |
+      type X @secret(field:"password") @secret(field: "psss"){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; has more than one secret fields password,psss",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
+  - name: "Conflicting secret directive and field"
+    input: |
+      type X @secret(field:"f1"){
+        f1: String!
+      }
+    errlist: [
+    {"message": "Type X; has a secret directive and field of the same name f1",
+     "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "@dgraph(pred: ...) validation"
+    input: |
+      interface V {
+        f1: String @dgraph(pred: "ff1")
+      }
+      interface W @secret(field: "f", pred: "pwd") {
+        f2: String! @dgraph(pred: "name")
+        f3: [Float] @dgraph(pred: "val")
+        f4: String @dgraph(pred: "ff4")
+        f5: String @dgraph(pred: "ff1")
+      }
+      type X implements V & W {
+        f6: Y @dgraph(pred: "link")
+        f7: String! @dgraph(pred: "ff7") @id
+        f8: String
+        f9: String @dgraph(pred: "ff4")
+      }
+      type Y {
+        f2: Int @dgraph(pred: "name")
+        f3: Float @dgraph(pred: "val")
+        f6: X @dgraph(pred: "link")
+        f7: String @dgraph(pred: "ff7")
+        f8: Int @dgraph(pred: "X.f8")
+        f10: String @dgraph(pred: "pwd")
+      }
+    errlist: [
+    {"message": "Type X; implements interfaces [V W], all of which have fields with @dgraph predicate: ff1. These fields must use different Dgraph predicates.",
+     "locations":[{"line":10, "column":6}]},
+    {"message": "Type X; Field f9: has the @dgraph directive, which conflicts with interface W; field f4, that this type implements. These fields must use different Dgraph predicates.",
+     "locations":[{"line":14, "column":3}]},
+    {"message": "Type Y; Field f2: has type Int, which is different to type W; field f2, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":17, "column":3}]},
+    {"message": "Type Y; Field f3: has type Float, which is different to type W; field f3, which has the same @dgraph directive but type [Float]. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":18, "column":3}]},
+    {"message": "Type Y; Field f6: has type X, which is different to type X; field f6, which has the same @dgraph directive but type Y. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":19, "column":3}]},
+    {"message": "Type Y; Field f7: doesn't have @id directive, which conflicts with type X; field f7, which has the same @dgraph directive along with @id directive. Both these fields must either use @id directive, or use different Dgraph predicates.",
+     "locations":[{"line":20, "column":3}]},
+    {"message": "Type Y; Field f8: has type Int, which is different to type X; field f8, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":21, "column":3}]},
+    {"message": "Type Y; Field f10: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
+     "locations":[{"line":22, "column":3}]}]
+
+  - name: "user-defined types can't have same name as the types generated for other user-defined types or any inbuilt types"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+      input UpdateAuthorInput {
+        id: ID!
+        name: String
+      }
+      union U = Author
+      input URef {
+        id: ID!
+      }
+      type IntFilter {
+        name: String
+      }
+    errlist: [
+    {"message": "UpdateAuthorInput is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":5, "column":7}]},
+    {"message": "URef is a reserved word, so you can't declare a INPUT_OBJECT with this name. Pick a different name for the INPUT_OBJECT.", "locations":[{"line":10, "column":7}]},
+    {"message": "IntFilter is a reserved word, so you can't declare a OBJECT with this name. Pick a different name for the OBJECT.", "locations":[{"line":13, "column":6}]},
+    ]
+
+  - name: "@custom query can't have same name as the query generated for other types"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+    errlist: [
+    {"message": "getAuthor is a reserved word, so you can't declare a query with this name. Pick a different name for the query.",
+     "locations":[{"line":7, "column":3}]},
+    ]
+
+  - name: "@custom mutation can't have same name as the mutation generated for other types"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Mutation {
+        addAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+    errlist: [
+    {"message": "addAuthor is a reserved word, so you can't declare a mutation with this name. Pick a different name for the mutation.",
+     "locations":[{"line":7, "column":3}]},
+    ]
+
+  - name: "@custom directive with extra arguments"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
+     "locations":[{"line":7, "column":32}]},
+    {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
+    ]
+
+  - name: "@custom directive without http or dql argument"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor1: one of `http` or `dql` arguments must be present for @custom directive.",
+      "locations":[{"line":7, "column":32}]},
+    ]
+
+  - name: "@custom directive with both http and dql argument"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"},
+          dql: "{me(func: uid(0x1))}")
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
+     "locations":[{"line":7, "column":32}]},
+    ]
+
+  -
+    name: "@custom directive with dql on field"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Author; Field name: @custom directive with `dql` can be used only on
+      queries.",
+     "locations": [{"line": 4,"column": 25}]}
+    ]
+
+  -
+    name: "@custom directive with dql on mutation"
+    input: |
+      type Mutation {
+        customMutation: String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Mutation; Field customMutation: @custom directive with `dql` can be used only on queries.",
+     "locations": [{"line": 2,"column": 35}]}
+    ]
+
+  -
+    name: "@custom directive with invalid dql argument type"
+    input: |
+      type Query {
+        query1: String! @custom(dql: 5)
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: dql argument for @custom directive must be of type String.",
+     "locations": [{"line": 2,"column": 27}]}
+    ]
+
+  -
+    name: "@custom directive with empty dql argument value"
+    input: |
+      type Query {
+        query1: String! @custom(dql: "  ")
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: dql argument for @custom directive must not be empty.",
+     "locations": [{"line": 2,"column": 27}]}
+    ]
+
+  -
+    name: "@custom directive with dql having non scalar argument for query"
+    input: |
+      type Query {
+        query1(arg1: [String]): String! @custom(dql: """
+          query {
+            me(func: uid(0x1)) {
+              uid
+            }
+          }
+        """)
+      }
+    errlist: [
+    {"message": "Type Query; Field query1: Argument arg1: must be of a scalar type. @custom DQL queries accept only scalar arguments.",
+     "locations": [{"line": 2,"column": 43}]}
+    ]
+
+  -
+    name: "@custom directive with wrong url"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "123", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor1; url field inside @custom directive is invalid.",
+      "locations":[{"line":7, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive on a query with undefined parameter in path is not allowed"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/$idm", method: "GET"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; url path inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":7, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive on a query with null parameter in path is not allowed"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/$id", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor1; url path inside @custom directive uses an argument id that can be null.",
+      "locations":[{"line":7, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive on a query with undefined parameter in query is not allowed"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com?a=$idm", method: "GET"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; url query inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":7, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive with wrong value for method"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; method field inside @custom directive can only be GET/POST/PUT/PATCH/DELETE.",
+     "locations":[{"line":7, "column":82}]},
+    ]
+
+  -
+    name: "@custom directive with mode on Query/Mutation"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", mode: SINGLE})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; mode field inside @custom directive can't be present on Query/Mutation.",
+     "locations":[{"line":7, "column":94}]},
+    ]
+
+  -
+    name: "@custom directive with wrong value for mode"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Post {
+        id: ID!
+        name: String!
+        author: Author! @custom(http: {url: "http://google.com/", method: "GET", mode: RANDOM})
+      }
+    errlist: [
+    {"message": "Type Post; Field author; mode field inside @custom directive can only be SINGLE/BATCH.",
+     "locations":[{"line":9, "column":82}]},
+    ]
+
+  -
+    name: "@custom directive with url params for batch operation"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Post {
+        id: ID!
+        name: String!
+        author: Author! @custom(http: {
+          url: "http://google.com?a=$id",
+          method: "GET",
+          mode: BATCH})
+      }
+    errlist: [
+    {"message": "Type Post; Field author; has parameters in url inside @custom directive while mode is BATCH, url can't contain parameters if mode is BATCH.",
+     "locations":[{"line":10, "column":11}]},
+    ]
+
+  -
+    name: "@custom directive with url params and graphql together"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/?q=$id",
+          method: "POST",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; has parameters in url along with graphql field inside @custom directive, url can't contain parameters if graphql field is present.",
+     "locations":[{"line":7, "column":32}]},
+    ]
+
+
+  -
+    name: "@custom directive with non-POST method and graphql together"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "GET",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; has method GET while graphql field is also present inside @custom directive, method can only be POST if graphql field is present.",
+     "locations":[{"line":7, "column":32}]},
+    ]
+
+  -
+    name: "@custom directive with both body and graphql together"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          body: "{id: $id}",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; has both body and graphql field inside @custom directive, they can't be present together.",
+     "locations":[{"line":7, "column":32}]},
+    ]
+
+  -
+    name: "@custom directive with unparseable body"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          body: "{id: $id, name: name}",
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; body template inside @custom directive could not be parsed: found unexpected value: name",
+     "locations":[{"line":10, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive with undefined parameter in body"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          body: "{id: $idm}",
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; body template inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":10, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive with empty graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "   "
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 0 operations, it can have exactly one operation.",
+     "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with invalid graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getAuthor(id: $id) } garbage"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: unable to parse graphql in @custom directive because: Unexpected Name \"garbage\"",
+     "locations":[{"line":9, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with multiple operations in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getAuthor(id: $id) } query { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 operations, it can have exactly one operation.",
+     "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with non query/mutation operation"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "subscription ($id: ID!) { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found `subscription` operation, it can only have query/mutation.",
+     "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with operation name in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query opName ($id: ID!) { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with directives in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!) @test { getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with multiple fields in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) getUser(id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with alias for field in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "mutation ($id: ID!) { authors: getAuthor(id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with return type for field in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getAuthor(id: $id): Author! }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1: unable to parse graphql in @custom directive because: Expected Name, found :",
+     "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with directive on field in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) @test }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with selection set on field in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) { id } }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive with batch mode on field and invalid input format for query in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+      type Post {
+        id: ID!
+        author: Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          mode: BATCH,
+          graphql: "query { getAuthor(postId: {id: $id}) }",
+          body: "{id: $id}"
+        })
+        name: String
+      }
+    errlist: [
+    {
+      "message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
+    ]
+  -
+    name: "@custom directive not allowed on field of type ID!"
+    input: |
+      type Author {
+        id: ID! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+        name: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field id; custom directive not allowed on field of type ID! or field with @id directive.",
+      "locations": [
+      {
+        "line": 2,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id; @custom directive, body template must use fields defined within the type, found `foo`.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    }
+    ]
+
+  -
+    name: "@custom directive not allowed on field with @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+        bar: String
+      }
+    errlist: [
+    {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or field with @id directive.",
+     "locations":[{"line":3, "column":22}]},
+    ]
+
+  -
+    name: "@custom directive on field where body required itself"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $name, id: $id }"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't use another field with @custom/@lambda directive, found field `name` with @custom/@lambda.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
+    ]
+
+  -
+    name: "@custom directive on field where body uses undefined field"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc }"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
+    ]
+
+  -
+    name: "@custom directive on field where body doesn't use scalar field"
+    input: |
+      type Note {
+        test: String!
+      }
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: Note
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          body: "{ id: $id, abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field `foo` of type `Note`.",
+     "locations":[{"line":11, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          body: "{ id: $id, abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, body template can't use another field with @custom/@lambda directive, found field `foo` with @custom/@lambda.",
+     "locations":[{"line":12, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive in body"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+     "locations":[{"line":8, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql required itself"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!, $name: String!) { getName(abc: $name, id: $id) }"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't use another field with @custom/@lambda directive, found field `name` with @custom/@lambda.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses undefined field for single mode"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!, $abc: String!) { getName(obj: [{abc: $abc}], id: $id) }"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses undefined field for batch mode"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          mode: BATCH,
+          graphql: "query ($abc: [AuthorInput]) { getName(obj: $abc) }"
+          body: "{abc: $abc, id: $id}"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 12
+      }
+      ]
+    },
+    ]
+  -
+    name: "@custom directive on field where graphql doesn't use scalar field"
+    input: |
+      type Note {
+        test: String!
+      }
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: Note
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!, $foo: Note) { getName(abc: $foo, id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!, $foo: String!) { getName(abc: $foo, id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom/@lambda directive, found field `foo` with @custom/@lambda.",
+      "locations": [
+      {
+        "line": 12,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($foo: String) { getName(abc: $foo) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field where type doesn't have id field"
+    input: |
+      type Author {
+        foo: String!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc, jam: $foo }"
+        })
+        bar: String
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive is only allowed on fields where the type definition has a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 3,
+        "column": 18
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
+    ]
+
+  -
+    name: "@custom directive not allowed along with @search directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @search @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+        bar: String
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @search directive.",
+          "locations":[{"line":3, "column":26}]},
+        ]
+
+  -
+    name: "@custom directive not allowed along with @dgraph directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @dgraph(pred: "foo") @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+        bar: String
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @dgraph directive.",
+          "locations":[{"line":3, "column":39}]},
+        ]
+
+  -
+    name: "@custom directive on a field in a type, only defined fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com/$fooz/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    }
+    ]
+
+  -
+    name: "@custom directive on a field in a type, only mandatory fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        foo: String
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com/$foo/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    }
+    ]
+  -
+    name: "@custom directive with variable definitions in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      type Query {
+        getAuthors(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($input: [UserInput]) { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on a field in a type, should only use fields defined in the type as GraphQL variables"
+    input: |
+      type Author {
+        id: ID!
+        foo: String!
+        bar: Int!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query ($fooz: String) { getUsers(foo: $fooz) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    ]
+  -
+    name: "@custom directive on a field in a type, should only use scalar fields as GraphQL variables"
+    input: |
+      type Car {
+        id: ID!
+        make: String!
+      }
+      type Author {
+        id: ID!
+        foo: String!
+        bar: Int!
+        car: Car
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query ($car: Car) { getUsers(foo: $car) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on a field in a type, only defined fields allowed in url query"
+    input: |
+      type Author {
+        id: ID!
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com?a=$fooz&b=$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; url query inside @custom directive uses a field fooz that is not defined.",
+     "locations":[{"line":5, "column":11}]},
+    ]
+
+  - name: "@auth directive on field"
+    input: |
+      type X {
+        username: String! @id @auth(query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}" })
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Directive auth is not applicable on FIELD_DEFINITION.",
+     "locations":[{"line":2, "column":26}]},
+    ]
+
+  - name: "@auth and @remote directive on type"
+    input: |
+      type Class @remote @auth(query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"}) {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type Class; cannot have both @auth and @remote directive",
+     "locations":[{"line":1, "column":6}]},
+    ]
+
+  - name: "@withSubscription and @remote directive on type"
+    input: |
+      type Class @withSubscription @remote  {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type Class; cannot have both @withSubscription and @remote directive",
+     "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!) { getName(obj: [{abc: $age}], id: $id) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on query where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      type Query {
+        getAuthors(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on mutation where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      input AuthorInput {
+        age: Int!
+      }
+
+      type Mutation {
+        setCountry1(input: [AuthorInput]): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 14,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "@custom directive on field with batch mode where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com"
+          method: "POST"
+          graphql: "query($id: ID!) { getName(obj: $input) }"
+          mode: BATCH
+          body: "{ id: $id, age: $age }"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "invalid value for skip introspection"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com"
+          method: "POST"
+          graphql: "query($id: ID!) { getName(id: $id) }"
+          mode: SINGLE
+          skipIntrospection: "random"
+        })
+      }
+    errlist: [
+    {
+      "message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    ]
+
+  -
+    name: "type can't just have ID! type field"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+    errlist: [
+      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.",
+        "locations":[{"line":1, "column":6}]},
+      ]
+
+  -
+    name: "types must have field which is not of ID! type and doesn't have @custom directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }",
+          skipIntrospection: true
+        })
+      }
+    errlist: [
+      {"message": "Type Author; is invalid, a type must have atleast one field that is not of ID! type and doesn't have @custom/@lambda directive.",
+        "locations":[{"line":1, "column":6}]},
+      ]
+
+  - name: "There shoudnt be any reserved arguments on any field"
+    input: |
+      type T {
+        f(first: Int): String
+      }
+    errlist: [
+    {"message": "Type T; Field f: can't have first as an argument because it is a reserved argument.", "locations": [{"line": 2, "column": 3}]}]
+
+  - name: "remote type with @custom directives on fields shouldn't be allowed."
+    description: "Remote types are not resolved further currently, hence they shouldn't have
+    fields with @custom directive on them."
+    input: |
+      type User {
+        id: ID!
+        name: String!
+      }
+
+      type School @remote {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type School; field name; can't have @custom/@lambda directive as a @remote
+     type can't have fields with @custom/@lambda directive.", "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a non-remote type can't have fields which are of remote type"
+    description: "This is disallowed because we don't generate UserRef etc., so we can't
+    allow adding/updating user from author."
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!]
+      }
+    errlist: [
+    {"message": "Type Author; field neighbour; is of a type that has @remote directive. Those
+    would need to be resolved by a @custom/@lambda directive.",
+     "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a remote type can't implement a non-remote interface"
+    description: "Since we won't be adding/update the remote type, it wouldn't show up in
+    getPerson, queryPerson etc., hence causing confusion."
+    input: |
+      interface Person {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; with @remote directive implements interface Person; which doesn't have
+     @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+  -
+    name: "non-remote type can't implement a remote type"
+    description: "Dgraph schema generation and possibly the way we do field mapping would have to
+     be re-worked to make this work correctly."
+    input: |
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; without @remote directive can't implement an interface Person; with
+     have @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+  - name: "ID field can't have @dgraph directive and @search directive"
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id") @search
+          name: String
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't
+          have the @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
+     "locations":[{"line":2, "column":35}]}
+    ]
+
+  - name: "@dgraph directive on ID field and @dgraph directive with reverse pred argument on scalar
+  field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+    only applies to fields with object types.",
+     "locations":[{"line":3, "column":5}]}
+    ]
+
+  - name: "Multiple type: @dgraph directive on ID field and @dgraph directive with reverse pred
+  argument on scalar field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          name: String
+      }
+      type Y {
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only
+     applies to fields with object types.",
+     "locations":[{"line":6, "column":5}]}
+    ]
+
+  -
+    name: "as is reserved keyword - type Name"
+    input: |
+      type As {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "As is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations": [ { "line": 1, "column": 6 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name"
+    input: |
+      type X {
+        as: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; Field as: as is a reserved keyword and you cannot declare a field with this name.", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
+  - name: "as is reserved keyword - type name using @dgraph directive"
+    input: |
+      type X @dgraph(type:"as") {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type X; type argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 1, "column": 9 } ] },
+    ]
+
+  - name: "as is reserved keyword - field name using @dgraph directive"
+    input: |
+      type X {
+        id: ID!
+        name: String @dgraph(pred:"as")
+      }
+    errlist: [
+      { "message": "Type X; Field name: pred argument 'as' for @dgraph directive is a reserved keyword.", "locations": [ { "line": 3, "column": 17 } ] },
+    ]
+
+  - name: "field type mismatched between implementation and interface"
+    input: |
+      interface I1 {
+          name: String!
+        }
+      type I3 implements I1 {
+          name:String
+        }
+    errlist: [
+        { "message": "For type I3 to implement interface I1 the field name must have type String!", "locations": [ { "line": 4, "column": 6 } ] },
+      ]
+
+  - name: "Type implements multiple interfaces with same field name"
+    input: |
+      interface I1 {
+          name: String!
+        }
+      interface I2 {
+          name: String!
+        }
+      type I3 implements I1 & I2 {
+          name:String!
+        }
+    errlist: [
+          { "message": "Field I3.name can only be defined once.", "locations": [ { "line": 2, "column": 5 } ] },
+          ]
+
+
+valid_schemas:
+  - name: "Type implements from two interfaces where both have ID"
+    input: |
+      interface X {
+          id: ID
+        }
+      interface Y {
+          id: ID
+        }
+      type Z implements X & Y {
+          name: String
+        }
+
+  - name: "Type implements an interface with the field definition repeated"
+    input: |
+      interface Y {
+        id: ID
+        name:String
+      }
+      type X implements Y {
+        id: ID
+        name:String
+        y: String
+      }
+
+  - name: "schema with union"
+    input: |
+      interface W {
+        f1: ID!
+      }
+      type X implements W {
+        f2: String
+      }
+      type Y implements W {
+        f3: Int
+      }
+      type Z {
+        f4: Float
+      }
+      union P @remote = X | Y
+      union U = X | Y | Z
+      type V {
+        id: ID!
+        data: [U!]! @dgraph(pred: "data")
+      }
+
+  - name: "@auth on interface implementation"
+    input: |
+      interface X {
+        username: String! @id
+        age: Int
+      }
+      type Y implements X @auth(
+      query: { rule: """
+                 query($USER: String!) {
+                     queryY(filter: { username: { eq: $USER } }) {
+                        __typename
+                     }
+                 }
+                 """ }
+      ){
+        userRole: String @search(by: [hash])
+      }
+
+  -
+    name: "hasInverse directive on singleton"
+    input: |
+      type X {
+        f1: Y @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 1"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive from list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author!
+      }
+
+      type Author {
+        posts: [Post!]! @hasInverse(field: "author")
+      }
+  -
+    name: "hasInverse directive to list type"
+    input: |
+      type Post {
+        postId: ID!
+        author: Author! @hasInverse(field: "posts")
+      }
+
+      type Author {
+        posts: [Post!]!
+      }
+
+  -
+    name: "hasInverse directive on list type 2"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @hasInverse(field: "f1")
+      }
+
+  -
+    name: "Correct search types"
+    input: |
+      type X {
+        int1: Int @search
+        int2: Int @search(by: [int])
+        int3: Int @search(by: [])
+        int64_1: Int64 @search
+        int64_2: Int64 @search(by: [int64])
+        int64_3: Int64 @search(by: [])
+        float1: Float @search
+        float2: Float @search(by: [float])
+        float3: Float @search(by: [])
+        bool1: Boolean @search
+        bool2: Boolean @search(by: [bool])
+        bool3: Boolean @search(by: [])
+        str: String @search
+        str2: String @search(by: [])
+        strHash: String @search(by: [hash])
+        strExact: String @search(by: [exact])
+        strTerm: String @search(by: [term])
+        strFulltext: String @search(by: [fulltext])
+        strTrigram: String @search(by: [trigram])
+        strRegexp: String @search(by: [regexp])
+        strRegexpFulltext: String @search(by: [regexp, fulltext])
+        strMultipleIndex: String @search(by: [trigram, hash, term, fulltext])
+        dt: DateTime @search
+        dt2: DateTime @search(by: [])
+        dtYear: DateTime @search(by: [year])
+        dtMonth: DateTime @search(by: [month])
+        dtDay: DateTime @search(by: [day])
+        dtHour: DateTime @search(by: [hour])
+        enumFld: E @search
+        req: String! @search(by: [term])
+        list: [Int] @search
+        reqList: [DateTime!]! @search
+      }
+      enum E {
+        A
+      }
+
+  -
+    name: "dgraph directive with correct reverse field works"
+    input: |
+      type X {
+        id: ID!
+        name: String
+        f1: [Y] @dgraph(pred: "~f1")
+      }
+      type Y {
+        id: ID!
+        name: String
+        f1: [X] @dgraph(pred: "f1")
+      }
+
+  -
+    name: "@dgraph predicate type validation gives no errors with non-null variations"
+    input: |
+      type X {
+        f1: String @dgraph(pred: "f1")
+        f2: [String] @dgraph(pred: "f2")
+        f3: [String!] @dgraph(pred: "f3")
+        f4: [String]! @dgraph(pred: "f4")
+        f5: String
+        f6: String @dgraph(pred: "<职业>")
+      }
+      type Y {
+        f1: String! @dgraph(pred: "f1")
+        f2: [String!] @dgraph(pred: "f2")
+        f3: [String]! @dgraph(pred: "f3")
+        f4: [String!]! @dgraph(pred: "f4")
+        f5: String @dgraph(pred: "X.f5")
+        f6: String @dgraph(pred: "<职业>")
+      }
+
+  -
+    name: "initial schema with @custom directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+      input AuthorUpdate {
+        id: ID!
+      }
+      type Country {
+        country_code: String! @id
+        authors: [Author] @custom(http: {
+             url: "http://blah.com",
+             method: "POST"
+             graphql: "query ($input: [AuthorInput]) { authors(input: $input) }"
+             body: "{country_code: $country_code, version: ONE}"
+             mode: BATCH
+             skipIntrospection: true
+        })
+      }
+
+      type Query {
+        getMyAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+        getAuthorsForCountry(country_code: String!): [Author] @custom(http: {
+            url: "http://blah.com"
+            method: "POST"
+            body: "{country_code: $country_code, version: 1, tag: \"temp\"}"
+        })
+      }
+      type Mutation {
+        updateMyAuthor(input: AuthorUpdate!): Author! @custom(http: {url: "http://blah.com",
+      method: "POST"})
+      }
+
+  - name: "Schema with @custom directives on fields."
+    input: |
+      type Class @remote {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+        classes: [Class] @custom(http: {
+                  url: "http://mock:8888/classes",
+                  method: "POST",
+                  body: "{sid: $id}"
+                })
+      }
+
+  -
+    name: "Schema with @custom directives on field where body requires field with @id directive."
+    input: |
+      type Class @remote {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        established: String! @id
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames",
+                method: "POST",
+                body: "{sid: $established}"
+                })
+        classes: [Class] @custom(http: {
+                  url: "http://mock:8888/classes",
+                  method: "POST",
+                  body: "{sid: $established}"
+                })
+      }
+
+  -
+    name: "@custom directive with variable definitions in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
+          skipIntrospection: true
+        })
+      }
+
+  -
+    name: "@custom directive with correct dql"
+    input: |
+      type Tweets {
+          id: ID!
+          text: String! @search(by: [fulltext])
+          user: User
+          timestamp: DateTime! @search
+      }
+      type User {
+          screen_name: String! @id
+          name: String
+          followers: Int @search
+          tweets: [Tweets] @hasInverse(field: user)
+      }
+      type Query {
+        tweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+          query t($search: string) {
+              var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+                  Tweets.user {
+                      followers as User.followers
+                  }
+                  userFollowerCount as sum(val(followers))
+              }
+              tweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
+                  id: uid
+                  text: Tweets.text
+                  timestamp: Tweets.timestamp
+              }
+          }
+      	""")
+      }
+
+  -
+    name: "remote type can use other types which are dgraph types"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+        author: Author
+      }
+
+      type Author {
+          id: ID!
+          age: Int!
+      }
+
+  -
+    name: "remote type can implement a remote type"
+    input: |
+      type Car {
+        id: ID!
+        name: String!
+      }
+
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+
+
+  -
+    name: "a non-remote type can have fields which are of remote type if they have @custom
+     directive"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!] @custom(http: {
+          url: "http://mock:8888/neighbour",
+          method: "POST",
+          body: "{sid: $id}"
+          })
+      }
+
+  -
+    name: "dgraph directive with reverse edges should work with interfaces"
+    input: |
+      type Object {
+        id: ID!
+        name: String
+        ownedBy: Person @dgraph(pred: "Object.owner")
+      }
+
+      type BusinessMan implements Person {
+        companyName: String
+      }
+
+      interface Person {
+        id: ID!
+        name: String
+        owns: [Object] @dgraph(pred: "~Object.owner")
+      }
+
+  - name: "@custom getAuthor query is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+
+  - name: "@custom addAuthor mutation is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type Mutation {
+        addAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+
+  - name: "UpdateAuthorInput is allowed if Author is of remote type"
+    input: |
+      type Author @remote {
+        id: ID!
+        name: String
+      }
+
+      type User {
+        id: ID!
+        name: String
+      }
+
+      input UpdateAuthorInput {
+        id: ID!
+        name: String
+      }

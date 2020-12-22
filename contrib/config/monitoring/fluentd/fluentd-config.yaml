@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config-dgraph-io
+  namespace: default
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+data:
+  containers.input.conf: |-
+    <source>
+      @id fluentd-containers.log
+      @type tail
+      path /var/log/containers/dgraph*.log
+      pos_file /var/log/containers.log.pos
+
+      tag dgraph.*
+      read_from_head true
+
+      <parse>
+        @type regexp
+
+        expression /^(?<time>.+) (?<stream>stdout|stderr) [^ ]* (?<log>.*)$/
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    <filter dgraph.**>
+      @type parser
+      key_name log
+
+      <parse>
+        @type regexp
+        expression /^(?<severity>[IWECF])(?<time>\d{4} \d{2}:\d{2}:\d{2}\.\d{6}) +(?<thread>\d+) (?<src_file>[^:]+):(?<src_line>\d+)\] (?<message>(?:.|\n)*)$/
+        time_format %m%d %H:%M:%S.%L
+      </parse>
+
+      reserve_data true
+    </filter>
+
+    <filter dgraph.**>
+      @type record_transformer
+      enable_ruby true
+
+      <record>
+        severity ${ if (record["severity"] == "E") then "Error" elsif (record["severity"] == "W") then "Warning" elsif (record["severity"] == "I") then "Info" elsif (record["severity"] == "D") then "Debug" else record["severity"] end}
+        tag ${tag}
+      </record>
+    </filter>
+
+    # Add your log injector and management pipeline here.
+    <match dgraph.**>
+      @type elasticsearch
+
+      logstash_format true
+      include_tag_key true
+
+      host "#{ENV['FLUENT_ELASTICSEARCH_HOST']}"
+      port "#{ENV['FLUENT_ELASTICSEARCH_PORT']}"
+      scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME'] || 'http'}"
+      user "#{ENV['FLUENT_ELASTICSEARCH_USER']}"
+      password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
+    </match>

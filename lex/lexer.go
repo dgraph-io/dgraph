@@ -56,8 +56,7 @@ func (i Item) Errorf(format string, args ...interface{}) error {
 }
 
 func (i Item) String() string {
-	switch i.Typ {
-	case ItemEOF:
+	if i.Typ == ItemEOF {
 		return "EOF"
 	}
 	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.line, i.column)

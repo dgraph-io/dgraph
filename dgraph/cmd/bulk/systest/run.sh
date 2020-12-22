@@ -31,13 +31,13 @@ for suite in $script_dir/suite*; do
 	sleep 2
 
 	pushd dg >/dev/null
-	$(go env GOPATH)/bin/dgraph -peer localhost:8888 -lru_mb=1024 >/dev/null 2>&1 &
+	$(go env GOPATH)/bin/dgraph -peer localhost:8888 >/dev/null 2>&1 &
 	dgPid=$!
 	popd >/dev/null
 	sleep 2
 
 	popd >/dev/null # out of tmp
-	result=$(curl --silent -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d @$suite/query.json)
+	result=$(curl --silent -H "Content-Type: application/dql" localhost:8080/query -XPOST -d @$suite/query.json)
 	if ! $(jq --argfile a <(echo $result) --argfile b $suite/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b')
 	then
 		echo "Actual result doesn't match expected result:"

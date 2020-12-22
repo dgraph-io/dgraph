@@ -1,0 +1,31 @@
+# Create an Alertmanager resource to be managed by prometheus-operator.
+# This creates a new alertmanager cluster with 3 replicas.
+#
+# Create an alertmanager config using the below command:
+# kubectl create secret generic alertmanager-alertmanager-dgraph-io --from-file=alertmanager.yaml=alertmanager-config.yaml
+# Make sure the name of secret is of the form alertmanager-{ALERTMANAGER_NAME}
+apiVersion: monitoring.coreos.com/v1
+kind: Alertmanager
+metadata:
+  name: alertmanager-dgraph-io
+  labels:
+    app: dgraph-io
+spec:
+  replicas: 1
+  logLevel: debug
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-dgraph-io
+  labels:
+    app: dgraph-io
+spec:
+  type: ClusterIP
+  ports:
+  - name: web
+    port: 9093
+    protocol: TCP
+    targetPort: web
+  selector:
+    alertmanager: alertmanager-dgraph-io

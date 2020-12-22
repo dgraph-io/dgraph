@@ -1,0 +1,333 @@
+-
+  name: "custom query"
+  type: "query"
+  gqlschema: |
+    type Country @remote {
+        code: String
+        name: String
+    }
+
+    type Query {
+      getCountry1(id: ID!): Country! @custom(http: {
+          url: "http://google.com/validcountry",
+          method: "POST",
+          forwardHeaders: ["Content-Type"],
+          graphql: "query($id: ID!) { country(code: $id) }",
+          skipIntrospection: true
+      })
+    }
+  gqlquery: |
+    query {
+      getCountry1(id: "0x1") {
+        name
+        code
+      }
+    }
+  remoteschema: |
+    type Country @remote {
+      code: String
+      name: String
+    }
+
+    type Query {
+      country(code: ID!): Country! @custom(http: {
+        url: "http://google.com/validcountry",
+        method: "POST",
+        graphql: "query($code: ID!) { country(code: $code) }",
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($id: ID!) { country(code: $id) {
+    name
+    code
+    }}
+  remotevariables: |-
+    { "id": "0x1" }
+
+-
+  name: "custom query with arguments on fields"
+  type: "query"
+  gqlschema: |
+    input ExactFilter {
+      eq: String
+    }
+
+    input MyFilter {
+      ids: ID
+      name: ExactFilter
+    }
+
+    type Country @remote {
+        code(first: Int!, filter: MyFilter): String
+        name: String
+    }
+
+    type Query {
+      getCountry1(id: ID!): Country! @custom(http: {
+          url: "http://google.com/validcountry",
+          method: "POST",
+          forwardHeaders: ["Content-Type"],
+          graphql: "query($id: ID!) { country(code: $id) }",
+          skipIntrospection: true
+      })
+    }
+  gqlquery: |
+    query {
+      getCountry1(id: "0x1") {
+        name
+        code(first: 10, filter: {ids: "0x123", name: { eq: "github" }})
+      }
+    }
+  remoteschema: |
+    input ExactFilter {
+      eq: String
+    }
+
+    input MyFilter {
+      ids: ID
+      name: ExactFilter
+    }
+
+    type Country @remote {
+      code(first: Int!, filter: MyFilter): String
+      name: String
+    }
+
+    type Query {
+      country(code: ID!): Country! @custom(http: {
+        url: "http://google.com/validcountry",
+        method: "POST",
+        graphql: "query($code: ID!) { country(code: $code) }",
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($id: ID!) { country(code: $id) {
+    name
+    code(first: 10, filter: {ids:"0x123",name:{eq:"github"}})
+    }}
+  remotevariables: |-
+    { "id": "0x1" }
+
+-
+  name: "custom mutation with arguments on field"
+  type: "mutation"
+  gqlschema: |
+    input ExactFilter {
+      eq: String
+    }
+
+    input MyFilter {
+      ids: ID
+      name: ExactFilter
+    }
+
+    type Country @remote {
+      code(get: Int!, choose: MyFilter): String
+      name: String
+      states: [State]
+      std: Int
+    }
+
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
+
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
+
+    input StateInput {
+        code: String!
+        name: String!
+    }
+
+    type Mutation {
+      addCountry1(input: CountryInput!): Country! @custom(http: {
+        url: "http://mock:8888/setCountry",
+        method: "POST",
+        skipIntrospection: true,
+        graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
+      })
+    }
+  gqlquery: |
+    mutation addCountry1($input: CountryInput!) {
+      addCountry1(input: $input) {
+        code(get: 10, choose: {ids: "0x123", name: { eq: "github" }})
+        name
+        states {
+          code
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "IN",
+        "name": "India",
+        "states": [
+          {
+            "code": "RJ",
+            "name": "Rajasthan"
+          },
+          {
+            "code": "KA",
+            "name": "Karnataka"
+          }
+        ]
+      }
+    }
+  remoteschema: |
+    input ExactFilter {
+      eq: String
+    }
+
+    input MyFilter {
+      ids: ID
+      name: ExactFilter
+    }
+
+    type Country {
+      code(get: Int!, choose: MyFilter): String
+      name: String
+      states: [State]
+      std: Int
+    }
+
+    type State {
+      code: String
+      name: String
+      country: Country
+    }
+
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
+
+    input StateInput {
+      code: String!
+      name: String!
+    }
+
+    type Mutation {
+      setCountry(country: CountryInput!): Country!  @custom(http: {
+        url: "http://mock:8888/setCountry",
+        method: "POST",
+        skipIntrospection: true,
+        graphql: "mutation($country: CountryInput!) { setCountry(country: $country) }"
+      })
+    }
+  remotequery: |-
+    mutation($input: CountryInput!) { setCountry(country: $input) {
+    code(get: 10, choose: {ids:"0x123",name:{eq:"github"}})
+    name
+    states{
+    code
+    name
+    }
+    }}
+  remotevariables: |
+    { "input":
+      {
+        "code": "IN",
+        "name": "India",
+        "states": [
+          {
+            "code": "RJ",
+            "name": "Rajasthan"
+          },
+          {
+            "code": "KA",
+            "name": "Karnataka"
+          }
+        ]
+      }
+    }
+
+-
+  name: "custom field single mode"
+  type: "field"
+  gqlschema: |
+    type User {
+      id: ID!
+      age: Float!
+      name: String @custom(
+        http: {
+          url: "http://mock:8888/gqlUserName"
+          method: "POST"
+          mode: SINGLE
+          graphql: "query($id: ID!, $age: Float!) { userName(id: $id, age: $age)}"
+          skipIntrospection: true
+        }
+      )
+    }
+  gqlquery: |
+    query {
+      queryUser {
+        name
+      }
+    }
+  remoteschema: |
+    type Query {
+      userName(id: ID!, age: Float!): String @custom(http: {
+        url: "http://google.com/validcountry"
+        method: "POST"
+        graphql: "query($id: ID!) { blah(code: $id) }"
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($id: ID!, $age: Float!) { userName(id: $id, age: $age)}
+  inputvariables: |-
+    { "id": "0x2", "age": 10 }
+
+-
+  name: "custom field batch mode"
+  type: "field"
+  gqlschema: |
+    type User {
+      id: ID!
+      age: String!
+      name: String @custom(
+        http: {
+          url: "http://mock:8888/gqlUserName"
+          method: "POST"
+          mode: BATCH
+          graphql: "query($random: [UserInput]) { userName(random: $random)}",
+          body: "{id: $id, age: $age}"
+          skipIntrospection: true
+        }
+      )
+    }
+  gqlquery: |
+    query {
+      queryUser {
+        name
+      }
+    }
+  remoteschema: |
+    input UserInput {
+      id: ID!
+      age: String!
+    }
+
+    type Query {
+      userName(id: ID,random: [UserInput]): String @custom(http: {
+        url: "http://google.com/validcountry"
+        method: "POST"
+        graphql: "query($id: ID!) { blah(code: $id) }"
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($random: [UserInput]) { userName(random: $random)}
+  inputvariables: |-
+    {"random": [{ "id": "0x2", "age": "10" },{ "id": "0x3", "age": "20"}]}

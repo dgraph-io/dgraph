@@ -1,16 +1,31 @@
 #!/bin/bash
-# This script runs in a loop, checks for updates to the Hugo docs theme or
-# to the docs on certain branches and rebuilds the public folder for them.
-# It has be made more generalized, so that we don't have to hardcode versions.
+# This script runs in a loop (configurable with LOOP), checks for updates to the
+# Hugo docs theme or to the docs on certain branches and rebuilds the public
+# folder for them. It has be made more generalized, so that we don't have to
+# hardcode versions.
 
 # Warning - Changes should not be made on the server on which this script is running
 # becauses this script does git checkout and merge.
 
 set -e
 
+# Important for clean builds on Netlify
+if ! git remote | grep -q origin ; then
+    git remote add origin https://github.com/dgraph-io/dgraph.git
+    git fetch --all
+fi
+
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST=https://docs.dgraph.io
+HOST="${HOST:-https://dgraph.io/docs}"
+# Name of output public directory
+PUBLIC="${PUBLIC:-public}"
+# LOOP true makes this script run in a loop to check for updates
+LOOP="${LOOP:-true}"
+# Binary of hugo command to run.
+HUGO="${HUGO:-hugo}"
+OLD_THEME="${OLD_THEME:-old-theme}"
+NEW_THEME="${NEW_THEME:-master}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -19,22 +34,23 @@ HOST=https://docs.dgraph.io
 # append '(latest)' to the version string, followed by the master version,
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
-VERSIONS_ARRAY=(
-	'v1.1.0'
-	'master'
-	'v1.0.17'
-	'v1.0.16'
-	'v1.0.15'
-	'v1.0.14'
-	'v1.0.13'
-	'v1.0.12'
-	'v1.0.11'
-	'v1.0.10'
-	'v1.0.9'
-	'v1.0.8'
-	'v1.0.7'
-	'v1.0.6'
+
+# these versions use new theme
+NEW_VERSIONS=(
+        'v20.11'
+        'master'
+        'v20.07',
+		'v20.03'
 )
+
+# these versions use old theme
+OLD_VERSIONS=(
+	'v1.2.2'
+	'v1.1.1'
+	'v1.0.18'
+)
+
+VERSIONS_ARRAY=("${NEW_VERSIONS[@]}" "${OLD_VERSIONS[@]}")
 
 joinVersions() {
 	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
@@ -59,12 +75,14 @@ rebuild() {
 	export CURRENT_VERSION=${2}
 	export VERSIONS=${VERSION_STRING}
 	export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
+        export CANONICAL_PATH="$HOST"
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
+		CANONICAL_PATH=${HOST}\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
-		CURRENT_VERSION=${2} hugo \
-		--destination=public/"$dir"\
+		CURRENT_VERSION=${2} ${HUGO} \
+		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
 
@@ -87,9 +105,9 @@ publicFolder()
 {
 	dir=''
 	if [[ $1 == "${VERSIONS_ARRAY[0]}" ]]; then
-		echo "public"
+		echo "${PUBLIC}"
 	else
-		echo "public/$1"
+		echo "${PUBLIC}/$1"
 	fi
 }
 
@@ -123,21 +141,42 @@ while true; do
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
-	# Lets check if the theme was updated.
+	if [ "$firstRun" = 1 ];
+	then
+		# clone the hugo-docs theme if not already there
+		[ ! -d 'themes/hugo-docs' ] && git clone https://github.com/dgraph-io/hugo-docs themes/hugo-docs
+	fi
+
+	# Lets check if the new theme was updated.
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
 	themeUpdated=1
-	if branchUpdated "master" ; then
+	if branchUpdated "${NEW_THEME}" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
 		themeUpdated=0
 	fi
 	popd > /dev/null
 
-	# Now lets check the theme.
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 
-	for version in "${VERSIONS_ARRAY[@]}"
+	for version in "${NEW_VERSIONS[@]}"
+	do
+		checkAndUpdate "$version"
+	done
+
+	# Lets check if the old theme was updated.
+	pushd themes/hugo-docs > /dev/null
+	themeUpdated=1
+	if branchUpdated "${OLD_THEME}" ; then
+		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
+		themeUpdated=0
+	fi
+	popd > /dev/null
+
+	git remote update > /dev/null
+
+	for version in "${OLD_VERSIONS[@]}"
 	do
 		checkAndUpdate "$version"
 	done
@@ -148,5 +187,8 @@ while true; do
 	popd > /dev/null
 
 	firstRun=0
+        if ! $LOOP; then
+            exit
+        fi
 	sleep 60
 done

@@ -22,8 +22,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -54,7 +55,7 @@ func sane(s string) bool {
 
 // ParseRDFs is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So, be careful using this.
-func ParseRDFs(b []byte) ([]*api.NQuad, error) {
+func ParseRDFs(b []byte) ([]*api.NQuad, *pb.Metadata, error) {
 	var nqs []*api.NQuad
 	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -63,11 +64,16 @@ func ParseRDFs(b []byte) ([]*api.NQuad, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		nqs = append(nqs, &nq)
 	}
-	return nqs, nil
+
+	return nqs, calculateTypeHints(nqs), nil
+}
+
+func isSpaceRune(r rune) bool {
+	return r == ' '
 }
 
 // ParseRDF parses a mutation string and returns the N-Quad representation for it.
@@ -95,7 +101,7 @@ L:
 		item := it.Item()
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = strings.Trim(item.Val, " ")
+			rnq.Subject = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemSubjectFunc:
 			var err error
@@ -111,17 +117,18 @@ L:
 
 		case itemPredicate:
 			// Here we split predicate and lang directive (ex: "name@en"), if needed.
-			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.TrimFunc(item.Val, isSpaceRune))
 
 		case itemObject:
-			rnq.ObjectId = strings.Trim(item.Val, " ")
+			rnq.ObjectId = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemStar:
-			if rnq.Subject == "" {
+			switch {
+			case rnq.Subject == "":
 				rnq.Subject = x.Star
-			} else if rnq.Predicate == "" {
+			case rnq.Predicate == "":
 				rnq.Predicate = x.Star
-			} else {
+			default:
 				rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			}
 
@@ -141,9 +148,9 @@ L:
 				return rnq, errors.Errorf("If predicate/subject is *, value should be * as well")
 			}
 
-			val := strings.Trim(item.Val, " ")
+			val := strings.TrimFunc(item.Val, isSpaceRune)
 			// TODO: Check if this condition is required.
-			if strings.Trim(val, " ") == "*" {
+			if val == "*" {
 				return rnq, errors.Errorf("itemObject can't be *")
 			}
 			// Lets find out the storage type from the type map.
@@ -187,7 +194,7 @@ L:
 			break L
 
 		case itemLabel:
-			rnq.Label = strings.Trim(item.Val, " ")
+			rnq.Label = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemLeftRound:
 			it.Prev() // backup '('
@@ -319,12 +326,35 @@ func parseFacetsRDF(it *lex.ItemIterator, rnq *api.NQuad) error {
 	return nil
 }
 
+// subjectPred is a type to store the count for each <subject, pred> in the  mutations.
+type subjectPred struct {
+	subject string
+	pred    string
+}
+
+func calculateTypeHints(nqs []*api.NQuad) *pb.Metadata {
+	// Stores the count of <subject, pred> pairs to help figure out whether
+	// schemas should be created as scalars or lists of scalars.
+	schemaCountMap := make(map[subjectPred]int)
+	predHints := make(map[string]pb.Metadata_HintType)
+
+	for _, nq := range nqs {
+		subPredPair := subjectPred{subject: nq.Subject, pred: nq.Predicate}
+		schemaCountMap[subPredPair]++
+		if count := schemaCountMap[subPredPair]; count > 1 {
+			predHints[nq.Predicate] = pb.Metadata_LIST
+		}
+	}
+	return &pb.Metadata{PredHints: predHints}
+}
+
 var typeMap = map[string]types.TypeID{
 	"xs:password":        types.PasswordID,
 	"xs:string":          types.StringID,
 	"xs:date":            types.DateTimeID,
 	"xs:dateTime":        types.DateTimeID,
 	"xs:int":             types.IntID,
+	"xs:integer":         types.IntID,
 	"xs:positiveInteger": types.IntID,
 	"xs:boolean":         types.BoolID,
 	"xs:double":          types.FloatID,

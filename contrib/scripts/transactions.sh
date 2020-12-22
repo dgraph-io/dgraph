@@ -27,3 +27,5 @@ pushd $contrib/integration/mutates
 go build . && ./mutates --add --alpha=localhost:9180
 ./mutates --alpha=localhost:9180
 popd
+
+stopCluster

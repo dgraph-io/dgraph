@@ -119,7 +119,7 @@ func TestConversionEdgeCases(t *testing.T) {
 			failure: "strconv.ParseBool"},
 		{in: Val{Tid: StringID, Value: []byte{}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
-			failure: `parsing time "" as "2006": cannot parse "" as "2006"`},
+			failure: `parsing time "" as "2006-01-02T15:04:05": cannot parse "" as "2006"`},
 
 		// From IntID to X
 		{in: Val{Tid: IntID, Value: []byte{}},
@@ -142,12 +142,12 @@ func TestConversionEdgeCases(t *testing.T) {
 		// From DateTimeID to X
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
-			failure: "Time.UnmarshalBinary:"},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
 			out:     Val{Tid: BinaryID, Value: []byte{}},
-			failure: "Time.UnmarshalBinary"},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
 			out: Val{Tid: BinaryID, Value: bs(time.Time{})}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},

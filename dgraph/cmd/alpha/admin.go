@@ -17,73 +17,105 @@
 package alpha
 
 import (
-	"bytes"
-	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
+
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
-// handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
-	if r.Method != method {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return false
-	}
+type allowedMethods map[string]bool
 
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
-		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+// hasPoormansAuth checks if poorman's auth is required and if so whether the given http request has
+// poorman's auth in it or not
+func hasPoormansAuth(r *http.Request) bool {
+	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
+		"X-Dgraph-AuthToken") {
 		return false
 	}
 	return true
 }
 
-func drainingHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut, http.MethodPost:
-		enableStr := r.URL.Query().Get("enable")
-
-		enable, err := strconv.ParseBool(enableStr)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Found invalid value for the enable parameter")
+func allowedMethodsHandler(allowedMethods allowedMethods, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := allowedMethods[r.Method]; !ok {
+			x.AddCorsHeaders(w)
+			if r.Method == http.MethodOptions {
+				return
+			}
+			x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
-		x.UpdateDrainingMode(enable)
-		_, err = w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
-			`"message": "draining mode has been set to %v"}`, enable)))
-		if err != nil {
-			glog.Errorf("Failed to write response: %v", err)
-		}
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
+		next.ServeHTTP(w, r)
+	})
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
+// adminAuthHandler does some standard checks for admin endpoints.
+// It returns if something is wrong. Otherwise, it lets the given handler serve the request.
+func adminAuthHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !hasPoormansAuth(r) {
+			x.AddCorsHeaders(w)
+			x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	enableStr := r.URL.Query().Get("enable")
+
+	enable, err := strconv.ParseBool(enableStr)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Found invalid value for the enable parameter")
 		return
 	}
 
-	close(shutdownCh)
+	gqlReq := &schema.Request{
+		Query: `
+		mutation draining($enable: Boolean) {
+		  draining(enable: $enable) {
+			response {
+			  code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"enable": enable},
+	}
+	_ = resolveWithAdminServer(gqlReq, r, adminServer)
+	w.Header().Set("Content-Type", "application/json")
+	x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
+		`"message": "draining mode has been set to %v"}`, enable))))
+}
+
+func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	gqlReq := &schema.Request{
+		Query: `
+		mutation {
+			shutdown {
+				response {
+					code
+				}
+			}
+		}`,
+	}
+	_ = resolveWithAdminServer(gqlReq, r, adminServer)
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
-func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
-		return
-	}
+func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
 	if err := r.ParseForm(); err != nil {
 		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
@@ -102,26 +134,37 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := worker.ExportOverNetwork(context.Background(), format); err != nil {
-		x.SetStatus(w, err.Error(), "Export failed.")
+
+	gqlReq := &schema.Request{
+		Query: `
+		mutation export($format: String) {
+		  export(input: {format: $format}) {
+			response {
+			  code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{},
+	}
+	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+	if len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
-func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
 	switch r.Method {
 	case http.MethodGet:
-		memoryLimitGetHandler(w, r)
+		memoryLimitGetHandler(w, r, adminServer)
 	case http.MethodPut:
-		memoryLimitPutHandler(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		memoryLimitPutHandler(w, r, adminServer)
 	}
 }
 
-func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -132,39 +175,45 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if memoryMB < edgraph.MinAllottedMemory {
+	gqlReq := &schema.Request{
+		Query: `
+		mutation config($cacheMb: Int) {
+		  config(input: {cacheMb: $cacheMb}) {
+			response {
+			  code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"cacheMb": memoryMB},
+	}
+	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+
+	if len(resp.Errors) != 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", edgraph.MinAllottedMemory)
+		x.Check2(fmt.Fprint(w, resp.Errors[0].Message))
 		return
 	}
-
-	posting.Config.Mu.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
 
-func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
-	posting.Config.Mu.Lock()
-	memoryMB := posting.Config.AllottedMemory
-	posting.Config.Mu.Unlock()
-
-	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	gqlReq := &schema.Request{
+		Query: `
+		query {
+		  config {
+			cacheMb
+		  }
+		}`,
 	}
-}
-
-func ipInIPWhitelistRanges(ipString string) bool {
-	ip := net.ParseIP(ipString)
-
-	if ip == nil {
-		return false
-	}
-
-	for _, ipRange := range x.WorkerConfig.WhiteListedIPRanges {
-		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
-			return true
+	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+	var data struct {
+		Config struct {
+			CacheMb float64
 		}
 	}
-	return false
+	x.Check(json.Unmarshal(resp.Data.Bytes(), &data))
+
+	if _, err := fmt.Fprintln(w, data.Config.CacheMb); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

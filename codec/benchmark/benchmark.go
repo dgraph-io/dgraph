@@ -25,6 +25,7 @@ package main
 import (
 	"compress/gzip"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -59,20 +60,20 @@ const (
 func read(filename string) []int {
 	f, err := os.Open(filename)
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 	defer f.Close()
 
 	fgzip, err := gzip.NewReader(f)
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 	defer fgzip.Close()
 
 	buf := make([]byte, 4)
 	_, err = fgzip.Read(buf)
 	if err != nil && err != io.EOF {
-		panic(err)
+		x.Panic(err)
 	}
 	ndata := binary.LittleEndian.Uint32(buf)
 
@@ -80,7 +81,7 @@ func read(filename string) []int {
 	for i := range data {
 		_, err = fgzip.Read(buf)
 		if err != nil && err != io.EOF {
-			panic(err)
+			x.Panic(err)
 		}
 
 		data[i] = int(binary.LittleEndian.Uint32(buf))
@@ -120,7 +121,8 @@ func benchmarkPack(trials int, chunks *chunks) int {
 	for i := range times {
 		start := time.Now()
 		for _, c := range chunks.data {
-			codec.Encode(c, 256)
+			pack := codec.Encode(c, 256)
+			codec.FreePack(pack)
 			// bp128.DeltaPack(c)
 		}
 		times[i] = int(time.Since(start).Nanoseconds())
@@ -176,7 +178,7 @@ func fmtBenchmark(name string, speed int) {
 func main() {
 	data := read("clustered1M.bin.gz")
 	if !sort.IsSorted(sort.IntSlice(data)) {
-		panic("test data must be sorted")
+		x.Panic(errors.New("test data must be sorted"))
 	}
 
 	chunks64 := chunkify64(data)

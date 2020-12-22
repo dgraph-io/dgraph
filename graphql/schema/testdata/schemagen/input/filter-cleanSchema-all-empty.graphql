@@ -1,0 +1,12 @@
+type X {
+    name: [Y]
+    f1: [Y] @dgraph(pred: "f1")
+}
+
+type Y {
+    f1: [X] @dgraph(pred: "~f1")
+}
+
+type Z {
+    add:[X]
+}

@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"math"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -31,7 +32,7 @@ func TestRollupTimestamp(t *testing.T) {
 	addEdgeToUID(t, "rollup", 1, 3, 3, 4)
 	addEdgeToUID(t, "rollup", 1, 4, 5, 6)
 
-	l, err := GetNoStore(key)
+	l, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	uidList, err := l.Uids(ListOptions{ReadTs: 7})
@@ -46,7 +47,7 @@ func TestRollupTimestamp(t *testing.T) {
 	}
 	addMutation(t, l, edge, Del, 9, 10, false)
 
-	nl, err := getNew(key, pstore)
+	nl, err := getNew(key, pstore, math.MaxUint64)
 	require.NoError(t, err)
 
 	uidList, err = nl.Uids(ListOptions{ReadTs: 11})
@@ -55,7 +56,7 @@ func TestRollupTimestamp(t *testing.T) {
 
 	// Now check that we don't lost the highest version during a rollup operation, despite the STAR
 	// delete marker being the most recent update.
-	kvs, err := nl.Rollup()
+	kvs, err := nl.Rollup(nil)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), kvs[0].Version)
 }
@@ -64,7 +65,7 @@ func TestPostingListRead(t *testing.T) {
 	key := x.DataKey("emptypl", 1)
 
 	assertLength := func(readTs, sz int) {
-		nl, err := getNew(key, pstore)
+		nl, err := getNew(key, pstore, math.MaxUint64)
 		require.NoError(t, err)
 		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})
 		require.NoError(t, err)

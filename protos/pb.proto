@@ -25,7 +25,8 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/pb/pb.proto";
+import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -123,14 +124,14 @@ message RaftContext {
 // one RAFT node per server serving that group.
 message Member {
 	fixed64 id = 1;
-	uint32 group_id = 2;
+	uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];
 	string addr = 3;
 	bool leader = 4;
-	bool am_dead = 5;
-	uint64 last_update = 6;
+	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
+	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
 
-	bool cluster_info_only = 13;
-	bool force_group_id = 14;
+	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
+	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
 }
 
 message Group {
@@ -138,6 +139,7 @@ message Group {
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
 	uint64 checksum             = 4; // Stores a checksum.
+	uint64 checkpoint_ts        = 5; // Stores checkpoint ts as seen by leader.
 }
 
 message License {
@@ -148,6 +150,7 @@ message License {
 }
 
 message ZeroProposal {
+	reserved 8;  // Was used for string key.
 	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
 	Tablet tablet = 3;
@@ -155,9 +158,9 @@ message ZeroProposal {
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
-	string key = 8;  // Used as unique identifier for proposal id.
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
+	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -176,18 +179,34 @@ message MembershipState {
 }
 
 message ConnectionState {
-	Member member = 1;
-	MembershipState state = 2;
-	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+    Member member = 1;
+    MembershipState state = 2;
+    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+}
+
+message HealthInfo {
+    string instance = 1;
+    string address = 2;
+    string status = 3;
+    string group = 4; // string so group = 0 can be printed in JSON.
+    string version = 5;
+    int64 uptime = 6;
+    int64 lastEcho = 7;
+    repeated string ongoing = 8;
+    repeated string indexing = 9;
+    repeated string ee_features = 10;
+		uint64 max_assigned = 11;
 }
 
 message Tablet {
-	uint32 group_id  = 1; // Served by which group.
-	string predicate = 2;
-	bool force       = 3; // Used while moving predicate.
-	int64 space      = 7;
-	bool remove      = 8;
-  bool read_only   = 9; // If true, do not ask zero to serve any tablets.
+    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+    string predicate = 2;
+    bool force = 3; // Used while moving predicate.
+    int64 on_disk_bytes = 7;
+    bool remove = 8;
+    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
+	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
 
 message DirectedEdge {
@@ -204,6 +223,7 @@ message DirectedEdge {
 	}
 	Op op = 8;
 	repeated api.Facet facets = 9;
+	repeated string allowedPreds = 10;
 }
 
 message Mutations {
@@ -220,6 +240,24 @@ message Mutations {
 	}
 	DropOp drop_op = 7;
 	string drop_value = 8;
+
+	Metadata metadata = 9;
+}
+
+message Metadata {
+  // HintType represents a hint that will be passed along the mutation and used
+  // to add the predicate to the schema if it's not already there.
+  enum HintType {
+    // DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+    DEFAULT = 0;
+    // SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+    SINGLE = 1;
+    // LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+    LIST = 2;
+  }
+
+  // Map of predicates to their hints.
+	map<string, HintType> pred_hints = 1;
 }
 
 message Snapshot {
@@ -232,21 +270,59 @@ message Snapshot {
 	uint64 since_ts = 5;
 }
 
+message ZeroSnapshot {
+	uint64 index = 1;
+	uint64 checkpoint_ts = 2;
+	MembershipState state = 5;
+}
+
+message RestoreRequest {
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
+
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
+
+	// Info needed to process encrypted backups.
+	string encryption_key_file = 9;
+	// Vault options
+	string vault_addr = 10;
+	string vault_roleid_file = 11;
+	string vault_secretid_file = 12;
+	string vault_path = 13;
+	string vault_field = 14;
+	string vault_format = 15;
+
+	uint64 backup_num = 16;
+}
+
 message Proposal {
-	Mutations mutations    = 2;
-	repeated KV kv         = 4;
-	MembershipState state  = 5;
-	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
-	string key             = 7;
-	OracleDelta delta      = 8;
-	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
-	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
+	reserved 7; // Was used for string key.
+	Mutations mutations    		= 2;
+	repeated badgerpb2.KV kv  = 4;
+	MembershipState state  		= 5;
+	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
+	OracleDelta delta      		= 8;
+	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
+	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore 		= 12;
 }
 
 message KVS {
- repeated pb.KV kv = 1;
- // done used to indicate if the stream of KVS is over.
- bool done      = 2;
+	bytes data = 5;
+
+	// done used to indicate if the stream of KVS is over.
+	bool done	= 2;
+	// predicates is the list of predicates known by the leader at the time of the snapshot.
+	repeated string predicates = 3;
+	// types is the list of types known by the leader at the time of the snapshot.
+	repeated string types = 4;
 }
 
 // Posting messages.
@@ -289,9 +365,11 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to 
-	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
-	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
+	// num_uids is the number of UIDs in the block. We are including this because we want to
+	// switch encoding to groupvarint encoding. Current avaialble open source version implements
+	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
+	// MSB base uids. That is, if the 32 MSBs are different, we will create a new block irrespective
+	// of whether the block is filled with the block_size or not.
 	// Default Blocksize is 256 so uint32 would be sufficient.
 	uint32 num_uids = 3;
 }
@@ -299,6 +377,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1;
 	repeated UidBlock blocks = 2;
+	uint64 alloc_ref = 23; // This field should be set to 0 during marshal.
 }
 
 message PostingList {
@@ -360,6 +439,7 @@ message SchemaNode {
 	bool list = 7;
 	bool upsert = 8;
 	bool lang = 9;
+	bool no_conflict = 10;
 }
 
 message SchemaResult {
@@ -390,6 +470,8 @@ message SchemaUpdate {
 	// custom name. This field stores said name.
 	string object_type_name = 12;
 
+	bool no_conflict = 13;
+
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
@@ -400,20 +482,16 @@ message TypeUpdate {
 	repeated SchemaUpdate fields = 2;
 }
 
-// Bulk loader proto.
-message MapEntry {
-	bytes key = 1;
-
-	// Only one should be set.
-	fixed64 uid = 2;
-	Posting posting = 3;
+message MapHeader {
+	repeated bytes partition_keys = 1;
 }
 
 message MovePredicatePayload {
-	string predicate  = 1;
-	uint32 source_gid = 2;
-	uint32 dest_gid   = 3;
-	uint64 txn_ts     = 4;
+	string predicate         = 1;
+	uint32 source_gid        = 2;
+	uint32 dest_gid          = 3;
+	uint64 txn_ts            = 4;
+	uint64 expected_checksum = 5;
 }
 
 message TxnStatus {
@@ -442,7 +520,7 @@ message RaftBatch {
 }
 
 service Raft {
-	rpc Heartbeat (api.Payload)        returns (stream api.Payload) {}
+	rpc Heartbeat (api.Payload)        returns (stream HealthInfo) {}
 	rpc RaftMessage (stream RaftBatch) returns (api.Payload) {}
 	rpc JoinCluster (RaftContext)      returns (api.Payload) {}
 	rpc IsPeer (RaftContext)           returns (PeerResponse) {}
@@ -469,10 +547,21 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Status) {}
-	rpc Export (ExportRequest)              returns (Status) {}
+	rpc Backup (BackupRequest)              returns (BackupResponse) {}
+	rpc Restore (RestoreRequest)            returns (Status) {}
+	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
+	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
+}
+
+message SubscriptionRequest {
+	repeated bytes prefixes = 1;
+}
+
+message SubscriptionResponse {
+    badgerpb2.KVList kvs = 1;
 }
 
 message Num {
@@ -511,13 +600,28 @@ message BackupRequest {
 	string secret_key = 7;
 	string session_token = 8;
 
-  // True if no credentials should be used to access the S3 or minio bucket.
-  // For example, when using a bucket with a public policy.
-  bool anonymous = 9;
+	// True if no credentials should be used to access the S3 or minio bucket.
+	// For example, when using a bucket with a public policy.
+	bool anonymous = 9;
 
-  // The predicates to backup. All other predicates present in the group (e.g
-  // stale data from a predicate move) will be ignored.
-  repeated string predicates = 10;
+	// The predicates to backup. All other predicates present in the group (e.g
+	// stale data from a predicate move) will be ignored.
+	repeated string predicates = 10;
+}
+
+message BackupResponse {
+	repeated DropOperation drop_operations = 1;
+}
+
+message DropOperation {
+	enum DropOp {
+		ALL = 0;
+		DATA = 1;
+		ATTR = 2;
+	}
+	DropOp drop_op    = 1;
+	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
+	string drop_value = 2;
 }
 
 message ExportRequest {
@@ -525,6 +629,21 @@ message ExportRequest {
 	uint64  read_ts  = 2;
 	int64   unix_ts  = 3;
 	string  format   = 4;
+
+	string destination = 5;
+
+	// These credentials are used to access the S3 or minio bucket.
+	string access_key = 6;
+	string secret_key = 7;
+	string session_token = 8;
+	bool anonymous = 9;
+}
+
+message ExportResponse {
+	// 0 indicates a success, and a non-zero code indicates failure
+	int32 code = 1;
+	string msg = 2;
+	repeated string files = 3;
 }
 
 // A key stored in the format used for writing backups.
@@ -554,6 +673,18 @@ message BackupPostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
+	bytes uid_bytes = 5;
+}
+
+message UpdateGraphQLSchemaRequest {
+	uint64                start_ts       = 1;
+	string                graphql_schema = 2;
+	repeated SchemaUpdate dgraph_preds   = 3;
+	repeated TypeUpdate   dgraph_types   = 4;
+}
+
+message UpdateGraphQLSchemaResponse {
+	uint64 uid = 1;
 }
 
 // vim: noexpandtab sw=2 ts=2

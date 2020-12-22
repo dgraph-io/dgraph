@@ -3,26 +3,27 @@
 # will still be available to service requests even when one Zero
 # and/or one Alpha are down.
 #
-# There are 4 public services exposed, users can use:
+# There are 3 services can can be used to expose outside the cluster as needed:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
 #       dgraph-alpha-public - To connect clients and for HTTP APIs
 #       dgraph-ratel-public - For Dgraph UI
-#       dgraph-alpha-x-http-public - Use for debugging & profiling
+
 apiVersion: v1
 kind: Service
 metadata:
   name: dgraph-zero-public
   labels:
     app: dgraph-zero
+    monitor: zero-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 5080
     targetPort: 5080
-    name: zero-grpc
+    name: grpc-zero
   - port: 6080
     targetPort: 6080
-    name: zero-http
+    name: http-zero
   selector:
     app: dgraph-zero
 ---
@@ -32,35 +33,18 @@ metadata:
   name: dgraph-alpha-public
   labels:
     app: dgraph-alpha
+    monitor: alpha-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8080
     targetPort: 8080
-    name: alpha-http
+    name: http-alpha
   - port: 9080
     targetPort: 9080
-    name: alpha-grpc
+    name: grpc-alpha
   selector:
     app: dgraph-alpha
----
-# This service is created in-order to debug & profile a specific alpha.
-# You can create one for each alpha that you need to profile.
-# For a more general HTTP APIs use the above service instead.
-apiVersion: v1
-kind: Service
-metadata:
-  name: dgraph-alpha-0-http-public
-  labels:
-    app: dgraph-alpha
-spec:
-  type: LoadBalancer
-  ports:
-  - port: 8080
-    targetPort: 8080
-    name: alpha-http
-  selector:
-    statefulset.kubernetes.io/pod-name: dgraph-alpha-0
 ---
 apiVersion: v1
 kind: Service
@@ -69,11 +53,11 @@ metadata:
   labels:
     app: dgraph-ratel
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8000
     targetPort: 8000
-    name: ratel-http
+    name: http-ratel
   selector:
     app: dgraph-ratel
 ---
@@ -89,8 +73,12 @@ spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: zero-grpc
+    name: grpc-zero
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph Zero pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-zero
 ---
@@ -106,8 +94,12 @@ spec:
   ports:
   - port: 7080
     targetPort: 7080
-    name: alpha-grpc-int
+    name: grpc-alpha-int
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph alpha pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-alpha
 ---
@@ -145,9 +137,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
-          name: zero-grpc
+          name: grpc-zero
         - containerPort: 6080
-          name: zero-http
+          name: http-zero
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -169,6 +161,24 @@ spec:
             else
               exec dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas 3
             fi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
@@ -219,7 +229,7 @@ spec:
       # Initializing the Alphas:
       #
       # You may want to initialize the Alphas with data before starting, e.g.
-      # with data from the Dgraph Bulk Loader: https://docs.dgraph.io/deploy/#bulk-loader.
+      # with data from the Dgraph Bulk Loader: https://dgraph.io/docs/deploy/#bulk-loader.
       # You can accomplish by uncommenting this initContainers config. This
       # starts a container with the same /dgraph volume used by Alpha and runs
       # before Alpha starts.
@@ -252,6 +262,7 @@ spec:
       #       - bash
       #       - "-c"
       #       - |
+      #         trap "exit" SIGINT SIGTERM
       #         echo "Write to /dgraph/doneinit when ready."
       #         until [ -f /dgraph/doneinit ]; do sleep 2; done
       #     volumeMounts:
@@ -263,11 +274,11 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 7080
-          name: alpha-grpc-int
+          name: grpc-alpha-int
         - containerPort: 8080
-          name: alpha-http
+          name: http-alpha
         - containerPort: 9080
-          name: alpha-grpc
+          name: grpc-alpha
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -279,12 +290,35 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+        # dgraph versions earlier than v1.2.3 and v20.03.0 can only support one zero:
+        #  `dgraph alpha --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080`
+        # dgraph-alpha versions greater than or equal to v1.2.3 or v20.03.1 can support
+        #  a comma-separated list of zeros.  The value below supports 3 zeros
+        #  (set according to number of replicas)
         command:
           - bash
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+        livenessProbe:
+          httpGet:
+            path: /health?live=1
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
       terminationGracePeriodSeconds: 600
       volumes:
       - name: datadir

@@ -330,6 +330,8 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		if j < len(dst2.Uids) {
 			b.Errorf("Unexpected error in intersection")
 		}
+
+		codec.FreePack(compressedUids)
 	}
 
 	randomTests(10240, 0.3)
@@ -395,6 +397,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			if j < len(dst2.Uids) {
 				b.Errorf("Unexpected error in intersection")
 			}
+
+			codec.FreePack(compressedUids)
 		}
 	}
 
@@ -459,10 +463,63 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 
 			pack := enc.Done()
 			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
 
 			actual := make([]uint64, 0)
 			IntersectCompressedWithLinJump(&dec, otherNums, &actual)
 			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
+		}
+	}
+}
+
+func TestIntersectCompressedWithBin(t *testing.T) {
+	lengths := []int{0, 1, 3, 11, 100}
+
+	for _, N1 := range lengths {
+		for _, N2 := range lengths {
+			// Intersection of blockNums and otherNums is commonNums.
+			commonNums, blockNums, otherNums := fillNums(N1, N2)
+
+			enc := codec.Encoder{BlockSize: 10}
+			for _, num := range blockNums {
+				enc.Add(num)
+			}
+
+			pack := enc.Done()
+			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
+
+			actual := make([]uint64, 0)
+			IntersectCompressedWithBin(&dec, otherNums, &actual)
+			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
+		}
+	}
+}
+
+func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
+	lengths := []int{0, 1, 3, 11, 100}
+
+	for _, N1 := range lengths {
+		for _, N2 := range lengths {
+			// Intersection of blockNums and otherNums is commonNums.
+			commonNums, blockNums, otherNums := fillNums(N1, N2)
+
+			// Set the block size to 0 to verify that the method still works in this case.
+			enc := codec.Encoder{BlockSize: 0}
+			for _, num := range blockNums {
+				enc.Add(num)
+			}
+
+			pack := enc.Done()
+			dec := codec.Decoder{Pack: pack}
+			dec.Seek(0, codec.SeekStart)
+
+			actual := make([]uint64, 0)
+			IntersectCompressedWithBin(&dec, otherNums, &actual)
+			require.Equal(t, commonNums, actual)
+			codec.FreePack(pack)
 		}
 	}
 }

@@ -1,0 +1,33 @@
+# Posts shouldn't have a 
+# getPost(id: ID): Post
+# GraphQL query generated, because there's no ID to reference.
+# Similarly update & delete shouldn't be generated because you
+# can't reference the node to delete it.
+type Post {
+    content: String!
+    author: Author!
+
+    # The generated mutation types should allow adding these, but
+    # not adding references to existing.  This doesn't make sense for
+    # this schema, but just tests that both list and single objects
+    # work without IDs
+    genre: Genre  
+}
+
+type Author {
+    id: ID
+    name: String
+
+    # The input type should allow to create posts as part of adding an
+    # author, but not add by reference.  You can also add 
+    # posts with a reference to the author and the author gets hooked
+    # up to the post in Dgraph ... just that this GraphQL schema
+    # says you can't query by ID for Post, but you can follow the
+    # Author's posts link (or if there were @search(by:...) in post
+    # it could be queried that way).
+    posts: [Post]  
+}
+
+type Genre {
+    name: String!
+}

@@ -19,7 +19,6 @@ package zero
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -90,7 +89,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, ids); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
@@ -225,30 +224,16 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, mstate); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
 }
 
-func (st *state) serveHTTP(l net.Listener) {
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
+func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
 
-	go func() {
-		defer st.zero.closer.Done()
-		err := srv.Serve(l)
-		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-		defer cancel()
-		err = srv.Shutdown(ctx)
-		glog.Infoln("All http(s) requests finished.")
-		if err != nil {
-			glog.Errorf("Http(s) shutdown err: %v", err)
-		}
-	}()
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
 }

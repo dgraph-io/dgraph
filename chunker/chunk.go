@@ -28,6 +28,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -84,7 +85,8 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
-		panic("unknown input format")
+		x.Panic(errors.New("unknown input format"))
+		return nil
 	}
 }
 
@@ -98,28 +100,38 @@ func (*rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
-			batch.Write(slc)
+			if _, err := batch.Write(slc); err != nil {
+				return nil, err
+			}
 			return batch, err
 		}
 		if err == bufio.ErrBufferFull {
 			// This should only happen infrequently.
-			batch.Write(slc)
+			if _, err := batch.Write(slc); err != nil {
+				return nil, err
+			}
 			var str string
 			str, err = r.ReadString('\n')
 			if err == io.EOF {
-				batch.WriteString(str)
+				if _, err := batch.WriteString(str); err != nil {
+					return nil, err
+				}
 				return batch, err
 			}
 			if err != nil {
 				return nil, err
 			}
-			batch.WriteString(str)
+			if _, err := batch.WriteString(str); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		batch.Write(slc)
+		if _, err := batch.Write(slc); err != nil {
+			return nil, err
+		}
 	}
 	return batch, nil
 }
@@ -137,12 +149,14 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 		}
 
 		nq, err := ParseRDF(str, rc.lexer)
-		if err == ErrEmpty {
+		switch {
+		case err == ErrEmpty:
 			continue // blank line or comment
-		} else if err != nil {
+		case err != nil:
 			return errors.Wrapf(err, "while parsing line %q", str)
+		default:
+			rc.nqs.Push(&nq)
 		}
-		rc.nqs.Push(&nq)
 	}
 	return nil
 }
@@ -156,23 +170,28 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	}
 	// If the file starts with a list rune [, we set the inList flag, and keep consuming maps
 	// until we reach the threshold.
-	if ch == '[' {
+	switch {
+	case ch == '[':
 		jc.inList = true
-	} else if ch == '{' {
+	case ch == '{':
 		// put the rune back for it to be consumed in the consumeMap function
 		if err := r.UnreadRune(); err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		return nil, errors.Errorf("file is not JSON")
 	}
 
 	out := new(bytes.Buffer)
-	out.WriteRune('[')
+	if _, err := out.WriteRune('['); err != nil {
+		return nil, err
+	}
 	hasMapsBefore := false
 	for out.Len() < 1e5 {
 		if hasMapsBefore {
-			out.WriteRune(',')
+			if _, err := out.WriteRune(','); err != nil {
+				return nil, err
+			}
 		}
 		if err := jc.consumeMap(r, out); err != nil {
 			return nil, err
@@ -187,7 +206,9 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.Errorf("JSON file ends abruptly, expecting ]")
 			}
 
-			out.WriteRune(']')
+			if _, err := out.WriteRune(']'); err != nil {
+				return nil, err
+			}
 			return out, io.EOF
 		} else if err != nil {
 			return nil, err
@@ -203,7 +224,9 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, errors.New("Not all of JSON file consumed")
 			}
 
-			out.WriteRune(']')
+			if _, err := out.WriteRune(']'); err != nil {
+				return nil, err
+			}
 			return out, io.EOF
 		}
 
@@ -216,7 +239,9 @@ func (jc *jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 			return nil, errors.Errorf("JSON map is followed by illegal rune \"%c\"", ch)
 		}
 	}
-	out.WriteRune(']')
+	if _, err := out.WriteRune(']'); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -241,7 +266,9 @@ func (jc *jsonChunker) consumeMap(r *bufio.Reader, out *bytes.Buffer) error {
 			return nil
 		}
 
-		x.Check2(out.WriteRune(ch))
+		if _, err := out.WriteRune(ch); err != nil {
+			return err
+		}
 		switch ch {
 		case '{':
 			depth++
@@ -278,8 +305,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return nil
 	}
 
-	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	return err
+	return jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
 }
 
 func slurpSpace(r *bufio.Reader) error {
@@ -301,7 +327,9 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 		if err != nil {
 			return err
 		}
-		x.Check2(out.WriteRune(ch))
+		if _, err := out.WriteRune(ch); err != nil {
+			return err
+		}
 
 		if ch == '\\' {
 			// Pick one more rune.
@@ -309,7 +337,9 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 			if err != nil {
 				return err
 			}
-			x.Check2(out.WriteRune(esc))
+			if _, err := out.WriteRune(esc); err != nil {
+				return err
+			}
 			continue
 		}
 		if ch == '"' {
@@ -318,10 +348,11 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
+// FileReader returns an open reader on the given file. Gzip-compressed input is detected
+// and decompressed automatically even without the gz extension. The key, if non-nil,
+// is used to decrypt the file. The caller is responsible for calling the returned cleanup
+// function when done with the reader.
+func FileReader(file string, key x.SensitiveByteSlice) (rd *bufio.Reader, cleanup func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -332,13 +363,15 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 	x.Check(err)
 
-	cleanup = func() { f.Close() }
+	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
-		gzr, err := gzip.NewReader(f)
+		r, err := enc.GetReader(key, f)
+		x.Check(err)
+		gzr, err := gzip.NewReader(r)
 		x.Check(err)
 		rd = bufio.NewReader(gzr)
-		cleanup = func() { f.Close(); gzr.Close() }
+		cleanup = func() { _ = f.Close(); _ = gzr.Close() }
 	} else {
 		rd = bufio.NewReader(f)
 		buf, _ := rd.Peek(512)
@@ -348,7 +381,7 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 			gzr, err := gzip.NewReader(rd)
 			x.Check(err)
 			rd = bufio.NewReader(gzr)
-			cleanup = func() { f.Close(); gzr.Close() }
+			cleanup = func() { _ = f.Close(); _ = gzr.Close() }
 		}
 	}
 

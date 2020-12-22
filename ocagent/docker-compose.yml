@@ -14,7 +14,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --jaeger.collector=http://ocagent:14268
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180 --logtostderr -v=2 --jaeger.collector=http://ocagent:14268
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1

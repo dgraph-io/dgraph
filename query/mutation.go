@@ -19,11 +19,12 @@ package query
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -41,6 +42,11 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
 	m.Edges = edges
+
+	err = checkIfDeletingAclOperation(m.Edges)
+	if err != nil {
+		return nil, err
+	}
 
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
@@ -63,13 +69,28 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
-
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
 				return nil, err
 			}
 			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.ReservedPredicates()...)
+			preds = append(preds, x.StarAllPredicates()...)
+			// AllowedPreds are used only with ACL. Do not delete all predicates but
+			// delete predicates to which the mutation has access
+			if edge.AllowedPreds != nil {
+				// Take intersection of preds and AllowedPreds
+				intersectPreds := make([]string, 0)
+				hashMap := make(map[string]bool)
+				for _, allowedPred := range edge.AllowedPreds {
+					hashMap[allowedPred] = true
+				}
+				for _, pred := range preds {
+					if _, found := hashMap[pred]; found {
+						intersectPreds = append(intersectPreds, pred)
+					}
+				}
+				preds = intersectPreds
+			}
 		}
 
 		for _, pred := range preds {
@@ -111,38 +132,40 @@ func verifyUid(ctx context.Context, uid uint64) error {
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the
 // format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
 // it shows up in the subjects or objects
-func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
 	var err error
-	for _, nq := range nquads {
-		// We dont want to assign uids to these.
-		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return newUids, errors.New("Predicate deletion should be called via alter")
-		}
+	for _, gmu := range gmuList {
+		for _, nq := range gmu.Set {
+			// We dont want to assign uids to these.
+			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+				return newUids, errors.New("predicate deletion should be called via alter")
+			}
 
-		if len(nq.Subject) == 0 {
-			return nil, errors.Errorf("Subject must not be empty for nquad: %+v", nq)
-		}
-		var uid uint64
-		if strings.HasPrefix(nq.Subject, "_:") {
-			newUids[nq.Subject] = 0
-		} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
-			return newUids, err
-		}
-		if err = verifyUid(ctx, uid); err != nil {
-			return newUids, err
-		}
-
-		if len(nq.ObjectId) > 0 {
+			if len(nq.Subject) == 0 {
+				return nil, errors.Errorf("subject must not be empty for nquad: %+v", nq)
+			}
 			var uid uint64
-			if strings.HasPrefix(nq.ObjectId, "_:") {
-				newUids[nq.ObjectId] = 0
-			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+			if strings.HasPrefix(nq.Subject, "_:") {
+				newUids[nq.Subject] = 0
+			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
 			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
+			}
+
+			if len(nq.ObjectId) > 0 {
+				var uid uint64
+				if strings.HasPrefix(nq.ObjectId, "_:") {
+					newUids[nq.ObjectId] = 0
+				} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+					return newUids, err
+				}
+				if err = verifyUid(ctx, uid); err != nil {
+					return newUids, err
+				}
 			}
 		}
 	}
@@ -167,8 +190,8 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(gmu *gql.Mutation,
-	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
+func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
+	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
@@ -189,22 +212,58 @@ func ToDirectedEdges(gmu *gql.Mutation,
 		return nil
 	}
 
-	for _, nq := range gmu.Set {
-		if err := facets.SortAndValidate(nq.Facets); err != nil {
-			return edges, err
+	for _, gmu := range gmuList {
+		// We delete first and then we set. Order of the mutation is important.
+		for _, nq := range gmu.Del {
+			if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+				return edges, errors.New("Predicate deletion should be called via alter")
+			}
+			if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
+				return edges, err
+			}
+			if gmu.AllowedPreds != nil {
+				for _, e := range edges {
+					e.AllowedPreds = gmu.AllowedPreds
+				}
+			}
 		}
-		if err := parse(nq, pb.DirectedEdge_SET); err != nil {
-			return edges, err
-		}
-	}
-	for _, nq := range gmu.Del {
-		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should be called via alter")
-		}
-		if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
-			return edges, err
+		for _, nq := range gmu.Set {
+			if err := facets.SortAndValidate(nq.Facets); err != nil {
+				return edges, err
+			}
+			if err := parse(nq, pb.DirectedEdge_SET); err != nil {
+				return edges, err
+			}
 		}
 	}
 
 	return edges, nil
+}
+
+func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
+	// Don't need to make any checks if ACL is not enabled
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
+	guardianGroupUid := atomic.LoadUint64(&x.GuardiansGroupUid)
+	grootUserUid := atomic.LoadUint64(&x.GrootUserUid)
+
+	isDeleteAclOperation := false
+	for _, edge := range edges {
+		// Disallow deleting of guardians group
+		if edge.Entity == guardianGroupUid && edge.Op == pb.DirectedEdge_DEL {
+			isDeleteAclOperation = true
+			break
+		}
+		// Disallow deleting of groot user
+		if edge.Entity == grootUserUid && edge.Op == pb.DirectedEdge_DEL {
+			isDeleteAclOperation = true
+			break
+		}
+	}
+	if isDeleteAclOperation {
+		return errors.Errorf("Properties of guardians group and groot user cannot be deleted.")
+	}
+	return nil
 }

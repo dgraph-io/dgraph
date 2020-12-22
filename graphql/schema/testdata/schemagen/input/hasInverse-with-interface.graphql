@@ -1,0 +1,21 @@
+type Author {
+  id: ID!
+  name: String! @search(by: [hash])
+  questions: [Question] @hasInverse(field: author)
+  answers: [Answer] @hasInverse(field: author)
+}
+
+interface Post {
+  id: ID!
+  text: String @search(by: [fulltext])
+  datePublished: DateTime @search
+  author: Author!
+}
+
+type Question implements Post {
+  answered: Boolean 
+}
+
+type Answer implements Post {
+  markedUseful: Boolean
+}

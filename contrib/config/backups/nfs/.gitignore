@@ -1,0 +1,15 @@
+## Vagrant files
+.vagrant
+
+## Terraform files
+.terraform
+*terraform.tfstate*
+terraform.tfvars
+
+## Configurations auto-generated
+/env.sh
+
+## Rook temporary helm charts
+rook-nfs-operator
+rook-nfs-server
+rook-nfs-storageclass

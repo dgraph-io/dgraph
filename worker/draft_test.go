@@ -21,7 +21,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -30,15 +29,12 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions(dir)
-	return badger.Open(opt)
-}
-
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
@@ -46,31 +42,29 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	delta := &pb.OracleDelta{}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
 	proposal := pb.Proposal{Delta: delta}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
 func TestCalculateSnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
+	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
-	require.NoError(t, err)
-	ds := raftwal.Init(db, 0, 0)
+	ds := raftwal.Init(dir)
+	defer ds.Close()
 
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry
 	// Txn: 1 -> 5 // 5 should be the ReadTs.
 	// Txn: 2 // Should correspond to the index. Subtract 1 from the index.
 	// Txn: 3 -> 4
-	entries = append(entries, getEntryForMutation(1, 1))
-	entries = append(entries, getEntryForMutation(2, 3))
-	entries = append(entries, getEntryForMutation(3, 2))  // Start ts can be jumbled.
-	entries = append(entries, getEntryForCommit(4, 3, 4)) // But commit ts would be serial.
-	entries = append(entries, getEntryForCommit(5, 1, 5))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	entries = append(entries, getEntryForMutation(1, 1), getEntryForMutation(2, 3),
+		getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
 	posting.Oracle().RegisterStartTs(2)
 	snap, err := n.calculateSnapshot(0, 1)
@@ -95,10 +89,9 @@ func TestCalculateSnapshot(t *testing.T) {
 	// Txn: 7 -> 8
 	// Txn: 2 -> 9
 	entries = entries[:0]
-	entries = append(entries, getEntryForMutation(6, 7))
-	entries = append(entries, getEntryForCommit(7, 7, 8))
-	entries = append(entries, getEntryForCommit(8, 2, 9))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	entries = append(entries, getEntryForMutation(6, 7), getEntryForCommit(7, 7, 8),
+		getEntryForCommit(8, 2, 9))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
 	posting.Oracle().ResetTxns()
 	snap, err = n.calculateSnapshot(0, 1)
@@ -115,7 +108,7 @@ func TestCalculateSnapshot(t *testing.T) {
 
 	entries = entries[:0]
 	entries = append(entries, getEntryForMutation(9, 11))
-	require.NoError(t, n.Store.Save(raftpb.HardState{}, entries, raftpb.Snapshot{}))
+	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(9)
 	snap, err = n.calculateSnapshot(0, 0)
 	require.NoError(t, err)

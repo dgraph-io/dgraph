@@ -19,7 +19,7 @@ package gql
 import (
 	"strconv"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,13 +27,17 @@ import (
 )
 
 var (
-	errInvalidUID = errors.New("UID has to be greater than one")
+	errInvalidUID = errors.New("UID must to be greater than 0")
 )
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set []*api.NQuad
-	Del []*api.NQuad
+	Cond         string
+	Set          []*api.NQuad
+	Del          []*api.NQuad
+	AllowedPreds []string
+
+	Metadata *pb.Metadata
 }
 
 // ParseUid parses the given string into an UID. This method returns with an error
@@ -55,7 +59,7 @@ type NQuad struct {
 	*api.NQuad
 }
 
-func typeValFrom(val *api.Value) types.Val {
+func TypeValFrom(val *api.Value) types.Val {
 	switch val.Val.(type) {
 	case *api.Value_BytesVal:
 		return types.Val{Tid: types.BinaryID, Value: val.GetBytesVal()}
@@ -83,7 +87,7 @@ func typeValFrom(val *api.Value) types.Val {
 func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := typeValFrom(nq.ObjectValue)
+	p := TypeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {

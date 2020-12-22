@@ -14,10 +14,14 @@
 # limitations under the License.
 #
 
-PROTO_PATH := ${GOPATH}/src:.
-PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgraph
-PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgo/protos
-PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/badger/pb
+DGO_PATH    := github.com/dgraph-io/dgo/v200
+BADGER_PATH := github.com/dgraph-io/badger/v2
+GOGO_PATH   := github.com/gogo/protobuf
+
+TMPDIR     := $(shell mktemp -d)
+PROTO_PATH := ${TMPDIR}/src:.
+PROTO_PATH := ${PROTO_PATH}:${TMPDIR}/src/${DGO_PATH}/protos
+PROTO_PATH := ${PROTO_PATH}:${TMPDIR}/src/${BADGER_PATH}/pb
 
 .PHONY: help
 help:
@@ -30,14 +34,26 @@ clean:
 .PHONY: check
 check:
 	@./depcheck.sh && \
-		(echo "Upgrading proto libraries before regenerating." ; \
-		go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+		(echo "Installing proto libraries to versions in go.mod." ; \
+		go install github.com/golang/protobuf/protoc-gen-go ; \
+		go install github.com/gogo/protobuf/protoc-gen-gofast)
+
+.PHONY: copy-protos
+copy-protos:
+	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
+	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
+	@mkdir -p ${TMPDIR}/src/${GOGO_PATH}/gogoproto
+	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb2.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate: check clean
+regenerate: copy-protos check clean
 	@protoc \
+		--proto_path=/usr/local/include \
+		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v2/protos/api:pb \
+		--gofast_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
 		pb.proto
+	@rm -rf ${TMPDIR}
 	@echo Done.

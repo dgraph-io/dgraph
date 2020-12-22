@@ -19,149 +19,68 @@ package posting
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/golang/glog"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-var (
-	emptyPostingList []byte // Used for indexing.
 )
 
 const (
 	mb = 1 << 20
 )
 
-// syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
-// of many individual mutations, which could be applied to many different posting lists.
-// Thus, each PL when being mutated would send an undone Mark, and each list would
-// accumulate all such pending marks. When the PL is synced to BadgerDB, it would
-// mark all the pending ones as done.
-// This ideally belongs to RAFT node struct (where committed watermark is being tracked),
-// but because the logic of mutations is
-// present here and to avoid a circular dependency, we've placed it here.
-// Note that there's one watermark for each RAFT node/group.
-// This watermark would be used for taking snapshots, to ensure that all the data and
-// index mutations have been syned to BadgerDB, before a snapshot is taken, and previous
-// RAFT entries discarded.
-func init() {
-	x.AddInit(func() {
-		pl := pb.PostingList{}
-		var err error
-		emptyPostingList, err = pl.Marshal()
-		x.Check(err)
-	})
-}
-
-func getMemUsage() int {
-	if runtime.GOOS != "linux" {
-		pid := os.Getpid()
-		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
-		c1, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			// In case of error running the command, resort to go way
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := ms.Alloc
-			return int(megs)
-		}
-
-		rss := strings.Split(string(c1), " ")[0]
-		kbs, err := strconv.Atoi(rss)
-		if err != nil {
-			return 0
-		}
-
-		megs := kbs << 10
-		return megs
-	}
-
-	contents, err := ioutil.ReadFile("/proc/self/stat")
-	if err != nil {
-		glog.Errorf("Can't read the proc file. Err: %v\n", err)
-		return 0
-	}
-
-	cont := strings.Split(string(contents), " ")
-	// 24th entry of the file is the RSS which denotes the number of pages
-	// used by the process.
-	if len(cont) < 24 {
-		glog.Errorln("Error in RSS from stat")
-		return 0
-	}
-
-	rss, err := strconv.Atoi(cont[23])
-	if err != nil {
-		glog.Errorln(err)
-		return 0
-	}
-
-	return rss * os.Getpagesize()
-}
-
-func updateMemoryMetrics(lc *y.Closer) {
-	defer lc.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	update := func() {
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-
-		inUse := ms.HeapInuse + ms.StackInuse
-		// From runtime/mstats.go:
-		// HeapIdle minus HeapReleased estimates the amount of memory
-		// that could be returned to the OS, but is being retained by
-		// the runtime so it can grow the heap without requesting more
-		// memory from the OS. If this difference is significantly
-		// larger than the heap size, it indicates there was a recent
-		// transient spike in live heap size.
-		idle := ms.HeapIdle - ms.HeapReleased
-
-		ostats.Record(context.Background(),
-			x.MemoryInUse.M(int64(inUse)),
-			x.MemoryIdle.M(int64(idle)),
-			x.MemoryProc.M(int64(getMemUsage())))
-	}
-	// Call update immediately so that Dgraph reports memory stats without
-	// having to wait for the first tick.
-	update()
-
-	for {
-		select {
-		case <-lc.HasBeenClosed():
-			return
-		case <-ticker.C:
-			update()
-		}
-	}
-}
-
 var (
 	pstore *badger.DB
-	closer *y.Closer
+	closer *z.Closer
+	lCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
+func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
-	closer = y.NewCloser(1)
-	go updateMemoryMetrics(closer)
+	closer = z.NewCloser(1)
+	go x.MonitorMemoryMetrics(closer)
+	// Initialize cache.
+	if cacheSize == 0 {
+		return
+	}
+	var err error
+	lCache, err = ristretto.NewCache(&ristretto.Config{
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val interface{}) int64 {
+			l, ok := val.(*List)
+			if !ok {
+				return int64(0)
+			}
+			return int64(l.DeepSize())
+		},
+	})
+	x.Check(err)
+	go func() {
+		m := lCache.Metrics
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// Record the posting list cache hit ratio
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+		}
+	}()
+}
+
+func UpdateMaxCost(maxCost int64) {
+	lCache.UpdateMaxCost(maxCost)
 }
 
 // Cleanup waits until the closer has finished processing.
@@ -171,8 +90,8 @@ func Cleanup() {
 
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
 // It does not store the list in any cache.
-func GetNoStore(key []byte) (rlist *List, err error) {
-	return getNew(key, pstore)
+func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
+	return getNew(key, pstore, readTs)
 }
 
 // LocalCache stores a cache of posting lists and deltas.
@@ -205,6 +124,12 @@ func NewLocalCache(startTs uint64) *LocalCache {
 	}
 }
 
+// NoCache returns a new LocalCache instance, which won't cache anything. Useful to pass startTs
+// around.
+func NoCache(startTs uint64) *LocalCache {
+	return &LocalCache{startTs: startTs}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
@@ -229,9 +154,19 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore)
+	getNewPlistNil := func() (*List, error){
+		lc.RLock()
+		defer lc.RUnlock()
+		if lc.plists == nil {
+			return getNew(key, pstore, lc.startTs)
+		}
+		return nil, nil
 	}
+
+	if l, err := getNewPlistNil(); l != nil || err != nil {
+		return l, err
+	}
+
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil
@@ -240,15 +175,14 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	var pl *List
 	if readFromDisk {
 		var err error
-		pl, err = getNew(key, pstore)
+		pl, err = getNew(key, pstore, lc.startTs)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		pl = &List{
-			key:         key,
-			mutationMap: make(map[uint64]*pb.PostingList),
-			plist:       new(pb.PostingList),
+			key:   key,
+			plist: new(pb.PostingList),
 		}
 	}
 
@@ -307,8 +241,7 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
-		if !x.HasString(ctx.Preds, predKey) {
-			ctx.Preds = append(ctx.Preds, predKey)
-		}
+		ctx.Preds = append(ctx.Preds, predKey)
 	}
+	ctx.Preds = x.Unique(ctx.Preds)
 }
