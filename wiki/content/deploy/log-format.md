@@ -34,7 +34,7 @@ This requires a restart of the node itself.
 
 ## Query Logging
 
-You can dynamically turn query logging on or off. To toggle query logging on or off, send the following GraphQL mutation to the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`):
+You can dynamically turn query logging on or off. To toggle query logging on, send the following GraphQL mutation to the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`):
 
 ```graphql
 mutation {
