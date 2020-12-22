@@ -39,7 +39,7 @@ NEW_THEME="${NEW_THEME:-master}"
 NEW_VERSIONS=(
         'v20.11'
         'master'
-        'v20.07',
+        'v20.07'
 		'v20.03'
 )
 
