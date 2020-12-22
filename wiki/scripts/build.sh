@@ -40,11 +40,11 @@ NEW_VERSIONS=(
         'v20.11'
         'master'
         'v20.07'
-		'v20.03'
 )
 
 # these versions use old theme
 OLD_VERSIONS=(
+	'v20.03'
 	'v1.2.2'
 	'v1.1.1'
 	'v1.0.18'
