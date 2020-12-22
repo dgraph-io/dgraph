@@ -479,14 +479,14 @@ regnbr string @index(exact) .
 name string @index(exact) .
 ```
 
-Makes it possible to query Persons and their cars by using:
+This makes it possible to query Persons and their cars by using:
 ```
 q(func type(Person)) {
   name
   ~owner { name }
 }
 ```
-And to get a different key than `~owner` in the result, the query can be written with the wanted label
+To get a different key than `~owner` in the result, the query can be written with the wanted label
 (`cars` in this case):
 
 ```
@@ -496,7 +496,7 @@ q(func type(Person)) {
 }
 ```
 
-This also works if there can be multiple "owners" of a `car`:
+This also works if there are multiple "owners" of a `car`:
 ```
 owner [uid] @reverse .
 ```
