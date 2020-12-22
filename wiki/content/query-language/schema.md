@@ -496,12 +496,12 @@ q(func type(Person)) {
 }
 ```
 
-This also works if there can be multiple "owners" of a car:
+This also works if there can be multiple "owners" of a `car`:
 ```
 owner [uid] @reverse .
 ```
 
-In both cases the `owner` edge should be set on the Car:
+In both cases the `owner` edge should be set on the `Car`:
 ```
 _:p1 <name> "Mary" .
 _:p1 <dgraph.type> "Person" .
