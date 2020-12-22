@@ -7,7 +7,8 @@ weight = 11
 +++
 
 This document summarizes major changes in Dgraph database that you should be
-aware of as you migrate your data from Dgraph v1.0 to newer Dgraph versions.
+aware of as you migrate your data and client applications from Dgraph v1.0 to
+newer Dgraph versions.
 
 ## Schema types: scalar `uid` and list `[uid]`
 
