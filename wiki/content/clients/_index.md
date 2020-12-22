@@ -64,7 +64,7 @@ weight = 7
     <a href="{{< relref "python.md">}}">
       <h2>Python</h2>
       <p>
-        Dgraph Python client
+        Dgraph Python client (Test)
       </p>
     </a>
   </div>
