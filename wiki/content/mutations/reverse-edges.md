@@ -6,11 +6,11 @@ weight = 13
     parent = "mutations"
 +++
 
-Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in Schema and be queried using tilde as the prefix of the reverse edge. e.g. `<~myEdge>`.
+Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in the schema and be queried using tilde as the prefix of the edge name. e.g. `<~myEdge>`.
 
 Dgraph serializes directed graphs. This means that all properties always point from an entity to another entity or value in a single direction. `S P -> O`.
 
-However, in some cases, users want to create an entity in the reverse direction. But there is no specific syntax for reverse edges in Dgraph mutations. Because Reverse edges are just a kind of edge indexing. It is not literally an edge, but a kind of "pointer" and it will always be represented as `S P -> O` in query responses. But the "tilde" sets what is the direction for the user.
+Reverse edges are automatically generated edges, and are not part of your dataset. This means that you cannot run mutations directly on the reverse edges. Mutating the forward edge will automatically update the reverse edge.
 
 There are some confusions about syntax related to reverse. For example, the datasets below are wrong.
 
@@ -188,7 +188,7 @@ Normal hierarchy:
 
 ### Reverse Edges and Facets
 
-Facets on reverse edges have their direction preserved. That is, if you create a facet from child to parent and another facet from parent to child, both will coexist independently.
+Facets on reverse edges are the same as the forward edge. That is, if you set or update a facet on an edge, its reverse will have the same facets.
 
 ```
 {
