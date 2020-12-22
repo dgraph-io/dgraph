@@ -40,7 +40,7 @@ The recommended operating system is Linux for production workloads. Dgraph provi
 
 ### CPU and Memory
 
-At the bare minimum, we recommend machines with at least 2 CPUs and 2 GiB of memory for testing.
+At the bare minimum, we recommend machines with at least 8 CPUs and 16 GiB of memory for testing.
 
 You'll want a sufficient CPU and memory according to your production workload. A common setup for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
 
@@ -50,7 +50,11 @@ You may find you'll need more CPU cores and memory for your specific use case.
 
 Dgraph instances make heavy usage of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
 
-Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes.
+Regarding disk IOPS, we recommend:
+* 1000 IOPS minimum
+* 3000 IOPS for medium and large datasets
+
+Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes. AWS introduced the new [gp3](https://aws.amazon.com/about-aws/whats-new/2020/12/introducing-new-amazon-ebs-general-purpose-volumes-gp3/?nc1=h_ls) disks that gives 3000 IOPS at any disk size.
 
 Recommended disk sizes for Dgraph Zero and Dgraph Alpha:
 
