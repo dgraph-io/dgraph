@@ -77,9 +77,6 @@ const (
 		"and as much other data as possible returned."
 
 	errInternal = "Internal error"
-
-	errExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
-		"GraphQL error propagation triggered."
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -1541,7 +1538,7 @@ func completeValue(
 				return []byte("null"), nil
 			}
 
-			gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
+			gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
 			return nil, x.GqlErrorList{gqlErr}
 		}
@@ -1580,7 +1577,7 @@ func completeGeoObject(path []interface{}, field schema.Field,
 	val map[string]interface{}) ([]byte, x.GqlErrorList) {
 	coordinate, _ := val[schema.Coordinates].([]interface{})
 	if coordinate == nil {
-		gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(),
+		gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(),
 			field.Type()).WithLocations(field.Location())
 		gqlErr.Path = copyPath(path)
 		return nil, x.GqlErrorList{gqlErr}

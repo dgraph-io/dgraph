@@ -1077,18 +1077,22 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 	var bufw bytes.Buffer
 	if field == nil {
 		if enc.children(n) == nil {
-			if _, err := bufw.WriteString(`{}`); err != nil {
+			if _, err = bufw.WriteString(`{}`); err != nil {
 				return nil, err
 			}
 		} else {
-			if err := enc.encode(n, &bufw); err != nil {
+			if err = enc.encode(n, &bufw); err != nil {
 				return nil, err
 			}
 		}
 	} else {
-		if err := enc.encodeGraphQL(n, &bufw, []gqlSchema.Field{field}); err != nil {
-			return nil, err
-		}
+		// GraphQL queries will always have at least one query whose results are visible to users,
+		// implying that the root fastJson node has will always have at least one child. So, no need
+		// to check for the case where there are no children.
+		// Also, errors from GraphQL encoding need to be sent to users along with the data.
+		fmt.Println("*********************err before: ", err, ", is nil: ", err == nil)
+		err = enc.encodeGraphQL(n, &bufw, []gqlSchema.Field{field}, nil)
+		fmt.Println("*********************err after: ", err, ", is nil: ", err == nil)
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
@@ -1097,7 +1101,7 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 			" is bigger than threshold: %d", bufw.Len(), maxEncodedSize)
 	}
 
-	return bufw.Bytes(), nil
+	return bufw.Bytes(), err
 }
 
 func (sg *SubGraph) fieldName() string {

@@ -19,6 +19,8 @@ package query
 import (
 	"bytes"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 )
 
@@ -99,7 +101,8 @@ func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) er
 }
 
 func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer,
-	children []gqlSchema.Field) error {
+	children []gqlSchema.Field, parentPath []interface{}) error {
+	var errs x.GqlErrorList
 	child := enc.children(fj)
 	// This is a scalar value.
 	if child == nil {
@@ -108,9 +111,9 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer,
 			return err
 		}
 		if val == nil {
-			// this would only be the case when the query has no results,
-			// TODO: so write null only for non-list fields (get queries).
-			//List fields would anyways turn out to be [].
+			// val would be nil only when a user query (not a field) has no results,
+			// TODO: so write null only for non-list fields (like get queries).
+			// List fields should always turn out to be [] in case they have no children.
 			_, err = out.Write([]byte("null"))
 		} else {
 			_, err = out.Write(val)
@@ -122,10 +125,30 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer,
 	if _, err := out.WriteRune('{'); err != nil {
 		return err
 	}
+
+	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
+	// the response as it is always written first in DQL query. So, if we get data for dgraph.type
+	// predicate then just save it in dgraphTypes slice, no need to write it to JSON yet.
+	var dgraphTypes []interface{}
+	for enc.attrForID(enc.getAttr(child)) == "dgraph.type" {
+		val, err := enc.getScalarVal(child) // val is a quoted string like: "Human"
+		if err != nil {
+			return err
+		}
+		typeStr := string(val)
+		typeStr = typeStr[1 : len(typeStr)-1] // remove `"` from beginning and end
+		dgraphTypes = append(dgraphTypes, typeStr)
+
+		child = child.next
+		if child == nil {
+			break
+		}
+	}
+
 	cnt := 0
 	i := 0
 	var cur, next fastJsonNode
-	for child != nil {
+	for child != nil && i < len(children) {
 		cnt++
 		curField := children[i]
 		validNext := false
@@ -135,53 +158,118 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer,
 			validNext = true
 		}
 
-		if validNext && enc.getAttr(cur) == enc.getAttr(next) {
-			if cnt == 1 {
-				if err := enc.writeKeyGraphQL(curField, out); err != nil {
-					return err
-				}
+		// write JSON key and opening [ for JSON arrays
+		if cnt == 1 {
+			if err := enc.writeKeyGraphQL(curField, out); err != nil {
+				return err
+			}
+			if curField.Type().ListType() != nil {
 				if _, err := out.WriteRune('['); err != nil {
 					return err
 				}
 			}
-			if err := enc.encodeGraphQL(cur, out, curField.SelectionSet()); err != nil {
+		}
+
+		// write JSON value
+		if curField.Name() == gqlSchema.Typename {
+			if _, err := out.Write([]byte(`"` + curField.TypeName(dgraphTypes) + `"`)); err != nil {
 				return err
 			}
+		} else if curField.DgraphAlias() != enc.attrForID(enc.getAttr(cur)) {
+			if validNext && curField.DgraphAlias() == enc.attrForID(enc.getAttr(next)) {
+				i--
+			} else {
+				out.Write([]byte("null"))
+			}
+			child = child.next
 		} else {
-			if cnt == 1 {
-				if err := enc.writeKeyGraphQL(curField, out); err != nil {
-					return err
-				}
-				if curField.Type().ListType() != nil {
-					if _, err := out.WriteRune('['); err != nil {
-						return err
-					}
-				}
-			}
-			if err := enc.encodeGraphQL(cur, out, curField.SelectionSet()); err != nil {
+			if err := enc.encodeGraphQL(cur, out, curField.SelectionSet(),
+				append(parentPath, curField.ResponseName())); err != nil {
 				return err
 			}
-			if cnt > 1 || curField.Type().ListType() != nil {
+			// iterate to the next child only when we have used cur to write JSON
+			child = child.next
+		}
+
+		// write closing ] for JSON arrays
+		if !(validNext && enc.getAttr(cur) == enc.getAttr(next)) {
+			if curField.Type().ListType() != nil {
 				if _, err := out.WriteRune(']'); err != nil {
 					return err
 				}
 			}
 			cnt = 0 // Reset the count.
 			i++     // all the results for curField have been picked up,
-			// so pick the next field in next iteration
+			// so iterate to the next field
 		}
-		// We need to print comma except for the last attribute.
-		if child.next != nil {
+
+		// print comma except for the last field.
+		if i < len(children) {
 			if _, err := out.WriteRune(','); err != nil {
 				return err
 			}
 		}
-
-		child = child.next
 	}
+
+	// We have iterated over all the data, and corresponding GraphQL fields.
+	// But, the GraphQL query may still have some fields which haven't been iterated upon.
+	// We need to encode these fields appropriately.
+	for i < len(children) {
+		// TODO: first check whether this field should be included, same for the above block.
+		// TODO: if this is the last field and shouldn't be included, remove the comma.
+		field := children[i]
+
+		// write JSON key
+		if err := enc.writeKeyGraphQL(field, out); err != nil {
+			return err
+		}
+
+		// write JSON value
+		if field.Name() == gqlSchema.Typename {
+			if _, err := out.Write([]byte(`"` + field.TypeName(dgraphTypes) + `"`)); err != nil {
+				return err
+			}
+		} else {
+			if field.Type().ListType() != nil {
+				// We could choose to set this to null.  This is our decision, not
+				// anything required by the GraphQL spec.
+				//
+				// However, if we query, for example, for a person's friends with
+				// some restrictions, and there aren't any, is that really a case to
+				// set this at null and error if the list is required?  What
+				// about if an person has just been added and doesn't have any friends?
+				// Doesn't seem right to add null and cause error propagation.
+				//
+				// Seems best if we pick [], rather than null, as the list value if
+				// there's nothing in the Dgraph result.
+				if _, err := out.Write([]byte("[]")); err != nil {
+					return err
+				}
+			} else if field.Type().Nullable() {
+				if _, err := out.Write([]byte("null")); err != nil {
+					return err
+				}
+			} else {
+				errs = append(errs, field.BuildError(append(parentPath, field.ResponseName()),
+					gqlSchema.ErrExpectedNonNull, field.Name(), field.Type()))
+			}
+		}
+
+		i++
+		// print comma except for the last field.
+		if i < len(children) {
+			if _, err := out.WriteRune(','); err != nil {
+				return err
+			}
+		}
+	}
+
 	if _, err := out.WriteRune('}'); err != nil {
 		return err
 	}
 
-	return nil
+	if errs == nil {
+		return nil
+	}
+	return errs
 }

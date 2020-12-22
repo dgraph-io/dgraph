@@ -31,6 +31,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	ErrExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
+		"GraphQL error propagation triggered."
+)
+
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 
@@ -130,7 +135,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("%+v", errors.Wrap(err, msg))
+		glog.Errorf("%+v", errors.Wrap(err, msg+". Got data: "+r.Data.String()))
 		js = []byte(fmt.Sprintf(
 			`{ "errors": [{"message": "%s"}], "data": null }`, msg))
 	}
