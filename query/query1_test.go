@@ -1473,7 +1473,7 @@ func TestAggregateRoot5(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":null}]}}`, js)
 }
 
 func TestAggregateRoot6(t *testing.T) {
@@ -1517,6 +1517,66 @@ func TestAggregateRootError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmptyData(t *testing.T) {
+
+	query := `
+		{
+			var(func: anyofterms(name, "Non-Existent-Data")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":null},{"min(val(a))":null},{"max(val(a))":null}]}}`, js)
+}
+
+func TestCountEmptyData(t *testing.T) {
+
+	query := `
+		{
+			me(func: anyofterms(name, "Non-Existent-Data")) {
+				a: count(uid)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"a":0}]}}`, js)
+}
+
+func TestCountEmptyData2(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend) @filter(eq(name, "non-existent"))
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"c":0}]}}`, js)
+}
+
+func TestCountEmptyData3(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend2)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestAggregateEmpty1(t *testing.T) {
