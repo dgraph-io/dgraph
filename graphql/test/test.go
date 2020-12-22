@@ -22,10 +22,10 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // Various helpers used in GQL testing
@@ -56,7 +56,7 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 }
 
 func LoadSchemaFromString(t *testing.T, sch string) schema.Schema {
-	handler, err := schema.NewHandler(string(sch))
+	handler, err := schema.NewHandler(string(sch), false)
 	requireNoGQLErrors(t, err)
 
 	return LoadSchema(t, handler.GQLSchema())

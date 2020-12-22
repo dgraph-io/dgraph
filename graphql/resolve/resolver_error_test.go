@@ -399,107 +399,11 @@ func TestManyMutationsWithError(t *testing.T) {
 	}
 }
 
-func TestQueriesPropagateExtensions(t *testing.T) {
+func TestSubscriptionErrorWhenNoneDefined(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-	query := `
-	query {
-      getAuthor(id: "0x1") {
-        name
-      }
-    }`
-
-	resp := resolveWithClient(gqlSchema, query, nil,
-		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
-		})
-
-	expectedExtensions := &schema.Extensions{TouchedUids: 2}
-
-	require.NotNil(t, resp)
-	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
-}
-
-func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
-	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-	query := `
-	query {
-      a: getAuthor(id: "0x1") {
-        name
-      }
-      b: getAuthor(id: "0x2") {
-        name
-      }
-      c: getAuthor(id: "0x3") {
-        name
-      }
-    }`
-
-	resp := resolveWithClient(gqlSchema, query, nil,
-		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
-		})
-
-	expectedExtensions := &schema.Extensions{TouchedUids: 6}
-
-	require.NotNil(t, resp)
-	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
-}
-
-func TestMutationsPropagateExtensions(t *testing.T) {
-	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-	mutation := `mutation {
-		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
-			post {
-				title
-			}
-		}
-	}`
-
-	resp := resolveWithClient(gqlSchema, mutation, nil,
-		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
-		})
-
-	// as both .Mutate() and .Query() should get called, so we should get their merged result
-	expectedExtensions := &schema.Extensions{TouchedUids: 7}
-
-	require.NotNil(t, resp)
-	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
-}
-
-func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
-	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-	mutation := `mutation {
-		a: addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
-			post {
-				title
-			}
-		}
-		b: addPost(input: [{title: "A Post", author: {id: "0x2"}}]) {
-			post {
-				title
-			}
-		}
-	}`
-
-	resp := resolveWithClient(gqlSchema, mutation, nil,
-		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
-		})
-
-	// as both .Mutate() and .Query() should get called, so we should get their merged result
-	expectedExtensions := &schema.Extensions{TouchedUids: 14}
-
-	require.NotNil(t, resp)
-	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
+	resp := resolveWithClient(gqlSchema, `subscription { foo }`, nil, nil)
+	test.RequireJSONEq(t, x.GqlErrorList{{Message: "Not resolving subscription because schema" +
+		" doesn't have any fields defined for subscription operation."}}, resp.Errors)
 }
 
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {

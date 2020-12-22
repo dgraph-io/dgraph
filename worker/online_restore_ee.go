@@ -17,6 +17,8 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -24,10 +26,15 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+)
+
+const (
+	errRestoreProposal = "cannot propose restore request"
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
@@ -52,13 +59,34 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		SessionToken: req.SessionToken,
 		Anonymous:    req.Anonymous,
 	}
-	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
+	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
 		return errors.Wrapf(err, "failed to verify backup")
 	}
-
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
 		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
+
+	// This check if any restore operation running on the node.
+	// Operation initiated on other nodes doesn't have record in the record tracker.
+	// This keeps track if there is an already running restore operation return the error.
+	// IMP: This introduces few corner cases.
+	// Like two concurrent restore operation on different nodes.
+	// Considering Restore as admin operation, solving all those complexities has low gains
+	// than to sacrifice the simplicity.
+	isRestoreRunning := func() bool {
+		tasks := GetOngoingTasks()
+		for _, t := range tasks {
+			if t == opRestore.String() {
+				return true
+			}
+		}
+		return false
+	}
+	if isRestoreRunning() {
+		return errors.Errorf("another restore operation is already running. " +
+			"Please retry later.")
+	}
+
 	req.RestoreTs = State.GetTimestamp(false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
@@ -69,21 +97,23 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		reqCopy.GroupId = gid
 
 		go func() {
-			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
-	for range currentGroups {
-		if err := <-errCh; err != nil {
-			return errors.Wrapf(err, "cannot complete restore proposal")
+	go func() {
+		for range currentGroups {
+			if err := <-errCh; err != nil {
+				glog.Errorf("Error while restoring %v", err)
+			}
 		}
-	}
+	}()
 
 	return nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
-	if groups().ServesGroup(req.GetGroupId()) {
+	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
 		return err
 	}
@@ -96,6 +126,40 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
+	return err
+}
+
+func retriableRestoreError(err error) bool {
+	switch {
+	case err == conn.ErrNoConnection:
+		// Try to recover from temporary connection issues.
+		return true
+	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
+		// Try to recover if raft has not been initialized.
+		return true
+	case strings.Contains(err.Error(), errRestoreProposal):
+		// Do not try to recover from other errors when sending the proposal.
+		return false
+	default:
+		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
+		return true
+	}
+}
+
+func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = proposeRestoreOrSend(ctx, req)
+		if err == nil {
+			return nil
+		}
+
+		if retriableRestoreError(err) {
+			time.Sleep(time.Second)
+			continue
+		}
+		return err
+	}
 	return err
 }
 
@@ -114,7 +178,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
-		return &emptyRes, errors.Wrapf(err, "cannot propose restore request")
+		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
 	}
 
 	return &emptyRes, nil
@@ -157,13 +221,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := handler.GetManifests(uri, req.BackupId)
+	manifests, err := handler.GetManifests(uri, req.BackupId, req.BackupNum)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
 	if len(manifests) == 0 {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
+
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
 	if !ok {
@@ -227,12 +292,25 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	if req.VaultField != "" {
 		config.Set("vault_field", req.VaultField)
 	}
+	if req.VaultFormat != "" {
+		config.Set("vault_format", req.VaultField)
+	}
 	return config, nil
 }
 
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
+	return &Credentials{
+		AccessKey:    req.AccessKey,
+		SecretKey:    req.SecretKey,
+		SessionToken: req.SessionToken,
+		Anonymous:    req.Anonymous,
+	}
+}
+
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
-	res := LoadBackup(req.Location, req.BackupId,
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
+		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
+			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -256,7 +334,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
+			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, dropOperations)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot write backup")
 			}

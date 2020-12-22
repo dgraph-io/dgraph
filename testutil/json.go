@@ -76,8 +76,10 @@ func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{},
 		if err != nil {
 			t.Error("Could not marshal JSON:", err)
 		}
-		t.Errorf("Expected JSON and actual JSON differ:\n%s",
-			sdiffJSON(wantBuf, gotBuf, savepath, quiet))
+		if !quiet {
+			t.Errorf("Expected JSON and actual JSON differ:\n%s",
+				sdiffJSON(wantBuf, gotBuf, savepath, quiet))
+		}
 		return false
 	}
 

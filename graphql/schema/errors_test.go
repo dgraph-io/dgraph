@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -138,7 +138,7 @@ func TestAsGQLErrors(t *testing.T) {
 		"an x.GqlError with a location": {err: x.GqlErrorf("A GraphQL error at a location").
 			WithLocations(x.Location{Line: 1, Column: 2}),
 			req: `[{
-				"message": "A GraphQL error at a location", 
+				"message": "A GraphQL error at a location",
 				"locations": [{"column":2, "line":1}]}]`},
 		"wrap an x.GqlError with a location": {
 			err: GQLWrapf(x.GqlErrorf("this error has a location").
@@ -164,7 +164,7 @@ func TestAsGQLErrors(t *testing.T) {
 				x.GqlErrorf("A GraphQL error"),
 				x.GqlErrorf("Another GraphQL error").WithLocations(x.Location{Line: 1, Column: 2})},
 			req: `[
-				{"message":"A GraphQL error"}, 
+				{"message":"A GraphQL error"},
 				{"message":"Another GraphQL error", "locations": [{"column":2, "line":1}]}]`},
 		"a gql parser error": {
 			err: gqlerror.Errorf("A GraphQL error"),

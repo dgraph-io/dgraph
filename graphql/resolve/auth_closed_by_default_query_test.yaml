@@ -1,0 +1,39 @@
+- name: "Query with missing jwt token - type with auth directive"
+  gqlquery: |
+    query {
+      queryTodo {
+        id
+        owner
+        text
+      }
+    }
+  dgquery: |-
+    query {
+      queryRTodo(func: type(Todo)) {
+        owner : Todo.comment
+        text :  Todo.text
+        dgraph.uid : uid
+      }
+    }
+  error:
+    { "message": "a valid JWT is required but was not provided"}
+
+- name: "Query with missing jwt token - type without auth directive"
+  gqlquery: |
+    query {
+      queryTodo {
+        id
+        owner
+        text
+      }
+    }
+  dgquery: |-
+    query {
+      queryRTodo(func: type(Todo)) {
+        owner : Todo.comment
+        text :  Todo.text
+        dgraph.uid : uid
+      }
+    }
+  error:
+    { "message": "a valid JWT is required but was not provided" }

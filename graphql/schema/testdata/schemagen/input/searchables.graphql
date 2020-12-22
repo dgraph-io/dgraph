@@ -12,19 +12,23 @@ type Post {
 	publishByMonth: DateTime @search(by: [month])
 	publishByDay: DateTime @search(by: [day])
 	publishByHour: DateTime @search(by: [hour])
+	publishTimestamp: Int64 @search
 
+	numViewers: Int64 @search(by: [int64])
 	numLikes: Int @search
 	score: Float @search
 	isPublished: Boolean @search
 
 	postType: PostType @search
-        postTypeTrigram: PostType @search(by: [trigram])
-        postTypeRegexp: PostType @search(by: [regexp])
-        postTypeExact: PostType @search(by: [exact])
-        postTypeHash: PostType @search(by: [hash])
-        postTypeRegexpExact: PostType @search(by: [exact, regexp])
-        postTypeHashRegexp: PostType @search(by: [hash, regexp])
-        postTypeNone: PostType @search(by: [])
+	postTypeNonNull: PostType! @search
+	postTypeList: [PostType] @search
+	postTypeTrigram: PostType @search(by: [trigram])
+	postTypeRegexp: PostType @search(by: [regexp])
+	postTypeExact: [PostType] @search(by: [exact])
+	postTypeHash: PostType @search(by: [hash])
+	postTypeRegexpExact: PostType @search(by: [exact, regexp])
+	postTypeHashRegexp: PostType @search(by: [hash, regexp])
+	postTypeNone: PostType @search(by: [])
 }
 
 enum PostType {

@@ -387,17 +387,7 @@ Here's the query.
 }
 ```
 
-{{% load-img "/images/tutorials/3/j-dislike-index-2.png" "Dislikes" %}}
-
-Oops! We forgot to add the index for the dislike predicate!
-
-Go to the Schema tab, find the `dislikes` predicate, add the index from the UI.
-
-{{% load-img "/images/tutorials/3/g-dislike-index-3.png" "Add index" %}}
-
-_Note: Notice that the `dislike` predicate is of integer type._
-
-Let's rerun the query.
+The query returns:
 
 {{% load-img "/images/tutorials/3/n-three-blogs.png" "rating-blog-rating" %}}
 
@@ -578,6 +568,4 @@ Check out our next tutorial of the getting started series [here]({{< relref "tut
 
 ## Need Help
 
-* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
-* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
-* You can also join our [Slack channel](http://slack.dgraph.io).
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs, and discussions.

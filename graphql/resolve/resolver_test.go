@@ -209,7 +209,7 @@ func TestValueCoercion(t *testing.T) {
 			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
 			Response: `{ "getPost": { "numLikes": 2147483648 }}`,
 			Errors: x.GqlErrorList{{
-				Message: "Error coercing value '2.147483648e+09' for field 'numLikes' to type" +
+				Message: "Error coercing value '2147483648' for field 'numLikes' to type" +
 					" Int.",
 				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
 				Path:      []interface{}{"getPost", "numLikes"},

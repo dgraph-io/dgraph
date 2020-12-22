@@ -1,6 +1,14 @@
 # **Don't delete** Comments at top of schemas should work
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
+type Hotel {
+    id: ID!
+    name: String! @search(by: [exact])
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
+}
+
 type Country {
         # **Don't delete** Comments in types should work
         id: ID! # **Don't delete** Comments in lines should work
@@ -12,8 +20,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-	capital: String
-	country: Country @dgraph(pred: "inCountry")
+        capital: String
+	    country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -35,8 +43,11 @@ type Author @dgraph(type: "test.dgraph.author") {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
@@ -46,6 +57,7 @@ type Post @dgraph(type: "myPost") {
         tags: [String] @search(by: [exact])
         topic: String @search(by: [exact]) @dgraph(pred: "test.dgraph.topic")
         numLikes: Int @search
+        numViews: Int64 @search
         isPublished: Boolean @search @dgraph(pred: "is_published")
         postType: PostType @search(by: [hash, trigram])
         author: Author! @hasInverse(field: posts) @dgraph(pred: "post.author")
@@ -89,14 +101,24 @@ interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
 }
 
 type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
         starships: [Starship]
         totalCredits: Float @dgraph(pred: "credits")
 }
 
 type Droid implements Character @dgraph(type: "roboDroid") {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
         primaryFunction: String
 }
 
@@ -136,10 +158,147 @@ type Teacher implements People {
 }
 
 type Student implements People {
-	taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
-type Message {
+type Message @withSubscription {
     content: String! @dgraph(pred: "post")
     author: String @dgraph(pred: "<职业>")
+}
+
+"""
+This is used for fragment related testing
+"""
+interface Thing {
+	name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+}
+
+type ThingOne implements Thing {
+	id: ID! # ID field with same name as the ID field in ThingTwo
+	color: String # field with same name as a field in ThingTwo
+	usedBy: String # field with different name than any field in ThingTwo
+}
+
+type ThingTwo implements Thing {
+	id: ID!
+	color: String
+	owner: String
+}
+
+type Post1 {
+       id: String! @id
+       comments: [Comment1]
+}
+
+type Comment1 {
+      id: String! @id
+      replies: [Comment1]
+}
+type post1{
+    id: ID
+    title: String! @id @search(by: [regexp])
+    numLikes: Int64 @search
+    commentsByMonth: [Int]
+    likesByMonth: [Int64]
+}
+
+type Person1 {
+    id: ID!
+    name: String!
+    friends: [Person1] @hasInverse(field: friends)
+}
+
+# union testing - start
+enum AnimalCategory {
+	Fish
+	Amphibian
+	Reptile
+	Bird
+	Mammal
+	InVertebrate
+}
+
+interface Animal {
+	id: ID!
+	category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+	breed: String @search
+}
+
+type Parrot implements Animal {
+	repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+	speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+	id: ID!
+	breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+	id: ID!
+	animals: [Animal]
+	city: String
+}
+
+type Home {
+	id: ID!
+	address: String
+	members: [HomeMember]
+	favouriteMember: HomeMember
+}
+# union testing - end
+
+type Query {
+	authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+	newAuthor(name: String!): ID! @lambda
+}
+
+# generate directive testing
+type University @generate(
+    query: {
+        query: false
+    },
+    mutation: {
+        add: true,
+        update: true,
+        delete: false
+    }
+){
+    id: ID!
+    name: String!
+    numStudents: Int
+}
+
+# @id directive with multiple data types
+type Book {
+    bookId: Int64! @id
+    name: String!
+    desc: String
+}
+
+type Chapter {
+    chapterId: Int! @id
+    name: String!
+    bookId: Int64! @search
+}
+
+type Section {
+    sectionId: Float! @id
+    name: String!
+    chapterId: Int! @search
 }

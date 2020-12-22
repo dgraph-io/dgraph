@@ -45,6 +45,10 @@ func hasPoormansAuth(r *http.Request) bool {
 func allowedMethodsHandler(allowedMethods allowedMethods, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := allowedMethods[r.Method]; !ok {
+			x.AddCorsHeaders(w)
+			if r.Method == http.MethodOptions {
+				return
+			}
 			x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -59,6 +63,7 @@ func allowedMethodsHandler(allowedMethods allowedMethods, next http.Handler) htt
 func adminAuthHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hasPoormansAuth(r) {
+			x.AddCorsHeaders(w)
 			x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
 			return
 		}
@@ -172,14 +177,14 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer w
 	}
 	gqlReq := &schema.Request{
 		Query: `
-		mutation config($lruMb: Float) {
-		  config(input: {lruMb: $lruMb}) {
+		mutation config($cacheMb: Int) {
+		  config(input: {cacheMb: $cacheMb}) {
 			response {
 			  code
 			}
 		  }
 		}`,
-		Variables: map[string]interface{}{"lruMb": memoryMB},
+		Variables: map[string]interface{}{"cacheMb": memoryMB},
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 
@@ -196,19 +201,19 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer w
 		Query: `
 		query {
 		  config {
-			lruMb
+			cacheMb
 		  }
 		}`,
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 	var data struct {
 		Config struct {
-			LruMb float64
+			CacheMb float64
 		}
 	}
 	x.Check(json.Unmarshal(resp.Data.Bytes(), &data))
 
-	if _, err := fmt.Fprintln(w, data.Config.LruMb); err != nil {
+	if _, err := fmt.Fprintln(w, data.Config.CacheMb); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

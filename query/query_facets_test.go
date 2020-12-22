@@ -2048,6 +2048,192 @@ func TestFacetValueListPredicate(t *testing.T) {
 	`, js)
 }
 
+func TestFacetUIDPredicateWithNormalize(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) @normalize {
+			name: name
+			from: boss @facets {
+				boss: name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"q": [
+					{
+						"boss": "Roger",
+						"from|company": "company1",
+						"name": "Michonne"
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetUIDListPredicateWithNormalize(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) @normalize {
+			name: name
+			friend @facets(since) {
+				friend_name: name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"q": [
+					{
+						"friend_name": "Rick Grimes",
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Glenn Rhee",
+						"friend|since": "2004-05-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Daryl Dixon",
+						"friend|since": "2007-05-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestNestedFacetUIDListPredicateWithNormalize(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) @normalize {
+			name: name
+			friend @facets(since) @normalize {
+				friend_name: name @facets
+				friend @facets(close)  {
+					friend_name_level2: name
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"q": [
+					{
+						"friend_name": "Rick Grimes",
+						"friend_name_level2": "Michonne",
+						"friend_name|dummy": true,
+						"friend_name|origin": "french",
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Glenn Rhee",
+						"friend_name|dummy": true,
+						"friend_name|origin": "french",
+						"friend|since": "2004-05-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Daryl Dixon",
+						"friend|since": "2007-05-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend_name_level2": "Michonne",
+						"friend|close": false,
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend_name_level2": "Glenn Rhee",
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend_name_level2": "Daryl Dixon",
+						"friend|close": false,
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetValuePredicateWithNormalize(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(1, 12000)) @normalize {
+			eng_name: name@en @facets
+			alt_name: alt_name @facets
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data":{
+				"q":[
+					{
+						"eng_name|origin":"french",
+						"eng_name":"Michelle",
+						"alt_name|dummy":{
+							"0":true,
+							"1":false
+						},
+						"alt_name|origin":{
+							"0":"french",
+							"1":"spanish"
+						},
+						"alt_name|isNick":{
+							"1":true
+						},
+						"alt_name":[
+							"Michelle",
+							"Michelin"
+						]
+					},
+					{
+						"eng_name|dummy":true,
+						"eng_name|origin":"french",
+						"eng_name":"Harry",
+						"alt_name|dummy":{
+							"0":false
+						},
+						"alt_name|isNick":{
+							"0":true
+						},
+						"alt_name|origin":{
+							"0":"spanish"
+						},
+						"alt_name":[
+							"Potter"
+						]
+					}
+				]
+			}
+		}
+	`, js)
+}
+
 func TestFacetValueListPredicateSingleFacet(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{

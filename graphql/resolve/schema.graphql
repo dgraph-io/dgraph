@@ -1,6 +1,14 @@
 # Test schema that contains an example of everything that's useful to
 # test for query rewriting.
 
+type Hotel {
+    id: ID!
+    name: String!
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
+}
+
 type Country {
         id: ID!
         name: String! @search(by: [trigram, exact])
@@ -11,7 +19,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-	capital: String
+        capital: String
 }
 
 type Author {
@@ -38,8 +46,13 @@ type Post {
         isPublished: Boolean @search
         postType: [PostType] @search
         author: Author!
-	category: Category @hasInverse(field: posts)
-	comments: [Comment]
+        category: Category @hasInverse(field: posts)
+        comments: [Comment]
+        ps: PostSecret
+}
+
+type PostSecret {
+       title: String! @id
 }
 
 type Category {
@@ -73,6 +86,20 @@ type Human implements Character & Employee {
         female: Boolean
 }
 
+# just for testing filters on enum types
+
+type Verification {
+  name: String @search(by: [exact])
+  status: [Status!]! @search(by: [exact])
+  prevStatus: Status! @search
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  DEACTIVATED
+}
+
 # just for testing singluar (non-list) edges in both directions
 
 type House {
@@ -96,6 +123,11 @@ type MovieDirector {
         id: ID!
         name: String!
         directed: [Movie] @dgraph(pred: "directed.movies")
+}
+
+type Lab {
+        name: String! @id
+        computers: [Computer]
 }
 
 # just for testing XID remove in list
@@ -140,7 +172,7 @@ type Teacher implements People {
 }
 
 type Student implements People {
-	taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
 type Comment {
@@ -228,4 +260,122 @@ type Y implements X @auth(
     """ }
 ){
   userRole: String @search(by: [hash])
+}
+
+type Post1 {
+  id: String! @id
+  content: String
+  comments: [Comment1]
+}
+
+type Person1 {
+  id: String! @id
+  name: String
+}
+
+type Comment1 {
+  id: String! @id
+  message: String
+  replies: [Comment1]
+}
+
+type Tweets {
+    id: String! @id
+    score: Int
+}
+
+"""
+This is used for fragment related testing
+"""
+interface Thing {
+    name: String # field to act as a common inherited field for both ThingOne and ThingTwo
+}
+
+type ThingOne implements Thing {
+    id: ID! # ID field with same name as the ID field in ThingTwo
+    color: String # field with same name as a field in ThingTwo
+    prop: String @dgraph(pred: "prop") # field with same name and same dgraph predicate as a field in ThingTwo
+    usedBy: String # field with different name than any field in ThingTwo
+}
+
+type ThingTwo implements Thing {
+    id: ID!
+    color: String
+    prop: String @dgraph(pred: "prop")
+    owner: String
+}
+
+type Person {
+    id: ID!
+    name: String @search(by: [hash])
+    friends: [Person] @hasInverse(field: friends)
+}
+
+interface A {
+    name: String! @id
+}
+
+type B implements A {
+    id: ID!
+}
+
+# union testing - start
+enum AnimalCategory {
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
+}
+
+interface Animal {
+    id: ID!
+    category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+    breed: String @search
+}
+
+type Parrot implements Animal {
+    repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+    speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+    id: ID!
+    animals: [Animal]
+    city: String
+}
+
+type Home {
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
+}
+# union testing - end
+
+type Workflow {
+    id: ID!
+    nodes: [Node!]
+}
+
+type Node {
+    name: String!
 }

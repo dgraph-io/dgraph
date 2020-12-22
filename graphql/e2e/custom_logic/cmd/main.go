@@ -35,7 +35,8 @@ import (
 )
 
 type expectedRequest struct {
-	method    string
+	method string
+	// Send urlSuffix as empty string to ignore comparison
 	urlSuffix string
 	body      string
 	// Send headers as nil to ignore comparing headers.
@@ -133,13 +134,22 @@ func check2(v interface{}, err error) {
 }
 
 func getError(key, val string) error {
-	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
+	jsonKey, _ := json.Marshal(key)
+	jsonKey = jsonKey[1 : len(jsonKey)-1]
+	jsonVal, _ := json.Marshal(val)
+	jsonVal = jsonVal[1 : len(jsonVal)-1]
+	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, jsonKey, jsonVal)
 }
 
 func compareHeaders(headers map[string][]string, actual http.Header) error {
 	if headers == nil {
 		return nil
 	}
+	// unless some other content-type was expected, always make sure we get JSON as content-type.
+	if _, ok := headers["Content-Type"]; !ok {
+		headers["Content-Type"] = []string{"application/json"}
+	}
+
 	actualHeaderLen := len(actual)
 	expectedHeaderLen := len(headers)
 	if actualHeaderLen != expectedHeaderLen {
@@ -172,7 +182,8 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid HTTP method", r.Method)
 	}
 
-	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+	if expectedRequest.urlSuffix != "" && !strings.HasSuffix(r.URL.String(),
+		expectedRequest.urlSuffix) {
 		return getError("Invalid URL", r.URL.String())
 	}
 
@@ -247,6 +258,26 @@ func getDefaultResponse() []byte {
 	return []byte(resTemplate)
 }
 
+func getRestError(w http.ResponseWriter, err []byte) {
+	w.WriteHeader(http.StatusBadRequest)
+	check2(w.Write(err))
+}
+
+func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/0x123?name=Author&num=10",
+		body:      "",
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
+}
+
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
@@ -266,6 +297,20 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		method:    http.MethodPost,
 		urlSuffix: "/0x123?name=Author&num=10",
 		body:      "",
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write(getDefaultResponse()))
+}
+
+func postFavMoviesWithBodyHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/0x123?name=Author",
+		body:      `{"id":"0x123","movie_type":"space","name":"Author"}`,
 		headers:   nil,
 	})
 	if err != nil {
@@ -295,17 +340,40 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
 }
 
-func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
-		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
+		urlSuffix: "/verifyCustomNameHeaders",
 		body:      "",
+		headers: map[string][]string{
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Authorization":   {"random-fake-token"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
+		},
 	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`
+	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
+}
+
+func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method: http.MethodGet,
+		body:   "",
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	var resp string
+	switch r.URL.Query().Get("screen_name") {
+	case "manishrjain":
+		resp = `
 	{
 		"users": [{
 			"id": 1231723732206411776,
@@ -317,7 +385,16 @@ func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 			"friends_count": 117,
 			"statuses_count": 0
 		}]
-	}`)))
+	}`
+	case "amazingPanda":
+		resp = `
+	{
+		"users": [{
+			"name": "twitter_bot"
+		}]
+	}`
+	}
+	check2(w.Write([]byte(resp)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -346,6 +423,50 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
         {
           "id": "0x3",
           "name": "Mov2"
+        }
+    ]`)))
+}
+
+func favMoviesCreateErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreateError",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":"Mov2"}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for FavoriteMoviesCreate query"}]}`))
+}
+
+func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreateWithNullBody",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":null}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`[
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": null
         }
     ]`)))
 }
@@ -397,6 +518,21 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
         "id": "0x1",
         "name": "Mov1"
     }`)))
+}
+
+func humanBioHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/humanBio",
+		body:      `{"name":"Han","totalCredits":10}`,
+	})
+	if err != nil {
+		w.WriteHeader(400)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`"My name is Han and I have 10 credits."`)))
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
@@ -559,19 +695,6 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
-}
-
-func getPostswithLike(w http.ResponseWriter, r *http.Request) {
-	_, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
-		urlSuffix: "/getPostswithLike",
-		body:      ``,
-	})
-	if err != nil {
-		check2(w.Write([]byte(err.Error())))
-		return
-	}
-
-	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
 }
 
 type input struct {
@@ -769,6 +892,43 @@ func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
 func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody input
 	nameHandler(w, r, &inputBody)
+}
+
+func userNameErrorHandler(w http.ResponseWriter, r *http.Request) {
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`))
+}
+
+func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
+	expectedRequest := expectedRequest{
+		body: `{"uid":"0x5"}`,
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	fmt.Println(b, err)
+	if err != nil {
+		err = getError("Unable to read request body", err.Error())
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	if string(b) != expectedRequest.body {
+		err = getError("Unexpected value for request body", string(b))
+	}
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	var inputBody input
+	if err := json.Unmarshal(b, &inputBody); err != nil {
+		fmt.Println("while doing JSON unmarshal: ", err)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	n := fmt.Sprintf(`"%s"`, inputBody.Name())
+	check2(fmt.Fprint(w, n))
+
 }
 
 func carHandler(w http.ResponseWriter, r *http.Request) {
@@ -1112,15 +1272,19 @@ func main() {
 
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
+	http.HandleFunc("/favMoviesError/", getFavMoviesErrorHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
+	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
+	http.HandleFunc("/favMoviesCreateError", favMoviesCreateErrorHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
-
+	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBodyHandler)
 	// The endpoints below are for testing custom resolution of fields within type definitions.
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
@@ -1132,11 +1296,14 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/userNameError", userNameErrorHandler)
+	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
+	http.HandleFunc("/humanBio", humanBioHandler)
 
 	/*************************************
 	* For testing http with graphql
@@ -1194,7 +1361,6 @@ func main() {
 	bsch := graphql.MustParseSchema(graphqlResponses["batchOperationSchema"].Schema, &query{})
 	bh := &relay.Handler{Schema: bsch}
 	http.HandleFunc("/getPosts", getPosts)
-	http.HandleFunc("/getPostswithLike", getPostswithLike)
 	http.Handle("/gqlUserNames", bh)
 	http.Handle("/gqlCars", bh)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)

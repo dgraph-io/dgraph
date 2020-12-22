@@ -1,0 +1,12 @@
+query {
+	queryRestaurant {
+		id
+		xid
+		name
+		pic
+		rating
+		costFor2
+		currency
+		createdAt
+	}
+}

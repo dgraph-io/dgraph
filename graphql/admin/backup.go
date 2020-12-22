@@ -28,12 +28,8 @@ import (
 )
 
 type backupInput struct {
-	Destination  string
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-	ForceFull    bool
+	DestinationFields
+	ForceFull bool
 }
 
 func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

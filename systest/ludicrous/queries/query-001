@@ -1,0 +1,13 @@
+{
+  result(func: gt(count(pred), 5)) {
+    count(pred) 
+  }
+}    
+---
+{
+  "result": [
+    {
+      "count(pred)": 30000
+    }
+  ]
+}

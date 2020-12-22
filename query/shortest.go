@@ -340,8 +340,13 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				continue
 			}
 
-			// Add path to list.
+			// Add path to list after making a copy of the path in itemRoute. A copy of
+			// *item.path.route is required because it has to be put back in the sync pool and a
+			// future reuse can alter the item already present in kroute because it is a pointer.
+			itemRoute := make([]pathInfo, len(*item.path.route))
+			copy(itemRoute, *item.path.route)
 			newRoute := item.path
+			newRoute.route = &itemRoute
 			newRoute.totalWeight = item.cost
 			kroutes = append(kroutes, newRoute)
 			if len(kroutes) == numPaths {

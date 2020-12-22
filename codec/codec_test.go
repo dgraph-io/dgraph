@@ -47,7 +47,8 @@ func TestUidPack(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Some edge case tests.
-	Encode([]uint64{}, 128)
+	pack := Encode([]uint64{}, 128)
+	FreePack(pack)
 	require.Equal(t, 0, ApproxLen(&pb.UidPack{}))
 	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
@@ -63,6 +64,51 @@ func TestUidPack(t *testing.T) {
 		require.Equal(t, len(expected), ExactLen(pack))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
+		FreePack(pack)
+	}
+}
+
+func TestBufferUidPack(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	// Some edge case tests.
+	pack := Encode([]uint64{}, 128)
+	FreePack(pack)
+	buf := DecodeToBuffer(&pb.UidPack{}, 0)
+	require.Equal(t, 0, buf.LenNoPadding())
+	require.NoError(t, buf.Release())
+
+	for i := 0; i < 13; i++ {
+		size := rand.Intn(10e6)
+		if size < 0 {
+			size = 1e6
+		}
+		expected := getUids(size)
+
+		pack = Encode(expected, 256)
+		require.Equal(t, len(expected), ExactLen(pack))
+		actual := Decode(pack, 0)
+		require.Equal(t, expected, actual)
+
+		actualbuffer := DecodeToBuffer(pack, 0)
+		enc := EncodeFromBuffer(actualbuffer.Bytes(), 256)
+		require.Equal(t, ExactLen(pack), ExactLen(enc))
+
+		prev := uint64(0)
+		outBuf := actualbuffer.Bytes()
+		var uids []uint64
+		// Read all uids in the outBuf
+		for len(outBuf) > 0 {
+			uid, n := binary.Uvarint(outBuf)
+			outBuf = outBuf[n:]
+
+			next := uint64(prev) + uid
+			prev = next
+			uids = append(uids, next)
+		}
+		require.Equal(t, actual, uids)
+		require.NoError(t, actualbuffer.Release())
+		FreePack(pack)
 	}
 }
 
@@ -73,6 +119,7 @@ func TestSeek(t *testing.T) {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
+	defer FreePack(pack)
 	dec := Decoder{Pack: pack}
 
 	tests := []struct {
@@ -121,6 +168,7 @@ func TestLinearSeek(t *testing.T) {
 		enc.Add(uint64(i))
 	}
 	pack := enc.Done()
+	defer FreePack(pack)
 	dec := Decoder{Pack: pack}
 
 	for i := 0; i < 2*N; i += 10 {
@@ -150,6 +198,7 @@ func TestDecoder(t *testing.T) {
 		expected = append(expected, uint64(i))
 	}
 	pack := enc.Done()
+	defer FreePack(pack)
 
 	dec := Decoder{Pack: pack}
 	for i := 3; i < N; i += 3 {
@@ -215,6 +264,7 @@ func benchmarkUidPackEncode(b *testing.B, blockSize int) {
 	for i := 0; i < b.N; i++ {
 		pack := Encode(uids, blockSize)
 		out, err := pack.Marshal()
+		FreePack(pack)
 		if err != nil {
 			b.Fatalf("Error marshaling uid pack: %s", err.Error())
 		}
@@ -249,6 +299,7 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 
 	pack := Encode(uids, blockSize)
 	data, err := pack.Marshal()
+	defer FreePack(pack)
 	x.Check(err)
 	b.Logf("Output size: %s. Compression: %.2f",
 		humanize.Bytes(uint64(len(data))),
@@ -301,6 +352,7 @@ func newUidPack(data []uint64) *pb.UidPack {
 
 func TestCopyUidPack(t *testing.T) {
 	pack := newUidPack([]uint64{1, 2, 3, 4, 5})
+	defer FreePack(pack)
 	copy := CopyUidPack(pack)
 	require.Equal(t, Decode(pack, 0), Decode(copy, 0))
 }

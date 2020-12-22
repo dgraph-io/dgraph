@@ -18,11 +18,14 @@ package codec
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"sort"
+	"unsafe"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-groupvarint"
 )
 
@@ -44,17 +47,40 @@ type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
 	uids      []uint64
+	alloc     *z.Allocator
+	buf       *bytes.Buffer
+}
+
+var blockSize = int(unsafe.Sizeof(pb.UidBlock{}))
+
+func FreePack(pack *pb.UidPack) {
+	if pack == nil {
+		return
+	}
+	if pack.AllocRef == 0 {
+		return
+	}
+	alloc := z.AllocatorFrom(pack.AllocRef)
+	alloc.Release()
 }
 
 func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
+
+	// Allocate blocks manually.
+	b := e.alloc.AllocateAligned(blockSize)
+	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
+
+	block.Base = e.uids[0]
+	block.NumUids = uint32(len(e.uids))
+
+	// block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	var out bytes.Buffer
+	e.buf.Reset()
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
@@ -69,7 +95,7 @@ func (e *Encoder) packBlock() {
 		}
 
 		data := groupvarint.Encode4(buf, tmpUids)
-		x.Check2(out.Write(data))
+		x.Check2(e.buf.Write(data))
 
 		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
@@ -79,14 +105,21 @@ func (e *Encoder) packBlock() {
 		e.uids = e.uids[4:]
 	}
 
-	block.Deltas = out.Bytes()
+	sz := len(e.buf.Bytes())
+	block.Deltas = e.alloc.Allocate(sz)
+	x.AssertTrue(sz == copy(block.Deltas, e.buf.Bytes()))
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
+
+var tagEncoder string = "enc"
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+		e.alloc = z.NewAllocator(1024)
+		e.alloc.Tag = tagEncoder
+		e.buf = new(bytes.Buffer)
 	}
 
 	size := len(e.uids)
@@ -102,9 +135,12 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
-// Done returns the final output of the encoder.
+// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
+	if e.pack != nil && e.alloc != nil {
+		e.pack.AllocRef = e.alloc.Ref
+	}
 	return e.pack
 }
 
@@ -151,7 +187,12 @@ func (d *Decoder) UnpackBlock() []uint64 {
 			// The SSE code tries to read 16 bytes past the header(1 byte).
 			// So we are padding encData to increase its length to 17 bytes.
 			// This is a workaround for https://github.com/dgryski/go-groupvarint/issues/1
-			encData = append(encData, bytes.Repeat([]byte{0}, 17-len(encData))...)
+			//
+			// We should NEVER write to encData, because it references block.Deltas, which is laid
+			// out on an allocator.
+			tmp := make([]byte, 17)
+			copy(tmp, encData)
+			encData = tmp
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
@@ -308,6 +349,21 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
+// EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
+func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
+	enc := Encoder{BlockSize: blockSize}
+	var prev uint64
+	for len(buf) > 0 {
+		uid, n := binary.Uvarint(buf)
+		buf = buf[n:]
+
+		next := prev + uid
+		enc.Add(next)
+		prev = next
+	}
+	return enc.Done()
+}
+
 // ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
@@ -337,13 +393,33 @@ func ExactLen(pack *pb.UidPack) int {
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, ApproxLen(pack))
+	out := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
-		uids = append(uids, block...)
+	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
+		out = append(out, uids...)
 	}
-	return uids
+	return out
+}
+
+// DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
+// calloc'ed and can be SHOULD be freed up by calling buffer.Release().
+func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
+	x.Check(err)
+	buf.AutoMmapAfter(1 << 30)
+
+	var last uint64
+	tmp := make([]byte, 16)
+	dec := Decoder{Pack: pack}
+	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
+		for _, u := range uids {
+			n := binary.PutUvarint(tmp, u-last)
+			x.Check2(buf.Write(tmp[:n]))
+			last = u
+		}
+	}
+	return buf
 }
 
 func match32MSB(num1, num2 uint64) bool {

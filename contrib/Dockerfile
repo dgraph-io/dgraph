@@ -5,7 +5,7 @@
 # already built and placed there.
 
 FROM ubuntu:latest
-MAINTAINER Dgraph Labs <contact@dgraph.io>
+LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates curl iputils-ping && \
@@ -19,4 +19,5 @@ EXPOSE 9080
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
+ENV GODEBUG=madvdontneed=1
 CMD ["dgraph"] # Shows the dgraph version and commands available.

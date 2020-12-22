@@ -428,6 +428,7 @@ func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
+	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
@@ -448,7 +449,6 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
-	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
@@ -533,10 +533,25 @@ func LoadTypesFromDb() error {
 	return nil
 }
 
-// InitialTypes returns the schema updates to insert at the begining of
-// Dgraph's execution. It looks at the schema state to determine which
+// InitialTypes returns the type updates to insert at the beginning of
+// Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
 func InitialTypes() []*pb.TypeUpdate {
+	return initialTypesInternal(false)
+}
+
+// CompleteInitialTypes returns all the type updates regardless of the worker
+// options. This is useful in situations where the worker options are not known
+// in advance or it is required to consider all initial pre-defined types. An
+// example of such situation is while allowing type updates to go through during
+// alter if they are same as existing pre-defined types. This is useful for
+// live loading a previously exported schema.
+func CompleteInitialTypes() []*pb.TypeUpdate {
+	return initialTypesInternal(true)
+}
+
+// NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
+func initialTypesInternal(all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
@@ -551,9 +566,31 @@ func InitialTypes() []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				},
 			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.history",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema_history",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.schema_created_at",
+					ValueType: pb.Posting_DATETIME,
+				},
+			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.persisted_query",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.p_query",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.p_sha256hash",
+					ValueType: pb.Posting_STRING,
+				},
+			},
 		})
 
-	if x.WorkerConfig.AclEnabled {
+	if all || x.WorkerConfig.AclEnabled {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
@@ -623,22 +660,47 @@ func CompleteInitialSchema() []*pb.SchemaUpdate {
 func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
-	initialSchema = append(initialSchema, &pb.SchemaUpdate{
-		Predicate: "dgraph.type",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		List:      true,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.schema",
-		ValueType: pb.Posting_STRING,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.xid",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		Upsert:    true,
-	})
+	initialSchema = append(initialSchema,
+		&pb.SchemaUpdate{
+			Predicate: "dgraph.cors",
+			ValueType: pb.Posting_STRING,
+			List:      true,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.type",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			List:      true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.drop.op",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.xid",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_history",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_created_at",
+			ValueType: pb.Posting_DATETIME,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.p_query",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.p_sha256hash",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+		})
 
 	if all || x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates
@@ -682,22 +744,50 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
-// predicate pred is different than the passed update.
-func IsPreDefinedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+// IsPreDefPredChanged returns true if the initial update for the pre-defined
+// predicate is different than the passed update.
+// If the passed update is not a pre-defined predicate then it just returns false.
+func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
-	if !x.IsPreDefinedPredicate(pred) {
+	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
 	}
 
 	initialSchema := CompleteInitialSchema()
 	for _, original := range initialSchema {
-		if original.Predicate != pred {
+		if original.Predicate != update.Predicate {
 			continue
 		}
 		return !proto.Equal(original, update)
 	}
 	return true
+}
+
+// IsPreDefTypeChanged returns true if the initial update for the pre-defined
+// type is different than the passed update.
+// If the passed update is not a pre-defined type than it just returns false.
+func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
+	// Return false for non-pre-defined types.
+	if !x.IsPreDefinedType(update.TypeName) {
+		return false
+	}
+
+	initialTypes := CompleteInitialTypes()
+	for _, original := range initialTypes {
+		if original.TypeName != update.TypeName {
+			continue
+		}
+		if len(original.Fields) != len(update.Fields) {
+			return true
+		}
+		for i, field := range original.Fields {
+			if field.Predicate != update.Fields[i].Predicate {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func reset() {

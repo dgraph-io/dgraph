@@ -7,7 +7,9 @@
         isPublic
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -20,7 +22,9 @@
         name
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -34,7 +38,9 @@
         msg
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -47,7 +53,9 @@
         name
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -60,7 +68,9 @@
         title
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -73,7 +83,9 @@
         logs
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -94,7 +106,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -109,7 +123,9 @@
         disabled
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -130,7 +146,9 @@
         }
       }
     }
-  role: "USER"
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -143,7 +161,9 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -157,7 +177,9 @@
         msg
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -170,7 +192,9 @@
         name
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -183,7 +207,9 @@
         title
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -196,7 +222,9 @@
         logs
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -217,7 +245,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -232,7 +262,9 @@
         disabled
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
@@ -253,7 +285,9 @@
         }
       }
     }
-  role: "ADMIN"
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
   dgquery: |-
     query {
     }
