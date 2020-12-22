@@ -35,7 +35,6 @@ the schema file from an export so all predicates of type `uid` are changed to
 
 For example, you could start with the following schema in Dgraph v1.0:
 
-<!-- NOSUBMIT comment for reviewers: OK to change the syntax blocks here to '```graphql' ? --> 
 ```text
 name: string .
 friend: uid .
@@ -86,9 +85,6 @@ type Person {
 
 Next, associate a node with the `Person` type by adding the following RDF triple
 to Dgraph (using a mutation):
-<!--    NOSUBMIT comment for reviewers: This example would be a lot better if we
-provided actual example mutation syntax. Also left open is the question: does
-the reader need to to this with all nodes, or only one node per type? -->
 
 ```text
 <0xff> <dgraph.type> "Person" .
