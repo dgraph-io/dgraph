@@ -10,47 +10,20 @@ Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in th
 
 Dgraph serializes directed graphs. This means that all properties always point from an entity to another entity or value in a single direction. `S P -> O`.
 
-Reverse edges are automatically generated edges, and are not part of your dataset. This means that you cannot run mutations directly on the reverse edges. Mutating the forward edge will automatically update the reverse edge.
+Reverse edges are automatically generated edges and are not part of your dataset. This means that you cannot run mutations directly on the reverse edges. Mutating the forward edge will automatically update the reverse edge.
 
-There are some confusions about syntax related to reverse. For example, the datasets below are wrong.
+**Using Reverse Edges correctly**
 
-```RDF
-_:BlankNode <~myEdge> _:MyObject . #That's really wrong syntax.
-_:BlankNode <dgraph.type> "Person" .
-```
-or
-
-```JSON
-{
-   "set": [
-      {
-         "uid": "_:BlankNode",
-         "dgraph.type": "Person",
-         "~myEdge": {
-            "uid": "_:MyObject",
-            "dgraph.type": "Object"
-         }
-      }
-   ]
-}
-```
-
-### Using Reverse Edges correctly
-
-Fixing the previous RDF mutation:
-
-In RDF the arrangement of the triples already defines what can be reverse.
+In RDF the arrangement of the triples already defines what can be reversed.
 
 ```RDF
 _:MyObject <myEdge> _:BlankNode  . #That's the right syntax of a reverse edge.
 _:BlankNode <dgraph.type> "Person" .
 ```
 
-Fixing the previous JSON mutation:
+The easiest way to correct and apply reverse edges is using JSON. It is simply having the directive on schema at the desired edge. When building your mutations remember that there is no reverse syntax in JSON. So what you should do is similar to RDF: change the arrangement of the JSON objects.
 
-The easiest way to correct and apply reverse edges using JSON. It is simply having the directive on schema at the desired edge and when building your mutations remember that there is no reverse syntax in JSON. So what you should do is similar to RDF. Just change the arrangement of the JSON objects.
-
-Since `MyObject` is above the `Person` entity. So `MyObject` must come before when formatting the mutation.
+Since `MyObject` is above the `Person` entity, `MyObject` must come before when formatting the mutation.
 
 ```JSON
 {
@@ -87,7 +60,7 @@ Another way to do this is to separate into small chunks/batches and use blank no
 
 ### More reverse examples
 
-In RDF the correct way to apply reverse edges is very straightforward.
+In RDF the correct way to apply reverse edges is very straight-forward.
 
 ```RDF
 name: String .
@@ -123,7 +96,7 @@ parent: [uid] @reverse .
 
 The directions are like:
 
-```
+```rdf
 Exchanged hierarchy:
  Object -> Parent;
  Object <~ Parent; #Reverse
@@ -153,7 +126,7 @@ Normal hierarchy:
 1. `wife_husband` is the reversed `wife` edge.
 2. `husband` is an actual edge.
 
-```
+```graphql
 {
   q(func: has(wife)) {
     name
@@ -175,7 +148,7 @@ Normal hierarchy:
 
 1. `Children` is the reversed `parent` edge.
 
-```
+```graphql
 {
   q(func: has(name)) @filter(eq(name, "Earl Sneed Sinclair")){
     name
@@ -190,7 +163,7 @@ Normal hierarchy:
 
 Facets on reverse edges are the same as the forward edge. That is, if you set or update a facet on an edge, its reverse will have the same facets.
 
-```
+```rdf
 {
   set {
     _:Megalosaurus <name> "Earl Sneed Sinclair" .
@@ -206,7 +179,7 @@ Facets on reverse edges are the same as the forward edge. That is, if you set or
 
 Using a similar query from the previous example:
 
-```
+```graphql
 {
   Parent(func: has(name)) @filter(eq(name, "Earl Sneed Sinclair")){
     name
@@ -223,7 +196,7 @@ Using a similar query from the previous example:
 }
 ```
 
-```
+```json
 {
   "data": {
     "Parent": [
