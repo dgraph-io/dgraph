@@ -469,6 +469,7 @@ func setupServer(closer *z.Closer) {
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/debug/plist", plistHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/draining", drainingHandler)

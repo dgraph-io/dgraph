@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -574,6 +575,16 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccessResponse(w, r)
+}
+
+func plistHandler(w http.ResponseWriter, r *http.Request) {
+	glog.Infof("Received request for verifying plist UID pack")
+	start := time.Now()
+	if err := posting.VerifyPostingList(w); err != nil {
+		x.SetStatus(w, "", err.Error())
+		return
+	}
+	glog.Infof("Verified posting lists UID pack in %s\n", time.Since(start))
 }
 
 func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
