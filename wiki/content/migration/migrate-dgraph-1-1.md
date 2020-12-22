@@ -60,7 +60,7 @@ Expand queries will not work until the type system has been properly set up. For
 example, the following query will return an empty result in newer Dgraph
 versions if the node `0xff` has no type information.
 
-```text
+```graphql
 {
   me(func: uid(0xff)) {
     expand(_all_)
@@ -76,15 +76,15 @@ You can add a type definition using the `/alter` endpoint. Let's assume that
 the node shown in the previous example represents a person, with the `Person`
 type defined as follows:
 
-```text
+```graphql
 type Person {
   name
   age
 }
 ```
 
-Next, associate a node with the `Person` type by adding the following RDF triple
-to Dgraph (using a mutation):
+Next, associate a node with the `Person` type by adding the following RDF 
+triple to Dgraph (using a mutation):
 
 ```text
 <0xff> <dgraph.type> "Person" .
@@ -106,10 +106,10 @@ reference it explicitly in queries as you could in Dgraph v1.0.
 For example, the following query returns the predicates of the node `0xff` in
 Dgraph v1.0:
 
-```ql
+```graphql
 {
   me(func: uid(0xff)) {
-     _predicate_ # NOT available in Dgraph v1.1
+     _predicate_ # NOT available in Dgraph v1.1 and newer versions
   }
 }
 ```
