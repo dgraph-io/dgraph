@@ -2855,6 +2855,68 @@ func queryAggregateOnEmptyData(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func queryAggregateOnEmptyData2(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregateState (filter: {xcode : { eq : "nsw" }} ) {
+				count
+				capitalMax
+				capitalMin
+				xcodeMin
+				xcodeMax
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregateState":
+						{
+							"capitalMax": null,
+							"capitalMin": null,
+							"xcodeMin": "nsw",
+							"xcodeMax": "nsw",
+							"count": 1
+						}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData3(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+					nameMin
+					capitalMax
+					capitalMin
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"nameMin": "Gujarat",
+					"capitalMax": null,
+					"capitalMin": null
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
 func queryAggregateWithoutFilter(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
