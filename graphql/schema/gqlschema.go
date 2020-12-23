@@ -1756,14 +1756,17 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		})
 	}
 	if hasXIDField {
-		name, dtype := xidTypeFor(defn)
-		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: name,
-			Type: &ast.Type{
-				NamedType: dtype,
-				NonNull:   !hasIDField,
-			},
-		})
+		for _, fld := range defn.Fields {
+			if hasIDDirective(fld) {
+				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+					Name: fld.Name,
+					Type: &ast.Type{
+						NamedType: fld.Type.Name(),
+						NonNull:   !hasIDField,
+					},
+				})
+			}
+		}
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 	subs := defn.Directives.ForName(subscriptionDirective)

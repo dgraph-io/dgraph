@@ -707,20 +707,20 @@ func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 		})
 	}
 
-	if len(idDirectiveFields) > 1 {
-		fieldNamesString, errLocations := collectFieldNames(idDirectiveFields)
-		errMessage := fmt.Sprintf(
-			"Type %s: fields %s have the @id directive, "+
-				"but a type can have only one field with @id. "+
-				"Pick a single field with @id for type %s.",
-			typ.Name, fieldNamesString, typ.Name,
-		)
-
-		errs = append(errs, &gqlerror.Error{
-			Message:   errMessage,
-			Locations: errLocations,
-		})
-	}
+	//if len(idDirectiveFields) > 1 {
+	//	fieldNamesString, errLocations := collectFieldNames(idDirectiveFields)
+	//	errMessage := fmt.Sprintf(
+	//		"Type %s: fields %s have the @id directive, "+
+	//			"but a type can have only one field with @id. "+
+	//			"Pick a single field with @id for type %s.",
+	//		typ.Name, fieldNamesString, typ.Name,
+	//	)
+	//
+	//	errs = append(errs, &gqlerror.Error{
+	//		Message:   errMessage,
+	//		Locations: errLocations,
+	//	})
+	//}
 
 	return errs
 }
