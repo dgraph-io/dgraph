@@ -360,11 +360,18 @@ func TestTruncateStorage(t *testing.T) {
 
 	// Insert entries.
 	for i := uint64(0); i < numEntries; i++ {
+		var typ raftpb.EntryType
+		if i%3 == 0 {
+			typ = raftpb.EntryConfChange
+		} else {
+			typ = raftpb.EntryNormal
+		}
+
 		idx := i + 1
 		entry := raftpb.Entry{
 			Term:  idx,
 			Index: idx,
-			Type:  raftpb.EntryNormal,
+			Type:  typ,
 			Data:  []byte(fmt.Sprintf("entry %d", idx)),
 		}
 		ds.addEntries([]raftpb.Entry{entry})
@@ -379,14 +386,15 @@ func TestTruncateStorage(t *testing.T) {
 	}
 
 	// Truncate entries.
-	ds.TruncateEntriesUntil(numTruncated)
+	err = ds.TruncateEntriesUntil(numTruncated)
+	require.NoError(t, err)
 
 	// Verify all entries.
 	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
 	require.Len(t, entries, int(numEntries))
 	for i := uint64(0); i < numEntries; i++ {
 		idx := i + 1
-		if idx < numTruncated {
+		if idx < numTruncated && i%3 != 0 {
 			require.Empty(t, entries[i].Data)
 		} else {
 			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
@@ -411,7 +419,7 @@ func TestTruncateStorage(t *testing.T) {
 	require.Len(t, entries, int(numEntriesNew))
 	for i := uint64(0); i < numEntriesNew; i++ {
 		idx := i + 1
-		if idx < numTruncated {
+		if idx < numTruncated && i%3 != 0 {
 			require.Empty(t, entries[i].Data)
 		} else {
 			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))

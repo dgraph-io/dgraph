@@ -199,9 +199,9 @@ func handleWal(store *raftwal.DiskStorage) error {
 	case len(opt.wsetSnapshot) > 0:
 		return overwriteSnapshot(store)
 	case opt.wtruncateUntil != 0:
-		store.TruncateEntriesUntil(opt.wtruncateUntil)
+		return store.TruncateEntriesUntil(opt.wtruncateUntil)
 	default:
 		printRaft(store)
+		return nil
 	}
-	return nil
 }

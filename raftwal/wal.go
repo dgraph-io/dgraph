@@ -18,7 +18,6 @@ package raftwal
 
 import (
 	"bytes"
-	"math"
 	"sort"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -106,13 +105,37 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 }
 
 func (l *wal) truncateEntriesUntil(lastIdx uint64) error {
-	entries := l.allEntries(0, math.MaxUint64, math.MaxUint64)
-	for i := range entries {
-		if entries[i].Index < lastIdx && entries[i].Type == raftpb.EntryNormal {
-			entries[i].Data = nil
+	files := append(l.files, l.current)
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		offset := logFileOffset
+		for i := 0; ; i++ {
+			entry := file.getEntry(i)
+			idx := entry.Index()
+			if idx == 0 || idx >= lastIdx {
+				return nil
+			}
+
+			var data []byte
+			if entry.Type() != uint64(raftpb.EntryNormal) {
+				data = file.Slice(int(entry.DataOffset()))
+			}
+
+			dest, next, err := file.AllocateSlice(len(data), offset)
+			if err != nil {
+				return err
+			}
+
+			x.AssertTrue(copy(dest, data) == len(data))
+			entry.SetDataOffset(uint64(offset))
+			offset = next
 		}
 	}
-	return l.AddEntries(entries)
+
+	return nil
 }
 
 // AddEntries adds the entries to the log. If there are entries in the log with the same index
