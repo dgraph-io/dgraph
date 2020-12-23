@@ -1,5 +1,5 @@
 +++
-title = "GraphQL+-: Tips and Tricks"
+title = "DQL: Tips and Tricks"
 [menu.main]
   url = "/tips/"
   identifier = "tips"
