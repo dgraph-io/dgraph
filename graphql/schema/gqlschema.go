@@ -751,9 +751,13 @@ func expandSchemaWithApolloExtras(doc *ast.SchemaDocument) {
 		return
 	}
 
+	// Form _Entity union with all the entities
+	// for e.g : union _Entity = A | B
+	// where A and B are object with @key directives
 	entityUnionDefinition := &ast.Definition{Kind: ast.Union, Name: "_Entity", Types: apolloKeyTypes}
 	doc.Definitions = append(doc.Definitions, entityUnionDefinition)
 
+	// Parse Apollo Queries and append to the Parsed Schema
 	docApolloQueries, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaQueries})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
@@ -2051,6 +2055,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		// Ignore Fields with @external directives also as they shouldn't be present
+		// in the Patch Type Also.
 		if hasExternal(fld) {
 			continue
 		}
@@ -2095,6 +2101,8 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
+		// Ignore Fields with @external directives also excluding those which are present
+		// as an argument in @key directive
 		if hasExternal(fld) && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
 			continue
 		}
@@ -2321,6 +2329,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	}
 
 	printed := make(map[string]bool)
+	// Marked "_Service" type as printed as it will be printed in the
+	// Extended Apollo Definitions
 	printed["_Service"] = true
 	// original defs can only be interface, type, union, enum or input.
 	// print those in the same order as the original schema.

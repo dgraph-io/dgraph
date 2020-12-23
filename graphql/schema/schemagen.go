@@ -173,6 +173,8 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
+	// Convert All the Type Extensions into the Type Definitions with @external directive
+	// to maintain uniformity in the output schema
 	for _, ext := range doc.Extensions {
 		ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
 	}
