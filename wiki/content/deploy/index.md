@@ -1548,19 +1548,55 @@ Where the fields are defined as follows:
 	msg              The user-supplied message
 ```
 
-### Increase Logging
+## Log Verbosity
 
-To increase logging, you have set `-v=3` which will enable verbose logging for everything. You can set this flag on both Zero and Alpha nodes.
-
-Alternatively, you can set `--vmodule=server=3` for only the Alpha node which would only enable query/mutation logging.
-
+To increase log verbosity, you have set the flag `-v=3` (or `-v=2`) which will enable verbose logging for everything. You can set this flag on both Zero and Alpha nodes.
 {{% notice "note" %}}
 This requires a restart of the node itself.
-
-Avoid keeping logging verbose for a long time. Revert back to default setting if not needed.
 {{% /notice %}}
 
-When enabling query logging with the `--vmodule=server=3` flag this prints the queries/mutation that Dgraph Cluster receives from Ratel, Client etc. In this case Alpha log will print something similar to:
+## Query Logging
+
+Starting from Dgraph v20.03.7, you can dynamically turn query logging on or off. To toggle query logging on, send the following GraphQL mutation to the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`):
+
+```graphql
+mutation {
+  config(input: {logRequest: true}) {
+    response {
+      code
+      message
+    }
+  }
+}
+```
+The response should look like the following:
+
+```json
+{
+  "data": {
+    "config": {
+      "response": {
+        "code": "Success",
+        "message": "Config updated successfully"
+      }
+    }
+  },
+  "extensions": {
+    "tracing": {
+      "version": 1,
+      "startTime": "2020-12-07T14:53:28.240420495Z",
+      "endTime": "2020-12-07T14:53:28.240569604Z",
+      "duration": 149114
+    }
+  }
+}
+```
+Also, the Alpha node will print the following INFO message to confirm that the mutation has been applied:
+```
+I1207 14:53:28.240516   20143 config.go:39] Got config update through GraphQL admin API
+```
+
+When enabling query logging this prints the queries/mutation that Dgraph Alpha receives from Ratel, Client etc. In this case, the Alpha log will print something similar to:
 
 ```
 I1201 13:06:26.686466   10905 server.go:908] Got a query: query:"{\n  query(func: allofterms(name@en, \"Marc Caro\")) {\n  uid\n  name@en\n  director.film\n  }\n}"  
@@ -1573,6 +1609,19 @@ As you can see, we got the query that Alpha received, to read it in the original
   uid
   name@en
   director.film
+  }
+}
+```
+
+Similarly, you can turn off query logging by setting `logRequest` to `false` in the `/admin` mutation.
+
+```graphql
+mutation {
+  config(input: {logRequest: false}) {
+    response {
+      code
+      message
+    }
   }
 }
 ```
