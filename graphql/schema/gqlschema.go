@@ -366,6 +366,12 @@ directive @external on FIELD_DEFINITION
 directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
 directive @extends on OBJECT | INTERFACE
 `
+	apolloSchemaQueries = `
+type Query {
+	_entities(representations: [_Any!]!): [_Entity]!
+	_service: _Service!
+}
+`
 )
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
@@ -748,16 +754,22 @@ func expandSchemaWithApolloExtras(doc *ast.SchemaDocument) {
 	entityUnionDefinition := &ast.Definition{Kind: ast.Union, Name: "_Entity", Types: apolloKeyTypes}
 	doc.Definitions = append(doc.Definitions, entityUnionDefinition)
 
-	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaExtras})
+	docApolloQueries, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaQueries})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
 	}
 
-	// extend type Query {
-	// 	_entities(representations: [_Any!]!): [_Entity]!
-	// 	_service: _Service!
-	// }
+	queryDefinition := doc.Definitions.ForName("Query")
+	if queryDefinition == nil {
+		doc.Definitions = append(doc.Definitions, docApolloQueries.Definitions[0])
+	} else {
+		queryDefinition.Fields = append(queryDefinition.Fields, docApolloQueries.Definitions[0].Fields...)
+	}
 
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaExtras})
+	if gqlErr != nil {
+		x.Panic(gqlErr)
+	}
 	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
 	doc.Directives = append(doc.Directives, docExtras.Directives...)
 
