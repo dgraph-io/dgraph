@@ -104,6 +104,8 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	return entries
 }
 
+// truncateEntriesUntil deletes the data field of every normal Raft entry
+// with index ∈ [0, lastIdx).
 func (l *wal) truncateEntriesUntil(lastIdx uint64) {
 	files := append(l.files, l.current)
 	for _, file := range files {
@@ -118,10 +120,12 @@ func (l *wal) truncateEntriesUntil(lastIdx uint64) {
 			}
 
 			// Truncate the data of normal Raft entries.
-			// Setting DataOffset to 0 means that the data field for this entry
-			// will never be accessed.
+			// Here, we set the length field of the entry data to zero.
+			// As long as we never directly iterate through the data section,
+			// this operation is safe.
 			if entry.Type() == uint64(raftpb.EntryNormal) {
-				entry.SetDataOffset(0)
+				offset := int(entry.DataOffset())
+				z.Memclr(file.Data[offset : offset+4])
 			}
 		}
 	}

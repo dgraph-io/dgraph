@@ -379,7 +379,7 @@ func TestTruncateStorage(t *testing.T) {
 	}
 
 	// Truncate entries.
-	ds.TruncateEntriesUntil(uint64(numTruncated))
+	ds.TruncateEntriesUntil(numTruncated)
 
 	// Verify all entries.
 	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
