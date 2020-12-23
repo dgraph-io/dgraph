@@ -18,6 +18,7 @@ package x
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"math"
 	"strings"
 
@@ -526,6 +527,18 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+func IsDropOpKey(key []byte) (bool, error) {
+	pk, err := Parse(key)
+	if err != nil {
+		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+	}
+
+	if pk.IsData() && pk.Attr == "dgraph.drop.op" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
@@ -540,10 +553,14 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.acl.rule":        {},
 }
 
+// TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
+// predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
+// by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":               {},
 	"dgraph.graphql.schema":            {},
 	"dgraph.cors":                      {},
+	"dgraph.drop.op":                   {},
 	"dgraph.graphql.schema_history":    {},
 	"dgraph.graphql.schema_created_at": {},
 	"dgraph.graphql.p_query":           {},
@@ -552,7 +569,8 @@ var graphqlReservedPredicate = map[string]struct{}{
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
 // predicate is a predicate that has a special meaning in Dgraph and its query
-// language and should not be allowed as a user-defined  predicate.
+// language and should not be allowed either as a user-defined predicate or as a
+// predicate in initial internal schema.
 var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }
@@ -567,6 +585,8 @@ var preDefinedTypeMap = map[string]struct{}{
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
+// These are a subset of PreDefined predicates, so follow all their properties. In addition,
+// the value for these predicates is also not allowed to be mutated directly by the users.
 func IsGraphqlReservedPredicate(pred string) bool {
 	_, ok := graphqlReservedPredicate[pred]
 	return ok
@@ -592,7 +612,9 @@ func IsReservedPredicate(pred string) bool {
 	return isReservedName(pred)
 }
 
-// IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally.
+// IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally
+// in the initial schema. These are not allowed to be dropped, as well as any schema update which
+// is different than the initial internal schema is also not allowed for these.
 // For example, `dgraph.type` or ACL predicates or GraphQL predicates are defined in the initial
 // internal schema.
 //

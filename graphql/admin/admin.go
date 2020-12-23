@@ -210,10 +210,13 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 
 		"""
-		Destination for the backup: e.g. Minio or S3 bucket or /absolute/path
+		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
 		"""
 		destination: String
 
@@ -320,7 +323,7 @@ const (
 		Alter the node's config.
 		"""
 		config(input: ConfigInput!): ConfigPayload
-		
+
 		replaceAllowedCORSOrigins(origins: [String]): Cors
 
 		` + adminMutations + `
@@ -348,7 +351,6 @@ var (
 		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
-		"restoreStatus": commonAdminQueryMWs,
 		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
@@ -432,7 +434,7 @@ type adminServer struct {
 	resolver *resolve.RequestResolver
 
 	// The mutex that locks schema update operations
-	mux sync.Mutex
+	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
@@ -531,7 +533,13 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-
+		server.mux.RLock()
+		if newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+			server.mux.RUnlock()
+			return
+		}
+		server.mux.RUnlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
@@ -582,9 +590,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
-		}).
-		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveRestoreStatus)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

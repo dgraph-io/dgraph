@@ -712,3 +712,45 @@ schemas:
       Hotel.branches1: geo @index(geo) .
       Hotel.branches2: geo .
       Hotel.branches3: geo @index(geo) .
+
+  - name: "Int field with @id Directive"
+    input: |
+      type T {
+        id : Int! @id
+        value: String
+      }
+    output: |
+      type T {
+        T.id
+        T.value
+      }
+      T.id: int @index(int) @upsert .
+      T.value: string .
+
+  - name: "Int64 field with @id Directive"
+    input: |
+      type T {
+        id : Int64! @id
+        value: String
+      }
+    output: |
+      type T {
+        T.id
+        T.value
+      }
+      T.id: int @index(int) @upsert .
+      T.value: string .
+
+  - name: "Float field with @id Directive"
+    input: |
+      type T {
+        id : Float! @id
+        value: String
+      }
+    output: |
+      type T {
+        T.id
+        T.value
+      }
+      T.id: float @index(float) @upsert .
+      T.value: string .

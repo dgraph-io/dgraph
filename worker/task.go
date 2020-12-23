@@ -801,6 +801,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
+					First:     int(args.q.First),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -983,6 +984,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
+		First:    int(q.First),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {

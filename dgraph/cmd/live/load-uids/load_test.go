@@ -38,17 +38,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var alphaService = testutil.SockAddr
-var zeroService = testutil.SockAddrZero
-
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
 )
 
-const (
-	alphaName       = "alpha1"
-	alphaExportPath = alphaName + ":/data/" + alphaName + "/export"
+var (
+	alphaService    string
+	zeroService     string
+	alphaName       string
+	alphaExportPath string
 	localExportPath = "./export_copy"
 )
 
@@ -266,8 +265,8 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			  }
 			}`,
 	}
-	accessJwt, _ := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
-	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	token := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, token.AccessJwt)
 	require.Nilf(t, resp.Errors, resp.Errors.Error())
 
 	// wait a bit to be sure export is complete
@@ -365,8 +364,19 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	alphaName = testutil.Instance
+	alphaService = testutil.SockAddr
+	zeroService = testutil.SockAddrZero
+
+	x.AssertTrue(strings.Count(alphaName, "_") == 2)
+	left := strings.Index(alphaName, "_")
+	right := strings.LastIndex(alphaName, "_")
+	alphaExportPath = alphaName + ":/data/" + alphaName[left+1:right] + "/export"
+	fmt.Printf("alphaExportPath: %s\n", alphaExportPath)
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
+	fmt.Printf("Using test data dir: %s\n", testDataDir)
 
 	var err error
 	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)

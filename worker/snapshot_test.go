@@ -36,7 +36,7 @@ import (
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1, err := testutil.DgraphClient("localhost:9180")
+	dg1, err := testutil.DgraphClient(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
@@ -50,7 +50,8 @@ func TestSnapshot(t *testing.T) {
 			address: string @index(term) .`,
 	}))
 
-	err = testutil.DockerStop("alpha2")
+	t.Logf("Stopping alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
 
 	// Update the name predicate to include an index.
@@ -71,20 +72,23 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+	t.Logf("Mutations done.\n")
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
-	err = testutil.DockerStart("alpha2")
+	t.Logf("Starting alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
 	// Wait for the container to start.
 	time.Sleep(time.Second * 2)
-	dg2, err := testutil.DgraphClient("localhost:9182")
+	dg2, err := testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 	verifySnapshot(t, dg2, 200)
 
-	err = testutil.DockerStop("alpha2")
+	t.Logf("Stopping alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Stop)
 	require.NoError(t, err)
 
 	for i := 201; i <= 400; i++ {
@@ -96,10 +100,11 @@ func TestSnapshot(t *testing.T) {
 	}
 	_ = waitForSnapshot(t, snapshotTs)
 
-	err = testutil.DockerStart("alpha2")
+	t.Logf("Starting alpha2.\n")
+	err = testutil.DockerRun("alpha2", testutil.Start)
 	require.NoError(t, err)
 
-	dg2, err = testutil.DgraphClient("localhost:9182")
+	dg2, err = testutil.DgraphClient(testutil.ContainerAddr("alpha2", 9080))
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
@@ -157,7 +162,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
-		res, err := http.Get("http://localhost:6180/state")
+		res, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
 		require.NoError(t, err)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()

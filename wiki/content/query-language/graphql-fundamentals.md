@@ -222,4 +222,3 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
   }
 }
 {{< /runnable >}}
-

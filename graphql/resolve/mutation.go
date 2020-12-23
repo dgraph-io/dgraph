@@ -98,7 +98,7 @@ type MutationRewriter interface {
 		ctx context.Context,
 		m schema.Mutation,
 		assigned map[string]string,
-		result map[string]interface{}) (*gql.GraphQuery, error)
+		result map[string]interface{}) ([]*gql.GraphQuery, error)
 }
 
 // A DgraphExecutor can execute a mutation and returns the request response and any errors.
@@ -114,7 +114,7 @@ type DgraphExecutor interface {
 // The node types is a blank node name -> Type mapping of nodes that could
 // be created by the upsert.
 type UpsertMutation struct {
-	Query     *gql.GraphQuery
+	Query     []*gql.GraphQuery
 	Mutations []*dgoapi.Mutation
 	NewNodes  map[string]schema.Type
 }
@@ -495,7 +495,7 @@ func authorizeNewNodes(
 
 	resp, errs := queryExecutor.Execute(ctx,
 		&dgoapi.Request{
-			Query:   dgraph.AsString(&gql.GraphQuery{Children: qs}),
+			Query:   dgraph.AsString(qs),
 			StartTs: txn.GetStartTs(),
 		})
 	if errs != nil || len(resp.Json) == 0 {

@@ -14,6 +14,7 @@ type Book implements LibraryItem {
 
 type Library {
 	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
 }
 
 #######################
@@ -33,28 +34,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -192,10 +193,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -281,12 +283,18 @@ type AddBookPayload {
 }
 
 type AddLibraryPayload {
-	library(first: Int, offset: Int): [Library]
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
 	numUids: Int
 }
 
 type BookAggregateResult {
 	count: Int
+	refIDMin: String
+	refIDMax: String
+	titleMin: String
+	titleMax: String
+	authorMin: String
+	authorMax: String
 }
 
 type DeleteBookPayload {
@@ -301,16 +309,29 @@ type DeleteLibraryItemPayload {
 	numUids: Int
 }
 
+type DeleteLibraryPayload {
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	msg: String
+	numUids: Int
+}
+
 type LibraryAggregateResult {
 	count: Int
 }
 
 type LibraryItemAggregateResult {
 	count: Int
+	refIDMin: String
+	refIDMax: String
 }
 
 type UpdateBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
+}
+
+type UpdateLibraryPayload {
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
 	numUids: Int
 }
 
@@ -359,8 +380,8 @@ input AddLibraryInput {
 input BookFilter {
 	refID: StringHashFilter
 	has: BookHasFilter
-	and: BookFilter
-	or: BookFilter
+	and: [BookFilter]
+	or: [BookFilter]
 	not: BookFilter
 }
 
@@ -383,16 +404,16 @@ input BookRef {
 
 input LibraryFilter {
 	has: LibraryHasFilter
-	and: LibraryFilter
-	or: LibraryFilter
+	and: [LibraryFilter]
+	or: [LibraryFilter]
 	not: LibraryFilter
 }
 
 input LibraryItemFilter {
 	refID: StringHashFilter
 	has: LibraryItemHasFilter
-	and: LibraryItemFilter
-	or: LibraryItemFilter
+	and: [LibraryItemFilter]
+	or: [LibraryItemFilter]
 	not: LibraryItemFilter
 }
 
@@ -406,6 +427,10 @@ input LibraryItemRef {
 	refID: String! @id
 }
 
+input LibraryPatch {
+	items: [LibraryItemRef]
+}
+
 input LibraryRef {
 	items: [LibraryItemRef]
 }
@@ -416,19 +441,24 @@ input UpdateBookInput {
 	remove: BookPatch
 }
 
+input UpdateLibraryInput {
+	filter: LibraryFilter!
+	set: LibraryPatch
+	remove: LibraryPatch
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getLibraryItem(refID: String!): LibraryItem
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book
 	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(first: Int, offset: Int): [Library]
-	aggregateLibrary: LibraryAggregateResult
+	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
 }
 
 #######################
@@ -441,5 +471,7 @@ type Mutation {
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
+	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
+	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
 }
 

@@ -381,20 +381,7 @@ Incorrect index choice can impose performance penalties and an increased
 transaction conflict rate. Use only the minimum number of and simplest indexes
 that your application needs.
 {{% /notice %}}
-
-Please note that when specifying at the same time both `term` and `trigram` indexes, in the schema, you will need to specify them in the following exact order:   `<predicate>: string @index(term, trigram) .` not vice-versa.
-Doing otherwise causes queries using the index to return an error about invalid tokenizers.
-
-```
-{
-     "message": ": Attribute streamTitle does not have a valid tokenizer.",
-     "extensions": {
-       "code": "ErrorInvalidRequest"
-     }
-   }
-```   
-
-
+ 
 ### DateTime Indices
 
 The indices available for `dateTime` are as follows.
@@ -478,6 +465,50 @@ A graph edge is unidirectional. For node-node edges, sometimes modeling requires
 The reverse edge of `anEdge` is `~anEdge`.
 
 For existing data, Dgraph computes all reverse edges.  For data added after the schema mutation, Dgraph computes and stores the reverse edge for each added triple.
+
+```
+type Person {
+  name string
+}
+type Car {
+  regnbr string
+  owner Person
+}
+owner uid @reverse .
+regnbr string @index(exact) .
+name string @index(exact) .
+```
+
+This makes it possible to query Persons and their cars by using:
+```
+q(func type(Person)) {
+  name
+  ~owner { name }
+}
+```
+To get a different key than `~owner` in the result, the query can be written with the wanted label
+(`cars` in this case):
+
+```
+q(func type(Person)) {
+  name
+  cars: ~owner { name }
+}
+```
+
+This also works if there are multiple "owners" of a `car`:
+```
+owner [uid] @reverse .
+```
+
+In both cases the `owner` edge should be set on the `Car`:
+```
+_:p1 <name> "Mary" .
+_:p1 <dgraph.type> "Person" .
+_:c1 <regnbr> "ABC123" .
+_:c1 <dgraph.type> "Car" .
+_:c1 <owner> _:p1
+```
 
 ## Querying Schema
 

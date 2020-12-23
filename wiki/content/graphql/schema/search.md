@@ -387,14 +387,35 @@ The `contains` filter matches all entities where the `Polygon` or `MultiPolygon`
 Only one `point` or `polygon` can be taken inside the `ContainsFilter` at a time.
 {{% /notice %}}
 
+A `contains` example using `point`:
+
 ```graphql
 queryHotel(filter: {
     area: { 
         contains: {
             point: {
+              latitude: 0.5,
+              longitude: 2.5
+            }
+        }
+    }
+}) {
+  name
+}
+```
+
+A `contains` example using `polygon`:
+
+```graphql
+ queryHotel(filter: {
+    area: { 
+        contains: {
+            polygon: {
                 coordinates: [{
-                    latitute: 37.771935, 
+                  points:[{
+                    latitude: 37.771935, 
                     longitude: -122.469829
+                  }]
                 }],
             }
         }
@@ -402,7 +423,6 @@ queryHotel(filter: {
 }) {
   name
 }
-
 ```
 
 #### intersects 
@@ -485,4 +505,103 @@ Only one `polygon` or `multiPolygon` can be given inside the `IntersectsFilter` 
   }) {
     name
   }
+```
+
+### Union
+
+Unions can be queried only as a field of a type. Union queries can't be ordered, but you can filter and paginate them.
+
+{{% notice "note" %}}
+Union queries do not support the `order` argument.
+The results will be ordered by the `uid` of each node in ascending order.
+{{% /notice %}}
+
+For example, the following schema will enable to query the `members` union field in the `Home` type with filters and pagination.
+
+```graphql
+union HomeMember = Dog | Parrot | Human
+
+type Home {
+  id: ID!
+  address: String
+  
+  members(filter: HomeMemberFilter, first: Int, offset: Int): [HomeMember]
+}
+
+# Not specifying a field in the filter input will be considered as a null value for that field.
+input HomeMemberFilter {
+	# `homeMemberTypes` is used to specify which types to report back.
+	homeMemberTypes: [HomeMemberType]
+
+	# specifying a null value for this field means query all dogs
+	dogFilter: DogFilter
+
+	# specifying a null value for this field means query all parrots
+	parrotFilter: ParrotFilter
+	# note that there is no HumanFilter because the Human type wasn't filterable
+}
+
+enum HomeMemberType {
+	dog
+	parrot
+	human
+}
+
+input DogFilter {
+	id: [ID!]
+	category: Category_hash
+	breed: StringTermFilter
+	and: DogFilter
+	or: DogFilter
+	not: DogFilter
+}
+
+input ParrotFilter {
+	id: [ID!]
+	category: Category_hash
+	and: ParrotFilter
+	or: ParrotFilter
+	not: ParrotFilter
+}
+```
+
+{{% notice "tip" %}}
+Not specifying any filter at all or specifying any of the `null` values for a filter will query all members.
+{{% /notice %}}
+
+
+
+The same example, but this time with filter and pagination arguments:
+
+```graphql
+query {
+  queryHome {
+    address
+    members (
+      filter: {
+		homeMemberTypes: [dog, parrot] # means we don't want to query humans
+		dogFilter: {
+			# means in Dogs, we only want to query "German Shepherd" breed
+			breed: { allofterms: "German Shepherd"}
+		}
+		# not specifying any filter for parrots means we want to query all parrots
+      }
+      first: 5
+      offset: 10
+    ) {
+      ... on Animal {
+        category
+      }
+      ... on Dog {
+        breed
+      }
+      ... on Parrot {
+        repeatsWords
+      }
+      ... on HomeMember {
+        name
+      }
+    }
+  }
+}
 ```

@@ -53,7 +53,7 @@ const (
 	// and baseIV (remaining 8 bytes) are stored.
 	encOffset = logFileOffset - 16 // 1MB - 16B
 	// logFileSize is the initial size of the log file.
-	logFileSize = 16 << 30
+	logFileSize = 256 << 20 // 256MB
 	// entrySize is the size in bytes of a single entry.
 	entrySize = 32
 	// logSuffix is the suffix for log files.
@@ -61,7 +61,8 @@ const (
 )
 
 var (
-	emptyEntry = entry(make([]byte, entrySize))
+	emptyEntry    = entry(make([]byte, entrySize))
+	encryptionKey x.SensitiveByteSlice
 )
 
 type entry []byte
@@ -103,15 +104,14 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		fid: fid,
 	}
 	var err error
-	encKey := x.WorkerConfig.EncryptionKey
 	// Initialize the registry for logFile if encryption in enabled.
 	// NOTE: If encryption is enabled then there is no going back because if we disable it
 	// later then the older log files which were previously encrypted can't be opened.
-	if len(encKey) > 0 {
+	if len(encryptionKey) > 0 {
 		krOpt := badger.KeyRegistryOptions{
 			ReadOnly:                      false,
 			Dir:                           dir,
-			EncryptionKey:                 encKey,
+			EncryptionKey:                 encryptionKey,
 			EncryptionKeyRotationDuration: 10 * 24 * time.Hour,
 			InMemory:                      false,
 		}
@@ -138,14 +138,14 @@ func openLogFile(dir string, fid int64) (*logFile, error) {
 		// If keyID is non-zero, then the opened file is encrypted.
 		if keyID != 0 {
 			// Logfile is encrypted but encryption key is not provided.
-			if encKey == nil {
+			if encryptionKey == nil {
 				return nil, errors.New("Logfile is encrypted but encryption key is nil")
 			}
 			// retrieve datakey from the keyID of the logfile.
 			if lf.dataKey, err = lf.registry.DataKey(keyID); err != nil {
 				return nil, err
 			}
-			lf.baseIV = buf[8:]
+			lf.baseIV = y.Copy(buf[8:])
 			y.AssertTrue(len(lf.baseIV) == 8)
 		}
 	}
@@ -171,7 +171,8 @@ func (lf *logFile) GetRaftEntry(idx int) raftpb.Entry {
 		Index: entry.Index(),
 		Type:  raftpb.EntryType(int32(entry.Type())),
 	}
-	if entry.DataOffset() > 0 && entry.DataOffset() < logFileSize {
+	if entry.DataOffset() > 0 {
+		x.AssertTrue(entry.DataOffset() < uint64(len(lf.Data)))
 		data := lf.Slice(int(entry.DataOffset()))
 		if len(data) > 0 {
 			// Copy the data over to allow the mmaped file to be deleted later.
@@ -345,6 +346,7 @@ func (lf *logFile) bootstrap() error {
 		return y.Wrapf(err, "Error while creating base IV, while creating logfile")
 	}
 	// Initialize base IV.
-	lf.baseIV = buf[8:]
+	lf.baseIV = y.Copy(buf[8:])
+	y.AssertTrue(len(lf.baseIV) == 8)
 	return nil
 }

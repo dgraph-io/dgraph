@@ -32,28 +32,28 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds a
 scalar DateTime
 
 input IntRange{
-	min: Int
-	max: Int
+	min: Int!
+	max: Int!
 }
 
 input FloatRange{
-	min: Float
-	max: Float
+	min: Float!
+	max: Float!
 }
 
 input Int64Range{
-	min: Int64
-	max: Int64
+	min: Int64!
+	max: Int64!
 }
 
 input DateTimeRange{
-	min: DateTime
-	max: DateTime
+	min: DateTime!
+	max: DateTime!
 }
 
 input StringRange{
-	min: String
-	max: String
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
@@ -191,10 +191,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -275,7 +276,7 @@ input StringHashFilter {
 #######################
 
 type AddBPayload {
-	b(order: BOrder, first: Int, offset: Int): [B]
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
 	numUids: Int
 }
 
@@ -286,6 +287,14 @@ type AddTPayload {
 
 type BAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type DeleteBPayload {
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	msg: String
+	numUids: Int
 }
 
 type DeleteIPayload {
@@ -306,6 +315,13 @@ type IAggregateResult {
 
 type TAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+}
+
+type UpdateBPayload {
+	b(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	numUids: Int
 }
 
 type UpdateTPayload {
@@ -347,8 +363,8 @@ input AddTInput {
 
 input BFilter {
 	has: BHasFilter
-	and: BFilter
-	or: BFilter
+	and: [BFilter]
+	or: [BFilter]
 	not: BFilter
 }
 
@@ -356,6 +372,10 @@ input BOrder {
 	asc: BOrderable
 	desc: BOrderable
 	then: BOrder
+}
+
+input BPatch {
+	name: String
 }
 
 input BRef {
@@ -374,8 +394,8 @@ input IRef {
 input TFilter {
 	id: [ID!]
 	has: THasFilter
-	and: TFilter
-	or: TFilter
+	and: [TFilter]
+	or: [TFilter]
 	not: TFilter
 }
 
@@ -392,6 +412,12 @@ input TPatch {
 input TRef {
 	id: ID
 	text: String
+}
+
+input UpdateBInput {
+	filter: BFilter!
+	set: BPatch
+	remove: BPatch
 }
 
 input UpdateTInput {
@@ -411,8 +437,8 @@ type Query {
 	getT(id: ID!): T
 	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	aggregateT(filter: TFilter): TAggregateResult
-	queryB(order: BOrder, first: Int, offset: Int): [B]
-	aggregateB: BAggregateResult
+	queryB(filter: BFilter, order: BOrder, first: Int, offset: Int): [B]
+	aggregateB(filter: BFilter): BAggregateResult
 }
 
 #######################
@@ -425,5 +451,7 @@ type Mutation {
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 	addB(input: [AddBInput!]!): AddBPayload
+	updateB(input: UpdateBInput!): UpdateBPayload
+	deleteB(filter: BFilter!): DeleteBPayload
 }
 

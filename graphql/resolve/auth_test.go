@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go/v4"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"google.golang.org/grpc/metadata"
 
@@ -36,8 +37,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/stretchr/testify/require"
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 
@@ -257,6 +258,15 @@ func TestInvalidAuthInfo(t *testing.T) {
 	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
 }
 
+func TestMissingAudienceWithJWKUrl(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
+	require.NoError(t, err)
+	_, err = schema.NewHandler(string(authSchema), false)
+	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
+}
+
 //Todo(Minhaj): Add a testcase for token without Expiry
 func TestVerificationWithJWKUrl(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
@@ -425,7 +435,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
   ticket(func: uid(TicketRoot)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column3)) {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
@@ -437,27 +447,20 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   var(func: uid(TicketRoot)) {
-    Column1 as Ticket.onColumn
+    Column2 as Ticket.onColumn
   }
-  Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-  ColumnAuth2 as var(func: uid(Column1)) @cascade {
+  Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+  ColumnAuth3 as var(func: uid(Column2)) @cascade {
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
 }`,
 		},
@@ -481,7 +484,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
   ticket(func: uid(TicketRoot)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column3)) {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
@@ -493,27 +496,20 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   var(func: uid(TicketRoot)) {
-    Column1 as Ticket.onColumn
+    Column2 as Ticket.onColumn
   }
-  Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-  ColumnAuth2 as var(func: uid(Column1)) @cascade {
+  Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+  ColumnAuth3 as var(func: uid(Column2)) @cascade {
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
       }
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
 }`,
 		},

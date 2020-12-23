@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/worker"
+
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -158,10 +160,6 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.BadgerCompressionLevel < 0 {
-		fmt.Printf("Invalid compression level: %d. It should be non-negative",
-			opt.BadgerCompressionLevel)
-	}
 
 	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
@@ -190,6 +188,18 @@ func run() {
 		if !opt.Encrypted && !opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
+		}
+
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = tlsConf
+		if !worker.EnterpriseEnabled() {
+			// Crash since the enterprise license is not enabled..
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			log.Printf("Encryption feature enabled.")
 		}
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
@@ -247,6 +257,7 @@ func run() {
 	go func() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
@@ -279,6 +290,12 @@ func run() {
 	if opt.CleanupTmp {
 		defer os.RemoveAll(opt.TmpDir)
 	}
+
+	// Create directory for temporary buffers used in map-reduce phase
+	bufDir := filepath.Join(opt.TmpDir, bufferDir)
+	x.Check(os.RemoveAll(bufDir))
+	x.Check(os.MkdirAll(bufDir, 0700))
+	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {

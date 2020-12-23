@@ -2,6 +2,9 @@ package single_node
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -9,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"testing"
-	"time"
 )
 
 func runTests(t *testing.T, client *dgo.Dgraph) {
@@ -22,10 +23,10 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		require.NoError(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, testutil.RetryAlter(client, &api.Operation{
 			DropAll: true,
 		}))
-		require.NoError(t, client.Alter(ctx, &api.Operation{
+		require.NoError(t, testutil.RetryAlter(client, &api.Operation{
 			Schema: initialSchema,
 		}))
 
@@ -74,7 +75,6 @@ func runTests(t *testing.T, client *dgo.Dgraph) {
 
 func TestClusterSetup(t *testing.T) {
 	c := &x.TLSHelperConfig{
-		CertDir:          "../tls/alpha1",
 		CertRequired:     true,
 		Cert:             "../tls/alpha1/client.alpha1.crt",
 		Key:              "../tls/alpha1/client.alpha1.key",
@@ -84,7 +84,7 @@ func TestClusterSetup(t *testing.T) {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(":9180", grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	dgConn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 	runTests(t, client)

@@ -47,4 +47,5 @@ Info "rebuilding dgraph ..."
 # The up command handles that automatically
 
 Info "bringing up containers"
+docker-compose -p dgraph down
 docker-compose --compatibility -p dgraph up --force-recreate --remove-orphans

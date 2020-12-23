@@ -1,6 +1,6 @@
 +++
 title = "And, Or and Not"
-weight = 4
+weight = 5
 [menu.main]
     parent = "graphql-queries"
     name = "And, Or and Not"

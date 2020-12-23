@@ -25,11 +25,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -194,7 +194,9 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
-	expandSchema(doc)
+	if gqlErr = expandSchema(doc); gqlErr != nil {
+		return nil, gqlerror.List{gqlErr}
+	}
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
@@ -221,8 +223,9 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 	}
 
 	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
-	// then Fetch the JWKs from the JWKUrl
+	// then initialise the http client and Fetch the JWKs from the JWKUrl
 	if metaInfo != nil && metaInfo.JWKUrl != "" {
+		metaInfo.InitHttpClient()
 		fetchErr := metaInfo.FetchJWKs()
 		if fetchErr != nil {
 			return nil, fetchErr
@@ -485,7 +488,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
-						indexes = append(indexes, "hash")
+						switch f.Type.Name() {
+						case "Int", "Int64":
+							indexes = append(indexes, "int")
+						case "Float":
+							indexes = append(indexes, "float")
+						case "String":
+							indexes = append(indexes, "hash")
+						}
 					}
 
 					if search != nil {
