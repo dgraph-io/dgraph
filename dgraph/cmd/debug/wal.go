@@ -122,7 +122,6 @@ func printBasic(store RaftStore) (uint64, uint64) {
 func printRaft(store *raftwal.DiskStorage) {
 	isZero := store.Uint(raftwal.GroupId) == 0
 
-	// TODO: Fix the pending logic.
 	pending := make(map[uint64]bool)
 	startIdx, lastIdx := printBasic(store)
 
