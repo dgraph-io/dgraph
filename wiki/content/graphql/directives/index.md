@@ -64,7 +64,7 @@ Reference: [Generate directive](/graphql/schema/generate)
 
 The `@lambda` directive allows you to call custom JavaScript resolvers. The `@lambda` queries, mutations, and fields are resolved through the lambda functions implemented on a given lambda server.
 
-Reference: [Lambda directive](/graphql/lambda/directive)
+Reference: [Lambda directive](/graphql/lambda/overview)
 
 ### @custom
 
