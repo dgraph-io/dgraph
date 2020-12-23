@@ -266,8 +266,6 @@ input GenerateMutationParams {
 	delete: Boolean
 }
 
-directive @key(fields: String!) on OBJECT
-
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -356,16 +354,17 @@ input StringHashFilter {
 }
 `
 
-	apolloFederationExtras = `
-directive @key(fields: String!) on OBJECT | INTERFACE
-directive @extends on OBJECT | INTERFACE
-directive @external on OBJECT | FIELD_DEFINITION
-directive @requires(fields: String!) on FIELD_DEFINITION
-directive @provides(fields: String!) on FIELD_DEFINITION
+	apolloSchemaExtras = `
 scalar _Any
+scalar _FieldSet
+
 type _Service {
-  sdl: String
+	sdl: String
 }
+
+directive @external on FIELD_DEFINITION
+directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
+directive @extends on OBJECT | INTERFACE
 `
 )
 
@@ -519,18 +518,21 @@ func ValidatorNoOp(
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:      hasInverseValidation,
-	searchDirective:       searchValidation,
-	dgraphDirective:       dgraphDirectiveValidation,
-	idDirective:           idValidation,
-	subscriptionDirective: ValidatorNoOp,
-	secretDirective:       passwordValidation,
-	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
-	customDirective:       customDirectiveValidation,
-	remoteDirective:       ValidatorNoOp,
-	deprecatedDirective:   ValidatorNoOp,
-	lambdaDirective:       lambdaDirectiveValidation,
-	generateDirective:     ValidatorNoOp,
+	inverseDirective:        hasInverseValidation,
+	searchDirective:         searchValidation,
+	dgraphDirective:         dgraphDirectiveValidation,
+	idDirective:             idValidation,
+	subscriptionDirective:   ValidatorNoOp,
+	secretDirective:         passwordValidation,
+	authDirective:           ValidatorNoOp, // Just to get it printed into generated schema
+	customDirective:         customDirectiveValidation,
+	remoteDirective:         ValidatorNoOp,
+	deprecatedDirective:     ValidatorNoOp,
+	lambdaDirective:         lambdaDirectiveValidation,
+	generateDirective:       ValidatorNoOp,
+	apolloKeyDirective:      ValidatorNoOp,
+	apolloExtendsDirective:  ValidatorNoOp,
+	apolloExternalDirective: apolloExternalValidation,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
@@ -726,7 +728,39 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 
 	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
 	doc.Directives = append(doc.Directives, docExtras.Directives...)
+	expandSchemaWithApolloExtras(doc)
 	return nil
+}
+
+func expandSchemaWithApolloExtras(doc *ast.SchemaDocument) {
+	var apolloKeyTypes []string
+	for _, defn := range doc.Definitions {
+		if defn.Directives.ForName(apolloKeyDirective) != nil {
+			apolloKeyTypes = append(apolloKeyTypes, defn.Name)
+		}
+	}
+
+	// No need to Expand with Apollo federation Extras
+	if len(apolloKeyTypes) == 0 {
+		return
+	}
+
+	entityUnionDefinition := &ast.Definition{Kind: ast.Union, Name: "_Entity", Types: apolloKeyTypes}
+	doc.Definitions = append(doc.Definitions, entityUnionDefinition)
+
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaExtras})
+	if gqlErr != nil {
+		x.Panic(gqlErr)
+	}
+
+	// extend type Query {
+	// 	_entities(representations: [_Any!]!): [_Entity]!
+	// 	_service: _Service!
+	// }
+
+	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
+	doc.Directives = append(doc.Directives, docExtras.Directives...)
+
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
@@ -2268,7 +2302,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	}
 
 	printed := make(map[string]bool)
-
+	printed["_Service"] = true
 	// original defs can only be interface, type, union, enum or input.
 	// print those in the same order as the original schema.
 	for _, typName := range originalTypes {
@@ -2343,6 +2377,11 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
+	x.Check2(sch.WriteString("\n"))
+	x.Check2(sch.WriteString(
+		"#######################\n# Extended Apollo Definitions\n#######################\n"))
+	x.Check2(sch.WriteString(generateUnionString(schema.Types["_Entity"])))
+	x.Check2(sch.WriteString(apolloSchemaExtras))
 	x.Check2(sch.WriteString("\n"))
 	if object.Len() > 0 {
 		x.Check2(sch.WriteString(

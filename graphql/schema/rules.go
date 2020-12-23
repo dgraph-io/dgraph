@@ -2004,11 +2004,17 @@ func idValidation(sch *ast.Schema,
 }
 
 func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
-	dir := typ.Directives.ForName(apolloKeyDirective)
-	if dir == nil {
+	dirList := typ.Directives.ForNames(apolloKeyDirective)
+	if len(dirList) == 0 {
 		return nil
 	}
 
+	if len(dirList) > 1 {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dirList[1].Position,
+			"Type %s; @key directive should not be defined more than once.", typ.Name)}
+	}
+	dir := dirList[0]
 	arg := dir.Arguments.ForName(apolloKeyArg)
 	if arg == nil || arg.Value.Raw == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
@@ -2028,6 +2034,23 @@ func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		arg.Position,
 		"Type %s: Field %s: with @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
+}
+
+func apolloExternalValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+
+	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
+	if extendsDirective != nil {
+		return nil
+	}
+
+	return []*gqlerror.Error{gqlerror.ErrorPosf(
+		dir.Position,
+		"Type %s: Field %s: @external directive can only be defined on type extensions .", typ.Name, field.Name)}
+
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {

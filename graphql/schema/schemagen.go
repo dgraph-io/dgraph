@@ -173,6 +173,12 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
+	for _, ext := range doc.Extensions {
+		ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
+	}
+	doc.Definitions = append(doc.Definitions, doc.Extensions...)
+	doc.Extensions = nil
+
 	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		return nil, gqlErrList
