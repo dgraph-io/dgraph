@@ -2051,6 +2051,9 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		if hasExternal(fld) {
+			continue
+		}
 		// Fields with @custom/@lambda directive should not be part of mutation input,
 		// hence we skip them.
 		if hasCustomOrLambda(fld) {
@@ -2089,6 +2092,10 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			continue
+		}
+
+		if hasExternal(fld) && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
 			continue
 		}
 
