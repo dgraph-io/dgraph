@@ -10,3 +10,8 @@
 [context.deploy-preview.environment]
   HUGO_VERSION = "0.74.3"
   LOOP = "false"
+
+[context.branch-deploy.environment]
+  HUGO_VERSION = "0.74.3"
+  LOOP = "false"
+  HOST = "/"
