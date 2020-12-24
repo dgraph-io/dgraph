@@ -82,6 +82,51 @@ func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
 	x.Check(err)
 }
 
+func shouldMigrate(oldWal *raftwal.DiskStorage, oldEntries []raftpb.Entry) bool {
+	isOldFormat := func(entry raftpb.Entry) bool {
+		if entry.Data[0] == 0 {
+			return false
+		}
+		return true
+	}
+
+	groupID := oldWal.Uint(raftwal.GroupId)
+	if groupID == 0 {
+		// For zero we need to verify both the Snapshot as well as raft-entries.
+		snapshot, err := oldWal.Snapshot()
+		x.Checkf(err, "failed to read snaphot %s", err)
+		var ms pb.MembershipState
+		if err := ms.Unmarshal(snapshot.Data); err != nil {
+			// We are unmarshalling the ZeroSnapshot into MembershipState. If this fails, this means
+			// we are on newer version.
+			fmt.Println("Zero snapshot unmarshalling failed => New format")
+			return false
+		}
+		for _, entry := range oldEntries {
+			// Raft commits an empty entry on becoming leader.
+			if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
+				continue
+			}
+			// In new format, we prepend key to entry.Data in first 8 bytes. First 4 bytes out of
+			// those contain a node ID. If we assume node ID to be less than 1<<24. Then, if
+			// entry.Data[0] = 0, we can conclude that we are on new format.
+			return isOldFormat(entry)
+		}
+	} else {
+		// For alpha we need to only verify the raft-entries, as the format of alpha Snapshot has
+		// not changed across RC2 and RC5.
+		for _, entry := range oldEntries {
+			// Raft commits an empty entry on becoming leader.
+			if entry.Type == raftpb.EntryConfChange || len(entry.Data) == 0 {
+				continue
+			}
+			return isOldFormat(entry)
+		}
+	}
+	// We can safely opt for not migrating the data here.
+	return false
+}
+
 func run(conf *viper.Viper) error {
 	oldDir := conf.GetString("old-dir")
 	newDir := conf.GetString("new-dir")
@@ -106,6 +151,12 @@ func run(conf *viper.Viper) error {
 	fmt.Printf("Fetching entries from low: %d to high: %d\n", firstIndex, lastIndex)
 	// Should we batch this up?
 	oldEntries, err := oldWal.Entries(firstIndex, lastIndex+1, math.MaxUint64)
+	x.Check(err)
+
+	if !shouldMigrate(oldWal, oldEntries) {
+		fmt.Println("No need to do raft migration!!")
+		return nil
+	}
 
 	newEntries := make([]raftpb.Entry, len(oldEntries))
 	for i, entry := range oldEntries {
