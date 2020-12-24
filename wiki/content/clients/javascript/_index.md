@@ -1,9 +1,9 @@
 +++
-date = "2017-03-20T22:25:17+11:00"
 title = "JavaScript"
-weight = 5
+weight = 9
 [menu.main]
-    parent = "clients"
+  identifier = "javascript"
+  parent = "clients"
 +++
 
 ## gRPC
