@@ -108,8 +108,8 @@ func shouldMigrate(oldWal *raftwal.DiskStorage, oldEntries []raftpb.Entry) bool 
 				continue
 			}
 			// In new format, we prepend key to entry.Data in first 8 bytes. First 4 bytes out of
-			// those contain a node ID. If we assume node ID to be not bigger than 1<<7 (128). Then,
-			// if entry.Data[0] = 0, we can conclude that we are on new format.
+			// those contain a node ID. If we assume node ID to be less than 1<<24. Then, if
+			// entry.Data[0] = 0, we can conclude that we are on new format.
 			return isOldFormat(entry)
 		}
 	} else {
