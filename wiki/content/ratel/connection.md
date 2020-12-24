@@ -24,15 +24,15 @@ The list also has an icon which indicates the version of the cluster running:
 
 In this box you add a valid Dgraph Alpha address. When you click on `Connect` Ratel will try to stablish a connection with the cluster. After Ratel has stablished a connection (all icons are green), click on the `Continue` button.
 
-{{% notice "tip" %}}
-To connect to a basic Dgraph instance, you only need to click on `Connect`. There's a specific section to login to ACL (an [Enterprise feature](/enterprise-features/)), if you're not using it, you don't need to login.
-{{% /notice %}}
-
 Under the input box you have tree icons which gives you the status of the connection.
 
 - Network Access: Uses an "Energy Plug" icon.
 - Server Health: Uses a "Heart" icon.
 - Logging in: a "lock" icon.
+
+{{% notice "tip" %}}
+To connect to a standard Dgraph instance, you only need to click on `Connect`. There's a specific section to [login using ACL](#acl-account) ([Enterprise feature]({{< relref "access-control-lists.md" >}})).
+{{% /notice %}}
 
 ## Cluster Settings
 

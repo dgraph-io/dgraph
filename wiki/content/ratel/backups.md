@@ -11,7 +11,7 @@ title = "Backups"
 Here you will find options to backup your server. 
 
 {{% notice "note" %}}
-This backup option is an [Enterprise feature](/enterprise-features/).
+This backup option is an [Enterprise feature]({{< relref "binary-backups.md" >}}).
 {{% /notice %}}
 
 ![Ratel Backup](/images/ratel/ratel_backup.png)
