@@ -185,8 +185,7 @@ func (e *executor) worker(mut *mutation) {
 
 	// Decrease inDeg of dependents. If this mutation unblocks them, queue them.
 	for _, dependent := range mut.dependentMutations {
-		atomic.AddInt64(&dependent.inDeg, -1)
-		if atomic.LoadInt64(&dependent.inDeg) == 0 {
+		if atomic.AddInt64(&dependent.inDeg, -1) == 0 {
 			x.Check(e.throttle.Do())
 			go e.worker(dependent)
 		}
