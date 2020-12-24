@@ -8,38 +8,47 @@ title = "Connection"
 
 ## Recent Servers
 
-List of recent clusters conected. You can select any of the list to connect. It also has an icon which indicates the version of the cluster running.
+This section provides a list of recent connected clusters. You can select any item on the list to connect. 
 
-Green icon: Running the latest version. <br>
-Yellow icon: Running X. <br>
-Red icon: No connection found. <br>
-Delete icon: Remove the address form the list. <br>
+The list also has an icon which indicates the version of the cluster running:
+
+- Green icon: Running the latest version.
+- Yellow icon: Running a specific version.
+- Red icon: No connection found.
+- Delete icon: Remove the address form the list.
+
+![Ratel UI](/images/ratel/ratel_ui.png)
+
 
 ## URL Input box
 
-In this box you add a valid Dgraph Alpha address. You just need to click on "Connect" that Ratel will be connected with the cluster.
+In this box you add a valid Dgraph Alpha address. When you click on `Connect` Ratel will try to stablish a connection with the cluster. After Ratel has stablished a connection (all icons are green), click on the `Continue` button.
 
-> Note: Some users confuses at this point. To connect to a basic Dgraph instance, you just need to click on "Connect" nothing else. There are places to login to ACL. Which is an enterpreise feature, if you're not using it, you don't need to login. After all green, finnaly click in "Continue" button.
+{{% notice "tip" %}}
+To connect to a basic Dgraph instance, you only need to click on `Connect`. There's a specific section to login to ACL (an [Enterprise feature](/enterprise-features/)), if you're not using it, you don't need to login.
+{{% /notice %}}
 
-bellow the input box you have tree icons which gives you status of the connection.
+Under the input box you have tree icons which gives you the status of the connection.
 
-Network Access: Uses a "Energy Plug" icon. <br>
-Server Health: Uses a "Heart" icon. <br>
-Logging in: a "lock" icon. <br>
+- Network Access: Uses an "Energy Plug" icon.
+- Server Health: Uses a "Heart" icon.
+- Logging in: a "lock" icon.
 
 ## Cluster Settings
 
 ### ACL Account
 
-The ACL Account login is necessary only when you have ACL feature enabled.
-The default password for a cluster started from scratch is "password" and the user is "groot".
+The ACL Account login is necessary only when you have ACL features enabled.
+
+{{% notice "note" %}}
+The default password for a cluster started from scratch is `password` and the user is `groot`.
+{{% /notice %}}
 
 ### Dgraph Zero
 
-If you use an unusual address for Zero instance, you should inform here.
+If you use a custom address for Zero instance, you should inform here.
 
 ### Extra Settings
 
-Query timeout (seconds): This is a timeout for queries and mutations. If the operation takes too long, it will be dropped in X seconds in the cluster.
-
-Slash API Key: Used to access Slash services.
+- Query timeout (seconds): This is a timeout for queries and mutations. If the operation takes too long, it will be dropped after `X` seconds in the cluster.
+- Slash API Key: Used to access Slash services.
