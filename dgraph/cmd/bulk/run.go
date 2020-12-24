@@ -19,6 +19,7 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -298,9 +300,41 @@ func run() {
 	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
-	if !opt.SkipMapPhase {
+
+	const bulkMetaFilename = "bulk.meta"
+	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
+
+	if opt.SkipMapPhase {
+		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		if err != nil {
+			fmt.Println("[ajeet] bulkMeta read failed")
+			os.Exit(1)
+		}
+
+		var bulkMeta pb.BulkMeta
+		err = bulkMeta.Unmarshal(bulkMetaData)
+		if err != nil {
+			fmt.Println("[ajeet] bulkMeta unmarshal failed")
+			os.Exit(1)
+		}
+	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+
+		bulkMeta := pb.BulkMeta{
+			SchemaMap: loader.schema.schemaMap,
+		}
+		bulkMetaData, err := bulkMeta.Marshal()
+		if err != nil {
+			fmt.Println("[ajeet] bulkMeta marshal failed")
+			os.Exit(1)
+		}
+
+		err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644)
+		if err != nil {
+			fmt.Println("[ajeet] bulkMeta write failed")
+			os.Exit(1)
+		}
 	}
 	loader.reduceStage()
 	loader.writeSchema()
