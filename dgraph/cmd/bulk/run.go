@@ -307,32 +307,35 @@ func run() {
 	if opt.SkipMapPhase {
 		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
 		if err != nil {
-			fmt.Println("[ajeet] bulkMeta read failed")
+			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
 			os.Exit(1)
 		}
 
 		var bulkMeta pb.BulkMeta
 		err = bulkMeta.Unmarshal(bulkMetaData)
 		if err != nil {
-			fmt.Println("[ajeet] bulkMeta unmarshal failed")
+			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
 			os.Exit(1)
 		}
+
+		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
+		loader.schema.schemaMap = bulkMeta.SchemaMap
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
 
 		bulkMeta := pb.BulkMeta{
+			EdgeCount: loader.prog.mapEdgeCount,
 			SchemaMap: loader.schema.schemaMap,
 		}
 		bulkMetaData, err := bulkMeta.Marshal()
 		if err != nil {
-			fmt.Println("[ajeet] bulkMeta marshal failed")
+			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
 		}
-
 		err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644)
 		if err != nil {
-			fmt.Println("[ajeet] bulkMeta write failed")
+			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
 			os.Exit(1)
 		}
 	}
