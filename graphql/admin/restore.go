@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -66,8 +69,11 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultField:        input.VaultField,
 		VaultFormat:       input.VaultFormat,
 	}
-	err = worker.ProcessRestoreRequest(context.Background(), &req)
+
+	restoreCloser := z.NewCloser(1)
+	err = worker.ProcessRestoreRequest(context.Background(), &req, restoreCloser)
 	if err != nil {
+		restoreCloser.Done()
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code": "Failure",
@@ -76,6 +82,15 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
 		}, false
 	}
+
+	go func() {
+		defer restoreCloser.Done()
+		select {
+		case <-restoreCloser.HasBeenClosed():
+			restoreCloser.AddRunning(1)
+			edgraph.ResetAcl(restoreCloser)
+		}
+	}()
 
 	return &resolve.Resolved{
 		Data: map[string]interface{}{m.Name(): map[string]interface{}{

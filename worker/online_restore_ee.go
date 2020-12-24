@@ -20,13 +20,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,7 +40,8 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest,
+	restoreCloser *z.Closer) error {
 	if req == nil {
 		return errors.Errorf("restore request cannot be nil")
 	}
@@ -106,6 +109,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 			if err := <-errCh; err != nil {
 				glog.Errorf("Error while restoring %v", err)
 			}
+			restoreCloser.Signal()
 		}
 	}()
 
