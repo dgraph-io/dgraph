@@ -151,8 +151,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 	for _, pred := range preds {
 		sch, ok := s.schemaMap[pred]
 		if !ok {
-			sch = &pb.SchemaUpdate{ValueType: pb.Posting_DEFAULT}
-			s.schemaMap[pred] = sch
+			continue
 		}
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
