@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.03.7] - 2020-12-25
+[20.03.7]: https://github.com/dgraph-io/dgraph/compare/v20.03.6...v20.03.7
+
+
+### Fixed
+
+fix: added comment docstring for ExportInput format ([#6991][])
+Add LogRequest variable to config input ([#5197][])
+eq index ordering fix ([#7034][])
+Change default compression to zstd:3 ([#7023][])
+fix(worker): fix eq filter for non-index predicates. ([#6986][])
+fix(Alpha): Immediately take a snapshot if we don't have one ([#6458][])
+build(dockerfile): Set GODEBUG=madvdontneed=1. ([#6956][])
+Fix(Dgraph): Type names in exported schema are surrounded by brackets. ([#6680][])
+fix(ludicrous mode): Handle deletes correctly ([#6773][])
+fix(worker): Avoid panic in handleUidPostings ([#6607][])
+fix(gqlParser): Handle strings with only whitespace in parseID ([#6615][])
+
+- Enterprise Edition
+	- fix(backup/restore): fixes backup and restore with DROP operations ([#6933][])
+	- Generic alpha log error message for failed ACL login ([#6851][])
+
+[#6991]: https://github.com/dgraph-io/dgraph/issues/6991
+[#5197]: https://github.com/dgraph-io/dgraph/issues/5197
+[#7034]: https://github.com/dgraph-io/dgraph/issues/7034
+[#7023]: https://github.com/dgraph-io/dgraph/issues/7023
+[#6986]: https://github.com/dgraph-io/dgraph/issues/6986
+[#6458]: https://github.com/dgraph-io/dgraph/issues/6458
+[#6956]: https://github.com/dgraph-io/dgraph/issues/6956
+[#6680]: https://github.com/dgraph-io/dgraph/issues/6680
+[#6773]: https://github.com/dgraph-io/dgraph/issues/6773
+[#6607]: https://github.com/dgraph-io/dgraph/issues/6607
+[#6615]: https://github.com/dgraph-io/dgraph/issues/6615
+[#6933]: https://github.com/dgraph-io/dgraph/issues/6933
+[#6851]: https://github.com/dgraph-io/dgraph/issues/6851	
+
 ## [20.03.6] - 2020-10-22
 [20.03.6]: https://github.com/dgraph-io/dgraph/compare/v20.03.5...v20.03.6
 
