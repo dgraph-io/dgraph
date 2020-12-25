@@ -6,7 +6,7 @@
 
 [context.production.environment]
   HUGO_VERSION = "0.74.3"
-  LOOP = "false"
+  LOOP = "true"
   HOST = "/"
 
 [context.deploy-preview.environment]
