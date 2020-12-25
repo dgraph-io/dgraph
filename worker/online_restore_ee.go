@@ -18,9 +18,9 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -40,8 +40,7 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest,
-	restoreCloser *z.Closer) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	if req == nil {
 		return errors.Errorf("restore request cannot be nil")
 	}
@@ -94,11 +93,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest,
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
+	wg.Add(1)
 	errCh := make(chan error, len(currentGroups))
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
@@ -109,8 +108,8 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest,
 			if err := <-errCh; err != nil {
 				glog.Errorf("Error while restoring %v", err)
 			}
-			restoreCloser.Signal()
 		}
+		wg.Done()
 	}()
 
 	return nil

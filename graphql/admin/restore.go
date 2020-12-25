@@ -19,10 +19,10 @@ package admin
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/dgraph-io/ristretto/z"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
+
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -70,10 +70,9 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultFormat:       input.VaultFormat,
 	}
 
-	restoreCloser := z.NewCloser(1)
-	err = worker.ProcessRestoreRequest(context.Background(), &req, restoreCloser)
+	wg := &sync.WaitGroup{}
+	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
-		restoreCloser.Done()
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code": "Failure",
@@ -84,12 +83,8 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	}
 
 	go func() {
-		defer restoreCloser.Done()
-		select {
-		case <-restoreCloser.HasBeenClosed():
-			restoreCloser.AddRunning(1)
-			edgraph.ResetAcl(restoreCloser)
-		}
+		wg.Wait()
+		edgraph.ResetAcl(nil)
 	}()
 
 	return &resolve.Resolved{
