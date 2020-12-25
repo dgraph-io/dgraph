@@ -18,14 +18,15 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-- Fix added comment docstring for ExportInput format ([#6991][])
+- GraphQL
+  - Fix(gqlParser): Handle strings with only whitespace in parseID ([#6615][])
+  - Fix added comment docstring for ExportInput format ([#6991][])
 - Fix eq index ordering ([#7034][])
 - Fix(worker): fix eq filter for non-index predicates. ([#6986][])
 - Fix(Alpha): Immediately take a snapshot if we don't have one ([#6458][])
 - Fix(Dgraph): Type names in exported schema are surrounded by brackets. ([#6680][])
 - Fix(ludicrous mode): Handle deletes correctly ([#6773][])
 - Fix(worker): Avoid panic in handleUidPostings ([#6607][])
-- Fix(gqlParser): Handle strings with only whitespace in parseID ([#6615][])
 - Enterprise features
   - Fix(backup/restore): fixes backup and restore with DROP operations ([#6933][])
 
