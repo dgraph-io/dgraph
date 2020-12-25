@@ -22,9 +22,9 @@ fix(ludicrous mode): Handle deletes correctly ([#6773][])
 fix(worker): Avoid panic in handleUidPostings ([#6607][])
 fix(gqlParser): Handle strings with only whitespace in parseID ([#6615][])
 
-- Enterprise Edition
-	- fix(backup/restore): fixes backup and restore with DROP operations ([#6933][])
-	- Generic alpha log error message for failed ACL login ([#6851][])
+- Enterprise features
+  - fix(backup/restore): fixes backup and restore with DROP operations ([#6933][])
+  - Generic alpha log error message for failed ACL login ([#6851][])
 
 [#6991]: https://github.com/dgraph-io/dgraph/issues/6991
 [#5197]: https://github.com/dgraph-io/dgraph/issues/5197
