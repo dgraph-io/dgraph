@@ -1086,13 +1086,29 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 			}
 		}
 	} else {
-		// GraphQL queries will always have at least one query whose results are visible to users,
-		// implying that the root fastJson node has will always have at least one child. So, no need
-		// to check for the case where there are no children.
-		// Also, errors from GraphQL encoding need to be sent to users along with the data.
-		fmt.Println("*********************err before: ", err, ", is nil: ", err == nil)
-		err = enc.encodeGraphQL(n, &bufw, []gqlSchema.Field{field}, nil)
-		fmt.Println("*********************err after: ", err, ", is nil: ", err == nil)
+		// Few points to note:
+		// * GraphQL queries will always have at least one query whose results are visible to users,
+		//   implying that the root fastJson node will always have at least one child. So, no need
+		//   to check for the case where there are no children for the root fastJson node.
+		// * If there are non-GraphQL errors, then the buffer may be corrupt, so let's not return
+		//   the buffer contents. But, if there are only GraphQL errors then the buffer is
+		//   guaranteed to be safe, so we can return both buffer contents and GraphQL errors.
+		// * dgraph.type predicate is requested by GraphQL layer for abstract types. We are caching
+		//   the id for this attr here so that instead of doing this:
+		//   	enc.attrForID(enc.getAttr(child)) == "dgraph.type"
+		//   we would now be able to do just this:
+		//   	enc.getAttr(child) == dgraphTypeAttrId
+		//   Meaning, instead of looking up an int in a map and then comparing strings,
+		//   we can just compare ints directly.
+		dgraphTypeAttrId := enc.idForAttr("dgraph.type")
+		var errs x.GqlErrorList
+		if err = enc.encodeGraphQL(n, &bufw, &errs, dgraphTypeAttrId, []gqlSchema.Field{field},
+			nil); err != nil {
+			return nil, err
+		}
+		if len(errs) > 0 {
+			err = errs
+		}
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
