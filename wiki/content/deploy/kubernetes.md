@@ -500,7 +500,7 @@ $ helm install my-prometheus-release \
   stable/prometheus-operator
 ```
 
-**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidently checked into anywhere.  You can supply it through the command line, or create a seperate `secrets.yaml` that is never checked into a code repository:
+**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidentally checked into anywhere.  You can supply it through the command line, or create a separate `secrets.yaml` that is never checked into a code repository:
 
 ```yaml
 grafana:
