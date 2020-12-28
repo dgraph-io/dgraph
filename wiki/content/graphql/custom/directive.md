@@ -230,7 +230,7 @@ For example, you api might use custom logic to integrate with GitHub, using eith
 
 ```graphql
 # GitHub's repository type
-type Respository @remote { ... }
+type Repository @remote { ... }
 
 # Dgraph user type
 type User {
@@ -249,7 +249,7 @@ type User {
 }
 ```
 
-Just defining the connection is all it takes and then you can ask a single GraphQL query that performs a local query and joins with (potentialy many) remote data sources.
+Just defining the connection is all it takes and then you can ask a single GraphQL query that performs a local query and joins with (potentially many) remote data sources.
 
 ## How Dgraph processes custom results
 
