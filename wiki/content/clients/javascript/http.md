@@ -3,87 +3,22 @@ date = "2017-03-20T22:25:17+11:00"
 title = "HTTP Client"
 weight = 5
 [menu.main]
+    identifier = "js-http-client"
     parent = "javascript"
 +++
 
-## HTTP
-
-The official JavaScript HTTP client [can be found here](https://github.com/dgraph-io/dgraph-js-http).
-Follow the instructions in the [README](https://github.com/dgraph-io/dgraph-js-http#readme) to get it up and running.
-
-More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js-http#supported-versions).
-
-We also have a [simple example](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple)
-project, which contains an end-to-end working example of how to use the JavaScript HTTP client,
-for Node.js >= v6.
-
-# dgraph-js-http 
-[![npm version](https://img.shields.io/npm/v/dgraph-js-http.svg?style=flat)](https://www.npmjs.com/package/dgraph-js-http) [![Build Status](https://img.shields.io/travis/dgraph-io/dgraph-js-http/master.svg?style=flat)](https://travis-ci.org/dgraph-io/dgraph-js-http) [![Coverage Status](https://img.shields.io/coveralls/github/dgraph-io/dgraph-js-http/master.svg?style=flat)](https://coveralls.io/github/dgraph-io/dgraph-js-http?branch=master)
-
-A Dgraph client implementation for javascript using HTTP. It supports both
+A Dgraph client implementation for JavaScript using HTTP. It supports both
 browser and Node.js environments.
+This client follows the [Dgraph JavaScript gRPC client]({{< relref "grpc.md" >}}) closely.
 
-**Looking for gRPC support? Check out [dgraph-js][grpcclient].**
-
-This client follows the [Dgraph Javascript gRPC client][grpcclient] closely.
-
-[grpcclient]: https://github.com/dgraph-io/dgraph-js
-
-Before using this client, we highly recommend that you go through [docs.dgraph.io],
-and understand how to run and work with Dgraph.
-
-[docs.dgraph.io]: https://docs.dgraph.io
-
-**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/35) for reporting issues about this repository.**
-
-## Table of contents
-
--   [Install](#install)
--   [Supported Versions](#supported-versions)
--   [Quickstart](#quickstart)
--   [Using a client](#using-a-client)
-    -   [Create a client](#create-a-client)
-    -   [Login into Dgraph](#login-into-dgraph)
-    -   [Configure access tokens](#configure-access-tokens)
-    -   [Alter the database](#alter-the-database)
-    -   [Create a transaction](#create-a-transaction)
-    -   [Run a mutation](#run-a-mutation)
-    -   [Run a query](#run-a-query)
-    -   [Commit a transaction](#commit-a-transaction)
-    -   [Check request latency](#check-request-latency)
-    -   [Debug mode](#debug-mode)
--   [Development](#development)
-    -   [Building the source](#building-the-source)
-    -   [Running tests](#running-tests)
-
-## Install
-
-Install using `yarn`:
-
-```sh
-yarn add dgraph-js-http
-```
-
-or npm:
-
-```sh
-npm install dgraph-js-http --save
-```
-
-You will also need a Promise polyfill for
-[older browsers](http://caniuse.com/#feat=promises) and Node.js v5 and below.
-We recommend [taylorhakes/promise-polyfill](https://github.com/taylorhakes/promise-polyfill)
-for its small size and Promises/A+ compatibility.
+{{% notice "tip" %}}
+The official JavaScript HTTP client [can be found here](https://github.com/dgraph-io/dgraph-js-http).
+Follow the [install instructions](https://github.com/dgraph-io/dgraph-js-http#install) to get it up and running.
+{{% /notice %}}
 
 ## Supported Versions
 
-Depending on the version of Dgraph that you are connecting to, you will have to
-use a different version of this client.
-
-| Dgraph version | dgraph-js-http version |
-| :------------: | :--------------------: |
-|   >= 20.03.0   |      >= _20.3.0_       |
-|     >= 1.1     |       >= _1.1.0_       |
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js-http#supported-versions).
 
 ## Quickstart
 
@@ -94,6 +29,12 @@ the instructions in the README of that project.
 [simple]: https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple
 
 ## Using a client
+
+{{% notice "tip" %}}
+You can find a [simple example](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple)
+project, which contains an end-to-end working example of how to use the JavaScript HTTP client,
+for Node.js >= v6.
+{{% /notice %}}
 
 ### Create a client
 
@@ -389,20 +330,4 @@ dgraphClient.setDebugMode(true);
 
 // Disable debug mode.
 dgraphClient.setDebugMode(false);
-```
-
-## Development
-
-### Building the source
-
-```sh
-npm run build
-```
-
-### Running tests
-
-Make sure you have a Dgraph server running on localhost before you run this task.
-
-```sh
-npm test
 ```

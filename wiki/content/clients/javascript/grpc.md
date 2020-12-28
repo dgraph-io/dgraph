@@ -6,93 +6,19 @@ weight = 5
     parent = "javascript"
 +++
 
-## gRPC
+The official Dgraph client implementation for JavaScript (Node.js v6 and above),
+using [gRPC](https://grpc.io/).
+This client follows the [Dgraph Go client]({{< relref "go.md" >}}) closely.
 
+
+{{% notice "tip" %}}
 The official JavaScript gRPC client [can be found here](https://github.com/dgraph-io/dgraph-js).
-Follow the instructions in the [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
-
-More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js#supported-versions).
-
-We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
-project, which contains an end-to-end working example of how to use the JavaScript gRPC client,
-for Node.js >= v6.
-
-# dgraph-js
-[![npm version](https://img.shields.io/npm/v/dgraph-js.svg?style=flat)](https://www.npmjs.com/package/dgraph-js) [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:dgraphjs_Build)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=dgraphjs_Build&buildId=lastFinished&guest=1) [![Coverage Status](https://img.shields.io/coveralls/github/dgraph-io/dgraph-js/master.svg?style=flat)](https://coveralls.io/github/dgraph-io/dgraph-js?branch=master)
-
-Official Dgraph client implementation for JavaScript (Node.js v6 and above),
-using [gRPC].
-
-**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/35/clients/46) for reporting issues about this repository.**
-
-**Looking for browser support? Check out [dgraph-js-http].**
-
-[grpc]: https://grpc.io/
-[dgraph-js-http]: https://github.com/dgraph-io/dgraph-js-http
-
-This client follows the [Dgraph Go client][goclient] closely.
-
-[goclient]: https://github.com/dgraph-io/dgo
-
-Before using this client, we highly recommend that you go through [docs.dgraph.io],
-and understand how to run and work with Dgraph.
-
-[docs.dgraph.io]:https://docs.dgraph.io
-
-## Table of contents
-
-  - [Install](#install)
-  - [Supported Versions](#supported-versions)
-  - [Quickstart](#quickstart)
-  - [Using a Client](#using-a-client)
-    - [Creating a Client](#creating-a-client)
-    - [Altering the Database](#altering-the-database)
-    - [Creating a Transaction](#creating-a-transaction)
-    - [Running a Mutation](#running-a-mutation)
-    - [Running a Query](#running-a-query)
-    - [Running an Upsert: Query + Mutation](#running-an-upsert-query--mutation)
-    - [Running a Conditional Upsert](#running-a-conditional-upsert)
-    - [Committing a Transaction](#committing-a-transaction)
-    - [Cleanup Resources](#cleanup-resources)
-    - [Debug mode](#debug-mode)
-    - [Setting Metadata Headers](#setting-metadata-headers)
-  - [Examples](#examples)
-  - [Development](#development)
-    - [Building the source](#building-the-source)
-    - [Running tests](#running-tests)
-
-## Install
-
-Install using npm:
-
-```sh
-npm install dgraph-js grpc --save
-# If you are using Typescript, you might also need:
-# npm install @types/google-protobuf @types/protobufjs --save-dev
-```
-
-or yarn:
-
-```sh
-yarn add dgraph-js grpc
-# If you are using Typescript, you might also need:
-# yarn add @types/google-protobuf @types/protobufjs --dev
-```
+Follow the [install instructions](https://github.com/dgraph-io/dgraph-js#install) to get it up and running.
+{{% /notice %}}
 
 ## Supported Versions
 
-Depending on the version of Dgraph that you are connecting to, you will have to
-use a different version of this client.
-
-| Dgraph version | dgraph-js version |
-|:--------------:|:-----------------:|
-|     1.0.X      |      *1.X.Y*      |
-|     1.1.X      |      *2.X.Y*      |
-|    20.03.0     |     *20.03.0*     |
-
-Note: Only API breakage from *v1.X.Y* to *v2.X.Y* is in
-the function `DgraphClient.newTxn().mutate()`. This function returns a `messages.Assigned`
-type in *v1.X* but a `messages.Response` type in *v2.X*.
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph-js#supported-versions).
 
 ## Quickstart
 
@@ -100,7 +26,21 @@ Build and run the [simple][] project in the `examples` folder, which
 contains an end-to-end example of using the Dgraph JavaScript client. Follow the
 instructions in the README of that project.
 
+### Examples
+
+- [simple][]: Quickstart example of using dgraph-js.
+- [tls][]: Example of using dgraph-js with a Dgraph cluster secured with TLS.
+
+[simple]: ./examples/simple
+[tls]: ./examples/tls
+
 ## Using a Client
+
+{{% notice "tip" %}}
+You can find a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
+project, which contains an end-to-end working example of how to use the JavaScript gRPC client,
+for Node.js >= v6.
+{{% /notice %}}
 
 ### Creating a Client
 
@@ -451,39 +391,4 @@ var meta = new grpc.Metadata();
 meta.add('auth-token', 'mySuperSecret');
 
 await dgraphClient.alter(op, meta);
-```
-
-## Examples
-
-- [simple][]: Quickstart example of using dgraph-js.
-- [tls][]: Example of using dgraph-js with a Dgraph cluster secured with TLS.
-
-[simple]: ./examples/simple
-[tls]: ./examples/tls
-
-## Development
-
-### Building the source
-
-```sh
-npm run build
-```
-
-If you have made changes to the `proto/api.proto` file, you need need to
-regenerate the source files generated by Protocol Buffer tools. To do that,
-install the [Protocol Buffer Compiler][protoc] and then run the following
-command:
-
-[protoc]: https://github.com/google/protobuf#readme
-
-```sh
-npm run build:protos
-```
-
-### Running tests
-
-Make sure you have a Dgraph server running on localhost before you run this task.
-
-```sh
-npm test
 ```
