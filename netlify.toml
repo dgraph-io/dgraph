@@ -12,3 +12,8 @@
   HUGO_VERSION = "0.74.3"
   LOOP = "false"
   HOST = "/"
+
+[context.branch-deploy.environment]
+  HUGO_VERSION = "0.74.3"
+  LOOP = "false"
+  HOST = "/"
