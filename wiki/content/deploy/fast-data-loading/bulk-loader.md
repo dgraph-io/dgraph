@@ -143,6 +143,40 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
 
+### How to properly bulk load
+Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 depending on your dataset size, you can follow one of the following ways to use bulk loader and start your Cluster.
+
+#### For small dataset
+In case your dataset is small (a few GBs) you can follow these steps:
+1. Run bulk loader only on one server
+2. Once the `out` directory has been created, start the first alpha **only**
+3. Wait for 1 minute to ensure that a snapshot has been taken by the alpha node. By checking the alpha logs, you will be looking for a similar message:
+```
+I1227 13:12:24.202196   14691 draft.go:571] Creating snapshot at index: 30. ReadTs: 4.
+```
+4. Only now, you can start the other alphas node according to the `--replicas` flag set in the zero nodes. Now the alpha node (the one started in point 2) will be printing similar messages:
+```
+I1227 13:18:16.154674   16779 snapshot.go:246] Streaming done. Sent 1093470 entries. Waiting for ACK...
+I1227 13:18:17.126494   16779 snapshot.go:251] Received ACK with done: true
+I1227 13:18:17.126514   16779 snapshot.go:292] Stream snapshot: OK
+```
+That means that all alpha nodes are using the same snapshot, therefore all your data is correctly in sync. Also, the other alpha nodes will be printing (in their logs) something similar to:
+```
+I1227 13:18:17.126621    1720 draft.go:567] Skipping snapshot at 28, because found one at 28
+```
+
+#### For bigger dataset
+When your dataset is pretty big (e.g. `dataset size` > `10GB`) you can use this method instead:
+1. Run bulk loader only on one server
+2. Copy (or use `rsync`) the `out` directory to the other servers (the servers you will be using to start the other alpha nodes)
+3. Now, start all alpha nodes at the same time
+
+If the process went well all alpha nodes must print the similar message:
+```
+I1227 13:27:53.959671   29781 draft.go:571] Creating snapshot at index: 34. ReadTs: 6.
+```
+Note that `snapshot at index` and `ReadTs` must be the same value in all alpha nodes
+
 ### Encryption at rest with Bulk Loader (Enterprise Feature)
 
 Even before the Dgraph cluster starts, we can load data using Bulk Loader with the encryption feature turned on. Later we can point the generated `p` directory to a new Alpha server.
