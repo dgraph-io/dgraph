@@ -146,6 +146,8 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 ### How to properly bulk load
 Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 onwards, depending on your dataset size, you can follow one of the following ways to use bulk loader and initialize your new Cluster.
 
+*The following procedure is particularly relevant for Clusters that have `--replicas` flag greater than 1*
+
 #### For small dataset
 In case your dataset is small (a few GBs) you can follow these steps:
 1. Run bulk loader only on one server
