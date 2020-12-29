@@ -158,7 +158,15 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v"}
+	if *race {
+		args = append(args, "-timeout", "180m")
+		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+		// args = append(args, "-race")
+	} else {
+		args = append(args, "-timeout", "30m")
+	}
+
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -168,10 +176,6 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
-	// Todo: There are few race errors in tests itself. Enable this once that is fixed.
-	//if *race {
-	//	args = append(args, "-race")
-	//}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -199,7 +203,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if detectRace(prefix) {
-		return fmt.Errorf("race condition detected for test package %s and cluster with prefix" +
+		return fmt.Errorf("race condition detected for test package %s and cluster with prefix"+
 			" %s. check logs for more details", pkg, prefix)
 	}
 	return nil
