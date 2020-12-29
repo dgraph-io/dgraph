@@ -144,23 +144,23 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 ```
 
 ### How to properly bulk load
-Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 depending on your dataset size, you can follow one of the following ways to use bulk loader and start your Cluster.
+Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 onwards, depending on your dataset size, you can follow one of the following ways to use bulk loader and initialize your new Cluster.
 
 #### For small dataset
 In case your dataset is small (a few GBs) you can follow these steps:
 1. Run bulk loader only on one server
-2. Once the `out` directory has been created, start the first alpha **only**
-3. Wait for 1 minute to ensure that a snapshot has been taken by the alpha node. By checking the alpha logs, you will be looking for a similar message:
+2. Once the `out` directory has been created, start **only** the first alpha
+3. Wait for 1 minute to ensure that a snapshot has been taken by the alpha node. You can confirm that a snapshot has been taken by looking for the following message":
 ```
 I1227 13:12:24.202196   14691 draft.go:571] Creating snapshot at index: 30. ReadTs: 4.
 ```
-4. Only now, you can start the other alphas node according to the `--replicas` flag set in the zero nodes. Now the alpha node (the one started in point 2) will be printing similar messages:
+4. After confirming that the snapshot has been taken, you can start the other alpha nodes (number of alpha nodes must be equal to the `--replicas` flag value set in the zero nodes). Now the alpha node (the one started in point 2) will be printing similar messages:
 ```
 I1227 13:18:16.154674   16779 snapshot.go:246] Streaming done. Sent 1093470 entries. Waiting for ACK...
 I1227 13:18:17.126494   16779 snapshot.go:251] Received ACK with done: true
 I1227 13:18:17.126514   16779 snapshot.go:292] Stream snapshot: OK
 ```
-That means that all alpha nodes are using the same snapshot, therefore all your data is correctly in sync. Also, the other alpha nodes will be printing (in their logs) something similar to:
+These messages indicate that all replica nodes are now using the same snapshot. Thus, all your data is correctly in sync across the cluster. Also, the other alpha nodes will be printing (in their logs) something similar to:
 ```
 I1227 13:18:17.126621    1720 draft.go:567] Skipping snapshot at 28, because found one at 28
 ```
