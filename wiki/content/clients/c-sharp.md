@@ -6,52 +6,19 @@ weight = 3
     parent = "clients"
 +++
 
+An implementation for a Dgraph client in C#, using [gRPC](https://grpc.io/).
+This client follows the [Dgraph Go client]({{< relref "go.md" >}}) closely.
+
+{{% notice "tip" %}}
 The official C# client [can be found here](https://github.com/dgraph-io/dgraph.net).
-Follow the instructions in the [README](https://github.com/dgraph-io/dgraph.net#readme) to get
+Follow the [install instructions](https://github.com/dgraph-io/dgraph.net#install) to get
 it up and running.
-
-More details on the supported versions can be found at
-[this link](https://github.com/dgraph-io/dgraph.net#supported-versions).
-
-# Dgraph.net ![Nuget](https://img.shields.io/nuget/v/dgraph) [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:DgraphNet_Build)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=DgraphNet_Build&buildId=lastFinished&guest=1)
-
-This client follows the [Dgraph Go client][goclient] closely.
-
-[goclient]: https://github.com/dgraph-io/dgo
-
-Before using this client, we highly recommend that you go through [docs.dgraph.io],
-and understand how to run and work with Dgraph.
-
-**Use [Discuss Issues](https://discuss.dgraph.io/tags/c/issues/35/dgraphnet) for reporting issues about this repository.**
-
-[docs.dgraph.io]:https://docs.dgraph.io
-
-## Table of contents
-
-  - [Install](#install)
-  - [Supported Versions](#supported-versions)
-  - [Using a Client](#using-a-client)
-    - [Creating a Client](#creating-a-client)
-    - [Altering the Database](#altering-the-database)
-    - [Creating a Transaction](#creating-a-transaction)
-    - [Running a Mutation](#running-a-mutation)
-    - [Running a Query](#running-a-query)
-    - [Running an Upsert: Query + Mutation](#running-an-upsert-query--mutation)
-    - [Committing a Transaction](#committing-a-transaction)
-    - [Cleanup Resources](#cleanup-resources)
-
-## Install
-
-Install using nuget:
-
-```sh
-dotnet add package Dgraph
-```
+{{% /notice %}}
 
 ## Supported Versions
 
-Each release of this client will support the equivalent Dgraph release. For example, 2020.03.XX will support any Dgraph instances with version 2020.03.XX. 
-
+More details on the supported versions can be found at
+[this link](https://github.com/dgraph-io/dgraph.net#supported-versions).
 
 ## Using a Client
 
@@ -126,7 +93,7 @@ the variables dictionary as the second argument.
 
 The response would contain the response string.
 
-Let’s run the following query with a variable $a:
+Let’s run the following query with a variable `$a`:
 
 ```console
 query all($a: string) {
@@ -160,7 +127,7 @@ Console.Write(res.Value.Json);
 
 The `Transaction.Mutate` function allows you to run upserts consisting of one query and one mutation. 
 
-To know more about upsert, we highly recommend going through the docs at https://docs.dgraph.io/mutations/#upsert-block.
+To know more about upsert, we highly recommend going through the [upsert block documentation]({{< relref "upsert-block.md" >}}).
 
 ```c#
 var query = @"
