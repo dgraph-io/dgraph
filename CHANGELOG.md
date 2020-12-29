@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.07.3] - 2020-12-29
+[20.07.3]: https://github.com/dgraph-io/dgraph/compare/v20.07.2...v20.07.3
+
+### Changed
+
+- Chore(bulk): Change default compression to zstd:3. ([#6995][])
+- Build(dockerfile): Set GODEBUG=madvdontneed=1. ([#6955][])
+- Updating badger version 3f846b3. ([#7212][])
+
+### Added:
+
+- Update kubernetes links to match 20.07 config files ([#7049][])
+- Fix(dgraph): giving users the option to control tls versions ([#6820][])
+- Feat(dgraph): making all internal communications with tls configured ([#6876][])
+- Feat(dgraph): enabling TLS config in http zero ([#6691) ([#6867][])
+
+### Fixed:
+
+- GraphQL
+  - Fix(GraphQL): don't update cacheMb if not specified by user ([#7103][]) 
+  - Fix: added comment docstring for ExportInput format ([#6991][])
+  - Fix(GraphQL): fixes issue of multiple responses in a subscription for an update. ([#6868][])
+  - Fix ErrIndexingInProgress if schema update fails ([#6583][]) 
+  - Fix(GraphQL): fix panic error when we give null value in filter connectives. ([#6707][])
+  - Fix(GraphQL): reduces polling duration of subscriptions. ([#6661][])
+  - Fix(GraphQL): add enable schema cleaning in GraphQL and reduce schema update time. ([#6725][])
+  - Fix(GraphQL): fixes flaky test  for subscriptions. ([#6065][]) 
+- Fix(DQL): ignore ordering of indexes in schema with eq function (DGRAPH-2601) ([#6996][])
+- Fix(worker): fix eq filter for non-index predicates. ([#6986][]) 
+- Fix(Alpha): Immediately take a snapshot if we don't have one ([#6458][])
+- Fix(Dgraph): Type names in exported schema are surrounded by brackets. ([#6679][])
+- Fix(ludicrous mode): Handle deletes correctly ([#6773][])
+- Fix(worker): Avoid panic in handleUidPostings ([#6607][])
+- Fix(gqlParser): Handle strings with only whitespace in parseID ([#6615][])
+- Fix(Ludicrous): Upserts on list type in Dgraph ([#6796][])
+- Enterprise features
+  - Fix(backup/restore): fixes backup and restore with DROP operations ([#6922][])
+  - Generic alpha log error message for failed ACL login  ([#6848][])
+
+[#6995]: https://github.com/dgraph-io/dgraph/issues/6995
+[#6955]: https://github.com/dgraph-io/dgraph/issues/6955
+[#7212]: https://github.com/dgraph-io/dgraph/issues/7212
+[#7049]: https://github.com/dgraph-io/dgraph/issues/7049
+[#6820]: https://github.com/dgraph-io/dgraph/issues/6820
+[#6876]: https://github.com/dgraph-io/dgraph/issues/6876
+[#6867]: https://github.com/dgraph-io/dgraph/issues/6867
+[#7103]: https://github.com/dgraph-io/dgraph/issues/7103
+[#6991]: https://github.com/dgraph-io/dgraph/issues/6991
+[#6868]: https://github.com/dgraph-io/dgraph/issues/6868
+[#6583]: https://github.com/dgraph-io/dgraph/issues/6583
+[#6707]: https://github.com/dgraph-io/dgraph/issues/6707
+[#6661]: https://github.com/dgraph-io/dgraph/issues/6661
+[#6725]: https://github.com/dgraph-io/dgraph/issues/6725
+[#6065]: https://github.com/dgraph-io/dgraph/issues/6065
+[#6996]: https://github.com/dgraph-io/dgraph/issues/6996
+[#6986]: https://github.com/dgraph-io/dgraph/issues/6986
+[#6458]: https://github.com/dgraph-io/dgraph/issues/6458
+[#6679]: https://github.com/dgraph-io/dgraph/issues/6679
+[#6773]: https://github.com/dgraph-io/dgraph/issues/6773
+[#6607]: https://github.com/dgraph-io/dgraph/issues/6607
+[#6615]: https://github.com/dgraph-io/dgraph/issues/6615
+[#6796]: https://github.com/dgraph-io/dgraph/issues/6796
+[#6922]: https://github.com/dgraph-io/dgraph/issues/6922
+[#6848]: https://github.com/dgraph-io/dgraph/issues/6848
+
+
 ## [20.07.2] - 2020-10-22
 [20.07.2]: https://github.com/dgraph-io/dgraph/compare/v20.07.1...v20.07.2
 
