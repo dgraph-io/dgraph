@@ -142,11 +142,11 @@ curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -
 ' | python -m json.tool | less
 ```
 
-
 {{% notice "tip" %}}
 To run an RDF/JSON mutation using a file via curl, you can use the curl option
 `--data-binary @/path/to/mutation.rdf` instead of `-d $''`.
-The `--data-binary` option skips curl's default URL-encoding.
+The `--data-binary` option skips curl's default URL-encoding which includes removal of all newlines. thus
+By using the data binary option you enable the use of `#` comments in the text since with the `-d` option, anything after the first `#` in the text would appear on the same line and therefore be taken as one long comment.
 {{% /notice %}}
 
 ### Step 3: Alter Schema

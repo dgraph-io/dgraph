@@ -443,8 +443,11 @@ For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For 
 
 `uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
-Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+{{% notice "tip" %}}
+If the UID of a node is known, values for the node can be read directly.
+{{% /notice %}}
 
+Query Example: The films of Priyanka Chopra by known UID.
 {{< runnable >}}
 {
   films(func: uid(0x2c964)) {
@@ -457,8 +460,6 @@ Query Example: If the UID of a node is known, values for the node can be read di
   }
 }
 {{< /runnable >}}
-
-
 
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}

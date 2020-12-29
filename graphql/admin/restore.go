@@ -66,9 +66,8 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultField:        input.VaultField,
 		VaultFormat:       input.VaultFormat,
 	}
-	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
+	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
-		worker.DeleteRestoreId(restoreId)
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code": "Failure",
@@ -80,9 +79,8 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 
 	return &resolve.Resolved{
 		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"code":      "Success",
-			"message":   "Restore operation started.",
-			"restoreId": restoreId,
+			"code":    "Success",
+			"message": "Restore operation started.",
 		}},
 		Field: m,
 	}, true
