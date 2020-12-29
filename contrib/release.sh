@@ -104,6 +104,7 @@ commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 jemallocXgoFlags=
 
 go install src.techknowlogick.com/xgo
+mkdir ~/.xgo-cache || echo "Continuing"
 
 basedir=$GOPATH/src/github.com/dgraph-io
 mkdir -p "$basedir"
