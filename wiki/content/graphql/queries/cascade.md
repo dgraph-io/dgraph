@@ -67,14 +67,14 @@ The query below only return those `posts` which have a non-null `text` field.
 
 ```graphql
 {
-        queryAuthor {
-		reputation
-		name
-		posts @cascade(fields:["text"]) {
-		   title
-		   text
-		}
-	}
+    queryAuthor {
+        reputation
+        name
+        posts @cascade(fields:["text"]) {
+           title
+           text
+        }
+    }
 }
 ```
 
@@ -86,14 +86,14 @@ For example, the query below ensures that an author has the `reputation` and `na
 
 ```graphql
 {
-      queryAuthor @cascade(fields:["reputation","name"]) {
+    queryAuthor @cascade(fields:["reputation","name"]) {
         reputation
         name
         dob
         posts @cascade(fields:["text"]) {
             title
             text
-            }
         }
+    }
 }
 ```

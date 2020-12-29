@@ -74,7 +74,7 @@ func TestQueriesFor21Million(t *testing.T) {
 			for retry := 0; retry < 3; retry++ {
 				// If a query takes too long to run, it probably means dgraph is stuck and there's
 				// no point in waiting longer or trying more tests.
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 				resp, err := dg.NewTxn().Query(ctx, bodies[0])
 				cancel()
 
