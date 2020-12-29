@@ -1038,7 +1038,7 @@ func (f *field) XIDArg() string {
 
 	for _, arg := range args {
 		if arg.Type.Name() != IDType && (passwordField == nil ||
-			arg.Name != passwordField.Name()) {
+			arg.Name != passwordField.Name()) && f.field.Arguments[0].Name == arg.Name {
 			xidArgName = arg.Name
 		}
 	}

@@ -1468,6 +1468,21 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
+// fieldMulti returns true if multiple field in fields satisfies pred
+func fieldMulti(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
+	var flag bool
+	for _, fld := range fields {
+		if pred(fld) {
+			if flag {
+				return true
+			} else {
+				flag = true
+			}
+		}
+	}
+	return false
+}
+
 func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	id := fld.Directives.ForName(idDirective)
 	if id != nil {
@@ -1732,6 +1747,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
+	hasMultipleXIDFields := fieldMulti(defn.Fields, hasIDDirective)
 	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
@@ -1743,7 +1759,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		},
 	}
 
-	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
+	// If the defn, only specified one of ID/XID field, then they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
 		fields := getIDField(defn)
@@ -1762,7 +1778,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 					Name: fld.Name,
 					Type: &ast.Type{
 						NamedType: fld.Type.Name(),
-						NonNull:   !hasIDField,
+						NonNull:   !hasIDField && !hasMultipleXIDFields,
 					},
 				})
 			}
