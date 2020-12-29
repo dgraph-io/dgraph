@@ -6,139 +6,22 @@ weight = 4
     parent = "clients"
 +++
 
+A minimal implementation for a Dgraph client for Java 1.8 and above, using [gRPC](https://grpc.io/).
+This client follows the [Dgraph Go client]({{< relref "go.md" >}}) closely.
+
+{{% notice "tip" %}}
 The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j). 
-Follow the instructions in the [README](https://github.com/dgraph-io/dgraph4j#readme) to get it up and running.
-
-More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph4j#supported-versions).
-
-We also have a [DgraphJavaSample] project, which contains an end-to-end
-working example of how to use the Java client.
-
-[DgraphJavaSample]:https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample
-
-# Dgraph Client for Java
-
-[![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:%28id:Dgraph4j_Integration%29/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph4j_Integration&buildId=lastFinished&guest=1)
-[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph4j/badge.svg)](https://coveralls.io/github/dgraph-io/dgraph4j)
-
-A minimal implementation for a Dgraph client for Java 1.8 and above, using [grpc].
-
-[grpc]: https://grpc.io/
-
-This client follows the [Dgraph Go client][goclient] closely.
-
-[goclient]: https://github.com/dgraph-io/dgo
-
-Before using this client, we highly recommend that you go through [docs.dgraph.io],
-and understand how to run and work with Dgraph.
-
-[docs.dgraph.io]:https://docs.dgraph.io
-
-**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/35/clients/46) for reporting issues about this repository.**
-
-## Table of Contents
-- [Download](#download)
-- [Supported Versions](#supported-versions)
-- [Quickstart](#quickstart)
-- [Intro](#intro)
-- [Using the Synchronous Client](#using-the-synchronous-client)
-  * [Creating a Client](#creating-a-client)
-  * [Creating a Client for Slash Graphql Endpoint](#creating-a-client-for-slash-graphql-endpoint)
-  * [Creating a Secure Client Using TLS](#creating-a-secure-client-using-tls)
-  * [Check Dgraph Version](#check-dgraph-version)
-  * [Login Using ACL](#login-using-acl)
-  * [Altering the Database](#altering-the-database)
-  * [Creating a Transaction](#creating-a-transaction)
-  * [Running a Mutation](#running-a-mutation)
-  * [Committing a Transaction](#committing-a-transaction)
-  * [Running a Query](#running-a-query)
-  * [Running a Query with RDF response](#running-a-query-with-rdf-response)
-  * [Running an Upsert: Query + Mutation](#running-an-upsert-query--mutation)
-  * [Running a Conditional Upsert](#running-a-conditional-upsert)
-  * [Setting Deadlines](#setting-deadlines)
-  * [Setting Metadata Headers](#setting-metadata-headers)
-  * [Helper Methods](#helper-methods)
-  * [Closing the DB Connection](#closing-the-db-connection)
-* [Using the Asynchronous Client](#using-the-asynchronous-client)
-* [Checking the request latency](#checking-the-request-latency)
-- [Development](#development)
-  * [Building the source](#building-the-source)
-  * [Code Style](#code-style)
-  * [Running unit tests](#running-unit-tests)
-
-## Download
-grab via Maven:
-
-```xml
-<dependency>
-  <groupId>io.dgraph</groupId>
-  <artifactId>dgraph4j</artifactId>
-  <version>20.03.3</version>
-</dependency>
-```
-or Gradle:
-```groovy
-compile 'io.dgraph:dgraph4j:20.03.3'
-```
+Follow the [install instructions](https://github.com/dgraph-io/dgraph4j#download) to get it up and running.
+{{% /notice %}}
 
 ## Supported Versions
 
-Depending on the version of Dgraph that you are connecting to, you will have to
-use a different version of this client.
-
-| Dgraph version | dgraph4j version  | java version |
-|:--------------:|:-----------------:|:------------:|
-|     1.0.X      |       1.X.X       |     1.9.X    |
-|    >= 1.1.0    |       2.X.X       |     1.9.X    |
-
-#### Note regarding Java 1.8.x support:
-* If you aren't using gRPC with TLS, then the above version table will work for you with Java
- 1.8.x too.
-* If you're using gRPC with TLS on Java 1.8.x, then you will need to follow gRPC docs [here
-](https://github.com/grpc/grpc-java/blob/master/SECURITY.md#tls-on-non-android). Basically, it
- will require you to add the following dependency in your app with correct version for the 
- corresponding `grpc-netty` version used by `dgraph4j`. You can find out the correct version of 
- the dependency to use from the version combination table in [this section] in `grpc-netty` docs.
-  
-  For maven:
-  
-  ```xml
-  <dependency>
-    <groupId>io.netty</groupId>
-    <artifactId>netty-tcnative-boringssl-static</artifactId>
-    <version><!-- See table in gRPC docs for correct version --></version>
-  </dependency>
-  ```
-  
-  For Gradle:
-  
-  ```groovy
-  compile 'io.netty:netty-tcnative-boringssl-static:<See table in gRPC docs for correct version>'
-  ```
-  
-  The following table lists the `grpc-netty` versions used by different `dgraph4j` versions over time, along with the supported versions of `netty-tcnative-boringssl-static` for the corresponding `grpc-netty` version:
-  
-  | dgraph4j version  | grpc-netty version | netty-tcnative-boringssl-static version |
-  |:-----------------:|:------------------:|:---------------------------------------:|
-  |    1.0.0-1.2.0    |        1.7.0       |               2.0.6.Final               |
-  |    1.4.0-1.6.0    |        1.10.0      |               2.0.7.Final               |
-  |       1.7.0       |        1.15.0      |               2.0.12.Final              |
-  |    1.7.3-1.7.5    |        1.15.1      |               2.0.12.Final              |
-  |    2.0.0-2.1.0    |        1.22.1      |               2.0.25.Final              |
-  |  20.03.0-20.03.3  |        1.26.0      |               2.0.26.Final              |
-  
-  So, for example, if you were using `dgraph4j v20.03.0`, then you would need to use `2.0.26-Final` 
-  as the version for `netty-tcnative-boringssl-static` dependency as suggested by gRPC docs for 
-  `grpc-netty v1.26.0`.
-
-[this section]: https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty
+More details on the supported versions can be found at [this link](https://github.com/dgraph-io/dgraph4j#supported-versions).
 
 ## Quickstart
-Build and run the [DgraphJavaSample] project in the `samples` folder, which
+Build and run the [DgraphJavaSample](https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample) project in the `samples` folder, which
 contains an end-to-end example of using the Dgraph Java client. Follow the
-instructions in the README of that project.
-
-[DgraphJavaSample]: https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample
+instructions in the [README](https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample/README.md) of that project.
 
 ## Intro
 This library supports two styles of clients, the synchronous client `DgraphClient` and
@@ -150,6 +33,11 @@ synchronous client and use it to mutate or query dgraph. For the async client, m
 be found in the [Using the Asynchronous Client](#using-the-asynchronous-client) section.
 
 ## Using the Synchronous Client
+
+{{% notice "tip" %}}
+You can find a [DgraphJavaSample](https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample) project, 
+which contains an end-to-end working example of how to use the Java client.
+{{% /notice %}}
 
 ### Creating a Client
 
@@ -640,35 +528,4 @@ Similarly you can get the latency of a mutation request:
 ```java
 Assigned assignedIds = dgraphClient.newTransaction().mutate(mu);
 Latency latency = assignedIds.getLatency();
-```
-
-## Development
-
-### Building the source
-
-**Warning**: The gradle build runs integration tests on a locally running Dgraph server.
-The tests will remove all data from your Dgraph instance. So make sure that you don't
-have any important data on your Dgraph instance.
-```
-./gradlew build
-```
-If you have made changes to the `task.proto` file, this step will also regenerate the source files
-generated by Protocol Buffer tools.
-
-### Code Style
-We use [google-java-format] to format the source code. If you run `./gradlew build`, you will be
-warned if there is code that is not conformant. You can run `./gradlew goJF` to format the source
- code, before committing it.
-
-[google-java-format]:https://github.com/google/google-java-format
-
-### Running unit tests
-**Warning**: This command will runs integration tests on a locally running Dgraph server.
-The tests will remove all data from your Dgraph instance. So make sure that you don't
-have any important data on your Dgraph instance.
-
-Make sure you have a Dgraph server running on localhost before you run this task.
-
-```
-./gradlew test
 ```
