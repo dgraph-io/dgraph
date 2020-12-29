@@ -9293,7 +9293,7 @@ func TestMain(m *testing.M) {
 
 	if err := testutil.BulkLoad(testutil.BulkOpts{
 		Zero:       testutil.SockAddrZero,
-		Shards:     3,
+		Shards:     1,
 		RdfFile:    rdfFile,
 		SchemaFile: noschemaFile,
 	}); err != nil {
