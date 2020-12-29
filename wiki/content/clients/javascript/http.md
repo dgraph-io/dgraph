@@ -22,11 +22,9 @@ More details on the supported versions can be found at [this link](https://githu
 
 ## Quickstart
 
-Build and run the [simple] project in the `examples` folder, which
+Build and run the [simple project](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple), which
 contains an end-to-end example of using the Dgraph javascript HTTP client. Follow
-the instructions in the README of that project.
-
-[simple]: https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple
+the instructions in the [README](https://github.com/dgraph-io/dgraph-js-http/tree/master/examples/simple/README.md) of that project.
 
 ## Using a client
 
