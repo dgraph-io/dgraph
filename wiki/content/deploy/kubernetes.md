@@ -454,7 +454,7 @@ The UI is accessible at port 9090. Open http://localhost:9090 in your browser to
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
 * Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
-with the required reciever configuration including the slack webhook credential and create the secret.
+with the required receiver configuration including the slack webhook credential and create the secret.
 
 You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
 
@@ -501,7 +501,7 @@ $ helm install my-prometheus-release \
   stable/prometheus-operator
 ```
 
-**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidently checked into anywhere.  You can supply it through the command line, or create a seperate `secrets.yaml` that is never checked into a code repository:
+**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidentally checked into anywhere.  You can supply it through the command line, or create a separate `secrets.yaml` that is never checked into a code repository:
 
 ```yaml
 grafana:

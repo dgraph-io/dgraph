@@ -9271,7 +9271,7 @@ func Test1Million(t *testing.T) {
 	}
 
 	for _, tt := range tc {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		resp, err := dg.NewTxn().Query(ctx, tt.query)
 		cancel()
 
