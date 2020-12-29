@@ -173,7 +173,7 @@ When your dataset is pretty big (e.g. `dataset size` > `10GB`) you can use this 
 2. Copy (or use `rsync`) the `out` directory to the other servers (the servers you will be using to start the other alpha nodes)
 3. Now, start all alpha nodes at the same time
 
-If the process went well all alpha nodes must print the similar message:
+If the process went well all alpha nodes must print similar message:
 ```
 I1227 13:27:53.959671   29781 draft.go:571] Creating snapshot at index: 34. ReadTs: 6.
 ```
