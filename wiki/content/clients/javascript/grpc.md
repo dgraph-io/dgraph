@@ -22,17 +22,14 @@ More details on the supported versions can be found at [this link](https://githu
 
 ## Quickstart
 
-Build and run the [simple][] project in the `examples` folder, which
+Build and run the [simple project](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple), which
 contains an end-to-end example of using the Dgraph JavaScript client. Follow the
-instructions in the README of that project.
+instructions in the [README](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple/README.md) of that project.
 
 ### Examples
 
-- [simple][]: Quickstart example of using dgraph-js.
-- [tls][]: Example of using dgraph-js with a Dgraph cluster secured with TLS.
-
-[simple]: ./examples/simple
-[tls]: ./examples/tls
+- [simple](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple): Quickstart example of using dgraph-js.
+- [tls](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls): Example of using dgraph-js with a Dgraph cluster secured with TLS.
 
 ## Using a Client
 
