@@ -64,7 +64,7 @@ func openDgraph(pdir string) (*badger.DB, error) {
 
 func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 	restoreDone := false
-	for i := 0; i < 15; i++ {
+	for {
 		resp, err := http.Get("http://" + SockAddrHttp + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
@@ -98,7 +98,9 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 			numSuccess = 0
 		}
 
-		if numSuccess == 3 {
+		// Apply restore works differently with race enabled.
+		// We are seeing delays in apply proposals hence failure of queries.
+		if numSuccess == 10 {
 			// The server has been responsive three times in a row.
 			break
 		}
