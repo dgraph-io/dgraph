@@ -1961,7 +1961,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.Params.IsInternal = false
 			temp.Params.Expand = ""
 			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
-			temp.Filters = child.Filters
+			for _, cf := range child.Filters {
+				s := &SubGraph{}
+				recursiveCopy(s, cf)
+				temp.Filters = append(temp.Filters, s)
+			}
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {

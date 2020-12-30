@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1655,9 +1656,35 @@ func TestGeoValidWkbData(t *testing.T) {
 
 var addr string
 
-// the grootAccessJWT stores the access JWT extracted from the response
-// of http login
-var token *testutil.HttpToken
+type Token struct {
+	token *testutil.HttpToken
+	sync.RWMutex
+}
+
+//// the grootAccessJWT stores the access JWT extracted from the response
+//// of http login
+var token *Token
+
+func (t *Token) getAccessJWTToken() string {
+	t.RLock()
+	defer t.RUnlock()
+	return t.token.AccessJwt
+}
+
+func (t *Token) refreshToken() error {
+	t.Lock()
+	defer t.Unlock()
+	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint:   addr + "/admin",
+		RefreshJwt: t.token.RefreshToken,
+	})
+	if err != nil {
+		return err
+	}
+	t.token.AccessJwt = newToken.AccessJwt
+	t.token.RefreshToken = newToken.RefreshToken
+	return nil
+}
 
 func TestMain(m *testing.M) {
 	addr = "http://" + testutil.SockAddrHttp
@@ -1670,8 +1697,11 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	token = testutil.GrootHttpLogin(addr + "/admin")
-
+	httpToken := testutil.GrootHttpLogin(addr + "/admin")
+	token = &Token{
+		token:   httpToken,
+		RWMutex: sync.RWMutex{},
+	}
 	r := m.Run()
 	os.Exit(r)
 }

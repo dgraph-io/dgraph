@@ -377,6 +377,16 @@ func getNextBlank() string {
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
+
+	// move all facets from global map to smaller mf map
+	mf := make(map[string]interface{})
+	for k, v := range m {
+		if strings.Contains(k, x.FacetDelimeter) {
+			mf[k] = v
+			delete(m, k)
+		}
+	}
+
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
@@ -413,7 +423,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
-
 		mr.uid = getNextBlank()
 	}
 
@@ -422,7 +431,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" || strings.Index(pred, x.FacetDelimeter) > 0 {
+		if pred == "uid" {
 			continue
 		}
 
@@ -451,11 +460,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 
 		prefix := pred + x.FacetDelimeter
-		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
-		// to call parseFacets everytime.
-		// Only call parseBasicFacets when value type for the predicate is not list.
 		if _, ok := v.([]interface{}); !ok {
-			fts, err := parseScalarFacets(m, prefix)
+			fts, err := parseScalarFacets(mf, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -502,7 +508,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_LIST)
 			// TODO(Ashish): We need to call this only in case of scalarlist, for other lists
 			// this can be avoided.
-			facetsMapSlice, err := parseMapFacets(m, prefix)
+			facetsMapSlice, err := parseMapFacets(mf, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -575,8 +581,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseScalarFacets(m, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(mf, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
+
 	return mr, err
 }
 
@@ -597,7 +604,6 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	var list []interface{}
 	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
-
 		buffer.Reset() // The previous contents are used. Reset here.
 		// Rewrite b into buffer, so it can be consumed.
 		if _, err := buffer.Write(b); err != nil {
@@ -607,11 +613,9 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 			return err
 		}
 	}
-
 	if len(list) == 0 && len(ms) == 0 {
 		return nil
 	}
-
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
@@ -625,7 +629,6 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		}
 		return nil
 	}
-
 	mr, err := buf.mapToNquads(ms, op, "")
 	buf.checkForDeletion(mr, ms, op)
 	return err
@@ -639,7 +642,6 @@ func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	buf.Flush()
 	nqs := <-buf.Ch()
 	metadata := buf.Metadata()

@@ -39,7 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) int {
+func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) {
 	if location == "" {
 		location = "/data/backup2"
 	}
@@ -49,7 +49,6 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 				encryptionKeyFile: "/data/keys/enc_key"}) {
 				code
 				message
-				restoreId
 			}
 		}`,
 		Variables: map[string]interface{}{
@@ -70,8 +69,7 @@ func sendRestoreRequest(t *testing.T, location, backupId string, backupNum int) 
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	require.Greater(t, restoreResp.Restore.RestoreId, 0)
-	return restoreResp.Restore.RestoreId
+	return
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -179,8 +177,8 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
+	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -196,8 +194,8 @@ func TestRestoreBackupNum(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	runQueries(t, dg, true)
 
-	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 1)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "", "youthful_rhodes3", 1)
+	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, true)
 	runMutations(t, dg)
 }
@@ -219,7 +217,6 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
-			restoreId
 		}
 	}`, "youthful_rhodes3", 1000)
 
@@ -243,7 +240,6 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			code
 			message
-			restoreId
 		}
 	}`, "youthful_rhodes3", -1)
 
@@ -271,14 +267,14 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "", "youthful_rhodes3", 0)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "", "youthful_rhodes3", 0)
+	testutil.WaitForRestore(t, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	restoreId = sendRestoreRequest(t, "", "blissful_hermann1", 0)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "", "blissful_hermann1", 0)
+	testutil.WaitForRestore(t, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -307,7 +303,6 @@ func TestInvalidBackupId(t *testing.T) {
 			encryptionKeyFile: "/data/keys/enc_key"}) {
 				code
 				message
-				restoreId
 		}
 	}`
 
@@ -571,7 +566,8 @@ func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVeri
 	expectedResponse string, schemaVerificationOpts testutil.SchemaOptions) {
 	schemaVerificationOpts.ExcludeAclSchema = true
 	backup(t, backupDir)
-	testutil.WaitForRestore(t, sendRestoreRequest(t, backupDir, "", 0), dg)
+	sendRestoreRequest(t, backupDir, "", 0)
+	testutil.WaitForRestore(t, dg)
 	testutil.VerifyQueryResponse(t, dg, queryToVerify, expectedResponse)
 	testutil.VerifySchema(t, dg, schemaVerificationOpts)
 }

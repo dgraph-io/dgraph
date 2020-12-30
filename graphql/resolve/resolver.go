@@ -116,6 +116,7 @@ type RequestResolver struct {
 // just returns errors if it's asked for a resolver for a field that it doesn't
 // know about.
 type resolverFactory struct {
+	sync.RWMutex
 	queryResolvers    map[string]func(schema.Query) QueryResolver
 	mutationResolvers map[string]func(schema.Mutation) MutationResolver
 
@@ -208,12 +209,16 @@ func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnConte
 
 func (rf *resolverFactory) WithQueryResolver(
 	name string, resolver func(schema.Query) QueryResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.queryResolvers[name] = resolver
 	return rf
 }
 
 func (rf *resolverFactory) WithMutationResolver(
 	name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.mutationResolvers[name] = resolver
 	return rf
 }
@@ -343,6 +348,8 @@ func StdDeleteCompletion(name string) CompletionFunc {
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.queryMiddlewareConfig[query.Name()]
 	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
 		return mws.Then(resolver(query))
@@ -352,6 +359,8 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.mutationMiddlewareConfig[mutation.Name()]
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
 		return mws.Then(resolver(mutation))
