@@ -703,6 +703,10 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func hasExtends(def *ast.Definition) bool {
+	return def.Directives.ForName(apolloExtendsDirective) != nil
+}
+
 func hasExternal(f *ast.FieldDefinition) bool {
 	return f.Directives.ForName(apolloExternalDirective) != nil
 }

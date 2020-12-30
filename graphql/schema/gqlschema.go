@@ -1132,7 +1132,6 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-// Todo: Handle Cases for @external keyword with @key keyword
 func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 	var flds ast.FieldList
 	if defn.Kind == ast.Interface {
