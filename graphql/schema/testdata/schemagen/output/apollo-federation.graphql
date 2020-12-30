@@ -19,7 +19,19 @@ type School @key(fields: "id") {
 	studentsAggregate(filter: StudentFilter): StudentAggregateResult
 }
 
-type Product @key(fields: "name") @extends {
+type Country {
+	code: String! @id
+	name: String!
+}
+
+type Product @key(fields: "id") @extends {
+	id: ID! @external
+	name: String! @id @external
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
+}
+
+type User @key(fields: "name") @extends {
 	id: ID! @external
 	name: String! @id @external
 	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
@@ -285,7 +297,7 @@ input StringHashFilter {
 #######################
 # Extended Apollo Definitions
 #######################
-union _Entity = Reviews | Student | School | Product
+union _Entity = Reviews | Student | School | Product | User
 
 scalar _Any
 scalar _FieldSet
@@ -301,6 +313,11 @@ directive @extends on OBJECT | INTERFACE
 #######################
 # Generated Types
 #######################
+
+type AddCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	numUids: Int
+}
 
 type AddProductPayload {
 	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
@@ -319,6 +336,25 @@ type AddSchoolPayload {
 
 type AddStudentPayload {
 	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type CountryAggregateResult {
+	count: Int
+	codeMin: String
+	codeMax: String
+	nameMin: String
+	nameMax: String
+}
+
+type DeleteCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	msg: String
 	numUids: Int
 }
 
@@ -342,6 +378,12 @@ type DeleteSchoolPayload {
 
 type DeleteStudentPayload {
 	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
 }
@@ -372,6 +414,11 @@ type StudentAggregateResult {
 	ageAvg: Float
 }
 
+type UpdateCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	numUids: Int
+}
+
 type UpdateProductPayload {
 	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	numUids: Int
@@ -392,12 +439,32 @@ type UpdateStudentPayload {
 	numUids: Int
 }
 
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
 #######################
 # Generated Enums
 #######################
 
-enum ProductHasFilter {
+enum CountryHasFilter {
+	code
 	name
+}
+
+enum CountryOrderable {
+	code
+	name
+}
+
+enum ProductHasFilter {
 	reviews
 }
 
@@ -427,12 +494,26 @@ enum StudentOrderable {
 	age
 }
 
+enum UserHasFilter {
+	name
+	reviews
+}
+
+enum UserOrderable {
+	name
+}
+
 #######################
 # Generated Inputs
 #######################
 
-input AddProductInput {
+input AddCountryInput {
+	code: String!
 	name: String!
+}
+
+input AddProductInput {
+	id: ID! @external
 	reviews: [ReviewsRef]
 }
 
@@ -449,9 +530,36 @@ input AddStudentInput {
 	age: Int!
 }
 
+input AddUserInput {
+	name: String!
+	reviews: [ReviewsRef]
+}
+
+input CountryFilter {
+	code: StringHashFilter
+	has: CountryHasFilter
+	and: [CountryFilter]
+	or: [CountryFilter]
+	not: CountryFilter
+}
+
+input CountryOrder {
+	asc: CountryOrderable
+	desc: CountryOrderable
+	then: CountryOrder
+}
+
+input CountryPatch {
+	name: String
+}
+
+input CountryRef {
+	code: String
+	name: String
+}
+
 input ProductFilter {
 	id: [ID!]
-	name: StringHashFilter
 	has: ProductHasFilter
 	and: [ProductFilter]
 	or: [ProductFilter]
@@ -470,7 +578,6 @@ input ProductPatch {
 
 input ProductRef {
 	id: ID @external
-	name: String
 	reviews: [ReviewsRef]
 }
 
@@ -539,6 +646,12 @@ input StudentRef {
 	age: Int
 }
 
+input UpdateCountryInput {
+	filter: CountryFilter!
+	set: CountryPatch
+	remove: CountryPatch
+}
+
 input UpdateProductInput {
 	filter: ProductFilter!
 	set: ProductPatch
@@ -563,6 +676,35 @@ input UpdateStudentInput {
 	remove: StudentPatch
 }
 
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	name: StringHashFilter
+	has: UserHasFilter
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	reviews: [ReviewsRef]
+}
+
+input UserRef {
+	name: String
+	reviews: [ReviewsRef]
+}
+
 #######################
 # Generated Query
 #######################
@@ -579,9 +721,15 @@ type Query {
 	getSchool(id: ID!): School
 	querySchool(filter: SchoolFilter, first: Int, offset: Int): [School]
 	aggregateSchool(filter: SchoolFilter): SchoolAggregateResult
+	getCountry(code: String!): Country
+	queryCountry(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	aggregateCountry(filter: CountryFilter): CountryAggregateResult
 	getProduct(id: ID, name: String): Product
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	aggregateProduct(filter: ProductFilter): ProductAggregateResult
+	getUser(name: String): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -598,8 +746,14 @@ type Mutation {
 	addSchool(input: [AddSchoolInput!]!): AddSchoolPayload
 	updateSchool(input: UpdateSchoolInput!): UpdateSchoolPayload
 	deleteSchool(filter: SchoolFilter!): DeleteSchoolPayload
+	addCountry(input: [AddCountryInput!]!): AddCountryPayload
+	updateCountry(input: UpdateCountryInput!): UpdateCountryPayload
+	deleteCountry(filter: CountryFilter!): DeleteCountryPayload
 	addProduct(input: [AddProductInput!]!): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 

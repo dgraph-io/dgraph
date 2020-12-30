@@ -1114,8 +1114,15 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[enumName] = enum
 }
 
+// For extended Type definition, if Field with ID type is also field with @key directive then
+// it should be present in the addTypeInput
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	field := getFieldsWithoutIDType(schema, defn)
+	if hasExtends(defn) {
+		idField := getIDField(defn)
+		field = append(idField, field...)
+	}
+
 	if len(field) != 0 {
 		schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 			Kind:   ast.InputObject,
@@ -1125,6 +1132,7 @@ func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+// Todo: Handle Cases for @external keyword with @key keyword
 func addReferenceType(schema *ast.Schema, defn *ast.Definition) {
 	var flds ast.FieldList
 	if defn.Kind == ast.Interface {
@@ -1309,6 +1317,11 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 		if isID(fld) || hasCustomOrLambda(fld) {
 			continue
 		}
+		// Ignore Fields with @external directives also excluding those which are present
+		// as an argument in @key directive
+		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+			continue
+		}
 		filter.EnumValues = append(filter.EnumValues,
 			&ast.EnumValueDefinition{Name: fld.Name})
 	}
@@ -1428,6 +1441,12 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
+		// Ignore Fields with @external directives also excluding those which are present
+		// as an argument in @key directive
+		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+			continue
+		}
+
 		if isID(fld) {
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
@@ -1799,13 +1818,13 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
+// TODO: Modify Get Queries with @external directives
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
 		return
 	}
-
 	qry := &ast.FieldDefinition{
 		Name: "get" + defn.Name,
 		Type: &ast.Type{
@@ -1817,13 +1836,15 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 	// both, then they are optional.
 	if hasIDField {
 		fields := getIDField(defn)
-		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: fields[0].Name,
-			Type: &ast.Type{
-				NamedType: idTypeFor(defn),
-				NonNull:   !hasXIDField,
-			},
-		})
+		if len(fields) != 0 {
+			qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+				Name: fields[0].Name,
+				Type: &ast.Type{
+					NamedType: idTypeFor(defn),
+					NonNull:   !hasXIDField,
+				},
+			})
+		}
 	}
 	if hasXIDField {
 		name, dtype := xidTypeFor(defn)
@@ -2103,7 +2124,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
 			continue
 		}
 
@@ -2139,6 +2160,9 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+				continue
+			}
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType

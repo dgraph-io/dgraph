@@ -2019,21 +2019,23 @@ func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
 	if arg == nil || arg.Value.Raw == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Argument %s: with @key directive should be defined.", typ.Name, apolloKeyArg)}
-	} else if typ.Fields.ForName(arg.Value.Raw) == nil {
-		return []*gqlerror.Error{gqlerror.ErrorPosf(
-			arg.Position,
-			"Type %s; Field %s: with @key directive is not a valid field.", typ.Name, arg.Value.Raw)}
+			"Type %s; Argument %s inside @key directive must be defined.", typ.Name, apolloKeyArg)}
 	}
 
 	fld := typ.Fields.ForName(arg.Value.Raw)
+	if fld == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			arg.Position,
+			"Type %s; @key directive uses a field %s which is not defined inside the type.", typ.Name, arg.Value.Raw)}
+	}
+
 	if isID(fld) || hasIDDirective(fld) {
 		return nil
 	}
 
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		arg.Position,
-		"Type %s: Field %s: with @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
+		"Type %s: Field %s: used inside @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
 }
 
 func apolloExternalValidation(sch *ast.Schema,
@@ -2049,7 +2051,7 @@ func apolloExternalValidation(sch *ast.Schema,
 
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s: Field %s: @external directive can only be defined on type extensions .", typ.Name, field.Name)}
+		"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
 
 }
 

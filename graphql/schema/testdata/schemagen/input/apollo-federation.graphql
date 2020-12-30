@@ -1,4 +1,4 @@
-extend type Product @key(fields: "name") {
+extend type Product @key(fields: "id") {
     id: ID! @external
     name: String! @id @external
     reviews: [Reviews]
@@ -18,4 +18,15 @@ type Student @key(fields: "id"){
 type School @key(fields: "id"){
     id: ID!
     students: [Student]
+}
+
+extend type User @key(fields: "name") {
+    id: ID! @external
+    name: String! @id @external
+    reviews: [Reviews]
+}
+
+type Country {
+    code: String! @id
+    name: String!
 }
