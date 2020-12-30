@@ -1076,6 +1076,7 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 
 	var bufw bytes.Buffer
 	if field == nil {
+		// if there is no GraphQL field that means we need to encode the response in DQL form.
 		if enc.children(n) == nil {
 			if _, err = bufw.WriteString(`{}`); err != nil {
 				return nil, err
@@ -1102,9 +1103,19 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 		//   we can just compare ints directly.
 		dgraphTypeAttrId := enc.idForAttr("dgraph.type")
 		var errs x.GqlErrorList
-		if err = enc.encodeGraphQL(n, &bufw, &errs, dgraphTypeAttrId, []gqlSchema.Field{field},
-			nil); err != nil {
-			return nil, err
+		if !enc.encodeGraphQL(n, &bufw, &errs, dgraphTypeAttrId, []gqlSchema.Field{field}, nil,
+			nil) {
+			// if enc.encodeGraphQL() didn't finish successfully here, that means we need to send
+			// data as null in the GraphQL response like this:
+			// 		{
+			// 			"errors": [...],
+			// 			"data": null
+			// 		}
+			// and not just null for a single query in data.
+			// So, reset the buffer contents here, so that GraphQL layer may know that if it gets
+			// error of type x.GqlErrorList along with nil JSON response, then it needs to set whole
+			// data as null.
+			bufw.Reset()
 		}
 		if len(errs) > 0 {
 			err = errs

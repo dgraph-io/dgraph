@@ -145,7 +145,7 @@ type Field interface {
 	ConstructedForDgraphPredicate() string
 	DgraphPredicateForAggregateField() string
 	IsAggregateField() bool
-	GqlErrorf(parentPath []interface{}, message string, args ...interface{}) *x.GqlError
+	GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -880,14 +880,13 @@ func (f *field) IsAggregateField() bool {
 		strings.HasSuffix(f.Type().Name(), "AggregateResult")
 }
 
-func (f *field) GqlErrorf(parentPath []interface{}, message string, args ...interface{}) *x.GqlError {
-	fieldPath := make([]interface{}, len(parentPath), len(parentPath)+1)
-	copy(fieldPath, parentPath)
-	fieldPath = append(fieldPath, f.ResponseName())
+func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
+	pathCopy := make([]interface{}, len(path))
+	copy(pathCopy, path)
 	return &x.GqlError{
 		Message:   fmt.Sprintf(message, args...),
 		Locations: []x.Location{f.Location()},
-		Path:      fieldPath,
+		Path:      pathCopy,
 	}
 }
 
@@ -1359,8 +1358,8 @@ func (q *query) IsAggregateField() bool {
 	return (*field)(q).IsAggregateField()
 }
 
-func (q *query) GqlErrorf(parentPath []interface{}, message string, args ...interface{}) *x.GqlError {
-	return (*field)(q).GqlErrorf(parentPath, message, args)
+func (q *query) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
+	return (*field)(q).GqlErrorf(path, message, args)
 }
 
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
@@ -1785,8 +1784,8 @@ func (m *mutation) IsAggregateField() bool {
 	return (*field)(m).IsAggregateField()
 }
 
-func (m *mutation) GqlErrorf(parentPath []interface{}, message string, args ...interface{}) *x.GqlError {
-	return (*field)(m).GqlErrorf(parentPath, message, args)
+func (m *mutation) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
+	return (*field)(m).GqlErrorf(path, message, args)
 }
 
 func (t *astType) AuthRules() *TypeAuth {

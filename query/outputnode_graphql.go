@@ -84,53 +84,65 @@ import (
 //	return bufw.Bytes(), nil
 //}
 
-func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) error {
-	if _, err := out.WriteRune('"'); err != nil {
-		return err
-	}
-	if _, err := out.WriteString(field.ResponseName()); err != nil {
-		return err
-	}
-	if _, err := out.WriteRune('"'); err != nil {
-		return err
-	}
-	if _, err := out.WriteRune(':'); err != nil {
-		return err
-	}
-	return nil
+func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
+	x.Check2(out.WriteRune('"'))
+	x.Check2(out.WriteString(field.ResponseName()))
+	x.Check2(out.WriteString(`":`))
 }
 
 // TODO:
-// * Non-null errors for values in a list
-// * Scalar coercion
-// * Geo fields
-// * Aggregate fields/queries
-//   * empty data in Aggregate queries
-// * Password queries
-func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.GqlErrorList,
-	dgraphTypeAttrId uint16, childSelectionSet []gqlSchema.Field, parentPath []interface{}) error {
+//  * change query rewriting for scalar fields asked multiple times
+//  * Scalar coercion
+//  * Geo fields
+//  * Aggregate fields/queries
+//    * empty data in Aggregate queries
+//  * Password queries
+func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errList *x.GqlErrorList,
+	dgraphTypeAttrId uint16, childSelectionSet []gqlSchema.Field,
+	parentField gqlSchema.Field, parentPath []interface{}) bool {
 	child := enc.children(fj)
 	// This is a scalar value.
 	if child == nil {
 		val, err := enc.getScalarVal(fj)
 		if err != nil {
-			return err
+			*errList = append(*errList, parentField.GqlErrorf(parentPath, err.Error()))
+			// return false so that the caller can appropriately handle null writing.
+			return false
 		}
 		if val == nil {
-			// val would be nil only when a user query (not a field) has no results,
-			// TODO: so write null only for non-list fields (like get queries).
-			// List fields should always turn out to be [] in case they have no children.
-			_, err = out.Write([]byte("null"))
+			// val being nil here can only be the case for a top-level query and not for a nested
+			// field. val being nil indicates that the top-level query has no value to resolve
+			// to, and we need to write null/[]/raise an error depending on the return type of the
+			// query. Now, for queries which return a list (whether nullable or not), [] would
+			// anyways be written by the parent encodeGraphQL() call. If we return false from here,
+			// then too the parent encodeGraphQL() call will write [], but then we won't be able to
+			// distinguish between whether the first item of the list was null or the whole query
+			// had no results.
+			// So, for lists lets return true.
+			// We will return false for single valued cases so that the caller can correctly write
+			// null or raise an error.
+			// Note that we don't need to add any errors to the errList here.
+			if parentField.Type().ListType() != nil {
+				return true
+			}
+			return false
 		} else {
-			_, err = out.Write(val)
+			x.Check2(out.Write(val))
 		}
-		return err
+		// we have successfully written the scalar value, lets return true to indicate that this
+		// call to encodeGraphQL() was successful.
+		return true
+	}
+
+	// if we are here, ensure that GraphQL was expecting an object, otherwise return error.
+	if len(childSelectionSet) == 0 {
+		*errList = append(*errList, parentField.GqlErrorf(parentPath, gqlSchema.ErrExpectedScalar))
+		// return false so that the caller can appropriately handle null writing.
+		return false
 	}
 
 	// This is an internal node. Write the opening { for the JSON object
-	if _, err := out.WriteRune('{'); err != nil {
-		return err
-	}
+	x.Check2(out.WriteRune('{'))
 
 	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
 	// the response as it is always written first in DQL query. So, if we get data for dgraph.type
@@ -139,8 +151,15 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 	for enc.getAttr(child) == dgraphTypeAttrId {
 		val, err := enc.getScalarVal(child) // val is a quoted string like: "Human"
 		if err != nil {
-			return err
+			// TODO: correctly format error, it should be on __typename field if present?
+			*errList = append(*errList, x.GqlErrorf(err.Error()).WithPath(parentPath))
+			child = child.next
+			if child == nil {
+				break
+			}
+			continue
 		}
+
 		typeStr := string(val)
 		typeStr = typeStr[1 : len(typeStr)-1] // remove `"` from beginning and end
 		dgraphTypes = append(dgraphTypes, typeStr)
@@ -151,9 +170,16 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 		}
 	}
 
-	cnt := 0                   // used to figure out how many times continuously we have seen the current attr
-	i := 0                     // used to iterate over childSelectionSet
-	var cur, next fastJsonNode // used to iterate over data in fastJson nodes
+	cnt := 0       // used to figure out how many times continuously we have seen the current attr
+	i := 0         // used to iterate over childSelectionSet
+	keyEndPos := 0 // used to store the length of output buffer at which a JSON key ends to
+	// correctly write value as null, if need be.
+	nullWritten := false // indicates whether null has been written as value for the current
+	// selection or not. Used to figure out whether to write the closing ] for JSON arrays.
+
+	var curSelection gqlSchema.Field // used to store the current selection in the childSelectionSet
+	var curSelectionIsList bool      // indicates whether the type of curSelection is list or not
+	var cur, next fastJsonNode       // used to iterate over data in fastJson nodes
 
 	// We need to keep iterating only if:
 	// 1. There is data to be processed for the current level. AND,
@@ -172,49 +198,51 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 	//    but no data for them. This is handled after this for loop.
 	for child != nil && i < len(childSelectionSet) {
 		cnt++
-		curSelection := childSelectionSet[i]
+		nullWritten = false // reset it at every iteration
+		curSelection = childSelectionSet[i]
 		cur = child
 		next = cur.next
 
 		if skipField(curSelection, dgraphTypes) {
+			cnt = 0 // Reset the count,
+			// indicating that we need to write the JSON key in next iteration.
 			i++
 			// if this is the last field and shouldn't be included,
 			// then need to remove comma from the buffer if one was present.
 			if i == len(childSelectionSet) {
 				checkAndStripComma(out)
 			}
-			// also need to skip all the data for this field
+			// also if there was any data for this field, need to skip that
+			// there may not be data in case this field was added from a fragment.
 			attrId := enc.idForAttr(curSelection.DgraphAlias())
-			for next != nil && enc.getAttr(next) == attrId {
-				next = next.next
+			if enc.getAttr(cur) == attrId {
+				for next != nil && enc.getAttr(next) == attrId {
+					next = next.next
+				}
+				child = next
 			}
-			child = next
 			continue
 		}
 
 		// Step-1: Write JSON key and opening [ for JSON arrays
 		if cnt == 1 {
-			if err := enc.writeKeyGraphQL(curSelection, out); err != nil {
-				return err
-			}
-			if curSelection.Type().ListType() != nil {
-				if _, err := out.WriteRune('['); err != nil {
-					return err
-				}
+			enc.writeKeyGraphQL(curSelection, out)
+			keyEndPos = out.Len()
+			curSelectionIsList = curSelection.Type().ListType() != nil
+			if curSelectionIsList {
+				x.Check2(out.WriteRune('['))
 			}
 		}
 
 		// Step-2: Write JSON value
 		if curSelection.Name() == gqlSchema.Typename {
-			// If the current selection is __typename then we find out the typename from the
+			// If the current selection is __typename then we find out the typename using the
 			// dgraphTypes slice saved earlier.
-			if _, err := out.Write([]byte(`"` + curSelection.TypeName(dgraphTypes) + `"`)); err != nil {
-				return err
-			}
+			x.Check2(out.Write([]byte(`"` + curSelection.TypeName(dgraphTypes) + `"`)))
 			// We don't need to iterate to next fastJson node in this case,
 			// as the current node will have data for the next field in the selection set.
 		} else if curSelection.DgraphAlias() != enc.attrForID(enc.getAttr(cur)) {
-			// TODO: use the correct alias
+			// TODO: use the correct alias everywhere
 			// if the current fastJson node doesn't hold data for the current GraphQL selection,
 			// then there can be two cases:
 			// 1. The current fastJson node holds data for a next selection and there was no data
@@ -226,50 +254,128 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 			//    Point to note is that this case doesn't happen as the GraphQL layer adds such
 			//    DQL selections only at the beginning (dgraph.type) or end (dgraph.uid: uid) of a
 			//    DQL selection set, but not in middle. The beginning case we have already handled,
-			//    and the end case would always be ignored by this for loop.
+			//    and the end case would either be ignored by this for loop or handled as case 1.
 			// So, we don't have a need to handle case 2, and need to always write null with
 			// appropriate errors.
-			errsLen := len(*errs)
-			if err := writeGraphQLNull(curSelection, out, parentPath, errs); err != nil {
-				return err
-			}
-			// we should propagate non-null errors to parent as soon as possible
-			if len(*errs) > errsLen {
-				return nil
+			if nullWritten = writeGraphQLNull(curSelection, out, keyEndPos); !nullWritten {
+				*errList = append(*errList, curSelection.GqlErrorf(append(parentPath,
+					curSelection.ResponseName()), gqlSchema.ErrExpectedNonNull, curSelection.Name(),
+					curSelection.Type()))
+				return false
 			}
 			// we don't need to iterate to next fastJson node here.
 		} else {
 			// This is the case where the current fastJson node holds data for the current
-			// GraphQL selection. Just recursively encode it.
-			errsLen := len(*errs)
-			outLen := out.Len()
-			if err := enc.encodeGraphQL(cur, out, errs, dgraphTypeAttrId,
-				curSelection.SelectionSet(), append(parentPath,
-					curSelection.ResponseName())); err != nil {
-				return err
-			}
-			if len(*errs) > errsLen {
-				out.Truncate(outLen)
-				errsLen = len(*errs)
-				if err := writeGraphQLNull(curSelection, out, parentPath, errs); err != nil {
-					return err
+			// GraphQL selection. There are following possible sub-cases:
+			// 1. current GraphQL selection == list type
+			//    current fastJson node == list type
+			//    => Both GraphQL and DQL schema are in list form, recursively encode it.
+			// 2. current GraphQL selection == list type
+			//    current fastJson node != list type
+			//    => There is a mismatch between the GraphQL and DQL schema. Raise a field error.
+			// 3. current GraphQL selection != list type
+			//    current fastJson node == list type
+			//    => There is a mismatch between the GraphQL and DQL schema. Raise a field error.
+			// 4. current GraphQL selection != list type
+			//    current fastJson node != list type
+			//    => Both GraphQL and DQL schema are in non-list form, recursively encode it.
+			if curSelectionIsList && enc.getList(cur) {
+				// handles case 1
+				itemPos := out.Len()
+				// List items which are scalars will never have null as a value returned
+				// from Dgraph, but there can be coercion errors due to which their encoding
+				// may return false and we will need to write null as a value for them.
+				// Similarly, List items which are objects will also not have null as a
+				// value returned from Dgraph, but there can be a nested non-nullable field
+				// which may trigger the object to turn out to be null.
+				if !enc.encodeGraphQL(cur, out, errList, dgraphTypeAttrId,
+					curSelection.SelectionSet(), curSelection, append(parentPath,
+						curSelection.ResponseName(), cnt-1)) {
+					// Unlike the choice in writeGraphQLNull(), where we turn missing
+					// lists into [], the spec explicitly calls out:
+					//  "If a List type wraps a Non-Null type, and one of the
+					//  elements of that list resolves to null, then the entire list
+					//  must resolve to null."
+					//
+					// The list gets reduced to null, but an error recording that must
+					// already be in errs.  See
+					// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
+					// "If the field returns null because of an error which has already
+					// been added to the "errors" list in the response, the "errors"
+					// list must not be further affected."
+					// The behavior is also in the examples in here:
+					// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+					typ := curSelection.Type()
+					if typ.ListType().Nullable() {
+						out.Truncate(itemPos)
+						x.Check2(out.WriteString("null"))
+					} else if typ.Nullable() {
+						out.Truncate(keyEndPos)
+						x.Check2(out.WriteString("null"))
+						// set nullWritten to true so we don't write closing ] for this list
+						nullWritten = true
+						// skip all data for the current list selection
+						attrId := enc.idForAttr(curSelection.DgraphAlias())
+						for next != nil && enc.getAttr(next) == attrId {
+							cur = next
+							next = next.next
+						}
+						// just set the child to point to the data for last item in the list and not
+						// the data for next field in the selection set as child would anyways be
+						// moved forward later.
+						child = cur
+					} else {
+						// this is the case of [T!]!, where we can't write null either for a
+						// list item or the list itself. So, mark the encoding as failed,
+						// and let the parent handle null writing.
+						return false
+					}
 				}
-				// we should propagate non-null errors to parent as soon as possible
-				if len(*errs) > errsLen {
-					return nil
+				// we need to iterate to the next fastJson node because we have used the data from
+				// the current fastJson node.
+				child = child.next
+			} else if !curSelectionIsList && (!enc.getList(cur) || enc.getAttr(fj) == enc.
+				idForAttr("_root_")) {
+				// handles case 4
+				if !enc.encodeGraphQL(cur, out, errList, dgraphTypeAttrId,
+					curSelection.SelectionSet(), curSelection, append(parentPath,
+						curSelection.ResponseName())) {
+					if nullWritten = writeGraphQLNull(curSelection, out, keyEndPos); !nullWritten {
+						return false
+					}
 				}
+				// we need to iterate to the next fastJson node because we have used the data from
+				// the current fastJson node.
+				child = child.next
+			} else if !curSelectionIsList {
+				// handles case 3
+				*errList = append(*errList, curSelection.GqlErrorf(append(parentPath,
+					curSelection.ResponseName()), gqlSchema.ErrExpectedSingleItem))
+				if nullWritten = writeGraphQLNull(curSelection, out, keyEndPos); !nullWritten {
+					return false
+				}
+				// need to skip all data points for the current selection, as they are of no use.
+				attrId := enc.idForAttr(curSelection.DgraphAlias())
+				for next != nil && enc.getAttr(next) == attrId {
+					next = next.next
+				}
+				child = next
+			} else {
+				// handles case 2
+				*errList = append(*errList, curSelection.GqlErrorf(append(parentPath,
+					curSelection.ResponseName()), gqlSchema.ErrExpectedList))
+				if nullWritten = writeGraphQLNull(curSelection, out, keyEndPos); !nullWritten {
+					return false
+				}
+				// need to skip the only data point for the current selection, as it is of no use.
+				child = child.next
 			}
-			// we need to iterate to the next fastJson node because we have used the data from
-			// the current fastJson node.
-			child = child.next
 		}
 
 		// Step-3: Write closing ] for JSON arrays
 		if next == nil || enc.getAttr(cur) != enc.getAttr(next) {
-			if curSelection.Type().ListType() != nil {
-				if _, err := out.WriteRune(']'); err != nil {
-					return err
-				}
+			if curSelectionIsList && !nullWritten {
+				x.Check2(out.WriteRune(']'))
 			}
 			cnt = 0 // Reset the count,
 			// indicating that we need to write the JSON key in next iteration.
@@ -279,9 +385,7 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 
 		// Step-4: Print comma except for the last field.
 		if i < len(childSelectionSet) {
-			if _, err := out.WriteRune(','); err != nil {
-				return err
-			}
+			x.Check2(out.WriteRune(','))
 		}
 	}
 
@@ -289,9 +393,9 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 	// But, the GraphQL query may still have some fields which haven't been iterated upon.
 	// We need to encode these null valued fields appropriately with errors.
 	for i < len(childSelectionSet) {
-		f := childSelectionSet[i]
+		curSelection = childSelectionSet[i]
 
-		if skipField(f, dgraphTypes) {
+		if skipField(curSelection, dgraphTypes) {
 			i++
 			// if this is the last field and shouldn't be included,
 			// then need to remove comma from the buffer if one was present.
@@ -302,41 +406,33 @@ func (enc *encoder) encodeGraphQL(fj fastJsonNode, out *bytes.Buffer, errs *x.Gq
 		}
 
 		// Step-1: Write JSON key
-		if err := enc.writeKeyGraphQL(f, out); err != nil {
-			return err
-		}
+		enc.writeKeyGraphQL(curSelection, out)
 
 		// Step-2: Write JSON value
-		if f.Name() == gqlSchema.Typename {
-			if _, err := out.Write([]byte(`"` + f.TypeName(dgraphTypes) + `"`)); err != nil {
-				return err
-			}
+		if curSelection.Name() == gqlSchema.Typename {
+			x.Check2(out.Write([]byte(`"` + curSelection.TypeName(dgraphTypes) + `"`)))
 		} else {
-			errsLen := len(*errs)
-			if err := writeGraphQLNull(f, out, parentPath, errs); err != nil {
-				return err
-			}
-			// we should propagate non-null errors to parent as soon as possible
-			if len(*errs) > errsLen {
-				return nil
+			if !writeGraphQLNull(curSelection, out, out.Len()) {
+				*errList = append(*errList, curSelection.GqlErrorf(append(parentPath,
+					curSelection.ResponseName()), gqlSchema.ErrExpectedNonNull, curSelection.Name(),
+					curSelection.Type()))
+				return false
 			}
 		}
 
 		i++ // iterate to next field
 		// Step-3: Print comma except for the last field.
 		if i < len(childSelectionSet) {
-			if _, err := out.WriteRune(','); err != nil {
-				return err
-			}
+			x.Check2(out.WriteRune(','))
 		}
 	}
 
 	// write the closing } for the JSON object
-	if _, err := out.WriteRune('}'); err != nil {
-		return err
-	}
+	x.Check2(out.WriteRune('}'))
 
-	return nil
+	// encoding has successfully finished for this call to encodeGraphQL().
+	// Lets return true to indicate that.
+	return true
 }
 
 // TODO: add seenField logic
@@ -363,8 +459,8 @@ func checkAndStripComma(buf *bytes.Buffer) {
 	}
 }
 
-func writeGraphQLNull(f gqlSchema.Field, out *bytes.Buffer, parentPath []interface{},
-	errList *x.GqlErrorList) error {
+func writeGraphQLNull(f gqlSchema.Field, out *bytes.Buffer, keyEndPos int) bool {
+	out.Truncate(keyEndPos) // truncate to make sure we write null correctly
 	if f.Type().ListType() != nil {
 		// We could choose to set this to null.  This is our decision, not
 		// anything required by the GraphQL spec.
@@ -372,21 +468,16 @@ func writeGraphQLNull(f gqlSchema.Field, out *bytes.Buffer, parentPath []interfa
 		// However, if we query, for example, for a person's friends with
 		// some restrictions, and there aren't any, is that really a case to
 		// set this at null and error if the list is required?  What
-		// about if an person has just been added and doesn't have any friends?
+		// about if a person has just been added and doesn't have any friends?
 		// Doesn't seem right to add null and cause error propagation.
 		//
 		// Seems best if we pick [], rather than null, as the list value if
 		// there's nothing in the Dgraph result.
-		if _, err := out.Write([]byte("[]")); err != nil {
-			return err
-		}
+		x.Check2(out.Write([]byte("[]")))
 	} else if f.Type().Nullable() {
-		if _, err := out.Write([]byte("null")); err != nil {
-			return err
-		}
+		x.Check2(out.Write([]byte("null")))
 	} else {
-		*errList = append(*errList, f.GqlErrorf(parentPath, gqlSchema.ErrExpectedNonNull,
-			f.Name(), f.Type()))
+		return false
 	}
-	return nil
+	return true
 }

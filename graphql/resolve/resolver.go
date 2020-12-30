@@ -58,24 +58,6 @@ const (
 	resolverFailed    = false
 	resolverSucceeded = true
 
-	errExpectedScalar = "A scalar type was returned, but GraphQL was expecting an object. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	errExpectedObject = "A list was returned, but GraphQL was expecting just one item. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	errExpectedList = "An object was returned, but GraphQL was expecting a list of objects. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
 	errInternal = "Internal error"
 )
 
@@ -205,19 +187,19 @@ func NewAdminExecutor() DgraphExecutor {
 	return &adminExecutor{dg: &dgraph.DgraphEx{}}
 }
 
-func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (
 	*dgoapi.Response, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
-	return aex.dg.Execute(ctx, req)
+	return aex.dg.Execute(ctx, req, field)
 }
 
 func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
 	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
-func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (
 	*dgoapi.Response, error) {
-	return de.dg.Execute(ctx, req)
+	return de.dg.Execute(ctx, req, field)
 }
 
 func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
@@ -1424,7 +1406,7 @@ func completeObject(
 				// We were expecting a list but got a value which wasn't a list. Lets return an
 				// error.
 				return nil, x.GqlErrorList{&x.GqlError{
-					Message:   errExpectedList,
+					Message:   schema.ErrExpectedList,
 					Locations: []x.Location{f.Location()},
 					Path:      copyPath(path),
 				}}
@@ -1488,7 +1470,7 @@ func completeValue(
 		switch field.Type().Name() {
 		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{field.Location()},
 				Path:      copyPath(path),
 			}}
@@ -1496,7 +1478,7 @@ func completeValue(
 		enumValues := field.EnumValues()
 		if len(enumValues) > 0 {
 			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{field.Location()},
 				Path:      copyPath(path),
 			}}
@@ -1988,7 +1970,7 @@ func mismatched(
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
 	gqlErr := &x.GqlError{
-		Message:   errExpectedObject,
+		Message:   schema.ErrExpectedSingleItem,
 		Locations: []x.Location{field.Location()},
 		Path:      copyPath(path),
 	}

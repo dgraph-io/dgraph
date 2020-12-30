@@ -22,8 +22,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/edgraph"
-
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
@@ -90,7 +88,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 		resolved.Data = map[string]interface{}{query.Name(): nil}
 	}
 
-	//qr.resultCompleter.Complete(ctx, resolved)
+	qr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved
@@ -146,8 +144,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	//resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
-	resp, err := (&edgraph.Server{}).QueryGraphQL(ctx, &dgoapi.Request{Query: qry, Vars: vars,
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
 		ReadOnly: true}, query)
 	queryTimer.Stop()
 
