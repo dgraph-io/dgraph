@@ -720,6 +720,14 @@ func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 	return false
 }
 
+func isKeyField(f *ast.FieldDefinition, typ *ast.Definition) bool {
+	keyDirective := typ.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return false
+	}
+	return f.Name == keyDirective.Arguments[0].Value.Raw
+}
+
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
 // The constructed @custom looks like this:
 //	@custom(http: {

@@ -2332,6 +2332,9 @@ func generateObjectString(typ *ast.Definition) string {
 }
 
 func generateUnionString(typ *ast.Definition) string {
+	if typ == nil {
+		return ""
+	}
 	return fmt.Sprintf("%sunion %s%s = %s\n",
 		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
 		strings.Join(typ.Types, " | "))
