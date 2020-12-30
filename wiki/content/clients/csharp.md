@@ -36,7 +36,7 @@ var client = new DgraphClient(new Channel("127.0.0.1:9080", ChannelCredentials.I
 To set the schema, pass the schema into the `DgraphClient.Alter` function, as seen below:
 
 ```c#
-var schema = "`name: string @index(exact) .";
+var schema = "name: string @index(exact) .";
 var result = client.Alter(new Operation{ Schema = schema });
 ```
 
@@ -78,7 +78,7 @@ using(var txn = client.NewTransaction()) {
 You can also set mutations using RDF format, if you so prefer, as seen below:
 
 ```c#
-var mutation = "_:alice <name> \"Alice\"";
+var mutation = "_:alice <name> \"Alice\" .";
 var transactionResult = await txn.Mutate(new RequestBuilder().WithMutations(new MutationBuilder{ SetNquads = mutation }));
 ```
 
@@ -87,7 +87,7 @@ Check out the example in `source/Dgraph.tests.e2e/TransactionTest.cs`.
 ### Running a Query
 
 You can run a query by calling `Transaction.Query(string)`. You will need to pass in a
-GraphQL+- query string. If you want to pass an additional map of any variables that
+DQL query string. If you want to pass an additional map of any variables that
 you might want to set in the query, call `Transaction.QueryWithVars(string, Dictionary<string,string>)` with
 the variables dictionary as the second argument.
 
@@ -135,7 +135,7 @@ var query = @"
     user as var(func: eq(email, \"wrong_email@dgraph.io\"))
   }";
 
-var mutation = new MutationBuilder{ SetNquads = "`uid(user) <email> \"correct_email@dgraph.io\" ." };
+var mutation = new MutationBuilder{ SetNquads = "uid(user) <email> \"correct_email@dgraph.io\" ." };
 
 var request = new RequestBuilder{ Query = query, CommitNow = true }.withMutation(mutation);
 
