@@ -24,66 +24,6 @@ import (
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 )
 
-// ToGraphQLJson builds the data and error sub-parts of the JSON response returned from the GraphQL
-// layer for the given field.
-//func ToGraphQLJson(l *Latency, gqlField gqlSchema.Field, sgl []*SubGraph) ([]byte, x.GqlErrorList) {
-//	// There can only be one subgraph with same name as the gqlField,
-//	// find that and build JSON for it.
-//	dgAlias := gqlField.DgraphAlias()
-//	for _, sg := range sgl {
-//		if sg.fieldName() == dgAlias {
-//			return sg.toFastGraphQLJson(l, gqlField)
-//		}
-//	}
-//	// if can't find the subgraph corresponding to gqlField,
-//	// then return a null data response for the given field with appropriate errors.
-//	// TODO: return non-nullable errors as required
-//	return []byte("null"), nil
-//}
-//
-//func (sg *SubGraph) toFastGraphQLJson(l *Latency, field gqlSchema.Field) ([]byte, x.GqlErrorList) {
-//	encodingStart := time.Now()
-//	defer func() {
-//		l.Json = time.Since(encodingStart)
-//	}()
-//
-//	enc := newEncoder()
-//	defer func() {
-//		// Put encoder's arena back to arena pool.
-//		arenaPool.Put(enc.arena)
-//		enc.alloc.Release()
-//	}()
-//
-//	var err error
-//	n := enc.newNode(enc.idForAttr("_root_"))
-//	for _, sg := range sg.Children {
-//		err = processNodeUids(n, enc, sg)
-//		if err != nil {
-//			return []byte("null"), x.GqlErrorList{field.BuildError(err.Error(), []interface{}{field.ResponseName()})}
-//		}
-//	}
-//	enc.fixOrder(n)
-//
-//	var bufw bytes.Buffer
-//	if enc.children(n) == nil {
-//		return []byte("null"), nil
-//	} else {
-//		if err := enc.encode(n, &bufw); err != nil {
-//			return []byte("null"), x.GqlErrorList{field.BuildError(err.Error(), []interface{}{field.ResponseName()})}
-//		}
-//	}
-//
-//	// Return error if encoded buffer size exceeds than a threshold size.
-//	if uint64(bufw.Len()) > maxEncodedSize {
-//		return []byte("null"), x.GqlErrorList{field.BuildError(fmt.Sprintf(
-//			"while writing to buffer. Encoded response size: %d"+
-//				" is bigger than threshold: %d", bufw.Len(), maxEncodedSize),
-//			[]interface{}{field.ResponseName()})}
-//	}
-//
-//	return bufw.Bytes(), nil
-//}
-
 func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 	x.Check2(out.WriteRune('"'))
 	x.Check2(out.WriteString(field.ResponseName()))
