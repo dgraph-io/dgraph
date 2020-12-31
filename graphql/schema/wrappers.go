@@ -1699,7 +1699,7 @@ func (m *mutation) QueryField() Field {
 		}
 		return f
 	}
-	return m.SelectionSet()[0]
+	return nil
 }
 
 func (m *mutation) NumUidsField() Field {

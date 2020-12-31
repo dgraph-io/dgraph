@@ -788,7 +788,7 @@ func (drw *deleteRewriter) Rewrite(
 	var finalQry []*gql.GraphQuery
 	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
 	// is later added to delete mutation result.
-	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
+	if queryField := m.QueryField(); queryField != nil {
 		queryAuthRw := &authRewriter{
 			authVariables: customClaims.AuthVariables,
 			varGen:        varGen,

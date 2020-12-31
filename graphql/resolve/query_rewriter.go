@@ -71,6 +71,10 @@ func NewQueryRewriter() QueryRewriter {
 }
 
 func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
+	if field == nil {
+		return false
+	}
+
 	rn := authRw.selector(field.ConstructedFor())
 	if rn != nil {
 		return true
@@ -375,6 +379,10 @@ func rewriteAsQueryByIds(
 	field schema.Field,
 	uids []uint64,
 	authRw *authRewriter) []*gql.GraphQuery {
+	if field == nil {
+		return nil
+	}
+
 	rbac := authRw.evaluateStaticRules(field.Type())
 	dgQuery := []*gql.GraphQuery{{
 		Attr: field.Name(),
