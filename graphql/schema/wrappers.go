@@ -120,8 +120,8 @@ type Field interface {
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
-	IDArgValue() (*string, uint64, error)
-	XIDArg() string
+	IDArgValue() (map[string]*string, uint64, error)
+	XIDArg() map[string]string
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
@@ -1024,8 +1024,8 @@ func (f *field) HasLambdaDirective() bool {
 	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
 }
 
-func (f *field) XIDArg() string {
-	xidArgName := ""
+func (f *field) XIDArg() map[string]string {
+	var xidToDgraphPredicate = make(map[string]string, 0)
 	passwordField := f.Type().PasswordField()
 
 	args := f.field.Definition.Arguments
@@ -1038,17 +1038,18 @@ func (f *field) XIDArg() string {
 
 	for _, arg := range args {
 		if arg.Type.Name() != IDType && (passwordField == nil ||
-			arg.Name != passwordField.Name()) && f.field.Arguments[0].Name == arg.Name {
-			xidArgName = arg.Name
+			arg.Name != passwordField.Name()) {
+			xidToDgraphPredicate[arg.Name] = f.Type().DgraphPredicate(arg.Name)
 		}
 	}
-	return f.Type().DgraphPredicate(xidArgName)
+	return xidToDgraphPredicate
 }
 
-func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+func (f *field) IDArgValue() (xids map[string]*string, uid uint64, err error) {
 	idField := f.Type().IDField()
 	passwordField := f.Type().PasswordField()
 	xidArgName := ""
+	xidArgToVal := make(map[string]*string, 0)
 	// This method is only called for Get queries and check. These queries can accept ID, XID
 	// or Password. Therefore the non ID and Password field is an XID.
 	// TODO maybe there is a better way to do this.
@@ -1057,29 +1058,29 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 			(passwordField == nil || arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
-	}
-	if xidArgName != "" {
-		var ok bool
-		var xidArgVal string
-		switch v := f.ArgValue(xidArgName).(type) {
-		case int64:
-			xidArgVal = strconv.FormatInt(v, 10)
-		case float64:
-			xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
-		case string:
-			xidArgVal = v
-		default:
-			pos := f.field.GetPosition()
-			if !ok {
-				err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
-					xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
-				return
+
+		if xidArgName != "" {
+			var ok bool
+			var xidArgVal string
+			switch v := f.ArgValue(xidArgName).(type) {
+			case int64:
+				xidArgVal = strconv.FormatInt(v, 10)
+			case float64:
+				xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
+			case string:
+				xidArgVal = v
+			default:
+				pos := f.field.GetPosition()
+				if !ok {
+					err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
+						xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+					return
+				}
 			}
+			xidArgToVal[xidArgName] = &xidArgVal
 		}
-
-		xid = &xidArgVal
 	}
-
+	xids = xidArgToVal
 	if idField == nil {
 		return
 	}
@@ -1412,11 +1413,11 @@ func (q *query) HasLambdaDirective() bool {
 	return (*field)(q).HasLambdaDirective()
 }
 
-func (q *query) IDArgValue() (*string, uint64, error) {
+func (q *query) IDArgValue() (map[string]*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
 
-func (q *query) XIDArg() string {
+func (q *query) XIDArg() map[string]string {
 	return (*field)(q).XIDArg()
 }
 
@@ -1659,11 +1660,11 @@ func (m *mutation) AbstractType() bool {
 	return (*field)(m).AbstractType()
 }
 
-func (m *mutation) XIDArg() string {
+func (m *mutation) XIDArg() map[string]string {
 	return (*field)(m).XIDArg()
 }
 
-func (m *mutation) IDArgValue() (*string, uint64, error) {
+func (m *mutation) IDArgValue() (map[string]*string, uint64, error) {
 	return (*field)(m).IDArgValue()
 }
 

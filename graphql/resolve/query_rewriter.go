@@ -434,7 +434,7 @@ func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 func rewriteAsGet(
 	query schema.Query,
 	uid uint64,
-	xid *string,
+	xidArgToVal map[string]*string,
 	auth *authRewriter) []*gql.GraphQuery {
 
 	var dgQuery []*gql.GraphQuery
@@ -463,7 +463,7 @@ func rewriteAsGet(
 		}
 	}
 
-	if xid == nil {
+	if len(xidArgToVal) == 0 {
 		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
 
 		// Add the type filter to the top level get query. When the auth has been written into the
@@ -474,14 +474,19 @@ func rewriteAsGet(
 	}
 
 	xidArgName := query.XIDArg()
-	eqXidFunc := &gql.Function{
-		Name: "eq",
-		Args: []gql.Arg{
-			{Value: xidArgName},
-			{Value: maybeQuoteArg("eq", *xid)},
-		},
+	var flt []*gql.FilterTree
+	for xid, val := range xidArgToVal {
+		eqXidFuncTemp := &gql.Function{
+			Name: "eq",
+			Args: []gql.Arg{
+				{Value: xidArgName[xid]},
+				{Value: maybeQuoteArg("eq", *val)},
+			},
+		}
+		flt = append(flt, &gql.FilterTree{
+			Func: eqXidFuncTemp,
+		})
 	}
-
 	if uid > 0 {
 		dgQuery = []*gql.GraphQuery{{
 			Attr: query.Name(),
@@ -491,14 +496,21 @@ func rewriteAsGet(
 			},
 		}}
 		dgQuery[0].Filter = &gql.FilterTree{
-			Func: eqXidFunc,
+			Op:    "and",
+			Child: flt,
 		}
 
 	} else {
 		dgQuery = []*gql.GraphQuery{{
 			Attr: query.Name(),
-			Func: eqXidFunc,
+			Func: flt[0].Func,
 		}}
+		if len(flt) > 1 {
+			dgQuery[0].Filter = &gql.FilterTree{
+				Op:    "and",
+				Child: flt[1:],
+			}
+		}
 	}
 
 	// Apply query auth rules even for password query
