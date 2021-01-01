@@ -116,7 +116,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		return &Resolved{
 			Data:       []byte(`{"` + query.ResponseName() + `":` + nullVal + `}`),
 			Field:      query,
-			Err:        err,
+			Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
 			Extensions: ext,
 		}
 	}
@@ -160,9 +160,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
 	resolved := &Resolved{
-		Data:       resp.GetJson(),
-		Field:      query,
-		Err:        schema.GQLWrapf(err, "Dgraph query failed"),
+		Data:  resp.GetJson(),
+		Field: query,
+		Err: schema.SetPathIfEmpty(schema.GQLWrapf(err, "Dgraph query failed"),
+			query.ResponseName()),
 		Extensions: ext,
 	}
 
