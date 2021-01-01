@@ -69,6 +69,10 @@
         uid
         Post2 as Author.posts
       }
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(0x1, 0x2)) @filter(type(Author))
       author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
         id : uid
         name : Author.name
@@ -260,6 +264,10 @@
       x as deleteA(func: type(A)) @filter(eq(A.name, "xyz")) {
         uid
       }
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: type(A)) @filter(eq(A.name, "xyz"))
       a(func: uid(x)) {
         dgraph.type
         name : A.name

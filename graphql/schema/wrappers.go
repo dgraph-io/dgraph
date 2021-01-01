@@ -1359,7 +1359,7 @@ func (q *query) IsAggregateField() bool {
 }
 
 func (q *query) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
-	return (*field)(q).GqlErrorf(path, message, args)
+	return (*field)(q).GqlErrorf(path, message, args...)
 }
 
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
@@ -1699,7 +1699,7 @@ func (m *mutation) QueryField() Field {
 		}
 		return f
 	}
-	return m.SelectionSet()[0]
+	return nil
 }
 
 func (m *mutation) NumUidsField() Field {
@@ -1785,7 +1785,7 @@ func (m *mutation) IsAggregateField() bool {
 }
 
 func (m *mutation) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
-	return (*field)(m).GqlErrorf(path, message, args)
+	return (*field)(m).GqlErrorf(path, message, args...)
 }
 
 func (t *astType) AuthRules() *TypeAuth {

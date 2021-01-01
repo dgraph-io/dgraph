@@ -281,7 +281,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Drw, fns.Ex, deleteCompletion())
+			return NewDgraphResolver(fns.Drw, fns.Ex, StdDeleteCompletion(m.Name()))
 		})
 	}
 
@@ -344,7 +344,7 @@ func StdMutationCompletion(name string) CompletionFunc {
 
 // StdDeleteCompletion is the completion steps that get run for delete mutations
 func StdDeleteCompletion(name string) CompletionFunc {
-	return deleteCompletion()
+	return noopCompletion
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -499,7 +499,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				resp.WithError(x.GqlErrorf(
 					"Mutation %s was not executed because of a previous error.",
 					m.ResponseName()).
-					WithLocations(m.Location()))
+					WithLocations(m.Location()).
+					WithPath([]interface{}{m.ResponseName()}))
 
 				continue
 			}
@@ -1285,7 +1286,7 @@ func resolveCustomFields(ctx context.Context, fields []schema.Field, data interf
 func completeAlias(field schema.Field, buf *bytes.Buffer) {
 	x.Check2(buf.WriteRune('"'))
 	x.Check2(buf.WriteString(field.ResponseName()))
-	x.Check2(buf.WriteString(`": `))
+	x.Check2(buf.WriteString(`":`))
 }
 
 // completeObject builds a json GraphQL result object for the current query level.

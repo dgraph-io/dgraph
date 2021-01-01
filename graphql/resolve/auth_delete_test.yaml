@@ -56,6 +56,12 @@
       }
       TweetsRoot as var(func: uid(Tweets1))
       Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(TweetsRoot))
+      TweetsRoot as var(func: uid(Tweets1))
+      Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
       tweets(func: uid(Tweets3)) {
         text : Tweets.text
         dgraph.uid : uid
@@ -86,6 +92,10 @@
   dgquery: |-
     query {
       x as deleteTweets()
+    }
+  dgquerysec: |-
+    query {
+      x as var()
       tweets(func: uid(Tweets1)) {
         text : Tweets.text
         dgraph.uid : uid
@@ -184,6 +194,21 @@
         Column3 as Ticket.onColumn
         User4 as Ticket.assignedTo
       }
+      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
+      Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(TicketRoot))
       TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
       Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
       TicketAuth2 as var(func: uid(Ticket1)) @cascade {
@@ -316,6 +341,10 @@
   dgquery: |-
     query {
       x as deleteLog()
+    }
+  dgquerysec: |-
+    query {
+      x as var()
       log()
     }
 
@@ -446,6 +475,12 @@
       x as deleteLog(func: uid(LogRoot)) {
         uid
       }
+      LogRoot as var(func: uid(Log1))
+      Log1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(LogRoot))
       LogRoot as var(func: uid(Log1))
       Log1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
       log(func: uid(Log2), orderasc: Log.logs) {

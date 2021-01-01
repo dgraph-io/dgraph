@@ -2196,8 +2196,9 @@ func manyMutationsWithQueryError(t *testing.T) {
 	}`, newCountry.ID)
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
-			`in result from Dgraph.  GraphQL error propagation triggered.`,
+		&x.GqlError{Message: "couldn't execute query for mutation addAuthor because Dgraph " +
+			"execution failed because Non-nullable field 'name' (type String!) was not present " +
+			"in result from Dgraph.  GraphQL error propagation triggered.",
 			Locations: []x.Location{{Line: 18, Column: 7}},
 			Path:      []interface{}{"add2", "author", float64(0), "country", "name"}}}
 
