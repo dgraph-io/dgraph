@@ -321,8 +321,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 	if dgQuery == nil && err != nil {
-		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query for mutation %s",
-			mutation.Name())), resolverFailed
+		return emptyResult(errs), resolverFailed
 	}
 
 	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)

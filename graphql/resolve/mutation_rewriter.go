@@ -821,6 +821,9 @@ func (drw *deleteRewriter) Rewrite(
 			Children: nil, // no need to copy children
 			Filter:   qry.Filter,
 		}
+		if qryCopy.Func == nil {
+			qryCopy.Attr = qryCopy.Attr + "()"
+		}
 		queryDel = append(append([]*gql.GraphQuery{qryCopy}, dgQry[1:]...), queryDel...)
 		upserts = append(upserts, &UpsertMutation{Query: queryDel})
 	}

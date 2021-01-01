@@ -499,7 +499,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				resp.WithError(x.GqlErrorf(
 					"Mutation %s was not executed because of a previous error.",
 					m.ResponseName()).
-					WithLocations(m.Location()))
+					WithLocations(m.Location()).
+					WithPath([]interface{}{m.ResponseName()}))
 
 				continue
 			}
