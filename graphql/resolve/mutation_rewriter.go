@@ -785,9 +785,17 @@ func (drw *deleteRewriter) Rewrite(
 	}
 
 	b, err := json.Marshal(deletes)
-	var finalQry []*gql.GraphQuery
-	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
-	// is later added to delete mutation result.
+	if err != nil {
+		return nil, err
+	}
+
+	upserts := []*UpsertMutation{{
+		Query:     dgQry,
+		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
+	}}
+
+	// If the mutation had the query field, then we also need to query the nodes which are going to
+	// be deleted before they are deleted. Let's add a query to do that.
 	if queryField := m.QueryField(); queryField != nil {
 		queryAuthRw := &authRewriter{
 			authVariables: customClaims.AuthVariables,
@@ -802,17 +810,22 @@ func (drw *deleteRewriter) Rewrite(
 
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
-		finalQry = append(dgQry, queryDel...)
-	} else {
-		finalQry = dgQry
+		// we don't want the `x` query to show up in GraphQL JSON response while querying the query
+		// field. So, need to make it `var` query and remove any children from it as there can be
+		// variables in them which won't be used in this query.
+		// Need to make a copy because the query for the 1st upsert shouldn't be affected.
+		qryCopy := &gql.GraphQuery{
+			Var:      MutationQueryVar,
+			Attr:     "var",
+			Func:     qry.Func,
+			Children: nil, // no need to copy children
+			Filter:   qry.Filter,
+		}
+		queryDel = append(append([]*gql.GraphQuery{qryCopy}, dgQry[1:]...), queryDel...)
+		upserts = append(upserts, &UpsertMutation{Query: queryDel})
 	}
 
-	upsert := &UpsertMutation{
-		Query:     finalQry,
-		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
-	}
-
-	return []*UpsertMutation{upsert}, err
+	return upserts, err
 }
 
 func (drw *deleteRewriter) FromMutationResult(

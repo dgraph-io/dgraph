@@ -141,3 +141,12 @@ func AppendGQLErrs(err1, err2 error) error {
 	}
 	return append(AsGQLErrors(err1), AsGQLErrors(err2)...)
 }
+
+// PrependPath adds the given path item as the first item in the error's path list.
+func PrependPath(err error, pathItem interface{}) error {
+	gqlErrs := AsGQLErrors(err)
+	for _, e := range gqlErrs {
+		e.Path = append([]interface{}{pathItem}, e.Path...)
+	}
+	return gqlErrs
+}

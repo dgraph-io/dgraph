@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 
@@ -203,7 +202,7 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 
 func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
-	var mutResp *dgoapi.Response
+	var mutResp, qryResp *dgoapi.Response
 	commit := false
 
 	defer func() {
@@ -236,9 +235,11 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
 			// all the standard mutations are nullable
-			Data:       []byte(fmt.Sprintf(`{"%s":null}`, mutation.ResponseName())),
-			Field:      mutation,
-			Err:        err,
+			Data:  []byte(`{"` + mutation.ResponseName() + `":null}`),
+			Field: mutation,
+			// there is no completion down the pipeline, so error's path should be prepended with
+			// mutation's alias before returning the response.
+			Err:        schema.PrependPath(err, mutation.ResponseName()),
 			Extensions: ext,
 		}
 	}
@@ -257,11 +258,31 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		}, resolverSucceeded
 	}
 
+	// For delete mutation, if query field is requested, there will be two upserts, the second one
+	// isn't needed for mutation, it only has the query to fetch the query field.
+	// We need to execute this query before the mutation to find out the query field.
+	if mutation.MutationType() == schema.DeleteMutation {
+		if qryField := mutation.QueryField(); qryField != nil {
+			dgQuery := upserts[1].Query
+			upserts = upserts[0:1] // we don't need the second upsert anymore
+
+			queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+			queryTimer.Start()
+			qryResp, err = mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
+				ReadOnly: true}, qryField)
+			queryTimer.Stop()
+
+			if err != nil {
+				return emptyResult(schema.GQLWrapf(err, "couldn't execute query for mutation %s",
+					mutation.Name())), resolverFailed
+			}
+			ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		}
+	}
+
 	result := make(map[string]interface{})
 	req := &dgoapi.Request{}
 	newNodes := make(map[string]schema.Type)
-
-	// TODO: for delete mutation, need to find results for queryField apriori if requested with auth
 
 	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()
@@ -295,7 +316,10 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
 
+	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
+	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+		"couldn't rewrite query for mutation %s", mutation.Name()))
 	if dgQuery == nil && err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query for mutation %s",
 			mutation.Name())), resolverFailed
@@ -309,28 +333,24 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 	commit = true
 
-	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
-	queryTimer.Start()
-	qryResp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
-		ReadOnly: true}, mutation.QueryField())
-	queryTimer.Stop()
+	// For delete mutation, we would have already populated qryResp if query field was requested.
+	if mutation.MutationType() != schema.DeleteMutation {
+		queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+		queryTimer.Start()
+		qryResp, err = mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
+			ReadOnly: true}, mutation.QueryField())
+		queryTimer.Stop()
 
-	err = schema.GQLWrapf(err, "couldn't execute query for mutation %s", mutation.Name())
-
-	ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+		errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+			"couldn't execute query for mutation %s", mutation.Name()))
+		ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
+	}
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
-	var qryResult []byte
-	if mutation.MutationType() == schema.DeleteMutation {
-		qryResult = mutResp.GetJson()
-	} else {
-		qryResult = qryResp.GetJson()
-	}
-
 	return &Resolved{
-		Data:       completeMutationResult(mutation, qryResult, numUids),
+		Data:       completeMutationResult(mutation, qryResp.GetJson(), numUids),
 		Field:      mutation,
-		Err:        err,
+		Err:        schema.PrependPath(errs, mutation.ResponseName()),
 		Extensions: ext,
 	}, resolverSucceeded
 }
