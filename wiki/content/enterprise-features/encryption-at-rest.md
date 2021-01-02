@@ -21,7 +21,7 @@ encryption at rest as an enterprise feature. If encryption is enabled, Dgraph us
 algorithm to encrypt the data and secure it.
 
 Prior to v20.07.0, the encryption key file must be present on the local file system.
-Starting with [v20.07.0] (https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0),
+Starting with [v20.07.0](https://github.com/dgraph-io/dgraph/releases/tag/v20.07.0),
 we have added support for encryption keys sitting on Vault servers. This allows an alternate
 way to configure the encryption keys needed for encrypting the data at rest.
 
