@@ -306,9 +306,16 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// handles case 4
 				// Root fastJson node's children contain the results for top level GraphQL queries.
 				// They are marked as list during fastJson node pre-processing even though they
-				// may not be list. So, we need to consider this special case when fjIsRoot.
-				if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(), curSelection,
-					append(parentPath, curSelection.ResponseName())) {
+				// may not be list. So, we also need to consider such nodes as single valued.
+
+				if fjIsRoot && curSelection.Type().IsAggregateResult() {
+					// this is the case of aggregate query at root
+					cur = completeRootAggregateQuery(enc, curSelection, cur, ctx,
+						append(parentPath, curSelection.ResponseName()))
+					child = cur
+					next = cur.next
+				} else if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(),
+					curSelection, append(parentPath, curSelection.ResponseName())) {
 					if nullWritten = writeGraphQLNull(curSelection, ctx.buf,
 						keyEndPos); !nullWritten {
 						return false
@@ -450,6 +457,31 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 		return false
 	}
 	return true
+}
+
+func completeRootAggregateQuery(enc *encoder, query gqlSchema.Field, fj fastJsonNode,
+	ctx *graphQLEncodingCtx, qryPath []interface{}) fastJsonNode {
+	var prev fastJsonNode
+	comma := ""
+
+	x.Check2(ctx.buf.WriteString("{"))
+	for _, f := range query.SelectionSet() {
+		x.Check2(ctx.buf.WriteString(comma))
+		writeKeyGraphQL(f, ctx.buf)
+		val, err := enc.getScalarVal(enc.children(fj))
+		if err != nil {
+			ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
+				err.Error()))
+			val = []byte("null")
+		}
+		x.Check2(ctx.buf.Write(val))
+		comma = ","
+		prev = fj
+		fj = fj.next
+	}
+	x.Check2(ctx.buf.WriteString("}"))
+
+	return prev
 }
 
 // completeGeoObject builds a json GraphQL result object for the underlying geo type.

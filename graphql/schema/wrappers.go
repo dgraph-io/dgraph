@@ -192,6 +192,7 @@ type Type interface {
 	FieldOriginatedFrom(fieldName string) string
 	AuthRules() *TypeAuth
 	IsGeo() bool
+	IsAggregateResult() bool
 	IsInbuiltOrEnumType() bool
 	fmt.Stringer
 }
@@ -876,8 +877,7 @@ func (f *field) IsAuthQuery() bool {
 }
 
 func (f *field) IsAggregateField() bool {
-	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") &&
-		strings.HasSuffix(f.Type().Name(), "AggregateResult")
+	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") && f.Type().IsAggregateResult()
 }
 
 func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
@@ -1794,6 +1794,10 @@ func (t *astType) AuthRules() *TypeAuth {
 
 func (t *astType) IsGeo() bool {
 	return t.Name() == "Point" || t.Name() == "Polygon" || t.Name() == "MultiPolygon"
+}
+
+func (t *astType) IsAggregateResult() bool {
+	return strings.HasSuffix(t.Name(), "AggregateResult")
 }
 
 func (t *astType) Field(name string) FieldDefinition {
