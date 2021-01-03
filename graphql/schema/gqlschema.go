@@ -1115,7 +1115,8 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 }
 
 // For extended Type definition, if Field with ID type is also field with @key directive then
-// it should be present in the addTypeInput
+// it should be present in the addTypeInput as it should not be generated automatically by dgraph
+// but determined by the value of field in the GraphQL service where the type is defined.
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	field := getFieldsWithoutIDType(schema, defn)
 	if hasExtends(defn) {
@@ -1817,7 +1818,6 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-// TODO: Modify Get Queries with @external directives
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
@@ -2119,7 +2119,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		// Ignore Fields with @external directives also excluding those which are present
+		// Ignore Fields with @external directives and excluding those which are present
 		// as an argument in @key directive
 		if hasExternal(fld) && !isKeyField(fld, defn) {
 			continue
@@ -2157,6 +2157,7 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			// Excluding those fields which are external and are not @key.
 			if hasExternal(fld) && !isKeyField(fld, defn) {
 				continue
 			}
@@ -2187,6 +2188,7 @@ func getXIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
+			// Excluding those fields which are external and are not @key.
 			if hasExternal(fld) && !isKeyField(fld, defn) {
 				continue
 			}
@@ -2335,9 +2337,6 @@ func generateObjectString(typ *ast.Definition) string {
 }
 
 func generateUnionString(typ *ast.Definition) string {
-	if typ == nil {
-		return ""
-	}
 	return fmt.Sprintf("%sunion %s%s = %s\n",
 		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
 		strings.Join(typ.Types, " | "))
@@ -2436,11 +2435,14 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Extended Apollo Definitions\n#######################\n"))
-	x.Check2(sch.WriteString(generateUnionString(schema.Types["_Entity"])))
-	x.Check2(sch.WriteString(apolloSchemaExtras))
-	x.Check2(sch.WriteString("\n"))
+	// Add Apollo Extras to the schema only when "_Entity" union is generated.
+	if schema.Types["_Entity"] != nil {
+		x.Check2(sch.WriteString(
+			"#######################\n# Extended Apollo Definitions\n#######################\n"))
+		x.Check2(sch.WriteString(generateUnionString(schema.Types["_Entity"])))
+		x.Check2(sch.WriteString(apolloSchemaExtras))
+		x.Check2(sch.WriteString("\n"))
+	}
 	if object.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Types\n#######################\n\n"))
