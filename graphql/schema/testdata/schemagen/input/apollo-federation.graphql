@@ -1,6 +1,6 @@
 extend type Product @key(fields: "id") {
     id: ID! @external
-    name: String! @id @external
+    name: String! @external
     reviews: [Reviews]
 }
 

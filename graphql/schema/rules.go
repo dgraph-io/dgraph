@@ -2083,14 +2083,14 @@ func apolloExternalValidation(sch *ast.Schema,
 			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda directive.", typ.Name, field.Name)}
 	}
 
-	if isKeyField(field, typ) {
+	if !isKeyField(field, typ) {
 		directiveList := []string{inverseDirective, searchDirective, dgraphDirective, idDirective}
 		for _, directive := range directiveList {
 			dirDefn := field.Directives.ForName(directive)
 			if dirDefn != nil {
 				return []*gqlerror.Error{gqlerror.ErrorPosf(
 					dirDefn.Position,
-					"Type %s: Field %s: @%s directive can not be defined on field with @external directive.", typ.Name, field.Name, directive)}
+					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
 			}
 		}
 	}

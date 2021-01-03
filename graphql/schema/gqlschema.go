@@ -1318,7 +1318,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 		}
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
 			continue
 		}
 		filter.EnumValues = append(filter.EnumValues,
@@ -1442,7 +1442,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
 			continue
 		}
 
@@ -1539,11 +1539,11 @@ func isSummable(fld *ast.FieldDefinition) bool {
 }
 
 func hasID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, isID)
+	return fieldAny(nonExternalAndKeyFields(defn), isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, hasIDDirective)
+	return fieldAny(nonExternalAndKeyFields(defn), hasIDDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
@@ -1835,15 +1835,13 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 	// both, then they are optional.
 	if hasIDField {
 		fields := getIDField(defn)
-		if len(fields) != 0 {
-			qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-				Name: fields[0].Name,
-				Type: &ast.Type{
-					NamedType: idTypeFor(defn),
-					NonNull:   !hasXIDField,
-				},
-			})
-		}
+		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+			Name: fields[0].Name,
+			Type: &ast.Type{
+				NamedType: idTypeFor(defn),
+				NonNull:   !hasXIDField,
+			},
+		})
 	}
 	if hasXIDField {
 		name, dtype := xidTypeFor(defn)
@@ -2123,7 +2121,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
 			continue
 		}
 
@@ -2159,12 +2157,13 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
-			if hasExternal(fld) && defn.Directives.ForName(apolloKeyDirective) != nil && fld.Name != defn.Directives.ForName(apolloKeyDirective).Arguments[0].Value.Raw {
+			if hasExternal(fld) && !isKeyField(fld, defn) {
 				continue
 			}
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
+			newFld.Directives = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -2188,9 +2187,13 @@ func getXIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
+			if hasExternal(fld) && !isKeyField(fld, defn) {
+				continue
+			}
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
+			newFld.Directives = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -2484,7 +2487,7 @@ func idTypeFor(defn *ast.Definition) string {
 }
 
 func xidTypeFor(defn *ast.Definition) (string, string) {
-	for _, fld := range defn.Fields {
+	for _, fld := range nonExternalAndKeyFields(defn) {
 		if hasIDDirective(fld) {
 			return fld.Name, fld.Type.Name()
 		}

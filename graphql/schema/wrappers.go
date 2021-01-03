@@ -728,6 +728,19 @@ func isKeyField(f *ast.FieldDefinition, typ *ast.Definition) bool {
 	return f.Name == keyDirective.Arguments[0].Value.Raw
 }
 
+// Filter out those fields which have @external directive and are not @key fields
+// in a definition.
+func nonExternalAndKeyFields(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
+		fldList = append(fldList, fld)
+	}
+	return fldList
+}
+
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
 // The constructed @custom looks like this:
 //	@custom(http: {

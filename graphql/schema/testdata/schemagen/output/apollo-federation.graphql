@@ -26,7 +26,7 @@ type Country {
 
 type Product @key(fields: "id") @extends {
 	id: ID! @external
-	name: String! @id @external
+	name: String! @external
 	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
 	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
 }
@@ -513,7 +513,7 @@ input AddCountryInput {
 }
 
 input AddProductInput {
-	id: ID! @external
+	id: ID!
 	reviews: [ReviewsRef]
 }
 
@@ -577,7 +577,7 @@ input ProductPatch {
 }
 
 input ProductRef {
-	id: ID @external
+	id: ID
 	reviews: [ReviewsRef]
 }
 
@@ -724,10 +724,10 @@ type Query {
 	getCountry(code: String!): Country
 	queryCountry(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
 	aggregateCountry(filter: CountryFilter): CountryAggregateResult
-	getProduct(id: ID, name: String): Product
+	getProduct(id: ID!): Product
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	aggregateProduct(filter: ProductFilter): ProductAggregateResult
-	getUser(name: String): User
+	getUser(name: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	aggregateUser(filter: UserFilter): UserAggregateResult
 }
