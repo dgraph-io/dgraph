@@ -25,6 +25,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	jsonNUll = []byte("null")
+)
+
 type graphQLEncodingCtx struct {
 	// buf is the buffer which stores the encoded GraphQL response.
 	buf *bytes.Buffer
@@ -276,10 +280,10 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 					typ := curSelection.Type()
 					if typ.ListType().Nullable() {
 						ctx.buf.Truncate(itemPos)
-						x.Check2(ctx.buf.WriteString("null"))
+						x.Check2(ctx.buf.Write(jsonNUll))
 					} else if typ.Nullable() {
 						ctx.buf.Truncate(keyEndPos)
-						x.Check2(ctx.buf.WriteString("null"))
+						x.Check2(ctx.buf.Write(jsonNUll))
 						// set nullWritten to true so we don't write closing ] for this list
 						nullWritten = true
 						// skip all data for the current list selection
@@ -302,20 +306,16 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// we need to iterate to the next fastJson node because we have used the data from
 				// the current fastJson node.
 				child = child.next
-			} else if !curSelectionIsList && (!enc.getList(cur) || fjIsRoot) {
+			} else if !curSelectionIsList && (!enc.getList(cur) || (fjIsRoot && enc.getAttr(
+				cur) != enc.getAttr(next) && !curSelection.Type().IsAggregateResult())) {
 				// handles case 4
 				// Root fastJson node's children contain the results for top level GraphQL queries.
 				// They are marked as list during fastJson node pre-processing even though they
-				// may not be list. So, we also need to consider such nodes as single valued.
+				// may not be list. So, we also need to consider such nodes if they actually have
+				// only one value.
 
-				if fjIsRoot && curSelection.Type().IsAggregateResult() {
-					// this is the case of aggregate query at root
-					cur = completeRootAggregateQuery(enc, curSelection, cur, ctx,
-						append(parentPath, curSelection.ResponseName()))
-					child = cur
-					next = cur.next
-				} else if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(),
-					curSelection, append(parentPath, curSelection.ResponseName())) {
+				if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(), curSelection,
+					append(parentPath, curSelection.ResponseName())) {
 					if nullWritten = writeGraphQLNull(curSelection, ctx.buf,
 						keyEndPos); !nullWritten {
 						return false
@@ -324,6 +324,19 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// we need to iterate to the next fastJson node because we have used the data from
 				// the current fastJson node.
 				child = child.next
+			} else if !curSelectionIsList && enc.getList(cur) && curSelection.Type().
+				IsAggregateResult() {
+				// handles aggregate fields
+				if fjIsRoot {
+					// this is the case of aggregate query at root
+					next = completeRootAggregateQuery(enc, ctx, cur, curSelection,
+						append(parentPath, curSelection.ResponseName()))
+				} else {
+					// this case is of deep aggregate fields
+					next = completeAggregateChildren(enc, ctx, cur, curSelection,
+						append(parentPath, curSelection.ResponseName()))
+				}
+				child = next
 			} else if !curSelectionIsList {
 				// handles case 3
 				ctx.gqlErrs = append(ctx.gqlErrs, curSelection.GqlErrorf(append(parentPath,
@@ -452,16 +465,47 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 		// there's nothing in the Dgraph result.
 		x.Check2(buf.Write([]byte("[]")))
 	} else if f.Type().Nullable() {
-		x.Check2(buf.Write([]byte("null")))
+		x.Check2(buf.Write(jsonNUll))
 	} else {
 		return false
 	}
 	return true
 }
 
-func completeRootAggregateQuery(enc *encoder, query gqlSchema.Field, fj fastJsonNode,
-	ctx *graphQLEncodingCtx, qryPath []interface{}) fastJsonNode {
-	var prev fastJsonNode
+// completeRootAggregateQuery builds GraphQL JSON for aggregate queries at root.
+// Root aggregate queries return a single object of type `TypeAggregateResult` which contains the
+// aggregate properties. But, in the Dgraph results those properties are returned as a list of
+// objects, each object having only one property. So we need to handle encoding root aggregate
+// queries accordingly.
+// Dgraph result:
+// 		{
+// 		  "aggregateCountry": [
+// 		    {
+// 		      "count": 3
+// 		    }, {
+// 		      "nameMin": "US1"
+// 		    }, {
+// 		      "nameMax": "US2"
+// 		    }
+// 		  ]
+// 		}
+// GraphQL Result:
+// 		{
+// 		  "aggregateCountry": {
+// 		    "count": 3,
+// 		    "nameMin": "US1",
+// 		    "nameMax": "US2"
+// 		  }
+// 		}
+// Note that there can't be the case when an aggregate property was requested in DQL and not
+// returned by Dgraph because aggregate properties are calculated using math functions which
+// always give some result.
+// TODO:
+//  * check if above note is still valid after Rajas's PR is merged.
+//  * handle the case when count isn't requested, check why do we ask count in DQL if it ain't asked
+//    in GraphQL? doesn't seem worth it now, should be removed.
+func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
+	query gqlSchema.Field, qryPath []interface{}) fastJsonNode {
 	comma := ""
 
 	x.Check2(ctx.buf.WriteString("{"))
@@ -472,16 +516,60 @@ func completeRootAggregateQuery(enc *encoder, query gqlSchema.Field, fj fastJson
 		if err != nil {
 			ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
 				err.Error()))
-			val = []byte("null")
+			// all aggregate properties are nullable, so no special checks are required
+			val = jsonNUll
 		}
+		fj = fj.next
 		x.Check2(ctx.buf.Write(val))
 		comma = ","
-		prev = fj
-		fj = fj.next
 	}
 	x.Check2(ctx.buf.WriteString("}"))
 
-	return prev
+	return fj
+}
+
+// TODO:
+//  * if we decide to not remove asking count even if it ain't requested in GraphQL,
+//    then we need to handle the case of empty list for aggregate children as to correctly set the
+//    next pointer. We will need to skip count fastJson node.
+//  * Add comments
+func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
+	field gqlSchema.Field, fieldPath []interface{}) fastJsonNode {
+	// first we need to skip all the nodes returned with the attr of field as they are not needed
+	// in GraphQL.
+	// TODO: we may need to check fj != nil if count isn't requested in DQL everytime
+	attrId := enc.getAttr(fj)
+	for fj = fj.next; attrId == enc.getAttr(fj); fj = fj.next {
+		// do nothing
+	}
+
+	// now fj points to a node containing data for a child of field
+	comma := ""
+	suffix := "_" + field.DgraphAlias()
+	var val []byte
+	var err error
+	x.Check2(ctx.buf.WriteString("{"))
+	for _, f := range field.SelectionSet() {
+		x.Check2(ctx.buf.WriteString(comma))
+		writeKeyGraphQL(f, ctx.buf)
+		if fj != nil && f.Name()+suffix == enc.attrForID(enc.getAttr(fj)) {
+			val, err = enc.getScalarVal(fj)
+			if err != nil {
+				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
+					err.Error()))
+				// all aggregate properties are nullable, so no special checks are required
+				val = jsonNUll
+			}
+			fj = fj.next
+		} else {
+			val = jsonNUll
+		}
+		x.Check2(ctx.buf.Write(val))
+		comma = ","
+	}
+	x.Check2(ctx.buf.WriteString("}"))
+
+	return fj
 }
 
 // completeGeoObject builds a json GraphQL result object for the underlying geo type.
