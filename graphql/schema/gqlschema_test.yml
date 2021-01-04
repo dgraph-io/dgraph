@@ -2663,7 +2663,7 @@ invalid_schemas:
 
 
 valid_schemas:
-  - name: "Multiple field with  @id directive should be allowed"
+  - name: "Multiple fields with @id directive should be allowed"
     input: |
       type X {
         f1: String! @id
