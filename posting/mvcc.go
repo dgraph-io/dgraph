@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/hex"
 	"math"
-	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -88,17 +87,22 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
-func (ir *incrRollupi) rollupDeltas(prefix []byte) {
+// rollupDeltas will try to collect 1000 deltas for roll up within 30 seconds.
+func (ir *incrRollupi) rollupDeltas() {
 	var wg sync.WaitGroup
 	wg.Add(1000) // Push 1,000 deltas for rollup.
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	stream := pstore.NewStreamAt(math.MaxUint64)
-	stream.LogPrefix = "Rollup"
-	stream.Prefix = prefix
+	stream.Prefix = []byte{x.DefaultPrefix}
+	stream.Logger = nil // We don't want any logs. This can get very noisy.
 	stream.ChooseKey = func(item *badger.Item) bool {
-		if item.UserMeta()&BitDeltaPosting > 0 {
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			glog.Errorf("RollupDeltas Parse failed: err = %s", err)
+			return false
+		}
+		if pk.IsData() && item.UserMeta()&BitDeltaPosting > 0 {
 			ir.addKeyToBatch(item.KeyCopy(nil))
 			wg.Done()
 		}
@@ -114,22 +118,22 @@ func (ir *incrRollupi) rollupDeltas(prefix []byte) {
 	}
 }
 
+// Start will start the background rollups.
 func (ir *incrRollupi) Start(cl *z.Closer) {
 	defer cl.Done()
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	prefix := make([]byte, 1)
 	for {
 		select {
 		case <-cl.HasBeenClosed():
 			return
 		case <-ticker.C:
-			rand.Read(prefix)
-			ir.rollupDeltas(prefix)
+			ir.rollupDeltas()
 		}
 	}
 }
+
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
