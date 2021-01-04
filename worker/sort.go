@@ -19,12 +19,10 @@ package worker
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -181,8 +179,6 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		return resultWithError(ctx.Err())
 	}
 
-	spew.Dump(ts)
-
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
@@ -307,20 +303,13 @@ BUCKETS:
 		}
 	}
 
-	fmt.Println(order.Attr)
-	fmt.Println(ts.UidMatrix)
-	fmt.Println(r.UidMatrix)
-
 	var toAppend []uint64
 
 	for i, ul := range ts.UidMatrix {
 		for _, uid := range ul.Uids {
-			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
+			_, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
 			if err != nil {
 				toAppend = append(toAppend, uid)
-				fmt.Println("not found pred", uid, val)
-			} else {
-				fmt.Println("found pred", uid, val)
 			}
 		}
 		if order.Desc {
@@ -497,21 +486,17 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 			return
 		}
 		r := sortWithoutIndex(cctx, ts)
-		fmt.Println("Without index")
-		spew.Dump(r)
 		resCh <- r
 	}()
 
 	go func() {
 		sr := sortWithIndex(cctx, ts)
-		fmt.Println("With index")
-		spew.Dump(sr)
 		resCh <- sr
 	}()
 
 	r := <-resCh
 	if r.err == nil {
-		// cancel()
+		cancel()
 		// wait for other goroutine to get cancelled
 		<-resCh
 	} else {
