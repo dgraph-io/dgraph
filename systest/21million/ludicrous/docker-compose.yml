@@ -17,40 +17,6 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --idx=1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --ludicrous_mode
-  alpha2:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha2
-    depends_on:
-    - alpha1
-    labels:
-      cluster: test
-    ports:
-    - 8080
-    - 9080
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
-      --logtostderr -v=2 --idx=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --ludicrous_mode
-  alpha3:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha3
-    depends_on:
-    - alpha2
-    labels:
-      cluster: test
-    ports:
-    - 8080
-    - 9080
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
-      --logtostderr -v=2 --idx=3 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --ludicrous_mode
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
@@ -64,4 +30,4 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=1 --logtostderr -v=2 --bindall
+    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --logtostderr -v=2 --bindall
