@@ -105,7 +105,8 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 
 func (gsr *getSchemaResolver) Execute(
 	ctx context.Context,
-	req *dgoapi.Request) (*dgoapi.Response, error) {
+	req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
@@ -127,7 +128,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 		return buf.Bytes(), nil
 	}
 
-	x.Check2(buf.WriteString(`": [{`))
+	x.Check2(buf.WriteString(`": {`))
 
 	for i, sel := range field.SelectionSet() {
 		var val []byte
@@ -150,7 +151,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 		x.Check2(buf.WriteString(`":`))
 		x.Check2(buf.Write(val))
 	}
-	x.Check2(buf.WriteString("}]}"))
+	x.Check2(buf.WriteString("}}"))
 
 	return buf.Bytes(), nil
 }

@@ -92,7 +92,8 @@ type authExecutor struct {
 	skipAuth bool
 }
 
-func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	ex.state++
 	switch ex.state {
 	case 1:

@@ -58,28 +58,7 @@ const (
 	resolverFailed    = false
 	resolverSucceeded = true
 
-	errExpectedScalar = "A scalar type was returned, but GraphQL was expecting an object. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	errExpectedObject = "A list was returned, but GraphQL was expecting just one item. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	errExpectedList = "An object was returned, but GraphQL was expecting a list of objects. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
 	errInternal = "Internal error"
-
-	errExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
-		"GraphQL error propagation triggered."
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -209,19 +188,19 @@ func NewAdminExecutor() DgraphExecutor {
 	return &adminExecutor{dg: &dgraph.DgraphEx{}}
 }
 
-func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (
 	*dgoapi.Response, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
-	return aex.dg.Execute(ctx, req)
+	return aex.dg.Execute(ctx, req, field)
 }
 
 func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
 	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
-func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (
 	*dgoapi.Response, error) {
-	return de.dg.Execute(ctx, req)
+	return de.dg.Execute(ctx, req, field)
 }
 
 func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
@@ -583,18 +562,24 @@ func addResult(resp *schema.Response, res *Resolved) {
 	// - q { f { g } }
 	// a path to the 2nd item in the f list would look like:
 	// - [ "q", "f", 2, "g" ]
-	path := make([]interface{}, 0, maxPathLength(res.Field))
-	var b []byte
-	var gqlErr x.GqlErrorList
+	if res.Data == nil && !res.Field.Type().Nullable() {
+		resp.SetDataNull()
+	} else if b, ok := res.Data.([]byte); ok {
+		resp.AddData(b)
+	} else {
+		path := make([]interface{}, 0, maxPathLength(res.Field))
+		//var b []byte
+		var gqlErr x.GqlErrorList
 
-	if res.Data != nil {
-		b, gqlErr = completeObject(path, []schema.Field{res.Field},
-			res.Data.(map[string]interface{}))
+		if res.Data != nil {
+			b, gqlErr = completeObject(path, []schema.Field{res.Field},
+				res.Data.(map[string]interface{}))
+		}
+		resp.WithError(gqlErr)
+		resp.AddData(b)
 	}
 
 	resp.WithError(res.Err)
-	resp.WithError(gqlErr)
-	resp.AddData(b)
 	resp.MergeExtensions(res.Extensions)
 }
 
@@ -1432,7 +1417,7 @@ func completeObject(
 				// We were expecting a list but got a value which wasn't a list. Lets return an
 				// error.
 				return nil, x.GqlErrorList{&x.GqlError{
-					Message:   errExpectedList,
+					Message:   schema.ErrExpectedList,
 					Locations: []x.Location{f.Location()},
 					Path:      copyPath(path),
 				}}
@@ -1496,7 +1481,7 @@ func completeValue(
 		switch field.Type().Name() {
 		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{field.Location()},
 				Path:      copyPath(path),
 			}}
@@ -1504,7 +1489,7 @@ func completeValue(
 		enumValues := field.EnumValues()
 		if len(enumValues) > 0 {
 			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{field.Location()},
 				Path:      copyPath(path),
 			}}
@@ -1546,7 +1531,7 @@ func completeValue(
 				return []byte("null"), nil
 			}
 
-			gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
+			gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
 			return nil, x.GqlErrorList{gqlErr}
 		}
@@ -1585,7 +1570,7 @@ func completeGeoObject(path []interface{}, field schema.Field,
 	val map[string]interface{}) ([]byte, x.GqlErrorList) {
 	coordinate, _ := val[schema.Coordinates].([]interface{})
 	if coordinate == nil {
-		gqlErr := x.GqlErrorf(errExpectedNonNull, field.Name(),
+		gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(),
 			field.Type()).WithLocations(field.Location())
 		gqlErr.Path = copyPath(path)
 		return nil, x.GqlErrorList{gqlErr}
@@ -1996,7 +1981,7 @@ func mismatched(
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
 	gqlErr := &x.GqlError{
-		Message:   errExpectedObject,
+		Message:   schema.ErrExpectedSingleItem,
 		Locations: []x.Location{field.Location()},
 		Path:      copyPath(path),
 	}

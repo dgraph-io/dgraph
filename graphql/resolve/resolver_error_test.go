@@ -82,7 +82,8 @@ type Post {
 	author: Author!
 }`
 
-func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	if len(req.Mutations) == 0 {
 		ex.failQuery--
 		if ex.failQuery == 0 {

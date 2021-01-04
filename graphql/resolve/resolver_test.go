@@ -19,6 +19,8 @@ package resolve
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
@@ -32,7 +34,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": {"id": "0x1"} }}`,
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
@@ -42,7 +44,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": [{"id": "0x1"}] }}`,
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedObject,
+				Message:   schema.ErrExpectedSingleItem,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
@@ -61,7 +63,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "country": [{"name": "Rwanda"}] }}`,
 			Expected: `{ "getAuthor": { "country": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedObject,
+				Message:   schema.ErrExpectedSingleItem,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "country"},
 			}}},
@@ -71,7 +73,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "posts": "Rwanda" }}`,
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedList,
+				Message:   schema.ErrExpectedList,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},
@@ -80,7 +82,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "posts": {"text": "Random post"} }}`,
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedList,
+				Message:   schema.ErrExpectedList,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},

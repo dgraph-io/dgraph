@@ -31,6 +31,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	ErrExpectedScalar = "An object type was returned, but GraphQL was expecting a scalar. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
+
+	ErrExpectedSingleItem = "A list was returned, but GraphQL was expecting just one item. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
+
+	ErrExpectedList = "An item was returned, but GraphQL was expecting a list of items. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
+
+	ErrExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
+		"GraphQL error propagation triggered."
+)
+
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 
@@ -48,6 +71,7 @@ type Response struct {
 	Data       bytes.Buffer
 	Extensions *Extensions
 	Header     http.Header
+	dataIsNull bool
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -85,12 +109,13 @@ func (r *Response) WithError(err error) {
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 
-// AddData adds p to r's data buffer.  If p is empty, the call has no effect.
+// AddData adds p to r's data buffer. If p is empty or r.SetDataNull() has been called earlier,
+// the call has no effect.
 // If r.Data is empty before the call, then r.Data becomes {p}
 // If r.Data contains data it always looks like {f,g,...}, and
 // adding to that results in {f,g,...,p}
 func (r *Response) AddData(p []byte) {
-	if r == nil || len(p) == 0 {
+	if r == nil || r.dataIsNull || len(p) == 0 {
 		return
 	}
 
@@ -105,6 +130,12 @@ func (r *Response) AddData(p []byte) {
 
 	x.Check2(r.Data.Write(p[1 : len(p)-1]))
 	x.Check2(r.Data.WriteRune('}'))
+}
+
+func (r *Response) SetDataNull() {
+	r.dataIsNull = true
+	r.Data.Reset()
+	x.Check2(r.Data.WriteString("null"))
 }
 
 // MergeExtensions merges the extensions given in ext to r.
@@ -130,7 +161,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("%+v", errors.Wrap(err, msg))
+		glog.Errorf("%+v", errors.Wrap(err, msg+". Got data: "+r.Data.String()))
 		js = []byte(fmt.Sprintf(
 			`{ "errors": [{"message": "%s"}], "data": null }`, msg))
 	}

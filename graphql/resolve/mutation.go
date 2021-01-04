@@ -101,12 +101,12 @@ type MutationRewriter interface {
 		result map[string]interface{}) ([]*gql.GraphQuery, error)
 }
 
-// A DgraphExecutor can execute a mutation and returns the request response and any errors.
+// A DgraphExecutor can execute a query/mutation and returns the request response and any errors.
 type DgraphExecutor interface {
-	// Execute performs the actual mutation and returns a Dgraph response. If an error
+	// Execute performs the actual query/mutation and returns a Dgraph response. If an error
 	// occurs, that indicates that the execution failed in some way significant enough
-	// way as to not continue processing this mutation or others in the same request.
-	Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+	// way as to not continue processing this query/mutation or others in the same request.
+	Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (*dgoapi.Response, error)
 	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
 }
 
@@ -268,7 +268,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	for _, upsert := range upserts {
 		req.Query = dgraph.AsString(upsert.Query)
 		req.Mutations = upsert.Mutations
-		mutResp, err = mr.executor.Execute(ctx, req)
+		mutResp, err = mr.executor.Execute(ctx, req, nil)
 		if err != nil {
 			gqlErr := schema.GQLWrapLocationf(
 				err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -313,7 +313,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
 	qryResp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
-		ReadOnly: true})
+		ReadOnly: true}, mutation.QueryField())
 	queryTimer.Stop()
 
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
@@ -497,7 +497,7 @@ func authorizeNewNodes(
 		&dgoapi.Request{
 			Query:   dgraph.AsString(qs),
 			StartTs: txn.GetStartTs(),
-		})
+		}, nil)
 	if errs != nil || len(resp.Json) == 0 {
 		return x.GqlErrorf("authorization request failed")
 	}

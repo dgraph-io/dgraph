@@ -107,10 +107,16 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	}
 
 	emptyResult := func(err error) *Resolved {
+		var nullVal string
+		if query.Type().ListType() != nil {
+			nullVal = "[]"
+		} else {
+			nullVal = "null"
+		}
 		return &Resolved{
-			Data:       map[string]interface{}{query.DgraphAlias(): nil},
+			Data:       []byte(`{"` + query.ResponseName() + `":` + nullVal + `}`),
 			Field:      query,
-			Err:        err,
+			Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
 			Extensions: ext,
 		}
 	}
@@ -144,17 +150,22 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
+		ReadOnly: true}, query)
 	queryTimer.Stop()
 
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
-		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
-	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
-	resolved.Extensions = ext
+	resolved := &Resolved{
+		Data:  resp.GetJson(),
+		Field: query,
+		Err: schema.SetPathIfEmpty(schema.GQLWrapf(err, "Dgraph query failed"),
+			query.ResponseName()),
+		Extensions: ext,
+	}
 
 	return resolved
 }
