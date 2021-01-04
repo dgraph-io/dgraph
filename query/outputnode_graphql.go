@@ -313,8 +313,8 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// we need to iterate to the next fastJson node because we have used the data from
 				// the current fastJson node.
 				child = child.next
-			} else if !curSelectionIsList && (!enc.getList(cur) || (fjIsRoot && enc.getAttr(
-				cur) != enc.getAttr(next) && !curSelection.Type().IsAggregateResult())) {
+			} else if !curSelectionIsList && (!enc.getList(cur) || (fjIsRoot && (next == nil || enc.
+				getAttr(cur) != enc.getAttr(next)) && !curSelection.Type().IsAggregateResult())) {
 				// handles case 4
 				// Root fastJson node's children contain the results for top level GraphQL queries.
 				// They are marked as list during fastJson node pre-processing even though they

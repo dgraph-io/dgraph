@@ -1111,8 +1111,11 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 			// data as null.
 			bufw.Reset()
 		}
-		// we need to propagate GraphQL errors back to GraphQL layer along with the data.
-		err = gqlEncCtx.gqlErrs
+		// if there were any GraphQL errors,
+		// we need to propagate them back to GraphQL layer along with the data.
+		if len(gqlEncCtx.gqlErrs) > 0 {
+			err = gqlEncCtx.gqlErrs
+		}
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
