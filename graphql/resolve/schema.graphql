@@ -381,9 +381,9 @@ type Node {
 }
 
 type Book{
-    id:ID!
+    id: ID!
     title: String! @id
     ISBN: String! @id
-    Author:String
+    Author: String
 
 }
