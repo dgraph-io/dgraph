@@ -18,8 +18,10 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"math"
+	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -86,6 +88,48 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
+func (ir *incrRollupi) rollupDeltas(prefix []byte) {
+	var wg sync.WaitGroup
+	wg.Add(1000) // Push 1,000 deltas for rollup.
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+
+	stream := pstore.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = "Rollup"
+	stream.Prefix = prefix
+	stream.ChooseKey = func(item *badger.Item) bool {
+		if item.UserMeta()&BitDeltaPosting > 0 {
+			ir.addKeyToBatch(item.KeyCopy(nil))
+			wg.Done()
+		}
+		return false
+	}
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
+
+	if err := stream.Orchestrate(ctx); err != nil && err != context.DeadlineExceeded {
+		glog.Errorf("RollupDeltas failed: err = %s", err)
+	}
+}
+
+func (ir *incrRollupi) Start(cl *z.Closer) {
+	defer cl.Done()
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	prefix := make([]byte, 1)
+	for {
+		select {
+		case <-cl.HasBeenClosed():
+			return
+		case <-ticker.C:
+			rand.Read(prefix)
+			ir.rollupDeltas(prefix)
+		}
+	}
+}
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)

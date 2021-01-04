@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -146,10 +147,11 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
 
-	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
+	gr.closer = z.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
+	go posting.IncrRollup.Start(gr.closer)
 
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
