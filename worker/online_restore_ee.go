@@ -93,11 +93,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
-	wg.Add(1)
 	errCh := make(chan error, len(currentGroups))
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
+		wg.Add(1)
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
@@ -108,8 +108,8 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 			if err := <-errCh; err != nil {
 				glog.Errorf("Error while restoring %v", err)
 			}
+			wg.Done()
 		}
-		wg.Done()
 	}()
 
 	return nil
