@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -41,15 +42,14 @@ func main() {
 		reader, err = gzip.NewReader(reader)
 		x.Check(err)
 	}
-	b, err := ioutil.ReadAll(reader)
-	x.Check(err)
 
 	outf, err := os.OpenFile(opts.output, os.O_WRONLY|os.O_CREATE, 0644)
 	x.CheckfNoTrace(err)
 
 	w := gzip.NewWriter(outf)
 
-	w.Write(b)
+	_, err = io.Copy(w, reader)
+	x.Check(err)
 	err = w.Flush()
 	x.Check(err)
 	err = w.Close()
