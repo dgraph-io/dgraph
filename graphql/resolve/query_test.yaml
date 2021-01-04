@@ -1451,29 +1451,6 @@
     }
 
 -
-  name: "Aggregate Query with no count field"
-  gqlquery: |
-    query {
-      aggregateCountry(filter: { name: { regexp: "/.*ust.*/" }}) {
-        nameMin
-        nm : nameMin
-        nameMax
-      }
-    }
-  dgquery: |-
-    query {
-      aggregateCountry() {
-        count : max(val(countVar))
-        nameMin : min(val(nameVar))
-        nameMax : max(val(nameVar))
-      }
-      var(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
-        countVar as count(uid)
-        nameVar as Country.name
-      }
-    }
-
--
   name: "Skip directive"
   variables:
     skipTrue: true
@@ -2994,48 +2971,6 @@
           statesAggregate_nameVar as State.name
           dgraph.uid : uid
         }
-        count_statesAggregate : count(Country.states)
-        nameMin_statesAggregate : min(val(statesAggregate_nameVar))
-        nameMax_statesAggregate : max(val(statesAggregate_nameVar))
-        statesAggregate.1 : Country.states @filter(eq(State.code, "state code")) {
-          statesAggregate.1_nameVar as State.name
-          statesAggregate.1_capitalVar as State.capital
-          dgraph.uid : uid
-        }
-        count_statesAggregate.1 : count(Country.states) @filter(eq(State.code, "state code"))
-        nameMin_statesAggregate.1 : min(val(statesAggregate.1_nameVar))
-        nameMax_statesAggregate.1 : max(val(statesAggregate.1_nameVar))
-        capitalMin_statesAggregate.1 : min(val(statesAggregate.1_capitalVar))
-        dgraph.uid : uid
-      }
-    }
-
--
-  name: "Aggregate query at child level with no count field"
-  gqlquery: |
-    query {
-      queryCountry {
-        nm : name
-        ag : statesAggregate {
-          nMin : nameMin
-          nMax : nameMax
-        }
-        statesAggregate(filter: { code: { eq: "state code" } }) {
-          nMin : nameMin
-          nMax : nameMax
-          cMin : capitalMin
-        }
-      }
-    }
-  dgquery: |-
-    query {
-      queryCountry(func: type(Country)) {
-        name : Country.name
-        statesAggregate : Country.states {
-          statesAggregate_nameVar as State.name
-          dgraph.uid : uid
-        }
-        count_statesAggregate : count(Country.states)
         nameMin_statesAggregate : min(val(statesAggregate_nameVar))
         nameMax_statesAggregate : max(val(statesAggregate_nameVar))
         statesAggregate.1 : Country.states @filter(eq(State.code, "state code")) {

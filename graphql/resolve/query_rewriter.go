@@ -196,19 +196,6 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 	// So the map entries would contain keys as nameMin, ageMin, nameName, etc.
 	isAggregateFunctionVisited := make(map[string]bool)
 
-	// Add count field to aggregateQuery by default. This is done to ensure that null is
-	// returned in case the count of nodes is 0.
-	child := &gql.GraphQuery{
-		Var:  "countVar",
-		Attr: "count(uid)",
-	}
-	finalQueryChild := &gql.GraphQuery{
-		Alias: "count",
-		Attr:  "max(val(countVar))",
-	}
-	mainQuery.Children = append(mainQuery.Children, child)
-	finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
-
 	for _, f := range query.SelectionSet() {
 		// fldName stores Name of the field f.
 		fldName := f.Name()
@@ -217,8 +204,16 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 		}
 		isAggregateFunctionVisited[fldName] = true
 		if fldName == "count" {
-			// We continue in case of a count field in Aggregate Query as count has already
-			// been added by default just before the for loop.
+			child := &gql.GraphQuery{
+				Var:  "countVar",
+				Attr: "count(uid)",
+			}
+			finalQueryChild := &gql.GraphQuery{
+				Alias: fldName,
+				Attr:  "max(val(countVar))",
+			}
+			mainQuery.Children = append(mainQuery.Children, child)
+			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 			continue
 		}
 
@@ -1053,16 +1048,6 @@ func buildAggregateFields(
 	// contain "scoreVar as Tweets.score" only once.
 	isAggregateFieldVisited := make(map[string]bool)
 
-	// Add the default count field. Count field is part of an AggregateField by default
-	// as this makes it possible to return null field in case the count of nodes is 0
-	aggregateChild := &gql.GraphQuery{
-		Alias: "count_" + fieldAlias,
-		Attr:  "count(" + constructedForDgraphPredicate + ")",
-	}
-	// Add filter to count aggregation field.
-	_ = addFilter(aggregateChild, constructedForType, fieldFilter)
-	aggregateChildren = append(aggregateChildren, aggregateChild)
-
 	// Iterate over fields queried inside aggregate.
 	for _, aggregateField := range f.SelectionSet() {
 		// Don't add the same field twice
@@ -1071,10 +1056,15 @@ func buildAggregateFields(
 		}
 		addedAggregateField[aggregateField.DgraphAlias()] = true
 
-		// As count fields are always part of an AggregateField by
-		// default (added just before this for loop). We continue
-		// in case of a count field.
+		// Handle count fields inside aggregate fields.
 		if aggregateField.DgraphAlias() == "count" {
+			aggregateChild := &gql.GraphQuery{
+				Alias: "count_" + fieldAlias,
+				Attr:  "count(" + constructedForDgraphPredicate + ")",
+			}
+			// Add filter to count aggregation field.
+			_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+			aggregateChildren = append(aggregateChildren, aggregateChild)
 			continue
 		}
 		// Handle other aggregate functions than count

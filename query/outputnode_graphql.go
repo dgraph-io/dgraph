@@ -53,7 +53,9 @@ func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 }
 
 // TODO:
-//  * change query rewriting for scalar fields asked multiple times
+//  * change query rewriting for scalar fields asked multiple times (DgraphALias() thing).
+//    We may also need to pay attention to aggregate field rewriting as they just use fieldName
+//    and not DgraphAlias().
 //  * Scalar coercion
 //  * Enums
 //  * Aggregate fields/queries
