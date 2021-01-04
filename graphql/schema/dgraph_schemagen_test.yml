@@ -759,6 +759,7 @@ schemas:
       extend type Product @key(fields: "id") {
         id: ID! @external
         name: String!
+        price: Int @external
         reviews: [String]
       }
     output: |

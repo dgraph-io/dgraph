@@ -439,6 +439,11 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					continue
 				}
 
+				// Ignore @external fields which are not @key
+				if hasExternal(f) && !isKeyField(f, def) {
+					continue
+				}
+
 				// If a field of type ID has @external directive and is a @key field then
 				// it should be translated into a dgraph field with string type having hash index.
 				if f.Type.Name() == "ID" && !(hasExternal(f) && isKeyField(f, def)) {

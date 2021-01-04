@@ -2716,7 +2716,7 @@ invalid_schemas:
     input: |
       type Product  @extends{
       id: ID! @external
-      name: String! @id @external
+      name: String! @external
       reviews: [Reviews]
       }
 
@@ -2742,12 +2742,12 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
     ]
-  - name: "External "
+  - name: "directives defined on @external fields that are not @key."
     input: |
-      extend type Product @key(fields: "name"){
-      id: ID! @external
-      name: String! @id @search @external
-      reviews: [Reviews]
+      extend type Product @key(fields: "id"){
+        id: ID! @external
+        name: String! @search @external
+        reviews: [Reviews]
       }
 
       type Reviews @key(fields: "id") {
@@ -2755,7 +2755,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product: Field name: @search directive can not be defined on field with @external directive.", "locations": [ { "line": 3, "column": 20} ] },
+      {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
     ]
 
 
