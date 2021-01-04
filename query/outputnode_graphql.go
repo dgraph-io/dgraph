@@ -254,6 +254,11 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 			// 4. current GraphQL selection != list type
 			//    current fastJson node != list type
 			//    => Both GraphQL and DQL schema are in non-list form, recursively encode it.
+			// Apart from these there is a special case of aggregate queries/fields where:
+			//    current GraphQL selection != list type
+			//    current fastJson node == list type
+			//    => This is not a mismatch between the GraphQL and DQL schema and should be
+			//       handled appropriately.
 			if curSelectionIsList && enc.getList(cur) {
 				// handles case 1
 				itemPos := ctx.buf.Len()
@@ -314,7 +319,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// Root fastJson node's children contain the results for top level GraphQL queries.
 				// They are marked as list during fastJson node pre-processing even though they
 				// may not be list. So, we also need to consider such nodes if they actually have
-				// only one value.
+				// only one value and the current selection is not an aggregate field.
 
 				if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(), curSelection,
 					append(parentPath, curSelection.ResponseName())) {
@@ -328,7 +333,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				child = child.next
 			} else if !curSelectionIsList && enc.getList(cur) && curSelection.Type().
 				IsAggregateResult() {
-				// handles aggregate fields
+				// handles special case of aggregate fields
 				if fjIsRoot {
 					// this is the case of aggregate query at root
 					next = completeRootAggregateQuery(enc, ctx, cur, curSelection,
@@ -503,9 +508,8 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 // returned by Dgraph because aggregate properties are calculated using math functions which
 // always give some result.
 // TODO:
-//  * check if above note is still valid after Rajas's PR is merged.
-//  * handle the case when count isn't requested, check why do we ask count in DQL if it ain't asked
-//    in GraphQL? doesn't seem worth it now, should be removed.
+//  * check if above note is still valid after Rajas's PR is merged and handle null writing for
+//    the whole query appropriately.
 func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	query gqlSchema.Field, qryPath []interface{}) fastJsonNode {
 	comma := ""
@@ -530,16 +534,31 @@ func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJs
 	return fj
 }
 
-// TODO:
-//  * if we decide to not remove asking count even if it ain't requested in GraphQL,
-//    then we need to handle the case of empty list for aggregate children as to correctly set the
-//    next pointer. We will need to skip count fastJson node.
-//  * Add comments
+// completeAggregateChildren build GraphQL JSON for aggregate fields at child levels.
+// Dgraph result:
+// 		{
+// 		  "statesAggregate": [
+// 		    {
+// 		      "State.name": "Calgary",
+// 		      "dgraph.uid": "0x2712"
+// 		    }
+// 		  ],
+// 		  "count_statesAggregate": 1,
+// 		  "nameMin_statesAggregate": "Calgary",
+// 		  "nameMax_statesAggregate": "Calgary"
+// 		}
+// GraphQL result:
+// 		{
+// 		  "statesAggregate": {
+// 		    "count": 1,
+// 		    "nameMin": "Calgary",
+// 		    "nameMax": "Calgary"
+// 		  }
+// 		}
 func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	field gqlSchema.Field, fieldPath []interface{}) fastJsonNode {
 	// first we need to skip all the nodes returned with the attr of field as they are not needed
 	// in GraphQL.
-	// TODO: we may need to check fj != nil if count isn't requested in DQL everytime
 	attrId := enc.getAttr(fj)
 	for fj = fj.next; attrId == enc.getAttr(fj); fj = fj.next {
 		// do nothing
@@ -554,7 +573,7 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 	for _, f := range field.SelectionSet() {
 		x.Check2(ctx.buf.WriteString(comma))
 		writeKeyGraphQL(f, ctx.buf)
-		if fj != nil && f.Name()+suffix == enc.attrForID(enc.getAttr(fj)) {
+		if f.Name()+suffix == enc.attrForID(enc.getAttr(fj)) {
 			val, err = enc.getScalarVal(fj)
 			if err != nil {
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
