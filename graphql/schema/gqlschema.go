@@ -2165,6 +2165,7 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
 			newFld.Directives = nil
+			newFld.Arguments = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -2196,6 +2197,7 @@ func getXIDField(defn *ast.Definition) ast.FieldList {
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
 			newFld.Directives = nil
+			newFld.Arguments = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
