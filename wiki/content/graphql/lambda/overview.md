@@ -72,7 +72,7 @@ Available only for types and interfaces (`null` for queries and mutations)
 - `dql`, provides an API to execute DQL from the lambda server
 
 {{% notice "tip" %}}
-`self.addGraphQLResolvers` is the default choice for registering resolvers when the result of the lambda for each parent is independant of other parents.
+`self.addGraphQLResolvers` is the default choice for registering resolvers when the result of the lambda for each parent is independent of other parents.
 {{% /notice %}}
 
 Each resolver function should return data in the exact format as the return type of GraphQL field, query, or mutation for which it is being registered.

@@ -261,7 +261,7 @@ That's when we say that the query is deep!
 
 {{% load-img "/images/tutorials/2/f-level-3-traverse.png" "level-3-query" %}}
 
-Here is one more example from the extention of the last query.
+Here is one more example from the extension of the last query.
 
 ```graphql
 {

@@ -130,9 +130,9 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 }
 
 type mutation struct {
+	inDeg              int64
 	sm                 *subMutation
 	conflictKeys       map[uint64]struct{}
-	inDeg              int
 	dependentMutations map[uint64]*mutation
 	graph              *graph
 }
@@ -185,8 +185,7 @@ func (e *executor) worker(mut *mutation) {
 
 	// Decrease inDeg of dependents. If this mutation unblocks them, queue them.
 	for _, dependent := range mut.dependentMutations {
-		dependent.inDeg -= 1
-		if dependent.inDeg == 0 {
+		if atomic.AddInt64(&dependent.inDeg, -1) == 0 {
 			x.Check(e.throttle.Do())
 			go e.worker(dependent)
 		}
@@ -224,7 +223,6 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			conflictKeys:       conflicts,
 			dependentMutations: make(map[uint64]*mutation),
 			graph:              g,
-			inDeg:              0,
 		}
 
 		g.Lock()
@@ -238,7 +236,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			for _, dependent := range l {
 				_, ok := dependent.dependentMutations[m.sm.startTs]
 				if !ok {
-					m.inDeg += 1
+					atomic.AddInt64(&m.inDeg, 1)
 					dependent.dependentMutations[m.sm.startTs] = m
 				}
 			}
@@ -248,7 +246,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 		}
 		g.Unlock()
 
-		if m.inDeg == 0 {
+		if atomic.LoadInt64(&m.inDeg) == 0 {
 			x.Check(e.throttle.Do())
 			go e.worker(m)
 		}
