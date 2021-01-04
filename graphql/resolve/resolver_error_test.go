@@ -344,7 +344,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			mutResponse: map[string]string{"Post1": "0x2"},
 			mutQryResp: map[string]interface{}{
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
-			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
+			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
 				"add2" : null
@@ -352,10 +352,12 @@ func TestManyMutationsWithError(t *testing.T) {
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `mutation addPost failed because ` +
 					`Dgraph mutation failed because _bad stuff happend_`,
-					Locations: []x.Location{{Line: 6, Column: 4}}},
+					Locations: []x.Location{{Line: 6, Column: 4}},
+					Path:      []interface{}{"add2"}},
 				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
 					`a previous error.`,
-					Locations: []x.Location{{Line: 10, Column: 4}}}},
+					Locations: []x.Location{{Line: 10, Column: 4}},
+					Path:      []interface{}{"add3"}}},
 		},
 		"Rewriting error": {
 			explanation: "The reference ID is not a uint64, so can't be converted to a uid",
@@ -363,7 +365,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			mutResponse: map[string]string{"Post1": "0x2"},
 			mutQryResp: map[string]interface{}{
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
-			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
+			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
 				"add2" : null
@@ -371,10 +373,12 @@ func TestManyMutationsWithError(t *testing.T) {
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
 					`failed to rewrite mutation payload because ` +
-					`ID argument (hi) was not able to be parsed`},
+					`ID argument (hi) was not able to be parsed`,
+					Path: []interface{}{"add2"}},
 				&x.GqlError{Message: `Mutation add3 was not executed because of ` +
 					`a previous error.`,
-					Locations: []x.Location{{Line: 10, Column: 4}}}},
+					Locations: []x.Location{{Line: 10, Column: 4}},
+					Path:      []interface{}{"add3"}}},
 		},
 	}
 

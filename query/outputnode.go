@@ -62,6 +62,10 @@ func ToJson(l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte, error) 
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
 	}
+	// don't wrap GraphQL errors
+	if field != nil {
+		return data, err
+	}
 	return data, errors.Wrapf(err, "while running ToJson")
 }
 

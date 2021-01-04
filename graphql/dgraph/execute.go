@@ -32,6 +32,7 @@ import (
 type DgraphEx struct{}
 
 // Execute is the underlying dgraph implementation of Dgraph execution.
+// If field is nil, returned response has JSON in DQL form, otherwise it will be in GraphQL form.
 func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request,
 	field schema.Field) (*dgoapi.Response, error) {
 
