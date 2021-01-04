@@ -33,7 +33,8 @@ func main() {
 	defer f.Close()
 
 	var sensitiveKey x.SensitiveByteSlice
-	sensitiveKey = []byte(opts.keyfile)
+	sensitiveKey, err = ioutil.ReadFile(opts.keyfile)
+	x.Check(err)
 	reader, err := enc.GetReader(sensitiveKey, f)
 	x.Check(err)
 	if strings.HasSuffix(strings.ToLower(opts.file), ".gz") {
