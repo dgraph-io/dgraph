@@ -379,3 +379,11 @@ type Workflow {
 type Node {
     name: String!
 }
+
+type Book{
+    id:ID!
+    title: String! @id
+    ISBN: String! @id
+    Author:String
+
+}
