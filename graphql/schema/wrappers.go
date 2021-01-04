@@ -890,16 +890,6 @@ func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{
 	}
 }
 
-func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
-	pathCopy := make([]interface{}, len(path))
-	copy(pathCopy, path)
-	return &x.GqlError{
-		Message:   fmt.Sprintf(message, args...),
-		Locations: []x.Location{f.Location()},
-		Path:      pathCopy,
-	}
-}
-
 func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
