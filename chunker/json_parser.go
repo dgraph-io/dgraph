@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	jsoniter "github.com/json-iterator/go"
 	simdjson "github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
@@ -619,274 +618,83 @@ const (
 	DeleteNquads
 )
 
+// FastParseJSON currently parses NQuads about 50% faster than ParseJSON.
+//
+// NOTE: FastParseJSON uses simdjson which has "minor floating point number
+//       imprecisions"
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
 		return errors.New("CPU doesn't support simdjson for fast parsing")
 	}
-
+	// parse the json into tape format
 	tape, err := simdjson.Parse(b, nil)
 	if err != nil {
 		return err
 	}
+	// we only need the iter to get the first element, either an array or object
 	iter := tape.Iter()
 
-	data, err := iter.Interface()
-	if err != nil {
-		return err
-	}
+	tmp := &simdjson.Iter{}
 
-restart:
-	switch d := data.(type) {
-	case map[string]interface{}:
-		mr, err := buf.mapToNquads(d, op, "")
-		buf.checkForDeletion(mr, d, op)
-		return err
-	case []interface{}:
-		if len(d) == 1 {
-			data = d[0]
-			goto restart
+	// if root object, this will be filled
+	obj := &simdjson.Object{}
+	// if root array, this will be filled
+	arr := &simdjson.Array{}
+
+	// grab the first elemtn
+	typ := iter.Advance()
+	switch typ {
+	case simdjson.TypeRoot:
+		if typ, tmp, err = iter.Root(tmp); err != nil {
+			return err
 		}
-		for _, o := range d {
-			if _, ok := o.(map[string]interface{}); !ok {
-				return errors.Errorf("only array of map allowed at root")
+		if typ == simdjson.TypeObject {
+			// the root element is an object, so parse the object
+			if obj, err = tmp.Object(obj); err != nil {
+				return err
 			}
-			mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+			// attempt to convert to map[string]interface{}
+			m, err := obj.Map(nil)
 			if err != nil {
 				return err
 			}
-			buf.checkForDeletion(mr, o.(map[string]interface{}), op)
-		}
-	}
-	return nil
-}
-
-type walk struct {
-	open bool
-	quad *api.NQuad
-	deep []simdjson.Tag
-	buff *NQuadBuffer
-}
-
-func newWalk(buff *NQuadBuffer) *walk {
-	return &walk{
-		buff: buff,
-		quad: &api.NQuad{},
-	}
-}
-
-func (w *walk) push() {
-	w.open = false
-	w.buff.Push(w.quad)
-	w.quad = &api.NQuad{}
-}
-
-func (buf *NQuadBuffer) FastestParseJSON(b []byte, op int) error {
-	if !simdjson.SupportedCPU() {
-		return errors.New("CPU doesn't support simdjson for fast parsing")
-	}
-
-	tape, err := simdjson.Parse(b, nil)
-	if err != nil {
-		return err
-	}
-
-	iter := tape.Iter()
-	walk := newWalk(buf)
-
-	stop := func(v interface{}, err error) {
-		switch val := v.(type) {
-		case string:
-			walk.quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{val}}
-		case int64:
-			walk.quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{val}}
-		case float64:
-			walk.quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{val}}
-		case bool:
-			walk.quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{val}}
-		case uint64:
-			// TODO: there's no api.Value_* struct for uint64, so i'm just
-			//       converting it to int64... this may not be the best way
-			walk.quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(val)}}
-		}
-		walk.push()
-	}
-
-	geop := func() error {
-		iter.AdvanceInto()
-		if t, _ := iter.String(); t != "type" {
-			return nil
-		}
-
-		iter.AdvanceInto()
-		geoType := ""
-		if geoType, _ = iter.String(); geoType != "Point" &&
-			geoType != "LineString" && geoType != "Polygon" && geoType != "MultiPoint" &&
-			geoType != "MultiLineString" && geoType != "MultiPolygon" && geoType != "GeometryCollection" {
-			return nil
-		}
-
-		coords := "["
-		coordsOpen := false
-
-		for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
-			switch tag {
-			case simdjson.TagString:
-				s, _ := iter.String()
-				if s == "coordinates" {
-					coordsOpen = true
-				}
-
-			case simdjson.TagInteger:
-				fallthrough
-			case simdjson.TagUint:
-				fallthrough
-			case simdjson.TagFloat:
-				if coordsOpen {
-					n, _ := iter.Float()
-					coords += fmt.Sprintf("%v,", n)
-				}
-
-			case simdjson.TagArrayEnd:
-				coordsOpen = false
-				coords = coords[:len(coords)-1]
-				coords = coords + "]"
-
-			case simdjson.TagObjectStart:
-			case simdjson.TagObjectEnd:
-				// geojson.Geometry requires a json.RawMessage for its
-				// Coordinate so even though we've already "parsed" this
-				// json we convert it back for this
-				c := json.RawMessage(coords)
-				g := &geojson.Geometry{
-					Type:        "Point",
-					Coordinates: &c,
-				}
-				o, err := g.Decode()
-				if err != nil {
-					return err
-				}
-				v, err := types.ObjectValue(types.GeoID, o)
-				if err != nil {
-					return err
-				}
-				walk.quad.ObjectValue = v
-				walk.push()
-				return nil
-			}
-		}
-	}
-
-	subj := getNextBlank()
-
-	for tag := iter.AdvanceInto(); ; tag = iter.AdvanceInto() {
-		switch tag {
-		case simdjson.TagString:
-			if !walk.open {
-				walk.open = true
-				walk.quad.Subject = subj
-				walk.quad.Predicate, _ = iter.String()
-				walk.quad.Predicate, walk.quad.Lang = x.PredicateLang(walk.quad.Predicate)
-			} else {
-				stop(iter.String())
-			}
-
-		case simdjson.TagInteger:
-			if walk.open {
-				stop(iter.Int())
-			}
-
-		case simdjson.TagUint:
-			if walk.open {
-				stop(iter.Uint())
-			}
-
-		case simdjson.TagFloat:
-			if walk.open {
-				stop(iter.Float())
-			}
-
-		case simdjson.TagBoolTrue:
-			fallthrough
-		case simdjson.TagBoolFalse:
-			if walk.open {
-				stop(iter.Bool())
-			}
-
-		case simdjson.TagNull:
-			if walk.open {
-				walk.open = false
-				walk.quad = &api.NQuad{}
-			}
-
-		case simdjson.TagObjectStart:
-			walk.deep = append(walk.deep, tag)
-			if len(walk.deep) > 1 {
-				geop()
-			}
-
-		case simdjson.TagObjectEnd:
-			walk.deep = walk.deep[:len(walk.deep)-1]
-
-		case simdjson.TagArrayStart:
-			walk.deep = append(walk.deep, tag)
-
-		case simdjson.TagArrayEnd:
-			walk.deep = walk.deep[:len(walk.deep)-1]
-
-		case simdjson.TagRoot:
-		case simdjson.TagEnd:
-			return nil
-		}
-	}
-	return nil
-}
-
-// TestParseJSON uses github.com/json-iterator/go for parsing (supposed to be
-// compatible with encoding/json with better performance--but not as much
-// performance as simdjson) but right now it's throwing errors
-//
-// going to keep this here until i'm done with simdjson and we decide which
-// path to take
-//
-// NOTE: it appears like jsoniter can't handle root-level arrays, like the Json4
-//       test--might be better to avoid this library
-func (buf *NQuadBuffer) TestParseJSON(b []byte, op int) error {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	buffer := bytes.NewBuffer(b)
-	dec := json.NewDecoder(buffer)
-	dec.UseNumber()
-	ms := make(map[string]interface{})
-	var list []interface{}
-	if err := dec.Decode(&ms); err != nil {
-		// Couldn't parse as map, lets try to parse it as a list.
-		buffer.Reset() // The previous contents are used. Reset here.
-		// Rewrite b into buffer, so it can be consumed.
-		if _, err := buffer.Write(b); err != nil {
-			return err
-		}
-		if err = dec.Decode(&list); err != nil {
-			return err
-		}
-	}
-	if len(list) == 0 && len(ms) == 0 {
-		return nil
-	}
-	if len(list) > 0 {
-		for _, obj := range list {
-			if _, ok := obj.(map[string]interface{}); !ok {
-				return errors.Errorf("Only array of map allowed at root.")
-			}
-			mr, err := buf.mapToNquads(obj.(map[string]interface{}), op, "")
+			// pass to next parsing stage
+			mr, err := buf.mapToNquads(m, op, "")
 			if err != nil {
 				return err
 			}
-			buf.checkForDeletion(mr, obj.(map[string]interface{}), op)
+			buf.checkForDeletion(mr, m, op)
+		} else if typ == simdjson.TypeArray {
+			// the root element is an array, so parse the array
+			if arr, err = tmp.Array(arr); err != nil {
+				return err
+			}
+			// attempt to convert to []interface{}
+			a, err := arr.Interface()
+			if err != nil {
+				return err
+			}
+			if len(a) > 0 {
+				// attempt to convert each array element to a
+				// map[string]interface{} for further parsing
+				var o interface{}
+				for _, o = range a {
+					if _, ok := o.(map[string]interface{}); !ok {
+						return errors.Errorf("only array of map allowed at root")
+					}
+				}
+				// pass to next parsing stage
+				mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+				if err != nil {
+					return err
+				}
+				buf.checkForDeletion(mr, o.(map[string]interface{}), op)
+			}
 		}
-		return nil
+	default:
+		return errors.Errorf("initial element not found in json")
 	}
-	mr, err := buf.mapToNquads(ms, op, "")
-	buf.checkForDeletion(mr, ms, op)
-	return err
+	return nil
 }
 
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.

@@ -17,7 +17,6 @@
 package chunker
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -25,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
@@ -77,24 +76,26 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 }
 
 func (exp *Experiment) verify() {
-	// insert the data into dgraph
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	/*
+		// insert the data into dgraph
+		dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+		if err != nil {
+			exp.t.Fatalf("Error while getting a dgraph client: %v", err)
+		}
 
-	ctx := context.Background()
-	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
-	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
-		"schema change failed")
+		ctx := context.Background()
+		require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
+		require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
+			"schema change failed")
 
-	_, err = dg.NewTxn().Mutate(ctx,
-		&api.Mutation{Set: exp.nqs, CommitNow: true})
-	require.NoError(exp.t, err, "mutation failed")
+		_, err = dg.NewTxn().Mutate(ctx,
+			&api.Mutation{Set: exp.nqs, CommitNow: true})
+		require.NoError(exp.t, err, "mutation failed")
 
-	response, err := dg.NewReadOnlyTxn().Query(ctx, exp.query)
-	require.NoError(exp.t, err, "query failed")
-	testutil.CompareJSON(exp.t, exp.expected, string(response.GetJson()))
+		response, err := dg.NewReadOnlyTxn().Query(ctx, exp.query)
+		require.NoError(exp.t, err, "query failed")
+		testutil.CompareJSON(exp.t, exp.expected, string(response.GetJson()))
+	*/
 }
 
 type Experiment struct {
@@ -124,6 +125,9 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
+
+	fmt.Println(string(b))
+	spew.Dump(nq)
 
 	require.Equal(t, 5, len(nq))
 	exp := &Experiment{
@@ -164,6 +168,10 @@ func TestNquadsFromJson2(t *testing.T) {
 	require.NoError(t, err)
 
 	nq, err := Parse(b, SetNquads)
+
+	fmt.Println(string(b))
+	spew.Dump(nq)
+
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
 	exp := &Experiment{
@@ -199,6 +207,10 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.NoError(t, err)
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
+
+	fmt.Println(string(b))
+	spew.Dump(nq)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -219,6 +231,10 @@ func TestNquadsFromJson4(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
 	nq, err := Parse([]byte(json), SetNquads)
+
+	fmt.Println(json)
+	spew.Dump(nq)
+
 	require.NoError(t, err)
 	exp := &Experiment{
 		t:      t,
@@ -244,6 +260,7 @@ func TestNquadsFromJsonMap(t *testing.T) {
 }]}`
 
 	nq, err := Parse([]byte(json), SetNquads)
+
 	require.NoError(t, err)
 	exp := &Experiment{
 		t:      t,
@@ -323,6 +340,11 @@ func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
+
+	fmt.Println(json)
+	fmt.Println()
+	spew.Dump(nq)
+
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -351,8 +373,11 @@ func TestJsonNumberParsing(t *testing.T) {
 		{`{"uid": "1", "key": 0E-0}`, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 0}}},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		nqs, err := Parse([]byte(test.in), SetNquads)
+		if i == 2 {
+			fmt.Println(err)
+		}
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
 			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
@@ -813,6 +838,146 @@ func TestSetNquadNilValue(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(nq))
+}
+
+func TestNoFacets(t *testing.T) {
+	json := []byte(`[
+	{
+		"uid":123,
+		"flguid":123,
+		"is_validate":"xxxxxxxxxx",
+		"createDatetime":"xxxxxxxxxx",
+		"contains":{
+			"createDatetime":"xxxxxxxxxx",
+			"final_individ":"xxxxxxxxxx",
+			"cm_bad_debt":"xxxxxxxxxx",
+			"cm_bill_address1":"xxxxxxxxxx",
+			"cm_bill_address2":"xxxxxxxxxx",
+			"cm_bill_city":"xxxxxxxxxx",
+			"cm_bill_state":"xxxxxxxxxx",
+			"cm_zip":"xxxxxxxxxx",
+			"zip5":"xxxxxxxxxx",
+			"cm_customer_id":"xxxxxxxxxx",
+			"final_gaid":"xxxxxxxxxx",
+			"final_hholdid":"xxxxxxxxxx",
+			"final_firstname":"xxxxxxxxxx",
+			"final_middlename":"xxxxxxxxxx",
+			"final_surname":"xxxxxxxxxx",
+			"final_gender":"xxxxxxxxxx",
+			"final_ace_prim_addr":"xxxxxxxxxx",
+			"final_ace_sec_addr":"xxxxxxxxxx",
+			"final_ace_urb":"xxxxxxxxxx",
+			"final_ace_city_llidx":"xxxxxxxxxx",
+			"final_ace_state":"xxxxxxxxxx",
+			"final_ace_postal_code":"xxxxxxxxxx",
+			"final_ace_zip4":"xxxxxxxxxx",
+			"final_ace_dpbc":"xxxxxxxxxx",
+			"final_ace_checkdigit":"xxxxxxxxxx",
+			"final_ace_iso_code":"xxxxxxxxxx",
+			"final_ace_cart":"xxxxxxxxxx",
+			"final_ace_lot":"xxxxxxxxxx",
+			"final_ace_lot_order":"xxxxxxxxxx",
+			"final_ace_rec_type":"xxxxxxxxxx",
+			"final_ace_remainder":"xxxxxxxxxx",
+			"final_ace_dpv_cmra":"xxxxxxxxxx",
+			"final_ace_dpv_ftnote":"xxxxxxxxxx",
+			"final_ace_dpv_status":"xxxxxxxxxx",
+			"final_ace_foreigncode":"xxxxxxxxxx",
+			"final_ace_match_5":"xxxxxxxxxx",
+			"final_ace_match_9":"xxxxxxxxxx",
+			"final_ace_match_un":"xxxxxxxxxx",
+			"final_ace_zip_move":"xxxxxxxxxx",
+			"final_ace_ziptype":"xxxxxxxxxx",
+			"final_ace_congress":"xxxxxxxxxx",
+			"final_ace_county":"xxxxxxxxxx",
+			"final_ace_countyname":"xxxxxxxxxx",
+			"final_ace_factype":"xxxxxxxxxx",
+			"final_ace_fipscode":"xxxxxxxxxx",
+			"final_ace_error_code":"xxxxxxxxxx",
+			"final_ace_stat_code":"xxxxxxxxxx",
+			"final_ace_geo_match":"xxxxxxxxxx",
+			"final_ace_geo_lat":"xxxxxxxxxx",
+			"final_ace_geo_lng":"xxxxxxxxxx",
+			"final_ace_ageo_pla":"xxxxxxxxxx",
+			"final_ace_geo_blk":"xxxxxxxxxx",
+			"final_ace_ageo_mcd":"xxxxxxxxxx",
+			"final_ace_cgeo_cbsa":"xxxxxxxxxx",
+			"final_ace_cgeo_msa":"xxxxxxxxxx",
+			"final_ace_ap_lacscode":"xxxxxxxxxx",
+			"final_dsf_businessflag":"xxxxxxxxxx",
+			"final_dsf_dropflag":"xxxxxxxxxx",
+			"final_dsf_throwbackflag":"xxxxxxxxxx",
+			"final_dsf_seasonalflag":"xxxxxxxxxx",
+			"final_dsf_vacantflag":"xxxxxxxxxx",
+			"final_dsf_deliverytype":"xxxxxxxxxx",
+			"final_dsf_dt_curbflag":"xxxxxxxxxx",
+			"final_dsf_dt_ndcbuflag":"xxxxxxxxxx",
+			"final_dsf_dt_centralflag":"xxxxxxxxxx",
+			"final_dsf_dt_doorslotflag":"xxxxxxxxxx",
+			"final_dsf_dropcount":"xxxxxxxxxx",
+			"final_dsf_nostatflag":"xxxxxxxxxx",
+			"final_dsf_educationalflag":"xxxxxxxxxx",
+			"final_dsf_rectyp":"xxxxxxxxxx",
+			"final_mailability_score":"xxxxxxxxxx",
+			"final_occupancy_score":"xxxxxxxxxx",
+			"final_multi_type":"xxxxxxxxxx",
+			"final_deceased_flag":"xxxxxxxxxx",
+			"final_dnm_flag":"xxxxxxxxxx",
+			"final_dnc_flag":"xxxxxxxxxx",
+			"final_dnf_flag":"xxxxxxxxxx",
+			"final_prison_flag":"xxxxxxxxxx",
+			"final_nursing_home_flag":"xxxxxxxxxx",
+			"final_date_of_birth":"xxxxxxxxxx",
+			"final_date_of_death":"xxxxxxxxxx",
+			"vip_number":"xxxxxxxxxx",
+			"vip_store_no":"xxxxxxxxxx",
+			"vip_division":"xxxxxxxxxx",
+			"vip_phone_number":"xxxxxxxxxx",
+			"vip_email_address":"xxxxxxxxxx",
+			"vip_first_name":"xxxxxxxxxx",
+			"vip_last_name":"xxxxxxxxxx",
+			"vip_gender":"xxxxxxxxxx",
+			"vip_status":"xxxxxxxxxx",
+			"vip_membership_date":"xxxxxxxxxx",
+			"vip_expiration_date":"xxxxxxxxxx",
+			"cm_date_addr_chng":"xxxxxxxxxx",
+			"cm_date_entered":"xxxxxxxxxx",
+			"cm_name":"xxxxxxxxxx",
+			"cm_opt_on_acct":"xxxxxxxxxx",
+			"cm_origin":"xxxxxxxxxx",
+			"cm_orig_acq_source":"xxxxxxxxxx",
+			"cm_phone_number":"xxxxxxxxxx",
+			"cm_phone_number2":"xxxxxxxxxx",
+			"cm_problem_cust":"xxxxxxxxxx",
+			"cm_rm_list":"xxxxxxxxxx",
+			"cm_rm_rented_list":"xxxxxxxxxx",
+			"cm_tax_code":"xxxxxxxxxx",
+			"email_address":"xxxxxxxxxx",
+			"esp_email_id":"xxxxxxxxxx",
+			"esp_sub_date":"xxxxxxxxxx",
+			"esp_unsub_date":"xxxxxxxxxx",
+			"cm_user_def_1":"xxxxxxxxxx",
+			"cm_user_def_7":"xxxxxxxxxx",
+			"do_not_phone":"xxxxxxxxxx",
+			"company_num":"xxxxxxxxxx",
+			"customer_id":"xxxxxxxxxx",
+			"load_date":"xxxxxxxxxx",
+			"activity_date":"xxxxxxxxxx",
+			"email_address_hashed":"xxxxxxxxxx",
+			"event_id":"",
+			"contains":{
+				"uid": 123,
+				"flguid": 123,
+				"is_validate":"xxxxxxxxxx",
+				"createDatetime":"xxxxxxxxxx"
+			}
+		}
+	}]`)
+
+	nq, err := Parse(json, SetNquads)
+	require.NoError(t, err)
+
+	fmt.Println("number of nquads", len(nq))
 }
 
 func BenchmarkNoFacets(b *testing.B) {
