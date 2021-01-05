@@ -221,6 +221,14 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		keys = append(keys, key)
 	}
 
+	defer func() {
+		// Add these keys to be rolled up after we're done writing. This is the right place for them
+		// to be rolled up, because we just pushed these deltas over to Badger.
+		for _, key := range keys {
+			IncrRollup.addKeyToBatch([]byte(key))
+		}
+	}()
+
 	var idx int
 	for idx < len(keys) {
 		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
