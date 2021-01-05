@@ -390,8 +390,8 @@ type DeleteUserPayload {
 
 type ProductAggregateResult {
 	count: Int
-	nameMin: String
-	nameMax: String
+	idMin: ID
+	idMax: ID
 }
 
 type ReviewsAggregateResult {
@@ -469,7 +469,7 @@ enum ProductHasFilter {
 }
 
 enum ProductOrderable {
-	name
+	id
 }
 
 enum ReviewsHasFilter {

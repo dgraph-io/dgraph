@@ -1525,13 +1525,22 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 }
 
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, isOrderable)
+	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
+		if !hasExternal(fld) {
+			return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+		}
+		return isKeyField(fld, defn)
+	})
 }
 
-func isOrderable(fld *ast.FieldDefinition) bool {
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
-	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+	// External field can't be ordered except when it is a @key field
+	if !hasExternal(fld) {
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+	}
+	return isKeyField(fld, defn)
 }
 
 // Returns true if the field is of type which can be summed. Eg: int, int64, float
@@ -1663,7 +1672,8 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isOrderable(fld) {
+
+		if isOrderable(fld, defn) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1780,7 +1790,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld) {
+		if isOrderable(fld, defn) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
