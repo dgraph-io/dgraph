@@ -90,6 +90,7 @@ func makeAdminSchemaRequest(t *testing.T, authTokenValue string) string {
 
 	resp, err := (&http.Client{}).Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	b, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 
