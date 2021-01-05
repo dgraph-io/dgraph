@@ -347,8 +347,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
 	return &Resolved{
-		Data:       completeMutationResult(mutation, qryResp.GetJson(), numUids),
-		Field:      mutation,
+		Data:  completeMutationResult(mutation, qryResp.GetJson(), numUids),
+		Field: mutation,
+		// the error path only contains the query field, so we prepend the mutation response name
 		Err:        schema.PrependPath(errs, mutation.ResponseName()),
 		Extensions: ext,
 	}, resolverSucceeded
@@ -393,7 +394,9 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 				// don't write null, instead write [] as query field is always a nullable list
 				x.Check2(buf.WriteString("[]"))
 			} else {
-				// need to write only the value returned for query field
+				// need to write only the value returned for query field, so need to remove the JSON
+				// key till colon (:) and also the ending brace }.
+				// 4 = {"":
 				x.Check2(buf.Write(qryResult[4+len(f.ResponseName()) : len(qryResult)-1]))
 			}
 		}

@@ -109,11 +109,13 @@ func (r *Response) WithError(err error) {
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 
-// AddData adds p to r's data buffer. If p is empty or r.SetDataNull() has been called earlier,
-// the call has no effect.
-// If r.Data is empty before the call, then r.Data becomes {p}
+// AddData adds p to r's data buffer.
+//
+// If p is empty or r.SetDataNull() has been called earlier, the call has no effect.
+//
+// If r.Data is empty before the call, then r.Data becomes {p}.
 // If r.Data contains data it always looks like {f,g,...}, and
-// adding to that results in {f,g,...,p}
+// adding to that results in {f,g,...,p}.
 func (r *Response) AddData(p []byte) {
 	if r == nil || r.dataIsNull || len(p) == 0 {
 		return
@@ -132,6 +134,8 @@ func (r *Response) AddData(p []byte) {
 	x.Check2(r.Data.WriteRune('}'))
 }
 
+// SetDataNull sets r's data buffer to contain the bytes representing a null.
+// Once this has been called on r, any further call to AddData has no effect.
 func (r *Response) SetDataNull() {
 	r.dataIsNull = true
 	r.Data.Reset()

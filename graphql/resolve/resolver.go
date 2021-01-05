@@ -561,9 +561,11 @@ func addResult(resp *schema.Response, res *Resolved) {
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 	// For a query like (assuming field f is of a list type and g is a scalar type):
 	// - q { f { g } }
-	// a path to the 2nd item in the f list would look like:
+	// a path to the 3rd item in the f list would look like:
 	// - [ "q", "f", 2, "g" ]
 	if res.Data == nil && !res.Field.Type().Nullable() {
+		// According to GraphQL spec, out of all the queries in the request, if any one query
+		// returns null but expected return type is non-nullable then we set root data to null.
 		resp.SetDataNull()
 	} else if b, ok := res.Data.([]byte); ok {
 		resp.AddData(b)
