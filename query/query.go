@@ -1720,7 +1720,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		return err
 	}
 
-	if sg.DestUIDs.Size() > 0 {
+	if len(sg.DestUIDs.GetUids()) > 0 {
 		// Don't add sg.DestUIDs in case its size is 0.
 		// This is to avoiding adding nil (empty element) to lists.
 		lists = append(lists, sg.DestUIDs)
