@@ -862,9 +862,9 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {
