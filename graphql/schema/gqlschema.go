@@ -1526,10 +1526,7 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 
 func hasOrderables(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
-		if !hasExternal(fld) {
-			return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
-		}
-		return isKeyField(fld, defn)
+		return isOrderable(fld, defn)
 	})
 }
 
