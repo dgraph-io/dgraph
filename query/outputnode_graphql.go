@@ -18,10 +18,11 @@ package query
 
 import (
 	"bytes"
-
-	"github.com/dgraph-io/dgraph/x"
+	"encoding/json"
+	"fmt"
 
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type graphQLEncodingCtx struct {
@@ -41,7 +42,7 @@ type graphQLEncodingCtx struct {
 	dgraphTypeAttrId uint16
 }
 
-func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
+func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 	x.Check2(out.WriteRune('"'))
 	x.Check2(out.WriteString(field.ResponseName()))
 	x.Check2(out.WriteString(`":`))
@@ -50,7 +51,7 @@ func (enc *encoder) writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 // TODO:
 //  * change query rewriting for scalar fields asked multiple times
 //  * Scalar coercion
-//  * Geo fields
+//  * Enums
 //  * Aggregate fields/queries
 //    * empty data in Aggregate queries
 //  * Password queries
@@ -83,6 +84,16 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				return true
 			}
 			return false
+		}
+
+		// here we have a valid value, lets write it to buffer appropriately.
+		if parentField.Type().IsGeo() {
+			var geoVal map[string]interface{}
+			x.Check(json.Unmarshal(val, &geoVal)) // this unmarshal can't error
+			if err := completeGeoObject(parentPath, parentField, geoVal, ctx.buf); err != nil {
+				ctx.gqlErrs = append(ctx.gqlErrs, err)
+				return false
+			}
 		} else {
 			x.Check2(ctx.buf.Write(val))
 		}
@@ -184,7 +195,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 
 		// Step-1: Write JSON key and opening [ for JSON arrays
 		if cnt == 1 {
-			enc.writeKeyGraphQL(curSelection, ctx.buf)
+			writeKeyGraphQL(curSelection, ctx.buf)
 			keyEndPos = ctx.buf.Len()
 			curSelectionIsList = curSelection.Type().ListType() != nil
 			if curSelectionIsList {
@@ -365,7 +376,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 		}
 
 		// Step-1: Write JSON key
-		enc.writeKeyGraphQL(curSelection, ctx.buf)
+		writeKeyGraphQL(curSelection, ctx.buf)
 
 		// Step-2: Write JSON value
 		if curSelection.Name() == gqlSchema.Typename {
@@ -439,4 +450,139 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 		return false
 	}
 	return true
+}
+
+// completeGeoObject builds a json GraphQL result object for the underlying geo type.
+// Currently, it supports Point, Polygon and MultiPolygon.
+func completeGeoObject(path []interface{}, field gqlSchema.Field, val map[string]interface{},
+	buf *bytes.Buffer) *x.GqlError {
+	coordinate, _ := val[gqlSchema.Coordinates].([]interface{})
+	if coordinate == nil {
+		return field.GqlErrorf(path, "missing coordinates in geojson value: %v", val)
+	}
+
+	typ, _ := val["type"].(string)
+	switch typ {
+	case gqlSchema.Point:
+		completePoint(field, coordinate, buf)
+	case gqlSchema.Polygon:
+		completePolygon(field, coordinate, buf)
+	case gqlSchema.MultiPolygon:
+		completeMultiPolygon(field, coordinate, buf)
+	default:
+		return field.GqlErrorf(path, "unsupported geo type: %s", typ)
+	}
+
+	return nil
+}
+
+// completePoint takes in coordinates from dgraph response like [12.32, 123.32], and builds
+// a JSON GraphQL result object for Point like { "longitude" : 12.32 , "latitude" : 123.32 }.
+func completePoint(field gqlSchema.Field, coordinate []interface{}, buf *bytes.Buffer) {
+	comma := ""
+
+	x.Check2(buf.WriteRune('{'))
+	for _, f := range field.SelectionSet() {
+		x.Check2(buf.WriteString(comma))
+		writeKeyGraphQL(f, buf)
+
+		switch f.Name() {
+		case gqlSchema.Longitude:
+			x.Check2(buf.WriteString(fmt.Sprintf("%v", coordinate[0])))
+		case gqlSchema.Latitude:
+			x.Check2(buf.WriteString(fmt.Sprintf("%v", coordinate[1])))
+		case gqlSchema.Typename:
+			x.Check2(buf.WriteString(`"Point"`))
+		}
+		comma = ","
+	}
+	x.Check2(buf.WriteRune('}'))
+}
+
+// completePolygon converts the Dgraph result to GraphQL Polygon type.
+// Dgraph output: coordinate: [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+// Graphql output: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] }
+func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Buffer) {
+	comma1 := ""
+
+	x.Check2(buf.WriteRune('{'))
+	for _, f1 := range field.SelectionSet() {
+		x.Check2(buf.WriteString(comma1))
+		writeKeyGraphQL(f1, buf)
+
+		switch f1.Name() {
+		case gqlSchema.Coordinates:
+			x.Check2(buf.WriteRune('['))
+			comma2 := ""
+
+			for _, ring := range polygon {
+				x.Check2(buf.WriteString(comma2))
+				x.Check2(buf.WriteRune('{'))
+				comma3 := ""
+
+				for _, f2 := range f1.SelectionSet() {
+					x.Check2(buf.WriteString(comma3))
+					writeKeyGraphQL(f2, buf)
+
+					switch f2.Name() {
+					case gqlSchema.Points:
+						x.Check2(buf.WriteRune('['))
+						comma4 := ""
+
+						r, _ := ring.([]interface{})
+						for _, point := range r {
+							x.Check2(buf.WriteString(comma4))
+
+							p, _ := point.([]interface{})
+							completePoint(f2, p, buf)
+
+							comma4 = ","
+						}
+						x.Check2(buf.WriteRune(']'))
+					case gqlSchema.Typename:
+						x.Check2(buf.WriteString(`"PointList"`))
+					}
+					comma3 = ","
+				}
+				x.Check2(buf.WriteRune('}'))
+				comma2 = ","
+			}
+			x.Check2(buf.WriteRune(']'))
+		case gqlSchema.Typename:
+			x.Check2(buf.WriteString(`"Polygon"`))
+		}
+		comma1 = ","
+	}
+	x.Check2(buf.WriteRune('}'))
+}
+
+// completeMultiPolygon converts the Dgraph result to GraphQL MultiPolygon type.
+func completeMultiPolygon(field gqlSchema.Field, multiPolygon []interface{}, buf *bytes.Buffer) {
+	comma1 := ""
+
+	x.Check2(buf.WriteRune('{'))
+	for _, f := range field.SelectionSet() {
+		x.Check2(buf.WriteString(comma1))
+		writeKeyGraphQL(f, buf)
+
+		switch f.Name() {
+		case gqlSchema.Polygons:
+			x.Check2(buf.WriteRune('['))
+			comma2 := ""
+
+			for _, polygon := range multiPolygon {
+				x.Check2(buf.WriteString(comma2))
+
+				p, _ := polygon.([]interface{})
+				completePolygon(f, p, buf)
+
+				comma2 = ","
+			}
+			x.Check2(buf.WriteRune(']'))
+		case gqlSchema.Typename:
+			x.Check2(buf.WriteString(`"MultiPolygon"`))
+		}
+		comma1 = ","
+	}
+	x.Check2(buf.WriteRune('}'))
 }
