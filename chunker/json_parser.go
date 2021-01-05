@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -618,85 +619,6 @@ const (
 	DeleteNquads
 )
 
-// FastParseJSON currently parses NQuads about 50% faster than ParseJSON.
-//
-// NOTE: FastParseJSON uses simdjson which has "minor floating point number
-//       imprecisions"
-func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
-	if !simdjson.SupportedCPU() {
-		return errors.New("CPU doesn't support simdjson for fast parsing")
-	}
-	// parse the json into tape format
-	tape, err := simdjson.Parse(b, nil)
-	if err != nil {
-		return err
-	}
-	// we only need the iter to get the first element, either an array or object
-	iter := tape.Iter()
-
-	tmp := &simdjson.Iter{}
-
-	// if root object, this will be filled
-	obj := &simdjson.Object{}
-	// if root array, this will be filled
-	arr := &simdjson.Array{}
-
-	// grab the first elemtn
-	typ := iter.Advance()
-	switch typ {
-	case simdjson.TypeRoot:
-		if typ, tmp, err = iter.Root(tmp); err != nil {
-			return err
-		}
-		if typ == simdjson.TypeObject {
-			// the root element is an object, so parse the object
-			if obj, err = tmp.Object(obj); err != nil {
-				return err
-			}
-			// attempt to convert to map[string]interface{}
-			m, err := obj.Map(nil)
-			if err != nil {
-				return err
-			}
-			// pass to next parsing stage
-			mr, err := buf.mapToNquads(m, op, "")
-			if err != nil {
-				return err
-			}
-			buf.checkForDeletion(mr, m, op)
-		} else if typ == simdjson.TypeArray {
-			// the root element is an array, so parse the array
-			if arr, err = tmp.Array(arr); err != nil {
-				return err
-			}
-			// attempt to convert to []interface{}
-			a, err := arr.Interface()
-			if err != nil {
-				return err
-			}
-			if len(a) > 0 {
-				// attempt to convert each array element to a
-				// map[string]interface{} for further parsing
-				var o interface{}
-				for _, o = range a {
-					if _, ok := o.(map[string]interface{}); !ok {
-						return errors.Errorf("only array of map allowed at root")
-					}
-				}
-				// pass to next parsing stage
-				mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
-				if err != nil {
-					return err
-				}
-				buf.checkForDeletion(mr, o.(map[string]interface{}), op)
-			}
-		}
-	default:
-		return errors.Errorf("initial element not found in json")
-	}
-	return nil
-}
-
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
@@ -748,4 +670,495 @@ func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	nqs := <-buf.Ch()
 	metadata := buf.Metadata()
 	return nqs, metadata, nil
+}
+
+// FastParseJSON currently parses NQuads about 230% faster than ParseJSON.
+//
+// NOTE: FastParseJSON uses simdjson which has "minor floating point number
+//       imprecisions"
+func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
+	if !simdjson.SupportedCPU() {
+		return errors.New("CPU doesn't support simdjson for fast parsing")
+	}
+	quads, err := NewParser(false).Parse(b)
+	if err != nil {
+		return err
+	}
+	buf.nquads = quads
+	return nil
+}
+
+type ParserState uint8
+
+const (
+	NONE ParserState = iota
+	PREDICATE
+	SCALAR
+	OBJECT
+	ARRAY
+	UID
+	GEO
+)
+
+func (s ParserState) String() string {
+	switch s {
+	case NONE:
+		return "NONE"
+	case PREDICATE:
+		return "PREDICATE"
+	case SCALAR:
+		return "SCALAR"
+	case OBJECT:
+		return "OBJECT"
+	case ARRAY:
+		return "ARRAY"
+	case UID:
+		return "UID"
+	case GEO:
+		return "GEO"
+	}
+	return "?"
+}
+
+type (
+	ParserQueue struct {
+		Waiting []*QueueQuad
+	}
+	QueueQuad struct {
+		Type ParserState
+		Quad *api.NQuad
+	}
+)
+
+func NewParserQueue() *ParserQueue {
+	return &ParserQueue{
+		Waiting: make([]*QueueQuad, 0),
+	}
+}
+
+func (q *ParserQueue) Recent(t ParserState) bool {
+	return q.Waiting[len(q.Waiting)-1].Type == t
+}
+
+func (q *ParserQueue) Pop(t ParserState) *api.NQuad {
+	waiting := q.Waiting[len(q.Waiting)-1]
+	if waiting.Type != t {
+		return nil
+	}
+	q.Waiting = q.Waiting[:len(q.Waiting)-1]
+	return waiting.Quad
+}
+
+func (q *ParserQueue) Add(t ParserState, quad *api.NQuad) {
+	q.Waiting = append(q.Waiting, &QueueQuad{
+		Type: t,
+		Quad: quad,
+	})
+}
+
+func (q *ParserQueue) Empty() bool {
+	return len(q.Waiting) == 0
+}
+
+type (
+	Depth struct {
+		Levels []*DepthLevel
+	}
+	DepthLevel struct {
+		Type   ParserState
+		Uids   []string
+		Uid    string
+		Closes uint64
+	}
+)
+
+func NewDepthLevel(t ParserState, counter, closes uint64) *DepthLevel {
+	return &DepthLevel{
+		Type:   t,
+		Uids:   make([]string, 0),
+		Uid:    fmt.Sprintf("_:dg.%d.%d", randomID, counter),
+		Closes: closes,
+	}
+}
+
+func (l *DepthLevel) Subject() string {
+	if len(l.Uids) == 0 {
+		return l.Uid
+	}
+	return l.Uids[len(l.Uids)-1]
+}
+
+func NewDepth() *Depth {
+	return &Depth{
+		Levels: make([]*DepthLevel, 0),
+	}
+}
+
+func (d *Depth) Closes() uint64 {
+	if len(d.Levels) < 1 {
+		return 0
+	}
+	return d.Levels[len(d.Levels)-1].Closes
+}
+
+func (d *Depth) ArrayObject() bool {
+	if len(d.Levels) < 2 {
+		return false
+	}
+	return d.Levels[len(d.Levels)-2].Type == ARRAY
+}
+
+func (d *Depth) ArrayUid(uid string) {
+	if len(d.Levels) < 2 {
+		return
+	}
+	array := d.Levels[len(d.Levels)-2]
+	array.Uids = append(array.Uids, uid)
+}
+
+func (d *Depth) Uid(uid string) {
+	curr := d.Levels[len(d.Levels)-1]
+	curr.Uids = append(curr.Uids, uid)
+}
+
+func (d *Depth) Subject() string {
+	return d.Levels[len(d.Levels)-1].Subject()
+}
+
+func (d *Depth) Increase(t ParserState, closes uint64) {
+	if t == OBJECT {
+		atomic.AddUint64(&nextIdx, 1)
+	}
+	d.Levels = append(d.Levels, NewDepthLevel(t, nextIdx, closes))
+}
+
+func (d *Depth) Decrease(t ParserState) *DepthLevel {
+	top := d.Levels[len(d.Levels)-1]
+	d.Levels = d.Levels[:len(d.Levels)-1]
+	return top
+}
+
+type Parser struct {
+	State  ParserState
+	Parsed *simdjson.ParsedJson
+	Quads  []*api.NQuad
+	Queue  *ParserQueue
+	Depth  *Depth
+	Quad   *api.NQuad
+	Skip   bool
+	Logs   bool
+
+	stringOffset uint64
+}
+
+func NewParser(logs bool) *Parser {
+	return &Parser{
+		State: NONE,
+		Quads: make([]*api.NQuad, 0),
+		Quad:  &api.NQuad{},
+		Queue: NewParserQueue(),
+		Depth: NewDepth(),
+		Logs:  logs,
+	}
+}
+
+func (p *Parser) Parse(d []byte) ([]*api.NQuad, error) {
+	var err error
+	if p.Parsed, err = simdjson.Parse(d, nil); err != nil {
+		return nil, err
+	}
+	return p.Quads, p.Walk()
+}
+
+func (p *Parser) String(l uint64) string {
+	s := string(p.Parsed.Strings[p.stringOffset : p.stringOffset+l])
+	p.stringOffset += l
+	return s
+}
+
+func (p *Parser) Log(i uint64, c uint64, n byte) {
+	if p.Logs {
+		switch byte(c >> 56) {
+		case 'r', 'n', 't', 'f', 'l', 'u', 'd', '"', '[', ']', '{', '}':
+			fmt.Printf("%2d: %c %c %s\n", i, byte(c>>56), n, p.State)
+		default:
+		}
+	}
+}
+
+func (p *Parser) LogMore(s string) {
+	if p.Logs {
+		fmt.Printf("\n        %s\n\n", s)
+	}
+}
+
+func (p *Parser) Walk() (err error) {
+	n := byte('n')
+
+	for i := uint64(0); i < uint64(len(p.Parsed.Tape))-1; i++ {
+		// c is the current node on the tape
+		c := p.Parsed.Tape[i]
+
+		// skip over things like {} and []
+		if p.Skip {
+			p.Log(i, c, 0)
+			p.Skip = false
+			continue
+		}
+
+		// switch over the current node type
+		switch byte(c >> 56) {
+
+		// string
+		case '"':
+			// p.String grabs the string value from the string buffer and
+			// increments p.stringOffset to account for the length
+			s := p.String(p.Parsed.Tape[i+1])
+			// n is the next node type
+			n = byte(p.Parsed.Tape[i+2] >> 56)
+
+			switch p.State {
+			case PREDICATE:
+				p.FoundPredicate(s)
+				switch n {
+				case '{':
+					p.State = OBJECT
+					p.FoundSubject(OBJECT, p.Depth.Subject())
+				case '[':
+					p.State = ARRAY
+					p.FoundSubject(ARRAY, p.Depth.Subject())
+				default:
+					switch p.Quad.Predicate {
+					case "uid":
+						p.State = UID
+					case "type":
+						p.State = GEO
+					default:
+						p.State = SCALAR
+					}
+				}
+
+			case SCALAR:
+				p.State = PREDICATE
+				p.FoundValue(s)
+
+			case UID:
+				p.State = PREDICATE
+				p.FoundUid(s)
+
+			case GEO:
+				switch s {
+				case "Point", "MultiPoint":
+					fallthrough
+				case "LineString", "MultiLineString":
+					fallthrough
+				case "Polygon", "MultiPolygon":
+					fallthrough
+				case "GeometryCollection":
+					// TODO: parsing geojson is hard so right now we skip over
+					//       the object
+					i = p.Depth.Closes()
+					p.LogMore(fmt.Sprintf("skipping %s geo object", s))
+					p.State = PREDICATE
+				}
+			}
+
+		// array open
+		case '[':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+			if n != ']' {
+				p.Depth.Increase(ARRAY, (c<<8)>>8-1)
+			}
+
+			p.LogMore(fmt.Sprintf("closing [ at %d", (c<<8)>>8-1))
+
+			switch n {
+			case '[':
+				p.State = ARRAY
+			case ']':
+				p.Queue.Pop(ARRAY)
+				p.State = PREDICATE
+				p.Skip = true
+			case '{':
+				p.State = OBJECT
+			default:
+				p.State = SCALAR
+			}
+
+		// array close
+		case ']':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+
+			if !p.Queue.Empty() {
+				if waiting := p.Queue.Pop(ARRAY); waiting != nil {
+					uids := p.Depth.Decrease(ARRAY).Uids
+					for _, uid := range uids {
+						p.Quads = append(p.Quads, &api.NQuad{
+							Subject:   p.Depth.Subject(),
+							Predicate: waiting.Predicate,
+							ObjectId:  uid,
+						})
+					}
+				}
+			}
+
+			switch n {
+			case '[':
+				p.State = ARRAY
+			case '{':
+				p.State = OBJECT
+			case '"', '}':
+				p.State = PREDICATE
+			}
+
+		// object open
+		case '{':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+			if n != '}' {
+				p.Depth.Increase(OBJECT, (c<<8)>>8-1)
+			}
+
+			p.LogMore(fmt.Sprintf("closing { at %d", (c<<8)>>8-1))
+
+			switch n {
+			case '{':
+				p.State = OBJECT
+			case '}':
+				p.State = PREDICATE
+				p.Queue.Pop(OBJECT)
+				p.Skip = true
+			case '[':
+				p.State = ARRAY
+			case '"':
+				p.State = PREDICATE
+			}
+
+		// object close
+		case '}':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+			if p.Depth.ArrayObject() {
+				p.Depth.ArrayUid(p.Depth.Subject())
+			}
+			objectId := p.Depth.Decrease(OBJECT).Subject()
+			if !p.Queue.Empty() {
+				if waiting := p.Queue.Pop(OBJECT); waiting != nil {
+					p.Quads = append(p.Quads, &api.NQuad{
+						Subject:   p.Depth.Subject(),
+						Predicate: waiting.Predicate,
+						ObjectId:  objectId,
+					})
+				}
+			}
+
+			switch n {
+			case '{':
+				p.State = OBJECT
+			case '"', '}', ']':
+				p.State = PREDICATE
+			}
+
+		// root
+		case 'r':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+
+			switch n {
+			case '{':
+				p.State = OBJECT
+			case '[':
+				p.State = ARRAY
+			}
+
+		// null
+		case 'n':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+
+		// true
+		case 't':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+
+			switch p.State {
+			case SCALAR:
+				p.State = PREDICATE
+				p.FoundValue(true)
+			}
+
+		// false
+		case 'f':
+			n = byte(p.Parsed.Tape[i+1] >> 56)
+
+			switch p.State {
+			case SCALAR:
+				p.State = PREDICATE
+				p.FoundValue(false)
+			}
+
+		// int64
+		case 'l':
+			n = byte(p.Parsed.Tape[i+2] >> 56)
+
+			switch p.State {
+			case SCALAR:
+				p.State = PREDICATE
+				// int64 value is stored after the current node (i + 1)
+				p.FoundValue(int64(p.Parsed.Tape[i+1]))
+			}
+
+		// uint64
+		case 'u':
+			n = byte(p.Parsed.Tape[i+2] >> 56)
+
+			switch p.State {
+			case SCALAR:
+				p.State = PREDICATE
+				// uint64 value is stored after the current node (i + 1)
+				p.FoundValue(p.Parsed.Tape[i+1])
+			}
+
+		// float64
+		case 'd':
+			n = byte(p.Parsed.Tape[i+2] >> 56)
+
+			switch p.State {
+			case SCALAR:
+				p.State = PREDICATE
+				// float64 value is stored after the current node (i + 1)
+				p.FoundValue(math.Float64frombits(p.Parsed.Tape[i+1]))
+			}
+		}
+
+		p.Log(i, c, n)
+	}
+	return
+}
+
+func (p *Parser) FoundUid(s string) {
+	p.Depth.Uid(s)
+	p.Quad = &api.NQuad{}
+}
+
+func (p *Parser) FoundSubject(t ParserState, s string) {
+	p.Queue.Add(t, p.Quad)
+	p.Quad = &api.NQuad{}
+}
+
+func (p *Parser) FoundPredicate(s string) {
+	p.Quad.Predicate = s
+}
+
+func (p *Parser) FoundValue(v interface{}) {
+	p.Quad.Subject = p.Depth.Subject()
+	switch val := v.(type) {
+	case string:
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{val}}
+	case float64:
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{val}}
+	case int64:
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{val}}
+	case uint64:
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(val)}}
+	case bool:
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{val}}
+	}
+	p.Quads = append(p.Quads, p.Quad)
+	p.Quad = &api.NQuad{}
 }
