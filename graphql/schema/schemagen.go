@@ -173,6 +173,14 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
+	// Convert All the Type Extensions into the Type Definitions with @external directive
+	// to maintain uniformity in the output schema
+	for _, ext := range doc.Extensions {
+		ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
+	}
+	doc.Definitions = append(doc.Definitions, doc.Extensions...)
+	doc.Extensions = nil
+
 	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		return nil, gqlErrList
@@ -427,7 +435,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
+				if hasCustomOrLambda(f) {
+					continue
+				}
+
+				// Ignore @external fields which are not @key
+				if hasExternal(f) && !isKeyField(f, def) {
+					continue
+				}
+
+				// If a field of type ID has @external directive and is a @key field then
+				// it should be translated into a dgraph field with string type having hash index.
+				if f.Type.Name() == "ID" && !(hasExternal(f) && isKeyField(f, def)) {
 					continue
 				}
 
@@ -477,23 +496,29 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Scalar:
+					fldType := inbuiltTypeToDgraph[f.Type.Name()]
+					// fldType can be "uid" only in case if it is @external and @key
+					// in this case it needs to be stored as string in dgraph.
+					if fldType == "uid" {
+						fldType = "string"
+					}
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, inbuiltTypeToDgraph[f.Type.Name()], suffix,
+						prefix, fldType, suffix,
 					)
 
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
-					if id != nil {
+					if id != nil || f.Type.Name() == "ID" {
 						upsertStr = "@upsert "
 						switch f.Type.Name() {
 						case "Int", "Int64":
 							indexes = append(indexes, "int")
 						case "Float":
 							indexes = append(indexes, "float")
-						case "String":
+						case "String", "ID":
 							indexes = append(indexes, "hash")
 						}
 					}

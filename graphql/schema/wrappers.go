@@ -703,6 +703,14 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func hasExtends(def *ast.Definition) bool {
+	return def.Directives.ForName(apolloExtendsDirective) != nil
+}
+
+func hasExternal(f *ast.FieldDefinition) bool {
+	return f.Directives.ForName(apolloExternalDirective) != nil
+}
+
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 	for _, dir := range f.Directives {
 		if dir.Name == customDirective || dir.Name == lambdaDirective {
@@ -710,6 +718,27 @@ func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 		}
 	}
 	return false
+}
+
+func isKeyField(f *ast.FieldDefinition, typ *ast.Definition) bool {
+	keyDirective := typ.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return false
+	}
+	return f.Name == keyDirective.Arguments[0].Value.Raw
+}
+
+// Filter out those fields which have @external directive and are not @key fields
+// in a definition.
+func nonExternalAndKeyFields(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
+		fldList = append(fldList, fld)
+	}
+	return fldList
 }
 
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda

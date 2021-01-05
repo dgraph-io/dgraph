@@ -424,7 +424,7 @@ input LibraryItemOrder {
 }
 
 input LibraryItemRef {
-	refID: String! @id
+	refID: String!
 }
 
 input LibraryPatch {

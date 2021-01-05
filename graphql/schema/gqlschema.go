@@ -64,6 +64,12 @@ const (
 	cacheControlDirective = "cacheControl"
 	CacheControlHeader    = "Cache-Control"
 
+	// Directives to support Apollo Federation
+	apolloKeyDirective      = "key"
+	apolloKeyArg            = "fields"
+	apolloExternalDirective = "external"
+	apolloExtendsDirective  = "extends"
+
 	// custom directive args and fields
 	dqlArg      = "dql"
 	httpArg     = "http"
@@ -347,6 +353,25 @@ input StringHashFilter {
 	in: [String]
 }
 `
+
+	apolloSchemaExtras = `
+scalar _Any
+scalar _FieldSet
+
+type _Service {
+	sdl: String
+}
+
+directive @external on FIELD_DEFINITION
+directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
+directive @extends on OBJECT | INTERFACE
+`
+	apolloSchemaQueries = `
+type Query {
+	_entities(representations: [_Any!]!): [_Entity]!
+	_service: _Service!
+}
+`
 )
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
@@ -499,18 +524,21 @@ func ValidatorNoOp(
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:      hasInverseValidation,
-	searchDirective:       searchValidation,
-	dgraphDirective:       dgraphDirectiveValidation,
-	idDirective:           idValidation,
-	subscriptionDirective: ValidatorNoOp,
-	secretDirective:       passwordValidation,
-	authDirective:         ValidatorNoOp, // Just to get it printed into generated schema
-	customDirective:       customDirectiveValidation,
-	remoteDirective:       ValidatorNoOp,
-	deprecatedDirective:   ValidatorNoOp,
-	lambdaDirective:       lambdaDirectiveValidation,
-	generateDirective:     ValidatorNoOp,
+	inverseDirective:        hasInverseValidation,
+	searchDirective:         searchValidation,
+	dgraphDirective:         dgraphDirectiveValidation,
+	idDirective:             idValidation,
+	subscriptionDirective:   ValidatorNoOp,
+	secretDirective:         passwordValidation,
+	authDirective:           ValidatorNoOp, // Just to get it printed into generated schema
+	customDirective:         customDirectiveValidation,
+	remoteDirective:         ValidatorNoOp,
+	deprecatedDirective:     ValidatorNoOp,
+	lambdaDirective:         lambdaDirectiveValidation,
+	generateDirective:       ValidatorNoOp,
+	apolloKeyDirective:      ValidatorNoOp,
+	apolloExtendsDirective:  ValidatorNoOp,
+	apolloExternalDirective: apolloExternalValidation,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
@@ -706,7 +734,49 @@ func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
 
 	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
 	doc.Directives = append(doc.Directives, docExtras.Directives...)
+	expandSchemaWithApolloExtras(doc)
 	return nil
+}
+
+func expandSchemaWithApolloExtras(doc *ast.SchemaDocument) {
+	var apolloKeyTypes []string
+	for _, defn := range doc.Definitions {
+		if defn.Directives.ForName(apolloKeyDirective) != nil {
+			apolloKeyTypes = append(apolloKeyTypes, defn.Name)
+		}
+	}
+
+	// No need to Expand with Apollo federation Extras
+	if len(apolloKeyTypes) == 0 {
+		return
+	}
+
+	// Form _Entity union with all the entities
+	// for e.g : union _Entity = A | B
+	// where A and B are object with @key directives
+	entityUnionDefinition := &ast.Definition{Kind: ast.Union, Name: "_Entity", Types: apolloKeyTypes}
+	doc.Definitions = append(doc.Definitions, entityUnionDefinition)
+
+	// Parse Apollo Queries and append to the Parsed Schema
+	docApolloQueries, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaQueries})
+	if gqlErr != nil {
+		x.Panic(gqlErr)
+	}
+
+	queryDefinition := doc.Definitions.ForName("Query")
+	if queryDefinition == nil {
+		doc.Definitions = append(doc.Definitions, docApolloQueries.Definitions[0])
+	} else {
+		queryDefinition.Fields = append(queryDefinition.Fields, docApolloQueries.Definitions[0].Fields...)
+	}
+
+	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: apolloSchemaExtras})
+	if gqlErr != nil {
+		x.Panic(gqlErr)
+	}
+	doc.Definitions = append(doc.Definitions, docExtras.Definitions...)
+	doc.Directives = append(doc.Directives, docExtras.Directives...)
+
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
@@ -1044,8 +1114,16 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types[enumName] = enum
 }
 
+// For extended Type definition, if Field with ID type is also field with @key directive then
+// it should be present in the addTypeInput as it should not be generated automatically by dgraph
+// but determined by the value of field in the GraphQL service where the type is defined.
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
 	field := getFieldsWithoutIDType(schema, defn)
+	if hasExtends(defn) {
+		idField := getIDField(defn)
+		field = append(idField, field...)
+	}
+
 	if len(field) != 0 {
 		schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 			Kind:   ast.InputObject,
@@ -1239,6 +1317,11 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition) {
 		if isID(fld) || hasCustomOrLambda(fld) {
 			continue
 		}
+		// Ignore Fields with @external directives also excluding those which are present
+		// as an argument in @key directive
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
 		filter.EnumValues = append(filter.EnumValues,
 			&ast.EnumValueDefinition{Name: fld.Name})
 	}
@@ -1358,6 +1441,12 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
+		// Ignore Fields with @external directives also excluding those which are present
+		// as an argument in @key directive
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
+
 		if isID(fld) {
 			filter.Fields = append(filter.Fields,
 				&ast.FieldDefinition{
@@ -1436,13 +1525,19 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 }
 
 func hasOrderables(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, isOrderable)
+	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
+		return isOrderable(fld, defn)
+	})
 }
 
-func isOrderable(fld *ast.FieldDefinition) bool {
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
-	return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+	// External field can't be ordered except when it is a @key field
+	if !hasExternal(fld) {
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+	}
+	return isKeyField(fld, defn)
 }
 
 // Returns true if the field is of type which can be summed. Eg: int, int64, float
@@ -1451,11 +1546,11 @@ func isSummable(fld *ast.FieldDefinition) bool {
 }
 
 func hasID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, isID)
+	return fieldAny(nonExternalAndKeyFields(defn), isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields, hasIDDirective)
+	return fieldAny(nonExternalAndKeyFields(defn), hasIDDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
@@ -1574,7 +1669,8 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	for _, fld := range defn.Fields {
-		if isOrderable(fld) {
+
+		if isOrderable(fld, defn) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1691,7 +1787,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld) {
+		if isOrderable(fld, defn) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
@@ -1735,7 +1831,6 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 	if !hasIDField && !hasXIDField {
 		return
 	}
-
 	qry := &ast.FieldDefinition{
 		Name: "get" + defn.Name,
 		Type: &ast.Type{
@@ -1985,6 +2080,11 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		// Ignore Fields with @external directives also as they shouldn't be present
+		// in the Patch Type Also.
+		if hasExternal(fld) {
+			continue
+		}
 		// Fields with @custom/@lambda directive should not be part of mutation input,
 		// hence we skip them.
 		if hasCustomOrLambda(fld) {
@@ -2026,6 +2126,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
+		// Ignore Fields with @external directives and excluding those which are present
+		// as an argument in @key directive
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
+
 		// Fields with @custom/@lambda directive should not be part of mutation input,
 		// hence we skip them.
 		if hasCustomOrLambda(fld) {
@@ -2058,9 +2164,15 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			// Excluding those fields which are external and are not @key.
+			if hasExternal(fld) && !isKeyField(fld, defn) {
+				continue
+			}
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
+			newFld.Directives = nil
+			newFld.Arguments = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -2084,9 +2196,15 @@ func getXIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
+			// Excluding those fields which are external and are not @key.
+			if hasExternal(fld) && !isKeyField(fld, defn) {
+				continue
+			}
 			newFld := *fld
 			newFldType := *fld.Type
 			newFld.Type = &newFldType
+			newFld.Directives = nil
+			newFld.Arguments = nil
 			fldList = append(fldList, &newFld)
 			break
 		}
@@ -2248,7 +2366,9 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	}
 
 	printed := make(map[string]bool)
-
+	// Marked "_Service" type as printed as it will be printed in the
+	// Extended Apollo Definitions
+	printed["_Service"] = true
 	// original defs can only be interface, type, union, enum or input.
 	// print those in the same order as the original schema.
 	for _, typName := range originalTypes {
@@ -2324,6 +2444,14 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
+	// Add Apollo Extras to the schema only when "_Entity" union is generated.
+	if schema.Types["_Entity"] != nil {
+		x.Check2(sch.WriteString(
+			"#######################\n# Extended Apollo Definitions\n#######################\n"))
+		x.Check2(sch.WriteString(generateUnionString(schema.Types["_Entity"])))
+		x.Check2(sch.WriteString(apolloSchemaExtras))
+		x.Check2(sch.WriteString("\n"))
+	}
 	if object.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Types\n#######################\n\n"))
@@ -2370,7 +2498,7 @@ func idTypeFor(defn *ast.Definition) string {
 }
 
 func xidTypeFor(defn *ast.Definition) (string, string) {
-	for _, fld := range defn.Fields {
+	for _, fld := range nonExternalAndKeyFields(defn) {
 		if hasIDDirective(fld) {
 			return fld.Name, fld.Type.Name()
 		}
