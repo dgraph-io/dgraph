@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	jsonNUll = []byte("null")
+	jsonNull = []byte("null")
 )
 
 type graphQLEncodingCtx struct {
@@ -53,14 +53,15 @@ func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 }
 
 // TODO:
-//  * change query rewriting for scalar fields asked multiple times (DgraphALias() thing).
+//  * change query rewriting for scalar fields asked multiple times (DgraphAlias() thing).
 //    We may also need to pay attention to aggregate field rewriting as they just use fieldName
 //    and not DgraphAlias().
 //  * Scalar coercion
 //  * Enums
-//  * Aggregate fields/queries
-//    * empty data in Aggregate queries
+//  * Null writing for root Aggregate queries
 //  * Password queries
+//  * Cleanup code from resolve pkg
+//  * make args like *bytes.Buffer the first arg in funcs as a best practice
 func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIsRoot bool,
 	childSelectionSet []gqlSchema.Field, parentField gqlSchema.Field,
 	parentPath []interface{}) bool {
@@ -287,10 +288,10 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 					typ := curSelection.Type()
 					if typ.ListType().Nullable() {
 						ctx.buf.Truncate(itemPos)
-						x.Check2(ctx.buf.Write(jsonNUll))
+						x.Check2(ctx.buf.Write(jsonNull))
 					} else if typ.Nullable() {
 						ctx.buf.Truncate(keyEndPos)
-						x.Check2(ctx.buf.Write(jsonNUll))
+						x.Check2(ctx.buf.Write(jsonNull))
 						// set nullWritten to true so we don't write closing ] for this list
 						nullWritten = true
 						// skip all data for the current list selection
@@ -472,7 +473,7 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 		// there's nothing in the Dgraph result.
 		x.Check2(buf.Write([]byte("[]")))
 	} else if f.Type().Nullable() {
-		x.Check2(buf.Write(jsonNUll))
+		x.Check2(buf.Write(jsonNull))
 	} else {
 		return false
 	}
@@ -523,7 +524,7 @@ func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJs
 			ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
 				err.Error()))
 			// all aggregate properties are nullable, so no special checks are required
-			val = jsonNUll
+			val = jsonNull
 		}
 		fj = fj.next
 		x.Check2(ctx.buf.Write(val))
@@ -579,11 +580,11 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
 					err.Error()))
 				// all aggregate properties are nullable, so no special checks are required
-				val = jsonNUll
+				val = jsonNull
 			}
 			fj = fj.next
 		} else {
-			val = jsonNUll
+			val = jsonNull
 		}
 		x.Check2(ctx.buf.Write(val))
 		comma = ","
