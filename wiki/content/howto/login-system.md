@@ -40,9 +40,7 @@ resp, err := txn.Query(ctx, q)
 // be found. Otherwise it will contain a bool to indicate if the password matched.
 var login struct {
     Account []struct {
-        Pass []struct {
-            CheckPwd bool `json:"checkpwd"`
-        } `json:"pass"`
+            CheckPwd bool `json:"checkpwd(pass)"`
     } `json:"login_attempt"`
 }
 err = json.Unmarshal(resp.GetJson(), &login); err != nil {
@@ -56,7 +54,7 @@ if len(login.Account) == 0 {
     _, err = txn.Mutate(ctx, mu)
     // Commit the mutation, making it visible outside of the transaction.
     err = txn.Commit(ctx)
-} else if login.Account[0].Pass[0].CheckPwd {
+} else if login.Account[0].CheckPwd {
     fmt.Println("Login successful!")
 } else {
     fmt.Println("Wrong email or password.")
