@@ -160,6 +160,8 @@ Zero nodes:
 * `--tls_client_auth string` - TLS client authentication used to validate client
   connections from external ports. To learn more, see
   [Client authentication options](#client-authentication-options).
+* `--tls_internal_port_enabled` - When set to `true`, traffic over internal
+  ports (by default, 5080 and 7080) is TLS-encrypted.
 
 Dgraph Live Loader can be configured with the following options:
 
@@ -203,7 +205,7 @@ The following example shows how to encrypt both internal and external ports:
 # First, create a rootca, node, and client certificates and private keys
 $ dgraph cert -n localhost -c dgraphuser
 # Default use for enabling TLS server with client authentication (after generating certificates and private keys)
-$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
+$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"  --tls_internal_port_enabled=true
 ```
 
 You can then run Dgraph Live Loader using the following:
@@ -321,19 +323,12 @@ succeed.
 
 ## Using Curl with Client authentication
 
-When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
-
-```
-curl --silent https://localhost:8080/admin/export
-```
-
-If you are using `curl` with [Client Authentication](#client-authentication-options) set to `REQUIREANY` or `REQUIREANDVERIFY`, you will need to provide the client certificate and private key.  For instance (for an export request):
+When TLS is enabled, `curl` requests to Dgraph will need some specific options
+to work. For example, see the following export:
 
 ```
 curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
 ```
-
-Refer to the `curl` documentation for further information on its TLS options.
 
 ## Access Data Using a Client
 
