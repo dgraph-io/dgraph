@@ -1202,6 +1202,14 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
 		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs, qc.gqlField)
+		// TODO: if err is just some error from GraphQL encoding,
+		//  then we need to continue the normal execution ignoring the error as we still need to
+		//  assign metrics and latency info to resp.
+		//  If we can change the api.Response proto to have a field to contain GraphQL errors,
+		//  that would be great. Otherwise, we will have to do type switches over error at a lot of
+		//  places. And that would make code ugly.
+		//  Also add a test where if there are GraphQL errors, the extensions should still report
+		//  touched_uids.
 	}
 	if err != nil {
 		return resp, err
