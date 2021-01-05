@@ -44,6 +44,7 @@ type incrRollupi struct {
 	// keysPool is sync.Pool to share the batched keys to rollup.
 	keysPool *sync.Pool
 	count    uint64
+	failures uint32
 }
 
 var (
@@ -91,8 +92,9 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 func (ir *incrRollupi) rollupDeltas() {
 	var wg sync.WaitGroup
 	wg.Add(1000) // Push 1,000 deltas for rollup.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 
+	var failed uint32 = 1
 	stream := pstore.NewStreamAt(math.MaxUint64)
 	stream.Prefix = []byte{x.DefaultPrefix}
 	stream.Logger = nil // We don't want any logs. This can get very noisy.
@@ -103,6 +105,7 @@ func (ir *incrRollupi) rollupDeltas() {
 			return false
 		}
 		if pk.IsData() && item.UserMeta()&BitDeltaPosting > 0 {
+			atomic.StoreUint32(&failed, 0)
 			ir.addKeyToBatch(item.KeyCopy(nil))
 			wg.Done()
 		}
@@ -116,6 +119,7 @@ func (ir *incrRollupi) rollupDeltas() {
 	if err := stream.Orchestrate(ctx); err != nil && err != context.DeadlineExceeded {
 		glog.Errorf("RollupDeltas failed: err = %s", err)
 	}
+	atomic.AddUint32(&ir.failures, failed)
 }
 
 // Start will start the background rollups.
@@ -130,6 +134,11 @@ func (ir *incrRollupi) Start(cl *z.Closer) {
 			return
 		case <-ticker.C:
 			ir.rollupDeltas()
+			if atomic.LoadUint32(&ir.failures) > 10 {
+				// We haven't found any deltas in a while. We should stop the scanning.
+				time.Sleep(time.Hour)
+				atomic.StoreUint32(&ir.failures, 0)
+			}
 		}
 	}
 }
