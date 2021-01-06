@@ -303,3 +303,10 @@ type Section {
         name: String!
         chapterId: Int! @search
 }
+
+# multiple fields with @id directive
+type Worker {
+        name: String!
+        reg_No: String! @id
+        emp_Id: String! @id
+}

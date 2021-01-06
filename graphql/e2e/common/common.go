@@ -708,6 +708,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
+	t.Run("mutation with multiple external Ids", mutationWithMultipleXids)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

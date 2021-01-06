@@ -4670,3 +4670,91 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
 }
+
+func mutationWithMultipleXids(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		expected  string
+		variables string
+		error     string
+	}{
+		{
+			name: "add worker with multiple xids",
+			query: `mutation {
+                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
+			        	worker {
+							name
+							reg_No
+							emp_Id
+				        }
+			         }
+  					}`,
+			expected: `{
+					  "addWorker": {
+						"worker": [
+						  {
+							"name": "Alice",
+							"reg_No": "001",
+                            "emp_Id": "E01"
+						  }
+						]
+					  }
+					}`,
+		},
+		{
+			name: "adding worker with same reg_No will return error",
+			query: `mutation {
+                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E02"}]) {
+			        	worker {
+							name
+							reg_No
+							emp_Id
+				        }
+			         }
+  					}`,
+			expected: `{
+					  "addWorker": {
+						"worker": [
+						  {
+							"name": "Alice",
+							"reg_No": "001",
+                            "emp_Id": "E01"
+						  }
+						]
+					  }
+					}`,
+		},
+		{
+			name: "adding worker with same reg_No and emp_id will return error",
+			query: `mutation {
+                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
+			        	worker {
+							name
+							reg_No
+							emp_Id
+				        }
+			         }
+  					}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			require.Equal(t, tcase.error, resp.Errors.Error())
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"reg_No": map[string]interface{}{"eq": "001"}}
+			DeleteGqlType(t, "Worker", filter, 1, nil)
+		})
+	}
+}

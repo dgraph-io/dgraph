@@ -172,7 +172,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
-	XIDField() FieldDefinition
+	XIDField() []FieldDefinition
 	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
@@ -2078,23 +2078,23 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 }
 
-func (t *astType) XIDField() FieldDefinition {
+func (t *astType) XIDField() []FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
-
+	var idFields []FieldDefinition
 	for _, fd := range def.Fields {
 		if hasIDDirective(fd) {
-			return &fieldDefinition{
+			idFields = append(idFields, &fieldDefinition{
 				fieldDef:   fd,
 				inSchema:   t.inSchema,
 				parentType: t,
-			}
+			})
 		}
 	}
 
-	return nil
+	return idFields
 }
 
 // InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.

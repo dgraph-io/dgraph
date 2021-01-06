@@ -979,128 +979,136 @@ func rewriteObject(
 	}
 
 	var xidFrag *mutationFragment
-	var xidString string
-	xid := typ.XIDField()
+	xidString := make(map[string]string, 0)
+	xids := typ.XIDField()
 	xidEncounteredFirstTime := false
-	if xid != nil {
-		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-			errResponse := func(err error) *mutationRes {
-				errFrag := newFragment(nil)
-				errFrag.err = err
-				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
-			}
-			switch xid.Type().Name() {
-			case "Int":
-				val, ok := xidVal.(int64)
-				if !ok {
-					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-						"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
-				}
-				xidString = strconv.FormatInt(val, 10)
-			case "Float":
-				val, ok := xidVal.(float64)
-				if !ok {
-					return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-						"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
-				}
-				xidString = strconv.FormatFloat(val, 'f', -1, 64)
-			case "Int64":
-				fallthrough
-			default:
-				xidString, ok = xidVal.(string)
-				if !ok {
+	//if xids is not empty , inrement deepXid
+	for _, xid := range xids {
+		if xid != nil {
+			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+				errResponse := func(err error) *mutationRes {
 					errFrag := newFragment(nil)
-					errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-						"a String or Int64", xid.Name(), xid.Type().Name()))
+					errFrag.err = err
 					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 				}
-			}
-			// if the object has an xid, the variable name will be formed from the xidValue in order
-			// to handle duplicate object addition/updation
-			variable = varGen.Next(typ, xid.Name(), xidString, false)
-			// check if an object with same xid has been encountered earlier
-			if xidMetadata.variableObjMap[variable] != nil {
-				// if we already encountered an object with same xid earlier, and this object is
-				// considered a duplicate of the existing object, then return error.
-				if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
-					errFrag := newFragment(nil)
-					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
-					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				switch xid.Type().Name() {
+				case "Int":
+					val, ok := xidVal.(int64)
+					if !ok {
+						return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+							"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
+					}
+					xidString[xid.Name()] = strconv.FormatInt(val, 10)
+				case "Float":
+					val, ok := xidVal.(float64)
+					if !ok {
+						return errResponse(errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+							"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
+					}
+					xidString[xid.Name()] = strconv.FormatFloat(val, 'f', -1, 64)
+				case "Int64":
+					fallthrough
+				default:
+					xidString[xid.Name()], ok = xidVal.(string)
+					if !ok {
+						errFrag := newFragment(nil)
+						errFrag.err = errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+							"a String or Int64", xid.Name(), xid.Type().Name()))
+						return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+					}
 				}
-			} else {
-				// if not encountered till now, add it to the map
-				xidMetadata.variableObjMap[variable] = obj
-				xidEncounteredFirstTime = true
+				// if the object has an xid, the variable name will be formed from the xidValue in order
+				// to handle duplicate object addition/updation
+				//handle xidmetadata
+				variable = varGen.Next(typ, xid.Name(), xidString[xid.Name()], false)
+				// check if an object with same xid has been encountered earlier
+				if xidMetadata.variableObjMap[variable] != nil {
+					// if we already encountered an object with same xid earlier, and this object is
+					// considered a duplicate of the existing object, then return error.
+					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
+						errFrag := newFragment(nil)
+						errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
+						return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+					}
+				} else {
+					// if not encountered till now, add it to the map
+					xidMetadata.variableObjMap[variable] = obj
+					xidEncounteredFirstTime = true
+				}
+				// save if this variable was seen at top level
+				if !xidMetadata.seenAtTopLevel[variable] {
+					xidMetadata.seenAtTopLevel[variable] = atTopLevel
+				}
 			}
-			// save if this variable was seen at top level
-			if !xidMetadata.seenAtTopLevel[variable] {
-				xidMetadata.seenAtTopLevel[variable] = atTopLevel
-			}
+
+			deepXID += 1
 		}
-
-		deepXID += 1
 	}
-
 	var parentFrags []*mutationFragment
 
 	if !atTopLevel { // top level is never a reference - it's a new addition.
 		// this is the case of a lower level having xid which is a reference.
-		if xid != nil && xidString != "" {
-			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
-				variable, withAdditionalDeletes, varGen, xidMetadata)
+		if len(xids) != 0 {
+			for _, xid := range xids {
+				if xidString[xid.Name()] != "" {
+					//add reference only once for multiple xids using or filter.
+					xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString[xid.Name()],
+						variable, withAdditionalDeletes, varGen, xidMetadata)
 
-			// Inverse Link is added as a Part of asXIDReference so we delete any provided
-			// Link to the object.
-			// Example: for this mutation
-			// mutation addCountry($inp: AddCountryInput!) {
-			// 	addCountry(input: [$inp]) {
-			// 	  country {
-			// 		id
-			// 	  }
-			// 	}
-			//  }
-			// with the input:
-			//{
-			// "inp": {
-			// 	"name": "A Country",
-			// 	"states": [
-			// 	  { "code": "abc", "name": "Alphabet" },
-			// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
-			// 	]
-			//   }
-			// }
-			// we delete the link of Second state to "B Country"
-			deleteInverseObject(obj, srcField)
+					// Inverse Link is added as a Part of asXIDReference so we delete any provided
+					// Link to the object.
+					// Example: for this mutation
+					// mutation addCountry($inp: AddCountryInput!) {
+					// 	addCountry(input: [$inp]) {
+					// 	  country {
+					// 		id
+					// 	  }
+					// 	}
+					//  }
+					// with the input:
+					//{
+					// "inp": {
+					// 	"name": "A Country",
+					// 	"states": [
+					// 	  { "code": "abc", "name": "Alphabet" },
+					// 	  { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+					// 	]
+					//   }
+					// }
+					// we delete the link of Second state to "B Country"
+					deleteInverseObject(obj, srcField)
 
-			if deepXID > 2 {
-				// Here we link the already existing node with an xid to the parent whose id is
-				// passed in srcUID. We do this linking only if there is a hasInverse relationship
-				// between the two.
-				// So for example if we had the addAuthor mutation which is also adding nested
-				// posts, then we link the authorUid(srcUID) - Author.posts - uid(Post) here.
+					if deepXID > 2 {
+						// Here we link the already existing node with an xid to the parent whose id is
+						// passed in srcUID. We do this linking only if there is a hasInverse relationship
+						// between the two.
+						// So for example if we had the addAuthor mutation which is also adding nested
+						// posts, then we link the authorUid(srcUID) - Author.posts - uid(Post) here.
 
-				res := make(map[string]interface{}, 1)
-				res["uid"] = srcUID
-				attachChild(res, parentTyp, srcField, fmt.Sprintf("uid(%s)", variable))
-				parentFrag := newFragment(res)
-				parentFrag.conditions = append(parentFrag.conditions, xidFrag.conditions...)
-				parentFrags = append(parentFrags, parentFrag)
+						res := make(map[string]interface{}, 1)
+						res["uid"] = srcUID
+						attachChild(res, parentTyp, srcField, fmt.Sprintf("uid(%s)", variable))
+						parentFrag := newFragment(res)
+						parentFrag.conditions = append(parentFrag.conditions, xidFrag.conditions...)
+						parentFrags = append(parentFrags, parentFrag)
+					}
+				}
 			}
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
-			if xid == nil && id == nil {
+			if len(xids) == 0 && id == nil {
 				err := errors.Errorf("object of type: %s doesn't have a field of type ID! "+
 					"or @id and can't be referenced for deletion", typ.Name())
 				return &mutationRes{secondPass: []*mutationFragment{{err: err}}}
 			}
 			var name string
-			if xid != nil {
-				name = xid.Name()
+			if len(xids) != 0 {
+				name = xids[0].Name()
 			} else {
 				name = id.Name()
 			}
 			return &mutationRes{secondPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
-				xidFrag, variable, xidString)}
+				xidFrag, variable, xidString[xids[0].Name()])}
 		}
 	}
 
@@ -1116,6 +1124,7 @@ func rewriteObject(
 		if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 			// This object is either an invalid deep mutation or it's an xid reference
 			// and asXIDReference must to apply or it's an error.
+			//just returns error if some field is not present
 			return &mutationRes{secondPass: invalidObjectFragment(err, xidFrag, variable, xidString)}
 		}
 	}
@@ -1139,7 +1148,7 @@ func rewriteObject(
 		newObj["dgraph.type"] = dgraphTypes
 		myUID = fmt.Sprintf("_:%s", variable)
 
-		if xid == nil || deepXID > 2 {
+		if len(xids) == 0 || deepXID > 2 {
 			// If this object had an overwritten value for the inverse field, then we don't want to
 			// use that value as we will add the link to the inverse field in the below
 			// function call with the parent of this object
@@ -1177,7 +1186,7 @@ func rewriteObject(
 	frag.newNodes[variable] = typ
 
 	results := &mutationRes{secondPass: []*mutationFragment{frag}}
-	if xid != nil && !atTopLevel && !xidEncounteredFirstTime && deepXID <= 2 {
+	if len(xids) != 0 && !atTopLevel && !xidEncounteredFirstTime && deepXID <= 2 {
 		// If this is an xid that has been encountered before, e.g. think add mutations with
 		// multiple objects as input. In that case we don't need to add the fragment to create this
 		// object, so we clear it out. We do need other fragments for linking this node to its
@@ -1189,28 +1198,31 @@ func rewriteObject(
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
-	if xidString != "" {
-		if atTopLevel && !xidMetadata.queryExists[variable] {
-			// If not at top level, the query is already added by asXIDReference
-			frag.queries = []*gql.GraphQuery{
-				xidQuery(variable, xidString, xid.Name(), typ),
+	for _, xid := range xids {
+		if xidString[xid.Name()] != "" {
+			if atTopLevel && !xidMetadata.queryExists[variable] {
+				// If not at top level, the query is already added by asXIDReference
+				frag.queries = []*gql.GraphQuery{
+					//paas xids to xidquery and add all the conditions.
+					xidQuery(variable, xidString[xid.Name()], xid.Name(), typ),
+				}
+				xidMetadata.queryExists[variable] = true
 			}
-			xidMetadata.queryExists[variable] = true
-		}
-		frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
+			frag.conditions = []string{fmt.Sprintf("eq(len(%s), 0)", variable)}
 
-		// We need to conceal the error because we might be leaking information to the user if it
-		// tries to add duplicate data to the field with @id.
-		var err error
-		if queryAuthSelector(typ) == nil {
-			err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
-		} else {
-			// This error will only be reported in debug mode.
-			err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+			// We need to conceal the error because we might be leaking information to the user if it
+			// tries to add duplicate data to the field with @id.
+			var err error
+			if queryAuthSelector(typ) == nil {
+				err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+			} else {
+				// This error will only be reported in debug mode.
+				err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+			}
+			frag.check = checkQueryResult(variable, err, nil)
 		}
-		frag.check = checkQueryResult(variable, err, nil)
 	}
-
+	//same as above
 	if xid != nil && !atTopLevel {
 		if deepXID <= 2 { // elements in firstPass or not
 			// duplicate query in elements >= 2, as the pair firstPass element would already have
@@ -1240,6 +1252,7 @@ func rewriteObject(
 
 	// For deepXIDs even if the xid has been encountered before, we should build the mutation for
 	// this object.
+	//restructure metadata
 	if xidString == "" || xidEncounteredFirstTime || deepXID > 2 {
 		var fields []string
 		for field := range obj {
@@ -1329,7 +1342,7 @@ func rewriteObject(
 	}
 
 	// In the case of an XID, move the secondPass (creation mutation) to firstPass
-	if xid != nil && !atTopLevel {
+	if len(xids) != 0 && !atTopLevel {
 		results.firstPass = appendFragments(results.firstPass, results.secondPass)
 		results.secondPass = []*mutationFragment{}
 	}
