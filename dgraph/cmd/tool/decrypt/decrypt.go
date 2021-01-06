@@ -54,7 +54,7 @@ Run: func(cmd *cobra.Command, args []string) {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringVarP(&opts.keyfile, "encryption_key_file", "e", "", "Location of the key file to decrypt the schema and data files.")
 	flag.StringVarP(&opts.file, "file", "f", "", "Path to file to decrypt.")
-	flag.StringVarP(&opts.output, "output", "o", "", "Path the the decrypted file.")
+	flag.StringVarP(&opts.output, "output", "o", "", "Path to the decrypted file.")
 }
 func run() {
 		f, err := os.Open(opts.file)
