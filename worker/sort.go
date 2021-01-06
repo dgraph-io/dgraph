@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -304,7 +305,7 @@ BUCKETS:
 			multiSortOffsets = append(multiSortOffsets, il.multiSortOffset)
 		}
 	}
-
+	spew.Dump(out)
 	var toAppend []uint64
 	for i, ul := range ts.UidMatrix {
 		present := make(map[uint64]bool)
@@ -319,12 +320,21 @@ BUCKETS:
 				toAppend = append(toAppend, uid)
 			}
 		}
-		nullsRequired := int(ts.Count) - len(r.UidMatrix[i].Uids)
-		canAppend := x.Min(uint64(nullsRequired), uint64(len(toAppend)))
+		reqCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
 		if order.Desc {
-			r.UidMatrix[i].Uids = append(toAppend[:canAppend], r.UidMatrix[i].Uids...)
+			toAppend = append(toAppend, out[i].skippedList.Uids...)
+			toAppend = append(toAppend, r.UidMatrix[i].Uids...)
+			r.UidMatrix[i].Uids = toAppend
+			if len(r.UidMatrix[i].Uids) > int(ts.Offset) {
+				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[ts.Offset:]
+			} else {
+				r.UidMatrix[i].Uids = nil
+			}
+			if int(ts.Count) < len(r.UidMatrix[i].Uids) {
+				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
+			}
 		} else {
-
+			canAppend := x.Min(uint64(reqCount), uint64(len(toAppend)))
 			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
 		}
 	}
