@@ -18,15 +18,12 @@ package debug
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/badger/v2"
-	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"go.etcd.io/etcd/raft"
@@ -122,55 +119,23 @@ func printBasic(store RaftStore) (uint64, uint64) {
 	return startIdx, lastIdx
 }
 
-func printRaft(db *badger.DB, store *raftmigrate.OldDiskStorage, groupId uint32) {
-	startIdx, lastIdx := printBasic(store)
-
-	commitTs := db.MaxVersion()
-	// In case we need to truncate raft entries.
-	batch := db.NewWriteBatchAt(commitTs)
-	defer batch.Cancel()
-	var numTruncates int
+func printRaft(store *raftwal.DiskStorage) {
+	isZero := store.Uint(raftwal.GroupId) == 0
 
 	pending := make(map[uint64]bool)
+	startIdx, lastIdx := printBasic(store)
+
 	for startIdx < lastIdx-1 {
-		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20 /* 64 MB Max Size */)
-		if err != nil {
-			fmt.Printf("Got error while retrieving entries: %v\n", err)
-			return
-		}
+		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20)
+		x.Check(err)
 		for _, ent := range entries {
-			switch {
-			case ent.Type == raftpb.EntryNormal && ent.Index < opt.wtruncateUntil:
-				if len(ent.Data) == 0 {
-					continue
-				}
-				ent.Data = nil
-				numTruncates++
-				k := store.EntryKey(ent.Index)
-				data, err := ent.Marshal()
-				if err != nil {
-					log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
-				}
-				if err := batch.Set(k, data); err != nil {
-					log.Fatalf("Unable to set data: %+v", err)
-				}
-			default:
-				printEntry(ent, pending, groupId == 0)
-			}
+			printEntry(ent, pending, isZero)
 			startIdx = x.Max(startIdx, ent.Index)
 		}
 	}
-	if err := batch.Flush(); err != nil {
-		fmt.Printf("Got error while flushing batch: %v\n", err)
-	}
-	if numTruncates > 0 {
-		fmt.Printf("==> Log entries truncated: %d\n\n", numTruncates)
-		err := db.Flatten(1)
-		fmt.Printf("Flatten done with error: %v\n", err)
-	}
 }
 
-func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
+func overwriteSnapshot(store *raftwal.DiskStorage) error {
 	snap, err := store.Snapshot()
 	x.Checkf(err, "Unable to get snapshot")
 	cs := snap.Metadata.ConfState
@@ -210,20 +175,7 @@ func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
 		Commit: ent.Index,
 	}
 	fmt.Printf("Setting hard state: %+v\n", hs)
-	err = db.Update(func(txn *badger.Txn) error {
-		data, err := ent.Marshal()
-		if err != nil {
-			return err
-		}
-		if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
-			return err
-		}
-		data, err = hs.Marshal()
-		if err != nil {
-			return err
-		}
-		return txn.Set(store.HardStateKey(), data)
-	})
+	err = store.Save(&hs, []raftpb.Entry{ent}, &snap)
 	x.Check(err)
 
 	dsnap.Index = ent.Index
@@ -238,64 +190,18 @@ func overwriteSnapshot(db *badger.DB, store *raftmigrate.OldDiskStorage) error {
 	return err
 }
 
-func handleWal(db *badger.DB) error {
-	rids := make(map[uint64]bool)
-	gids := make(map[uint32]bool)
+func handleWal(store *raftwal.DiskStorage) error {
+	rid := store.Uint(raftwal.RaftId)
+	gid := store.Uint(raftwal.GroupId)
 
-	parseIds := func(item *badger.Item) {
-		key := item.Key()
-		switch {
-		case len(key) == 14:
-			// hard state and snapshot key.
-			rid := binary.BigEndian.Uint64(key[0:8])
-			rids[rid] = true
-
-			gid := binary.BigEndian.Uint32(key[10:14])
-			gids[gid] = true
-		case len(key) == 20:
-			// entry key.
-			rid := binary.BigEndian.Uint64(key[0:8])
-			rids[rid] = true
-
-			gid := binary.BigEndian.Uint32(key[8:12])
-			gids[gid] = true
-		default:
-			// Ignore other keys.
-		}
-	}
-
-	err := db.View(func(txn *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		for itr.Rewind(); itr.Valid(); itr.Next() {
-			parseIds(itr.Item())
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("rids: %v\n", rids)
-	fmt.Printf("gids: %v\n", gids)
-
-	for rid := range rids {
-		for gid := range gids {
-			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
-			store := raftmigrate.Init(db, rid, gid)
-			switch {
-			case len(opt.wsetSnapshot) > 0:
-				err := overwriteSnapshot(db, store)
-				store.Closer.SignalAndWait()
-				return err
-
-			default:
-				printRaft(db, store, gid)
-			}
-			store.Closer.SignalAndWait()
-		}
+	fmt.Printf("Raft Id = %d Groupd Id = %d\n", rid, gid)
+	switch {
+	case len(opt.wsetSnapshot) > 0:
+		return overwriteSnapshot(store)
+	case opt.wtruncateUntil != 0:
+		store.TruncateEntriesUntil(opt.wtruncateUntil)
+	default:
+		printRaft(store)
 	}
 	return nil
 }

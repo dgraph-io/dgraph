@@ -104,6 +104,41 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	return entries
 }
 
+// truncateEntriesUntil deletes the data field of every raft entry
+// of type EntryNormal and index ∈ [0, lastIdx).
+func (l *wal) truncateEntriesUntil(lastIdx uint64) {
+	files := append(l.files, l.current)
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		for idx := 0; idx < maxNumEntries; idx++ {
+			entry := file.getEntry(idx)
+			if entry.Index() >= lastIdx {
+				return
+			}
+
+			// Truncate the data of normal Raft entries.
+			// Here, we set the length field of the entry data to zero.
+			// As long as we never directly iterate through the data section,
+			// this operation is safe.
+			// Suppose we truncate indexes [0, 100) and then call AddEntries
+			// with indexes [95, 105]. AddEntries will do the following:
+			// 1. It will zero out all data at index 95 and above
+			// 2. It will find the data offset at index 94 (say 'x')
+			// 3. We start writing new data at x+sliceSize(data, x),
+			//    which will be x+4 if the entry is of type EntryNormal.
+			// Since all entries of index 95 and above have been invalidated,
+			// we can be sure that we don't overwrite any useful data.
+			if entry.Type() == uint64(raftpb.EntryNormal) {
+				offset := int(entry.DataOffset())
+				z.ZeroOut(file.Data, offset, offset+4)
+			}
+		}
+	}
+}
+
 // AddEntries adds the entries to the log. If there are entries in the log with the same index
 // they will be overwritten and the entries after that zeroed out from the log.
 func (l *wal) AddEntries(entries []raftpb.Entry) error {

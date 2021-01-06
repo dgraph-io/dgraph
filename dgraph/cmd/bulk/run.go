@@ -19,6 +19,7 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -298,9 +300,42 @@ func run() {
 	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
-	if !opt.SkipMapPhase {
+
+	const bulkMetaFilename = "bulk.meta"
+	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
+
+	if opt.SkipMapPhase {
+		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
+			os.Exit(1)
+		}
+
+		var bulkMeta pb.BulkMeta
+		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
+			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
+			os.Exit(1)
+		}
+
+		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
+		loader.schema.schemaMap = bulkMeta.SchemaMap
+	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+
+		bulkMeta := pb.BulkMeta{
+			EdgeCount: loader.prog.mapEdgeCount,
+			SchemaMap: loader.schema.schemaMap,
+		}
+		bulkMetaData, err := bulkMeta.Marshal()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
+			os.Exit(1)
+		}
+		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644); err != nil {
+			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
+			os.Exit(1)
+		}
 	}
 	loader.reduceStage()
 	loader.writeSchema()

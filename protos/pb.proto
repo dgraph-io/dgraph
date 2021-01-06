@@ -687,4 +687,10 @@ message UpdateGraphQLSchemaResponse {
 	uint64 uid = 1;
 }
 
+// BulkMeta stores metadata from the map phase of the bulk loader.
+message BulkMeta {
+	int64 edge_count = 1;
+	map<string, SchemaUpdate> schema_map = 2;
+}
+
 // vim: noexpandtab sw=2 ts=2

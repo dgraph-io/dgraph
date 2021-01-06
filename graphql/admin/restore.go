@@ -19,6 +19,9 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"sync"
+
+	"github.com/dgraph-io/dgraph/edgraph"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -66,7 +69,9 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultField:        input.VaultField,
 		VaultFormat:       input.VaultFormat,
 	}
-	err = worker.ProcessRestoreRequest(context.Background(), &req)
+
+	wg := &sync.WaitGroup{}
+	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
@@ -76,6 +81,11 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
 		}, false
 	}
+
+	go func() {
+		wg.Wait()
+		edgraph.ResetAcl(nil)
+	}()
 
 	return &resolve.Resolved{
 		Data: map[string]interface{}{m.Name(): map[string]interface{}{
