@@ -62,12 +62,13 @@ func run() {
 	x.Checkf(err, "could not read encryption key file")
 	opts.keyfile = sensitiveKey
 	if len(opts.keyfile) == 0 {
-		log.Fatal("Key is empty")
+		log.Fatal("Error while reading encryption key: Key is empty")
 	}
 	f, err := os.Open(opts.file)
-	x.CheckfNoTrace(err)
+	if err != nil {
+		log.Fatalf("Error opening file: %v\n", err)
+	}
 	defer f.Close()
-	x.Checkf(err, "could not open file")
 	reader, err := enc.GetReader(opts.keyfile, f)
 	x.Checkf(err, "could not open key reader")
 	if strings.HasSuffix(strings.ToLower(opts.file), ".gz") {
@@ -75,15 +76,21 @@ func run() {
 		x.Check(err)
 	}
 	outf, err := os.OpenFile(opts.output, os.O_WRONLY|os.O_CREATE, 0644)
-	x.CheckfNoTrace(err)
+	if err != nil {
+		log.Fatalf("Error while opening output file: %v\n", err)
+	}
 	w := gzip.NewWriter(outf)
+	fmt.Printf("Decrypting %s\n", opts.file)
+	fmt.Printf("Writing to %v\n", opts.output)
 	_, err = io.Copy(w, reader)
-	x.Checkf(err, "error during copying")
+	if err != nil {
+		log.Fatalf("Error while writing: %v\n", err)
+	}
 	err = w.Flush()
 	x.Check(err)
 	err = w.Close()
 	x.Check(err)
 	err = outf.Close()
 	x.Check(err)
-	fmt.Printf("Done. Outputted to %v\n", opts.output)
+	fmt.Println("Done.")
 }
