@@ -1,15 +1,15 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Using Kubernetes"
+weight = 6
 [menu.main]
     parent = "deploy"
-    weight = 6
 +++
 
 The following section covers running Dgraph with Kubernetes. We have tested Dgraph with Kubernetes versions 1.14 to 1.16 on [GKE](https://cloud.google.com/kubernetes-engine) and versions 1.14 to 1.17 on [EKS](https://aws.amazon.com/eks/).
 
 {{% notice "note" %}}These instructions are for running Dgraph alpha service without TLS configuration.
-Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "tls-configuration.md" >}}).{{% /notice %}}
+Instructions for running Dgraph alpha service with TLS refer [TLS instructions]({{< relref "deploy/tls-configuration.md" >}}).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -231,7 +231,7 @@ helm install my-release dgraph/dgraph --set image.tag="v1.2.6"
 
 #### Dgraph Configuration Files
 
-You can supply a dgraph config files (see [Config]({{< relref "config.md" >}})) for alpha and zero with Helm chart configuration values:
+You can supply a dgraph config files (see [Config]({{< relref "deploy/config.md" >}})) for alpha and zero with Helm chart configuration values:
 
 ```yaml
 # my-config-values.yaml
@@ -245,7 +245,6 @@ alpha:
         vlog: mmap
       postings: /dgraph/data/p
       wal: /dgraph/data/w
-      lru_mb: 2048
 zero:
   configFile:
     config.yaml: |
@@ -363,7 +362,7 @@ upgrade the configuration in multiple steps following the steps below.
 
 #### Upgrade to HA cluster setup
 
-To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup-using-kubernetes" >}}), ensure
 that the shard replication setting is more than 1. When `zero.shardReplicaCount`
 is not set to an HA configuration (3 or 5), follow the steps below:
 
@@ -455,7 +454,7 @@ The UI is accessible at port 9090. Open http://localhost:9090 in your browser to
 To register alerts from dgraph cluster with your prometheus deployment follow the steps below:
 
 * Create a kubernetes secret containing alertmanager configuration. Edit the configuration file present [here](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/monitoring/prometheus/alertmanager-config.yaml)
-with the required reciever configuration including the slack webhook credential and create the secret.
+with the required receiver configuration including the slack webhook credential and create the secret.
 
 You can find more information about alertmanager configuration [here](https://prometheus.io/docs/alerting/configuration/).
 
@@ -502,7 +501,7 @@ $ helm install my-prometheus-release \
   stable/prometheus-operator
 ```
 
-**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidently checked into anywhere.  You can supply it through the command line, or create a seperate `secrets.yaml` that is never checked into a code repository:
+**NOTE**: For security best practices, we want to keep secrets, such as the Grafana password outside of general configuration, so that it is not accidentally checked into anywhere.  You can supply it through the command line, or create a separate `secrets.yaml` that is never checked into a code repository:
 
 ```yaml
 grafana:
@@ -642,7 +641,7 @@ remove the node in this order:
 
 1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
    the cluster (see [More about Dgraph Zero]({{< relref
-   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   "/deploy/dgraph-zero" >}})). The removed instance will immediately stop
    running. Any further attempts to join the cluster will fail for that instance
    since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
@@ -661,7 +660,7 @@ configuration to be updated.
 ## Kubernetes and Bulk Loader
 
 You may want to initialize a new cluster with an existing data set such as data
-from the [Dgraph Bulk Loader]({{< relref "#bulk-loader" >}}). You can use [Init
+from the [Dgraph Bulk Loader]({{< relref "deploy/fast-data-loading/bulk-loader.md" >}}). You can use [Init
 Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 

@@ -16,17 +16,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/query"
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v2/y"
-
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
@@ -74,9 +76,8 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
-		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		glog.Errorf("Authentication from address %s failed: %v", addr, err)
+		return nil, x.ErrorInvalidLogin
 	}
 	glog.Infof("%s logged in successfully", user.UserID)
 
@@ -136,8 +137,8 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate through refresh token: "+
-				"user not found for id %v", userId)
+			return nil, errors.Errorf("unable to authenticate: "+
+				"invalid username or password")
 		}
 
 		glog.Infof("Authenticated user %s through refresh token", userId)
@@ -153,11 +154,11 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate through password: "+
-			"user not found for id %v", request.Userid)
+		return nil, errors.Errorf("unable to authenticate: "+
+			"invalid username or password")
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, x.ErrorInvalidLogin
 	}
 	return user, nil
 }
@@ -305,7 +306,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 }
 
 // RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	defer func() {
 		glog.Infoln("RefreshAcls closed")
 		closer.Done()
@@ -317,11 +318,18 @@ func RefreshAcls(closer *y.Closer) {
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
-	retrieveAcls := func() error {
+	var maxRefreshTs uint64
+	retrieveAcls := func(refreshTs uint64) error {
+		if refreshTs <= maxRefreshTs {
+			return nil
+		}
+		maxRefreshTs = refreshTs
+
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
+			StartTs:  refreshTs,
 		}
 
 		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
@@ -338,18 +346,17 @@ func RefreshAcls(closer *y.Closer) {
 		return nil
 	}
 
-	ticker := time.NewTicker(worker.Config.AclRefreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if err := retrieveAcls(); err != nil {
-				glog.Errorf("Error while retrieving acls: %v", err)
-			}
-		case <-closer.HasBeenClosed():
+	closer.AddRunning(1)
+	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
-	}
+		if err := retrieveAcls(kvs.Kv[0].Version); err != nil {
+			glog.Errorf("Error while retrieving acls: %v", err)
+		}
+	}, 1, closer)
+
+	<-closer.HasBeenClosed()
 }
 
 const queryAcls = `
@@ -367,8 +374,17 @@ const queryAcls = `
 }
 `
 
-// ResetAcl clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *y.Closer) {
+var aclPrefixes = [][]byte{
+	x.PredicatePrefix("dgraph.acl.permission"),
+	x.PredicatePrefix("dgraph.acl.predicate"),
+	x.PredicatePrefix("dgraph.acl.rule"),
+	x.PredicatePrefix("dgraph.user.group"),
+	x.PredicatePrefix("dgraph.type.Group"),
+	x.PredicatePrefix("dgraph.xid"),
+}
+
+// clears the aclCachePtr and upserts the Groot account.
+func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
 		closer.Done()
@@ -383,7 +399,9 @@ func ResetAcl(closer *y.Closer) {
 	upsertGuardians := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
-				guid as var(func: eq(dgraph.xid, "%s"))
+				guid as guardians(func: eq(dgraph.xid, "%s")){
+					uid
+				}
 			}
 		`, x.GuardiansId)
 		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
@@ -398,11 +416,44 @@ func ResetAcl(closer *y.Closer) {
 			},
 		}
 
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
-			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+
+		// Structs to parse guardians group uid from query response
+		type groupNode struct {
+			Uid string `json:"uid"`
 		}
 
-		glog.Infof("Successfully upserted the guardian group")
+		type groupQryResp struct {
+			GuardiansGroup []groupNode `json:"guardians"`
+		}
+
+		if err != nil {
+			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+		}
+		var groupResp groupQryResp
+		var guardiansGroupUid string
+		if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
+			return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
+		}
+		if len(groupResp.GuardiansGroup) == 0 {
+			// no guardians group found
+			// Extract guardians group uid from mutation
+			newGroupUidMap := resp.GetUids()
+			guardiansGroupUid = newGroupUidMap["newgroup"]
+		} else if len(groupResp.GuardiansGroup) == 1 {
+			// we found a guardians group
+			guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
+		} else {
+			return errors.Wrap(err, "Multiple guardians group found")
+		}
+
+		guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
+		if err != nil {
+			return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
+		}
+		atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
+
+		glog.Infof("Successfully upserted the guardians group")
 		return nil
 	}
 
@@ -410,7 +461,9 @@ func ResetAcl(closer *y.Closer) {
 	upsertGroot := func(ctx context.Context) error {
 		query := fmt.Sprintf(`
 			{
-				grootid as var(func: eq(dgraph.xid, "%s"))
+				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+					uid
+				}
 				guid as var(func: eq(dgraph.xid, "%s"))
 			}
 		`, x.GrootId, x.GuardiansId)
@@ -432,9 +485,42 @@ func ResetAcl(closer *y.Closer) {
 			},
 		}
 
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+		if err != nil {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}
+
+		// Structs to parse groot user uid from query response
+		type userNode struct {
+			Uid string `json:"uid"`
+		}
+
+		type userQryResp struct {
+			GrootUser []userNode `json:"grootUser"`
+		}
+
+		var grootUserUid string
+		var userResp userQryResp
+		if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+			return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
+		}
+		if len(userResp.GrootUser) == 0 {
+			// no groot user found from query
+			// Extract uid of created groot user from mutation
+			newUserUidMap := resp.GetUids()
+			grootUserUid = newUserUidMap["newuser"]
+		} else if len(userResp.GrootUser) == 1 {
+			// we found a groot user
+			grootUserUid = userResp.GrootUser[0].Uid
+		} else {
+			return errors.Wrap(err, "Multiple groot users found")
+		}
+
+		grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
+		if err != nil {
+			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
+		}
+		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
 
 		glog.Infof("Successfully upserted groot account")
 		return nil
@@ -588,7 +674,10 @@ func parsePredsFromMutation(nquads []*api.NQuad) []string {
 	// use a map to dedup predicates
 	predsMap := make(map[string]struct{})
 	for _, nquad := range nquads {
-		predsMap[nquad.Predicate] = struct{}{}
+		// _STAR_ALL is not a predicate in itself.
+		if nquad.Predicate != "_STAR_ALL" {
+			predsMap[nquad.Predicate] = struct{}{}
+		}
 	}
 
 	preds := make([]string, 0, len(predsMap))
@@ -663,7 +752,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -673,7 +762,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-
+		gmu.AllowedPreds = allowedPreds
 		return nil
 	}
 

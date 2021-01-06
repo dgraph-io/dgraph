@@ -13,15 +13,22 @@
 package worker
 
 import (
+	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -32,6 +39,12 @@ import (
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
 	fp *os.File
+}
+
+// BackupExporter is an alias of fileHandler so that this struct can be used
+// by the export_backup command.
+type BackupExporter struct {
+	fileHandler
 }
 
 // readManifest reads a manifest file at path using the handler.
@@ -65,8 +78,8 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while GetLatestManifest: %v", err)
 	}
 
 	// Find the max Since value from the latest backup.
@@ -90,10 +103,21 @@ func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	return &m, nil
 }
 
+func createIfNotExists(path string) error {
+	if pathExist(path) {
+		return nil
+	}
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return errors.Errorf("The path %q does not exist or it is inaccessible."+
+			" While trying to create it, got error: %v", path, err)
+	}
+	return nil
+}
+
 // CreateBackupFile prepares the a path to save the backup file.
 func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return errors.Errorf("while CreateBackupFile: %v", err)
 	}
 
 	fileName := backupName(req.ReadTs, req.GroupId)
@@ -102,16 +126,17 @@ func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) erro
 
 // CreateManifest completes the backup by writing the manifest to a file.
 func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
-	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return errors.Errorf("while CreateManifest: %v", err)
 	}
 
 	return h.createFiles(uri, req, backupManifest)
 }
 
-func (h *fileHandler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while GetManifests: %v", err)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
@@ -134,23 +159,14 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, 
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err := filterManifests(manifests, backupId)
-	if err != nil {
-		return nil, err
-	}
 
-	// Sort manifests in the ascending order of their BackupNum so that the first
-	// manifest corresponds to the first full backup and so on.
-	sort.Slice(manifests, func(i, j int) bool {
-		return manifests[i].BackupNum < manifests[j].BackupNum
-	})
-	return manifests, nil
+	return getManifests(manifests, backupId, backupNum)
 }
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
+	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
 		return LoadResult{0, 0, errors.Wrapf(err, "cannot retrieve manifests")}
 	}
@@ -178,7 +194,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, gid, predSet)
+			groupMaxUid, err := fn(fp, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}
@@ -194,23 +210,18 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 
 // Verify performs basic checks to decide whether the specified backup can be restored
 // to a live cluster.
-func (h *fileHandler) Verify(uri *url.URL, backupId string, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, backupId)
+func (h *fileHandler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", backupId)
-	}
-
-	return verifyGroupsInBackup(manifests, currentGroups)
+	return verifyRequest(req, manifests, currentGroups)
 }
 
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
-	if !pathExist(uri.Path) {
-		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while ListManifests: %v", err)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
@@ -252,4 +263,135 @@ func pathExist(path string) bool {
 		return true
 	}
 	return !os.IsNotExist(err) && !os.IsPermission(err)
+}
+
+func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
+	key x.SensitiveByteSlice) error {
+	if format != "json" && format != "rdf" {
+		return errors.Errorf("invalid format %s", format)
+	}
+
+	// Create exportDir and temporary folder to store the restored backup.
+	var err error
+	exportDir, err = filepath.Abs(exportDir)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
+	tmpDir, err := ioutil.TempDir("", "export_backup")
+	if err != nil {
+		return errors.Wrapf(err, "cannot create temp dir")
+	}
+
+	// Function to load the a single backup file.
+	loadFn := func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", groupId))
+
+		r, err := enc.GetReader(key, r)
+		if err != nil {
+			return 0, err
+		}
+
+		gzReader, err := gzip.NewReader(r)
+		if err != nil {
+			if len(key) != 0 {
+				err = errors.Wrap(err,
+					"Unable to read the backup. Ensure the encryption key is correct.")
+			}
+			return 0, errors.Wrapf(err, "cannot create gzip reader")
+		}
+		// The badger DB should be opened only after creating the backup
+		// file reader and verifying the encryption in the backup file.
+		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+			WithSyncWrites(false).
+			WithValueThreshold(1 << 10).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithEncryptionKey(key))
+
+		if err != nil {
+			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
+		}
+		defer db.Close()
+		_, err = loadFromBackup(db, gzReader, 0, preds, nil)
+		if err != nil {
+			return 0, errors.Wrapf(err, "cannot load backup")
+		}
+		return 0, x.WriteGroupIdFile(dir, uint32(groupId))
+	}
+
+	// Read manifest from folder.
+	manifest := &Manifest{}
+	manifestPath := filepath.Join(backupDir, backupManifest)
+	if err := h.ReadManifest(manifestPath, manifest); err != nil {
+		return errors.Wrapf(err, "cannot read manifest at %s", manifestPath)
+	}
+	manifest.Path = manifestPath
+	if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		return errors.Errorf("no data found in backup")
+	}
+
+	// Restore backup to disk.
+	for gid := range manifest.Groups {
+		file := filepath.Join(backupDir, backupName(manifest.Since, gid))
+		fp, err := os.Open(file)
+		if err != nil {
+			return errors.Wrapf(err, "cannot open backup file at %s", file)
+		}
+		defer fp.Close()
+
+		// Only restore the predicates that were assigned to this group at the time
+		// of the last backup.
+		predSet := manifest.getPredsInGroup(gid)
+
+		_, err = loadFn(fp, gid, predSet)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Export the data from the p directories produced by the last step.
+	ch := make(chan error, len(manifest.Groups))
+	for gid := range manifest.Groups {
+		go func(group uint32) {
+			dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", group))
+			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithSyncWrites(false).
+				WithValueThreshold(1 << 10).
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(key))
+
+			if err != nil {
+				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
+				return
+			}
+			defer db.Close()
+
+			req := &pb.ExportRequest{
+				GroupId:     group,
+				ReadTs:      manifest.Since,
+				UnixTs:      time.Now().Unix(),
+				Format:      format,
+				Destination: exportDir,
+			}
+
+			_, err = exportInternal(context.Background(), req, db, true)
+			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
+		}(gid)
+	}
+
+	for i := 0; i < len(manifest.Groups); i++ {
+		err := <-ch
+		if err != nil {
+			return err
+		}
+	}
+
+	// Clean up temporary directory.
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
+	}
+
+	return nil
 }

@@ -1438,7 +1438,7 @@
                                     {
                                         "Ref": "AWS::Region"
                                     },
-                                    ".compute.internal:7080 --lru_mb 2048 --zero ",
+                                    ".compute.internal:7080 --zero ",
                                     {
                                         "Fn::GetAtt": [
                                             "DgraphHealthyZero",

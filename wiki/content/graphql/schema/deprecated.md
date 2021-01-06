@@ -1,8 +1,8 @@
 +++
 title = "Deprecation"
+weight = 8
 [menu.main]
     parent = "schema"
-    weight = 7   
 +++
 
 Documentation about `@deprecated` directive coming soon.

@@ -94,7 +94,7 @@ func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 	addCountryExpected := `
 		{ "addCountry": { "country": [{ "id": "_UID_", "name": "Testland" }] } }`
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -139,7 +139,7 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country, includeS
 		}`,
 		Variables: map[string]interface{}{"id": uid, "includeStates": includeStates},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, GraphqlURL, params)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -197,7 +197,7 @@ func addAuthor(t *testing.T, countryUID string,
 		}]
 	} }`, countryUID)
 
-	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -249,7 +249,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 		}`,
 		Variables: map[string]interface{}{"id": authorID},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, GraphqlURL, params)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -278,7 +278,7 @@ func addCategory(t *testing.T, executeRequest requestExecutor) *category {
 	addCategoryExpected := `
 		{ "addCategory": { "category": [{ "id": "_UID_", "name": "A Category" }] } }`
 
-	gqlResponse := executeRequest(t, graphqlURL, addCategoryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCategoryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -400,7 +400,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 		},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, updateAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -515,6 +515,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 			  	author {
 					id
 					name
+					qualification
 					reputation
 					country {
 						id
@@ -536,7 +537,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 		Variables: map[string]interface{}{"author": newAuthor},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -586,7 +587,7 @@ func addComments(t *testing.T, ids []string) {
 		},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, params)
+	gqlResponse := postExecutor(t, GraphqlURL, params)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
@@ -810,12 +811,12 @@ func testThreeLevelXID(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			addComments(t, tc.Comments)
-			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+			gqlResponse := postExecutor(t, GraphqlURL, addPostParams)
 			RequireNoGQLErrors(t, gqlResponse)
 			testutil.CompareJSON(t, tc.Expected, string(gqlResponse.Data))
 
-			deleteGqlType(t, "Post1", map[string]interface{}{}, 2, nil)
-			deleteGqlType(t, "Comment1", map[string]interface{}{}, tc.ExpectedNumDeletedComments,
+			DeleteGqlType(t, "Post1", map[string]interface{}{}, 2, nil)
+			DeleteGqlType(t, "Comment1", map[string]interface{}{}, tc.ExpectedNumDeletedComments,
 				nil)
 		})
 	}
@@ -854,7 +855,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
@@ -924,7 +925,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 		},
 	}
 
-	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
+	gqlResponse = executeRequest(t, GraphqlURL, updateCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var updResult struct {
@@ -1011,7 +1012,7 @@ func addPost(t *testing.T, authorID, countryID string,
 		}]
 	} }`, authorID, countryID)
 
-	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addPostParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -1085,7 +1086,7 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 		}]
 	} }`, authorID, countryID)
 
-	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addPostParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -1141,7 +1142,7 @@ func requirePost(
 		},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, GraphqlURL, params)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -1255,7 +1256,7 @@ func updateRemove(t *testing.T) {
 		Variables: map[string]interface{}{"filter": filter, "rem": remPatch},
 	}
 
-	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{
@@ -1294,7 +1295,7 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string, 
 		Variables: map[string]interface{}{"filter": filter, "newName": newName},
 	}
 
-	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -1376,7 +1377,7 @@ func filterInUpdate(t *testing.T) {
 				},
 			}
 
-			gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := updateParams.ExecuteAsPost(t, GraphqlURL)
 			RequireNoGQLErrors(t, gqlResponse)
 
 			var result struct {
@@ -1481,7 +1482,7 @@ func addMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 			"posts": []interface{}{newPost},
 		}},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
@@ -1528,7 +1529,7 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
@@ -1587,7 +1588,7 @@ func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 			"set": map[string]interface{}{"posts": []interface{}{newPost}},
 		},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, updateAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	// The original author no longer has newPost in its list of posts
@@ -1638,7 +1639,7 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 				"author": newAuthor},
 		},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	gqlResponse := executeRequest(t, GraphqlURL, updateAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	// The expected post was updated
@@ -1676,7 +1677,7 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
@@ -1710,7 +1711,7 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 		},
 	}
 
-	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
+	gqlResponse = executeRequest(t, GraphqlURL, updateCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	// newCountry doesn't have "ABC" in it's states list
@@ -1754,7 +1755,7 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
@@ -1778,7 +1779,7 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 		}`,
 		Variables: map[string]interface{}{"id": addResult.AddCountry.Country[0].States[0].ID},
 	}
-	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = getCatParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{"getState":{"country":null}}`, string(gqlResponse.Data))
@@ -1801,7 +1802,7 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 			"set":    map[string]interface{}{"category": newCategory}},
 	}
 
-	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	// show that this post is in the author's posts
@@ -1829,7 +1830,7 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 		}`,
 		Variables: map[string]interface{}{"id": newCategory.ID},
 	}
-	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = getCatParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{"getCategory":{"posts":[]}}`, string(gqlResponse.Data))
@@ -1843,7 +1844,7 @@ func deleteCountry(
 	filter map[string]interface{},
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-	deleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteAuthors(
@@ -1851,7 +1852,7 @@ func deleteAuthors(
 	authorIDs []string,
 	expectedErrors x.GqlErrorList) {
 	filter := map[string]interface{}{"id": authorIDs}
-	deleteGqlType(t, "Author", filter, len(authorIDs), expectedErrors)
+	DeleteGqlType(t, "Author", filter, len(authorIDs), expectedErrors)
 }
 
 func deletePost(
@@ -1860,7 +1861,7 @@ func deletePost(
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
 	filter := map[string]interface{}{"postID": []string{postID}}
-	deleteGqlType(t, "Post", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "Post", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteWrongID(t *testing.T) {
@@ -1883,7 +1884,7 @@ func deleteWrongID(t *testing.T) {
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
-	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := deleteCountryParams.ExecuteAsPost(t, GraphqlURL)
 	require.JSONEq(t, expectedData, string(gqlResponse.Data))
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{})
@@ -1919,7 +1920,7 @@ func manyMutations(t *testing.T) {
 		"add2": { "country": [{ "id": "_UID_", "name": "Testland2" }] }
 	}`
 
-	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -2016,7 +2017,7 @@ func testSelectionInAddObject(t *testing.T) {
 				},
 			}
 
-			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+			gqlResponse := postExecutor(t, GraphqlURL, addPostParams)
 			RequireNoGQLErrors(t, gqlResponse)
 			var result struct {
 				AddPost struct {
@@ -2056,7 +2057,7 @@ func mutationEmptyDelete(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := updatePostParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updatePostParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Equal(t, gqlResponse.Errors[0].Error(), "couldn't rewrite mutation updatePost"+
 		" because failed to rewrite mutation payload because id is not provided")
@@ -2105,7 +2106,7 @@ func mutationWithDeepFilter(t *testing.T) {
 		}]
 	} }`
 
-	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -2143,7 +2144,7 @@ func manyMutationsWithQueryError(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -2200,7 +2201,7 @@ func manyMutationsWithQueryError(t *testing.T) {
 			Locations: []x.Location{{Line: 18, Column: 7}},
 			Path:      []interface{}{"add2", "author", float64(0), "country", "name"}}}
 
-	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
 
 	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
 		t.Errorf("errors mismatch (-want +got):\n%s", diff)
@@ -2275,7 +2276,7 @@ func addStarship(t *testing.T) *starship {
 		}},
 	}
 
-	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addStarshipParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStarshipExpected := `{"addStarship":{
@@ -2325,7 +2326,7 @@ func addHuman(t *testing.T, starshipID string) string {
 		}},
 	}
 
-	gqlResponse := addHumanParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addHumanParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2358,7 +2359,7 @@ func addDroid(t *testing.T) string {
 		}},
 	}
 
-	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addDroidParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2376,7 +2377,7 @@ func addDroid(t *testing.T) string {
 }
 
 func addThingOne(t *testing.T) string {
-	addDroidParams := &GraphQLParams{
+	addThingOneParams := &GraphQLParams{
 		Query: `mutation addThingOne($input: AddThingOneInput!) {
 			addThingOne(input: [$input]) {
 				thingOne {
@@ -2391,7 +2392,7 @@ func addThingOne(t *testing.T) string {
 		}},
 	}
 
-	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addThingOneParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2409,7 +2410,7 @@ func addThingOne(t *testing.T) string {
 }
 
 func addThingTwo(t *testing.T) string {
-	addDroidParams := &GraphQLParams{
+	addThingTwoParams := &GraphQLParams{
 		Query: `mutation addThingTwo($input: AddThingTwoInput!) {
 			addThingTwo(input: [$input]) {
 				thingTwo {
@@ -2424,7 +2425,7 @@ func addThingTwo(t *testing.T) string {
 		}},
 	}
 
-	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addThingTwoParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2441,14 +2442,119 @@ func addThingTwo(t *testing.T) string {
 	return result.AddThingTwo.ThingTwo[0].ID
 }
 
+func addHome(t *testing.T, humanId string) (string, string, string, string) {
+	addHomeParams := &GraphQLParams{
+		Query: `mutation addHome($input: AddHomeInput!) {
+			addHome(input: [$input]) {
+				home {
+					id
+					members {
+						__typename
+						... on Animal {
+							id
+						}
+						... on Human {
+							id
+						}
+						... on Plant {
+							id
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": map[string]interface{}{
+				"address": "Avenger Street",
+				"members": []interface{}{
+					map[string]interface{}{
+						"dogRef": map[string]interface{}{
+							"category": "Mammal",
+							"breed":    "German Shephard",
+						},
+					},
+					map[string]interface{}{
+						"parrotRef": map[string]interface{}{
+							"category": "Bird",
+							"repeatsWords": []interface{}{
+								"squawk",
+								"Good Morning!",
+							},
+						},
+					},
+					map[string]interface{}{
+						"humanRef": map[string]interface{}{
+							"id": humanId,
+						},
+					},
+					map[string]interface{}{
+						"plantRef": map[string]interface{}{
+							"breed": "Flower",
+						},
+					},
+				},
+				"favouriteMember": map[string]interface{}{
+					"humanRef": map[string]interface{}{
+						"id": humanId,
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := addHomeParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddHome struct {
+			Home []struct {
+				ID      string
+				Members []struct {
+					Typename string `json:"__typename"`
+					ID       string
+				}
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	homeId := result.AddHome.Home[0].ID
+	requireUID(t, homeId)
+
+	var dogId, parrotId, plantId string
+	for _, member := range result.AddHome.Home[0].Members {
+		switch member.Typename {
+		case "Dog":
+			dogId = member.ID
+		case "Parrot":
+			parrotId = member.ID
+		case "Plant":
+			plantId = member.ID
+		}
+	}
+	return homeId, dogId, parrotId, plantId
+}
+
+func deleteHome(t *testing.T, homeId, dogId, parrotId, plantId string) {
+	homeFilter := map[string]interface{}{"id": []string{homeId}}
+	DeleteGqlType(t, "Home", homeFilter, 1, nil)
+	dogFilter := map[string]interface{}{"id": []string{dogId}}
+	DeleteGqlType(t, "Dog", dogFilter, 1, nil)
+	parrotFilter := map[string]interface{}{"id": []string{parrotId}}
+	DeleteGqlType(t, "Parrot", parrotFilter, 1, nil)
+	plantFilter := map[string]interface{}{"id": []string{plantId}}
+	DeleteGqlType(t, "Plant", plantFilter, 1, nil)
+}
+
 func deleteThingOne(t *testing.T, thingOneId string) {
 	thingOneFilter := map[string]interface{}{"id": []string{thingOneId}}
-	deleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
+	DeleteGqlType(t, "ThingOne", thingOneFilter, 1, nil)
 }
 
 func deleteThingTwo(t *testing.T, thingTwoId string) {
 	thingTwoFilter := map[string]interface{}{"id": []string{thingTwoId}}
-	deleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
+	DeleteGqlType(t, "ThingTwo", thingTwoFilter, 1, nil)
 }
 
 func updateCharacter(t *testing.T, id string) {
@@ -2470,7 +2576,7 @@ func updateCharacter(t *testing.T, id string) {
 		}},
 	}
 
-	gqlResponse := updateCharacterParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updateCharacterParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
@@ -2501,7 +2607,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		  }`,
 		}
 
-		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
@@ -2551,7 +2657,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 	  }`,
 		}
 
-		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
@@ -2589,7 +2695,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 	  }`,
 		}
 
-		gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryHumanParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
@@ -2627,7 +2733,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 	  }`,
 		}
 
-		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
@@ -2657,15 +2763,15 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	// Delete everything
 	if starshipID != "" {
 		starshipFilter := map[string]interface{}{"id": []string{starshipID}}
-		deleteGqlType(t, "Starship", starshipFilter, 1, nil)
+		DeleteGqlType(t, "Starship", starshipFilter, 1, nil)
 	}
 	if humanID != "" {
 		humanFilter := map[string]interface{}{"id": []string{humanID}}
-		deleteGqlType(t, "Human", humanFilter, 1, nil)
+		DeleteGqlType(t, "Human", humanFilter, 1, nil)
 	}
 	if droidID != "" {
 		droidFilter := map[string]interface{}{"id": []string{droidID}}
-		deleteGqlType(t, "Droid", droidFilter, 1, nil)
+		DeleteGqlType(t, "Droid", droidFilter, 1, nil)
 	}
 }
 
@@ -2686,7 +2792,7 @@ func requireState(t *testing.T, uid string, expectedState *state,
 		}`,
 		Variables: map[string]interface{}{"id": uid},
 	}
-	gqlResponse := executeRequest(t, graphqlURL, params)
+	gqlResponse := executeRequest(t, GraphqlURL, params)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -2716,7 +2822,7 @@ func addState(t *testing.T, name string, executeRequest requestExecutor) *state 
 	addStateExpected := `
 		{ "addState": { "state": [{ "id": "_UID_", "name": "` + name + `", "xcode": "cal" } ]} }`
 
-	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -2746,10 +2852,10 @@ func deleteState(
 	filter map[string]interface{},
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-	deleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
+	DeleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
 }
 
-func deleteGqlType(
+func DeleteGqlType(
 	t *testing.T,
 	typeName string,
 	filter map[string]interface{},
@@ -2763,7 +2869,7 @@ func deleteGqlType(
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
-	gqlResponse := deleteTypeParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := deleteTypeParams.ExecuteAsPost(t, GraphqlURL)
 	if len(expectedErrors) == 0 {
 		RequireNoGQLErrors(t, gqlResponse)
 
@@ -2784,10 +2890,8 @@ func deleteGqlType(
 			require.Equal(t, "Deleted", deleteType["msg"], "while deleting %s (filter: %v)",
 				typeName, filter)
 		}
-	} else {
-		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-			t.Errorf("errors mismatch (-want +got):\n%s", diff)
-		}
+	} else if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+		t.Errorf("errors mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -2810,7 +2914,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 		Variables: map[string]interface{}{"name": name, "xcode": "cal"},
 	}
 
-	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
 		"because id cal already exists for type State")
@@ -2871,7 +2975,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 			anotherGoodPost}},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addPostParams)
+	gqlResponse := postExecutor(t, GraphqlURL, addPostParams)
 
 	addPostExpected := fmt.Sprintf(`{ "addPost": {
 		"post": [{
@@ -2921,7 +3025,7 @@ func addMovie(t *testing.T, executeRequest requestExecutor) *movie {
 	addMovieExpected := `
 		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
 
-	gqlResponse := executeRequest(t, graphqlURL, addMovieParams)
+	gqlResponse := executeRequest(t, GraphqlURL, addMovieParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -2968,7 +3072,7 @@ func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
 	"deleteMovieDirector" : { "msg": "Deleted" }
 }`
 
-	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	testutil.CompareJSON(t, multiMutationExpected, string(gqlResponse.Data))
@@ -2998,7 +3102,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 
 	addMovieDirectorExpected := `{ "addMovieDirector": { "movieDirector": [{ "id": "_UID_", "name": "Spielberg" }] } }`
 
-	gqlResponse := postExecutor(t, graphqlURL, addMovieDirectorParams)
+	gqlResponse := postExecutor(t, GraphqlURL, addMovieDirectorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
@@ -3036,7 +3140,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 		},
 	}
 
-	gqlResponse = getMovieParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = getMovieParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	expectedResponse := `{"getMovie":{"name":"Testmovie","director":[{"name":"Spielberg"}]}}`
 	require.Equal(t, expectedResponse, string(gqlResponse.Data))
@@ -3087,7 +3191,7 @@ func testNumUids(t *testing.T) {
 		}
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addAuthorParams)
+	gqlResponse := postExecutor(t, GraphqlURL, addAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	t.Run("Test numUID in add", func(t *testing.T) {
@@ -3115,7 +3219,7 @@ func testNumUids(t *testing.T) {
 			}},
 		}
 
-		gqlResponse = postExecutor(t, graphqlURL, updatePostParams)
+		gqlResponse = postExecutor(t, GraphqlURL, updatePostParams)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		var updateResult struct {
@@ -3155,7 +3259,7 @@ func testNumUids(t *testing.T) {
 				},
 			},
 		}
-		gqlResponse = postExecutor(t, graphqlURL, deleteAuthorParams)
+		gqlResponse = postExecutor(t, GraphqlURL, deleteAuthorParams)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		var deleteResult struct {
@@ -3181,93 +3285,8 @@ func testNumUids(t *testing.T) {
 	cleanUp(t, []*country{newCountry}, nil, nil)
 }
 
-func checkUser(t *testing.T, userObj, expectedObj *user) {
-	checkUserParams := &GraphQLParams{
-		Query: `query checkUserPassword($name: String!, $pwd: String!) {
-			checkUserPassword(name: $name, password: $pwd) { name }
-		}`,
-		Variables: map[string]interface{}{
-			"name": userObj.Name,
-			"pwd":  userObj.Password,
-		},
-	}
-
-	gqlResponse := checkUserParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	var result struct {
-		CheckUserPasword *user `json:"checkUserPassword,omitempty"`
-	}
-
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
-
-	opt := cmpopts.IgnoreFields(user{}, "Password")
-	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func deleteUser(t *testing.T, userObj user) {
-	deleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
-}
-
-func passwordTest(t *testing.T) {
-	newUser := &user{
-		Name:     "Test User",
-		Password: "password",
-	}
-
-	addUserParams := &GraphQLParams{
-		Query: `mutation addUser($user: [AddUserInput!]!) {
-			addUser(input: $user) {
-				user {
-					name
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"user": []*user{newUser}},
-	}
-
-	updateUserParams := &GraphQLParams{
-		Query: `mutation addUser($user: UpdateUserInput!) {
-			updateUser(input: $user) {
-				user {
-					name
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"user": map[string]interface{}{
-			"filter": map[string]interface{}{
-				"name": map[string]interface{}{
-					"eq": newUser.Name,
-				},
-			},
-			"set": map[string]interface{}{
-				"password": "password_new",
-			},
-		}},
-	}
-
-	t.Run("Test add and update user", func(t *testing.T) {
-		gqlResponse := postExecutor(t, graphqlURL, addUserParams)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.Equal(t, `{"addUser":{"user":[{"name":"Test User"}]}}`,
-			string(gqlResponse.Data))
-
-		checkUser(t, newUser, newUser)
-		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
-
-		gqlResponse = postExecutor(t, graphqlURL, updateUserParams)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.Equal(t, `{"updateUser":{"user":[{"name":"Test User"}]}}`,
-			string(gqlResponse.Data))
-		checkUser(t, newUser, nil)
-		updatedUser := &user{Name: newUser.Name, Password: "password_new"}
-		checkUser(t, updatedUser, updatedUser)
-	})
-
-	deleteUser(t, *newUser)
+	DeleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
 }
 
 func threeLevelDeepMutation(t *testing.T) {
@@ -3315,7 +3334,7 @@ func threeLevelDeepMutation(t *testing.T) {
 		Variables: map[string]interface{}{"input": newStudents},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
+	gqlResponse := postExecutor(t, GraphqlURL, addStudentParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
@@ -3336,9 +3355,9 @@ func threeLevelDeepMutation(t *testing.T) {
 
 	// cleanup
 	filter := getXidFilter("xid", []string{"HS1", "HS2"})
-	deleteGqlType(t, "Student", filter, 2, nil)
+	DeleteGqlType(t, "Student", filter, 2, nil)
 	filter = getXidFilter("xid", []string{"HT0"})
-	deleteGqlType(t, "Teacher", filter, 1, nil)
+	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
 }
 
@@ -3391,7 +3410,7 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 		Variables: map[string]interface{}{"input": newStudents},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
+	gqlResponse := postExecutor(t, GraphqlURL, addStudentParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
@@ -3418,9 +3437,9 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 
 	// cleanup
 	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
-	deleteGqlType(t, "Student", filter, 2, nil)
+	DeleteGqlType(t, "Student", filter, 2, nil)
 	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
-	deleteGqlType(t, "Teacher", filter, 1, nil)
+	DeleteGqlType(t, "Teacher", filter, 1, nil)
 }
 
 func sliceSorter() cmp.Option {
@@ -3478,7 +3497,7 @@ func queryTypenameInMutationPayload(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
@@ -3512,7 +3531,7 @@ func ensureAliasInMutationPayload(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
@@ -3541,7 +3560,7 @@ func mutationsHaveExtensions(t *testing.T) {
 	}
 
 	touchedUidskey := "touched_uids"
-	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := mutation.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
 	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
@@ -3554,7 +3573,7 @@ func mutationsHaveExtensions(t *testing.T) {
 	}
 	err := json.Unmarshal(gqlResponse.Data, &resp)
 	require.NoError(t, err)
-	deleteGqlType(t, "Category",
+	DeleteGqlType(t, "Category",
 		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
 }
 
@@ -3586,7 +3605,7 @@ func mutationsWithAlias(t *testing.T) {
 		"del" : { "message": "Deleted", "uids": 1 }
 	}`
 
-	gqlResponse := aliasMutationParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := aliasMutationParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
@@ -3607,7 +3626,7 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{"id": country.ID},
 	}
-	gqlResponse := updateCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := updateCountryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{
@@ -3633,7 +3652,7 @@ func checkCascadeWithMutationWithoutIDField(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
@@ -3648,4 +3667,1006 @@ func checkCascadeWithMutationWithoutIDField(t *testing.T) {
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
 	deleteState(t, filter, 1, nil)
+}
+
+func int64BoundaryTesting(t *testing.T) {
+	//This test checks the range of Int64
+	//(2^63)=9223372036854775808
+	addPost1Params := &GraphQLParams{
+		Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
+				post1 {
+					title
+					numLikes
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addPost1Expected := `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"numLikes": 9223372036854775807
+
+			},{
+				"title": "Dgraph1",
+				"numLikes": -9223372036854775808
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	DeleteGqlType(t, "post1", filter, 2, nil)
+}
+
+func intWithList(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{{
+		name: "list of integers in mutation",
+		query: `mutation {
+			addpost1(input: [{title: "Dgraph",commentsByMonth:[2,33,11,6],likesByMonth:[4,33,1,66] }]) {
+				post1 {
+					title
+                    commentsByMonth
+                    likesByMonth
+				}
+			}
+		}`,
+		expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"commentsByMonth": [2,33,11,6],
+                "likesByMonth": [4,33,1,66]
+			}]
+		}
+	}`,
+	}, {
+		name: "list of integers in variable",
+		query: `mutation($post1:[Addpost1Input!]!) {
+			addpost1(input:$post1 ) {
+				post1 {
+					title
+                    commentsByMonth
+                    likesByMonth
+				}
+			}
+		}`,
+		variables: map[string]interface{}{"post1": []interface{}{map[string]interface{}{"title": "Dgraph", "commentsByMonth": []int{2, 33, 11, 6}, "likesByMonth": []int64{4, 33, 1, 66}}}},
+
+		expected: `{
+		"addpost1": {
+			"post1": [{
+				"title": "Dgraph",
+				"commentsByMonth": [2,33,11,6],
+                "likesByMonth": [4,33,1,66]
+			}]
+		}
+	}`,
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+			DeleteGqlType(t, "post1", filter, 1, nil)
+		})
+	}
+
+}
+
+func nestedAddMutationWithHasInverse(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
+			addPerson1(input: $input) {
+				person1 {
+					name
+					friends {
+						name
+						friends {
+							name
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "Or",
+					"friends": []interface{}{
+						map[string]interface{}{
+							"name": "Michal",
+							"friends": []interface{}{
+								map[string]interface{}{
+									"name": "Justin",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addPerson1": {
+		  "person1": [
+			{
+			  "friends": [
+				{
+				  "friends": [
+					{
+					  "name": "Or"
+					},
+					{
+					  "name": "Justin"
+					}
+				  ],
+				  "name": "Michal"
+				}
+			  ],
+			  "name": "Or"
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+	// cleanup
+	DeleteGqlType(t, "Person1", map[string]interface{}{}, 3, nil)
+}
+
+func mutationPointType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel($hotel: AddHotelInput!) {
+		  addHotel(input: [$hotel]) {
+			hotel {
+			  name
+			  location {
+				__typename
+				latitude
+				longitude
+			  }
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"hotel": map[string]interface{}{
+			"name": "Taj Hotel",
+			"location": map[string]interface{}{
+				"latitude":  11.11,
+				"longitude": 22.22,
+			},
+		}},
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"location": {
+					"__typename": "Point",
+					"latitude": 11.11,
+					"longitude": 22.22
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
+func mutationPolygonType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel {
+		  addHotel(input: [
+				{
+					name: "Taj Hotel"
+					area : {
+							coordinates: [{
+								points: [{
+									latitude: 11.11,
+									longitude: 22.22
+								}, {
+									latitude: 15.15,
+									longitude: 16.16
+								}, {
+									latitude: 20.20,
+									longitude: 21.21
+								},
+ 								{
+									latitude: 11.11,
+									longitude: 22.22
+								}]
+							}, {
+								points: [{
+									latitude: 11.18,
+									longitude: 22.28
+								}, {
+									latitude: 15.18,
+									longitude: 16.18
+								}, {
+									latitude: 20.28,
+									longitude: 21.28
+								}, {
+									latitude: 11.18,
+									longitude: 22.28
+								}]
+							}]
+    					}
+					}
+					]) {
+			hotel {
+			  name
+			  area {
+				__typename
+				coordinates {
+                  __typename
+				  points {
+					latitude
+					__typename
+					longitude
+				  }
+				}
+			  }
+			}
+		  }
+		}`,
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"area": {
+				  "__typename": "Polygon",
+				  "coordinates": [{
+					"__typename": "PointList",
+					"points": [{
+					  "__typename": "Point",
+					  "latitude": 11.11,
+					  "longitude": 22.22
+					}, {
+					  "__typename": "Point",
+					  "latitude": 15.15,
+					  "longitude": 16.16
+					}, {
+					  "__typename": "Point",
+					  "latitude": 20.20,
+					  "longitude": 21.21
+					},{
+					  "__typename": "Point",
+					  "latitude": 11.11,
+					  "longitude": 22.22
+					}]
+				  }, {
+					  "__typename": "PointList",
+					  "points": [{
+					  	"__typename": "Point",
+						"latitude": 11.18,
+						"longitude": 22.28
+					  }, {
+					  	"__typename": "Point",
+						"latitude": 15.18,
+						"longitude": 16.18
+					  }, {
+					  	"__typename": "Point",
+						"latitude": 20.28,
+						"longitude": 21.28
+					  }, {
+					  	"__typename": "Point",
+						"latitude": 11.18,
+						"longitude": 22.28
+					  }]
+				  }]
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
+func mutationMultiPolygonType(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel {
+		  addHotel(input: [{
+			name: "Taj Hotel"
+			branches : {
+				polygons: [{
+					coordinates: [{
+						points: [{
+							latitude: 11.11,
+							longitude: 22.22
+						}, {
+							latitude: 15.15,
+							longitude: 16.16
+						}, {
+							latitude: 20.20,
+							longitude: 21.21
+						}, {
+							latitude: 11.11,
+							longitude: 22.22
+						}]
+					}, {
+						points: [{
+							latitude: 11.18,
+							longitude: 22.28
+						}, {
+							latitude: 15.18,
+							longitude: 16.18
+						}, {
+							latitude: 20.28,
+							longitude: 21.28
+						}, {
+							latitude: 11.18,
+							longitude: 22.28
+						}]
+					}]
+				}, {
+					coordinates: [{
+						points: [{
+							latitude: 91.11,
+							longitude: 92.22
+						}, {
+							latitude: 15.15,
+							longitude: 16.16
+						}, {
+							latitude: 20.20,
+							longitude: 21.21
+						}, {
+							latitude: 91.11,
+							longitude: 92.22
+						}]
+					}, {
+						points: [{
+							latitude: 11.18,
+							longitude: 22.28
+						}, {
+							latitude: 15.18,
+							longitude: 16.18
+						}, {
+							latitude: 20.28,
+							longitude: 21.28
+						}, {
+							latitude: 11.18,
+							longitude: 22.28
+						}]
+					}]
+				}]
+			}
+		  }]) {
+			hotel {
+			  name
+			  branches {
+				__typename
+				polygons {
+					__typename
+					coordinates {
+					  __typename
+					  points {
+						latitude
+						__typename
+						longitude
+					  }
+					}
+				}
+			  }
+			}
+		  }
+		}`,
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addHotelExpected := `
+	{
+		"addHotel": {
+			"hotel": [{
+				"name": "Taj Hotel",
+				"branches": {
+					"__typename": "MultiPolygon",
+					"polygons": [{
+					  "__typename": "Polygon",
+					  "coordinates": [{
+						"__typename": "PointList",
+						"points": [{
+						  "__typename": "Point",
+						  "latitude": 11.11,
+						  "longitude": 22.22
+						}, {
+						  "__typename": "Point",
+						  "latitude": 15.15,
+						  "longitude": 16.16
+						}, {
+						  "__typename": "Point",
+						  "latitude": 20.20,
+						  "longitude": 21.21
+						},{
+						  "__typename": "Point",
+						  "latitude": 11.11,
+						  "longitude": 22.22
+						}]
+					  }, {
+						  "__typename": "PointList",
+						  "points": [{
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 15.18,
+							"longitude": 16.18
+						  }, {
+							"__typename": "Point",
+							"latitude": 20.28,
+							"longitude": 21.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }]
+					  }]
+					}, {
+					  "__typename": "Polygon",
+					  "coordinates": [{
+						"__typename": "PointList",
+						"points": [{
+						  "__typename": "Point",
+						  "latitude": 91.11,
+						  "longitude": 92.22
+						}, {
+						  "__typename": "Point",
+						  "latitude": 15.15,
+						  "longitude": 16.16
+						}, {
+						  "__typename": "Point",
+						  "latitude": 20.20,
+						  "longitude": 21.21
+						},{
+						  "__typename": "Point",
+						  "latitude": 91.11,
+						  "longitude": 92.22
+						}]
+					  }, {
+						  "__typename": "PointList",
+						  "points": [{
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 15.18,
+							"longitude": 16.18
+						  }, {
+							"__typename": "Point",
+							"latitude": 20.28,
+							"longitude": 21.28
+						  }, {
+							"__typename": "Point",
+							"latitude": 11.18,
+							"longitude": 22.28
+						  }]
+					  }]
+					}]
+				}
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
+
+	// Cleanup
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 1, nil)
+}
+
+func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
+	params := &GraphQLParams{
+		Query: `mutation addCountry($input: [AddCountryInput!]!) {
+			addCountry(input: $input) {
+			  country {
+				name
+				states{
+				  xcode
+				  name
+				  country{
+					name
+				  }
+				}
+			  }
+			}
+		  }`,
+
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{
+					"name": "A country",
+					"states": []interface{}{
+						map[string]interface{}{
+							"xcode": "abc",
+							"name":  "Alphabet",
+						},
+						map[string]interface{}{
+							"xcode": "def",
+							"name":  "Vowel",
+							"country": map[string]interface{}{
+								"name": "B country",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, params)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+		"addCountry": {
+		  "country": [
+			{
+			  "name": "A country",
+			  "states": [
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Alphabet",
+				  "xcode": "abc"
+				},
+				{
+				  "country": {
+					"name": "A country"
+				  },
+				  "name": "Vowel",
+				  "xcode": "def"
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"name": map[string]interface{}{"eq": "A country"}}
+	deleteCountry(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "abc"}}
+	deleteState(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "def"}}
+	deleteState(t, filter, 1, nil)
+}
+
+func addUniversity(t *testing.T) string {
+	addUniversityParams := &GraphQLParams{
+		Query: `mutation addUniversity($university: AddUniversityInput!) {
+			addUniversity(input: [$university]) {
+				university {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"university": map[string]interface{}{
+			"name": "The Great University",
+		}},
+	}
+
+	gqlResponse := addUniversityParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddUniversity struct {
+			University []struct {
+				ID   string
+				name string
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+
+	requireUID(t, result.AddUniversity.University[0].ID)
+	return result.AddUniversity.University[0].ID
+}
+
+func updateUniversity(t *testing.T, id string) {
+	updateUniversityParams := &GraphQLParams{
+		Query: `mutation updateUniversity($university: UpdateUniversityInput!) {
+			updateUniversity(input: $university) {
+				university {
+					name
+					numStudents
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"university": map[string]interface{}{
+			"filter": map[string]interface{}{
+				"id": []string{id},
+			},
+			"set": map[string]interface{}{
+				"numStudents": 1000,
+			},
+		}},
+	}
+
+	gqlResponse := updateUniversityParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateUniversity struct {
+			University []struct {
+				name        string
+				numStudents int
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+}
+
+func filterInMutationsWithArrayForAndOr(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		expected  string
+	}{
+		{
+			name: "Filter with OR at top level in Mutation",
+			query: `mutation {
+			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
+							title
+							numLikes
+				        }
+			         }
+		          }`,
+			expected: `{
+					  "addpost1": {
+						"post1": [
+						  {
+							"title": "Dgraph",
+							"numLikes": 100
+						  }
+						]
+					  }
+					}`,
+		},
+		{
+			name: "Filter with OR at top level in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			variables: `{"filter":{"or":{"title":{"eq": "Dgraph"}}}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with AND at top level in Mutation",
+			query: `mutation {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with AND at top level in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:$filter) {
+								title
+								numLikes
+							}
+						}
+					}`,
+			variables: `{"filter":{"and":{"title":{"eq": "Dgraph"}}}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with Nested And-OR in Mutation",
+			query: `mutation {
+						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+							post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
+								title 
+								numLikes
+							}
+						}
+						}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+		{
+			name: "Filter with Nested And-OR in Mutation using variables",
+			query: `mutation($filter:post1Filter) {
+			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+				        post1(filter:$filter) {
+					      title
+                          numLikes
+				        }
+                      }
+		           }`,
+			variables: `{"filter": {"and": [{"title":{"eq": "Dgraph"}},{"or":{"numLikes":{"eq": 100}}}]}}`,
+			expected: `{
+						  "addpost1": {
+							"post1": [
+							  {
+								"title": "Dgraph",
+								"numLikes": 100
+							  }
+							]
+						  }
+						}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+			DeleteGqlType(t, "post1", filter, 1, nil)
+		})
+	}
+
+}
+
+func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
+	params := &GraphQLParams{Query: `mutation {
+			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
+				post1(filter:{title:{eq:"Dgraph"}}) {
+					title
+					numLikes
+				}
+			}
+		}`}
+	resp := params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		expected  string
+	}{
+		{name: "Filter with Nested OR-AND in Update Mutation",
+			query: `mutation updatepost1{
+                    	updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+				    		post1{
+								title
+								numLikes
+							}
+						}
+					}`,
+			expected: `{
+						  "updatepost1": {
+							"post1": [
+							  {
+								"title": "Dgraph1",
+								"numLikes": 200
+							  }
+							]
+						  }
+						}`,
+		},
+		{name: "Filter with Nested OR-AND in Update Mutation using variables",
+			query: `mutation updatepost1($post1:Updatepost1Input!) {
+		              updatepost1(input:$post1){
+					    post1{
+							 title
+							 numLikes
+					}
+				}
+			}`,
+			variables: `{"post1": {"filter":{"or": [{"title":{"eq": "Dgraph1"}},{"and":{"numLikes":{"eq": 140}}}]},
+				"set":{
+					"numLikes": "200"
+				}
+			}
+			}`,
+			expected: `{
+			"updatepost1": {
+				"post1": [{
+					"title": "Dgraph1",
+					"numLikes": 200
+				}]
+			}
+		}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
+	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
+	DeleteGqlType(t, "post1", filter, 2, nil)
+
+}
+
+func idDirectiveWithInt64Mutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addBook(input:[
+			{
+			  bookId: 1234567890123
+			  name: "Graphql"
+			  desc: "Graphql is the next big thing"
+			}
+		  ]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	expected := `{
+		  	"addBook": {
+			  "numUids": 1
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
+}
+
+func idDirectiveWithIntMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addChapter(input:[{
+			chapterId: 2
+			name: "Graphql and more"
+			bookId: 1234567890123
+		  }]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"addChapter": {
+			  "numUids": 1
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
+}
+
+func idDirectiveWithFloatMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addSection(input:[{
+			chapterId: 2
+			name: "Graphql: Introduction"
+			sectionId: 2.1
+		  },
+		  {
+			chapterId: 2
+			name: "Graphql Available Data Types"
+			sectionId: 2.2
+		  }]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"addSection": {
+			  "numUids": 2
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
 }

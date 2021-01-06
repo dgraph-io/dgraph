@@ -134,13 +134,22 @@ func check2(v interface{}, err error) {
 }
 
 func getError(key, val string) error {
-	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
+	jsonKey, _ := json.Marshal(key)
+	jsonKey = jsonKey[1 : len(jsonKey)-1]
+	jsonVal, _ := json.Marshal(val)
+	jsonVal = jsonVal[1 : len(jsonVal)-1]
+	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, jsonKey, jsonVal)
 }
 
 func compareHeaders(headers map[string][]string, actual http.Header) error {
 	if headers == nil {
 		return nil
 	}
+	// unless some other content-type was expected, always make sure we get JSON as content-type.
+	if _, ok := headers["Content-Type"]; !ok {
+		headers["Content-Type"] = []string{"application/json"}
+	}
+
 	actualHeaderLen := len(actual)
 	expectedHeaderLen := len(headers)
 	if actualHeaderLen != expectedHeaderLen {
@@ -247,6 +256,26 @@ func getDefaultResponse() []byte {
 		]`
 
 	return []byte(resTemplate)
+}
+
+func getRestError(w http.ResponseWriter, err []byte) {
+	w.WriteHeader(http.StatusBadRequest)
+	check2(w.Write(err))
+}
+
+func getFavMoviesErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/0x123?name=Author&num=10",
+		body:      "",
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for myFavoriteMovies query","locations": [ { "line": 5, "column": 4 } ],"path": ["Movies","name"]}]}`))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -398,6 +427,20 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
     ]`)))
 }
 
+func favMoviesCreateErrorHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreateError",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":"Mov2"}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for FavoriteMoviesCreate query"}]}`))
+}
+
 func favMoviesCreateWithNullBodyHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
@@ -475,6 +518,21 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
         "id": "0x1",
         "name": "Mov1"
     }`)))
+}
+
+func humanBioHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/humanBio",
+		body:      `{"name":"Han","totalCredits":10}`,
+	})
+	if err != nil {
+		w.WriteHeader(400)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`"My name is Han and I have 10 credits."`)))
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
@@ -834,6 +892,10 @@ func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
 func userNameHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody input
 	nameHandler(w, r, &inputBody)
+}
+
+func userNameErrorHandler(w http.ResponseWriter, r *http.Request) {
+	getRestError(w, []byte(`{"errors":[{"message": "Rest API returns Error for field name"}]}`))
 }
 
 func userNameWithoutAddressHandler(w http.ResponseWriter, r *http.Request) {
@@ -1210,6 +1272,7 @@ func main() {
 
 	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
+	http.HandleFunc("/favMoviesError/", getFavMoviesErrorHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/favMoviesPostWithBody/", postFavMoviesWithBodyHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
@@ -1218,6 +1281,7 @@ func main() {
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
+	http.HandleFunc("/favMoviesCreateError", favMoviesCreateErrorHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
 	http.HandleFunc("/favMoviesCreateWithNullBody", favMoviesCreateWithNullBodyHandler)
@@ -1232,12 +1296,14 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/userNameError", userNameErrorHandler)
 	http.HandleFunc("/userNameWithoutAddress", userNameWithoutAddressHandler)
 	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
+	http.HandleFunc("/humanBio", humanBioHandler)
 
 	/*************************************
 	* For testing http with graphql

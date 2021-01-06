@@ -1,7 +1,6 @@
 +++
-title = "GraphQL+-: Tips and Tricks"
+title = "DQL: Tips and Tricks"
 [menu.main]
-  url = "/tips/"
   identifier = "tips"
   parent = "dql"
   weight = 5
@@ -119,6 +118,28 @@ Example: Get all unique genres from all of the movies directed by Steven Spielbe
 
   q(func: uid(genres)) {
     name@.
+  }
+}
+{{< /runnable >}}
+
+## Usage of checkpwd boolean
+
+Store the result of `checkpwd` in a query variable and then match it against `1` (`checkpwd` is `true`) or `0` (`checkpwd` is `false`).
+
+{{< runnable >}}
+{  
+  exampleData(func: has(email)) {
+    uid
+    email
+    check as checkpwd(pass, "1bdfhJHb!fd")
+  }
+  userMatched(func: eq(val(check), 1)) {
+    uid
+    email
+  }
+  userIncorrect(func: eq(val(check), 0)) {
+    uid
+    email
   }
 }
 {{< /runnable >}}

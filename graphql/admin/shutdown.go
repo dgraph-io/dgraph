@@ -19,16 +19,16 @@ package admin
 import (
 	"context"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
 var (
 	// ServerCloser is used to signal and wait for other goroutines to return gracefully after user
 	// requests shutdown.
-	ServerCloser *y.Closer
+	ServerCloser *z.Closer
 )
 
 func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

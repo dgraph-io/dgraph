@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -29,18 +30,17 @@ import (
 )
 
 func setSchema(schema string) {
-	for retry := 0; retry < 3; retry++ {
-		err := client.Alter(context.Background(), &api.Operation{
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{
 			Schema: schema,
 		})
 		if err == nil {
 			return
 		}
-		// We'll panic if we are in last iteration.
-		if retry == 2 {
-			panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
-		}
+		time.Sleep(time.Second)
 	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 }
 
 func dropPredicate(pred string) {
@@ -212,6 +212,9 @@ const testSchema = `
 type Person {
 	name
 	pet
+	friend
+	gender
+	alive
 }
 
 type Animal {
@@ -243,6 +246,9 @@ type SchoolInfo {
 type User {
 	name
 	password
+	gender
+	friend
+	alive
 }
 
 type Node {
@@ -277,6 +283,7 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
+pet_name                       : [string] @index(exact) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
@@ -315,6 +322,9 @@ noindex_dob                    : datetime .
 noindex_alive                  : bool .
 noindex_salary                 : float .
 language                       : [string] .
+score                          : [int] @index(int) .
+average                        : [float] @index(float) .
+gender						   : string .
 `
 
 func populateCluster() {
@@ -612,6 +622,10 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<23> <dgraph.type> "Person" .
+		<24> <dgraph.type> "Person" .
+		<25> <dgraph.type> "Person" .
+		<31> <dgraph.type> "Person" .
 		<32> <dgraph.type> "SchoolInfo" .
 		<33> <dgraph.type> "SchoolInfo" .
 		<34> <dgraph.type> "SchoolInfo" .
@@ -729,6 +743,21 @@ func populateCluster() {
 		<56> <connects> <58> (weight=1) .
 		<58> <connects> <59> (weight=1) .
 		<59> <connects> <60> (weight=1) .
+
+		# data for testing between operator.
+		<20000> <score> "90" .
+		<20000> <score> "56" .
+		<20000> <average> "46.93" .
+		<20000> <average> "55.10" .
+		<20000> <pet_name> "little master" .
+		<20000> <pet_name> "master blaster" .
+
+		<20001> <score> "68" .
+		<20001> <score> "85" .
+		<20001> <average> "35.20" .
+		<20001> <average> "49.33" .
+		<20001> <pet_name> "mahi" .
+		<20001> <pet_name> "ms" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

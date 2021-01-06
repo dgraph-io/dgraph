@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Single Host Setup"
+weight = 4
 [menu.main]
     parent = "deploy"
-    weight = 4
 +++
 
 ## Run directly on the host
@@ -21,8 +21,8 @@ For all other various flags, run `dgraph zero --help`.
 ### Run dgraph alpha
 
 ```sh
-dgraph alpha --lru_mb=<typically one-third the RAM> --my=IPADDR:7080 --zero=localhost:5080
-dgraph alpha --lru_mb=<typically one-third the RAM> --my=IPADDR:7081 --zero=localhost:5080 -o=1
+dgraph alpha --my=IPADDR:7080 --zero=localhost:5080
+dgraph alpha --my=IPADDR:7081 --zero=localhost:5080 -o=1
 ```
 
 Notice the use of `-o` for the second Alpha to add offset to the default ports used. Zero automatically assigns an unique ID to each Alpha, which is persisted in the write ahead log (wal) directory, users can specify the index using `--idx` option. Dgraph Alphas use two directories to persist data and
@@ -64,12 +64,12 @@ docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgr
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 ```
 ```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
@@ -85,7 +85,7 @@ We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a
 * [Install Docker Machine](https://docs.docker.com/machine/install-machine/) on your machine.
 
 {{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS config.
-Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
+Instructions for running with TLS refer [TLS instructions]({{< relref "deploy/tls-configuration.md" >}}).{{% /notice %}}
 
 Here we'll go through an example of deploying Dgraph Zero, Alpha and Ratel on an AWS instance.
 

@@ -7,6 +7,7 @@ type Author {
 	name: String! @search(by: [hash])
 	dob: DateTime
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 type Post {
@@ -22,12 +23,40 @@ type Post {
 
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
-Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
-Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
 """
 scalar Int64
 
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
 
 enum DgraphIndex {
 	int
@@ -44,6 +73,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -78,6 +108,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -85,13 +193,20 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -99,6 +214,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -107,6 +223,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -115,6 +232,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -123,6 +241,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -141,14 +260,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -165,6 +287,14 @@ type AddPostPayload {
 	numUids: Int
 }
 
+type AuthorAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+	dobMin: DateTime
+	dobMax: DateTime
+}
+
 type DeleteAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
@@ -175,6 +305,16 @@ type DeletePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
+}
+
+type PostAggregateResult {
+	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type UpdateAuthorPayload {
@@ -234,8 +374,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -263,8 +403,8 @@ input PostFilter {
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
@@ -313,8 +453,10 @@ input UpdatePostInput {
 type Query {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 	getPost(postID: ID!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
 }
 
 #######################

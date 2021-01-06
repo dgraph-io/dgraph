@@ -1,9 +1,9 @@
 +++
 title = "Overview"
+weight = 1
 [menu.main]
     parent = "schema"
     identifier = "schema-overview"
-    weight = 1   
 +++
 
 This section describes all the things you can put in your input GraphQL schema, and what gets generated from that.

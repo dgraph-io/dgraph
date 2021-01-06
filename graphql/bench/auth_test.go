@@ -47,6 +47,7 @@ func getAuthMeta(schema string) *testutil.AuthMeta {
 	if err != nil {
 		panic(err)
 	}
+	authorization.SetAuthMeta(authMeta)
 
 	return &testutil.AuthMeta{
 		PublicKey: authMeta.VerificationKey,

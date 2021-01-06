@@ -30,11 +30,12 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
+	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/tool"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/tool"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -77,7 +78,7 @@ var rootConf = viper.New()
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
 	&debug.Debug, &increment.Increment, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
-	&tool.Tool,
+	&raftmigrate.RaftMigrate, &tool.Tool,
 }
 
 func initCmds() {
@@ -159,18 +160,17 @@ func setGlogFlags(conf *viper.Viper) {
 	}
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
-		if stringValue, ok := conf.Get(gflag).(string); ok {
-			// Special handling for log_backtrace_at flag because the flag is of
-			// type tracelocation. The nil value for tracelocation type is
-			// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
-			// But we can't set nil value for the flag because of
-			// https://github.com/golang/glog/blob/master/glog.go#L374
-			// Skip setting value if log_backstrace_at is nil in config.
-			if gflag == "log_backtrace_at" && stringValue == ":0" {
-				continue
-			}
-			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
+		stringValue := conf.GetString(gflag)
+		// Special handling for log_backtrace_at flag because the flag is of
+		// type tracelocation. The nil value for tracelocation type is
+		// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
+		// But we can't set nil value for the flag because of
+		// https://github.com/golang/glog/blob/master/glog.go#L374
+		// Skip setting value if log_backstrace_at is nil in config.
+		if gflag == "log_backtrace_at" && (stringValue == "0" || stringValue == ":0") {
+			continue
 		}
+		x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 	}
 }
 

@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof" // http profiler
 	"sort"
 	"strings"
 	"sync"
@@ -49,6 +51,8 @@ var (
 	verbose    = flag.Bool("verbose", true, "Output all logs in verbose mode.")
 	login      = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
 	slashToken = flag.String("slash-token", "", "Slash GraphQL API token")
+	debugHttp  = flag.String("http", "localhost:6060",
+		"Address to serve http (pprof).")
 )
 
 var startBal = 10
@@ -340,6 +344,10 @@ func grpcConnection(one string) (*grpc.ClientConn, error) {
 
 func main() {
 	flag.Parse()
+	go func() {
+		log.Printf("Listening for /debug HTTP requests at address: %v\n", *debugHttp)
+		log.Fatal(http.ListenAndServe(*debugHttp, nil))
+	}()
 
 	all := strings.Split(*alpha, ",")
 	x.AssertTrue(len(all) > 0)

@@ -1,14 +1,17 @@
 +++
 title = "Custom DQL"
+weight = 6
 [menu.main]
     parent = "custom"
-    weight = 6   
 +++
 
-At present, it is an experimental feature in master. You can specify the DQL (aka GraphQL+-) query you want to execute
-while running a custom GraphQL query, and Dgraph's GraphQL API will execute that for you.
+Dgraph Query Language (DQL - formerly GraphQL+-) is rapidly evolving, and now
+includes support for custom logic. You can specify the DQL (aka GraphQL+-) query
+you want to execute while running a custom GraphQL query, and Dgraph's GraphQL
+API will execute that for you.
 
-It helps to build logic that you can't do with the current GraphQL CRUD API.
+DQL lets you build custom logic that goes beyond what is possible with the
+current GraphQL CRUD API.
 
 For example, lets say you had following schema:
 ```graphql

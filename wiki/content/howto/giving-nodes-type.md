@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Giving Nodes a Type"
+weight = 5
 [menu.main]
     parent = "howto"
-    weight = 5
 +++
 
 It's often useful to give the nodes in a graph *types* (also commonly referred

@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -35,8 +35,8 @@ type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
 
 	Pstore   *badger.DB
-	WALstore *badger.DB
-	gcCloser *y.Closer // closer for valueLogGC
+	WALstore *raftwal.DiskStorage
+	gcCloser *z.Closer // closer for valueLogGC
 
 	needTs chan tsReq
 }
@@ -62,14 +62,10 @@ func InitServerState() {
 	x.WorkerConfig.ProposedGroupId = groupId
 }
 
-func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
+func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).
-		WithTruncate(true).
 		WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
-
-	// Do not load bloom filters on DB open.
-	opt.LoadBloomsOnOpen = false
 
 	// Disable conflict detection in badger. Alpha runs in managed mode and
 	// perform its own conflict detection so we don't need badger's conflict
@@ -77,50 +73,11 @@ func setBadgerOptions(opt badger.Options, wal bool) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	var badgerTables string
-	var badgerVlog string
-	if wal {
-		// Settings for the write-ahead log.
-		badgerTables = Config.BadgerWalTables
-		badgerVlog = Config.BadgerWalVlog
-		// Disable compression for WAL as it is supposed to be fast. Compression makes it a
-		// little slow (Though we save some disk space but it is not worth the slowness).
-		opt.Compression = options.None
-	} else {
-		// Settings for the data directory.
-		badgerTables = Config.BadgerTables
-		badgerVlog = Config.BadgerVlog
-		glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-		// Default value of badgerCompressionLevel is 3 so compression will always
-		// be enabled, unless it is explicitly disabled by setting the value to 0.
-		if Config.BadgerCompressionLevel != 0 {
-			// By default, compression is disabled in badger.
-			opt.Compression = options.ZSTD
-			opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
-		}
-	}
+	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
+	opt.Compression = Config.PostingDirCompression
+	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
 
-	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
-	switch badgerTables {
-	case "mmap":
-		opt.TableLoadingMode = options.MemoryMap
-	case "ram":
-		opt.TableLoadingMode = options.LoadToRAM
-	case "disk":
-		opt.TableLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Tables options")
-	}
-
-	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
-	switch badgerVlog {
-	case "mmap":
-		opt.ValueLogLoadingMode = options.MemoryMap
-	case "disk":
-		opt.ValueLogLoadingMode = options.FileIO
-	default:
-		x.Fatalf("Invalid Badger Value log options")
-	}
+	// Settings for the data directory.
 	return opt
 }
 
@@ -141,21 +98,8 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions(Config.WALDir)
-		opt = setBadgerOptions(opt, true)
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
-		opt.BlockCacheSize = Config.WBlockCacheSize
-		opt.IndexCacheSize = Config.WIndexCacheSize
-
-		// Print the options w/o exposing key.
-		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
-		key := opt.EncryptionKey
-		opt.EncryptionKey = nil
-		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
-		opt.EncryptionKey = key
-
-		s.WALstore, err = badger.Open(opt)
-		x.Checkf(err, "Error while creating badger KV WAL store")
+		s.WALstore, err = raftwal.InitEncrypted(Config.WALDir, x.WorkerConfig.EncryptionKey)
+		x.Check(err)
 	}
 	{
 		// Postings directory
@@ -167,7 +111,7 @@ func (s *ServerState) initStorage() {
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize)
-		opt = setBadgerOptions(opt, false)
+		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
 		// TODO: Build a stringify interface in Badger options, which is used to print nicely here.
@@ -182,10 +126,13 @@ func (s *ServerState) initStorage() {
 		// zero out from memory
 		opt.EncryptionKey = nil
 	}
+	// Temp directory
+	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
 
-	s.gcCloser = y.NewCloser(2)
+	s.gcCloser = z.NewCloser(2)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
-	go x.RunVlogGC(s.WALstore, s.gcCloser)
+	// Commenting this out because Badger is doing its own cache checks.
+	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.

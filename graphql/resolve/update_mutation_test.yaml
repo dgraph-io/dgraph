@@ -1,4 +1,240 @@
 -
+  name: "Update set mutation on Geo - Point type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "location":  { "near" : { "distance": 33.33, "coordinate" : { "latitude": 11.11, "longitude": 22.22 } } }
+        },
+        "set": {
+          "location": { "latitude": 11.11 , "longitude" : 22.22}
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
+        uid
+      }
+    }
+
+-
+  name: "Update remove mutation on Geo - Point type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "remove": {
+          "location": { "latitude": 11.11 , "longitude" : 22.22}
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  dgmutations:
+    - deletejson: |
+        { "uid" : "uid(x)",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
+        uid
+      }
+    }
+
+-
+  name: "Update remove mutation on Geo - Polygon type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        hotel {
+          name
+          area {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "remove": {
+          "area": {
+            "coordinates": [{
+              "points": [{
+                "latitude": 11.11,
+                "longitude": 22.22
+              }, {
+                "latitude": 15.15,
+                "longitude": 16.16
+              }, {
+                "latitude": 20.20,
+                "longitude": 21.21
+              }]
+            }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+            }]
+          }
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  dgmutations:
+    - deletejson: |
+        { "uid" : "uid(x)",
+          "Hotel.area": {
+            "type": "Polygon",
+            "coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
+        uid
+      }
+    }
+
+-
+  name: "Update set mutation on Geo - MultiPolygon type"
+  gqlmutation: |
+    mutation updateHotel($patch: UpdateHotelInput!) {
+      updateHotel(input: $patch) {
+        numUids
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123", "0x124"]
+        },
+        "set": {
+          "branches": {
+            "polygons": [{
+              "coordinates": [{
+                "points": [{
+                  "latitude": 11.11,
+                  "longitude": 22.22
+                }, {
+                  "latitude": 15.15,
+                  "longitude": 16.16
+                }, {
+                  "latitude": 20.20,
+                  "longitude": 21.21
+                }]
+              }, {
+                "points": [{
+                  "latitude": 11.18,
+                  "longitude": 22.28
+                }, {
+                  "latitude": 15.18,
+                  "longitude": 16.18
+                }, {
+                  "latitude": 20.28,
+                  "longitude": 21.28
+                }]
+              }]
+            }, {
+              "coordinates": [{
+                "points": [{
+                  "latitude": 91.11,
+                  "longitude": 92.22
+                }, {
+                  "latitude": 15.15,
+                  "longitude": 16.16
+                }, {
+                  "latitude": 20.20,
+                  "longitude": 21.21
+                }]
+              }, {
+                "points": [{
+                  "latitude": 11.18,
+                  "longitude": 22.28
+                }, {
+                  "latitude": 15.18,
+                  "longitude": 16.18
+                }, {
+                  "latitude": 20.28,
+                  "longitude": 21.28
+                }]
+              }]
+            }]
+          }
+        }
+      }
+    }
+  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Hotel.branches": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+          }
+        }
+      cond: "@if(gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
+        uid
+      }
+    }
+
+-
   name: "Update set mutation with variables"
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
@@ -165,30 +401,6 @@
       x as updateCharacter(func: uid(0x123)) @filter(type(Character)) {
         uid
       }
-    }
-
--
-  name: "Update mutation for an interface whose implementation has auth rules"
-  gqlmutation: |-
-    mutation {
-      updateX(input: {filter: { id: ["0x123"] }, set: {age: 50}}) {
-        x {
-          id
-          username
-          age
-        }
-      }
-    }
-  explanation: "The mutation should get rewritten to dummy query because its implementation has auth rules."
-  dgmutations:
-    - setjson: |
-        { "uid" : "uid(x)",
-          "X.age": 50
-        }
-      cond: "@if(gt(len(x), 0))"
-  dgquery: |-
-    query {
-      x as updateX()
     }
 
 -
@@ -440,7 +652,7 @@
     }
   dgmutations:
     - deletejson: |
-        { 
+        {
                 "Author.posts": [{
                         "uid" : "0x124",
                         "Post.author": {
@@ -501,6 +713,33 @@
         uid
       }
     }
+
+-
+  name: "Update remove reference without id or xid"
+  gqlmutation: |
+    mutation updateWorkflow($patch: UpdateWorkflowInput!) {
+      updateWorkflow(input: $patch) {
+        workflow {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "id": ["0x123"]
+        },
+        "remove": {
+          "nodes": [ { "name": "node" } ]
+        },
+        "set": {
+          "nodes": [ { "name": "node" } ]
+        }
+      }
+    }
+  error:
+    message: |-
+      failed to rewrite mutation payload because object of type: Node doesn't have a field of type ID! or @id and can't be referenced for deletion
 
 -
   name: "Update add and remove together"
@@ -1140,16 +1379,16 @@
 # Additional Deletes
 #
 # If we have
-# 
+#
 # type Post { ... author: Author @hasInverse(field: posts) ... }
 # type Author { ... posts: [Post] ... }
 #
 # and existing edge
-# 
+#
 # Post1 --- author --> Author1
-# 
+#
 # there must also exist edge
-# 
+#
 # Author1 --- posts --> Post1
 #
 # So if we did an update that changes the author of Post1 to Author2, we need to
@@ -1166,7 +1405,7 @@
 # author we are updating.
 #
 # Updates can only happen at the top level of a mutation, so there's no deep cases.
-# There's four cases to consider: 
+# There's four cases to consider:
 #  * updating a node by adding a reference by ID (e.g. attaching a post to an author
 #    causes a delete on the author the post was attached to - if it's not the post
 #    being updated)
@@ -1186,8 +1425,8 @@
       }
     }
   gqlvariables: |
-    { 
-      "patch": { 
+    {
+      "patch": {
         "filter": {
           "id": ["0x123"]
         },
@@ -1198,7 +1437,7 @@
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid" : "uid(x)",
           "Author.posts": [
             {
@@ -1252,7 +1491,7 @@
     - setjson: |
         { "uid" : "uid(x)",
           "Post.text": "updated text",
-          "Post.author": { 
+          "Post.author": {
             "uid": "0x456",
             "Author.posts": [ { "uid": "uid(x)" } ]
           }
@@ -1288,8 +1527,8 @@
       }
     }
   gqlvariables: |
-    { 
-      "patch": { 
+    {
+      "patch": {
         "filter": {
           "id": ["0x123"]
         },
@@ -1309,7 +1548,7 @@
       cond: "@if(eq(len(State4), 0) AND gt(len(x), 0))"
   dgmutationssec:
     - setjson: |
-        { 
+        {
           "uid" : "uid(x)",
           "Country.states": [
             {
@@ -1382,16 +1621,16 @@
       }
     }
   gqlvariables: |
-    { 
+    {
       "patch":
-      { 
+      {
         "filter": { "name": { "eq": "A.N. Owner" } },
         "set": { "computers": { "name": "Comp" } }
       }
     }
   dgmutations:
     - setjson: |
-        { 
+        {
           "uid": "_:Computer4",
           "dgraph.type": ["Computer"],
           "Computer.name": "Comp"
@@ -1400,7 +1639,7 @@
   dgmutationssec:
     - setjson: |
         { "uid" : "uid(x)",
-          "ComputerOwner.computers": { 
+          "ComputerOwner.computers": {
             "uid": "uid(Computer4)",
             "Computer.owners": [ { "uid": "uid(x)" } ]
           }
@@ -1434,3 +1673,87 @@
         Computer5 as ComputerOwner.computers @filter(NOT (uid(Computer4)))
       }
     }
+
+-
+  name: "Add mutation with union"
+  gqlmutation: |
+    mutation($patch: UpdateHomeInput!) {
+      updateHome(input: $patch) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal", "breed": "German Shephard"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { "parrotRef": { "id": "0x124"} }
+        },
+        "remove": {
+          "members": [ { "parrotRef": { "id": "0x125"} } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateHome(func: uid(0x123)) @filter(type(Home)) {
+        uid
+      }
+      Parrot3 as Parrot3(func: uid(0x124)) @filter(type(Parrot)) {
+        uid
+      }
+      Parrot8 as Parrot8(func: uid(0x125)) @filter(type(Parrot)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Home.address": "United Street",
+          "Home.favouriteMember": {
+            "uid": "0x124"
+          },
+          "Home.members": [{
+            "Animal.category": "Mammal",
+            "Dog.breed": "German Shephard",
+            "dgraph.type": ["Dog", "Animal"],
+            "uid": "_:Dog4"
+          }, {
+            "Animal.category": "Bird",
+            "Parrot.repeatsWords": ["squawk"],
+            "dgraph.type": ["Parrot", "Animal"],
+            "uid": "_:Parrot5"
+          }, {
+            "Character.name": "Han Solo",
+            "Employee.ename": "Han_emp",
+            "dgraph.type": ["Human", "Character", "Employee"],
+            "uid": "_:Human6"
+          }],
+          "uid": "uid(x)"
+        }
+      cond: "@if(eq(len(Parrot3), 1) AND gt(len(x), 0))"
+    - deletejson: |
+        {
+          "Home.members": [
+            {
+              "uid": "0x125"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(eq(len(Parrot8), 1) AND gt(len(x), 0))"

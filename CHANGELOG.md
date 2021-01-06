@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
-## [20.07.1] - Unreleased
+## [20.07.1] - 2020-09-17
 [20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
 
 ### Changed
@@ -19,6 +19,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - GraphQL
   - Adds auth for subscriptions. ([#6165][]) 
+- Add --cache_mb and --cache_percentage flags. ([#6286][])
+- Add flags to set table and vlog loading mode for zero. ([#6342][])
+- Add flag to set up compression in zero. ([#6355][])
   
 ### Fixed
 
@@ -33,12 +36,46 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Don't reserve certain queries/mutations/inputs when a type is remote. ([#6201][])
   - Linking of xids for deep mutations. ([#6203][])
   - Prevent empty values in fields having `id` directive. ([#6196][]) 
+  - Fixes unexpected fragment behaviour. ([#6274][]) 
+  - Incorrect generatedSchema in update GQLSchema. ([#6354][])
 - Fix out of order issues with split keys in bulk loader. ([#6124][])
 - Rollup a batch if more than 2 seconds elapsed since last batch. ([#6137][])
 - Refactor: Simplify how list splits are tracked. ([#6070][])
 - Fix: Don't allow idx flag to be set to 0 on dgraph zero. ([#6192][]) 
 - Fix error message for idx = 0 for dgraph zero. ([#6199][])
+- Stop forcing RAM mode for the write-ahead log. ([#6259][])
+- Fix panicwrap parent check. ([#6299][]) 
+- Sort manifests by BackupNum in file handler. ([#6279][])
+- Fixes queries which use variable at the top level. ([#6290][])
+- Return error on closed DB. ([#6320][])
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6332][]) 
+- Proto fix needed for PR [#6331][]. ([#6346][]) 
+- Sentry nil pointer check. ([#6374][]) 
+- Don't store start_ts in postings. ([#6213][]) 
+- Use z.Closer instead of y.Closer. ([#6399][]) 
+- Make Alpha Shutdown Again. ([#6402][])
+- Force exit if CTRL-C is caught before initialization. ([#6407][])
+- Update advanced-queries.md.
+- Batch list in bulk loader to avoid panic. ([#6446][])
+- Enterprise features
+  - Make backups cancel other tasks. ([#6243][]) 
+  - Online Restore honors credentials passed in. ([#6302][]) 
+  - Add a lock to backups to process one request at a time. ([#6339][])
+  - Fix Star_All delete query when used with ACL enabled. ([#6336][])
 
+[#6407]: https://github.com/dgraph-io/dgraph/issues/6407
+[#6336]: https://github.com/dgraph-io/dgraph/issues/6336
+[#6446]: https://github.com/dgraph-io/dgraph/issues/6446
+[#6402]: https://github.com/dgraph-io/dgraph/issues/6402
+[#6399]: https://github.com/dgraph-io/dgraph/issues/6399
+[#6346]: https://github.com/dgraph-io/dgraph/issues/6346
+[#6332]: https://github.com/dgraph-io/dgraph/issues/6332
+[#6243]: https://github.com/dgraph-io/dgraph/issues/6243
+[#6302]: https://github.com/dgraph-io/dgraph/issues/6302
+[#6339]: https://github.com/dgraph-io/dgraph/issues/6339
+[#6355]: https://github.com/dgraph-io/dgraph/issues/6355
+[#6342]: https://github.com/dgraph-io/dgraph/issues/6342
+[#6286]: https://github.com/dgraph-io/dgraph/issues/6286
 [#6201]: https://github.com/dgraph-io/dgraph/issues/6201
 [#6203]: https://github.com/dgraph-io/dgraph/issues/6203
 [#6196]: https://github.com/dgraph-io/dgraph/issues/6196
@@ -61,8 +98,18 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6098]: https://github.com/dgraph-io/dgraph/issues/6098
 [#6151]: https://github.com/dgraph-io/dgraph/issues/6151
 [#6165]: https://github.com/dgraph-io/dgraph/issues/6165
+[#6259]: https://github.com/dgraph-io/dgraph/issues/6259
+[#6299]: https://github.com/dgraph-io/dgraph/issues/6299
+[#6279]: https://github.com/dgraph-io/dgraph/issues/6279
+[#6290]: https://github.com/dgraph-io/dgraph/issues/6290
+[#6274]: https://github.com/dgraph-io/dgraph/issues/6274
+[#6320]: https://github.com/dgraph-io/dgraph/issues/6320
+[#6331]: https://github.com/dgraph-io/dgraph/issues/6331
+[#6354]: https://github.com/dgraph-io/dgraph/issues/6354
+[#6374]: https://github.com/dgraph-io/dgraph/issues/6374
+[#6213]: https://github.com/dgraph-io/dgraph/issues/6213
 
-## [20.03.5] - Unreleased
+## [20.03.5] - 2020-09-17
 [20.03.5]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.03.5
 
 ### Changed
@@ -70,14 +117,55 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Add retry for schema update. ([#6097][]) 
 - Queue keys for rollup during mutation. ([#6150][]) 
 
+### Added
+
+- Add --cache_mb and --cache_percentage flags. ([#6287][])
+- Add flag to set up compression in zero. ([#6356][])
+- Add flags to set table and vlog loading mode for zero. ([#6343][])
+
 ### Fixed
 
+- GraphQL
+  - Prevent empty values in fields having `id` directive. ([#6197][]) 
 - Fix out of order issues with split keys in bulk loader. ([#6125][])
 - Rollup a batch if more than 2 seconds elapsed since last batch. ([#6138][])
 - Simplify how list splits are tracked. ([#6071][])
 - Perform rollups more aggresively. ([#6147][]) 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6156][]) 
+- Stop forcing RAM mode for the write-ahead log. ([#6260][])
+- Fix panicwrap parent check.  ([#6300][]) 
+- Sort manifests by backup number. ([#6280][]) 
+- Don't store start_ts in postings. ([#6214][])
+- Update reverse index when updating single UID predicates. ([#6006][])
+- Return error on closed DB.  ([#6321][]) 
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6333][]) 
+- Sentry nil pointer check. ([#6375][])
+- Use z.Closer instead of y.Closer. ([#6398][])
+- Make Alpha Shutdown Again. ([#6403][])
+- Force exit if CTRL-C is caught before initialization. ([#6409][])
+- Batch list in bulk loader to avoid panic. ([#6445][])
+- Enterprise features
+  -  Make backups cancel other tasks. ([#6244][])
+  - Add a lock to backups to process one request at a time. ([#6340][])
 
+[#6409]: https://github.com/dgraph-io/dgraph/issues/6409
+[#6445]: https://github.com/dgraph-io/dgraph/issues/6445
+[#6398]: https://github.com/dgraph-io/dgraph/issues/6398
+[#6403]: https://github.com/dgraph-io/dgraph/issues/6403
+[#6260]: https://github.com/dgraph-io/dgraph/issues/6260
+[#6300]: https://github.com/dgraph-io/dgraph/issues/6300
+[#6280]: https://github.com/dgraph-io/dgraph/issues/6280
+[#6214]: https://github.com/dgraph-io/dgraph/issues/6214
+[#6006]: https://github.com/dgraph-io/dgraph/issues/6006
+[#6321]: https://github.com/dgraph-io/dgraph/issues/6321
+[#6244]: https://github.com/dgraph-io/dgraph/issues/6244
+[#6333]: https://github.com/dgraph-io/dgraph/issues/6333
+[#6340]: https://github.com/dgraph-io/dgraph/issues/6340
+[#6343]: https://github.com/dgraph-io/dgraph/issues/6343
+[#6197]: https://github.com/dgraph-io/dgraph/issues/6197
+[#6375]: https://github.com/dgraph-io/dgraph/issues/6375
+[#6287]: https://github.com/dgraph-io/dgraph/issues/6287
+[#6356]: https://github.com/dgraph-io/dgraph/issues/6356
 [#5988]: https://github.com/dgraph-io/dgraph/issues/5988
 [#6097]: https://github.com/dgraph-io/dgraph/issues/6097
 [#6094]: https://github.com/dgraph-io/dgraph/issues/6094
@@ -88,13 +176,43 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6156]: https://github.com/dgraph-io/dgraph/issues/6156
 [#6147]: https://github.com/dgraph-io/dgraph/issues/6147
 
-## [1.2.7] - Unreleased
+## [1.2.7] - 2020-09-21
 [1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
+
+### Added
+
+- Add --cache_mb and --cache_percentage flags. ([#6288][])
+- Add flag to set up compression in zero. ([#6357][])
+- Add flags to set table and vlog loading mode for zero. ([#6344][])
 
 ### Fixed
 
 - Don't allow idx flag to be set to 0 on dgraph zero. ([#6193][])
+- Stop forcing RAM mode for the write-ahead log. ([#6261][])
+- Return error on closed DB. ([#6319][]) 
+- Don't store start_ts in postings. ([#6212][]) 
+- Optimize splits by doing binary search.  Clear the pack from the main list. ([#6334][]) 
+- Add a lock to backups to process one request at a time. ([#6341][])
+- Use z.Closer instead of y.Closer' ([#6396][])
+- Force exit if CTRL-C is caught before initialization. ([#6408][])
+- Fix(Alpha): MASA: Make Alpha Shutdown Again. ([#6406][])
+- Enterprise features
+  - Sort manifests by backup number. ([#6281][]) 
+  - Skip backing up nil lists. ([#6314][]) 
 
+[#6408]: https://github.com/dgraph-io/dgraph/issues/6408
+[#6406]: https://github.com/dgraph-io/dgraph/issues/6406
+[#6396]: https://github.com/dgraph-io/dgraph/issues/6396
+[#6261]: https://github.com/dgraph-io/dgraph/issues/6261
+[#6319]: https://github.com/dgraph-io/dgraph/issues/6319
+[#6212]: https://github.com/dgraph-io/dgraph/issues/6212
+[#6334]: https://github.com/dgraph-io/dgraph/issues/6334
+[#6341]: https://github.com/dgraph-io/dgraph/issues/6341
+[#6281]: https://github.com/dgraph-io/dgraph/issues/6281
+[#6314]: https://github.com/dgraph-io/dgraph/issues/6314
+[#6288]: https://github.com/dgraph-io/dgraph/issues/6288
+[#6357]: https://github.com/dgraph-io/dgraph/issues/6357
+[#6344]: https://github.com/dgraph-io/dgraph/issues/6344
 [#5987]: https://github.com/dgraph-io/dgraph/issues/5987
 [#6193]: https://github.com/dgraph-io/dgraph/issues/6193
 

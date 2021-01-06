@@ -18,6 +18,7 @@ package x
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -78,7 +79,7 @@ func TestValidateAddress(t *testing.T) {
 		}
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				if len(st.err) != 0 {
+				if st.err != "" {
 					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
 					require.NoError(t, ValidateAddress(st.address))
@@ -101,13 +102,39 @@ func TestValidateAddress(t *testing.T) {
 		}
 		for _, st := range testData {
 			t.Run(st.name, func(t *testing.T) {
-				if len(st.err) != 0 {
+				if st.err != "" {
 					require.EqualError(t, ValidateAddress(st.address), st.err)
 				} else {
 					require.NoError(t, ValidateAddress(st.address))
 				}
 			})
 		}
+	})
+	t.Run("Hostnames", func(t *testing.T) {
+		testData := []struct {
+			name    string
+			address string
+			err     string
+		}{
+			{"Valid", "dgraph-alpha-0.dgraph-alpha-headless.default.svc.local:9080", ""},
+			{"Valid with underscores", "alpha_1:9080", ""},
+			{"Valid ending in a period", "dgraph-alpha-0.dgraph-alpha-headless.default.svc.:9080", ""},
+			{"Invalid because the name part is longer than 63 characters",
+				"this-is-a-name-that-is-way-too-long-for-a-hostname-that-is-valid:9080",
+				"Invalid hostname: " +
+					"this-is-a-name-that-is-way-too-long-for-a-hostname-that-is-valid"},
+			{"Invalid because it starts with a hyphen", "-alpha1:9080", "Invalid hostname: -alpha1"},
+		}
+		for _, st := range testData {
+			t.Run(st.name, func(t *testing.T) {
+				if st.err != "" {
+					require.EqualError(t, ValidateAddress(st.address), st.err)
+				} else {
+					require.NoError(t, ValidateAddress(st.address))
+				}
+			})
+		}
+
 	})
 }
 
@@ -156,4 +183,17 @@ func TestVersionString(t *testing.T) {
 	dgraphVersion = "v1.2.2-rc1-g123456"
 	require.False(t, DevVersion())
 
+}
+
+func TestToHex(t *testing.T) {
+	require.Equal(t, []byte(`"0x0"`), ToHex(0, false))
+	require.Equal(t, []byte(`<0x0>`), ToHex(0, true))
+	require.Equal(t, []byte(`"0xf"`), ToHex(15, false))
+	require.Equal(t, []byte(`<0xf>`), ToHex(15, true))
+	require.Equal(t, []byte(`"0x19"`), ToHex(25, false))
+	require.Equal(t, []byte(`<0x19>`), ToHex(25, true))
+	require.Equal(t, []byte(`"0xff"`), ToHex(255, false))
+	require.Equal(t, []byte(`<0xff>`), ToHex(255, true))
+	require.Equal(t, []byte(`"0xffffffffffffffff"`), ToHex(math.MaxUint64, false))
+	require.Equal(t, []byte(`<0xffffffffffffffff>`), ToHex(math.MaxUint64, true))
 }

@@ -6,6 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 interface Employee {
@@ -20,6 +21,7 @@ type Human implements Character & Employee {
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 #######################
@@ -28,12 +30,40 @@ type Human implements Character & Employee {
 
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
-Int64 can currently represent values in range [-(2^53)+1, (2^53)-1] without any error.
-Values out of this range but representable by a signed 64-bit integer, may get coercion error.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
 """
 scalar Int64
 
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
 scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
 
 enum DgraphIndex {
 	int
@@ -50,6 +80,7 @@ enum DgraphIndex {
 	month
 	day
 	hour
+	geo
 }
 
 input AuthRule {
@@ -84,6 +115,84 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -91,13 +200,20 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
-directive @remote on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -105,6 +221,7 @@ input IntFilter {
 	lt: Int
 	ge: Int
 	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
@@ -113,6 +230,7 @@ input Int64Filter {
 	lt: Int64
 	ge: Int64
 	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
@@ -121,6 +239,7 @@ input FloatFilter {
 	lt: Float
 	ge: Float
 	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
@@ -129,6 +248,7 @@ input DateTimeFilter {
 	lt: DateTime
 	ge: DateTime
 	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
@@ -147,14 +267,17 @@ input StringFullTextFilter {
 
 input StringExactFilter {
 	eq: String
+	in: [String]
 	le: String
 	lt: String
 	ge: String
 	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
 	eq: String
+	in: [String]
 }
 
 #######################
@@ -166,8 +289,20 @@ type AddHumanPayload {
 	numUids: Int
 }
 
+type CharacterAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
 type DeleteCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	msg: String
+	numUids: Int
+}
+
+type DeleteEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
 	msg: String
 	numUids: Int
 }
@@ -178,8 +313,35 @@ type DeleteHumanPayload {
 	numUids: Int
 }
 
+type EmployeeAggregateResult {
+	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
+}
+
+type HumanAggregateResult {
+	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
+	nameMin: String
+	nameMax: String
+	totalCreditsMin: Int
+	totalCreditsMax: Int
+	totalCreditsSum: Int
+	totalCreditsAvg: Float
+}
+
 type UpdateCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
 	numUids: Int
 }
 
@@ -242,8 +404,8 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -264,8 +426,8 @@ input CharacterRef {
 
 input EmployeeFilter {
 	has: EmployeeHasFilter
-	and: EmployeeFilter
-	or: EmployeeFilter
+	and: [EmployeeFilter]
+	or: [EmployeeFilter]
 	not: EmployeeFilter
 }
 
@@ -275,12 +437,17 @@ input EmployeeOrder {
 	then: EmployeeOrder
 }
 
+input EmployeePatch {
+	employeeId: String
+	title: String
+}
+
 input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -313,6 +480,12 @@ input UpdateCharacterInput {
 	remove: CharacterPatch
 }
 
+input UpdateEmployeeInput {
+	filter: EmployeeFilter!
+	set: EmployeePatch
+	remove: EmployeePatch
+}
+
 input UpdateHumanInput {
 	filter: HumanFilter!
 	set: HumanPatch
@@ -326,9 +499,12 @@ input UpdateHumanInput {
 type Query {
 	getCharacter(id: ID!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
+	queryEmployee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	aggregateEmployee(filter: EmployeeFilter): EmployeeAggregateResult
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 }
 
 #######################
@@ -338,6 +514,8 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	updateEmployee(input: UpdateEmployeeInput!): UpdateEmployeePayload
+	deleteEmployee(filter: EmployeeFilter!): DeleteEmployeePayload
 	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload

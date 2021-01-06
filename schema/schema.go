@@ -428,6 +428,7 @@ func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
+	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
@@ -448,7 +449,6 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
-	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
@@ -566,6 +566,28 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				},
 			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.history",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema_history",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.schema_created_at",
+					ValueType: pb.Posting_DATETIME,
+				},
+			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.graphql.persisted_query",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.p_query",
+					ValueType: pb.Posting_STRING,
+				}, {
+					Predicate: "dgraph.graphql.p_sha256hash",
+					ValueType: pb.Posting_STRING,
+				},
+			},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -653,6 +675,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Tokenizer: []string{"exact"},
 			List:      true,
 		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.drop.op",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.schema",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
@@ -661,6 +686,20 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_history",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.schema_created_at",
+			ValueType: pb.Posting_DATETIME,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.p_query",
+			ValueType: pb.Posting_STRING,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.graphql.p_sha256hash",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -707,7 +746,7 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
-//If the passed update is not a pre-defined predicate then it just returns false.
+// If the passed update is not a pre-defined predicate then it just returns false.
 func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {

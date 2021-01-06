@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Download"
+weight = 1
 [menu.main]
     parent = "deploy"
-    weight = 1
 +++
 
 {{% notice "tip" %}}
@@ -32,7 +32,7 @@ dgraph
 
 would install the `dgraph` binary into your system.
 
-Other instalation options:
+Other installation options:
 
 > Add `-s --` before the flags.()
 `-y | --accept-license`: Automatically agree to the terms of the Dgraph Community License (default: "n").
@@ -81,7 +81,7 @@ dgraph
 ## Building from Source
 
 {{% notice "note" %}}
-You can build the Ratel UI from source seperately following its build
+You can build the Ratel UI from source separately following its build
 [instructions](https://github.com/dgraph-io/ratel/blob/master/INSTRUCTIONS.md).
 Ratel UI is distributed via Dgraph releases using any of the download methods
 listed above.

@@ -4,7 +4,7 @@
     query {
       getAuthorszzz(id: "0x1") { name }
     }
-  gqlvariables: 
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean
@@ -17,7 +17,7 @@
     query {
       getAuthor(id: "0x1") { namezzz }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Cannot query field \"namezzz\" on type \"Author\". Did you mean \"name\"?",
@@ -29,7 +29,7 @@
     query {
       getAuthor(id: $theID) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Variable \"$theID\" is not defined.",
@@ -41,7 +41,7 @@
     query {
       queryAuthor(filter: { reputation: { le: "hi there" } }) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { }
   errors:
     [ { "message": "Expected type Float, found \"hi there\".",
@@ -53,7 +53,7 @@
     query queryAuthor($filter: AuthorFiltarzzz!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { "filter": "type was wrong" }
   errors:
     [ { "message": "Variable type provided AuthorFiltarzzz! is incompatible with expected
@@ -71,10 +71,10 @@
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
+  gqlvariables: | 
     { "filter": 57 }
   errors:
-    [ { "message": "must be defined",
+    [ { "message": "must be a AuthorFilter",
       "path": [ "variable", "filter"] } ]
 
 -
@@ -83,8 +83,8 @@
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
-  gqlvariables: 
-    { "filter": { "reputation": { le: "hi there" } } }
+  gqlvariables: |
+    { }
   errors:
     [ { "message": "must be defined",
       "path": [ "variable", "filter"] } ]
@@ -94,7 +94,7 @@
     subscription {
       getAuthor(id: "0x1") { name }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
@@ -109,11 +109,51 @@
         reputation
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Field `title` is not present in type `Author`. You can only use fields which are in type `Author`",
     } ]
+
+-
+  name: "Out of range error for int32 type"
+  gqlrequest: |
+    mutation {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:2147483648}]){
+        post{
+          title
+          numLikes
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [ { "line": 2, "column": 63 } ] } ]
+
+-
+  name: "Out of range error for int64 type"
+  gqlrequest: |
+    mutation {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:9223372036854775808}]){
+        post{
+          title
+          numViews
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "locations": [ { "line": 2, "column": 63 } ] } ]
 
 -
   name: "@cascade only accepts numUids or given type name as arguments for add or update payload "
@@ -125,8 +165,187 @@
         }
       }
     }
-  gqlvariables:
+  gqlvariables: |
     { }
   errors:
     [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields which are in type `AddAuthorPayload`",
     } ]
+
+-
+  name: "String value is Incompatible with Int64 type"
+  gqlrequest: |
+    mutation {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:"180143985094"}]){
+        post{
+          title
+          numLikes
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094`, expected: Int64, got: 'String'",
+        "locations": [ { "line": 2, "column": 64 } ] } ]
+
+-
+  name: "Float value is Incompatible with Int64 type"
+  gqlrequest: |
+    mutation {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:180143985094.0}]){
+        post{
+          title
+          numLikes
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
+        "locations": [ { "line": 2, "column": 63 } ] } ]
+
+-
+  name: "Out of range error for int32 type given in variable"
+  gqlrequest: |
+    mutation($numLikes:Int) {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:$numLikes}]){
+        post{
+          title
+            numLikes
+            author{
+              name
+            }
+          }
+        }
+      }
+  gqlvariables: |
+    { "numLikes": 2147483648 }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "path": [ "variable","numLikes" ] } ]
+
+-
+  name: "Out of range error for int64 type in variable"
+  gqlrequest: |
+    mutation($numViews:Int64) {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:$numViews}]){
+        post{
+          title
+          numViews
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "numViews":9223372036854775808}
+  errors:
+    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "path": [ "variable", "numViews" ] } ]
+
+-
+  name: "Float value is Incompatible with Int64 type given in variable"
+  gqlrequest: |
+    mutation addPost($Post: [AddPostInput!]!){
+      addPost(input:$Post){
+        post{
+          title
+          numViews
+          author{
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "Post": [
+      { "title": "Dgraph",
+        "author":{"name":"Alice"},
+        "numViews":180143985094.0
+      } ]
+    }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
+        "path": [ "variable", "Post",0.0,"numViews" ] } ]
+
+-
+  name: "Error for int64 value given in list as variable"
+  gqlrequest: |
+    mutation addpost1($Post: [Addpost1Input!]!){
+      addpost1(input:$Post){
+        post1{
+          title
+          likesByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { "Post": [
+      { "title": "Dgraph",
+         "likesByMonth": [180143985094.0,33,1,66]
+      } ]
+    }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
+        "path": [ "variable", "Post",0.0,"likesByMonth",0.0 ] } ]
+
+- name: "Error for int64 value given in list"
+  gqlrequest: |
+    mutation {
+      addpost1(input:[{title:"Dgraph",likesByMonth: [180143985094.0,33,1,66]}]){
+        post1{
+          title
+          likesByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
+        "locations": [ { "line": 2, "column": 50 } ] } ]
+
+-
+  name: "Error for int value given in list as variable"
+  gqlrequest: |
+    mutation addpost1($Post: [Addpost1Input!]!){
+      addpost1(input:$Post){
+        post1{
+          title
+          commentsByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { "Post": [
+      { "title": "Dgraph",
+         "commentsByMonth": [2147483648,33,1,66]
+      } ]
+    }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "path": [ "variable", "Post",0.0,"commentsByMonth",0.0 ] } ]
+
+- name: "Error for int value given in list"
+  gqlrequest: |
+    mutation {
+      addpost1(input:[{title:"Dgraph",commentsByMonth: [2147483648,33,1,66]}]){
+        post1{
+          title
+          commentsByMonth
+        }
+      }
+    }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [ { "line": 2, "column": 53 } ] } ]

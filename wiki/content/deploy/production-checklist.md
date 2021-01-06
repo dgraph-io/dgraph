@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Production Checklist"
+weight = 20
 [menu.main]
     parent = "deploy"
-    weight = 20
 +++
 
 This guide describes important setup recommendations for a production-ready Dgraph cluster.
@@ -25,13 +25,13 @@ There can be multiple Dgraph Zeros and Dgraph Alphas running in a single cluster
 
 ### Machine Requirements
 
-To ensure predictable performance characteristics, Dgraph instances should NOT run on "burstable" or throttled machines that limit resources. That includes t2 class machines on AWS.
+To ensure predictable performance characteristics, Dgraph instances should **not** run on "burstable" or throttled machines that limit resources. That includes t2 class machines on AWS.
 
-We recommend each Dgraph instance to be deployed to a single dedicated machine to ensure that Dgraph can take full advantage of machine resources. That is, for a 6-node Dgraph cluster with 3 Dgraph Zeros and 3 Dgraph Alphas, each process runs in its own machine (e.g., EC2 instance). In the event of a machine failure, only one instance is affected, instead of multiple if they were running on that same machine.
+To ensure that Dgraph can take full advantage of machine resources, we recommend each Dgraph instance to be deployed to a single dedicated machine to ensure that Dgraph can take full advantage of machine resources. That is, for a 6-node Dgraph cluster with 3 Dgraph Zeros and 3 Dgraph Alphas, each process runs in its own machine (e.g., EC2 instance). In the event of a machine failure, only one instance is affected, instead of multiple if they were running on that same machine.
 
 If you'd like to run Dgraph with fewer machines, then the recommended configuration is to run a single Dgraph Zero and a single Dgraph Alpha per machine. In a high availability setup, that allows the cluster to lose a single machine (simultaneously losing a Dgraph Zero and a Dgraph Alpha) with continued availability of the database.
 
-Do not run multiple Dgraph Zeros or Dgraph Alpha processes on a single machine. This can affect performance due to shared resources and reduce high availability in the event of machine failures.
+Do not run multiple Dgraph Zeros or Dgraph Alpha processes on a single machine. This can affect performance due to shared resource issues and reduce availability in the event of machine failures.
 
 ### Operating System
 
@@ -40,17 +40,21 @@ The recommended operating system is Linux for production workloads. Dgraph provi
 
 ### CPU and Memory
 
-At the bare minimum, we recommend machines with at least 2 CPUs and 2 GiB of memory for testing.
+At a the bare minimum, we recommend machines with at least 8 CPUs and 16 GiB of memory for testing.
 
-You'll want a sufficient CPU and memory according to your production workload. A common setup for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
+You'll want a ensure that your CPU and memory resources are sufficient for your production workload. A common configuration for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
 
 You may find you'll need more CPU cores and memory for your specific use case.
 
 ### Disk
 
-Dgraph instances make heavy usage of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
+Dgraph instances make heavy use of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
 
-Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes.
+Regarding disk IOPS, we recommend:
+* 1000 IOPS minimum
+* 3000 IOPS for medium and large datasets
+
+Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes. AWS introduced the new [gp3](https://aws.amazon.com/about-aws/whats-new/2020/12/introducing-new-amazon-ebs-general-purpose-volumes-gp3/?nc1=h_ls) disks that gives 3000 IOPS at any disk size.
 
 Recommended disk sizes for Dgraph Zero and Dgraph Alpha:
 
@@ -88,6 +92,18 @@ It is recommended to set the file descriptors limit to unlimited. If that is not
 
 A Dgraph instance is run as a single process from a single static binary. It does not require any additional dependencies or separate services in order to run (see the [Supplementary Services]({{< relref "#supplementary-services" >}}) section for third-party services that work alongside Dgraph). A Dgraph cluster is set up by running multiple Dgraph processes networked together.
 
+### Backup Policy
+
+A backup policy is a predefined, set schedule used to schedule backups of information from business applications. A backup policy helps to ensure data recoverability in the event of accidental data deletion, data corruption, or a system outage.
+
+For Dgraph, backups are created using the [backups enterprise feature]({{< relref "/enterprise-features/binary-backups" >}}). You can also create full backups of your data and schema using [data exports]({{< relref "/deploy/dgraph-administration/index.md#exporting-database" >}}) available as an open source feature.
+
+We **strongly** recommend that you have a backup policy in place before moving your application to the production phase, and we also suggest that you have a backup policy even for pre-production apps supported by Dgraph database instances running in development, staging, QA or pre-production clusters.
+
+We suggest that your policy include frequent full and incremental backups. Accordingly, we suggest the following backup policy for your production apps:
+* [full backup](https://dgraph.io/docs/enterprise-features/binary-backups/#forcing-a-full-backup) every 24hrs
+* incremental backup every 2/4hrs
+
 ### Terminology
 
 An **N-node cluster** is a Dgraph cluster that contains N number of Dgraph instances. For example, a 6-node cluster means six Dgraph instances. The **replication setting** specifies the number of Dgraph Alpha replicas are assigned per group. The replication setting is a configuration flag (`--replicas`) on Dgraph Zero. A **Dgraph Alpha group** is a set of Dgraph Alphas that store replications of the data amongst each other. Every Dgraph Alpha group is assigned a set of distinct predicates to store and serve.
@@ -107,7 +123,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 {{% load-img "/images/deploy-guide-1.png" "2-node cluster" %}}
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/config.md" >}})).
 
 Dgraph Zero:
 * The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Alpha (default: `localhost:5080`).
@@ -130,7 +146,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 A Dgraph cluster can be configured in a high-availability setup with Dgraph Zero and Dgraph Alpha each set up with peers. These peers are part of Raft consensus groups, which elect a single leader amongst themselves. The non-leader peers are called followers. In the event that the peers cannot communicate with the leader (e.g., a network partition or a machine shuts down), the group automatically elects a new leader to continue.
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/config.md" >}})).
 
 In this setup, we assume the following hostnames are set:
 
@@ -175,11 +191,11 @@ Dgraph Zero configuration options:
 
 The number of replica members per Alpha group depends on the setting of Dgraph Zero's `--replicas` flag. Above, it is set to 3. So when Dgraph Alphas join the cluster, Dgraph Zero will assign it to an Alpha group to fill in its members up to the limit per group set by the `--replicas` flag.
 
-First Alpha example: `dgraph alpha --my=alpha1:7080 --zero=zero1:7080`
+First Alpha example: `dgraph alpha --my=alpha1:7080 --zero=zero1:5080`
 
-Second Alpha example: `dgraph alpha --my=alpha2:7080 --zero=zero1:7080`
+Second Alpha example: `dgraph alpha --my=alpha2:7080 --zero=zero1:5080`
 
-First Alpha example: `dgraph alpha --my=alpha3:7080 --zero=zero1:7080`
+First Alpha example: `dgraph alpha --my=alpha3:7080 --zero=zero1:5080`
 
 Dgraph Alpha configuration options:
 

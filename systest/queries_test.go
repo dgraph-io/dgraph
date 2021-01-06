@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,6 +53,7 @@ func TestQuery(t *testing.T) {
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("eq with altering order of trigram and term index", wrap(EqWithAlteredIndexOrder))
 	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("parameterized cascade", wrap(CascadeParams))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
@@ -331,32 +331,15 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
-	resp, err := txn.Query(ctx, `schema {}`)
-	require.NoError(t, err)
-	js := `
-  {
-    "schema": [` + x.CorsPredicate + "," + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "predicate": "dgraph.type",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ],
-		"list": true
-      },
-      {
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+      }`})
 }
 
 func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
@@ -390,11 +373,26 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
   {
     "schema": [
 	  {
+		"predicate": "dgraph.drop.op"
+	  },
+	  {
 		"predicate": "dgraph.cors"
+	  },
+	  {
+		"predicate": "dgraph.graphql.p_query"
+	  },
+	  {
+		"predicate": "dgraph.graphql.p_sha256hash"
+	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_history"
+	  },
+	  {
+	    "predicate": "dgraph.graphql.schema_created_at"
 	  },
       {
         "predicate": "dgraph.xid"
-      },
+	  },
       {
         "predicate": "dgraph.password"
       },
@@ -428,7 +426,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "age"
       }
-    ],` + x.InitialTypes + `
+    ],
+	"types": [` + testutil.GetInternalTypes(false) + `
+	]
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -522,9 +522,10 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
+	url := fmt.Sprintf("http://%s", testutil.SockAddrHttp)
 	var loginBb bytes.Buffer
 	loginBb.WriteString(`{"userid":"groot","password":"password"}`)
-	loginRes, err := http.Post("http://localhost:8180/login", "application/json", &loginBb)
+	loginRes, err := http.Post(url+"/login", "application/json", &loginBb)
 	require.NoError(t, err)
 	loginBody, err := ioutil.ReadAll(loginRes.Body)
 	require.NoError(t, err)
@@ -535,9 +536,9 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	var bb bytes.Buffer
 	bb.WriteString(`schema{}`)
 	client := http.Client{}
-	req, err := http.NewRequest("POST", "http://localhost:8180/query", &bb)
+	req, err := http.NewRequest("POST", url+"/query", &bb)
 	require.NoError(t, err)
-	req.Header.Add("Content-Type", "application/graphql+-")
+	req.Header.Add("Content-Type", "application/dql")
 	req.Header.Add("X-Dgraph-AccessToken", accessJwt)
 	res, err := client.Do(req)
 	require.NoError(t, err)
@@ -552,27 +553,15 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, json.Unmarshal(bb.Bytes(), &m))
 	require.NotNil(t, m["extensions"])
 
-	js := `
-  {
-    "schema": [` + x.CorsPredicate + `,` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "index": true,
-        "predicate": "dgraph.type",
-        "type": "string",
-        "tokenizer": ["exact"],
-		"list": true
-      },
-      {
+	testutil.CompareJSON(t, testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(m["data"]))
+      }`}), string(m["data"]))
 }
 
 func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
@@ -731,17 +720,17 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 		_:alice1 <name> "Alice 1" .
-		_:alice1 <age> "23" . 
+		_:alice1 <age> "23" .
 		_:alice2 <name> "Alice 2" .
 		_:alice3 <name> "Alice 3" .
 		_:alice3 <age> "32" .
 		_:bob <name> "Bob" .
 		_:chris <name> "Chris" .
 		_:dave <name> "Dave" .
-		_:alice1 <friend> _:bob (close=true) .  
-		_:alice1 <friend> _:dave .    
-		_:alice2 <friend> _:chris (close=false) .	  
-		  _:bob <friend> _:chris .		
+		_:alice1 <friend> _:bob (close=true) .
+		_:alice1 <friend> _:dave .
+		_:alice2 <friend> _:chris (close=false) .
+		  _:bob <friend> _:chris .
 	`),
 	})
 	require.NoError(t, err)
@@ -753,8 +742,8 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 		{
 			// value preds Parameterized at root.
 			in: `
-			{  
-				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {	
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {
 					name
 					age
 					friend {
@@ -817,13 +806,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -834,13 +823,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade(__all__) {
 				  name
-				  age  
+				  age
 					friend {
 					  name
 				  	  age
 				  	}
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -851,13 +840,13 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 			in: `{
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
-				  age  
+				  age
 					friend @cascade {
 					  name
 				  	  age
 				    }
 				}
-			}			  
+			}
 			  `,
 			out: `{
 				"q": []
@@ -875,7 +864,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -921,7 +910,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -938,7 +927,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -954,12 +943,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				    age
 				  }
 				}
-			}						
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -974,7 +963,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 						  age
 				  }
 				}
-			}				  
+			}
 			`,
 			out: `
 			{
@@ -999,7 +988,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1015,7 +1004,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1029,7 +1018,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1045,12 +1034,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					name
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
 				"q": []
-			}			
+			}
 			`,
 		},
 
@@ -1068,7 +1057,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					}
 				  }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1103,7 +1092,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				      name
 				    }
 				}
-			}	
+			}
 			`,
 			out: `
 			{
@@ -1126,7 +1115,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			}			
+			}
 			`,
 		},
 
@@ -1142,7 +1131,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					  age
 				    }
 				}
-			}			
+			}
 			`,
 			out: `
 			{
@@ -1356,6 +1345,41 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
+}
+
+func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// first, let's set the schema with term before trigram
+	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// fill up some data
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "Alice" .
+      _:x2 <name> "Bob" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	// querying with eq should work
+	q := `{q(func: eq(name, "Alice")) {name}}`
+	expectedResult := `{"q":[{"name":"Alice"}]}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
+
+	// now, let's set the schema with trigram before term
+	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// querying with eq should still work
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
 }
 
 func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {

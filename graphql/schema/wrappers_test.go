@@ -22,11 +22,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
 	"gopkg.in/yaml.v2"
 )
 
@@ -84,7 +83,7 @@ type Starship {
         length: Float
 }`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -93,58 +92,121 @@ type Starship {
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "Author.name",
-		"dob":        "Author.dob",
-		"reputation": "Author.reputation",
-		"posts":      "Author.posts",
+		"name":           "Author.name",
+		"dob":            "Author.dob",
+		"reputation":     "Author.reputation",
+		"posts":          "Author.posts",
+		"postsAggregate": "Author.postsAggregate",
+	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
 	}
 	post := map[string]string{
 		"postType": "Post.postType",
 		"author":   "Post.author",
 	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
+	}
 	character := map[string]string{
 		"name":      "Character.name",
 		"appearsIn": "Character.appearsIn",
 	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
+	}
+	employee := map[string]string{
+		"ename": "Employee.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
+	}
 	human := map[string]string{
-		"ename":        "Employee.ename",
-		"name":         "Character.name",
-		"appearsIn":    "Character.appearsIn",
-		"starships":    "Human.starships",
-		"totalCredits": "Human.totalCredits",
+		"ename":              "Employee.ename",
+		"name":               "Character.name",
+		"appearsIn":          "Character.appearsIn",
+		"starships":          "Human.starships",
+		"totalCredits":       "Human.totalCredits",
+		"starshipsAggregate": "Human.starshipsAggregate",
+	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
 	}
 	droid := map[string]string{
 		"name":            "Character.name",
 		"appearsIn":       "Character.appearsIn",
 		"primaryFunction": "Droid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
 	starship := map[string]string{
 		"name":   "Starship.name",
 		"length": "Starship.length",
 	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
+	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "Employee.ename",
-		},
-		"Character":              character,
-		"UpdateCharacterPayload": character,
-		"DeleteCharacterPayload": character,
-		"Human":                  human,
-		"UpdateHumanPayload":     human,
-		"DeleteHumanPayload":     human,
-		"Droid":                  droid,
-		"UpdateDroidPayload":     droid,
-		"DeleteDroidPayload":     droid,
-		"Starship":               starship,
-		"UpdateStarshipPayload":  starship,
-		"DeleteStarshipPayload":  starship,
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
+		"Character":                character,
+		"UpdateCharacterPayload":   character,
+		"DeleteCharacterPayload":   character,
+		"Human":                    human,
+		"UpdateHumanPayload":       human,
+		"DeleteHumanPayload":       human,
+		"Droid":                    droid,
+		"UpdateDroidPayload":       droid,
+		"DeleteDroidPayload":       droid,
+		"UpdateEmployeePayload":    employee,
+		"DeleteEmployeePayload":    employee,
+		"Starship":                 starship,
+		"UpdateStarshipPayload":    starship,
+		"DeleteStarshipPayload":    starship,
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
@@ -206,7 +268,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			length: Float
 	}`
 
-	schHandler, errs := NewHandler(schemaStr)
+	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -215,58 +277,121 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "dgraph.author.name",
-		"dob":        "dgraph.author.dob",
-		"reputation": "dgraph.author.reputation",
-		"posts":      "dgraph.author.posts",
+		"name":           "dgraph.author.name",
+		"dob":            "dgraph.author.dob",
+		"reputation":     "dgraph.author.reputation",
+		"posts":          "dgraph.author.posts",
+		"postsAggregate": "dgraph.author.postsAggregate",
+	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
 	}
 	post := map[string]string{
 		"postType": "dgraph.post_type",
 		"author":   "dgraph.post_author",
 	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
+	}
 	character := map[string]string{
 		"name":      "performance.character.name",
 		"appearsIn": "appears_in",
 	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
+	}
 	human := map[string]string{
-		"ename":        "dgraph.employee.en.ename",
-		"name":         "performance.character.name",
-		"appearsIn":    "appears_in",
-		"starships":    "Human.starships",
-		"totalCredits": "credits",
+		"ename":              "dgraph.employee.en.ename",
+		"name":               "performance.character.name",
+		"appearsIn":          "appears_in",
+		"starships":          "Human.starships",
+		"totalCredits":       "credits",
+		"starshipsAggregate": "Human.starshipsAggregate",
+	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
 	}
 	droid := map[string]string{
 		"name":            "performance.character.name",
 		"appearsIn":       "appears_in",
 		"primaryFunction": "roboDroid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
+	employee := map[string]string{
+		"ename": "dgraph.employee.en.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
+	}
 	starship := map[string]string{
 		"name":   "star.ship.name",
 		"length": "star.ship.length",
 	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
+	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "dgraph.employee.en.ename",
-		},
-		"Character":              character,
-		"UpdateCharacterPayload": character,
-		"DeleteCharacterPayload": character,
-		"Human":                  human,
-		"UpdateHumanPayload":     human,
-		"DeleteHumanPayload":     human,
-		"Droid":                  droid,
-		"UpdateDroidPayload":     droid,
-		"DeleteDroidPayload":     droid,
-		"Starship":               starship,
-		"UpdateStarshipPayload":  starship,
-		"DeleteStarshipPayload":  starship,
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
+		"DeleteEmployeePayload":    employee,
+		"UpdateEmployeePayload":    employee,
+		"Character":                character,
+		"UpdateCharacterPayload":   character,
+		"DeleteCharacterPayload":   character,
+		"Human":                    human,
+		"UpdateHumanPayload":       human,
+		"DeleteHumanPayload":       human,
+		"Droid":                    droid,
+		"UpdateDroidPayload":       droid,
+		"DeleteDroidPayload":       droid,
+		"Starship":                 starship,
+		"UpdateStarshipPayload":    starship,
+		"DeleteStarshipPayload":    starship,
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
@@ -578,7 +703,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		},
 		{
 			"parses body template with an array of object and hardcoded scalars correctly",
-			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5,
 				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
 			map[string]interface{}{"author": "$id", "admin": false,
 				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
@@ -796,7 +921,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			schHandler, errs := NewHandler(tcase.GQLSchema)
+			schHandler, errs := NewHandler(tcase.GQLSchema, false)
 			require.NoError(t, errs)
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -836,7 +961,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
-			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
 			require.NoError(t, errs)
 			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
 			require.NoError(t, err)
@@ -896,7 +1021,7 @@ func TestAllowedHeadersList(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			schHandler, errs := NewHandler(test.schemaStr)
+			schHandler, errs := NewHandler(test.schemaStr, false)
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -979,7 +1104,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewHandler(test.schemaStr)
+			_, err := NewHandler(test.schemaStr, false)
 			require.EqualError(t, err, test.err.Error())
 		})
 	}
@@ -1102,7 +1227,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
-			errors.New("required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
@@ -1135,15 +1260,15 @@ func TestParseSecrets(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			s, err := parseSecrets(test.schemaStr)
+			s, authMeta, err := parseSecrets(test.schemaStr)
 			if test.err != nil || err != nil {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
-
 			require.Equal(t, test.expectedSecrets, s)
 			if test.expectedAuthHeader != "" {
-				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+				require.NotNil(t, authMeta)
+				require.Equal(t, test.expectedAuthHeader, authMeta.Header)
 			}
 		})
 	}

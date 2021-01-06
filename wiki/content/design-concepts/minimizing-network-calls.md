@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Minimizing network calls explained"
+weight = 4
 [menu.main]
     parent = "design-concepts"
-    weight = 4
 +++
 
 To explain how Dgraph minimizes network calls, let's start with an example query we should be able

@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Raw HTTP"
+weight = 8
 [menu.main]
     parent = "clients"
-    weight = 8
 +++
 
 {{% notice "warning" %}}
@@ -108,12 +108,18 @@ new transaction is initiated.**
 ## Run a query
 
 To query the database, the `/query` endpoint is used. Remember to set the `Content-Type` header
-to `application/graphql+-` in order to ensure that the body of the request is correctly parsed.
+to `application/dql` to ensure that the body of the request is parsed correctly.
+
+{{% notice "note" %}}
+GraphQL+- has been renamed to Dgraph Query Language (DQL). While `application/dql`
+is the preferred value for the `Content-Type` header, we will continue to support
+`Content-Type: application/graphql+-` to avoid making breaking changes.
+{{% /notice %}}
 
 To get the balances for both accounts:
 
 ```sh
-$ curl -H "Content-Type: application/graphql+-" -X POST localhost:8080/query -d $'
+$ curl -H "Content-Type: application/dql" -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -316,11 +322,11 @@ The result:
 ## Running read-only queries
 
 You can set the query parameter `ro=true` to `/query` to set it as a
-[read-only]({{< relref "#read-only-transactions" >}}) query.
+[read-only]({{< relref "clients/go.md#read-only-transactions" >}}) query.
 
 
 ```sh
-$ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?ro=true" -d $'
+$ curl -H "Content-Type: application/dql" -X POST "localhost:8080/query?ro=true" -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -333,11 +339,11 @@ $ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?ro
 ## Running best-effort queries
 
 You can set the query parameter `be=true` to `/query` to set it as a
-[best-effort]({{< relref "#read-only-transactions" >}}) query.
+[best-effort]({{< relref "clients/go.md#read-only-transactions" >}}) query.
 
 
 ```sh
-$ curl -H "Content-Type: application/graphql+-" -X POST "localhost:8080/query?be=true" -d $'
+$ curl -H "Content-Type: application/dql" -X POST "localhost:8080/query?be=true" -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -371,7 +377,7 @@ Example of a compressed request via curl:
 ```sh
 $ curl -X POST \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphql+-" \
+  -H "Content-Type: application/dql" \
   localhost:8080/query -d $'schema {}' | gzip --decompress
 ```
 
@@ -391,7 +397,7 @@ $ zcat query.gz # query.gz is gzipped compressed
 $ curl -X POST \
   -H 'Content-Encoding: gzip' \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphql+-" \
+  -H "Content-Type: application/dql" \
   localhost:8080/query --data-binary @query.gz | gzip --decompress
 ```
 
@@ -399,7 +405,7 @@ $ curl -X POST \
 Curl has a `--compressed` option that automatically requests for a compressed response (`Accept-Encoding` header) and decompresses the compressed response.
 
 ```sh
-$ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8080/query -d $'schema {}'
+$ curl -X POST --compressed -H "Content-Type: application/dql" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
 

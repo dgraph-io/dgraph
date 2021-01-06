@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Normalize directive"
+weight = 17
 [menu.main]
     parent = "query-language"
-    weight = 17
 +++
 
 With the `@normalize` directive, only aliased predicates are returned and the result is flattened to remove nesting.

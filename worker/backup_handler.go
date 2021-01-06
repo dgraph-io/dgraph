@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
@@ -59,9 +60,11 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetManfiest returns the list of manfiests for the given backup series ID
-	// at the specified location.
-	GetManifests(*url.URL, string) ([]*Manifest, error)
+	// GetManifests returns the list of manfiests for the given backup series ID
+	// and backup number at the specified location. If backupNum is set to zero,
+	// all the manifests for the backup series will be returned. If it's greater
+	// than zero, manifests from one to backupNum will be returned.
+	GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
 
 	// GetLatestManifest reads the manifests at the given URL and returns the
 	// latest manifest.
@@ -78,12 +81,12 @@ type UriHandler interface {
 	// created after will be ignored.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	Load(*url.URL, string, loadFn) LoadResult
+	Load(*url.URL, string, uint64, loadFn) LoadResult
 
 	// Verify checks that the specified backup can be restored to a cluster with the
 	// given groups. The last manifest of that backup should have the same number of
 	// groups as given list of groups.
-	Verify(*url.URL, string, []uint32) error
+	Verify(*url.URL, *pb.RestoreRequest, []uint32) error
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
@@ -144,11 +147,13 @@ func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
 // loadFn is a function that will receive the current file being read.
 // A reader, the backup groupId, and a map whose keys are the predicates to restore
 // are passed as arguments.
-type loadFn func(reader io.Reader, groupId uint32, preds predicateSet) (uint64, error)
+type loadFn func(reader io.Reader, groupId uint32, preds predicateSet,
+	dropOperations []*pb.DropOperation) (uint64, error)
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func LoadBackup(location, backupId string, creds *Credentials, fn loadFn) LoadResult {
+func LoadBackup(location, backupId string, backupNum uint64, creds *Credentials,
+	fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return LoadResult{0, 0, err}
@@ -159,13 +164,13 @@ func LoadBackup(location, backupId string, creds *Credentials, fn loadFn) LoadRe
 		return LoadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
-	return h.Load(uri, backupId, fn)
+	return h.Load(uri, backupId, backupNum, fn)
 }
 
 // VerifyBackup will access the backup location and verify that the specified backup can
 // be restored to the cluster.
-func VerifyBackup(location, backupId string, creds *Credentials, currentGroups []uint32) error {
-	uri, err := url.Parse(location)
+func VerifyBackup(req *pb.RestoreRequest, creds *Credentials, currentGroups []uint32) error {
+	uri, err := url.Parse(req.GetLocation())
 	if err != nil {
 		return err
 	}
@@ -175,7 +180,7 @@ func VerifyBackup(location, backupId string, creds *Credentials, currentGroups [
 		return errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Verify(uri, backupId, currentGroups)
+	return h.Verify(uri, req, currentGroups)
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
@@ -185,8 +190,7 @@ func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, er
 		return nil, err
 	}
 
-	// TODO(martinmr): allow overriding credentials while listing manifests.
-	h := getHandler(uri.Scheme, nil)
+	h := getHandler(uri.Scheme, creds)
 	if h == nil {
 		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}
@@ -273,18 +277,18 @@ func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
 }
 
-// verifyGroupsInBackup checks that the groups in the last manifest match the groups in
-// the current cluster.  If they don't match, the backup cannot be restored to the cluster.
-func verifyGroupsInBackup(manifests []*Manifest, currentGroups []uint32) error {
-	var maxBackupNum uint64
-	var lastManifest *Manifest
-	for _, manifest := range manifests {
-		if manifest.BackupNum > maxBackupNum {
-			lastManifest = manifest
-			maxBackupNum = manifest.BackupNum
-		}
+// verifyRequest verifies the manifests satisfy the requirements to process the given
+// restore request.
+func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups []uint32) error {
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
 	}
 
+	if err := verifyManifests(manifests); err != nil {
+		return err
+	}
+
+	lastManifest := manifests[len(manifests)-1]
 	if len(currentGroups) != len(lastManifest.Groups) {
 		return errors.Errorf("groups in cluster and latest backup manifest differ")
 	}
@@ -295,4 +299,28 @@ func verifyGroupsInBackup(manifests []*Manifest, currentGroups []uint32) error {
 		}
 	}
 	return nil
+}
+
+func getManifests(manifests []*Manifest, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
+
+	manifests, err := filterManifests(manifests, backupId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort manifests in the ascending order of their BackupNum so that the first
+	// manifest corresponds to the first full backup and so on.
+	sort.Slice(manifests, func(i, j int) bool {
+		return manifests[i].BackupNum < manifests[j].BackupNum
+	})
+
+	if backupNum > 0 {
+		if len(manifests) < int(backupNum) {
+			return nil, errors.Errorf("not enough backups to restore manifest with backupNum %d",
+				backupNum)
+		}
+		manifests = manifests[:backupNum]
+	}
+	return manifests, nil
 }

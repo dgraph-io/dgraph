@@ -1,19 +1,19 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Functions"
+weight = 2
 [menu.main]
     parent = "query-language"
-    weight = 2 
 +++
 
-Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
+Functions allow filtering based on properties of nodes or [variables]({{<relref "query-language/value-variables.md">}}).  Functions can be applied in the query root or in filters.
 
 {{% notice "note" %}}Support for filters on non-indexed predicates was added with Dgraph `v1.2.0`.
 {{% /notice %}}
 
 Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func:`) can only
-be applied on [indexed predicates]({{< relref "#indexing">}}). Since v1.2, comparison functions
-can now be used on [@filter]({{<relref "#applying-filters">}}) directives even on predicates
+be applied on [indexed predicates]({{< relref "query-language/schema.md#indexing" >}}). Since v1.2, comparison functions
+can now be used on [@filter]({{<relref "query-language/graphql-fundamentals.md#applying-filters" >}}) directives even on predicates
 that have not been indexed.
 Filtering on non-indexed predicates can be slow for large datasets, as they require
 iterating over all of the possible values at the level where the filter is being used.
@@ -76,7 +76,7 @@ Index Required: `term`
 Matches strings that have any of the specified terms in any order; case insensitive.
 #### Usage at root
 
-Query Example: All nodes that have a `name` containing either `poison` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "#cascade-directive">}}) the query doesn't require a genre.
+Query Example: All nodes that have a `name` containing either `poison` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "query-language/cascade-directive.md">}}) the query doesn't require a genre.
 
 {{< runnable >}}
 {
@@ -265,7 +265,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash` |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.
@@ -315,7 +315,7 @@ With `IE` replaced by
 * `le` less than or equal to
 * `lt` less than
 * `ge` greater than or equal to
-* `gt` greather than
+* `gt` greater than
 
 Schema Types: `int`, `float`, `string`, `dateTime`
 
@@ -364,7 +364,7 @@ Query Example: Movies with directors with `Steven` in `name` and have directed m
 
 
 
-Query Example: A movie in each genre that has over 30000 movies.  Because there is no order specified on genres, the order will be by UID.  The [count index]({{< relref "#count-index">}}) records the number of edges out of nodes and makes such queries more .
+Query Example: A movie in each genre that has over 30000 movies.  Because there is no order specified on genres, the order will be by UID.  The [count index]({{< relref "query-language/schema.md#count-index">}}) records the number of edges out of nodes and makes such queries more .
 
 {{< runnable >}}
 {
@@ -396,6 +396,37 @@ than that of the movie Minority Report.
 }
 {{< /runnable >}}
 
+## between
+
+Syntax Example: `between(predicate, startDateValue, endDateValue)`
+
+Schema Types: Scalar types, including `dateTime`, `int`, `float` and `string`
+
+Index Required: `dateTime`, `int`, `float`, and `exact` on strings
+
+Returns nodes that match an inclusive range of indexed values. The `between`
+keyword performs a range check on the index to improve query efficiency,
+helping to prevent a wide-ranging query on a large set of data from running
+slowly.
+
+A common use case for the `between` keyword is to search within a
+dataset indexed by `dateTime`. The following example query demonstrates this
+use case.
+
+Query Example: Movies released between the start of 1976 and the end of 1983,
+listed by genre.
+
+{{< runnable >}}
+{
+  me(func: between(initial_release_date, "1976-01-01", "1983-12-31")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
 ## uid
 
 Syntax Examples:
@@ -404,7 +435,7 @@ Syntax Examples:
 * `predicate @filter(uid(<uid1>, ..., <uidn>))`
 * `predicate @filter(uid(a))` for variable `a`
 * `q(func: uid(a,b))` for variables `a` and `b`
-
+* `q(func: uid($uids))` for multiple uids in DQL Variables. You have to set the value of this variable as a string (e.g`"[0x1, 0x2, 0x3]"`) in queryWithVars.
 
 Filters nodes at the current query level to only nodes in the given set of UIDs.
 
@@ -412,8 +443,11 @@ For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For 
 
 `uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
-Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+{{% notice "tip" %}}
+If the UID of a node is known, values for the node can be read directly.
+{{% /notice %}}
 
+Query Example: The films of Priyanka Chopra by known UID.
 {{< runnable >}}
 {
   films(func: uid(0x2c964)) {
@@ -426,8 +460,6 @@ Query Example: If the UID of a node is known, values for the node can be read di
   }
 }
 {{< /runnable >}}
-
-
 
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}
@@ -476,11 +508,12 @@ Query Example: Taraji Henson films ordered by number of genres, with genres list
 
 ## uid_in
 
-
 Syntax Examples:
 
 * `q(func: ...) @filter(uid_in(predicate, <uid>))`
 * `predicate1 @filter(uid_in(predicate2, <uid>))`
+* `predicate1 @filter(uid_in(predicate2, [<uid1>, ..., <uidn>]))`
+* `predicate1 @filter(uid_in(predicate2, uid(myVariable) ))`
 
 Schema Types: UID
 
@@ -488,15 +521,30 @@ Index Required: none
 
 While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
 
-`uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
-
+`uid_in` cannot be used at root. It accepts multiple UIDs as its argument, and it accepts a UID variable (which can contain a map of UIDs).
 
 Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x99706).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
     director.film @filter(uid_in(~director.film, 0x99706)) {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+You can also query for Jean-Pierre Jeunet if you don't know his UID and use it in a UID variable.
+
+{{< runnable >}}
+{
+  getJeunet as q(func: eq(name@fr, "Jean-Pierre Jeunet"))
+
+  caro(func: eq(name@en, "Marc Caro")) {
+    name@en
+    director.film @filter(uid_in(~director.film, uid(getJeunet) )) {
       name@en
     }
   }
@@ -638,5 +686,3 @@ Matches all entities where the polygon describing the location given by `predica
   }
 }
 {{< /runnable >}}
-
-

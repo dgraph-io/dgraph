@@ -136,7 +136,7 @@ func TestFloatConverstion(t *testing.T) {
 
 }
 
-func TestDeleteAndReaddIndex(t *testing.T) {
+func TestDeleteAndReadIndex(t *testing.T) {
 	// Add new predicate with several indices.
 	s1 := testSchema + "\n numerology: string @index(exact, term, fulltext) .\n"
 	setSchema(s1)
@@ -194,7 +194,7 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	setSchema(testSchema)
 }
 
-func TestDeleteAndReaddCount(t *testing.T) {
+func TestDeleteAndReadCount(t *testing.T) {
 	// Add new predicate with count index.
 	s1 := testSchema + "\n numerology: string @count .\n"
 	setSchema(s1)
@@ -238,7 +238,7 @@ func TestDeleteAndReaddCount(t *testing.T) {
 	setSchema(testSchema)
 }
 
-func TestDeleteAndReaddReverse(t *testing.T) {
+func TestDeleteAndReadReverse(t *testing.T) {
 	// Add new predicate with a reverse edge.
 	s1 := testSchema + "\n child_pred: uid @reverse .\n"
 	setSchema(s1)
@@ -621,6 +621,20 @@ func TestTypeFilterAtExpandEmptyResults(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[]}}`, js)
+}
+
+func TestFilterAtSameLevelOnUIDWithExpand(t *testing.T) {
+	query := `{
+		q(func: eq(name, "Michonne")) {
+			expand(_all_)
+			friend @filter(eq(alive, true)){
+				expand(_all_)
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	"friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
 }
 
 // Test Related to worker based pagination.

@@ -21,11 +21,11 @@ package edgraph
 import (
 	"context"
 
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -42,12 +42,12 @@ func (s *Server) Login(ctx context.Context,
 }
 
 // ResetAcl is an empty method since ACL is only supported in the enterprise version.
-func ResetAcl(closer *y.Closer) {
+func ResetAcl(closer *z.Closer) {
 	// do nothing
 }
 
 // ResetAcls is an empty method since ACL is only supported in the enterprise version.
-func RefreshAcls(closer *y.Closer) {
+func RefreshAcls(closer *z.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()
 	closer.Done()

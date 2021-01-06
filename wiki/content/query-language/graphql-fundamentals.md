@@ -1,20 +1,20 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
-title = "GraphQL+- Fundamentals"
+title = "DQL Fundamentals"
+weight = 1   
 [menu.main]
     parent = "query-language"
-    weight = 1   
 +++
 
-Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but its graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
+Dgraph Query Language, _DQL_, ([previously named GraphQL+-](https://dgraph.io/blog/post/graphql+-to-dql/)) is based on [GraphQL](http://spec.graphql.org/) maintained by the [GraphQL Foundation](https://foundation.graphql.org/).  GraphQL wasn't developed for Graph databases, but its graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.
 
-GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.
+DQL is a work in progress. We're adding more features and we might further simplify existing ones.
 
 ## Take a Tour - https://dgraph.io/tour/
 
-This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraphQL+- but need to check syntax, or indices, or functions, etc.
+This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in DQL but need to check syntax, or indices, or functions, etc.
 
-{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://dgraph.io/tour/{{% /notice %}}
+{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and DQL, take the tour - https://dgraph.io/tour/{{% /notice %}}
 
 
 ### Running examples
@@ -23,7 +23,7 @@ The examples in this reference use a database of 21 million triples about movies
 
 ## Queries
 
-A GraphQL+- query finds nodes based on search criteria, matches patterns in a graph and returns a graph as a result.
+A DQL query finds nodes based on search criteria, matches patterns in a graph and returns a graph as a result.
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
@@ -194,7 +194,7 @@ above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}})
+In [full-text search functions]({{< relref "query-language/functions.md#full-text-search" >}})
 (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
 the default (English) full-text tokenizer is used. This does not mean that
 the value with the `en` tag will be searched when querying the untagged value,
@@ -222,4 +222,3 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
   }
 }
 {{< /runnable >}}
-

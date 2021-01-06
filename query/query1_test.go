@@ -669,6 +669,43 @@ func TestHasFuncAtRootWithAfter(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":1}],"name":"Rick Grimes","uid":"0x17"},{"friend":[{"count":1}],"name":"Andrea","uid":"0x1f"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithAfterOnUIDs(t *testing.T) {
+
+	query := `
+	{
+			var(func: has(name)) {
+					uids as uid
+			}
+			me(func: uid(uids), first: 2, after: 0x5) {
+					uid
+			}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x6"},{"uid":"0x7"}]}}`, js)
+}
+
+func TestHasFuncAtRootWithAfterOnUIDsOtherThanRoot(t *testing.T) {
+
+	query := `
+	{
+		var(func: has(name)) {
+			uids as uid
+		}
+		me(func: uid(0x1, 0x1f)) {
+				uid
+				friend(first:2, after:0x5) @filter(uid(uids)) {
+					uid
+			}
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"uid":"0x1","friend":[{"uid": "0x17"},{"uid": "0x18"}]},{"uid": "0x1f","friend": [{"uid": "0x18"}]}]}}`, js)
+}
+
 func TestHasFuncAtRootFilter(t *testing.T) {
 
 	query := `
@@ -1436,7 +1473,7 @@ func TestAggregateRoot5(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":null}]}}`, js)
 }
 
 func TestAggregateRoot6(t *testing.T) {
@@ -1480,6 +1517,66 @@ func TestAggregateRootError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmptyData(t *testing.T) {
+
+	query := `
+		{
+			var(func: anyofterms(name, "Non-Existent-Data")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":null},{"min(val(a))":null},{"max(val(a))":null}]}}`, js)
+}
+
+func TestCountEmptyData(t *testing.T) {
+
+	query := `
+		{
+			me(func: anyofterms(name, "Non-Existent-Data")) {
+				a: count(uid)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"a":0}]}}`, js)
+}
+
+func TestCountEmptyData2(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend) @filter(eq(name, "non-existent"))
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"c":0}]}}`, js)
+}
+
+func TestCountEmptyData3(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend2)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestAggregateEmpty1(t *testing.T) {

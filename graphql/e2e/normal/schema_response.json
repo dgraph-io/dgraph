@@ -1,14 +1,12 @@
 {
     "schema": [
         {
-            "index": true,
-            "list": true,
-            "predicate": "dgraph.cors",
-            "tokenizer": [
-              "exact"
-            ],
+            "predicate": "Animal.category",
             "type": "string",
-            "upsert": true
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ]
         },
         {
             "predicate": "Author.country",
@@ -45,6 +43,15 @@
             ]
         },
         {
+            "index": true,
+            "predicate": "Author.qualification",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string"
+        },
+        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -69,6 +76,10 @@
             "tokenizer": [
                 "exact"
             ]
+        },
+        {
+            "predicate": "Cheetah.speed",
+            "type": "float"
         },
         {
             "predicate": "Comment1.id",
@@ -99,12 +110,65 @@
             "list": true
         },
         {
+            "predicate": "Dog.breed",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "term"
+            ]
+        },
+        {
             "predicate": "Droid.primaryFunction",
             "type": "string"
         },
         {
             "predicate": "Employee.ename",
             "type": "string"
+        },
+        {
+            "predicate": "Home.address",
+            "type": "string"
+        },
+        {
+            "predicate": "Home.favouriteMember",
+            "type": "uid"
+        },
+        {
+            "predicate": "Home.members",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Hotel.area",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.branches",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.location",
+            "type": "geo",
+            "index": true,
+            "tokenizer": [
+                "geo"
+            ]
+        },
+        {
+            "predicate": "Hotel.name",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ]
         },
         {
             "predicate": "Human.starships",
@@ -134,6 +198,11 @@
             "type": "string"
         },
         {
+            "predicate": "Parrot.repeatsWords",
+            "type": "string",
+            "list": true
+        },
+        {
             "predicate": "People.name",
             "type": "string"
         },
@@ -148,6 +217,19 @@
         },
         {
             "predicate": "Person.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Person1.friends",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Person1.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Plant.breed",
             "type": "string"
         },
         {
@@ -308,6 +390,14 @@
             "type": "string"
         },
         {
+            "predicate": "University.name",
+            "type": "string"
+        },
+        {
+            "predicate": "University.numStudents",
+            "type": "int"
+        },
+        {
             "predicate": "User.name",
             "type": "string",
             "index": true,
@@ -321,8 +411,49 @@
             "type": "password"
         },
         {
+            "predicate": "Zoo.animals",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Zoo.city",
+            "type": "string"
+        },
+        {
+            "predicate": "dgraph.cors",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "list": true,
+            "upsert": true
+        },
+        {
+            "predicate": "dgraph.drop.op",
+            "type": "string"
+        },
+        {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_created_at",
+            "type": "datetime"
+        },
+        {
+            "predicate": "dgraph.graphql.schema_history",
+            "type": "string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_query",
+            "type":"string"
+        },
+        {
+            "predicate":"dgraph.graphql.p_sha256hash",
+            "type":"string",
+            "index":true,
+            "tokenizer":["exact"]
         },
         {
             "predicate": "dgraph.graphql.xid",
@@ -341,9 +472,104 @@
                 "exact"
             ],
             "list": true
+        },
+        {
+            "index": true,
+            "predicate": "post1.numLikes",
+            "tokenizer": [
+              "int"
+            ],
+            "type": "int"
+        },
+        {
+            "predicate": "post1.title",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "upsert": true
+        },
+        {
+            "predicate": "post1.commentsByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "post1.likesByMonth",
+            "list": true,
+            "type": "int"
+        },
+        {
+            "predicate": "Book.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Book.desc",
+            "type": "string"
+        },
+        {
+            "predicate": "Section.name",
+            "type": "string"
+        },
+        {
+            "predicate": "Chapter.name",
+            "type": "string"
+        },
+        {
+            "index": true,
+            "predicate": "Section.sectionId",
+            "tokenizer": [
+                "float"
+            ],
+            "type": "float",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "Chapter.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Book.bookId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int",
+            "upsert": true
+        },
+        {
+            "index": true,
+            "predicate": "Section.chapterId",
+            "tokenizer": [
+                "int"
+            ],
+            "type": "int"
         }
     ],
     "types": [
+        {
+            "fields": [
+                {
+                    "name": "Animal.category"
+                }
+            ],
+            "name": "Animal"
+        },
         {
             "fields": [
                 {
@@ -360,6 +586,9 @@
                 },
                 {
                     "name": "Author.posts"
+                },
+                {
+                    "name": "Author.qualification"
                 }
             ],
             "name": "Author"
@@ -389,6 +618,17 @@
         {
             "fields": [
                 {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Cheetah.speed"
+                }
+            ],
+            "name": "Cheetah"
+        },
+        {
+            "fields": [
+                {
                     "name": "Comment1.id"
                 },
                 {
@@ -411,6 +651,17 @@
         {
             "fields": [
                 {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Dog.breed"
+                }
+            ],
+            "name": "Dog"
+        },
+        {
+            "fields": [
+                {
                     "name": "Character.name"
                 },
                 {
@@ -429,6 +680,37 @@
                 }
             ],
             "name": "Employee"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Home.address"
+                },
+                {
+                    "name": "Home.members"
+                },
+                {
+                    "name": "Home.favouriteMember"
+                }
+            ],
+            "name": "Home"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Hotel.name"
+                },
+                {
+                    "name": "Hotel.location"
+                },
+                {
+                    "name": "Hotel.area"
+                },
+                {
+                    "name": "Hotel.branches"
+                }
+            ],
+            "name": "Hotel"
         },
         {
             "fields": [
@@ -475,6 +757,59 @@
         {
             "fields": [
                 {
+                    "name": "Animal.category"
+                },
+                {
+                    "name": "Parrot.repeatsWords"
+                }
+            ],
+            "name": "Parrot"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Book.name"
+                },
+                {
+                    "name": "Book.desc"
+                },
+                {
+                    "name": "Book.bookId"
+                }
+            ],
+            "name": "Book"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Chapter.name"
+                },
+                {
+                    "name": "Chapter.bookId"
+                },
+                {
+                    "name": "Chapter.chapterId"
+                }
+            ],
+            "name": "Chapter"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Section.sectionId"
+                },
+                {
+                    "name": "Section.chapterId"
+                },
+                {
+                    "name": "Section.name"
+                }
+            ],
+            "name": "Section"
+        },
+        {
+            "fields": [
+                {
                     "name": "People.xid"
                 },
                 {
@@ -490,6 +825,25 @@
                 }
             ],
             "name": "Person"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Person1.name"
+                },
+                {
+                    "name": "Person1.friends"
+                }
+            ],
+            "name": "Person1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Plant.breed"
+                }
+            ],
+            "name": "Plant"
         },
         {
             "fields": [
@@ -635,6 +989,17 @@
         {
             "fields": [
                 {
+                    "name": "University.name"
+                },
+                {
+                    "name": "University.numStudents"
+                }
+            ],
+            "name": "University"
+        },
+        {
+            "fields": [
+                {
                     "name": "User.name"
                 },
                 {
@@ -646,6 +1011,17 @@
         {
             "fields": [
                 {
+                    "name": "Zoo.animals"
+                },
+                {
+                    "name": "Zoo.city"
+                }
+            ],
+            "name": "Zoo"
+        },
+        {
+            "fields": [
+                {
                     "name": "dgraph.graphql.schema"
                 },
                 {
@@ -653,6 +1029,45 @@
                 }
             ],
             "name": "dgraph.graphql"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.schema_history"
+                },
+                {
+                    "name": "dgraph.graphql.schema_created_at"
+                }
+            ],
+            "name": "dgraph.graphql.history"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.graphql.p_query"
+                },
+                {
+                    "name": "dgraph.graphql.p_sha256hash"
+                }
+            ],
+            "name": "dgraph.graphql.persisted_query"
+        },
+        {
+            "fields": [
+                {
+                    "name": "post1.title"
+                },
+                {
+                    "name": "post1.numLikes"
+                },
+                {
+                    "name": "post1.commentsByMonth"
+                },
+                {
+                    "name": "post1.likesByMonth"
+                }
+            ],
+            "name": "post1"
         }
     ]
 }

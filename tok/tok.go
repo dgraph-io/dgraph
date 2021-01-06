@@ -19,6 +19,7 @@ package tok
 import (
 	"encoding/binary"
 	"plugin"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -275,7 +276,9 @@ func (t HourTokenizer) IsSortable() bool { return true }
 func (t HourTokenizer) IsLossy() bool    { return true }
 
 // TermTokenizer generates term tokens from string data.
-type TermTokenizer struct{}
+type TermTokenizer struct {
+	lang string
+}
 
 func (t TermTokenizer) Name() string { return "term" }
 func (t TermTokenizer) Type() string { return "string" }
@@ -284,8 +287,17 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok || str == "" {
 		return []string{str}, nil
 	}
-	tokens := termAnalyzer.Analyze([]byte(str))
-	return uniqueTerms(tokens), nil
+	lang := LangBase(t.lang)
+	switch lang {
+	case "zh", "ja", "th", "lo", "my", "bo", "km", "kxm":
+		// Chinese, Japanese, Thai, Lao, Burmese, Tibetan and Khmer (km, kxm) do not use spaces as delimiters. We simply split by space.
+		tokens := strings.Split(str, " ")
+		return x.RemoveDuplicates(tokens), nil
+	default:
+		tokens := termAnalyzer.Analyze([]byte(str))
+		return uniqueTerms(tokens), nil
+	}
+
 }
 func (t TermTokenizer) Identifier() byte { return IdentTerm }
 func (t TermTokenizer) IsSortable() bool { return false }

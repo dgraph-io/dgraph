@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "JSON Mutation Format"
+weight = 10
 [menu.main]
     parent = "mutations"
-    weight = 10
 +++
 
 Mutations can also be specified using JSON objects. This can allow mutations to
@@ -11,8 +11,11 @@ be expressed in a more natural way. It also eliminates the need for apps to
 have custom serialisation code, since most languages already have a JSON
 marshalling library.
 
-When Dgraph receives a mutation as a JSON object, it first converts in into
-multiple RDFs that are then processed as normal.
+When Dgraph receives a mutation as a JSON object, it first converts it into an 
+internal edge format that is then processed into Dgraph.
+
+> JSON  -> Edges -> Posting list \
+> RDF   -> Edges -> Posting list
 
 Each JSON object represents a single node in the graph.
 
@@ -57,6 +60,22 @@ to the key `blank-0`. You could specify your own key like
 
 In this case, the assigned uids map would have a key called `diggy` with the value being the uid
 assigned to it.
+
+### Forbidden values
+ 
+{{% notice "note" %}}
+When using JSON mutations, the following string values are not accepted: `uid( )`, `val( )` 
+{{% /notice %}}
+
+For example, the following JSON can't be processed by Dgraph:
+
+```json
+{
+  "uid": "uid(t)",
+  "user_name": "uid(s ia)",
+  "name": "val (s kl)",
+}
+```
 
 ## Language support
 
@@ -236,7 +255,7 @@ All edges for a predicate emanating from a single node can be deleted at once
 If no predicates are specified, then all of the node's known outbound edges (to
 other nodes and to literal values) are deleted (corresponding to deleting `S *
 *`). The predicates to delete are derived using the type system. Refer to the
-[RDF format]({{< relref "#delete" >}}) documentation and the section on the
+[RDF format]({{< relref "mutations/delete.md" >}}) documentation and the section on the
 [type system]({{< relref "query-language/type-system.md" >}}) for more
 information:
 
@@ -316,7 +335,7 @@ upsert {
 }' | jq
 ```
 
-## Creating a list with JSON and interacting with
+## Creating a list with JSON and interacting with it
 
 Schema:
 

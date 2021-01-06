@@ -31,7 +31,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -40,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var (
@@ -153,7 +153,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
 	start := time.Now()
-	stopIndexing := func(closer *y.Closer) {
+	stopIndexing := func(closer *z.Closer) {
 		// runSchemaMutation can return. stopIndexing could be called by goroutines.
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {

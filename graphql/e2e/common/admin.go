@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -35,126 +37,28 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 const (
-	// Dgraph schema should look like this if the GraphQL layer has started and
-	// successfully connected
-	initSchema = `{
-    "schema": [
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        }
-    ]
-}`
-
-	firstTypes = `
+	firstGqlSchema = `
 	type A {
 		b: String
 	}`
-	firstSchema = `{
-    "schema": [
-        {
-            "predicate": "A.b",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        }
-    ]
-}`
-	firstGQLSchema = `{
+	firstPreds = `
+	{
+		"predicate": "A.b",
+		"type": "string"
+	}`
+	firstTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			}
+		],
+		"name": "A"
+	}`
+	firstIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -165,79 +69,33 @@ const (
     }
 }`
 
-	updatedTypes = `
+	updatedGqlSchema = `
 	type A {
 		b: String
 		c: Int
 	}`
-	updatedSchema = `{
-    "schema": [
-        {
-            "predicate": "A.b",
-            "type": "string"
-        },
-        {
-            "predicate": "A.c",
-            "type": "int"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                },
-                {
-                    "name": "A.c"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        }
-    ]
-}`
-	updatedGQLSchema = `{
+	updatedPreds = `
+	{
+		"predicate": "A.b",
+		"type": "string"
+	},
+	{
+		"predicate": "A.c",
+		"type": "int"
+	}`
+	updatedTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			},
+			{
+				"name": "A.c"
+			}
+		],
+		"name": "A"
+	}`
+	updatedIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -251,14 +109,13 @@ const (
     }
 }`
 
-	adminSchemaEndptTypes = `
+	adminSchemaEndptGqlSchema = `
 	type A {
 		b: String
 		c: Int
 		d: Float
 	}`
-	adminSchemaEndptSchema = `{
-    "schema": [
+	adminSchemaEndptPreds = `
         {
             "predicate": "A.b",
             "type": "string"
@@ -270,68 +127,23 @@ const (
         {
             "predicate": "A.d",
             "type": "float"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "list": true,
-            "index": true,
-            "tokenizer": [
-             "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        }
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "A.b"
-                },
-                {
-                    "name": "A.c"
-                },
-                {
-                    "name": "A.d"
-                }
-            ],
-            "name": "A"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },{
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        }
-    ]
-}`
-	adminSchemaEndptGQLSchema = `{
+        }`
+	adminSchemaEndptTypes = `
+	{
+		"fields": [
+			{
+				"name": "A.b"
+			},
+			{
+				"name": "A.c"
+			},
+			{
+				"name": "A.d"
+			}
+		],
+		"name": "A"
+	}`
+	adminSchemaEndptIntrospectionResponse = `{
     "__type": {
         "name": "A",
         "fields": [
@@ -350,12 +162,13 @@ const (
 )
 
 func admin(t *testing.T) {
-	d, err := grpc.Dial(alphaAdminTestgRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	testutil.DropAll(t, client)
 
-	hasSchema, err := hasCurrentGraphQLSchema(graphqlAdminTestAdminURL)
+	hasSchema, err := hasCurrentGraphQLSchema(GraphqlAdminURL)
 	require.NoError(t, err)
 	require.False(t, hasSchema)
 
@@ -364,61 +177,79 @@ func admin(t *testing.T) {
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
 	gqlSchemaNodeHasXid(t, client)
+
+	// restore the state to the initial schema and data.
+	testutil.DropAll(t, client)
+
+	schemaFile := "schema.graphql"
+	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	jsonFile := "test_data.json"
+	data, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
+	}
+
+	addSchemaAndData(schema, data, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
-	require.JSONEq(t, initSchema, string(resp.GetJson()))
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{ExcludeAclSchema: true})
 }
 
 func addGQLSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, firstTypes)
-	require.NoError(t, err)
+	SafelyUpdateGQLSchemaOnAlpha1(t, firstGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        firstPreds,
+		UserTypes:        firstTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, firstSchema, string(resp.GetJson()))
-
-	introspect(t, firstGQLSchema)
+	introspect(t, firstIntrospectionResponse)
 }
 
 func updateSchema(t *testing.T, client *dgo.Dgraph) {
-	err := addSchema(graphqlAdminTestAdminURL, updatedTypes)
-	require.NoError(t, err)
+	SafelyUpdateGQLSchemaOnAlpha1(t, updatedGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        updatedPreds,
+		UserTypes:        updatedTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, updatedSchema, string(resp.GetJson()))
-
-	introspect(t, updatedGQLSchema)
+	introspect(t, updatedIntrospectionResponse)
 }
 
 func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
-	err := addSchemaThroughAdminSchemaEndpt(graphqlAdminTestAdminSchemaURL, adminSchemaEndptTypes)
-	require.NoError(t, err)
+	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema)
 
-	resp, err := client.NewReadOnlyTxn().Query(context.Background(), "schema {}")
-	require.NoError(t, err)
+	testutil.VerifySchema(t, client, testutil.SchemaOptions{
+		UserPreds:        adminSchemaEndptPreds,
+		UserTypes:        adminSchemaEndptTypes,
+		ExcludeAclSchema: true,
+	})
 
-	require.JSONEq(t, adminSchemaEndptSchema, string(resp.GetJson()))
-
-	introspect(t, adminSchemaEndptGQLSchema)
+	introspect(t, adminSchemaEndptIntrospectionResponse)
 }
 
 func gqlSchemaNodeHasXid(t *testing.T, client *dgo.Dgraph) {
 	resp, err := client.NewReadOnlyTxn().Query(context.Background(), `query {
-		gqlSchema(func: type(dgraph.graphql)) {
+		gqlSchema(func: has(dgraph.graphql.schema)) {
 			dgraph.graphql.xid
+			dgraph.type
 		}
 	}`)
 	require.NoError(t, err)
-	// confirm that there is only one node of type dgraph.graphql and it has xid.
+	// confirm that there is only one node having GraphQL schema, it has xid,
+	// and its type is dgraph.graphql
 	require.JSONEq(t, `{
 		"gqlSchema": [{
-			"dgraph.graphql.xid": "dgraph.graphql.schema"
+			"dgraph.graphql.xid": "dgraph.graphql.schema",
+			"dgraph.type": ["dgraph.graphql"]
 		}]
 	}`, string(resp.GetJson()))
 }
@@ -435,7 +266,7 @@ func introspect(t *testing.T, expected string) {
 		}`,
 	}
 
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
@@ -457,7 +288,7 @@ func health(t *testing.T) {
         }
       }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
@@ -468,18 +299,20 @@ func health(t *testing.T) {
 	require.NoError(t, err)
 
 	var health []pb.HealthInfo
-	resp, err := http.Get(adminDgraphHealthURL)
+	resp, err := http.Get(dgraphHealthURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	healthRes, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(healthRes, &health))
 
-	// Uptime and LastEcho might have changed between the GraphQL and /health calls.
-	// If we don't remove them, the test would be flakey.
+	// These fields might have changed between the GraphQL and /health calls.
+	// If we don't remove them, the test would be flaky.
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
+		cmpopts.IgnoreFields(pb.HealthInfo{}, "MaxAssigned"),
 		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
@@ -497,7 +330,7 @@ func partialHealth(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "health": [
@@ -526,7 +359,7 @@ func adminAlias(t *testing.T) {
             }
         }`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t, `{
         "dgraphHealth": [
@@ -549,7 +382,6 @@ func adminState(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `query {
 			state {
-				counter
 				groups {
 					id
 					members {
@@ -605,13 +437,12 @@ func adminState(t *testing.T) {
 			}
 		}`,
 	}
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		State struct {
-			Counter uint64
-			Groups  []struct {
+			Groups []struct {
 				Id         uint32
 				Members    []*pb.Member
 				Tablets    []*pb.Tablet
@@ -635,14 +466,13 @@ func adminState(t *testing.T) {
 	require.NoError(t, err)
 
 	var state pb.MembershipState
-	resp, err := http.Get(adminDgraphStateURL)
+	resp, err := http.Get(dgraphStateURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	stateRes, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
 
-	require.Equal(t, state.Counter, result.State.Counter)
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)
 		expectedGroup := state.Groups[group.Id]
@@ -683,7 +513,7 @@ func adminState(t *testing.T) {
 }
 
 func testCors(t *testing.T) {
-	t.Run("testing normal retrival", func(t *testing.T) {
+	t.Run("testing normal retrieval", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{
@@ -691,7 +521,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -710,7 +540,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {
@@ -721,7 +551,7 @@ func testCors(t *testing.T) {
           }`, string(gqlResponse.Data))
 	})
 
-	t.Run("retrive mutated cors", func(t *testing.T) {
+	t.Run("retrieve mutated cors", func(t *testing.T) {
 		queryParams := &GraphQLParams{
 			Query: `query{
                 getAllowedCORSOrigins{
@@ -729,7 +559,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "getAllowedCORSOrigins": {
@@ -743,7 +573,7 @@ func testCors(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		client := &http.Client{}
-		req, err := http.NewRequest("GET", graphqlURL, nil)
+		req, err := http.NewRequest("GET", GraphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "google.com")
 		resp, err := client.Do(req)
@@ -754,7 +584,7 @@ func testCors(t *testing.T) {
 		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
 
 		client = &http.Client{}
-		req, err = http.NewRequest("GET", graphqlURL, nil)
+		req, err = http.NewRequest("GET", GraphqlURL, nil)
 		require.NoError(t, err)
 		req.Header.Add("Origin", "googl.com")
 		resp, err = client.Do(req)
@@ -772,7 +602,7 @@ func testCors(t *testing.T) {
                 }
               }`,
 		}
-		gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminURL)
+		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 		RequireNoGQLErrors(t, gqlResponse)
 		require.JSONEq(t, ` {
             "replaceAllowedCORSOrigins": {

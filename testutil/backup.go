@@ -17,11 +17,16 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -50,10 +55,57 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		return nil, err
 	}
 
-	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(true).
+	opt := badger.DefaultOptions(pdir).
+		WithBlockCacheSize(10 * (1 << 20)).
+		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
+}
+
+func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
+	restoreDone := false
+	for {
+		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		require.NoError(t, err)
+		buf, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		sbuf := string(buf)
+		if !strings.Contains(sbuf, "opRestore") {
+			restoreDone = true
+			break
+		}
+		time.Sleep(4 * time.Second)
+	}
+	require.True(t, restoreDone)
+
+	// Wait for the client to exit draining mode. This is needed because the client might
+	// be connected to a follower and might be behind the leader in applying the restore.
+	// Waiting for three consecutive successful queries is done to prevent a situation in
+	// which the query succeeds at the first attempt because the follower is behind and
+	// has not started to apply the restore proposal.
+	numSuccess := 0
+	for {
+		// This is a dummy query that returns no results.
+		_, err := dg.NewTxn().Query(context.Background(), `{
+	   q(func: has(invalid_pred)) {
+		   invalid_pred
+	   }}`)
+
+		if err == nil {
+			numSuccess += 1
+		} else {
+			require.Contains(t, err.Error(), "the server is in draining mode")
+			numSuccess = 0
+		}
+
+		// Apply restore works differently with race enabled.
+		// We are seeing delays in apply proposals hence failure of queries.
+		if numSuccess == 10 {
+			// The server has been responsive three times in a row.
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // GetPredicateValues reads the specified p directory and returns the values for the given

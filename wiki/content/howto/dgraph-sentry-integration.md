@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Using the Dgraph Sentry Integration"
+weight = 3
 [menu.main]
     parent = "howto"
-    weight = 3
 +++
 
 Sentry is a powerful service that allows applications to send arbitrary events, messages, exceptions, bread-crumbs (logs) to your sentry account. In simplest terms, it is a dial-home service but also has a  rich feature set including event filtering, data scrubbing, several SDKs, custom and release tagging, as well as integration with 3rd party tools such as Slack, GitHub.

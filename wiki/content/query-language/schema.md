@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Schema"
+weight = 20
 [menu.main]
     parent = "query-language"
-    weight = 20
 +++
 
 For each predicate, the schema specifies the target's type.  If a predicate `p` has type `T`, then for all subject-predicate-object triples `s p o` the object `o` is of schema type `T`.
@@ -126,8 +126,8 @@ Background indexing task may fail if an unexpected error occurs while computing
 the indexes. You should retry the Alter operation in order to update the schema,
 or sync the schema across all the alphas.
 
-We also plan to add a simpler API soon to check the status of background indexing.
-See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
+To learn about how to check background indexing status, see
+[Querying Health](https://dgraph.io/docs/master/deploy/dgraph-alpha/#querying-health).
 
 ### HTTP API
 
@@ -258,7 +258,7 @@ email: string @index(exact) @noconflict .
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/language-rdf-types.md" >}}).
 
-As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
+As well as implying a schema type for a [first mutation]({{< relref "query-language/schema.md" >}}), an RDF type can override a schema type for storage.
 
 If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.  Query results are always returned in schema type.
 
@@ -355,7 +355,7 @@ output:
 
 ## Indexing
 
-{{% notice "note" %}}Filtering on a predicate by applying a [function]({{< relref "#functions" >}}) requires an index.{{% /notice %}}
+{{% notice "note" %}}Filtering on a predicate by applying a [function]({{< relref "query-language/functions.md" >}}) requires an index.{{% /notice %}}
 
 When filtering by applying a function, Dgraph uses the index to make the search through a potentially large dataset efficient.
 
@@ -381,8 +381,7 @@ Incorrect index choice can impose performance penalties and an increased
 transaction conflict rate. Use only the minimum number of and simplest indexes
 that your application needs.
 {{% /notice %}}
-
-
+ 
 ### DateTime Indices
 
 The indices available for `dateTime` are as follows.
@@ -435,8 +434,7 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 ## List Type
 
 Predicate with scalar types can also store a list of values if specified in the schema. The scalar
-type needs to be enclosed within `[]` to indicate that its a list type. These lists are like an
-unordered set.
+type needs to be enclosed within `[]` to indicate that its a list type.
 
 ```
 occupations: [string] .
@@ -446,9 +444,9 @@ score: [int] .
 * A set operation adds to the list of values. The order of the stored values is non-deterministic.
 * A delete operation deletes the value from the list.
 * Querying for these predicates would return the list in an array.
-* Indexes can be applied on predicates which have a list type and you can use [Functions]({{<ref
-  "#functions">}}) on them.
+* Indexes can be applied on predicates which have a list type and you can use [Functions]({{<relref "query-language/functions.md">}}) on them.
 * Sorting is not allowed using these predicates.
+* These lists are like an unordered set. For example: `["e1", "e1", "e2"]` may get stored as `["e2", "e1"]`, i.e., duplicate values will not be stored and order may not be preserved.
 
 ## Filtering on list
 
@@ -467,6 +465,50 @@ A graph edge is unidirectional. For node-node edges, sometimes modeling requires
 The reverse edge of `anEdge` is `~anEdge`.
 
 For existing data, Dgraph computes all reverse edges.  For data added after the schema mutation, Dgraph computes and stores the reverse edge for each added triple.
+
+```
+type Person {
+  name string
+}
+type Car {
+  regnbr string
+  owner Person
+}
+owner uid @reverse .
+regnbr string @index(exact) .
+name string @index(exact) .
+```
+
+This makes it possible to query Persons and their cars by using:
+```
+q(func type(Person)) {
+  name
+  ~owner { name }
+}
+```
+To get a different key than `~owner` in the result, the query can be written with the wanted label
+(`cars` in this case):
+
+```
+q(func type(Person)) {
+  name
+  cars: ~owner { name }
+}
+```
+
+This also works if there are multiple "owners" of a `car`:
+```
+owner [uid] @reverse .
+```
+
+In both cases the `owner` edge should be set on the `Car`:
+```
+_:p1 <name> "Mary" .
+_:p1 <dgraph.type> "Person" .
+_:c1 <regnbr> "ABC123" .
+_:c1 <dgraph.type> "Car" .
+_:c1 <owner> _:p1
+```
 
 ## Querying Schema
 
@@ -509,6 +551,9 @@ schema(pred: [name, friend]) {
   lang
 }
 ```
+
+{{% notice "note" %}} If ACL is enabled, then the schema query returns only the
+predicates for which the logged-in ACL user has read access. {{% /notice %}}
 
 Types can also be queried. Below are some example queries.
 

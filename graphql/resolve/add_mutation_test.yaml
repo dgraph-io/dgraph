@@ -1,4 +1,186 @@
 -
+  name: "Add mutation geo field - Point type"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "location": { "latitude": 11.11 , "longitude" : 22.22}
+      }
+    }
+  explanation: "Add mutation should convert the Point type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.location": {
+            "type": "Point",
+            "coordinates": [22.22, 11.11]
+          }
+        }
+
+-
+  name: "Add mutation geo field - Polygon type"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          area {
+            coordinates {
+              points {
+                latitude
+                longitude
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "area": {
+          "coordinates": [{
+            "points": [{
+              "latitude": 11.11,
+              "longitude": 22.22
+            }, {
+              "latitude": 15.15,
+              "longitude": 16.16
+            }, {
+              "latitude": 20.20,
+              "longitude": 21.21
+            }]
+          }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+          }]
+        }
+      }
+    }
+  explanation: "Add mutation should convert the Polygon type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        {
+          "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.area": {
+            "type": "Polygon",
+            "coordinates": [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
+          }
+        }
+
+-
+  name: "Add mutation geo field - MultiPolygon type"
+  gqlmutation: |
+    mutation addHotel($hotel: AddHotelInput!) {
+      addHotel(input: [$hotel]) {
+        hotel {
+          name
+          branches {
+            polygons {
+              coordinates {
+                points {
+                  latitude
+                  longitude
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "hotel":
+      { "name": "Taj Hotel",
+        "branches": {
+          "polygons": [{
+            "coordinates": [{
+              "points": [{
+                "latitude": 11.11,
+                "longitude": 22.22
+              }, {
+                "latitude": 15.15,
+                "longitude": 16.16
+              }, {
+                "latitude": 20.20,
+                "longitude": 21.21
+              }]
+            }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+            }]
+          }, {
+            "coordinates": [{
+              "points": [{
+                "latitude": 91.11,
+                "longitude": 92.22
+              }, {
+                "latitude": 15.15,
+                "longitude": 16.16
+              }, {
+                "latitude": 20.20,
+                "longitude": 21.21
+              }]
+            }, {
+              "points": [{
+                "latitude": 11.18,
+                "longitude": 22.28
+              }, {
+                "latitude": 15.18,
+                "longitude": 16.18
+              }, {
+                "latitude": 20.28,
+                "longitude": 21.28
+              }]
+            }]
+        }]
+        }
+      }
+    }
+  explanation: "Add mutation should convert the MultiPolygon type mutation to corresponding Dgraph JSON mutation"
+  dgmutations:
+    - setjson: |
+        {
+          "uid":"_:Hotel1",
+          "dgraph.type":["Hotel"],
+          "Hotel.name":"Taj Hotel",
+          "Hotel.branches": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]],[[[92.22,91.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]]
+          }
+        }
+
+-
   name: "Add mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
@@ -338,6 +520,26 @@
           "dgraph.type":["Author"],
           "Author.name":"Different Author"
         }
+
+-
+  name: "Add Mutation with object at root instead of an array"
+  gqlmutation: |
+    mutation addAuthor {
+      addAuthor(input: { name: "A.N. Author"}) {
+        author {
+          name
+        }
+      }
+    }
+  explanation: "The input being an object should also work because of the input coercion rules
+  for input objects."
+  dgmutations:
+    - setjson: |
+        { "uid":"_:Author1",
+          "dgraph.type":["Author"],
+          "Author.name":"A.N. Author"
+        }
+
 
 -
   name: "Add Mutation with embedded value"
@@ -1341,11 +1543,15 @@
         {
           "name": "NY",
           "district": {"code": "D1", "name": "Dist1"}
+        },
+        {
+         "name": "Sydney",
+         "district": {"code": "D1"}
         }
       ]
     }
   explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is same, it should not return error."
+  is same or contains just xid, it should not return error."
   dgquery: |-
     query {
       District3 as District3(func: eq(District.code, "D1")) @filter(type(District)) {
@@ -1391,6 +1597,17 @@
             },
           "dgraph.type":["City"],
           "uid":"_:City4"
+        }
+      cond: "@if(eq(len(District3), 1))"
+    - setjson: |
+        {
+          "City.name":"Sydney",
+          "City.district":{
+              "District.cities":[{"uid":"_:City6"}],
+              "uid":"uid(District3)"
+            },
+          "dgraph.type":["City"],
+          "uid":"_:City6"
         }
       cond: "@if(eq(len(District3), 1))"
 
@@ -1600,7 +1817,7 @@
     {
       "auth": {
         "name": "A.N. Author",
-        "posts": [ { "postID": "0x456" } ]
+        "posts": [ { "postID": "0x456" }, {"title": "New Post", "author": {"name": "Abhimanyu"}} ]
       }
     }
   dgmutations:
@@ -1612,6 +1829,12 @@
           "Author.posts": [
             {
               "uid": "0x456",
+              "Post.author": { "uid": "_:Author1" }
+            },
+            {
+              "uid": "_:Post4",
+              "dgraph.type": ["Post"],
+              "Post.title": "New Post",
               "Post.author": { "uid": "_:Author1" }
             }
           ]
@@ -1647,13 +1870,19 @@
     {
       "inp": {
         "name": "A Country",
-        "states": [ { "code": "abc", "name": "Alphabet" } ]
+        "states": [
+          { "code": "abc", "name": "Alphabet" },
+          { "code": "def", "name": "Vowel", "country": { "name": "B country" } }
+        ]
       }
     }
 
   dgquery: |-
     query {
       State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
         uid
       }
     }
@@ -1668,6 +1897,16 @@
           "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "State.code": "def",
+          "State.name": "Vowel",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State6"
+        }
+      cond: "@if(eq(len(State6), 0))"
 
   dgquerysec: |-
     query {
@@ -1676,6 +1915,12 @@
       }
       var(func: uid(State3)) {
         Country4 as State.country
+      }
+      State6 as State6(func: eq(State.code, "def")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State6)) {
+        Country7 as State.country
       }
     }
   dgmutationssec:
@@ -1688,6 +1933,10 @@
             {
               "uid": "uid(State3)",
               "State.country": { "uid": "_:Country1" }
+            },
+            {
+              "uid": "uid(State6)",
+              "State.country": { "uid": "_:Country1" }
             }
           ]
         }
@@ -1696,9 +1945,13 @@
           {
             "uid": "uid(Country4)",
             "Country.states": [ { "uid": "uid(State3)" } ]
+          },
+          {
+            "uid": "uid(Country7)",
+            "Country.states": [ { "uid": "uid(State6)" } ]
           }
         ]
-      cond: "@if(eq(len(State3), 1))"
+      cond: "@if(eq(len(State3), 1) AND eq(len(State6), 1))"
 
 - name: "Deep XID 4 level deep"
   gqlmutation: |
@@ -2413,3 +2666,158 @@
   explanation: "The add mutation should not be allowed since value of @id field is empty."
   error:
     { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+
+-
+  name: "Add mutation for person with @hasInverse"
+  gqlmutation: |
+    mutation($input: [AddPersonInput!]!) {
+      addPerson(input: $input) {
+        person {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Or",
+          "friends": [
+            { "name": "Michal", "friends": [{ "name": "Justin" }] }
+          ]
+        }
+      ]
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person.friends": [
+            {
+              "Person.friends": [
+                {
+                  "uid": "_:Person1"
+                },
+                {
+                  "Person.friends": [
+                    {
+                      "uid": "_:Person2"
+                    }
+                  ],
+                  "Person.name": "Justin",
+                  "dgraph.type": [
+                    "Person"
+                  ],
+                  "uid": "_:Person3"
+                }
+              ],
+              "Person.name": "Michal",
+              "dgraph.type": [
+                "Person"
+              ],
+              "uid": "_:Person2"
+            }
+          ],
+          "Person.name": "Or",
+          "dgraph.type": [
+            "Person"
+          ],
+          "uid": "_:Person1"
+        }
+
+-
+  name: "Add mutation with union"
+  gqlmutation: |
+    mutation($input: [AddHomeInput!]!) {
+      addHome(input: $input) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal", "breed": "German Shephard"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { "parrotRef": { "id": "0x123"} }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Parrot2 as Parrot2(func: uid(0x123)) @filter(type(Parrot)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Home.address": "United Street",
+          "Home.favouriteMember": {
+            "uid": "0x123"
+          },
+          "Home.members": [{
+            "Animal.category": "Mammal",
+            "Dog.breed": "German Shephard",
+            "dgraph.type": ["Dog", "Animal"],
+            "uid": "_:Dog3"
+          }, {
+            "Animal.category": "Bird",
+            "Parrot.repeatsWords": ["squawk"],
+            "dgraph.type": ["Parrot", "Animal"],
+            "uid": "_:Parrot4"
+          }, {
+            "Character.name": "Han Solo",
+            "Employee.ename": "Han_emp",
+            "dgraph.type": ["Human", "Character", "Employee"],
+            "uid": "_:Human5"
+          }],
+          "dgraph.type": ["Home"],
+          "uid": "_:Home1"
+        }
+      cond: "@if(eq(len(Parrot2), 1))"
+
+-
+  name: "Add mutation with union - invalid input"
+  gqlmutation: |
+    mutation($input: [AddHomeInput!]!) {
+      addHome(input: $input) {
+        home {
+          address
+          members {
+            ... on Dog {
+              breed
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "address": "United Street",
+          "members": [
+            { "dogRef": { "category": "Mammal"}, "parrotRef": { "category": "Bird"} },
+            { "parrotRef": { "category": "Bird", "repeatsWords": ["squawk"]} },
+            { "humanRef": { "name": "Han Solo", "ename": "Han_emp"} }
+          ],
+          "favouriteMember": { }
+        }
+      ]
+    }
+  explanation: "The add mutation should not be allowed since the union input is invalid"
+  error:
+    message: |-
+      failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
+      failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children

@@ -43,6 +43,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
@@ -73,6 +74,7 @@ type options struct {
 	bufferSize      int
 	ludicrousMode   bool
 	upsertPredicate string
+	tmpDir          string
 	key             x.SensitiveByteSlice
 }
 
@@ -161,6 +163,7 @@ func init() {
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -523,10 +526,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
-			WithTableLoadingMode(bopt.MemoryMap).
 			WithCompression(bopt.ZSTD).
 			WithSyncWrites(false).
-			WithLoadBloomsOnOpen(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
 			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
@@ -542,13 +545,17 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
+		x.Check(tlsErr)
 	}
 
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db)
+	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
 		opts:      opts,
 		dc:        dc,
@@ -595,7 +602,11 @@ func run() error {
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
 		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
+		tmpDir:          Live.Conf.GetString("tmp"),
 	}
+
+	z.SetTmpDir(opt.tmpDir)
+
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
 		return err
@@ -614,6 +625,9 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 		bufferSize:    opt.bufferSize,
 	}
+
+	// Create directory for temporary buffers.
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
@@ -693,10 +707,10 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if err := l.alloc.Flush(); err != nil {
+		return err
+	}
 	if l.db != nil {
-		if err := l.alloc.Flush(); err != nil {
-			return err
-		}
 		if err := l.db.Close(); err != nil {
 			return err
 		}

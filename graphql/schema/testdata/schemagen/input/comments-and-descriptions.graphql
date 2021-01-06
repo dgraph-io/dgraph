@@ -36,3 +36,21 @@ enum AnEnum {
     """
     AnotherVal
 }
+
+"""
+Desc
+"""
+union A_Union = T
+
+"""
+Desc
+"""
+input AnInput {
+    # # comment
+    id: ID! # comment
+
+    """
+    Desc
+    """
+    i: Int
+}

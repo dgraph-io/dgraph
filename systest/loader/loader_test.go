@@ -20,9 +20,10 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,7 +34,12 @@ import (
 
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	conf := viper.GetViper()
+	conf.Set("tls_cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
+	conf.Set("tls_internal_port_enabled", true)
+	conf.Set("tls_server_name", "alpha1")
+
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
@@ -43,28 +49,34 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+
+	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	require.NoError(t, liveCmd.Run())
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	require.NoError(t, liveCmd.Run())
+		"--tls_cacert", tlsDir + "/ca.crt",
+		"--tls_internal_port_enabled=true",
+		"--tls_cert", tlsDir + "/client.liveclient.crt",
+		"--tls_key", tlsDir + "/client.liveclient.key",
+		"--tls_server_name", "alpha1",
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	op := api.Operation{Schema: "name: string @index(exact) ."}
 	x.Check(dg.Alter(ctx, &op))

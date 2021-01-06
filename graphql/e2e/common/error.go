@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -47,10 +48,10 @@ const (
 )
 
 type ErrorCase struct {
-	Name       string
-	GQLRequest string
-	variables  map[string]interface{}
-	Errors     x.GqlErrorList
+	Name         string
+	GQLRequest   string
+	GQLVariables string
+	Errors       x.GqlErrorList
 }
 
 func graphQLCompletionOn(t *testing.T) {
@@ -60,7 +61,7 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -78,7 +79,7 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 
 			// Check that the error is valid
-			gqlResponse := queryCountry.ExecuteAsPost(t, graphqlURL)
+			gqlResponse := queryCountry.ExecuteAsPost(t, GraphqlURL)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.Contains(t, gqlResponse.Errors[0].Error(),
@@ -91,10 +92,11 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
-			require.Equal(t, 4, len(result.QueryCountry))
+			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
 				&country{Name: "Angola"},
 				&country{Name: "Bangladesh"},
+				&country{Name: "India"},
 				&country{Name: "Mozambique"},
 				nil,
 			}
@@ -106,11 +108,11 @@ func graphQLCompletionOn(t *testing.T) {
 				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
 			})
 
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 4; i++ {
 				require.NotNil(t, result.QueryCountry[i])
 				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
 			}
-			require.Nil(t, result.QueryCountry[3])
+			require.Nil(t, result.QueryCountry[4])
 		})
 	}
 
@@ -166,7 +168,7 @@ func deepMutationErrors(t *testing.T) {
 				},
 			}
 
-			gqlResponse := executeRequest(t, graphqlURL, updateCountryParams)
+			gqlResponse := executeRequest(t, GraphqlURL, updateCountryParams)
 			require.NotNil(t, gqlResponse.Errors)
 			require.Equal(t, 1, len(gqlResponse.Errors))
 			require.EqualError(t, gqlResponse.Errors[0], tcase.exp)
@@ -188,18 +190,63 @@ func requestValidationErrors(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				d := json.NewDecoder(strings.NewReader(tcase.GQLVariables))
+				d.UseNumber()
+				err := d.Decode(&vars)
+				require.NoError(t, err)
+			}
 			test := &GraphQLParams{
 				Query:     tcase.GQLRequest,
-				Variables: tcase.variables,
+				Variables: vars,
 			}
-			gqlResponse := test.ExecuteAsPost(t, graphqlURL)
-
+			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+// notGeneratedAPIErrors check that the mutations and queries explicitly asked to be not
+// generated using the generate directive are indeed not generated
+func notGeneratedAPIErrors(t *testing.T) {
+	// Add and update university
+	universityID := addUniversity(t)
+	updateUniversity(t, universityID)
+
+	// Try querying, should throw error as query API is not generated
+	query := `
+		query {
+			queryUniversity {
+				name
+			}
+		}`
+	params := &GraphQLParams{Query: query}
+	gqlResponse := params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"queryUniversity\" on type \"Query\"."))
+
+	// Try deleting university, should throw error as delete API does not exist
+	mutation := `
+		mutation {
+			deleteUniversity(filter: {}) {
+				name
+			}
+		}`
+	params = &GraphQLParams{Query: mutation}
+	gqlResponse = params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"deleteUniversity\" on type \"Mutation\"."))
 }
 
 // panicCatcher tests that the GraphQL server behaves properly when an internal

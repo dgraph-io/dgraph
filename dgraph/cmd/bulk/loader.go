@@ -31,7 +31,10 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/credentials"
+
 	"github.com/dgraph-io/badger/v2"
+	bo "github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
@@ -54,6 +57,7 @@ type options struct {
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       uint64
+	PartitionBufSize int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumReducers      int
@@ -66,6 +70,7 @@ type options struct {
 	NewUids          bool
 	ClientDir        string
 	Encrypted        bool
+	EncryptedOut     bool
 
 	MapShards    int
 	ReduceShards int
@@ -75,8 +80,12 @@ type options struct {
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
 	EncryptionKey x.SensitiveByteSlice
+	// BadgerCompression is the compression algorithm to use while writing to badger.
+	BadgerCompression bo.CompressionType
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
+	BlockCacheSize         int64
+	IndexCacheSize         int64
 }
 
 type state struct {
@@ -104,13 +113,20 @@ func newLoader(opt *options) *loader {
 	}
 
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+	x.Check(err)
+	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithInsecure())
+	}
+	if tlsConf != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
@@ -181,7 +197,7 @@ func (ld *loader) mapStage() {
 		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
-	ld.xids = xidmap.New(ld.zero, db)
+	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
@@ -345,7 +361,9 @@ func (ld *loader) cleanup() {
 		x.Check(db.Close())
 	}
 	for _, db := range ld.tmpDbs {
+		opts := db.Opts()
 		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
 }

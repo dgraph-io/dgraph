@@ -315,6 +315,63 @@ func TestGtAge(t *testing.T) {
 	require.JSONEq(t, `{"data": {"senior_citizens":[]}}`, js)
 }
 
+func TestBetweenAge(t *testing.T) {
+	query := `
+    {
+			senior_citizens(func: between(age, 18, 30)) {
+				name
+				age
+			}
+    }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"senior_citizens": [
+					{
+						"name": "Andrea",
+						"age": 19
+					},
+					{
+						"name": "Alice",
+						"age": 25
+					},
+					{
+						"name": "Bob",
+						"age": 25
+					},
+					{
+						"name": "Colin",
+						"age": 25
+					},
+					{
+						"name": "Elizabeth",
+						"age": 25
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestBetweenAgeEmptyResponse(t *testing.T) {
+	query := `
+    {
+			senior_citizens(func: between(age, 30, 18)) {
+				name
+				age
+			}
+    }`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"senior_citizens": []
+			}
+		}
+	`, js)
+}
+
 func TestLeAge(t *testing.T) {
 	query := `{
 		  minors(func: le(age, 15)) {
@@ -2351,13 +2408,63 @@ func TestNonFlattenedResponse(t *testing.T) {
 func TestDateTimeQuery(t *testing.T) {
 	var query string
 
+	// Test 23
+	query = `
+{
+	q(func: between(graduation, "1931-01-01", "1932-03-01")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1","graduation":["1932-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 22
+	query = `
+{
+	q(func: between(graduation, "1932-03-01", "1950-01-01")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1f","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 21
+	query = `
+{
+  q(func: between(created_at, "2021-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+	  uid
+	  created_at
+  }
+}
+`
+	require.JSONEq(t, `{"data":{"q":[]}}`, processQueryNoErr(t, query))
+
+	// Test 20
+	query = `
+{
+  q(func: between(created_at, "2019-03-28T14:41:57+30:00", "2019-03-28T15:41:57+30:00"), orderdesc: created_at) {
+	  uid
+	  created_at
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"}]}}`,
+		processQueryNoErr(t, query))
+
 	// Test 19
 	query = `
 {
   q(func: has(created_at), orderdesc: created_at) {
 		uid
 		created_at
-  }
+	}
 }
 `
 	require.JSONEq(t,
@@ -2906,6 +3013,377 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 			require.JSONEq(t, js, tc.result)
 		})
 	}
+}
+
+func TestBetweenString(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between string on predicate with lang tag`,
+			`
+			{
+				me(func: between(name, "", "Alice")) {
+					uid
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x33","name":"A"},{"uid":"0x6e","name":"Alice"},{"uid":"0x3e8","name":"Alice"},{"uid":"0xdac","name":""},{"uid":"0xdad","name":"Alex"},{"uid":"0xdae","name":""},{"uid":"0x2710","name":"Alice"},{"uid":"0x2712","name":"Alice"},{"uid":"0x2714","name":"Alice"}]}}`,
+		},
+		{
+			`Test between string on predicate with lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(name, "Alice", "")) {
+					uid
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between string on predicate without lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(newname, "P", "P1")) {
+					uid
+					newname
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x1f5","newname":"P1"}]}}`,
+		},
+		{
+			`Test between string on predicate without lang tag when bounds are invalid`,
+			`
+			{
+				me(func: between(newname, "P1", "P5")) {
+					uid
+					newname
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x1f5","newname":"P1"},{"uid":"0x1f6","newname":"P2"},{"uid":"0x1f7","newname":"P3"},{"uid":"0x1f8","newname":"P4"},{"uid":"0x1f9","newname":"P5"},{"uid":"0x1fe","newname":"P10"},{"uid":"0x1ff","newname":"P11"},{"uid":"0x200","newname":"P12"}]}}`,
+		},
+		{
+			`Test between string on predicate of list type`,
+			`
+			{
+				me(func: between(pet_name, "a", "z")) {
+					uid
+					pet_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","pet_name":["little master","master blaster"]},{"uid":"0x4e21","pet_name":["mahi","ms"]}]}}`,
+		},
+		{
+			`Test between string on predicate of list type with partial match`,
+			`
+			{
+				me(func: between(pet_name, "a", "mahi")) {
+					uid
+					pet_name
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","pet_name":["little master","master blaster"]},{"uid":"0x4e21","pet_name":["mahi","ms"]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenFloat(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between salary all results`,
+			`
+			{
+				me(func: between(salary, "9999.0000", "10003.0000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x2710","salary":10000.000000},{"uid":"0x2712","salary":10002.000000}]}}`,
+		},
+		{
+			`Test between salary 1 result`,
+			`
+			{
+				me(func: between(salary, "10000.1000", "10002.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x2712","salary":10002.000000}]}}`,
+		},
+		{
+			`Test between salary empty response`,
+			`
+			{
+				me(func: between(salary, "10000.1000", "10001.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between salary invalid args`,
+			`
+			{
+				me(func: between(salary, "10010.1000", "10001.1000")) {
+					uid
+					salary
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between for float list`,
+			`
+			{
+				me(func: between(average, "30", "50")) {
+					uid
+					average
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","average":[46.930000,55.100000]},{"uid":"0x4e21","average":[35.200000,49.330000]}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenInt(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between on int list predicate`,
+			`
+			{
+				me(func: between(score, "50", "70")) {
+					uid
+					score
+				}
+			}
+			`,
+			`{"data":{"me":[{"uid":"0x4e20","score":[56,90]},{"uid":"0x4e21","score":[85,68]}]}}`,
+		},
+		{
+			`Test between on int list predicate empty respone`,
+			`
+			{
+				me(func: between(score, "1", "30")) {
+					uid
+					score
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+		{
+			`Test between on int`,
+			`
+			{
+				senior_citizens(func: between(age, 18, 30)) {
+					name
+					age
+				}
+			}
+			`,
+			`{"data": {"senior_citizens": [{"name": "Andrea","age": 19},{"name": "Alice","age": 25},{"name": "Bob","age": 25},{"name": "Colin","age": 25},{"name": "Elizabeth","age": 25}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenCount(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test between on valid bounds`,
+			`
+			{
+				me(func: between(count(friend), 1, 3)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`,
+		},
+		{
+			`Test between on count equal bounds`,
+			`
+			{
+				me(func: between(count(friend), 5, 5)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[{"name":"Michonne"}]}}`,
+		},
+		{
+			`Test between on count invalid bounds`,
+			`
+			{
+				me(func: between(count(friend), 3, 1)) {
+					name
+				}
+			}
+			`,
+			`{"data":{"me":[]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+
+func TestBetweenWithIndex(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test Between on Indexed Predicate`,
+			`{
+				me(func :has(newname))  @filter(between(newname,"P1","P3")){
+					newname
+				  }
+			 }`,
+			`{"data": {"me": [{"newname": "P1"},{"newname": "P2"},{"newname": "P3"},{"newname": "P10"},{"newname": "P11"},{"newname": "P12"}]}}`,
+		},
+		{
+			`Test Between on Indexed Predicate at child Node`,
+			`{
+				me(func :has(newname))  @filter(between(newname,"P12","P2")){
+					newname
+					newfriend @filter(between(newname, "P3", "P5")){
+					  newname
+					}
+				  }
+			 }`,
+			`{"data": {"me": [{"newname": "P2", "newfriend": [{"newname": "P5"}]},{"newname": "P12"}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+}
+func TestBetweenWithoutIndex(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			`Test Between on Non Indexed Predicate`,
+			`
+			{
+				me(func: type(CarModel)) @filter(between(year,2009,2010)){
+					make
+					model
+					year
+				}
+			}
+			`,
+			`{"data":{"me":[{"make":"Ford","model":"Focus","year":2009},{"make":"Toyota","model":"Prius","year":2009}]}}`,
+		},
+		{
+			`Test Between filter at child node`,
+			`
+			{
+				me(func :has(newage)) @filter(between(newage,20,24)) {
+					newage
+					newfriend @filter(between(newage,25,30)){
+					  newage
+					}
+				 }
+			}
+			`,
+			`{"data": {"me": [{"newage": 21},{"newage": 22,"newfriend": [{"newage": 25},{"newage": 26}]},{"newage": 23,"newfriend": [{"newage": 27},{"newage": 28}]},{"newage": 24,"newfriend": [{"newage": 29},{"newage": 30}]}]}}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, js, tc.result)
+		})
+	}
+
+}
+
+func TestEqFilterWithoutIndex(t *testing.T) {
+	test := struct {
+		name   string
+		query  string
+		result string
+	}{
+		`Test eq filter on Non Indexed Predicate`,
+		`
+		{
+			me(func: type(CarModel)) @filter(eq(year,2008,2009)){
+				make
+				model
+				year
+			}
+		}
+		`,
+		`{"data":{"me":[{"make":"Ford","model":"Focus","year":2008},{"make":"Ford","model":"Focus","year":2009},{"make":"Toyota","model":"Prius","year":2009}]}}`,
+	}
+
+	js := processQueryNoErr(t, test.query)
+	require.JSONEq(t, js, test.result)
+
 }
 
 var client *dgo.Dgraph

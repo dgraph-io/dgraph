@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -52,6 +54,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
+
+	// set up the lambda url for unit tests
+	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
 
 	common.BootstrapServer(schema, data)
 

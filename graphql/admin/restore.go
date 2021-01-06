@@ -19,16 +19,21 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"sync"
+
+	"github.com/dgraph-io/dgraph/edgraph"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/pkg/errors"
 )
 
 type restoreInput struct {
 	Location          string
 	BackupId          string
+	BackupNum         int
 	EncryptionKeyFile string
 	AccessKey         string
 	SecretKey         string
@@ -51,6 +56,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	req := pb.RestoreRequest{
 		Location:          input.Location,
 		BackupId:          input.BackupId,
+		BackupNum:         uint64(input.BackupNum),
 		EncryptionKeyFile: input.EncryptionKeyFile,
 		AccessKey:         input.AccessKey,
 		SecretKey:         input.SecretKey,
@@ -63,9 +69,10 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultField:        input.VaultField,
 		VaultFormat:       input.VaultFormat,
 	}
-	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
+
+	wg := &sync.WaitGroup{}
+	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
-		worker.DeleteRestoreId(restoreId)
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code": "Failure",
@@ -75,11 +82,15 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		}, false
 	}
 
+	go func() {
+		wg.Wait()
+		edgraph.ResetAcl(nil)
+	}()
+
 	return &resolve.Resolved{
 		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"code":      "Success",
-			"message":   "Restore operation started.",
-			"restoreId": restoreId,
+			"code":    "Success",
+			"message": "Restore operation started.",
 		}},
 		Field: m,
 	}, true
@@ -93,6 +104,13 @@ func getRestoreInput(m schema.Mutation) (*restoreInput, error) {
 	}
 
 	var input restoreInput
-	err = json.Unmarshal(inputByts, &input)
-	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+	if err := json.Unmarshal(inputByts, &input); err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	if input.BackupNum < 0 {
+		err := errors.Errorf("backupNum value should be equal or greater than zero")
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+	return &input, nil
 }

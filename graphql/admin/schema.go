@@ -22,12 +22,14 @@ import (
 	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -41,7 +43,11 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+type updateSchemaResolver struct {
+	admin *adminServer
+}
+
+func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
@@ -49,7 +55,9 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 		return resolve.EmptyResult(m, err), false
 	}
 
-	schHandler, err := schema.NewHandler(input.Set.Schema)
+	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
+	// is returned from badger.
+	schHandler, err := schema.NewHandler(input.Set.Schema, true)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -57,12 +65,23 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if _, err = schema.FromString(schHandler.GQLSchema()); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	newGQLSchema := input.Set.Schema
-	newDgraphSchema := schHandler.DGSchema()
 
-	resp, err := edgraph.UpdateGQLSchema(ctx, newGQLSchema, newDgraphSchema)
+	usr.admin.mux.RLock()
+	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	usr.admin.mux.RUnlock()
+
+	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
+	updateHistory := oldSchemaHash != newSchemaHash
+
+	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
+	}
+
+	if updateHistory {
+		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
+			glog.Errorf("error while updating schema history %s", err.Error())
+		}
 	}
 
 	return &resolve.Resolved{
@@ -70,8 +89,8 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 			m.Name(): map[string]interface{}{
 				"gqlSchema": map[string]interface{}{
 					"id":              query.UidToHex(resp.Uid),
-					"schema":          newGQLSchema,
-					"generatedSchema": newDgraphSchema,
+					"schema":          input.Set.Schema,
+					"generatedSchema": schHandler.GQLSchema(),
 				}}},
 		Field: m,
 		Err:   nil,
@@ -79,7 +98,7 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) (*gql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
 	return nil, nil
 }
@@ -87,6 +106,8 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 func (gsr *getSchemaResolver) Execute(
 	ctx context.Context,
 	req *dgoapi.Request) (*dgoapi.Response, error) {
+	gsr.admin.mux.RLock()
+	defer gsr.admin.mux.RUnlock()
 	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
 	return &dgoapi.Response{Json: b}, err
 }

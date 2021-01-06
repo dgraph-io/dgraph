@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
@@ -321,7 +322,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("type %s {\n", attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -544,8 +545,17 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
+	return exportInternal(ctx, in, pstore, false)
+}
+
+// exportInternal contains the core logic to export a Dgraph database. If skipZero is set to
+// false, the parts of this method that require to talk to zero will be skipped. This is useful
+// when exporting a p directory directly from disk without a running cluster.
+func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
+	skipZero bool) (ExportedFiles, error) {
 	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := newExportStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	exportStorage, err := newExportStorage(in,
+		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 	if err != nil {
 		return nil, err
 	}
@@ -562,12 +572,13 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		return nil, err
 	}
 
-	gqlSchemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
+	gqlSchemaWriter, err := exportStorage.openFile(
+		fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
 	if err != nil {
 		return nil, err
 	}
 
-	stream := pstore.NewStreamAt(in.ReadTs)
+	stream := db.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		// Skip exporting delete data including Schema and Types.
@@ -594,7 +605,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 			return false
 		}
 
-		if !pk.IsType() {
+		if !pk.IsType() && !skipZero {
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}
@@ -649,7 +660,16 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 			// Ignore this predicate.
 		case pk.Attr == "dgraph.cors":
 			// Ignore this predicate.
-
+		case pk.Attr == "dgraph.drop.op":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.schema_created_at":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.schema_history":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.p_query":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.graphql.p_sha256hash":
+			// Ignore this predicate.
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
@@ -660,7 +680,14 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
 			}
-			if len(vals) != 1 {
+			// if the GraphQL schema node was deleted with S * * delete mutation,
+			// then the data key will be overwritten with nil value.
+			// So, just skip exporting it as there will be no value for this data key.
+			if len(vals) == 0 {
+				return nil, nil
+			}
+			// Give an error only if we find more than one value for the schema.
+			if len(vals) > 1 {
 				return nil, errors.Errorf("found multiple values for the GraphQL schema")
 			}
 			val, ok := vals[0].Value.([]byte)
@@ -724,12 +751,17 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		glog.Fatalf("Invalid export format found: %s", in.Format)
 	}
 
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
+	stream.Send = func(buf *z.Buffer) error {
+		kv := &bpb.KV{}
+		return buf.SliceIterate(func(s []byte) error {
+			kv.Reset()
+			if err := kv.Unmarshal(s); err != nil {
+				return err
+			}
 			// Skip nodes that have no data. Otherwise, the exported data could have
 			// formatting and/or syntax errors.
 			if len(kv.Value) == 0 {
-				continue
+				return nil
 			}
 
 			var writer *fileWriter
@@ -755,12 +787,9 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 				hasDataBefore = true
 			}
 
-			if _, err := writer.gw.Write(kv.Value); err != nil {
-				return err
-			}
-		}
-		// Once all the sends are done, writers must be flushed and closed in order.
-		return nil
+			_, err = writer.gw.Write(kv.Value)
+			return err
+		})
 	}
 
 	// All prepwork done. Time to roll.

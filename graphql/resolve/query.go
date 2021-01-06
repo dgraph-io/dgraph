@@ -41,7 +41,7 @@ type QueryResolver interface {
 
 // A QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query,
 type QueryRewriter interface {
-	Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
+	Rewrite(ctx context.Context, q schema.Query) ([]*gql.GraphQuery, error)
 }
 
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from
@@ -188,6 +188,8 @@ func convertScalarToString(val interface{}) (string, error) {
 		str = strconv.FormatInt(v, 10)
 	case float64:
 		str = strconv.FormatFloat(v, 'f', -1, 64)
+	case json.Number:
+		str = v.String()
 	case nil:
 		str = ""
 	default:

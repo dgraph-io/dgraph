@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Aggregation"
+weight = 11
 [menu.main]
     parent = "query-language"
-    weight = 11
 +++
 
 Syntax Example: `AG(val(varName))`
@@ -22,7 +22,7 @@ Schema Types:
 | `min` / `max`     | `int`, `float`, `string`, `dateTime`, `default`         |
 | `sum` / `avg`    | `int`, `float`       |
 
-Aggregation can only be applied to [value variables]({{< relref "#value-variables">}}).  An index is not required (the values have already been found and stored in the value variable mapping).
+Aggregation can only be applied to [value variables]({{< relref "query-language/value-variables.md">}}).  An index is not required (the values have already been found and stored in the value variable mapping).
 
 An aggregation is applied at the query block enclosing the variable definition.  As opposed to query variables and value variables, which are global, aggregation is computed locally.  For example:
 ```

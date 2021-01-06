@@ -1,8 +1,8 @@
 +++
 title = "Links in the Graph"
+weight = 4
 [menu.main]
     parent = "schema"
-    weight = 4   
 +++
 
 All the data in your app forms a GraphQL data graph.  That graph has nodes of particular types (the types you define in your schema) and links between the nodes to form the data graph.
@@ -48,7 +48,7 @@ type Post {
 }
 ```
 
-Then, the schema says that an author has a list of posts and a post has an author.  But, that GraphQL schema doesn't doesn't say that every post in the list of posts for an author has the same author as their `author`.  For example, it's perfectly valid for author `a1` to have a `posts` edge to post `p1`, that has an `author` edge to author `a2`.  Here, we'd expect an author to be the author of all their posts, but that's not what GraphQL enforces.  In GraphQL, it's left up to the implementation to make two-way connections in cases that make sense.  That's just part of how GraphQL works.
+Then, the schema says that an author has a list of posts and a post has an author.  But, that GraphQL schema doesn't say that every post in the list of posts for an author has the same author as their `author`.  For example, it's perfectly valid for author `a1` to have a `posts` edge to post `p1`, that has an `author` edge to author `a2`.  Here, we'd expect an author to be the author of all their posts, but that's not what GraphQL enforces.  In GraphQL, it's left up to the implementation to make two-way connections in cases that make sense.  That's just part of how GraphQL works.
 
 In Dgraph, the directive `@hasInverse` is used to create a two-way edge.  
 

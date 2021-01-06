@@ -1,9 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Tracing"
+weight = 16
 [menu.main]
     parent = "deploy"
-    weight = 16
 +++
 
 Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.

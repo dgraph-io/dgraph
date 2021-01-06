@@ -313,7 +313,7 @@ You can see that we have six hashtags in total, and four of them have the substr
 We should use the built-in function `regexp` to be able to use regular expressions to search for predicates.
 This function takes two arguments, the first is the name of the predicate, and the second one is the regular expression.
 
-Here is the syntax of the `regexp` funtion: `regexp(predicate, /regular-expression/)`
+Here is the syntax of the `regexp` function: `regexp(predicate, /regular-expression/)`
 
 Let's execute the following query to find the hashtags that have the substring `graph`.
 
@@ -382,5 +382,4 @@ Check out our next tutorial of the getting started series [here]({{< relref "tut
 
 ## Need Help
 
-* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
-* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs, and discussions.

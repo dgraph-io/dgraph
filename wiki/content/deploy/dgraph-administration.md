@@ -1,23 +1,85 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Dgraph Administration"
+weight = 18
 [menu.main]
     parent = "deploy"
-    weight = 18
 +++
 
-Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
+Each Dgraph Alpha exposes various administrative (admin) endpoints both over
+HTTP and GraphQL, for example endpoints to export data and to perform a clean
+shutdown. All such admin endpoints are protected by three layers of authentication:
+
+1. IP White-listing (use `--whitelist` flag in alpha to whitelist IPs other than
+   localhost).
+2. Poor-man's auth, if alpha is started with the `--auth_token` flag (means you
+   will need to pass the `auth_token` as `X-Dgraph-AuthToken` header while
+   making the HTTP request).
+3. Guardian-only access, if ACL is enabled (means you need to pass the ACL-JWT
+   of a Guardian user using the `X-Dgraph-AccessToken` header while making the
+  HTTP request).
+
+An admin endpoint is any HTTP endpoint which provides admin functionality.
+Admin endpoints usually start with the `/admin` path. The current list of admin
+endpoints includes the following:
+
+* `/admin`
+* `/admin/backup`
+* `/admin/config/lru_mb`
+* `/admin/draining`
+* `/admin/export`
+* `/admin/shutdown`
+* `/admin/schema`
+* `/alter`
+* `/login`
+
+There are a few exceptions to the general rule described above:
+
+* `/login`: This endpoint logs-in an ACL user, and provides them with a JWT.
+  Only IP Whitelisting and Poor-man's auth checks are performed for this endpoint.
+* `/admin`: This endpoint provides GraphQL queries/mutations corresponding to
+  the HTTP admin endpoints. All of the queries/mutations on `/admin` have all
+  three layers of authentication, except for `login (mutation)`, which has the
+  same behavior as the above HTTP `/login` endpoint.
 
 ## Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
-You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
+
+You can use the `--whitelist` option to specify a comma-separated whitelist of IP addresses, IP ranges, CIDR ranges, or hostnames for hosts from which admin operations can be initiated.
+
+**IP Address**
 
 ```sh
-dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third RAM> ...
+dgraph alpha --whitelist 127.0.0.1 ...
 ```
+This would allow admin operations from hosts with IP 127.0.0.1 (i.e., localhost only).
+
+**IP Range**
+```sh
+dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 ...
+```
+
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
+
+**CIDR Range**
+
+```sh
+dgraph alpha --whitelist 172.17.0.0/16,172.18.0.0/15,172.20.0.0/32,192.168.1.1/32 ...
+```
+
+This would allow admin operations from hosts that matches the CIDR range `172.17.0.0/16`, `172.18.0.0/15`, `172.20.0.0/32`, or `192.168.1.1/32` (the same range as the IP Range example).
+
+You can set whitelist IP to `0.0.0.0/0` to whitelist all IPs.
+
+**Hostname**
+
+```sh
+dgraph alpha --whitelist admin-bastion,host.docker.internal ...
+```
+
+This would allow admin operations from hosts with hostnames `admin-bastion` and `host.docker.internal`.
 
 ## Restricting Mutation Operations
 
@@ -47,13 +109,13 @@ dgraph alpha --mutations strict
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
 You can configure Dgraph to only allow alter operations when the client provides a specific token.
-This can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
+This "Simple ACL" token can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
 
 You can specify the auth token with the `--auth_token` option for each Dgraph Alpha in the cluster.
 Clients must include the same auth token to make alter requests.
 
 ```sh
-$ dgraph alpha --lru_mb=2048 --auth_token=<authtokenstring>
+$ dgraph alpha --auth_token=<authtokenstring>
 ```
 
 ```sh
@@ -78,7 +140,7 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ## Exporting Database
 
-An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
+An export of all nodes is started by locally executing the following GraphQL mutation on the `/admin` endpoint of an Alpha node (e.g. `localhost:8080/admin`) using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ```graphql
 mutation {
@@ -108,6 +170,19 @@ export.
 Each Alpha leader for a group writes output as a gzipped file to the export
 directory specified via the `--export` flag (defaults to a directory called `"export"`). If any of the groups fail, the
 entire export process is considered failed and an error is returned.
+
+Starting in Dgraph v20.11.0 you can provide an absolute path to the directory where you want to export data in the GraphQL mutation request, as follows:
+
+```graphql
+mutation {
+  export(input: {format: "rdf",destination: "<absolute-path-to-your-export-dir>"}) {
+    response {
+      message
+      code
+    }
+  }
+}
+```
 
 The data is exported in RDF format by default. A different output format may be specified with the
 `format` field. For example:
@@ -156,7 +231,7 @@ This stops the Alpha on which the command is executed and not the entire cluster
 
 ## Deleting database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
+Individual triples, patterns of triples and predicates can be deleted as described in the [DQL docs]({{< relref "mutations/delete.md" >}}).
 
 To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
@@ -174,7 +249,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading/bulk-loader.md" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
@@ -215,7 +290,7 @@ dgraph upgrade --acl -a localhost:9080 -u groot -p password
     They have now been renamed as `dgraph.type.User`, `dgraph.type.Group` and `dgraph.type.Rule`, to
     keep them in dgraph's internal namespace. This upgrade just changes the type-names for the ACL
     nodes to the new type-names.
-    
+
     You can use `--dry-run` option in `dgraph upgrade` command to see a dry run of what the upgrade
     command will do.
 8. If you have types or predicates in your schema whose names start with `dgraph.`, then
@@ -225,7 +300,7 @@ new type name and copy data from old predicate name to new predicate name for al
 are affected. Then, you can drop the old types and predicates from DB.
 
 {{% notice "note" %}}
-If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "/migration/migrate-dgraph-1-1.md" >}}).
 {{% /notice %}}
 
 ## Post Installation
