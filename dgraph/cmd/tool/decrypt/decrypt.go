@@ -20,51 +20,56 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
-  "github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 type options struct {
-	keyfile string
+	// keyfile comes from the encryption_key_file or Vault flags
+	keyfile x.SensitiveByteSlice
 	file    string
 	output  string
 }
 
-var opts options
 var Decrypt x.SubCommand
 
 func init() {
 	Decrypt.Cmd = &cobra.Command{
 		Use:   "decrypt",
 		Short: "Run Decrypt tool",
-		Long: `
-A Decrypt tool that can be used to decrypt an export that has been taken from
-an encrypted Dgraph Cluster
-`,
-Run: func(cmd *cobra.Command, args []string) {
+		Long:  "A tool to decrypt an export file created by an encrypted Dgraph cluster",
+		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
 	}
-	Decrypt.EnvPrefix = "DGRAPH_DECRYPT"
+	Decrypt.EnvPrefix = "DGRAPH_TOOL_DECRYPT"
 	flag := Decrypt.Cmd.Flags()
-	flag.StringVarP(&opts.keyfile, "encryption_key_file", "e", "", "Location of the key file to decrypt the schema and data files.")
-	flag.StringVarP(&opts.file, "file", "f", "", "Path to file to decrypt.")
-	flag.StringVarP(&opts.output, "output", "o", "", "Path to the decrypted file.")
+	flag.StringP("file", "f", "", "Path to file to decrypt.")
+	flag.StringP("out", "o", "", "Path to the decrypted file.")
+	enc.RegisterFlags(flag)
 }
 func run() {
-		f, err := os.Open(opts.file)
+	opts := options{
+		file:   Decrypt.Conf.GetString("file"),
+		output: Decrypt.Conf.GetString("out"),
+	}
+	sensitiveKey, err := enc.ReadKey(Decrypt.Conf)
+	x.Checkf(err, "could not read encryption key file")
+	opts.keyfile = sensitiveKey
+	if len(opts.keyfile) == 0 {
+		log.Fatal("Key is empty")
+	}
+	f, err := os.Open(opts.file)
 	x.CheckfNoTrace(err)
 	defer f.Close()
-	var sensitiveKey x.SensitiveByteSlice
-	sensitiveKey, err = ioutil.ReadFile(opts.keyfile)
-	x.Check(err)
-	reader, err := enc.GetReader(sensitiveKey, f)
-	x.Check(err)
+	x.Checkf(err, "could not open file")
+	reader, err := enc.GetReader(opts.keyfile, f)
+	x.Checkf(err, "could not open key reader")
 	if strings.HasSuffix(strings.ToLower(opts.file), ".gz") {
 		reader, err = gzip.NewReader(reader)
 		x.Check(err)
@@ -73,7 +78,7 @@ func run() {
 	x.CheckfNoTrace(err)
 	w := gzip.NewWriter(outf)
 	_, err = io.Copy(w, reader)
-	x.Check(err)
+	x.Checkf(err, "error during copying")
 	err = w.Flush()
 	x.Check(err)
 	err = w.Close()

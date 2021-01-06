@@ -16,9 +16,12 @@
 package tool
 
 import (
-	"github.com/dgraph-io/dgraph/dgraph/cmd/tool/decrypt"
+	"strings"
+
+	tool "github.com/dgraph-io/dgraph/dgraph/cmd/tool/decrypt"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var Tool x.SubCommand
@@ -30,13 +33,19 @@ var subcommands = []*x.SubCommand{
 func init() {
 	Tool.Cmd = &cobra.Command{
 		Use:   "tool",
-		Short: "Run Dgraph tools suite",
-		Long: `
-A Dgraph tools suits that contains various useful tool for dealing with your Cluster
-`,
+		Short: "Run a Dgraph tool",
+		Long:  "A suite of Dgraph tools",
 	}
 	Tool.EnvPrefix = "DGRAPH_TOOL"
 	for _, sc := range subcommands {
 		Tool.Cmd.AddCommand(sc.Cmd)
+		sc.Conf = viper.New()
+		x.Check(sc.Conf.BindPFlags(sc.Cmd.Flags()))
+		x.Check(sc.Conf.BindPFlags(Tool.Cmd.PersistentFlags()))
+		sc.Conf.AutomaticEnv()
+		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+		// Options that contain a "." should use "_" in its place when provided as an
+		// environment variable.
+		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 }
