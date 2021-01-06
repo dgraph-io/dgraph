@@ -326,8 +326,8 @@ succeed.
 When TLS is enabled, `curl` requests to Dgraph will need some specific options
 to work. For example, see the following export:
 
-```
-curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
+```sh
+curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
 ```
 
 ## Access Data Using a Client
