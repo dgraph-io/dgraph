@@ -30,7 +30,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
