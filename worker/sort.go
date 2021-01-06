@@ -190,7 +190,9 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
 		var emptyList pb.List
+		var emptySkippedList pb.List
 		out[i].ulist = &emptyList
+		out[i].skippedList = &emptySkippedList
 		out[i].uset = map[uint64]struct{}{}
 	}
 
@@ -304,20 +306,22 @@ BUCKETS:
 	}
 
 	var toAppend []uint64
-
 	for i, ul := range ts.UidMatrix {
+		present := make(map[uint64]bool)
+		for _, uid := range out[i].ulist.Uids {
+			present[uid] = true
+		}
+		for _, uid := range out[i].skippedList.Uids {
+			present[uid] = true
+		}
 		for _, uid := range ul.Uids {
-			_, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
-			if err != nil {
+			if _, ok := present[uid]; !ok {
 				toAppend = append(toAppend, uid)
 			}
 		}
-		if order.Desc {
-			r.UidMatrix[i].Uids = append(toAppend, r.UidMatrix[i].Uids...)
-		} else {
-
-			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend...)
-		}
+		nullsRequired := int(ts.Count) - len(r.UidMatrix[i].Uids)
+		canAppend := x.Min(uint64(nullsRequired), uint64(len(toAppend)))
+		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
 	}
 
 	select {
@@ -549,6 +553,7 @@ func fetchValues(ctx context.Context, in *pb.Query, idx int, or chan orderResult
 type intersectedList struct {
 	offset          int
 	ulist           *pb.List
+	skippedList     *pb.List
 	values          []types.Val
 	uset            map[uint64]struct{}
 	multiSortOffset int32
@@ -603,6 +608,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		// Check offsets[i].
 		n := len(result.Uids)
 		if il.offset >= n {
+			il.skippedList.Uids = append(il.skippedList.Uids, result.Uids...)
 			// We are going to skip the whole intersection. No need to do actual
 			// sorting. Just update offsets[i]. We now offset less.
 			il.offset -= n
@@ -623,6 +629,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		if il.offset > 0 {
 			// Apply the offset.
 			if len(ts.Order) == 1 {
+				il.skippedList.Uids = append(il.skippedList.Uids, result.Uids[:il.offset]...)
 				result.Uids = result.Uids[il.offset:n]
 			} else {
 				// In case of multi sort we can't apply the offset yet, as the order might change

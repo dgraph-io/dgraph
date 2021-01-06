@@ -325,6 +325,7 @@ language                       : [string] .
 score                          : [int] @index(int) .
 average                        : [float] @index(float) .
 gender						   : string .
+pred 						   : string @index(exact) .
 `
 
 func populateCluster() {
@@ -758,6 +759,25 @@ func populateCluster() {
 		<20001> <average> "49.33" .
 		<20001> <pet_name> "mahi" .
 		<20001> <pet_name> "ms" .
+
+		# data for testing consistency of sort
+		<61> <pred> "A" .
+		<62> <pred> "B" .
+		<63> <pred> "C" .
+		<64> <pred> "D" .
+		<65> <pred> "E" .
+
+		<61> <name> "nameA" .
+		<62> <name> "nameB" .
+		<63> <name> "nameC" .
+		<64> <name> "nameD" .
+		<65> <name> "nameE" .
+		<66> <name> "nameF" .
+		<67> <name> "nameG" .
+		<68> <name> "nameH" .
+		<69> <name> "nameI" .
+		<70> <name> "nameJ" .
+
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

@@ -1915,6 +1915,57 @@ func TestMultiSort7Paginate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
+func TestSortNull1(t *testing.T) {
+
+	query := `{
+		me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred) {
+			name
+			pred
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"nameA","pred":"A"},{"name":"nameB","pred":"B"},{"name":"nameC","pred":"C"},{"name":"nameD","pred":"D"},{"name":"nameE","pred":"E"},{"name":"nameF"},{"name":"nameG"},{"name":"nameH"},{"name":"nameI"},{"name":"nameJ"}]}}`, js)
+}
+
+func TestSortNull2(t *testing.T) {
+
+	query := `{
+me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7) {
+			name
+			pred
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"nameA","pred":"A"},{"name":"nameB","pred":"B"},{"name":"nameC","pred":"C"},{"name":"nameD","pred":"D"},{"name":"nameE","pred":"E"},{"name":"nameF"},{"name":"nameG"}]}}`, js)
+}
+
+func TestSortNull3(t *testing.T) {
+
+	query := `{
+me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7, offset: 2) {
+			name
+			pred
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"nameC","pred":"C"},{"name":"nameD","pred":"D"},{"name":"nameE","pred":"E"},{"name":"nameF"},{"name":"nameG"},{"name":"nameH"},{"name":"nameI"}]}}`, js)
+}
+
+func TestSortNull4(t *testing.T) {
+
+	query := `{
+me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 4, offset: 5) {
+			name
+			pred
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"nameF"},{"name":"nameG"},{"name":"nameH"},{"name":"nameI"}]}}`, js)
+}
 func TestMultiSortPaginateWithOffset(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
