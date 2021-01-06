@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"

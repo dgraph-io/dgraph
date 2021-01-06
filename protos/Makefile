@@ -15,7 +15,7 @@
 #
 
 DGO_PATH    := github.com/dgraph-io/dgo/v200
-BADGER_PATH := github.com/dgraph-io/badger/v2
+BADGER_PATH := github.com/dgraph-io/badger/v3
 GOGO_PATH   := github.com/gogo/protobuf
 
 TMPDIR     := $(shell mktemp -d)

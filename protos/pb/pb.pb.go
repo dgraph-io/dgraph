@@ -7,7 +7,7 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
-	pb "github.com/dgraph-io/badger/v2/pb"
+	pb "github.com/dgraph-io/badger/v3/pb"
 	api "github.com/dgraph-io/dgo/v200/protos/api"
 	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/golang/protobuf/proto"
