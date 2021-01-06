@@ -312,8 +312,7 @@ func run() {
 		}
 
 		var bulkMeta pb.BulkMeta
-		err = bulkMeta.Unmarshal(bulkMetaData)
-		if err != nil {
+		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
 			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
 			os.Exit(1)
 		}
@@ -333,8 +332,7 @@ func run() {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
 		}
-		err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644)
-		if err != nil {
+		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644); err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
 			os.Exit(1)
 		}
