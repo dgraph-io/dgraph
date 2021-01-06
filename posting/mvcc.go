@@ -54,7 +54,7 @@ var (
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
-		keysCh: make(chan *[][]byte),
+		keysCh: make(chan *[][]byte, 16),
 		keysPool: &sync.Pool{
 			New: func() interface{} {
 				return new([][]byte)
