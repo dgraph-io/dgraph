@@ -321,7 +321,12 @@ BUCKETS:
 		}
 		nullsRequired := int(ts.Count) - len(r.UidMatrix[i].Uids)
 		canAppend := x.Min(uint64(nullsRequired), uint64(len(toAppend)))
-		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
+		if order.Desc {
+			r.UidMatrix[i].Uids = append(toAppend[:canAppend], r.UidMatrix[i].Uids...)
+		} else {
+
+			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
+		}
 	}
 
 	select {
