@@ -31,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -1028,6 +1029,64 @@ func TestMultiPartListBasic(t *testing.T) {
 	for i, uid := range l.Uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
+}
+
+// Checks if the binSplit works correctly.
+func TestBinSplit(t *testing.T) {
+	createList := func(t *testing.T, size int) *List {
+		originalListSize := maxListSize
+		maxListSize = math.MaxInt32
+		defer func() {
+			maxListSize = originalListSize
+		}()
+		key := x.DataKey(uuid.New().String(), 1331)
+		ol, err := getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		for i := 1; i <= size; i++ {
+			edge := &pb.DirectedEdge{
+				ValueId: uint64(i),
+				Label:   strconv.Itoa(i),
+			}
+			txn := Txn{StartTs: uint64(i)}
+			addMutationHelper(t, ol, edge, Set, &txn)
+			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		}
+
+		kvs, err := ol.Rollup(nil)
+		for _, kv := range kvs {
+			require.Equal(t, uint64(size+1), kv.Version)
+		}
+		require.NoError(t, err)
+		require.NoError(t, writePostingListToDisk(kvs))
+		ol, err = getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(ol.plist.Splits))
+		require.Equal(t, size, len(ol.plist.Postings))
+		return ol
+	}
+	verifyBinSplit := func(t *testing.T, ol *List, startUids []uint64, pls []*pb.PostingList) {
+		require.Equal(t, 2, len(startUids))
+		require.Equal(t, 2, len(pls))
+		uids := codec.Decode(ol.plist.Pack, 0)
+		lowUids := codec.Decode(pls[0].Pack, startUids[0])
+		highUids := codec.Decode(pls[1].Pack, startUids[1])
+		require.Equal(t, uids, append(lowUids, highUids...))
+		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+	}
+	size := int(1e5)
+	ol := createList(t, size)
+	require.Equal(t, size, len(ol.plist.Postings))
+	postings := ol.plist.Postings
+	startUids, pls := binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+
+	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
+	ol.plist.Postings = postings[:size/3]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+	ol.plist.Postings = postings[:0]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
 }
 
 // Verify that iteration works with an afterUid value greater than zero.
