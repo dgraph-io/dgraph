@@ -128,6 +128,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
+				glog.Infof("== [DEBUG] Rolling up key %x", key)
 				if err := ir.rollUpKey(writer, key); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 				}
@@ -239,6 +240,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
+				glog.Infof("== [DEBUG] writing key %x (%d)", key, commitTs)
 				err := btxn.SetEntry(&badger.Entry{
 					Key:      []byte(key),
 					Value:    data,
