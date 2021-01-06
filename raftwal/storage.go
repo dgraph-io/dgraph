@@ -361,8 +361,8 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 	return nil
 }
 
-// TruncateEntriesUntil deletes the data field of every normal Raft entry
-// with index ∈ [0, lastIdx).
+// truncateEntriesUntil deletes the data field of every raft entry
+// of type EntryNormal and index ∈ [0, lastIdx).
 func (w *DiskStorage) TruncateEntriesUntil(lastIdx uint64) {
 	w.wal.truncateEntriesUntil(lastIdx)
 }
