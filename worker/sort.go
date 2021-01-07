@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -179,7 +180,6 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	if ctx.Err() != nil {
 		return resultWithError(ctx.Err())
 	}
-
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
@@ -321,18 +321,23 @@ BUCKETS:
 			}
 		}
 		reqCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
+		fmt.Println("result", r.UidMatrix[i].Uids)
+		fmt.Println("skipped", out[i].skippedList.Uids)
+		fmt.Println("toappend", toAppend)
 		if order.Desc {
-			toAppend = append(toAppend, out[i].skippedList.Uids...)
-			toAppend = append(toAppend, r.UidMatrix[i].Uids...)
-			r.UidMatrix[i].Uids = toAppend
-			if len(r.UidMatrix[i].Uids) > int(ts.Offset) {
+			r.UidMatrix[i].Uids = append(out[i].skippedList.Uids, r.UidMatrix[i].Uids...)
+			r.UidMatrix[i].Uids = append(toAppend, r.UidMatrix[i].Uids...)
+			// Apply the offset
+			if int(ts.Offset) < len(r.UidMatrix[i].Uids) {
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[ts.Offset:]
 			} else {
 				r.UidMatrix[i].Uids = nil
 			}
+			// Apply the count
 			if int(ts.Count) < len(r.UidMatrix[i].Uids) {
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
 			}
+			fmt.Println("result", r.UidMatrix[i].Uids)
 		} else {
 			canAppend := x.Min(uint64(reqCount), uint64(len(toAppend)))
 			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
@@ -580,6 +585,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	out []intersectedList) error {
 	count := int(ts.Count)
 	order := ts.Order[0]
+	if order.Desc {
+		count = 1000
+	}
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
 		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
