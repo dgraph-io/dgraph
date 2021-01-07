@@ -19,12 +19,10 @@ package worker
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -305,7 +303,7 @@ BUCKETS:
 			multiSortOffsets = append(multiSortOffsets, il.multiSortOffset)
 		}
 	}
-	spew.Dump(out)
+
 	var toAppend []uint64
 	for i, ul := range ts.UidMatrix {
 		present := make(map[uint64]bool)
@@ -321,9 +319,6 @@ BUCKETS:
 			}
 		}
 		reqCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
-		fmt.Println("result", r.UidMatrix[i].Uids)
-		fmt.Println("skipped", out[i].skippedList.Uids)
-		fmt.Println("toappend", toAppend)
 		if order.Desc {
 			r.UidMatrix[i].Uids = append(out[i].skippedList.Uids, r.UidMatrix[i].Uids...)
 			r.UidMatrix[i].Uids = append(toAppend, r.UidMatrix[i].Uids...)
@@ -337,7 +332,6 @@ BUCKETS:
 			if int(ts.Count) < len(r.UidMatrix[i].Uids) {
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
 			}
-			fmt.Println("result", r.UidMatrix[i].Uids)
 		} else {
 			canAppend := x.Min(uint64(reqCount), uint64(len(toAppend)))
 			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
