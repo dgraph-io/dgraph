@@ -1938,7 +1938,7 @@ func TestSortNull1Desc(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameF"},{"predname":"nameG"},{"predname":"nameH"},{"predname":"nameI"},{"predname":"nameJ"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"},{"predname":"nameA","pred":"A"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"},{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"},{"predname":"nameA","pred":"A"}]}}`, js)
 }
 
 func TestSortNull2(t *testing.T) {
@@ -1964,7 +1964,7 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7)
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameF"},{"predname":"nameG"},{"predname":"nameH"},{"predname":"nameI"},{"predname":"nameJ"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"},{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"}]}}`, js)
 }
 
 func TestSortNull3(t *testing.T) {
@@ -1990,7 +1990,7 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7,
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameH"},{"predname":"nameI"},{"predname":"nameJ"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"}]}}`, js)
 }
 
 func TestSortNull4(t *testing.T) {
@@ -2042,7 +2042,7 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 2)
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameF"},{"predname":"nameG"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"}]}}`, js)
 }
 
 func TestMultiSortPaginateWithOffset(t *testing.T) {

@@ -189,13 +189,13 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
-		totalUids += len(ts.UidMatrix[i].Uids)
 		out[i].offset = int(ts.Offset)
 		var emptyList pb.List
 		var emptySkippedList pb.List
 		out[i].ulist = &emptyList
-		out[i].skippedList = &emptySkippedList
+		out[i].skippedUids = &emptySkippedList
 		out[i].uset = map[uint64]struct{}{}
+		totalUids += len(ts.UidMatrix[i].Uids)
 	}
 
 	order := ts.Order[0]
@@ -283,14 +283,14 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			// Intersect every UID list with the index bucket, and update their
-			// results (in out).
-			oldCount := int(ts.Count)
+			oldCount := ts.Count
 			if order.Desc {
 				ts.Count = int32(totalUids)
 			}
+			// Intersect every UID list with the index bucket, and update their
+			// results (in out).
 			err = intersectBucket(ctx, ts, token, out)
-			ts.Count = int32(oldCount)
+			ts.Count = oldCount
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -312,37 +312,53 @@ BUCKETS:
 		}
 	}
 
-	var toAppend []uint64
+	var nullPreds []uint64
 	for i, ul := range ts.UidMatrix {
+		// present is a map[uid]->bool to keep track of the UIDs containing the sort predicate.
 		present := make(map[uint64]bool)
+
+		// Add the UIDs to the map, which are in the resultant intersected list and the UIDs which
+		// have been skipped because of offset while intersection.
 		for _, uid := range out[i].ulist.Uids {
 			present[uid] = true
 		}
-		for _, uid := range out[i].skippedList.Uids {
+		for _, uid := range out[i].skippedUids.Uids {
 			present[uid] = true
 		}
+
+		// nullPreds is a list of UIDs which doesn't contain the sort predicate.
 		for _, uid := range ul.Uids {
 			if _, ok := present[uid]; !ok {
-				toAppend = append(toAppend, uid)
+				nullPreds = append(nullPreds, uid)
 			}
 		}
-		reqCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
+
+		requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
 		if order.Desc {
-			r.UidMatrix[i].Uids = append(out[i].skippedList.Uids, r.UidMatrix[i].Uids...)
-			r.UidMatrix[i].Uids = append(toAppend, r.UidMatrix[i].Uids...)
+			// Arrange the null predicates in decreasing order of their UIDs.
+			revNullPreds := make([]uint64, len(nullPreds))
+			for j := 0; j < len(nullPreds); j++ {
+				revNullPreds[j] = nullPreds[len(nullPreds)-1-j]
+			}
+			// Append the UIDs which have been skipped while intersection and the UIDs which
+			// have null predicates to the result.
+			r.UidMatrix[i].Uids = append(out[i].skippedUids.Uids, r.UidMatrix[i].Uids...)
+			r.UidMatrix[i].Uids = append(revNullPreds, r.UidMatrix[i].Uids...)
 			// Apply the offset
 			if int(ts.Offset) < len(r.UidMatrix[i].Uids) {
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[ts.Offset:]
 			} else {
-				r.UidMatrix[i].Uids = nil
+				r.UidMatrix[i].Uids = []uint64{}
 			}
 			// Apply the count
 			if int(ts.Count) < len(r.UidMatrix[i].Uids) {
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
 			}
 		} else {
-			canAppend := x.Min(uint64(reqCount), uint64(len(toAppend)))
-			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, toAppend[:canAppend]...)
+			// For the case of ascending, we simply need to append the UIDs with null predicate
+			// at the last of the result.
+			canAppend := x.Min(uint64(requiredCount), uint64(len(nullPreds)))
+			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
 		}
 	}
 
@@ -575,7 +591,7 @@ func fetchValues(ctx context.Context, in *pb.Query, idx int, or chan orderResult
 type intersectedList struct {
 	offset          int
 	ulist           *pb.List
-	skippedList     *pb.List
+	skippedUids     *pb.List
 	values          []types.Val
 	uset            map[uint64]struct{}
 	multiSortOffset int32
@@ -629,10 +645,11 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		// Check offsets[i].
 		n := len(result.Uids)
 		if il.offset >= n {
-			il.skippedList.Uids = append(il.skippedList.Uids, result.Uids...)
 			// We are going to skip the whole intersection. No need to do actual
-			// sorting. Just update offsets[i]. We now offset less.
+			// sorting. Just update offsets[i]. We now offset less. Also, keep track of the UIDs
+			// that have been skipped for the offset.
 			il.offset -= n
+			il.skippedUids.Uids = append(il.skippedUids.Uids, result.Uids...)
 			continue
 		}
 
@@ -650,7 +667,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		if il.offset > 0 {
 			// Apply the offset.
 			if len(ts.Order) == 1 {
-				il.skippedList.Uids = append(il.skippedList.Uids, result.Uids[:il.offset]...)
+				// Keep track of UIDs which had sort predicate but have been skipped because of
+				// the offset.
+				il.skippedUids.Uids = append(il.skippedUids.Uids, result.Uids[:il.offset]...)
 				result.Uids = result.Uids[il.offset:n]
 			} else {
 				// In case of multi sort we can't apply the offset yet, as the order might change
