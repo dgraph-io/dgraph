@@ -15,7 +15,7 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 
 Query with debug as a query parameter
 ```sh
-curl -H "Content-Type: application/graphql+-" http://localhost:8080/query?debug=true -XPOST -d $'{
+curl -H "Content-Type: application/dql" http://localhost:8080/query?debug=true -XPOST -d $'{
   tbl(func: allofterms(name@en, "The Big Lebowski")) {
     name@en
   }
@@ -57,3 +57,8 @@ Returns `uid` and `server_latency`
   }
 }
 ```
+{{% notice "note" %}}
+GraphQL+- has been renamed to Dgraph Query Language (DQL). While `application/dql`
+is the preferred value for the `Content-Type` header, we will continue to support
+`Content-Type: application/graphql+-` to avoid making breaking changes.
+{{% /notice %}}

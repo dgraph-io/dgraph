@@ -8,7 +8,6 @@ weight = 8
 
 <div class="landing">
   <div class="hero">
-    <h1></h1>
     <p>
       This section talks about running Dgraph in various deployment modes, in a distributed fashion and involves
 running multiple instances of Dgraph, over multiple servers in a cluster.
@@ -54,7 +53,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
   </div>
   <div class="item">
     <div class="icon"><i class="lni lni-upload" aria-hidden="true"></i></div>
-    <a href="{{< relref "fast-data-loading.md">}}">
+    <a href="{{< relref "fast-data-loading/overview.md">}}">
       <h2>Fast Data Loading</h2>
       <p>
         Dgraph tools for fast data loading

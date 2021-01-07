@@ -1,6 +1,6 @@
 +++
 title = "Deprecation"
-weight = 7
+weight = 8
 [menu.main]
     parent = "schema"
 +++

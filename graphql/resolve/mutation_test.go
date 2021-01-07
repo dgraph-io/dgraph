@@ -206,7 +206,6 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(context.Background(), mut)
-
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)

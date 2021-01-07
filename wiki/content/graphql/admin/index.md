@@ -7,9 +7,9 @@ weight = 12
   parent = "graphql"
 +++
 
-This article presents the Admin API and explains how to run Dgraph with GraphQL.
+This article presents the Admin API and explains how to run a Dgraph database with GraphQL.
 
-## Running
+## Running Dgraph with GraphQL
 
 The simplest way to start with Dgraph GraphQL is to run the all-in-one Docker image.
 
@@ -19,7 +19,7 @@ docker run -it -p 8080:8080 dgraph/standalone:master
 
 That brings up GraphQL at `localhost:8080/graphql` and `localhost:8080/admin`, but is intended for quickstart and doesn't persist data.
 
-## Advanced Options
+## Advanced options
 
 Once you've tried out Dgraph GraphQL, you'll need to move past the `dgraph/standalone` and run and deploy Dgraph instances.
 
@@ -326,7 +326,7 @@ You'll notice that the `/admin` schema is very much the same as the schemas gene
 * The `getAllowedCORSOrigins` query returns your CORS policy.
 * The `updateGQLSchema` mutation allows you to change the schema currently served at `/graphql`.
 
-## Enterprise Features
+## Enterprise features
 
 Enterprise Features like ACL, Backups and Restore are also available using the GraphQL API at `/admin` endpoint.
 
@@ -334,7 +334,7 @@ Enterprise Features like ACL, Backups and Restore are also available using the G
 * [Backups](https://dgraph.io/docs/enterprise-features/binary-backups/#create-a-backup)
 * [Restore](https://dgraph.io/docs/enterprise-features/binary-backups/#restore-from-backup)
 
-## First Start
+## First start
 
 On first starting with a blank database:
 
@@ -342,7 +342,7 @@ On first starting with a blank database:
 * Querying the `/admin` endpoint for `getGQLSchema` returns `"getGQLSchema": null`.
 * Querying the `/admin` endpoint for `health` lets you know that no schema has been added.
 
-## Validating a Schema
+## Validating a schema
 
 You can validate a GraphQL schema before adding it to your database by sending
 your schema definition in an HTTP POST request to the to the
@@ -367,7 +367,7 @@ This endpoint returns a JSON response that indicates if the schema is valid or
 not, and provides an error if isn't valid. In this case, the schema is valid,
 so the JSON response includes the following message: `Schema is valid`.
 
-## Modifying a Schema
+## Modifying a schema
 
 There are two ways you can modify a GraphQL schema:
 - Using `/admin/schema`
@@ -392,7 +392,7 @@ curl -X POST localhost:8080/admin/schema --data-binary '@schema.graphql'
 
 On successful execution, the `/admin/schema` endpoint will give you a JSON response with a success code.
 
-### Using `updateGQLSchema`
+### Using `updateGQLSchema` to add or modify a schema
 
 Another option to add or modify a GraphQL schema is the `updateGQLSchema` mutation.
 
@@ -411,7 +411,43 @@ mutation {
 }
 ```
 
-## Initial Schema
+## Using `querySchemaHistory` to see schema history
+
+You can query the history of your schema using `querySchemaHistory` on the
+`/admin` endpoint. This allows you to debug any issues that arise as you iterate
+your schema. You can specify how many entries to return, and an offset to skip
+the first few entries in the query result.
+
+Because a query using `querySchemaHistory` returns the complete schema
+for each version, you can use the JSON returned by such a query to manually roll
+back to an earlier schema version. To roll back, copy the desired
+schema version from query results, and then send it to `updateGQLSchema`.
+
+For example, to see the first 10 entries in your schema history, run the
+following query on the `/admin` endpoint:
+
+```graphql
+query {
+          querySchemaHistory ( first : 10 ){
+              schema
+              created_at
+           }
+}
+```
+You could also skip the first entry when querying your schema history by setting
+an offset, as in the following example:
+
+```graphql
+query {
+          querySchemaHistory ( first : 10, offset : 1 ){
+              schema
+              created_at
+           }
+}
+```
+
+
+## Initial schema
 
 Regardless of the method used to upload the GraphQL schema, on a black database, adding this schema
 
@@ -429,7 +465,7 @@ would cause the following:
 * The mutation would return `"schema": "type Person { name: String }"` and the generated GraphQL schema for `generatedSchema` (this is the schema served at `/graphql`).
 * Querying the `/admin` endpoint for `getGQLSchema` would return the new schema.
 
-## Migrating a Schema
+## Migrating a schema
 
 Given an instance serving the GraphQL schema from the previous section, updating the schema to the following
 
@@ -447,7 +483,7 @@ would change the GraphQL definition of `Person` and result in the following:
 * The `health` is unchanged.
 * Querying the `/admin` endpoint for `getGQLSchema` would return the updated schema.
 
-## Removing from Schema
+## Removing indexes from a schema
 
 Adding a schema through GraphQL doesn't remove existing data (it only removes indexes).
 

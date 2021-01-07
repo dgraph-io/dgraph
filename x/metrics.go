@@ -37,6 +37,7 @@ import (
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
@@ -70,6 +71,9 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
+	// MemoryAlloc records the amount of memory allocated via jemalloc
+	MemoryAlloc = stats.Int64("memory_alloc_bytes",
+		"Amount of memory allocated", stats.UnitBytes)
 	// MemoryInUse records the current amount of used memory by Dgraph.
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
@@ -88,6 +92,10 @@ var (
 	// RaftAppliedIndex records the latest applied RAFT index.
 	RaftAppliedIndex = stats.Int64("raft_applied_index",
 		"Latest applied Raft index", stats.UnitDimensionless)
+	RaftApplyCh = stats.Int64("raft_applych_size",
+		"Number of proposals in Raft apply channel", stats.UnitDimensionless)
+	RaftPendingSize = stats.Int64("pending_proposal_bytes",
+		"Size of Raft pending proposal", stats.UnitBytes)
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
@@ -159,14 +167,28 @@ var (
 			Name:        RaftAppliedIndex.Name(),
 			Measure:     RaftAppliedIndex,
 			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.Count(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftApplyCh.Name(),
+			Measure:     RaftApplyCh,
+			Description: RaftApplyCh.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftPendingSize.Name(),
+			Measure:     RaftPendingSize,
+			Description: RaftPendingSize.Description(),
+			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
 			Name:        MaxAssignedTs.Name(),
 			Measure:     MaxAssignedTs,
 			Description: MaxAssignedTs.Description(),
-			Aggregation: view.Count(),
+			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
@@ -191,6 +213,13 @@ var (
 			Description: PendingProposals.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
+		},
+		{
+			Name:        MemoryAlloc.Name(),
+			Measure:     MemoryAlloc,
+			Description: MemoryAlloc.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
 		},
 		{
 			Name:        MemoryInUse.Name(),
@@ -447,8 +476,13 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	fastTicker := time.NewTicker(time.Second)
+	defer fastTicker.Stop()
 
 	update := func() {
+		// ReadMemStats stops the world which is expensive especially when the
+		// heap is large. So don't call it too frequently. Calling it every
+		// minute is OK.
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
@@ -467,14 +501,20 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 			MemoryIdle.M(int64(idle)),
 			MemoryProc.M(int64(getMemUsage())))
 	}
+	updateAlloc := func() {
+		ostats.Record(context.Background(), MemoryAlloc.M(z.NumAllocBytes()))
+	}
 	// Call update immediately so that Dgraph reports memory stats without
 	// having to wait for the first tick.
 	update()
+	updateAlloc()
 
 	for {
 		select {
 		case <-lc.HasBeenClosed():
 			return
+		case <-fastTicker.C:
+			updateAlloc()
 		case <-ticker.C:
 			update()
 		}
@@ -525,4 +565,14 @@ func getMemUsage() int {
 	}
 
 	return rss * os.Getpagesize()
+}
+
+func JemallocHandler(w http.ResponseWriter, r *http.Request) {
+	AddCorsHeaders(w)
+
+	na := z.NumAllocBytes()
+	fmt.Fprintf(w, "Num Allocated Bytes: %s [%d]\n",
+		humanize.IBytes(uint64(na)), na)
+	fmt.Fprintf(w, "Allocators:\n%s\n", z.Allocators())
+	fmt.Fprintf(w, "%s\n", z.Leaks())
 }

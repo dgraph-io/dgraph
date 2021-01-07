@@ -6,12 +6,14 @@ type Movie {
 	id: ID!
 	name: String!
 	director(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector] @dgraph(pred: "~directed.movies")
+	directorAggregate(filter: MovieDirectorFilter): MovieDirectorAggregateResult
 }
 
 type MovieDirector {
 	id: ID!
 	name: String!
 	directed(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie] @dgraph(pred: "directed.movies")
+	directedAggregate(filter: MovieFilter): MovieAggregateResult
 }
 
 #######################
@@ -190,10 +192,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -297,10 +300,14 @@ type DeleteMoviePayload {
 
 type MovieAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type MovieDirectorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateMovieDirectorPayload {
@@ -351,8 +358,8 @@ input AddMovieInput {
 input MovieDirectorFilter {
 	id: [ID!]
 	has: MovieDirectorHasFilter
-	and: MovieDirectorFilter
-	or: MovieDirectorFilter
+	and: [MovieDirectorFilter]
+	or: [MovieDirectorFilter]
 	not: MovieDirectorFilter
 }
 
@@ -376,8 +383,8 @@ input MovieDirectorRef {
 input MovieFilter {
 	id: [ID!]
 	has: MovieHasFilter
-	and: MovieFilter
-	or: MovieFilter
+	and: [MovieFilter]
+	or: [MovieFilter]
 	not: MovieFilter
 }
 

@@ -68,6 +68,10 @@ const (
 				"description": ""
             },
             {
+                "name": "qualification",
+				"description": ""
+            },
+            {
                 "name": "country",
 				"description": ""
             },
@@ -82,7 +86,11 @@ const (
             {
                 "name": "rank",
 				"description": ""
-            }
+            },
+			{
+				"name": "postsAggregate",
+				"description": ""
+			}
 		],
 		"enumValues":[]
 	}, "__typename" : "Query" }`
@@ -112,7 +120,7 @@ const (
 )
 
 func SchemaTest(t *testing.T, expectedDgraphSchema string) {
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
@@ -161,7 +169,7 @@ func graphQLDescriptions(t *testing.T) {
 			}
 
 			introspectionResult := introspect.ExecuteAsPost(t, GraphqlURL)
-			require.Nil(t, introspectionResult.Errors)
+			RequireNoGQLErrors(t, introspectionResult)
 
 			require.JSONEq(t, tCase.expected, string(introspectionResult.Data))
 		})

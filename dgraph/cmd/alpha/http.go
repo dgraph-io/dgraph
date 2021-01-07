@@ -197,11 +197,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.SetStatus(w, x.ErrorInvalidRequest, jsonErr.Error())
 			return
 		}
-	case "application/graphql+-":
+	case "application/graphql+-", "application/dql":
 		params.Query = string(body)
 	default:
 		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphql+-")
+			"Supported content types are application/json, application/graphql+-,application/dql")
 		return
 	}
 
@@ -642,6 +642,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	return adminServer.Resolve(ctx, gqlReq)
 }

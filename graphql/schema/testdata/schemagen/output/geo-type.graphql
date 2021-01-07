@@ -189,10 +189,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -285,6 +286,8 @@ type DeleteHotelPayload {
 
 type HotelAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateHotelPayload {
@@ -330,8 +333,8 @@ input HotelFilter {
 	area: PolygonGeoFilter
 	branches: PolygonGeoFilter
 	has: HotelHasFilter
-	and: HotelFilter
-	or: HotelFilter
+	and: [HotelFilter]
+	or: [HotelFilter]
 	not: HotelFilter
 }
 

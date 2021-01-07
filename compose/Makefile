@@ -20,9 +20,12 @@ BUILD_FLAGS  ?= "-N -l"
 .PHONY: all
 all: install_dgraph $(BIN)
 
+.PHONY: install
+install: all
+
 .PHONY: install_dgraph
 install_dgraph:
-	$(MAKE) -C .. install
+	$(MAKE) -C ../dgraph install
 
 $(BIN): compose.go
 	go build -gcflags=$(BUILD_FLAGS) -o $(BIN)

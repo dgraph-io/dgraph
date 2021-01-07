@@ -6,6 +6,7 @@ interface Movie {
 	id: ID!
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "~directed.movies")
+	directorAggregate(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type OscarMovie implements Movie {
@@ -13,12 +14,14 @@ type OscarMovie implements Movie {
 	name: String!
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director] @dgraph(pred: "~directed.movies")
 	year: Int!
+	directorAggregate(filter: DirectorFilter): DirectorAggregateResult
 }
 
 type Director {
 	id: ID!
 	name: String!
 	directed(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie] @dgraph(pred: "directed.movies")
+	directedAggregate(filter: OscarMovieFilter): OscarMovieAggregateResult
 }
 
 #######################
@@ -197,10 +200,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -310,14 +314,24 @@ type DeleteOscarMoviePayload {
 
 type DirectorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type MovieAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type OscarMovieAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	yearMin: Int
+	yearMax: Int
+	yearSum: Int
+	yearAvg: Float
 }
 
 type UpdateDirectorPayload {
@@ -385,8 +399,8 @@ input AddOscarMovieInput {
 input DirectorFilter {
 	id: [ID!]
 	has: DirectorHasFilter
-	and: DirectorFilter
-	or: DirectorFilter
+	and: [DirectorFilter]
+	or: [DirectorFilter]
 	not: DirectorFilter
 }
 
@@ -410,8 +424,8 @@ input DirectorRef {
 input MovieFilter {
 	id: [ID!]
 	has: MovieHasFilter
-	and: MovieFilter
-	or: MovieFilter
+	and: [MovieFilter]
+	or: [MovieFilter]
 	not: MovieFilter
 }
 
@@ -432,8 +446,8 @@ input MovieRef {
 input OscarMovieFilter {
 	id: [ID!]
 	has: OscarMovieHasFilter
-	and: OscarMovieFilter
-	or: OscarMovieFilter
+	and: [OscarMovieFilter]
+	or: [OscarMovieFilter]
 	not: OscarMovieFilter
 }
 

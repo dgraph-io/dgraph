@@ -3,16 +3,20 @@
 #######################
 
 type X {
-	name(first: Int, offset: Int): [Y]
-	f1(first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	name(filter: YFilter, first: Int, offset: Int): [Y]
+	f1(filter: YFilter, first: Int, offset: Int): [Y] @dgraph(pred: "f1")
+	nameAggregate(filter: YFilter): YAggregateResult
+	f1Aggregate(filter: YFilter): YAggregateResult
 }
 
 type Y {
-	f1(first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f1(filter: XFilter, first: Int, offset: Int): [X] @dgraph(pred: "~f1")
+	f1Aggregate(filter: XFilter): XAggregateResult
 }
 
 type Z {
-	add(first: Int, offset: Int): [X]
+	add(filter: XFilter, first: Int, offset: Int): [X]
+	addAggregate(filter: XFilter): XAggregateResult
 }
 
 #######################
@@ -191,10 +195,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -274,6 +279,44 @@ input StringHashFilter {
 # Generated Types
 #######################
 
+type AddXPayload {
+	x(filter: XFilter, first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+type AddZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
+type DeleteXPayload {
+	x(filter: XFilter, first: Int, offset: Int): [X]
+	msg: String
+	numUids: Int
+}
+
+type DeleteYPayload {
+	y(filter: YFilter, first: Int, offset: Int): [Y]
+	msg: String
+	numUids: Int
+}
+
+type DeleteZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	msg: String
+	numUids: Int
+}
+
+type UpdateXPayload {
+	x(filter: XFilter, first: Int, offset: Int): [X]
+	numUids: Int
+}
+
+type UpdateZPayload {
+	z(filter: ZFilter, first: Int, offset: Int): [Z]
+	numUids: Int
+}
+
 type XAggregateResult {
 	count: Int
 }
@@ -309,8 +352,8 @@ enum ZHasFilter {
 
 input XFilter {
 	has: XHasFilter
-	and: XFilter
-	or: XFilter
+	and: [XFilter]
+	or: [XFilter]
 	not: XFilter
 }
 
@@ -320,8 +363,8 @@ input YFilter {
 
 input ZFilter {
 	has: ZHasFilter
-	and: ZFilter
-	or: ZFilter
+	and: [ZFilter]
+	or: [ZFilter]
 	not: ZFilter
 }
 
@@ -330,11 +373,21 @@ input ZFilter {
 #######################
 
 type Query {
-	queryX(first: Int, offset: Int): [X]
-	aggregateX: XAggregateResult
-	queryY(first: Int, offset: Int): [Y]
-	aggregateY: YAggregateResult
-	queryZ(first: Int, offset: Int): [Z]
-	aggregateZ: ZAggregateResult
+	queryX(filter: XFilter, first: Int, offset: Int): [X]
+	aggregateX(filter: XFilter): XAggregateResult
+	queryY(filter: YFilter, first: Int, offset: Int): [Y]
+	aggregateY(filter: YFilter): YAggregateResult
+	queryZ(filter: ZFilter, first: Int, offset: Int): [Z]
+	aggregateZ(filter: ZFilter): ZAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	deleteX(filter: XFilter!): DeleteXPayload
+	deleteY(filter: YFilter!): DeleteYPayload
+	deleteZ(filter: ZFilter!): DeleteZPayload
 }
 

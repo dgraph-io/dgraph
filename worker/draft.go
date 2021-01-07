@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -37,6 +38,7 @@ import (
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -57,12 +59,13 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh chan []*pb.Proposal
+	applyCh chan []raftpb.Entry
 	ctx     context.Context
 	gid     uint32
 	closer  *z.Closer
 
-	streaming int32 // Used to avoid calculating snapshot
+	checkpointTs uint64 // Timestamp corresponding to checkpoint.
+	streaming    int32  // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
 	ops     map[op]*z.Closer
@@ -240,7 +243,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []*pb.Proposal, 1000),
+		applyCh: make(chan []raftpb.Entry, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  z.NewCloser(4), // Matches CLOSER:1
 		ops:     make(map[op]*z.Closer),
@@ -251,7 +254,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	return n
 }
 
-func (n *node) Ctx(key string) context.Context {
+func (n *node) Ctx(key uint64) context.Context {
 	if pctx := n.Proposals.Get(key); pctx != nil {
 		return pctx.Ctx
 	}
@@ -533,11 +536,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal) error {
-	ctx := n.Ctx(proposal.Key)
+func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
-	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %s",
-		n.Id, n.gid, proposal.Key)
+	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
+		n.Id, n.gid, key)
 
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's committed.
@@ -556,7 +559,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return populateKeyValues(ctx, proposal.Kv)
 
 	case proposal.State != nil:
-		n.elog.Printf("Applying state for key: %s", proposal.Key)
+		n.elog.Printf("Applying state for key: %s", key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
@@ -583,8 +586,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	case proposal.Delta != nil:
-		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
-		return n.commitOrAbort(proposal.Key, proposal.Delta)
+		n.elog.Printf("Applying Oracle Delta for key: %d", key)
+		return n.commitOrAbort(key, proposal.Delta)
 
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
@@ -600,7 +603,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return nil
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
+		glog.Infof("Creating snapshot at Index: %d, ReadTs: %d\n", snap.Index, snap.ReadTs)
 
 		data, err := snap.Marshal()
 		x.Check(err)
@@ -635,7 +638,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 		// Call commitOrAbort to update the group checksums.
 		ts := proposal.Restore.RestoreTs
-		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+		return n.commitOrAbort(key, &pb.OracleDelta{
 			Txns: []*pb.TxnStatus{
 				{StartTs: ts, CommitTs: ts},
 			},
@@ -668,16 +671,23 @@ func (n *node) processApplyCh() {
 		size int
 		seen time.Time
 	}
-	previous := make(map[string]*P)
+	previous := make(map[uint64]*P)
 
 	// This function must be run serially.
-	handle := func(proposals []*pb.Proposal) {
+	handle := func(entries []raftpb.Entry) {
 		var totalSize int64
-		for _, proposal := range proposals {
+		for _, entry := range entries {
+			x.AssertTrue(len(entry.Data) > 0)
+
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
-			psz := proposal.Size()
+			psz := entry.Size()
 			totalSize += int64(psz)
+
+			var proposal pb.Proposal
+			key := binary.BigEndian.Uint64(entry.Data[:8])
+			x.Check(proposal.Unmarshal(entry.Data[8:]))
+			proposal.Index = entry.Index
 
 			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
 			// commit ts.
@@ -686,25 +696,25 @@ func (n *node) processApplyCh() {
 			}
 
 			var perr error
-			p, ok := previous[proposal.Key]
+			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
 				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-					proposal.Key, proposal.Index)
-				previous[proposal.Key].seen = time.Now() // Update the ts.
+					key, proposal.Index)
+				previous[key].seen = time.Now() // Update the ts.
 				// Don't break here. We still need to call the Done below.
 
 			} else {
 				start := time.Now()
-				perr = n.applyCommitted(proposal)
-				if len(proposal.Key) > 0 {
+				perr = n.applyCommitted(&proposal, key)
+				if key != 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
-					previous[proposal.Key] = p
+					previous[key] = p
 				}
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
 				}
-				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
-					proposal.Key, proposal.Index, perr)
+				n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
+					key, proposal.Index, perr)
 
 				var tags []tag.Mutator
 				switch {
@@ -717,7 +727,7 @@ func (n *node) processApplyCh() {
 				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
-			n.Proposals.Done(proposal.Key, perr)
+			n.Proposals.Done(key, perr)
 			n.Applied.Done(proposal.Index)
 			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
@@ -751,7 +761,7 @@ func (n *node) processApplyCh() {
 }
 
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
-func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
+func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
@@ -874,7 +884,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	if _, err := n.populateSnapshot(snap, pool); err != nil {
+	if err := n.populateSnapshot(snap, pool); err != nil {
 		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -897,14 +907,16 @@ func (n *node) proposeSnapshot(discardN int) error {
 	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
-	n.elog.Printf("Proposing snapshot: %+v\n", snap)
-	data, err := proposal.Marshal()
+	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
 }
 
 const (
-	maxPendingSize int64 = 64 << 20 // in bytes.
+	maxPendingSize int64 = 256 << 20 // in bytes.
 	nodeApplyChan        = "pushing to raft node applyCh"
 )
 
@@ -936,9 +948,10 @@ func (n *node) updateRaftProgress() error {
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
+	atomic.StoreUint64(&n.checkpointTs, snap.ReadTs)
 
 	n.Store.SetUint(raftwal.CheckpointIndex, snap.GetIndex())
-	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	glog.V(2).Infof("[%#x] Set Raft progress to index: %d, ts: %d.", n.Id, snap.Index, snap.ReadTs)
 	return nil
 }
 
@@ -967,7 +980,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					glog.Errorf("While retrieving snapshot from Store: %v\n", err)
 					continue
 				}
-				calculate := raft.IsEmptySnap(snap) // If no snapshot, then calculate one immediately.
+
+				// If we don't have a snapshot, or if there are too many log files in Raft,
+				// calculate a new snapshot.
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
@@ -1021,11 +1037,12 @@ func (n *node) drainApplyChan() {
 	numDrained := 0
 	for {
 		select {
-		case proposals := <-n.applyCh:
-			numDrained += len(proposals)
-			for _, proposal := range proposals {
-				n.Proposals.Done(proposal.Key, nil)
-				n.Applied.Done(proposal.Index)
+		case entries := <-n.applyCh:
+			numDrained += len(entries)
+			for _, entry := range entries {
+				key := binary.BigEndian.Uint64(entry.Data[:8])
+				n.Proposals.Done(key, nil)
+				n.Applied.Done(entry.Index)
 			}
 		default:
 			glog.Infof("Drained %d proposals\n", numDrained)
@@ -1191,7 +1208,7 @@ func (n *node) Run() {
 			}
 
 			// Now schedule or apply committed entries.
-			var proposals []*pb.Proposal
+			var entries []raftpb.Entry
 			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
@@ -1214,39 +1231,46 @@ func (n *node) Run() {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 				default:
-					proposal := &pb.Proposal{}
-					if err := proposal.Unmarshal(entry.Data); err != nil {
-						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
-					}
-					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
+					key := binary.BigEndian.Uint64(entry.Data[:8])
+					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetEdges()) > 0 {
-							// Assuming that there will be no error while applying. But this
-							// assumption is only made for data mutations and not schema mutations.
-							n.Proposals.Done(proposal.Key, nil)
+						if x.WorkerConfig.LudicrousMode {
+							var p pb.Proposal
+							if err := p.Unmarshal(entry.Data[8:]); err != nil {
+								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
+									err, entry.Data)
+								break
+							}
+							if len(p.Mutations.GetEdges()) > 0 {
+								// Assuming that there will be no error while applying. But this
+								// assumption is only made for data mutations and not schema
+								// mutations.
+								// TODO: This should not be done here. Instead, it should be done
+								// within the ludicrous mode scheduler.
+								n.Proposals.Done(key, nil)
+							}
 						}
 					}
-					proposal.Index = entry.Index
-					proposals = append(proposals, proposal)
+					entries = append(entries, entry)
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
-			if len(proposals) > 0 {
+			if len(entries) > 0 {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If this do this after adding its size to
 				// pending size, we could block forever in rampMeter.
 				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
-				for _, p := range proposals {
-					pendingSize += int64(p.Size())
+				for _, e := range entries {
+					pendingSize += int64(e.Size())
 				}
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				n.applyCh <- proposals
+				n.applyCh <- entries
 			}
 
 			if span != nil {
@@ -1307,26 +1331,28 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
-	updateSize := func(pred string, size int64) {
+	updateSize := func(tinfo badger.TableInfo) {
+		// The error has already been checked by caller.
+		left, _ := x.Parse(tinfo.Left)
+		pred := left.Attr
 		if pred == "" {
 			return
 		}
-
 		if tablet, ok := tablets[pred]; ok {
-			tablet.Space += size
+			tablet.OnDiskBytes += int64(tinfo.OnDiskSize)
+			tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
 		} else {
 			tablets[pred] = &pb.Tablet{
-				GroupId:   n.gid,
-				Predicate: pred,
-				Space:     size,
+				GroupId:           n.gid,
+				Predicate:         pred,
+				OnDiskBytes:       int64(tinfo.OnDiskSize),
+				UncompressedBytes: int64(tinfo.UncompressedSize),
 			}
 		}
-		total += size
+		total += int64(tinfo.OnDiskSize)
 	}
 
 	tableInfos := pstore.Tables()
-	previousLeft := ""
-	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
@@ -1334,22 +1360,19 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
+		right, err := x.Parse(tinfo.Right)
+		if err != nil {
+			glog.V(3).Infof("Unable to parse key: %v", err)
+			continue
+		}
 
-		if left.Attr == previousLeft {
-			// Dgraph cannot depend on the right end of the table to know if the table belongs
-			// to a single predicate because there might be Badger-specific keys.
-			// Instead, Dgraph only counts the previous table if the current one belongs to the
-			// same predicate.
-			// We could later specifically iterate over these tables to get their estimated sizes.
-			updateSize(previousLeft, previousSize)
+		// Count the table only if it is occupied by a single predicate.
+		if left.Attr == right.Attr {
+			updateSize(tinfo)
 		} else {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		previousLeft = left.Attr
-		previousSize = int64(tinfo.EstimatedSz)
 	}
-	// The last table has not been counted. Assign it to the predicate at the left of the table.
-	updateSize(previousLeft, previousSize)
 
 	if len(tablets) == 0 {
 		glog.V(2).Infof("No tablets found.")
@@ -1523,12 +1546,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-
 		// Exit early from the loop if no entries were found.
 		if len(entries) == 0 {
 			break
@@ -1541,11 +1563,11 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		batchFirst = lastEntry.Index + 1
 
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var proposal pb.Proposal
-			if err := proposal.Unmarshal(entry.Data); err != nil {
+			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return nil, err
 			}
@@ -1707,6 +1729,7 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	go n.monitorRaftMetrics()
 	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)
@@ -1720,4 +1743,14 @@ func (n *node) AmLeader() bool {
 	}
 	r := n.Raft()
 	return r.Status().Lead == r.Status().ID
+}
+
+func (n *node) monitorRaftMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		curPendingSize := atomic.LoadInt64(&n.pendingSize)
+		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
+		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
+	}
 }

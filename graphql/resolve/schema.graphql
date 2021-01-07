@@ -19,7 +19,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-	capital: String
+        capital: String
 }
 
 type Author {
@@ -46,8 +46,8 @@ type Post {
         isPublished: Boolean @search
         postType: [PostType] @search
         author: Author!
-	category: Category @hasInverse(field: posts)
-	comments: [Comment]
+        category: Category @hasInverse(field: posts)
+        comments: [Comment]
         ps: PostSecret
 }
 
@@ -84,6 +84,20 @@ type Director implements Character {
 type Human implements Character & Employee {
         dob: DateTime
         female: Boolean
+}
+
+# just for testing filters on enum types
+
+type Verification {
+  name: String @search(by: [exact])
+  status: [Status!]! @search(by: [exact])
+  prevStatus: Status! @search
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  DEACTIVATED
 }
 
 # just for testing singluar (non-list) edges in both directions
@@ -301,6 +315,10 @@ interface A {
     name: String! @id
 }
 
+type B implements A {
+    id: ID!
+}
+
 # union testing - start
 enum AnimalCategory {
     Fish
@@ -352,3 +370,12 @@ type Home {
     favouriteMember: HomeMember
 }
 # union testing - end
+
+type Workflow {
+    id: ID!
+    nodes: [Node!]
+}
+
+type Node {
+    name: String!
+}

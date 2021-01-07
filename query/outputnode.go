@@ -249,7 +249,7 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 
 	// Also increase curSize.
 	enc.curSize += uint64(len(sv))
-	if size := enc.alloc.Size() + enc.curSize; size > maxEncodedSize {
+	if size := uint64(enc.alloc.Size()) + enc.curSize; size > maxEncodedSize {
 		return fmt.Errorf("estimated response size: %d is bigger than threshold: %d",
 			size, maxEncodedSize)
 	}
@@ -914,7 +914,7 @@ func (sg *SubGraph) addAggregations(enc *encoder, fj fastJsonNode) error {
 			}
 			// the aggregation didn't happen, most likely was called with unset vars.
 			// See: query.go:fillVars
-			aggVal = types.Val{Tid: types.FloatID, Value: float64(0)}
+			// In this case we do nothing. The aggregate value in response will be returned as NULL.
 		}
 		if child.Params.Normalize && child.Params.Alias == "" {
 			continue

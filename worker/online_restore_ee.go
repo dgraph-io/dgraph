@@ -18,7 +18,10 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -26,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,13 +40,13 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	if req == nil {
-		return 0, errors.Errorf("restore request cannot be nil")
+		return errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return 0, errors.Wrapf(err, "cannot update membership state before restore")
+		return errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -60,12 +62,33 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
-		return 0, errors.Wrapf(err, "failed to verify backup")
+		return errors.Wrapf(err, "failed to verify backup")
+	}
+	if err := FillRestoreCredentials(req.Location, req); err != nil {
+		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 
-	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+	// This check if any restore operation running on the node.
+	// Operation initiated on other nodes doesn't have record in the record tracker.
+	// This keeps track if there is an already running restore operation return the error.
+	// IMP: This introduces few corner cases.
+	// Like two concurrent restore operation on different nodes.
+	// Considering Restore as admin operation, solving all those complexities has low gains
+	// than to sacrifice the simplicity.
+	isRestoreRunning := func() bool {
+		tasks := GetOngoingTasks()
+		for _, t := range tasks {
+			if t == opRestore.String() {
+				return true
+			}
+		}
+		return false
 	}
+	if isRestoreRunning() {
+		return errors.Errorf("another restore operation is already running. " +
+			"Please retry later.")
+	}
+
 	req.RestoreTs = State.GetTimestamp(false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
@@ -74,30 +97,22 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-
+		wg.Add(1)
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
-	restoreId, err := rt.Add()
-	if err != nil {
-		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
-	go func(restoreId int) {
-		errs := make([]error, 0)
+	go func() {
 		for range currentGroups {
 			if err := <-errCh; err != nil {
-				errs = append(errs, err)
+				glog.Errorf("Error while restoring %v", err)
 			}
+			wg.Done()
 		}
-		if err := rt.Done(restoreId, errs); err != nil {
-			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
-				restoreId, err)
-		}
-	}(restoreId)
+	}()
 
-	return restoreId, nil
+	return nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -297,8 +312,8 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req),
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
+			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -322,7 +337,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
+			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, dropOperations)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot write backup")
 			}
@@ -351,8 +366,4 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
-}
-
-func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
-	return rt.Status(restoreId), nil
 }

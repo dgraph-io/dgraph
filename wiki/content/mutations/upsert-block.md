@@ -130,7 +130,7 @@ We can achieve the same result using `json` dataset as follows:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d '
 {
-  "query": "{ q(func: eq(email, \\"user@company1.io\\")) {v as uid\\n name} }",
+  "query": "{ q(func: eq(email, \"user@company1.io\")) {v as uid, name} }",
   "set": {
     "uid": "uid(v)",
     "name": "first last",

@@ -142,11 +142,11 @@ curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -
 ' | python -m json.tool | less
 ```
 
-
 {{% notice "tip" %}}
 To run an RDF/JSON mutation using a file via curl, you can use the curl option
 `--data-binary @/path/to/mutation.rdf` instead of `-d $''`.
-The `--data-binary` option skips curl's default URL-encoding.
+The `--data-binary` option skips curl's default URL-encoding which includes removal of all newlines. thus
+By using the data binary option you enable the use of `#` comments in the text since with the `-d` option, anything after the first `#` in the text would appear on the same line and therefore be taken as one long comment.
 {{% /notice %}}
 
 ### Step 3: Alter Schema
@@ -185,11 +185,15 @@ click on **Bulk Edit**, and paste the schema.
 ### Step 4: Run Queries
 
 #### Get all movies
-Run this query to get all the movies.
-The query lists all the movies that have a starring edge.
+Run this query to get all the movies. The query lists all movies that have a
+`starring` edge.
+
+{{% notice "tip" %}}
+You can also run the DQL query from the Query tab in the Ratel UI.
+{{% /notice %}}
 
 ```sh
-curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $'
+curl -H "Content-Type: application/dql" "localhost:8080/query" -XPOST -d $'
 {
  me(func: has(starring)) {
    name
@@ -198,8 +202,10 @@ curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $
 ' | python -m json.tool | less
 ```
 
-{{% notice "tip" %}}
-You can also run the DQL query from the Ratel UI's query tab.
+{{% notice "note" %}}
+GraphQL+- has been renamed to Dgraph Query Language (DQL). While `application/dql`
+is the preferred value for the `Content-Type` header, we will continue to support
+`Content-Type: application/graphql+-` to avoid making breaking changes.
 {{% /notice %}}
 
 #### Get all movies released after "1980"
@@ -207,7 +213,7 @@ Run this query to get "Star Wars" movies released after "1980".
 Try it in the user interface to see the result as a graph.
 
 ```sh
-curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $'
+curl -H "Content-Type: application/dql" "localhost:8080/query" -XPOST -d $'
 {
   me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name

@@ -20,8 +20,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-	capital: String
-	country: Country
+        capital: String
+        country: Country
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -43,6 +43,7 @@ type Author {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
         bio: String @lambda
@@ -104,11 +105,20 @@ interface Character {
 }
 
 type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
         starships: [Starship]
         totalCredits: Float
 }
 
 type Droid implements Character {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
         primaryFunction: String
 }
 
@@ -188,7 +198,7 @@ type Comment1 {
 type post1{
         id: ID
         title: String! @id @search(by: [regexp])
-        numLikes: Int64
+        numLikes: Int64 @search
         commentsByMonth: [Int]
         likesByMonth: [Int64]
 }
@@ -273,4 +283,23 @@ type University @generate(
         id: ID!
         name: String!
         numStudents: Int
+}
+
+# @id directive with multiple data types
+type Book {
+        bookId: Int64! @id
+        name: String!
+        desc: String
+}
+
+type Chapter {
+        chapterId: Int! @id
+        name: String!
+        bookId: Int64! @search
+}
+
+type Section {
+        sectionId: Float! @id
+        name: String!
+        chapterId: Int! @search
 }

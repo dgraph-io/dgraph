@@ -62,7 +62,7 @@ import (
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
 var (
@@ -103,6 +103,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -147,6 +148,9 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
+	flag.Float64P("lru_mb", "l", 0, // TODO: Remove this flag in the next release.
+		"[Deprecated] Estimated memory the LRU cache can take. "+
+			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -162,16 +166,6 @@ they form a Raft group and provide synchronous replication.
 			"normalize directive.")
 	flag.Uint64("mutations_nquad_limit", 1e6,
 		"Limit for the maximum number of nquads that can be inserted in a mutation request")
-
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	flag.Bool("tls_internal_port_enabled", false, "(optional) enable inter node TLS encryption between cluster nodes.")
-	flag.String("tls_cert", "", "(optional) The Cert file name in tls_dir which is needed to " +
-		"connect as a client with the other nodes in the cluster.")
-	flag.String("tls_key", "", "(optional) The private key file name "+
-		"in tls_dir needed to connect as a client with the other nodes in the cluster.")
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -196,6 +190,9 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -390,32 +387,11 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	hapi.RegisterHealthServer(s, health.NewServer())
+	worker.RegisterZeroProxyServer(s)
+
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
-}
-
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
-	defer closer.Done()
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
-	var err error
-	switch {
-	case tlsCfg != nil:
-		srv.TLSConfig = tlsCfg
-		err = srv.ServeTLS(l, "", "")
-	default:
-		err = srv.Serve(l)
-	}
-	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
-	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Http(s) shutdown err: %v", err.Error())
-	}
 }
 
 func setupServer(closer *z.Closer) {
@@ -426,7 +402,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -449,6 +425,7 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -458,6 +435,7 @@ func setupServer(closer *z.Closer) {
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
 	// It's is just an atomic counter used by the graphql subscription to update its state.
 	// It's is used to detect the schema changes and server exit.
+	// It is also reported by /probe/graphql endpoint as the schemaUpdateCounter.
 
 	// Implementation for schema change:
 	// The global epoch is incremented when there is a schema change.
@@ -482,7 +460,8 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, healthStatus.StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
@@ -549,7 +528,7 @@ func setupServer(closer *z.Closer) {
 	// Initialize the servers.
 	admin.ServerCloser = z.NewCloser(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
@@ -590,6 +569,12 @@ func run() {
 
 	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
+	if Alpha.Conf.IsSet("lru_mb") {
+		glog.Warningln("--lru_mb is deprecated, use --cache_mb instead")
+		if !Alpha.Conf.IsSet("cache_mb") {
+			totalCache = int64(Alpha.Conf.GetFloat64("lru_mb"))
+		}
+	}
 
 	cachePercentage := Alpha.Conf.GetString("cache_percentage")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
@@ -651,9 +636,13 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
-	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
+	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
+
 	x.WorkerConfig = x.WorkerOptions{
+		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -667,11 +656,13 @@ func run() {
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
-		TLSClientConfig:      tlsConf,
-		TLSDir:               Alpha.Conf.GetString("tls_dir"),
-		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSClientConfig:      tlsClientConf,
+		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	// Set the directory for temporary buffers.
+	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -738,10 +729,16 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
+			closer := admin.ServerCloser
+			if closer == nil {
+				glog.Infoln("Caught Ctrl-C. Terminating now.")
+				os.Exit(1)
+			}
+
 			select {
-			case <-admin.ServerCloser.HasBeenClosed():
+			case <-closer.HasBeenClosed():
 			default:
-				admin.ServerCloser.Signal()
+				closer.Signal()
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
@@ -773,6 +770,7 @@ func run() {
 			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
+				time.Sleep(time.Second)
 				continue
 			}
 			x.UpdateCorsOrigins(origins)

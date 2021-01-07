@@ -14,6 +14,7 @@ type Author {
 	name: String! @id @search(by: [regexp])
 	pen_name: String
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
 type Genre {
@@ -196,10 +197,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -296,6 +298,10 @@ type AddPostPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
+	pen_nameMin: String
+	pen_nameMax: String
 }
 
 type DeleteAuthorPayload {
@@ -318,10 +324,14 @@ type DeletePostPayload {
 
 type GenreAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type PostAggregateResult {
 	count: Int
+	contentMin: String
+	contentMax: String
 }
 
 type UpdateAuthorPayload {
@@ -391,8 +401,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter_StringRegExpFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -417,8 +427,8 @@ input AuthorRef {
 input GenreFilter {
 	name: StringHashFilter
 	has: GenreHasFilter
-	and: GenreFilter
-	or: GenreFilter
+	and: [GenreFilter]
+	or: [GenreFilter]
 	not: GenreFilter
 }
 
@@ -435,8 +445,8 @@ input GenreRef {
 input PostFilter {
 	postID: [ID!]
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 

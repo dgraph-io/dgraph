@@ -27,7 +27,7 @@ import (
 )
 
 type configInput struct {
-	CacheMb float64
+	CacheMb *float64
 	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
 	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
 	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
@@ -42,8 +42,11 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if err = worker.UpdateCacheMb(int64(input.CacheMb)); err != nil {
-		return resolve.EmptyResult(m, err), false
+	// update cacheMB only when it is specified by user
+	if input.CacheMb != nil {
+		if err = worker.UpdateCacheMb(int64(*input.CacheMb)); err != nil {
+			return resolve.EmptyResult(m, err), false
+		}
 	}
 
 	// input.LogRequest will be nil, when it is not specified explicitly in config request.

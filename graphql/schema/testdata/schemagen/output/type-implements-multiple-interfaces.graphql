@@ -6,6 +6,7 @@ interface Character {
 	id: ID!
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 interface Employee {
@@ -20,6 +21,7 @@ type Human implements Character & Employee {
 	name: String! @search(by: [exact])
 	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 #######################
@@ -198,10 +200,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -288,10 +291,18 @@ type AddHumanPayload {
 
 type CharacterAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	msg: String
+	numUids: Int
+}
+
+type DeleteEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
 	msg: String
 	numUids: Int
 }
@@ -304,14 +315,33 @@ type DeleteHumanPayload {
 
 type EmployeeAggregateResult {
 	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
 }
 
 type HumanAggregateResult {
 	count: Int
+	employeeIdMin: String
+	employeeIdMax: String
+	titleMin: String
+	titleMax: String
+	nameMin: String
+	nameMax: String
+	totalCreditsMin: Int
+	totalCreditsMax: Int
+	totalCreditsSum: Int
+	totalCreditsAvg: Float
 }
 
 type UpdateCharacterPayload {
 	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateEmployeePayload {
+	employee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
 	numUids: Int
 }
 
@@ -374,8 +404,8 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: CharacterHasFilter
-	and: CharacterFilter
-	or: CharacterFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
 	not: CharacterFilter
 }
 
@@ -396,8 +426,8 @@ input CharacterRef {
 
 input EmployeeFilter {
 	has: EmployeeHasFilter
-	and: EmployeeFilter
-	or: EmployeeFilter
+	and: [EmployeeFilter]
+	or: [EmployeeFilter]
 	not: EmployeeFilter
 }
 
@@ -407,12 +437,17 @@ input EmployeeOrder {
 	then: EmployeeOrder
 }
 
+input EmployeePatch {
+	employeeId: String
+	title: String
+}
+
 input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	has: HumanHasFilter
-	and: HumanFilter
-	or: HumanFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
 	not: HumanFilter
 }
 
@@ -445,6 +480,12 @@ input UpdateCharacterInput {
 	remove: CharacterPatch
 }
 
+input UpdateEmployeeInput {
+	filter: EmployeeFilter!
+	set: EmployeePatch
+	remove: EmployeePatch
+}
+
 input UpdateHumanInput {
 	filter: HumanFilter!
 	set: HumanPatch
@@ -459,8 +500,8 @@ type Query {
 	getCharacter(id: ID!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
-	aggregateEmployee: EmployeeAggregateResult
+	queryEmployee(filter: EmployeeFilter, order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	aggregateEmployee(filter: EmployeeFilter): EmployeeAggregateResult
 	getHuman(id: ID!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	aggregateHuman(filter: HumanFilter): HumanAggregateResult
@@ -473,6 +514,8 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	updateEmployee(input: UpdateEmployeeInput!): UpdateEmployeePayload
+	deleteEmployee(filter: EmployeeFilter!): DeleteEmployeePayload
 	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload

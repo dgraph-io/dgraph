@@ -7,6 +7,8 @@ type Author {
 	name: String! @search(by: [hash])
 	questions(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question] @hasInverse(field: author)
 	answers(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer] @hasInverse(field: author)
+	questionsAggregate(filter: QuestionFilter): QuestionAggregateResult
+	answersAggregate(filter: AnswerFilter): AnswerAggregateResult
 }
 
 interface Post {
@@ -208,10 +210,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -308,10 +311,16 @@ type AddQuestionPayload {
 
 type AnswerAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteAnswerPayload {
@@ -340,10 +349,18 @@ type DeleteQuestionPayload {
 
 type PostAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type QuestionAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type UpdateAnswerPayload {
@@ -444,8 +461,8 @@ input AnswerFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: AnswerHasFilter
-	and: AnswerFilter
-	or: AnswerFilter
+	and: [AnswerFilter]
+	or: [AnswerFilter]
 	not: AnswerFilter
 }
 
@@ -474,8 +491,8 @@ input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -503,8 +520,8 @@ input PostFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
@@ -529,8 +546,8 @@ input QuestionFilter {
 	text: StringFullTextFilter
 	datePublished: DateTimeFilter
 	has: QuestionHasFilter
-	and: QuestionFilter
-	or: QuestionFilter
+	and: [QuestionFilter]
+	or: [QuestionFilter]
 	not: QuestionFilter
 }
 

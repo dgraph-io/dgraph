@@ -137,6 +137,7 @@ type RequestResolver struct {
 // just returns errors if it's asked for a resolver for a field that it doesn't
 // know about.
 type resolverFactory struct {
+	sync.RWMutex
 	queryResolvers    map[string]func(schema.Query) QueryResolver
 	mutationResolvers map[string]func(schema.Mutation) MutationResolver
 
@@ -229,12 +230,16 @@ func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnConte
 
 func (rf *resolverFactory) WithQueryResolver(
 	name string, resolver func(schema.Query) QueryResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.queryResolvers[name] = resolver
 	return rf
 }
 
 func (rf *resolverFactory) WithMutationResolver(
 	name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.mutationResolvers[name] = resolver
 	return rf
 }
@@ -364,6 +369,8 @@ func StdDeleteCompletion(name string) CompletionFunc {
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.queryMiddlewareConfig[query.Name()]
 	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
 		return mws.Then(resolver(query))
@@ -373,6 +380,8 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.mutationMiddlewareConfig[mutation.Name()]
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
 		return mws.Then(resolver(mutation))
@@ -716,7 +725,8 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.DgraphAlias()].(type) {
+	alias := field.DgraphAlias()
+	switch val := valToComplete[alias].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -734,20 +744,38 @@ func completeDgraphResult(
 			}
 
 			if len(val) > 1 {
-				// If we get here, then we got a list result for a query that expected
-				// a single item.  That probably indicates a schema error, or maybe
-				// a bug in GraphQL processing or some data corruption.
-				//
-				// We'll continue and just try the first item to return some data.
+				// This case may occur during handling of aggregate Queries. So, we don't throw an error
+				// and combine all items into one single item.
 
-				glog.Errorf("Got a list of length %v from Dgraph when expecting a "+
-					"one-item list.\n", len(val))
+				if strings.HasSuffix(field.Type().String(), "AggregateResult") {
+					for i := 1; i < len(val); i++ {
+						var internalValMap interface{}
+						var ok bool
+						if internalValMap, ok = val[i].(map[string]interface{}); !ok {
+							return dgraphError()
+						}
+						for key, val := range internalValMap.(map[string]interface{}) {
+							internalVal.(map[string]interface{})[key] = val
+						}
+					}
+				} else {
 
-				errs = append(errs,
-					x.GqlErrorf(
-						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-							"The first item in the list was used to produce the result.",
-						field.Name(), field.Type().String()).WithLocations(field.Location()))
+					// If we get here, then we got a list result for a query that expected
+					// a single item.  That probably indicates a schema error, or maybe
+					// a bug in GraphQL processing or some data corruption.
+					//
+					// We'll continue and just try the first item to return some data.
+
+					glog.Errorf("Got a list of length %v from Dgraph when expecting a "+
+						"one-item list.\n", len(val))
+
+					errs = append(errs,
+						x.GqlErrorf(
+							"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
+								"The first item in the list was used to produce the result.",
+							field.Name(), field.Type().String()).WithLocations(field.Location()))
+
+				}
 			}
 
 			valToComplete[field.DgraphAlias()] = internalVal
@@ -1325,6 +1353,11 @@ func completeObject(
 
 	x.Check2(buf.WriteRune('{'))
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
+
+	// fieldSeenCount is to keep track the number of times a specific field
+	// has been seen till now. It is used in generating Unique Dgraph Alias
+	// to extract out the corresponding value of field from the response.
+	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
@@ -1352,7 +1385,28 @@ func completeObject(
 
 		seenField[f.ResponseName()] = true
 
-		val := res[f.DgraphAlias()]
+		var uniqueDgraphAlias string
+		// In case of InbuiltType or Enums, only one alias was passed into the dgraph query.
+		// So just map its value to all of its occurences.
+		if f.Type().IsInbuiltOrEnumType() {
+			uniqueDgraphAlias = f.DgraphAlias()
+		} else {
+			uniqueDgraphAlias = generateUniqueDgraphAlias(f, fieldSeenCount)
+		}
+		val := res[uniqueDgraphAlias]
+		// Handle aggregate queries:
+		// Aggregate Fields in DQL response don't follow the same response as other queries.
+		// Create a map aggregateVal and store response of aggregate fields in a way which
+		// GraphQL aggregate fields expect it to be. completeValue function called later on
+		// will convert then fill up the GraphQL response.
+		if f.IsAggregateField() {
+			aggregateVal := make(map[string]interface{})
+			for _, aggregateField := range f.SelectionSet() {
+				aggregateFieldName := aggregateField.Name()
+				aggregateVal[aggregateFieldName] = res[aggregateFieldName+"_"+uniqueDgraphAlias]
+			}
+			val = aggregateVal
+		}
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
@@ -1384,6 +1438,35 @@ func completeObject(
 				}}
 			}
 		}
+
+		// Handle the case of empty data in Aggregate Queries. If count of data is equal
+		// to 0, set the val map to nil. This makes the aggregateField return null instead
+		// of returning "0.0000" for Min, Max function on strings and 0 for Min, Max functions
+		// on integers/float.
+		if strings.HasSuffix(f.Type().Name(), "AggregateResult") && val != nil {
+			var count json.Number
+			countVal := val.(map[string]interface{})["count"]
+			if countVal == nil {
+				// This case may happen in case of auth queries when the user does not have
+				// sufficient permission to query aggregate fields. We set val to nil in this
+				// case
+				val = nil
+			} else {
+				if count, ok = countVal.(json.Number); !ok {
+					// This is to handle case in which countVal is of any other type than
+					// json.Number. This should never happen. We return an error.
+					return nil, x.GqlErrorList{&x.GqlError{
+						Message:   "Expected count field of type json.Number inside Aggregate Field",
+						Locations: []x.Location{f.Location()},
+						Path:      copyPath(path),
+					}}
+				}
+				if count == "0" {
+					val = nil
+				}
+			}
+		}
+
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
@@ -1394,6 +1477,7 @@ func completeObject(
 		}
 		x.Check2(buf.Write(completed))
 		comma = ", "
+		fieldSeenCount[f.DgraphAlias()]++
 	}
 	x.Check2(buf.WriteRune('}'))
 

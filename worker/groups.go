@@ -145,8 +145,6 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
-	x.UpdateHealthStatus(true)
-	glog.Infof("Server is ready")
 
 	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
@@ -156,6 +154,9 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 	gr.proposeInitialTypes()
+
+	x.UpdateHealthStatus(true)
+	glog.Infof("Server is ready")
 }
 
 func (g *groupi) Ctx() context.Context {
@@ -229,12 +230,16 @@ func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
-	ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
-	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
-	cancel()
-	if err != nil {
+	var ts *pb.AssignedIds
+	for {
+		ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
+		var err error
+		ts, err = Timestamps(ctx, &pb.Num{Val: 1})
+		cancel()
+		if err == nil {
+			break
+		}
 		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
-		return
 	}
 
 	m.StartTs = ts.StartId
@@ -707,6 +712,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 		if snap, err := g.Node.Snapshot(); err == nil {
 			group.SnapshotTs = snap.ReadTs
 		}
+		group.CheckpointTs = atomic.LoadUint64(&g.Node.checkpointTs)
 	}
 
 	pl := g.connToZeroLeader()

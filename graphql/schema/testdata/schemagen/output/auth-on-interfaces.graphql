@@ -6,16 +6,17 @@ type Author {
 	id: ID!
 	name: String! @search(by: [hash])
 	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post] @hasInverse(field: author)
+	postsAggregate(filter: PostFilter): PostAggregateResult
 }
 
-interface Post @auth(query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {
+interface Post @secret(field: "pwd") @auth(password: {rule:"{$ROLE: { eq: \"Admin\" } }"}, query: {rule:"query($TEXT: String!) { \n  queryPost(filter: { text : {eq: $TEXT } } ) { \n    id \n  } \n}"}) {
 	id: ID!
 	text: String @search(by: [exact])
 	datePublished: DateTime @search
 	author(filter: AuthorFilter): Author! @hasInverse(field: posts)
 }
 
-type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  queryQuestion(filter: { answered: $ANS } ) { \n    id \n  } \n}"}) {
+type Question implements Post @auth(query: {rule:"query($ANS: Boolean!) { \n  queryQuestion(filter: { answered: $ANS } ) { \n    id \n  } \n}"}) @secret(field: "pwd") {
 	id: ID!
 	text: String @search(by: [exact])
 	datePublished: DateTime @search
@@ -199,10 +200,11 @@ directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
+	password: AuthRule
 	query: AuthRule,
 	add: AuthRule,
 	update: AuthRule,
-	delete:AuthRule) on OBJECT | INTERFACE
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -294,6 +296,8 @@ type AddQuestionPayload {
 
 type AuthorAggregateResult {
 	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteAuthorPayload {
@@ -316,10 +320,18 @@ type DeleteQuestionPayload {
 
 type PostAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type QuestionAggregateResult {
 	count: Int
+	textMin: String
+	textMax: String
+	datePublishedMin: DateTime
+	datePublishedMax: DateTime
 }
 
 type UpdateAuthorPayload {
@@ -387,14 +399,15 @@ input AddQuestionInput {
 	datePublished: DateTime
 	author: AuthorRef!
 	answered: Boolean
+	pwd: String!
 }
 
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
 	has: AuthorHasFilter
-	and: AuthorFilter
-	or: AuthorFilter
+	and: [AuthorFilter]
+	or: [AuthorFilter]
 	not: AuthorFilter
 }
 
@@ -420,8 +433,8 @@ input PostFilter {
 	text: StringExactFilter
 	datePublished: DateTimeFilter
 	has: PostHasFilter
-	and: PostFilter
-	or: PostFilter
+	and: [PostFilter]
+	or: [PostFilter]
 	not: PostFilter
 }
 
@@ -435,6 +448,7 @@ input PostPatch {
 	text: String
 	datePublished: DateTime
 	author: AuthorRef
+	pwd: String
 }
 
 input PostRef {
@@ -447,8 +461,8 @@ input QuestionFilter {
 	datePublished: DateTimeFilter
 	answered: Boolean
 	has: QuestionHasFilter
-	and: QuestionFilter
-	or: QuestionFilter
+	and: [QuestionFilter]
+	or: [QuestionFilter]
 	not: QuestionFilter
 }
 
@@ -463,6 +477,7 @@ input QuestionPatch {
 	datePublished: DateTime
 	author: AuthorRef
 	answered: Boolean
+	pwd: String
 }
 
 input QuestionRef {
@@ -471,6 +486,7 @@ input QuestionRef {
 	datePublished: DateTime
 	author: AuthorRef
 	answered: Boolean
+	pwd: String
 }
 
 input UpdateAuthorInput {
@@ -500,9 +516,11 @@ type Query {
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
 	getPost(id: ID!): Post
+	checkPostPassword(id: ID!, pwd: String!): Post
 	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	aggregatePost(filter: PostFilter): PostAggregateResult
 	getQuestion(id: ID!): Question
+	checkQuestionPassword(id: ID!, pwd: String!): Question
 	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	aggregateQuestion(filter: QuestionFilter): QuestionAggregateResult
 }
