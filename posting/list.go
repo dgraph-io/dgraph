@@ -20,9 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
@@ -38,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -52,6 +56,83 @@ var (
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
 )
+
+type Stat struct {
+	start   time.Time
+	updated time.Time
+	added   time.Time
+	count   int
+}
+
+type Rstats struct {
+	sync.RWMutex
+	keys map[string]*Stat
+}
+
+var rstat Rstats
+
+func (rstat *Rstats) Update(key []byte) {
+	rstat.Lock()
+	defer rstat.Unlock()
+	nkey := fmt.Sprintf("%x", key)
+	stat, ok := rstat.keys[nkey]
+	if !ok {
+		stat = &Stat{
+			start: time.Now(),
+		}
+		rstat.keys[nkey] = stat
+	}
+	stat.updated = time.Now()
+	stat.count++
+}
+
+func (rstat *Rstats) Add(key []byte) {
+	rstat.Lock()
+	defer rstat.Unlock()
+	nkey := fmt.Sprintf("%x", key)
+	stat, _ := rstat.keys[nkey]
+	stat.added = time.Now()
+}
+
+func (rstat *Rstats) Delete(key []byte) {
+	rstat.Lock()
+	defer rstat.Unlock()
+	nkey := fmt.Sprintf("%x", key)
+	delete(rstat.keys, nkey)
+}
+
+func PrintRstats(lc *z.Closer) {
+	defer lc.Done()
+	timer := time.NewTicker(time.Minute)
+	defer timer.Stop()
+	printstats := func() {
+		rstat.RLock()
+		defer rstat.RUnlock()
+
+		now := time.Now()
+		count := 0
+		for key, s := range rstat.keys {
+			count++
+			start := s.start
+			if now.Sub(start) > 10*time.Minute {
+				glog.Infof("key: %s cnt: %d [u: %s, a: %s]", key, s.count,
+					x.FixedDuration(s.updated.Sub(start)), x.FixedDuration(s.added.Sub(start)))
+			}
+			// Print atmax 100 entries
+			if count >= 100 {
+				break
+			}
+		}
+	}
+	for {
+		select {
+		case <-lc.HasBeenClosed():
+			return
+		case <-timer.C:
+			printstats()
+		}
+	}
+}
 
 const (
 	// Set means overwrite in mutation layer. It contributes 0 in Length.
@@ -329,7 +410,6 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
-
 	// Keys are added to the rollup batches here instead of at the point at which the
 	// transaction is committed because the transaction context does not keep track
 	// of the badger keys touched by mutations. It's useful to roll up lists even if

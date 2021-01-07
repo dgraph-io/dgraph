@@ -46,8 +46,9 @@ var (
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
-	closer = z.NewCloser(1)
+	closer = z.NewCloser(2)
 	go x.MonitorMemoryMetrics(closer)
+	go PrintRstats(closer)
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
@@ -154,7 +155,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	getNewPlistNil := func() (*List, error){
+	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {

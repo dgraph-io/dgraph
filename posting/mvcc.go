@@ -87,6 +87,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 }
 
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
+	rstat.Add(key)
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
 	if len(*batch) < 16 {
@@ -126,6 +127,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 	doRollup := func() {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
+			rstat.Delete(key)
 			hash := z.MemHash(key)
 			if elem := m[hash]; currTs-elem >= 10 {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
@@ -135,8 +137,9 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				if err := ir.rollUpKey(writer, key); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 				}
+			} else {
+				glog.Infof("== [DEBUG] NOT Rolling up key %x", key)
 			}
-			glog.Infof("== [DEBUG] NOT Rolling up key %x", key)
 		}
 		// clear the batch and put it back in Sync keysPool
 		*batch = (*batch)[:0]
@@ -245,7 +248,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				glog.Infof("== [DEBUG] writing key %x (%d)", key, commitTs)
+				rstat.Update([]byte(key))
+				// glog.Infof("== [DEBUG] writing key %x (%d)", key, commitTs)
 				err := btxn.SetEntry(&badger.Entry{
 					Key:      []byte(key),
 					Value:    data,
