@@ -69,7 +69,9 @@ type Rstats struct {
 	keys map[string]*Stat
 }
 
-var rstat Rstats
+var rstat = &Rstats{
+	keys: make(map[string]*Stat),
+}
 
 func (rstat *Rstats) Update(key []byte) {
 	rstat.Lock()
