@@ -178,6 +178,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	if ctx.Err() != nil {
 		return resultWithError(ctx.Err())
 	}
+
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
@@ -617,7 +618,6 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			First:     0, // TODO: Should we set the first N here?
 		}
 		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
-
 		if err != nil {
 			return err
 		}

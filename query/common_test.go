@@ -324,9 +324,9 @@ noindex_salary                 : float .
 language                       : [string] .
 score                          : [int] @index(int) .
 average                        : [float] @index(float) .
-gender						   : string .
-pred 						   : string @index(exact) .
-predname 					   : string .
+gender                         : string .
+pred                           : string @index(exact) .
+predname                       : string .
 `
 
 func populateCluster() {

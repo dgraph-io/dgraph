@@ -219,8 +219,7 @@ func TestDateRDF(t *testing.T) {
 	`
 	rdf, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	expected :=
-		`<0x1> <name> "Michonne" .
+	expected := `<0x1> <name> "Michonne" .
 <0x1> <gender> "female" .
 <0x1> <friend> <0x65> .
 <0x1> <friend> <0x19> .
