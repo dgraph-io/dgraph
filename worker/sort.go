@@ -181,12 +181,14 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
+	totalUids := 0
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
+		totalUids += len(ts.UidMatrix[i].Uids)
 		out[i].offset = int(ts.Offset)
 		var emptyList pb.List
 		var emptySkippedList pb.List
@@ -282,7 +284,12 @@ BUCKETS:
 			token := k.Term
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
+			oldCount := int(ts.Count)
+			if order.Desc {
+				ts.Count = int32(totalUids)
+			}
 			err = intersectBucket(ctx, ts, token, out)
+			ts.Count = int32(oldCount)
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -596,9 +603,6 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		if order.Desc {
-			count = len(ul.Uids)
-		}
 		// We need to reduce multiSortOffset while checking the count as we might have included
 		// some extra uids from the bucket that the offset falls into. We are going to discard
 		// the first multiSortOffset number of uids later after all sorts are applied.
