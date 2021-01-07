@@ -117,6 +117,7 @@ message RaftContext {
 	uint32 group = 2;
 	string addr = 3;
 	uint64 snapshot_ts = 4;
+	bool is_learner = 5;
 }
 
 // Member stores information about RAFT group member for a single RAFT node.
@@ -129,6 +130,7 @@ message Member {
 	bool leader = 4;
 	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
 	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
+	bool learner = 7;
 
 	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
 	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];

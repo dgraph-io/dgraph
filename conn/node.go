@@ -565,14 +565,9 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 	}
 }
 
-func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
-	addr, ok := n.Peer(pid)
-	x.AssertTruef(ok, "Unable to find conn pool for peer: %#x", pid)
-	rc := &pb.RaftContext{
-		Addr:  addr,
-		Group: n.RaftContext.Group,
-		Id:    pid,
-	}
+func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
+	pid := rc.Id
+	rc.SnapshotTs = 0
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
 
@@ -581,9 +576,13 @@ func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
 		NodeID:  pid,
 		Context: rcBytes,
 	}
+	if rc.IsLearner {
+		cc.Type = raftpb.ConfChangeAddLearnerNode
+	}
+
 	err = errInternalRetry
 	for err == errInternalRetry {
-		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, rc.Addr)
 		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
 	}
@@ -752,7 +751,7 @@ func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payloa
 	}
 	n.Connect(rc.Id, rc.Addr)
 
-	err := n.addToCluster(context.Background(), rc.Id)
+	err := n.addToCluster(context.Background(), rc)
 	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }

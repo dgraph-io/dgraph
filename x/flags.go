@@ -16,7 +16,13 @@
 
 package x
 
-import "github.com/spf13/pflag"
+import (
+	"strconv"
+	"strings"
+
+	"github.com/golang/glog"
+	"github.com/spf13/pflag"
+)
 
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {
@@ -46,4 +52,47 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	// Telemetry.
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
+}
+
+func GetFlag(opt, key string) string {
+	for _, kv := range strings.Split(opt, ";") {
+		glog.Infof("Kv: %s\n", kv)
+		splits := strings.SplitN(kv, "=", 2)
+		k := strings.TrimSpace(splits[0])
+		k = strings.ToLower(k)
+		k = strings.ReplaceAll(k, "_", "-")
+		if k == key {
+			v := strings.TrimSpace(splits[1])
+			glog.V(2).Infof("Got value for key %s: %s\n", k, v)
+			return v
+		}
+	}
+	return ""
+}
+func GetFlagBool(opt, key string) bool {
+	val := GetFlag(opt, key)
+	if val == "" {
+		return false
+	}
+	b, err := strconv.ParseBool(val)
+	Checkf(err, "Unable to parse %s as bool for key: %s. Options: %s\n", val, key, opt)
+	return b
+}
+func GetFlagUint64(opt, key string) uint64 {
+	val := GetFlag(opt, key)
+	if val == "" {
+		return 0
+	}
+	u, err := strconv.ParseUint(val, 0, 64)
+	Checkf(err, "Unable to parse %s as uint64 for key: %s. Options: %s\n", val, key, opt)
+	return u
+}
+func GetFlagUint32(opt, key string) uint32 {
+	val := GetFlag(opt, key)
+	if val == "" {
+		return 0
+	}
+	u, err := strconv.ParseUint(val, 0, 32)
+	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, key, opt)
+	return uint32(u)
 }
