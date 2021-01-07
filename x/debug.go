@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/pkg/errors"
 )
 
 // VerifyPack checks that the Pack should not be nil if the postings exist.
@@ -61,6 +60,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 			err := item.Value(func(v []byte) error {
 				plist := &pb.PostingList{}
 				Check(plist.Unmarshal(v))
+				VerifyPack(plist)
 				if len(plist.Splits) == 0 {
 					return nil
 				}
@@ -84,11 +84,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 				}
 				return nil
 			})
-			if err != nil {
-				err = errors.Wrapf(err, "Error getting value of key: %v version: %v", k, item.Version())
-				CaptureSentryException(err)
-				log.Fatalf("%+v", err)
-			}
+			Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
 
 			if item.DiscardEarlierVersions() {
 				break

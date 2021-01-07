@@ -939,10 +939,10 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 
 	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
-	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
@@ -1034,6 +1034,7 @@ func TestMultiPartListBasic(t *testing.T) {
 // Checks if the binSplit works correctly.
 func TestBinSplit(t *testing.T) {
 	createList := func(t *testing.T, size int) *List {
+		// This is a package level constant, so reset it after use.
 		originalListSize := maxListSize
 		maxListSize = math.MaxInt32
 		defer func() {
@@ -1053,10 +1054,10 @@ func TestBinSplit(t *testing.T) {
 		}
 
 		kvs, err := ol.Rollup(nil)
+		require.NoError(t, err)
 		for _, kv := range kvs {
 			require.Equal(t, uint64(size+1), kv.Version)
 		}
-		require.NoError(t, err)
 		require.NoError(t, writePostingListToDisk(kvs))
 		ol, err = getNew(key, ps, math.MaxUint64)
 		require.NoError(t, err)
@@ -1070,12 +1071,21 @@ func TestBinSplit(t *testing.T) {
 		uids := codec.Decode(ol.plist.Pack, 0)
 		lowUids := codec.Decode(pls[0].Pack, startUids[0])
 		highUids := codec.Decode(pls[1].Pack, startUids[1])
+		// Check if no data is lost in splitting.
 		require.Equal(t, uids, append(lowUids, highUids...))
 		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+		// Check if the postings belong to the correct half.
+		midUid := pls[1].Pack.Blocks[0].GetBase()
+		require.Equal(t, startUids[1], midUid)
+		for _, p := range pls[0].Postings {
+			require.Less(t, p.Uid, midUid)
+		}
+		for _, p := range pls[1].Postings {
+			require.GreaterOrEqual(t, p.Uid, midUid)
+		}
 	}
 	size := int(1e5)
 	ol := createList(t, size)
-	require.Equal(t, size, len(ol.plist.Postings))
 	postings := ol.plist.Postings
 	startUids, pls := binSplit(1, ol.plist)
 	verifyBinSplit(t, ol, startUids, pls)
@@ -1084,6 +1094,7 @@ func TestBinSplit(t *testing.T) {
 	ol.plist.Postings = postings[:size/3]
 	startUids, pls = binSplit(1, ol.plist)
 	verifyBinSplit(t, ol, startUids, pls)
+
 	ol.plist.Postings = postings[:0]
 	startUids, pls = binSplit(1, ol.plist)
 	verifyBinSplit(t, ol, startUids, pls)
