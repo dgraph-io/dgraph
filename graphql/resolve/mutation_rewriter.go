@@ -78,6 +78,10 @@ type xidMetadata struct {
 	seenAtTopLevel map[string]bool
 	// queryExists tells whether the query part in upsert has already been created for xidVariable
 	queryExists map[string]bool
+	// seenUIDs tells whether the UID is previously been seen during DFS traversal
+	seenUIDs map[string]bool
+	// seenXIDs tells whether the XID for some type has been seen previously during DFS traversal
+	seenXIDs map[string]bool
 }
 
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
@@ -342,6 +346,26 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 	}
 
 	return result, errs
+}
+
+// NewRewrite is a temporary function which will be used to replace Rewrite
+// after complete refactoring of mutation rewriter. It currently returns the
+// queries made by mutation rewriter to check for existence of nodes with given
+// XIDs and IDs.
+func (mrw *AddRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
+	mutatedType := m.MutatedType()
+	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
+	varGen := NewVariableGenerator()
+	xidMd := newXidMetadata()
+
+	var ret []*gql.GraphQuery
+
+	for _, i := range val {
+		obj := i.(map[string]interface{})
+		queries := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMd)
+		ret = append(ret, queries...)
+	}
+	return ret, nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -1358,6 +1382,165 @@ func rewriteObject(
 	}
 
 	return results
+}
+
+func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type) *gql.GraphQuery {
+	qry := &gql.GraphQuery{
+		Attr: xidVariable,
+		Func: &gql.Function{
+			Name: "eq",
+			Args: []gql.Arg{
+				{Value: typ.DgraphPredicate(xidPredicate)},
+				{Value: maybeQuoteArg("eq", xidString)},
+			},
+		},
+		Children: []*gql.GraphQuery{{Attr: "uid"}},
+	}
+	addTypeFilter(qry, typ)
+	return qry
+}
+
+func checkUIDExistsQuery(
+	val interface{},
+	srcField schema.FieldDefinition,
+	variable string) *gql.GraphQuery {
+
+	uid, err := asUID(val)
+	if err != nil {
+		return nil
+	}
+
+	query := &gql.GraphQuery{
+		Attr:     variable,
+		UID:      []uint64{uid},
+		Children: []*gql.GraphQuery{{Attr: "uid"}},
+	}
+	addTypeFilter(query, srcField.Type())
+	addUIDFunc(query, []uint64{uid})
+	return query
+}
+
+func getExistenceQueries(
+	ctx context.Context,
+	typ schema.Type,
+	srcField schema.FieldDefinition,
+	varGen *VariableGenerator,
+	obj map[string]interface{},
+	xidMetadata *xidMetadata) []*gql.GraphQuery {
+
+	var ret []*gql.GraphQuery
+
+	id := typ.IDField()
+	if id != nil {
+		// Check if the ID field is referenced in the mutation
+		if idVal, ok := obj[id.Name()]; ok {
+			if idVal != nil {
+				// No need to add query if the UID is already been seen.
+				if xidMetadata.seenUIDs[idVal.(string)] == true {
+					return ret
+				}
+				// Mark this UID as seen.
+				xidMetadata.seenUIDs[idVal.(string)] = true
+				variable := varGen.Next(typ, "", "", false)
+				query := checkUIDExistsQuery(idVal, srcField, variable)
+				if query != nil {
+					ret = append(ret, query)
+					return ret
+				}
+				// Add check UID query and return it.
+				// There is no need to move forward. If reference ID field is given,
+				// it has to exist.
+			}
+			// As the type has not been referenced by ID field, remove it so that it does
+			// not interfere with further processing.
+			delete(obj, id.Name())
+		}
+	}
+
+	xid := typ.XIDField()
+	var xidString string
+	if xid != nil {
+		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+			switch xid.Type().Name() {
+			// TODO: Better error handling in case of parsing errors
+			case "Int":
+				val, ok := xidVal.(int64)
+				if !ok {
+					return ret
+				}
+				xidString = strconv.FormatInt(val, 10)
+			case "Float":
+				val, ok := xidVal.(float64)
+				if !ok {
+					return ret
+				}
+				xidString = strconv.FormatFloat(val, 'f', -1, 64)
+			case "Int64":
+				fallthrough
+			default:
+				xidString, ok = xidVal.(string)
+				if !ok {
+					return ret
+				}
+			}
+			variable := varGen.Next(typ, xid.Name(), xidString, false)
+
+			query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+			// No need to add this XID query if seen already
+			if query != nil && !xidMetadata.seenXIDs[variable] {
+				ret = append(ret, query)
+				// Don't return just over here as there maybe more nodes in the children tree.
+			}
+			// Mark this XID as seen.
+			xidMetadata.seenXIDs[variable] = true
+		}
+	}
+	// Iterate on fields and call the same function recursively.
+	var fields []string
+	for field := range obj {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	for _, field := range fields {
+		val := obj[field]
+
+		fieldDef := typ.Field(field)
+		fieldName := typ.DgraphPredicate(field)
+
+		// This fixes mutation when dgraph predicate has special characters. PR #5526
+		if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+			fieldName = fieldName[1 : len(fieldName)-1]
+		}
+
+		switch val := val.(type) {
+		case map[string]interface{}:
+			// TODO: Also handle the case of union and geo object
+			ret = append(ret, getExistenceQueries(ctx, fieldDef.Type(), fieldDef, varGen, val, xidMetadata)...)
+
+		case []interface{}:
+			ret = append(ret, newRewriteList(ctx, fieldDef.Type(), fieldDef, varGen, val, xidMetadata)...)
+		}
+	}
+
+	return ret
+}
+
+func newRewriteList(
+	ctx context.Context,
+	typ schema.Type,
+	srcField schema.FieldDefinition,
+	varGen *VariableGenerator,
+	objects []interface{},
+	xidMetadata *xidMetadata) []*gql.GraphQuery {
+
+	var result []*gql.GraphQuery
+
+	for _, obj := range objects {
+		result = append(result, getExistenceQueries(ctx, typ, srcField, varGen, obj.(map[string]interface{}), xidMetadata)...)
+	}
+
+	return result
+
 }
 
 // if this is a union field, then obj should have only one key which will be a ref
