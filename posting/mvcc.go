@@ -97,6 +97,9 @@ func (ir *incrRollupi) addKeyToBatch(key []byte) {
 	select {
 	case ir.keysCh <- batch:
 	default:
+		for _, b := range *batch {
+			glog.Infof("== [DEBUG] Batch dropping key %x", b)
+		}
 		// Drop keys and build the batch again. Lossy behavior.
 		*batch = (*batch)[:0]
 		ir.keysPool.Put(batch)
@@ -111,7 +114,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 	defer writer.Flush()
 
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
-	limiter := time.NewTicker(100 * time.Millisecond)
+	limiter := time.NewTicker(time.Millisecond)
 	defer limiter.Stop()
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
@@ -133,6 +136,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 				}
 			}
+			glog.Infof("== [DEBUG] NOT Rolling up key %x", key)
 		}
 		// clear the batch and put it back in Sync keysPool
 		*batch = (*batch)[:0]
@@ -160,6 +164,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 			}
 		case batch = <-ir.keysCh:
 			doRollup()
+
 			// throttle to 1 batch = 64 rollups per 100 ms.
 			<-limiter.C
 		}
