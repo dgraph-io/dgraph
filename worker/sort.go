@@ -585,9 +585,6 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	out []intersectedList) error {
 	count := int(ts.Count)
 	order := ts.Order[0]
-	if order.Desc {
-		count = 1000
-	}
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
 		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
@@ -605,6 +602,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
+		if order.Desc {
+			count = len(ul.Uids)
+		}
 		// We need to reduce multiSortOffset while checking the count as we might have included
 		// some extra uids from the bucket that the offset falls into. We are going to discard
 		// the first multiSortOffset number of uids later after all sorts are applied.

@@ -2019,6 +2019,19 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 4,
 	require.JSONEq(t, `{"data": {"me":[{"name":"nameE","pred":"E"},{"name":"nameD","pred":"D"},{"name":"nameC","pred":"C"},{"name":"nameB","pred":"B"}]}}`, js)
 }
 
+func TestSortNull5Desc(t *testing.T) {
+
+	query := `{
+me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 2) {
+			name
+			pred
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"nameF"},{"name":"nameG"}]}}`, js)
+}
+
 func TestMultiSortPaginateWithOffset(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
