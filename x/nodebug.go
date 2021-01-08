@@ -25,6 +25,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
+// VerifyPack works in debug mode. Check out the comment in debug_on.go
+func VerifyPack(plist *pb.PostingList) {
+}
+
 // VerifySnapshot works in debug mode. Check out the comment in debug_on.go
 func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 }

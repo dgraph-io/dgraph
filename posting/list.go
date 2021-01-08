@@ -918,6 +918,7 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 // MarshalPostingList returns a KV with the marshalled posting list. The caller
 // SHOULD SET the Key and Version for the returned KV.
 func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
+	x.VerifyPack(plist)
 	kv := y.NewKV(alloc)
 	if isPlistEmpty(plist) {
 		kv.Value = nil
@@ -1073,6 +1074,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		}
 	} else {
 		// We already have a nicely packed posting list. Just use it.
+		x.VerifyPack(l.plist)
 		out.plist = l.plist
 	}
 
