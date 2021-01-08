@@ -990,11 +990,6 @@ func evalLevelAgg(
 		// The aggregated value doesn't really belong to a uid, we put it in UidToVal map
 		// corresponding to uid 0 to avoid defining another field in SubGraph.
 		vals := doneVars[needsVar].Vals
-		if len(vals) == 0 {
-			mp = make(map[uint64]types.Val)
-			mp[0] = types.Val{Tid: types.FloatID, Value: 0.0}
-			return mp, nil
-		}
 
 		ag := aggregator{
 			name: sg.SrcFunc.Name,
@@ -1724,7 +1719,13 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if err := sg.replaceVarInFunc(); err != nil {
 		return err
 	}
-	lists = append(lists, sg.DestUIDs)
+
+	if len(sg.DestUIDs.GetUids()) > 0 {
+		// Don't add sg.DestUIDs in case its size is 0.
+		// This is to avoiding adding nil (empty element) to lists.
+		lists = append(lists, sg.DestUIDs)
+	}
+
 	sg.DestUIDs = algo.MergeSorted(lists)
 	return nil
 }
@@ -1961,7 +1962,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.Params.IsInternal = false
 			temp.Params.Expand = ""
 			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
-			temp.Filters = child.Filters
+			for _, cf := range child.Filters {
+				s := &SubGraph{}
+				recursiveCopy(s, cf)
+				temp.Filters = append(temp.Filters, s)
+			}
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -1992,18 +1997,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	// queries like `Users as var(func: ...)` have Alias = var and don't have an attr. Instead, they
-	// would have Var = Users. So, if there are a lot of such queries in a single request,
-	// then it is easier to identify them in traces if we also use Var to construct the span name.
-	if len(sg.Params.Var) > 0 {
-		suffix += "." + sg.Params.Var
-	}
-	// starting a span for every sub-graph that is processed creates an execution tree in jaeger UI,
-	// which makes it very easier to understand the flow of request execution.
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph."+suffix)
-	defer span.End()
-
-	// span timer doesn't show up in jaeger UI directly. Instead, it is part of logs for each span.
+	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
 	defer stop()
 

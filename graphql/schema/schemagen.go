@@ -488,7 +488,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
-						indexes = append(indexes, "hash")
+						switch f.Type.Name() {
+						case "Int", "Int64":
+							indexes = append(indexes, "int")
+						case "Float":
+							indexes = append(indexes, "float")
+						case "String":
+							indexes = append(indexes, "hash")
+						}
 					}
 
 					if search != nil {

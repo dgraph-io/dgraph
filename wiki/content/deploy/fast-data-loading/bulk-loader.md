@@ -1,128 +1,10 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
-title = "Fast Data Loading"
+title = "Bulk Loader"
 weight = 12
 [menu.main]
-    parent = "deploy"
+    parent = "fast-data-loading"
 +++
-
-There are two different tools that can be used for fast data loading:
-
-- `dgraph live` runs the Dgraph Live Loader
-- `dgraph bulk` runs the Dgraph Bulk Loader
-
-{{% notice "note" %}} Both tools only accept [RDF N-Quad/Triple
-data](https://www.w3.org/TR/n-quads/) or JSON in plain or gzipped format. Data
-in other formats must be converted.{{% /notice %}}
-
-## Live Loader
-
-Dgraph Live Loader (run with `dgraph live`) is a small helper program which reads RDF N-Quads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
-
-Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
-
-{{% notice "note" %}} Dgraph Live Loader can optionally write the `xid`->`uid` mapping to a directory specified using the `--xidmap` flag, which can reused
-given that live loader completed successfully in the previous run.{{% /notice %}}
-
-```sh
-$ dgraph live --help # To see the available flags.
-
-# Read RDFs or JSON from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraph live -f <path-to-gzipped-RDF-or-JSON-file>
-
-# Read multiple RDFs or JSON from the passed path, and send them to Dgraph on localhost:9080.
-$ dgraph live -f <./path-to-gzipped-RDF-or-JSON-files>
-
-# Read multiple files strictly by name.
-$ dgraph live -f <file1.rdf, file2.rdf>
-
-# Use compressed gRPC connections to and from Dgraph.
-$ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
-
-# Read RDFs and a schema file and send to Dgraph running at given address.
-$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
-```
-
-### Encrypted imports via Live Loader (Enterprise Feature)
-
-A new flag `--encryption_key_file` is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
-Alternatively, starting with v20.07.0, the `vault_*` options can be used to decrypt the encrypted export and schema files.
-
-{{% notice "note" %}}
-If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
-{{% /notice %}}
-
-#### Encrypted RDF/JSON file and schema via Live Loader
-
-```sh
-dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> --encryption_keyfile <path-to-keyfile-to-decrypt-files>
-```
-
-### Batch Upserts in Live Loader
-
-With batch upserts in Live Loader, you can insert big data-sets (multiple files) into an existing cluster that might contain nodes that already exist in the graph.
-Live Loader generates an `upsertPredicate` query for each of the ids found in the request, while
-adding the corresponding `xid` to that `uid`. The added mutation is only useful if the `uid` doesn't exists.
-
-The `-U, --upsertPredicate` flag runs the Live Loader in upsertPredicate mode. The provided predicate needs to be indexed, and the Loader will use it to store blank nodes as a `xid`.
-
-{{% notice "note" %}}
-When the `upsertPredicate` already exists in the data, the existing node with this `xid` is modified and no new node is added.
-{{% /notice %}}
-
-For example:
-```sh
-dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -U <xid>
-```
-
-### Other Live Loader options
-
-`--new_uids` (default: `false`): Assign new UIDs instead of using the existing
-UIDs in data files. This is useful to avoid overriding the data in a DB already
-in operation.
-
-`-f, --files`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
-load multiple files in a given path. If the path is a directory, then all files
-ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
-
-`--format`: Specify file format (`rdf` or `json`) instead of getting it from
-filenames. This is useful if you need to define a strict format manually.
-
-`-b, --batch` (default: `1000`): Number of N-Quads to send as part of a mutation.
-
-`-c, --conc` (default: `10`): Number of concurrent requests to make to Dgraph.
-Do not confuse with `-C`.
-
-`-C, --use_compression` (default: `false`): Enable compression for connections to and from the
-Alpha server.
-
-`-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
-
-`-x, --xidmap` (default: disabled. Need a path): Store `xid` to `uid` mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. 
-
-{{% notice "tip" %}}
-Using the `--xidmap` flag is recommended if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific `uid`.
-{{% /notice %}}
-
-`--ludicrous_mode` (default: `false`): This option allows the user to notify Live Loader that the Alpha server is running in ludicrous mode.
-Live Loader, by default, does smart batching of data to avoid transaction conflicts, which improves the performance in normal mode.
-Since there's no conflict detection in ludicrous mode, smart batching is disabled to speed up the data ingestion further.
-
-{{% notice "note" %}}
-The `--ludicrous_mode` option should only be used if Dgraph is also running in [ludicrous mode]({{< relref "ludicrous-mode.md" >}}).
-{{% /notice %}}
-
-`-U, --upsertPredicate` (default: disabled): Runs Live Loader in `upsertPredicate` mode. The provided value will be used to store blank nodes as a `xid`.
-
-`--vault_*` flags specifies the Vault server address, role id, secret id and
-field that contains the encryption key that can be used to decrypt the encrypted export.
-
-## Bulk Loader
-
-{{% notice "note" %}}
-It's crucial to tune the bulk loader's flags to get good performance. See the
-section below for details.
-{{% /notice %}}
 
 Dgraph Bulk Loader serves a similar purpose to the Dgraph Live Loader, but can
 only be used to load data into a new cluster. It cannot be run on an existing
@@ -141,8 +23,16 @@ your existing data to a new cluster.
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
 
-See [Fast Data Loading]({{< relref "#fast-data-loading" >}}) for more info about
-the expected N-Quads format.
+{{% notice "tip" %}}
+It's crucial to tune the bulk loader's flags to get good performance. See the
+next section for details.
+{{% /notice %}}
+
+### Settings
+
+{{% notice "note" %}} Bulk Loader only accept [RDF N-Quad/Triple
+data](https://www.w3.org/TR/n-quads/) or JSON in plain or gzipped format. Data
+in other formats must be converted.{{% /notice %}}
 
 **Reduce shards**: Before running the bulk load, you need to decide how many
 Alpha groups will be running when the cluster starts. The number of Alpha groups
@@ -252,6 +142,42 @@ $ dgraph bulk -f <./path-to-gzipped-RDF-or-JSON-files> ...
 $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
+
+### How to properly bulk load
+Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 onwards, depending on your dataset size, you can follow one of the following ways to use bulk loader and initialize your new Cluster.
+
+*The following procedure is particularly relevant for Clusters that have `--replicas` flag greater than 1*
+
+#### For small dataset
+In case your dataset is small (a few GBs) it would be convenient to start by initializing just one Alpha node and then let the snapshot be streamed among the other Alpha replicas. You can follow these steps:
+1. Run bulk loader only on one server
+2. Once the `p` directory has been created by the bulk loader, then start **only** the first Alpha replica
+3. Wait for 1 minute to ensure that a snapshot has been taken by the first Alpha node replica. You can confirm that a snapshot has been taken by looking for the following message":
+```
+I1227 13:12:24.202196   14691 draft.go:571] Creating snapshot at index: 30. ReadTs: 4.
+```
+4. After confirming that the snapshot has been taken, you can start the other Alpha node replicas (number of Alpha nodes must be equal to the `--replicas` flag value set in the zero nodes). Now the Alpha node (the one started in point 2) will be printing similar messages:
+```
+I1227 13:18:16.154674   16779 snapshot.go:246] Streaming done. Sent 1093470 entries. Waiting for ACK...
+I1227 13:18:17.126494   16779 snapshot.go:251] Received ACK with done: true
+I1227 13:18:17.126514   16779 snapshot.go:292] Stream snapshot: OK
+```
+These messages indicate that all replica nodes are now using the same snapshot. Thus, all your data is correctly in sync across the cluster. Also, the other alpha nodes will be printing (in their logs) something similar to:
+```
+I1227 13:18:17.126621    1720 draft.go:567] Skipping snapshot at 28, because found one at 28
+```
+
+#### For bigger dataset
+When your dataset is pretty big (e.g. dataset size > 10GB) it will be faster that you just copy the generated `p` directory (by the bulk loader) among all the Alphas nodes. You can follow these steps:
+1. Run bulk loader only on one server
+2. Copy (or use `rsync`) the `p` directory to the other servers (the servers you will be using to start the other Alpha nodes)
+3. Now, start all Alpha nodes at the same time
+
+If the process went well **all** Alpha nodes will take a snapshot after 1 minute. You will be seeing something similar to this in the Alpha logs:
+```
+I1227 13:27:53.959671   29781 draft.go:571] Creating snapshot at index: 34. ReadTs: 6.
+```
+Note that `snapshot at index` value must be the same within the same Alpha group and `ReadTs` must be the same value within and among all the Alpha groups.
 
 ### Encryption at rest with Bulk Loader (Enterprise Feature)
 

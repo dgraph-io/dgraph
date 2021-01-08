@@ -54,7 +54,7 @@ var (
 	}
 )
 
-func sendRestoreRequest(t *testing.T, location string) int {
+func sendRestoreRequest(t *testing.T, location string) {
 	if location == "" {
 		location = "/data/backup"
 	}
@@ -63,7 +63,6 @@ func sendRestoreRequest(t *testing.T, location string) int {
 			restore(input: {location: $location}) {
 				code
 				message
-				restoreId
 			}
 		}`,
 		Variables: map[string]interface{}{
@@ -77,14 +76,12 @@ func sendRestoreRequest(t *testing.T, location string) int {
 		Restore struct {
 			Code      string
 			Message   string
-			RestoreId int
 		}
 	}
 
 	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
 	require.Equal(t, restoreResp.Restore.Code, "Success")
-	require.Greater(t, restoreResp.Restore.RestoreId, 0)
-	return restoreResp.Restore.RestoreId
+	return
 }
 
 // This test takes a backup and then restores an old backup in a cluster incrementally.
@@ -104,8 +101,8 @@ func TestBackupOfOldRestore(t *testing.T) {
 
 	_ = runBackup(t, 3, 1)
 
-	restoreId := sendRestoreRequest(t, oldBackupDir)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, oldBackupDir)
+	testutil.WaitForRestore(t, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)
@@ -116,8 +113,8 @@ func TestBackupOfOldRestore(t *testing.T) {
 	// Clean the cluster and try restoring the backups created above.
 	testutil.DropAll(t, dg)
 	time.Sleep(2 * time.Second)
-	restoreId = sendRestoreRequest(t, alphaBackupDir)
-	testutil.WaitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, alphaBackupDir)
+	testutil.WaitForRestore(t, dg)
 
 	resp, err = dg.NewTxn().Query(context.Background(), `{ authors(func: has(Author.name)) { count(uid) } }`)
 	require.NoError(t, err)

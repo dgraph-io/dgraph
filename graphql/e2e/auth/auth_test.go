@@ -20,15 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -440,7 +442,7 @@ func TestAuthOnInterfaces(t *testing.T) {
 			result: `{"queryFbPost": [{"text": "B FbPost"}]}`,
 		},
 		{
-			name: "Query Interface should interhit auth rules from all the interfaces",
+			name: "Query Interface should inherit auth rules from all the interfaces",
 			query: `
 			query{
 				queryPost(order: {asc: text}){
@@ -603,12 +605,28 @@ func TestOrderAndOffset(t *testing.T) {
 				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
 			},
 		},
+		Task{
+			Name: "Fifth one, two occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
+		Task{
+			Name: "Sixth Task four occurrences",
+			Occurrences: []*TaskOccurrence{
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+				{Due: "2020-07-19T08:00:00", Comp: "2020-07-19T08:00:00"},
+			},
+		},
 	}
 	tasks.add(t)
 
 	query := `
 	query {
-	  queryTask(first: 4, order: {asc : name}) {
+	  queryTask(filter: {name: {anyofterms: "Task"}}, first: 4, offset: 1, order: {asc : name}) {
 		name
 		occurrences(first: 2) {
 		  due
@@ -623,19 +641,6 @@ func TestOrderAndOffset(t *testing.T) {
 		result: `
 		{
 		"queryTask": [
-		  {
-			"name": "First Task four occurrence",
-			"occurrences": [
-			  {
-				"due": "2020-07-19T08:00:00Z",
-				"comp": "2020-07-19T08:00:00Z"
-			  },
-			  {
-				"due": "2020-07-19T08:00:00Z",
-				"comp": "2020-07-19T08:00:00Z"
-			  }
-			]
-		  },
 		  {
 			"name": "Fourth Task two occurrences",
 			"occurrences": [
@@ -652,6 +657,19 @@ func TestOrderAndOffset(t *testing.T) {
 		  {
 			"name": "Second Task single occurrence",
 			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  }
+			]
+		  },
+		  {
+			"name": "Sixth Task four occurrences",
+			"occurrences": [
+			  {
+				"due": "2020-07-19T08:00:00Z",
+				"comp": "2020-07-19T08:00:00Z"
+			  },
 			  {
 				"due": "2020-07-19T08:00:00Z",
 				"comp": "2020-07-19T08:00:00Z"
@@ -677,7 +695,7 @@ func TestOrderAndOffset(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 
@@ -1604,12 +1622,7 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 							[
 								{
 									"username": "user1",
-									"issuesAggregate":
-										{
-											"count": null,
-											"msgMax": null,
-											"msgMin": null
-										}
+									"issuesAggregate": null
 								}
 							]
 					}`},
@@ -1671,12 +1684,7 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 								{
 									"username": "user1",
 									"issues":[],
-									"issuesAggregate":
-										{
-											"count": null,
-											"msgMin": null,
-											"msgMax": null
-										}
+									"issuesAggregate": null
 								}
 							]
 					}`},
@@ -1883,4 +1891,85 @@ func TestAuthWithSecretDirective(t *testing.T) {
 	gqlResponse = checkLogPassword(t, logID, newLog.Pwd, "USER")
 	require.JSONEq(t, `{"checkLogPassword": null}`, string(gqlResponse.Data))
 	deleteLog(t, logID)
+}
+
+func TestAuthRBACEvaluation(t *testing.T) {
+	query := `query {
+			  queryBook{
+				bookId
+				name
+				desc
+			  }
+			}`
+	tcs := []struct {
+		name   string
+		header http.Header
+	}{
+		{
+			name:   "Test Auth Eq Filter With Object As Token Val",
+			header: common.GetJWT(t, map[string]interface{}{"a": "b"}, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Eq Filter With Float Token Val",
+			header: common.GetJWT(t, 123.12, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Eq Filter With Int64 Token Val",
+			header: common.GetJWT(t, 1237890123456, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Eq Filter With Int Token Val",
+			header: common.GetJWT(t, 1234, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Eq Filter With Bool Token Val",
+			header: common.GetJWT(t, true, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth In Filter With Object As Token Val",
+			header: common.GetJWT(t, map[string]interface{}{"e": "f"}, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth In Filter With Float Token Val",
+			header: common.GetJWT(t, 312.124, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth In Filter With Int64 Token Val",
+			header: common.GetJWT(t, 1246879976444232435, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth In Filter With Int Token Val",
+			header: common.GetJWT(t, 6872, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Eq Filter From Token With Array Val",
+			header: common.GetJWT(t, []int{456, 1234}, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth In Filter From Token With Array Val",
+			header: common.GetJWT(t, []int{124324, 6872}, nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Regex Filter",
+			header: common.GetJWT(t, "xyz@dgraph.io", nil, metaInfo),
+		},
+		{
+			name:   "Test Auth Regex Filter From Token With Array Val",
+			header: common.GetJWT(t, []string{"abc@def.com", "xyz@dgraph.io"}, nil, metaInfo),
+		},
+	}
+	bookResponse := `{"queryBook":[{"bookId":"book1","name":"Introduction","desc":"Intro book"}]}`
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			queryParams := &common.GraphQLParams{
+				Headers: tc.header,
+				Query:   query,
+			}
+
+			gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, string(gqlResponse.Data), bookResponse)
+		})
+
+	}
 }

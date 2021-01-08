@@ -17,7 +17,9 @@
 package admin_auth
 
 import (
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -51,6 +53,20 @@ func TestAdminOnlyPoorManAuth(t *testing.T) {
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
 }
 
+func TestPoorManAuthOnAdminSchemaHttpEndpoint(t *testing.T) {
+	// without X-Dgraph-AuthToken should give error
+	require.Contains(t, makeAdminSchemaRequest(t, ""), "Invalid X-Dgraph-AuthToken")
+
+	// setting a wrong value for the token should still give error
+	require.Contains(t, makeAdminSchemaRequest(t, wrongAuthToken), "Invalid X-Dgraph-AuthToken")
+
+	// setting correct value for the token should successfully update the schema
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP).SchemaUpdateCounter
+	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`, makeAdminSchemaRequest(t,
+		authToken))
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter)
+}
+
 func assertAuthTokenError(t *testing.T, schema string, headers http.Header) {
 	resp := common.RetryUpdateGQLSchema(t, common.Alpha1HTTP, schema, headers)
 	require.Equal(t, x.GqlErrorList{{
@@ -58,4 +74,25 @@ func assertAuthTokenError(t *testing.T, schema string, headers http.Header) {
 		Extensions: map[string]interface{}{"code": "ErrorUnauthorized"},
 	}}, resp.Errors)
 	require.Nil(t, resp.Data)
+}
+
+func makeAdminSchemaRequest(t *testing.T, authTokenValue string) string {
+	schema := `type Person {
+		id: ID!
+		name: String! @id
+	}`
+	req, err := http.NewRequest(http.MethodPost, common.GraphqlAdminURL+"/schema",
+		strings.NewReader(schema))
+	require.NoError(t, err)
+	if authTokenValue != "" {
+		req.Header.Set(authTokenHeader, authTokenValue)
+	}
+
+	resp, err := (&http.Client{}).Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return string(b)
 }

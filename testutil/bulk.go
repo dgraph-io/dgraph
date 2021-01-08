@@ -18,14 +18,13 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
-
-	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 type LiveOpts struct {
@@ -34,26 +33,35 @@ type LiveOpts struct {
 	RdfFile    string
 	SchemaFile string
 	Dir        string
+	Ludicrous  bool
 }
 
 func LiveLoad(opts LiveOpts) error {
-	liveCmd := exec.Command(DgraphBinaryPath(), "live",
+	args := []string{
+		"live",
 		"--files", opts.RdfFile,
 		"--schema", opts.SchemaFile,
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
-	)
+	}
+	if opts.Ludicrous {
+		args = append(args, "--ludicrous_mode")
+	}
+	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 
 	if opts.Dir != "" {
 		liveCmd.Dir = opts.Dir
 	}
 
-	if out, err := liveCmd.Output(); err != nil {
+	out, err := liveCmd.Output()
+	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
 		return err
 	}
-
+	if CheckIfRace(out) {
+		return errors.New("race condition detected. check logs for more details")
+	}
 	return nil
 }
 
@@ -81,12 +89,16 @@ func BulkLoad(opts BulkOpts) error {
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
 	}
-	if out, err := bulkCmd.CombinedOutput(); err != nil {
+	out, err := bulkCmd.CombinedOutput()
+	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
 		return err
 	}
 
+	if CheckIfRace(out) {
+		return errors.New("race condition detected. check logs for more details")
+	}
 	return nil
 }
 
@@ -137,17 +149,12 @@ func StartAlphas(compose string) error {
 	return nil
 }
 
-func StopAlphas(compose string) {
-	dg, err := DgraphClient(ContainerAddr("alpha1", 9080))
-	if err == nil {
-		_ = dg.Alter(context.Background(), &api.Operation{
-			DropAll: true,
-		})
-	}
-
+func StopAlphasAndDetectRace(compose string) (raceDetected bool) {
+	raceDetected = DetectRaceInAlphas(DockerPrefix)
 	cmd := exec.CommandContext(context.Background(), "docker-compose", "-f", compose,
 		"-p", DockerPrefix, "rm", "-f", "-s", "-v")
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
 	}
+	return raceDetected
 }

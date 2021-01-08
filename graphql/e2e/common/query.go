@@ -2833,8 +2833,10 @@ func queryAggregateWithFilter(t *testing.T) {
 						}
 				}`,
 		string(gqlResponse.Data))
+}
 
-	queryPostParams = &GraphQLParams{
+func queryAggregateOnEmptyData(t *testing.T) {
+	queryPostParams := &GraphQLParams{
 		Query: `query {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
@@ -2844,17 +2846,74 @@ func queryAggregateWithFilter(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse = queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	testutil.CompareJSON(t,
 		`{
-					"aggregatePost":
+					"aggregatePost": null
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData2(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregateState (filter: {xcode : { eq : "nsw" }} ) {
+				count
+				capitalMax
+				capitalMin
+				xcodeMin
+				xcodeMax
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregateState":
 						{
-							"count":0,
-							"numLikesMax": 0,
-							"titleMin": "0.000000"
+							"capitalMax": null,
+							"capitalMin": null,
+							"xcodeMin": "nsw",
+							"xcodeMax": "nsw",
+							"count": 1
 						}
 				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData3(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+					nameMin
+					capitalMax
+					capitalMin
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"nameMin": "Gujarat",
+					"capitalMax": null,
+					"capitalMin": null
+				}
+			}]
+		}`,
 		string(gqlResponse.Data))
 }
 
@@ -2918,6 +2977,41 @@ func queryAggregateWithAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func queryAggregateWithRepeatedFields(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				count
+				cnt2 : count
+				tmin : titleMin
+				tmin_again : titleMin
+				tmax: titleMax
+				tmax_again : titleMax
+				navg : numLikesAvg
+				navg2 : numLikesAvg
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+							{
+								"count":4,
+								"cnt2":4,
+								"tmax": "Random post",
+								"tmax_again": "Random post",
+								"tmin": "GraphQL doco",
+								"tmin_again": "GraphQL doco",
+								"navg": 66.25,
+								"navg2": 66.25
+							}
+				}`,
+		string(gqlResponse.Data))
+}
+
 func queryAggregateAtChildLevel(t *testing.T) {
 	queryNumberOfStates := &GraphQLParams{
 		Query: `query
@@ -2976,6 +3070,32 @@ func queryAggregateAtChildLevelWithFilter(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
+                	count
+					nameMin
+                }
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": null
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
 func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
 	queryNumberOfIndianStates := &GraphQLParams{
 		Query: `query
@@ -3007,6 +3127,39 @@ func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
 				"ag2": {
 					"count" : 3,
 					"nameMax" : "Maharashtra"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithRepeatedFields(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+					count
+					cnt2 : count
+					nameMax
+					nm : nameMax
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag1": {
+					"count" : 2,
+					"cnt2" : 2,
+					"nameMax" : "Maharashtra",
+					"nm": "Maharashtra"
 				}
 			}]
 		}`,
@@ -3191,4 +3344,139 @@ func passwordTest(t *testing.T) {
 	})
 
 	deleteUser(t, *newUser)
+}
+
+func queryFilterSingleIDListCoercion(t *testing.T) {
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		},
+	}, postExecutor)
+	authorIds := []string{authors[0].ID, authors[1].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID}
+	tcase := struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{
+
+		name: "Query using single ID in a filter",
+		query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+		variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+		respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+	}
+
+	t.Run(tcase.name, func(t *testing.T) {
+		params := &GraphQLParams{
+			Query:     tcase.query,
+			Variables: tcase.variables,
+		}
+		resp := params.ExecuteAsPost(t, GraphqlURL)
+		RequireNoGQLErrors(t, resp)
+		testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+	})
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+}
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getBook(bookId: 1234567890) {
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"getBook": {
+				"bookId": 1234567890,
+				"name": "Dgraph and Graphql",
+				"desc": "All love between dgraph and graphql"
+			  }
+		 }`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getChapter(chapterId: 1) {
+			bookId
+			chapterId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	  	"getChapter": {
+			"bookId": 1234567890,
+			"chapterId": 1,
+			"name": "How Dgraph Works"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithFloat(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getSection(sectionId: 1.1) {
+			chapterId
+			sectionId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	 	"getSection": {
+			"chapterId": 1,
+			"sectionId": 1.1,
+			"name": "How to define dgraph schema"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
 }

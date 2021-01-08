@@ -24,6 +24,28 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
+func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition == nil || value.ExpectedType == nil {
+			return
+		}
+
+		if value.Kind == ast.Variable {
+			return
+		}
+		// If the expected value is a list (ExpectedType.Elem != nil) && the value is not of list type,
+		// then we need to coerce the value to a list, otherwise, we can return here as we do below.
+
+		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
+			return
+		}
+		val := *value
+		child := &ast.ChildValue{Value: &val}
+		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
+		*value = valueNew
+	})
+}
+
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
 		if value.Definition == nil || value.ExpectedType == nil ||

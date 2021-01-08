@@ -70,19 +70,12 @@ const versionKey = 1
 // HardSync is set, msync is called after every write, which flushes those
 // writes to disk.
 type DiskStorage struct {
-	dir      string
-	commitTs uint64
-	id       uint64
-	gid      uint32
-	elog     trace.EventLog
+	dir  string
+	elog trace.EventLog
 
 	meta *metaFile
 	wal  *wal
 	lock sync.Mutex
-}
-
-type indexRange struct {
-	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
 // Init initializes an instance of DiskStorage without encryption.
@@ -366,6 +359,12 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 		return errors.Wrapf(err, "while adding entries")
 	}
 	return nil
+}
+
+// truncateEntriesUntil deletes the data field of every raft entry
+// of type EntryNormal and index ∈ [0, lastIdx).
+func (w *DiskStorage) TruncateEntriesUntil(lastIdx uint64) {
+	w.wal.truncateEntriesUntil(lastIdx)
 }
 
 func (w *DiskStorage) NumLogFiles() int {

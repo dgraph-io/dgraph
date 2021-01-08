@@ -103,9 +103,35 @@ type Author {
 
 GraphQL interfaces allow you to define a generic pattern that multiple types follow.  When a type implements an interface, that means it has all fields of the interface and some extras.  
 
-When a type implements an interface, GraphQL requires that the type repeats all the fields from the interface, but that's just boilerplate and a maintenance problem, so Dgraph doesn't need that repetition in the input schema and will generate the correct GraphQL for you.
+According to GraphQL specifications, you can have the same fields in implementing types as the interface. In such cases, the GraphQL layer will generate the correct Dgraph schema without duplicate fields.
 
-For example, the following defines the schema for posts with comment threads; Dgraph will fill in the `Question` and `Comment` types to make the full GraphQL types.
+If you repeat a field name in a type, it must be of the same type (including list or scalar types), and it must have the same nullable condition as the interface's field. Note that if the interface's field has a directory like `@search` then it will be inherited by the implementing type's field.
+
+For example:
+
+```graphql
+interface Fruit {
+    id: ID!
+    price: Int!
+}
+
+type Apple implements Fruit {
+    id: ID!
+    price: Int!
+    color: String!
+}
+
+type Banana implements Fruit {
+    id: ID!
+    price: Int!
+}
+```
+
+{{% notice "tip" %}}
+GraphQL will generate the correct Dgraph schema where fields occur only once.
+{{% /notice %}}
+
+The following example defines the schema for posts with comment threads. As mentioned, Dgraph will fill in the `Question` and `Comment` types to make the full GraphQL types.
 
 ```graphql
 interface Post {
@@ -117,13 +143,12 @@ interface Post {
 type Question implements Post {
     title: String!
 }
-
 type Comment implements Post {
     commentsOn: Post!
 }
 ```
 
-The generated GraphQL will contain the full types, for example, `Question` gets expanded as:
+The generated schema will contain the full types, for example, `Question` and `Comment` get expanded as:
 
 ```graphql
 type Question implements Post {
@@ -132,16 +157,37 @@ type Question implements Post {
     datePublished: DateTime
     title: String!
 }
-```
 
-while `Comment` gets expanded as:
-
-```graphql
 type Comment implements Post {
     id: ID!
     text: String
     datePublished: DateTime
     commentsOn: Post!
+}
+```
+
+{{% notice "note" %}}
+If you have a type that implements two interfaces, Dgraph won't allow a field of the same name in both interfaces, except for the `ID` field.
+{{% /notice %}}
+
+Dgraph currently allows this behavior for `ID` type fields since the `ID` type field is not a predicate. Note that in both interfaces and the implementing type, the nullable condition and type (list or scalar) for the `ID` field should be the same. For example:
+
+```graphql
+interface Shape {
+    id: ID!
+    shape: String!
+}
+
+interface Color {
+    id: ID!
+    color: String!
+}
+
+type Figure implements Shape & Color {
+    id: ID!
+    shape: String!
+    color: String!
+    size: Int!
 }
 ```
 

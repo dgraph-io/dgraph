@@ -1715,7 +1715,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 	err := c.Alter(ctx, op)
 	require.NoError(t, err)
 
-	r := rand.New(rand.NewSource(time.Now().Unix()))
+	rand.Seed(time.Now().Unix())
 	maxUID := 100
 	txnTotal := uint64(1000)
 	txnCur := uint64(0)
@@ -1733,7 +1733,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
 					break
 				}
-				id := 2 + int(r.Int31n(int32(maxUID))) // 1 id subject id.
+				id := 2 + int(rand.Int31n(int32(maxUID))) // 1 id subject id.
 				mu := &api.Mutation{
 					CommitNow: true,
 				}
@@ -1784,7 +1784,7 @@ func CountIndexConcurrentSetDelUIDList(t *testing.T, c *dgo.Dgraph) {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
 					break
 				}
-				id := insertedUids[r.Intn(len(insertedUids))]
+				id := insertedUids[rand.Intn(len(insertedUids))]
 				mu := &api.Mutation{
 					CommitNow: true,
 				}
@@ -1836,7 +1836,7 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 	err := c.Alter(ctx, op)
 	require.NoError(t, err)
 
-	r := rand.New(rand.NewSource(time.Now().Unix()))
+	rand.Seed(time.Now().Unix())
 	txnTotal := uint64(100)
 	txnCur := uint64(0)
 
@@ -1850,7 +1850,7 @@ func CountIndexConcurrentSetDelScalarPredicate(t *testing.T, c *dgo.Dgraph) {
 				if atomic.AddUint64(&txnCur, 1) > txnTotal {
 					break
 				}
-				id := int(r.Int31n(int32(10000)))
+				id := int(rand.Int31n(int32(10000)))
 				mu := &api.Mutation{
 					CommitNow: true,
 				}

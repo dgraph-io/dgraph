@@ -45,13 +45,41 @@ There are a few exceptions to the general rule described above:
 ## Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
-You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
 
+You can use the `--whitelist` option to specify a comma-separated whitelist of IP addresses, IP ranges, CIDR ranges, or hostnames for hosts from which admin operations can be initiated.
+
+**IP Address**
+
+```sh
+dgraph alpha --whitelist 127.0.0.1 ...
+```
+This would allow admin operations from hosts with IP 127.0.0.1 (i.e., localhost only).
+
+**IP Range**
 ```sh
 dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 ...
 ```
+
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
+
+**CIDR Range**
+
+```sh
+dgraph alpha --whitelist 172.17.0.0/16,172.18.0.0/15,172.20.0.0/32,192.168.1.1/32 ...
+```
+
+This would allow admin operations from hosts that matches the CIDR range `172.17.0.0/16`, `172.18.0.0/15`, `172.20.0.0/32`, or `192.168.1.1/32` (the same range as the IP Range example).
+
+You can set whitelist IP to `0.0.0.0/0` to whitelist all IPs.
+
+**Hostname**
+
+```sh
+dgraph alpha --whitelist admin-bastion,host.docker.internal ...
+```
+
+This would allow admin operations from hosts with hostnames `admin-bastion` and `host.docker.internal`.
 
 ## Restricting Mutation Operations
 
@@ -81,7 +109,7 @@ dgraph alpha --mutations strict
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
 You can configure Dgraph to only allow alter operations when the client provides a specific token.
-This can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
+This "Simple ACL" token can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
 
 You can specify the auth token with the `--auth_token` option for each Dgraph Alpha in the cluster.
 Clients must include the same auth token to make alter requests.
@@ -221,7 +249,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading.md#bulk-loader" >}})
+5. Reload the data via [bulk loader]({{< relref "deploy/fast-data-loading/bulk-loader.md" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
@@ -272,7 +300,7 @@ new type name and copy data from old predicate name to new predicate name for al
 are affected. Then, you can drop the old types and predicates from DB.
 
 {{% notice "note" %}}
-If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "howto/migrate-dgraph-1-1.md" >}}).
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section]({{< relref "/migration/migrate-dgraph-1-1.md" >}}).
 {{% /notice %}}
 
 ## Post Installation

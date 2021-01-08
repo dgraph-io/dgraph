@@ -137,6 +137,7 @@ type RequestResolver struct {
 // just returns errors if it's asked for a resolver for a field that it doesn't
 // know about.
 type resolverFactory struct {
+	sync.RWMutex
 	queryResolvers    map[string]func(schema.Query) QueryResolver
 	mutationResolvers map[string]func(schema.Mutation) MutationResolver
 
@@ -229,12 +230,16 @@ func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnConte
 
 func (rf *resolverFactory) WithQueryResolver(
 	name string, resolver func(schema.Query) QueryResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.queryResolvers[name] = resolver
 	return rf
 }
 
 func (rf *resolverFactory) WithMutationResolver(
 	name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory {
+	rf.Lock()
+	defer rf.Unlock()
 	rf.mutationResolvers[name] = resolver
 	return rf
 }
@@ -364,6 +369,8 @@ func StdDeleteCompletion(name string) CompletionFunc {
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.queryMiddlewareConfig[query.Name()]
 	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
 		return mws.Then(resolver(query))
@@ -373,6 +380,8 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
+	rf.RLock()
+	defer rf.RUnlock()
 	mws := rf.mutationMiddlewareConfig[mutation.Name()]
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
 		return mws.Then(resolver(mutation))
@@ -1429,6 +1438,35 @@ func completeObject(
 				}}
 			}
 		}
+
+		// Handle the case of empty data in Aggregate Queries. If count of data is equal
+		// to 0, set the val map to nil. This makes the aggregateField return null instead
+		// of returning "0.0000" for Min, Max function on strings and 0 for Min, Max functions
+		// on integers/float.
+		if strings.HasSuffix(f.Type().Name(), "AggregateResult") && val != nil {
+			var count json.Number
+			countVal := val.(map[string]interface{})["count"]
+			if countVal == nil {
+				// This case may happen in case of auth queries when the user does not have
+				// sufficient permission to query aggregate fields. We set val to nil in this
+				// case
+				val = nil
+			} else {
+				if count, ok = countVal.(json.Number); !ok {
+					// This is to handle case in which countVal is of any other type than
+					// json.Number. This should never happen. We return an error.
+					return nil, x.GqlErrorList{&x.GqlError{
+						Message:   "Expected count field of type json.Number inside Aggregate Field",
+						Locations: []x.Location{f.Location()},
+						Path:      copyPath(path),
+					}}
+				}
+				if count == "0" {
+					val = nil
+				}
+			}
+		}
+
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {

@@ -19,6 +19,7 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -28,6 +29,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
@@ -187,6 +191,18 @@ func run() {
 			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
 		}
+
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = tlsConf
+		if !worker.EnterpriseEnabled() {
+			// Crash since the enterprise license is not enabled..
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			log.Printf("Encryption feature enabled.")
+		}
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
 
@@ -243,6 +259,7 @@ func run() {
 	go func() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
@@ -283,9 +300,42 @@ func run() {
 	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
-	if !opt.SkipMapPhase {
+
+	const bulkMetaFilename = "bulk.meta"
+	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
+
+	if opt.SkipMapPhase {
+		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
+			os.Exit(1)
+		}
+
+		var bulkMeta pb.BulkMeta
+		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
+			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
+			os.Exit(1)
+		}
+
+		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
+		loader.schema.schemaMap = bulkMeta.SchemaMap
+	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+
+		bulkMeta := pb.BulkMeta{
+			EdgeCount: loader.prog.mapEdgeCount,
+			SchemaMap: loader.schema.schemaMap,
+		}
+		bulkMetaData, err := bulkMeta.Marshal()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
+			os.Exit(1)
+		}
+		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644); err != nil {
+			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
+			os.Exit(1)
+		}
 	}
 	loader.reduceStage()
 	loader.writeSchema()

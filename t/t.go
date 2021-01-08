@@ -83,6 +83,7 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
+	race = pflag.Bool("race", false, "Set true to build with race")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -101,20 +102,19 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
-func runFatal(cmd *exec.Cmd) {
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("While running command: %q Error: %v\n",
-			strings.Join(cmd.Args, " "), err)
-	}
-}
-func startCluster(composeFile, prefix string) {
+
+func startCluster(composeFile, prefix string) error {
 	cmd := command(
 		"docker-compose", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
 	fmt.Printf("Bringing up cluster %s...\n", prefix)
-	runFatal(cmd)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("While running command: %q Error: %v\n",
+			strings.Join(cmd.Args, " "), err)
+		return err
+	}
 	fmt.Printf("CLUSTER UP: %s\n", prefix)
 
 	// Wait for cluster to be healthy.
@@ -131,7 +131,18 @@ func startCluster(composeFile, prefix string) {
 			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
 		}
 	}
+	return nil
 }
+
+func detectRace(prefix string) bool {
+	if !*race {
+		return false
+	}
+	zeroRaceDetected := testutil.DetectRaceInZeros(prefix)
+	alphaRaceDetected := testutil.DetectRaceInAlphas(prefix)
+	return zeroRaceDetected || alphaRaceDetected
+}
+
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
@@ -147,7 +158,15 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v"}
+	if *race {
+		args = append(args, "-timeout", "180m")
+		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+		// args = append(args, "-race")
+	} else {
+		args = append(args, "-timeout", "30m")
+	}
+
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -183,6 +202,10 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
+	if detectRace(prefix) {
+		return fmt.Errorf("race condition detected for test package %s and cluster with prefix"+
+			" %s. check logs for more details", pkg, prefix)
+	}
 	return nil
 }
 
@@ -230,7 +253,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if len(*useExisting) > 0 || started {
 			return
 		}
-		startCluster(defaultCompose, prefix)
+		err := startCluster(defaultCompose, prefix)
+		if err != nil {
+			closer.Signal()
+		}
 		started = true
 	}
 
@@ -294,7 +320,10 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-	startCluster(compose, prefix)
+	err := startCluster(compose, prefix)
+	if err != nil {
+		return err
+	}
 	if !*keepCluster {
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)
@@ -605,8 +634,12 @@ func run() error {
 	oc.Took(0, "START", time.Millisecond)
 
 	if *rebuildBinary {
-		// cmd := command("make", "BUILD_RACE=y", "install")
-		cmd := command("make", "install")
+		var cmd *exec.Cmd
+		if *race {
+			cmd = command("make", "BUILD_RACE=y", "install")
+		} else {
+			cmd = command("make", "install")
+		}
 		cmd.Dir = *baseDir
 		if err := cmd.Run(); err != nil {
 			return err

@@ -20,15 +20,16 @@ package worker
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
-	return 0, x.ErrNotSupported
+	return x.ErrNotSupported
 }
 
 // Restore implements the Worker interface.
@@ -39,8 +40,4 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
-}
-
-func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
-	return nil, x.ErrNotSupported
 }

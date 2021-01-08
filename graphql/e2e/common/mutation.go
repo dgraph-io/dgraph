@@ -4576,3 +4576,97 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	DeleteGqlType(t, "post1", filter, 2, nil)
 
 }
+
+func idDirectiveWithInt64Mutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addBook(input:[
+			{
+			  bookId: 1234567890123
+			  name: "Graphql"
+			  desc: "Graphql is the next big thing"
+			}
+		  ]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	expected := `{
+		  	"addBook": {
+			  "numUids": 1
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
+}
+
+func idDirectiveWithIntMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addChapter(input:[{
+			chapterId: 2
+			name: "Graphql and more"
+			bookId: 1234567890123
+		  }]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"addChapter": {
+			  "numUids": 1
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
+}
+
+func idDirectiveWithFloatMutation(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `mutation {
+		  addSection(input:[{
+			chapterId: 2
+			name: "Graphql: Introduction"
+			sectionId: 2.1
+		  },
+		  {
+			chapterId: 2
+			name: "Graphql Available Data Types"
+			sectionId: 2.2
+		  }]) {
+			numUids
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"addSection": {
+			  "numUids": 2
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// adding same mutation again should result in error because of duplicate id
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	require.Contains(t, response.Errors.Error(), "already exists")
+
+	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
+}

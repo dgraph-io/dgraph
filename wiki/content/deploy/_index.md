@@ -53,7 +53,7 @@ running multiple instances of Dgraph, over multiple servers in a cluster.
   </div>
   <div class="item">
     <div class="icon"><i class="lni lni-upload" aria-hidden="true"></i></div>
-    <a href="{{< relref "fast-data-loading.md">}}">
+    <a href="{{< relref "fast-data-loading/overview.md">}}">
       <h2>Fast Data Loading</h2>
       <p>
         Dgraph tools for fast data loading

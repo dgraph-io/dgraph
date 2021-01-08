@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -73,8 +74,8 @@ func (n *node) AmLeader() bool {
 	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
-func (n *node) uniqueKey() string {
-	return fmt.Sprintf("z%x-%d", n.Id, n.Rand.Uint64())
+func (n *node) uniqueKey() uint64 {
+	return uint64(n.Id)<<32 | uint64(n.Rand.Uint32())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -118,15 +119,22 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		// unique key is randomly generated key and could have collision.
+		// This is to ensure that even if collision occurs, we retry.
+		for !n.Proposals.Store(key, pctx) {
+			glog.Warningf("Found existing proposal with key: [%v]", key)
+			key = n.uniqueKey()
+		}
 		defer n.Proposals.Delete(key)
-		proposal.Key = key
-		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
+		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
-		data, err := proposal.Marshal()
+		data := make([]byte, 8+proposal.Size())
+		binary.BigEndian.PutUint64(data[:8], key)
+		sz, err := proposal.MarshalToSizedBuffer(data[8:])
 		if err != nil {
 			return err
 		}
+		data = data[:8+sz]
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
@@ -322,19 +330,15 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	return nil
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (string, error) {
+func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
+	x.AssertTrue(len(e.Data) > 0)
+
 	var p pb.ZeroProposal
-	// Raft commits empty entry on becoming a leader.
-	if len(e.Data) == 0 {
-		return p.Key, nil
+	key := binary.BigEndian.Uint64(e.Data[:8])
+	if err := p.Unmarshal(e.Data[8:]); err != nil {
+		return key, err
 	}
-	if err := p.Unmarshal(e.Data); err != nil {
-		return p.Key, err
-	}
-	if p.Key == "" {
-		return p.Key, errInvalidProposal
-	}
-	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
+	span := otrace.FromContext(n.Proposals.Ctx(key))
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -343,13 +347,13 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	state.Counter = e.Index
 	if len(p.Cid) > 0 {
 		if len(state.Cid) > 0 {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.Cid = p.Cid
 	}
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
 		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
@@ -365,14 +369,14 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		if err := n.handleMemberProposal(p.Member); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(p.Tablet); err != nil {
 			span.Annotatef(nil, "While applying tablet proposal: %v", err)
 			glog.Errorf("While applying tablet proposal: %v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.License != nil {
@@ -383,7 +387,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			numNodes += len(group.GetMembers())
 		}
 		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.License = p.License
 		// Check expiry and set enabled accordingly.
@@ -411,7 +415,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
-	return p.Key, nil
+	return key, nil
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -516,12 +520,11 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 		batch = entries[len(entries)-1].Index + 1
 
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var proposal pb.ZeroProposal
-			err = proposal.Unmarshal(entry.Data)
-			if err != nil {
+			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
 				return false, err
 			}
 			if len(proposal.Cid) > 0 {
@@ -545,11 +548,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var state pb.MembershipState
-			x.Check(state.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&state)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, state.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
@@ -749,11 +752,11 @@ func (n *node) calculateAndProposeSnapshot() error {
 			break
 		}
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var p pb.ZeroProposal
-			if err := p.Unmarshal(entry.Data); err != nil {
+			if err := p.Unmarshal(entry.Data[8:]); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return err
 			}
@@ -864,9 +867,9 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -875,6 +878,10 @@ func (n *node) Run() {
 				case entry.Type == raftpb.EntryConfChange:
 					n.applyConfChange(entry)
 					glog.Infof("Done applying conf change at %#x", n.Id)
+
+				case len(entry.Data) == 0:
+					// Raft commits empty entry on becoming a leader.
+					// Do nothing.
 
 				case entry.Type == raftpb.EntryNormal:
 					start := time.Now()
@@ -886,11 +893,10 @@ func (n *node) Run() {
 					if took := time.Since(start); took > time.Second {
 						var p pb.ZeroProposal
 						// Raft commits empty entry on becoming a leader.
-						if err := p.Unmarshal(entry.Data); err == nil {
+						if err := p.Unmarshal(entry.Data[8:]); err == nil {
 							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
 								took.Round(time.Second), p)
 						}
-
 					}
 
 				default:
