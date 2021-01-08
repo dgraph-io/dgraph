@@ -182,7 +182,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
-	totalUids := 0
+	maxCount := 0
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
@@ -195,7 +195,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		out[i].ulist = &emptyList
 		out[i].skippedUids = &emptySkippedList
 		out[i].uset = map[uint64]struct{}{}
-		totalUids += len(ts.UidMatrix[i].Uids)
+		maxCount += len(ts.UidMatrix[i].Uids)
 	}
 
 	order := ts.Order[0]
@@ -283,14 +283,12 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			oldCount := ts.Count
-			if order.Desc {
-				ts.Count = int32(totalUids)
+			if !order.Desc {
+				maxCount = int(ts.Count)
 			}
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err = intersectBucket(ctx, ts, token, out)
-			ts.Count = oldCount
+			err = intersectBucket(ctx, ts, token, out, maxCount)
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -333,7 +331,6 @@ BUCKETS:
 			}
 		}
 
-		requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
 		if order.Desc {
 			// Arrange the null predicates in decreasing order of their UIDs.
 			revNullPreds := make([]uint64, len(nullPreds))
@@ -355,8 +352,16 @@ BUCKETS:
 				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
 			}
 		} else {
-			// For the case of ascending, we simply need to append the UIDs with null predicate
-			// at the last of the result.
+			// Apply offset to the list of null predicates, if applicable.
+			if len(out[i].skippedUids.Uids) == len(ul.Uids)-len(nullPreds) {
+				start := int(ts.Offset) - len(out[i].skippedUids.Uids)
+				if start < len(nullPreds) {
+					nullPreds = nullPreds[start:]
+				} else {
+					nullPreds = []uint64{}
+				}
+			}
+			requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
 			canAppend := x.Min(uint64(requiredCount), uint64(len(nullPreds)))
 			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
 		}
@@ -600,8 +605,7 @@ type intersectedList struct {
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
 func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
-	out []intersectedList) error {
-	count := int(ts.Count)
+	out []intersectedList, count int) error {
 	order := ts.Order[0]
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
