@@ -26,7 +26,7 @@ import (
 	"strings"
 )
 
-func GeneratePlugins() {
+func GeneratePlugins(raceEnabled bool) {
 	_, curr, _, ok := runtime.Caller(0)
 	if !ok {
 		fmt.Print("error while getting current file")
@@ -41,7 +41,12 @@ func GeneratePlugins() {
 	} {
 		so := "./custom_plugins/" + strconv.Itoa(i) + ".so"
 		fmt.Printf("compiling plugin: src=%q so=%q\n", src, so)
-		cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", so, src)
+		opts := []string{"build"}
+		if raceEnabled {
+			opts = append(opts, "-race")
+		}
+		opts = append(opts, "-buildmode=plugin", "-o", so, src)
+		cmd := exec.Command("go", opts...)
 		cmd.Dir = path.Dir(curr)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error: %v\n", err)
