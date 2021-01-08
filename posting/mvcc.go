@@ -87,6 +87,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 }
 
 func (ir *incrRollupi) addKeyToBatch(key []byte) {
+	glog.Infof("== [DEBUG] == Adding key to batch %x (%s)", x.GetCallerFunctionName())
 	batch := ir.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
 	if len(*batch) < 16 {
