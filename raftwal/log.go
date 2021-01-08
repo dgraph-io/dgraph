@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -275,7 +276,7 @@ func getLogFiles(dir string) ([]*logFile, error) {
 	seen := make(map[int64]struct{})
 
 	for _, fpath := range entryFiles {
-		_, fname := path.Split(fpath)
+		_, fname := filepath.Split(fpath)
 		fname = strings.TrimSuffix(fname, logSuffix)
 
 		fid, err := strconv.ParseInt(fname, 10, 64)
