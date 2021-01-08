@@ -20,7 +20,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -123,7 +122,6 @@ func newKeyReader(cfg *viper.Viper) (keyReader, error) {
 		return nil, errors.Errorf("cannot have local and vault key readers. " +
 			"re-check the configuration")
 	}
-	glog.Infof("KeyReader instantiated of type %T", keyReader)
 	return keyReader, nil
 }
 
