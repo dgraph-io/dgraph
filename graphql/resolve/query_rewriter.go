@@ -188,28 +188,21 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 	mainQuery.Attr = "var"
 
 	finalMainQuery := &gql.GraphQuery{
-		Attr: query.Name() + "()",
+		Attr: query.DgraphAlias() + "()",
 	}
 	// Add selection set to mainQuery and finalMainQuery.
 	isAggregateFieldVisited := make(map[string]bool)
-	// isAggregateFunctionVisited stores if the aggregate function for a field has been added or not.
-	// So the map entries would contain keys as nameMin, ageMin, nameName, etc.
-	isAggregateFunctionVisited := make(map[string]bool)
 
 	for _, f := range query.SelectionSet() {
 		// fldName stores Name of the field f.
 		fldName := f.Name()
-		if _, visited := isAggregateFunctionVisited[fldName]; visited {
-			continue
-		}
-		isAggregateFunctionVisited[fldName] = true
 		if fldName == "count" {
 			child := &gql.GraphQuery{
 				Var:  "countVar",
 				Attr: "count(uid)",
 			}
 			finalQueryChild := &gql.GraphQuery{
-				Alias: fldName,
+				Alias: f.DgraphAlias(),
 				Attr:  "max(val(countVar))",
 			}
 			mainQuery.Children = append(mainQuery.Children, child)
@@ -246,7 +239,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					isAggregateFieldVisited[constructedForField] = true
 				}
 				finalQueryChild := &gql.GraphQuery{
-					Alias: fldName,
+					Alias: f.DgraphAlias(),
 					Attr:  strings.ToLower(function) + "(val(" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
@@ -380,7 +373,7 @@ func rewriteAsQueryByIds(
 
 	rbac := authRw.evaluateStaticRules(field.Type())
 	dgQuery := []*gql.GraphQuery{{
-		Attr: field.Name(),
+		Attr: field.DgraphAlias(),
 	}}
 
 	if rbac == schema.Negative {
@@ -447,7 +440,7 @@ func rewriteAsGet(
 	// caught here but in case of interface, we need to check validity on each
 	// implementing type as Rules for the interface are made empty.
 	if rbac == schema.Negative {
-		return []*gql.GraphQuery{{Attr: query.Name() + "()"}}
+		return []*gql.GraphQuery{{Attr: query.DgraphAlias() + "()"}}
 	}
 
 	// For interface, empty query should be returned if Auth rules are
@@ -487,7 +480,7 @@ func rewriteAsGet(
 
 	if uid > 0 {
 		dgQuery = []*gql.GraphQuery{{
-			Attr: query.Name(),
+			Attr: query.DgraphAlias(),
 			Func: &gql.Function{
 				Name: "uid",
 				UID:  []uint64{uid},
@@ -499,7 +492,7 @@ func rewriteAsGet(
 
 	} else {
 		dgQuery = []*gql.GraphQuery{{
-			Attr: query.Name(),
+			Attr: query.DgraphAlias(),
 			Func: eqXidFunc,
 		}}
 	}
@@ -531,7 +524,7 @@ func addCommonRules(
 	authRw *authRewriter) ([]*gql.GraphQuery, schema.RuleResult) {
 	rbac := authRw.evaluateStaticRules(fieldType)
 	dgQuery := &gql.GraphQuery{
-		Attr: field.Name(),
+		Attr: field.DgraphAlias(),
 	}
 
 	if rbac == schema.Negative {
@@ -1005,11 +998,8 @@ func buildCommonAuthQueries(
 // buildAggregateFields builds DQL queries for aggregate fields like count, avg, max etc.
 // It returns related DQL fields and Auth Queries which are then added to the final DQL query
 // by the caller.
-// fieldAlias is being passed along with the field as it depends on the number of times we have
-// encountered that field till now.
 func buildAggregateFields(
 	f schema.Field,
-	fieldAlias string,
 	auth *authRewriter) ([]*gql.GraphQuery, []*gql.GraphQuery) {
 	constructedForType := f.ConstructedFor()
 	constructedForDgraphPredicate := f.ConstructedForDgraphPredicate()
@@ -1031,7 +1021,7 @@ func buildAggregateFields(
 	//   ... other queried aggregate fields
 	// }
 	mainField := &gql.GraphQuery{
-		Alias: fieldAlias,
+		Alias: f.DgraphAlias(),
 		Attr:  constructedForDgraphPredicate,
 	}
 
@@ -1040,8 +1030,6 @@ func buildAggregateFields(
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
 	_ = addFilter(mainField, constructedForType, fieldFilter)
 
-	// addedAggregateFields is a map from aggregate field name to boolean
-	addedAggregateField := make(map[string]bool)
 	// isAggregateFieldVisited is a map from field name to boolean. It is used to
 	// ensure that a field is added to Var query at maximum once.
 	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
@@ -1050,16 +1038,11 @@ func buildAggregateFields(
 
 	// Iterate over fields queried inside aggregate.
 	for _, aggregateField := range f.SelectionSet() {
-		// Don't add the same field twice
-		if _, isAddedAggregateField := addedAggregateField[aggregateField.DgraphAlias()]; isAddedAggregateField {
-			continue
-		}
-		addedAggregateField[aggregateField.DgraphAlias()] = true
 
 		// Handle count fields inside aggregate fields.
-		if aggregateField.DgraphAlias() == "count" {
+		if aggregateField.Name() == "count" {
 			aggregateChild := &gql.GraphQuery{
-				Alias: "count_" + fieldAlias,
+				Alias: aggregateField.Alias() + "_" + f.DgraphAlias(),
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			// Add filter to count aggregation field.
@@ -1084,7 +1067,7 @@ func buildAggregateFields(
 				// ensures that a var queried is added at maximum once.
 				if !isAggregateFieldVisited[constructedForField] {
 					child := &gql.GraphQuery{
-						Var:  fieldAlias + "_" + constructedForField + "Var",
+						Var:  f.DgraphAlias() + "_" + constructedForField + "Var",
 						Attr: constructedForDgraphPredicateField,
 					}
 					// The var field is added to mainQuery. This adds the following DQL query.
@@ -1095,8 +1078,8 @@ func buildAggregateFields(
 					isAggregateFieldVisited[constructedForField] = true
 				}
 				aggregateChild := &gql.GraphQuery{
-					Alias: aggregateFldName + "_" + fieldAlias,
-					Attr:  strings.ToLower(function) + "(val(" + fieldAlias + "_" + constructedForField + "Var))",
+					Alias: aggregateField.Alias() + "_" + f.DgraphAlias(),
+					Attr:  strings.ToLower(function) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
 				// nameMin_postsAggregate : min(val(postsAggregate_nameVar))
@@ -1211,13 +1194,12 @@ func addSelectionSetFrom(
 	}
 
 	// These fields might not have been requested by the user directly as part of the query but
-	// are required in the body template for other fields requested within the query. We must
-	// fetch them from Dgraph.
+	// are required in the body template for other @custom fields requested within the query.
+	// We must fetch them from Dgraph.
 	requiredFields := make(map[string]schema.FieldDefinition)
-	// fieldSeenCount is a map from field's dgraph alias to integer.
-	// It stores the number of times a field was encountered
-	// in the query till now.
-	fieldSeenCount := make(map[string]int)
+	// fieldAdded is a map from field's dgraph alias to bool.
+	// It tells whether a field with that dgraph alias has been added to DQL query or not.
+	fieldAdded := make(map[string]bool)
 
 	for _, f := range field.SelectionSet() {
 		hasCustom, rf := f.HasCustomDirective()
@@ -1238,18 +1220,17 @@ func addSelectionSetFrom(
 
 		// Handle aggregation queries
 		if f.IsAggregateField() {
-			fieldAlias := generateUniqueDgraphAlias(f, fieldSeenCount)
-			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, fieldAlias, auth)
+			aggregateChildren, aggregateAuthQueries := buildAggregateFields(f, auth)
 
 			authQueries = append(authQueries, aggregateAuthQueries...)
 			q.Children = append(q.Children, aggregateChildren...)
 			// As all child fields inside aggregate have been looked at. We can continue
-			fieldSeenCount[f.DgraphAlias()]++
+			fieldAdded[f.DgraphAlias()] = true
 			continue
 		}
 
 		child := &gql.GraphQuery{
-			Alias: generateUniqueDgraphAlias(f, fieldSeenCount),
+			Alias: f.DgraphAlias(),
 		}
 
 		if f.Type().Name() == schema.IDType {
@@ -1291,11 +1272,7 @@ func addSelectionSetFrom(
 			}
 		}
 
-		if f.Type().IsInbuiltOrEnumType() && (fieldSeenCount[f.DgraphAlias()] > 0) {
-			restoreAuthState()
-			continue
-		}
-		fieldSeenCount[f.DgraphAlias()]++
+		fieldAdded[f.DgraphAlias()] = true
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -1365,7 +1342,7 @@ func addSelectionSetFrom(
 	// Add fields required by other custom fields which haven't already been added as a
 	// child to be fetched from Dgraph.
 	for _, dgAlias := range rfset {
-		if fieldSeenCount[dgAlias] == 0 {
+		if !fieldAdded[dgAlias] {
 			f := requiredFields[dgAlias]
 			child := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),

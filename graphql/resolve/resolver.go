@@ -1381,7 +1381,7 @@ func completeObject(
 		} else {
 			uniqueDgraphAlias = generateUniqueDgraphAlias(f, fieldSeenCount)
 		}
-		val := res[uniqueDgraphAlias]
+		val := res[f.Name()] // temp change just for making admin work
 		// Handle aggregate queries:
 		// Aggregate Fields in DQL response don't follow the same response as other queries.
 		// Create a map aggregateVal and store response of aggregate fields in a way which
