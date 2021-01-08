@@ -32,8 +32,8 @@ func TestQueries(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := path.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := path.Join(testutil.TestDataDirectory, "21million.rdf.gz")
+	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
 	if err := testutil.LiveLoad(testutil.LiveOpts{
 		Alpha:      testutil.ContainerAddr("alpha1", 9080),
 		Zero:       testutil.SockAddrZero,

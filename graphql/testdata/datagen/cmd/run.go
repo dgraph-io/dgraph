@@ -234,7 +234,7 @@ func readRestaurantData() (dataFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		restaurantDataFile = path.Join(dir, restaurantDataFile)
+		restaurantDataFile = filepath.Join(dir, restaurantDataFile)
 	}
 
 	b, err := ioutil.ReadFile(restaurantDataFile)

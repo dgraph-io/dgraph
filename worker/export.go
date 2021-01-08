@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -412,7 +411,7 @@ type remoteExportStorage struct {
 }
 
 func newLocalExportStorage(destination, backupName string) (*localExportStorage, error) {
-	bdir, err := filepath.Abs(path.Join(destination, backupName))
+	bdir, err := filepath.Abs(filepath.Join(destination, backupName))
 	if err != nil {
 		return nil, err
 	}
@@ -425,9 +424,9 @@ func newLocalExportStorage(destination, backupName string) (*localExportStorage,
 }
 
 func (l *localExportStorage) openFile(fileName string) (*fileWriter, error) {
-	fw := &fileWriter{relativePath: path.Join(l.relativePath, fileName)}
+	fw := &fileWriter{relativePath: filepath.Join(l.relativePath, fileName)}
 
-	filePath, err := filepath.Abs(path.Join(l.destination, fw.relativePath))
+	filePath, err := filepath.Abs(filepath.Join(l.destination, fw.relativePath))
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +504,7 @@ func (r *remoteExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, e
 		} else {
 			d = r.prefix + "/" + f
 		}
-		filePath := path.Join(r.les.destination, f)
+		filePath := filepath.Join(r.les.destination, f)
 		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
 		glog.Infof("Uploading from %s to %s\n", filePath, d)
 		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{

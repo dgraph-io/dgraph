@@ -111,7 +111,7 @@ func initConfig() {
 		}
 
 		// Search config in home directory with name ".datagen" (without extension).
-		viper.AddConfigPath(path.Join(home, ".config", "datagen"))
+		viper.AddConfigPath(filepath.Join(home, ".config", "datagen"))
 		viper.SetConfigName("conf")
 	}
 

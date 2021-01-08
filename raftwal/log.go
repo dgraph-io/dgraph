@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -93,7 +92,7 @@ type logFile struct {
 }
 
 func logFname(dir string, id int64) string {
-	return path.Join(dir, fmt.Sprintf("%05d%s", id, logSuffix))
+	return filepath.Join(dir, fmt.Sprintf("%05d%s", id, logSuffix))
 }
 
 // openLogFile opens a logFile in the given directory. The filename is
