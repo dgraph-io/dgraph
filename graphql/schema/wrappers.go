@@ -96,6 +96,7 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
+	IsFederated() bool
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -306,6 +307,10 @@ func (s *schema) Mutations(t MutationType) []string {
 		}
 	}
 	return result
+}
+
+func (s *schema) IsFederated() bool {
+	return s.schema.Types["_Entity"] != nil
 }
 
 func (o *operation) IsQuery() bool {

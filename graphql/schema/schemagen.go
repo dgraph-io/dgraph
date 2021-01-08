@@ -37,6 +37,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	GQLSchemaWithoutApolloExtras() string
 }
 
 type handler struct {
@@ -70,6 +71,22 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+// GQLSchemaWithoutApolloExtras return GraphQL schema string
+// excluding Apollo extras definitions and Apollo Queries
+func (s *handler) GQLSchemaWithoutApolloExtras() string {
+	astSchemaCopy := *s.completeSchema
+	delete(astSchemaCopy.Types, "_Entity")
+	queryList := make(ast.FieldList, 0)
+	for _, qry := range astSchemaCopy.Query.Fields {
+		if qry.Name == "_entities" || qry.Name == "_service" {
+			continue
+		}
+		queryList = append(queryList, qry)
+	}
+	astSchemaCopy.Query.Fields = queryList
+	return Stringify(s.completeSchema, s.originalDefs)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {

@@ -861,6 +861,20 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	} else {
 		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
 			WithConventionResolvers(gqlSchema, as.fns)
+		// If the schema is a Federated Schema then attach "_service" resolver
+		if gqlSchema.IsFederated() {
+			resolverFactory.WithQueryResolver("_service", func(s schema.Query) resolve.QueryResolver {
+				return resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					handler, _ := schema.NewHandler(as.schema.Schema, false)
+					data := handler.GQLSchemaWithoutApolloExtras()
+					return &resolve.Resolved{
+						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
+						Field: query,
+					}
+				})
+			})
+		}
+
 		if as.withIntrospection {
 			resolverFactory.WithSchemaIntrospection()
 		}
