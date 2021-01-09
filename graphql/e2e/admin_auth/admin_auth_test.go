@@ -18,7 +18,9 @@ package admin_auth
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -88,6 +90,39 @@ func TestAdminPoorManWithAcl(t *testing.T) {
 	accessJwt, _ := grootLogin(t)
 	params.Headers.Set(accessJwtHeader, accessJwt)
 	common.RequireNoGQLErrors(t, params.ExecuteAsPost(t, poorManWithAclAdminURL))
+}
+
+func TestPoorManAuthOnAdminSchemaHttpEndpoint(t *testing.T) {
+	// without X-Dgraph-AuthToken should give error
+	require.Contains(t, makeAdminSchemaRequest(t, ""), "Invalid X-Dgraph-AuthToken")
+
+	// setting a wrong value for the token should still give error
+	require.Contains(t, makeAdminSchemaRequest(t, wrongAuthToken), "Invalid X-Dgraph-AuthToken")
+
+	// setting correct value for the token should successfully update the schema
+	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`, makeAdminSchemaRequest(t,
+		authToken))
+}
+
+func makeAdminSchemaRequest(t *testing.T, authTokenValue string) string {
+	schema := `type Person {
+		id: ID!
+		name: String! @id
+	}`
+	req, err := http.NewRequest(http.MethodPost, poorManAdminURL+"/schema",
+		strings.NewReader(schema))
+	require.NoError(t, err)
+	if authTokenValue != "" {
+		req.Header.Set(authTokenHeader, authTokenValue)
+	}
+
+	resp, err := (&http.Client{}).Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return string(b)
 }
 
 func assertAuthTokenError(t *testing.T, url string, params *common.GraphQLParams) {
