@@ -19,9 +19,9 @@ greater RSA or AES encryption are supported.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with the `openssl`
 command, be sure to specify the encryption algorithm explicitly
-(like **-aes256**). This will force `openssl` to include the **DEK-Info** header
+(like `-aes256`). This will force OpenSSL to include the `DEK-Info` header
 in the private key, which Dgraph requires to decrypt the key. When default
-encryption is used, `openssl` doesn't write that header and the key can't be
+encryption is used, OpenSSL doesn't write that header and the key can't be
 decrypted.{{% /notice %}}
 
 ## Dgraph Certificate Management Tool
@@ -288,7 +288,7 @@ $ certutil -addstore -f "ROOT" /path/to/ca.crt
 * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Authorities
 * Click on Import and import the **ca.crt**
 
-### Step 3. Point ratel to the `https://` endpoint of alpha server.
+### Step 3. Point Ratel to the Dgraph Alpha server https:// endpoint
 
 * Change the Dgraph Alpha server address to **https://** instead of **http://**, for example **https://localhost:8080**.
 
