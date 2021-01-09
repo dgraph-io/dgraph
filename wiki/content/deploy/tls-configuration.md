@@ -267,7 +267,7 @@ $ cp /path/to/ca.crt /usr/local/share/ca-certificates/ca.crt
 # Update the CA store
 $ sudo update-ca-certificates`
 ```
-##### Mac OS X
+##### macOS X
 ```sh
 $ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /path/to/ca.crt
 ```
