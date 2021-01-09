@@ -2849,10 +2849,14 @@ func queryAggregateOnEmptyData(t *testing.T) {
 
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	testutil.CompareJSON(t,
+	require.JSONEq(t,
 		`{
-					"aggregatePost": null
-				}`,
+			"aggregatePost": {
+				"count": 0,
+				"numLikesMax": null,
+				"titleMin": null
+			}
+		}`,
 		string(gqlResponse.Data))
 }
 

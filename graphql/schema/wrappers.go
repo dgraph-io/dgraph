@@ -807,7 +807,7 @@ func (f *field) IsAuthQuery() bool {
 }
 
 func (f *field) IsAggregateField() bool {
-	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") && f.Type().IsAggregateResult()
+	return strings.HasSuffix(f.Name(), "Aggregate") && f.Type().IsAggregateResult()
 }
 
 func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {

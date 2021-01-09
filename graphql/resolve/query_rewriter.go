@@ -191,21 +191,25 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 		Attr: query.DgraphAlias() + "()",
 	}
 	// Add selection set to mainQuery and finalMainQuery.
-	isAggregateFieldVisited := make(map[string]bool)
+	isAggregateVarAdded := make(map[string]bool)
+	isCountVarAdded := false
 
 	for _, f := range query.SelectionSet() {
 		// fldName stores Name of the field f.
 		fldName := f.Name()
 		if fldName == "count" {
-			child := &gql.GraphQuery{
-				Var:  "countVar",
-				Attr: "count(uid)",
+			if !isCountVarAdded {
+				child := &gql.GraphQuery{
+					Var:  "countVar",
+					Attr: "count(uid)",
+				}
+				mainQuery.Children = append(mainQuery.Children, child)
+				isCountVarAdded = true
 			}
 			finalQueryChild := &gql.GraphQuery{
 				Alias: f.DgraphAlias(),
 				Attr:  "max(val(countVar))",
 			}
-			mainQuery.Children = append(mainQuery.Children, child)
 			finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 			continue
 		}
@@ -213,7 +217,6 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 		// Handle other aggregate functions than count
 		aggregateFunctions := []string{"Max", "Min", "Sum", "Avg"}
 
-		// TODO(GRAPHQL-887) :Fix Maximum and Minimum Aggregate DQL functions in case of no data
 		for _, function := range aggregateFunctions {
 			// A field can have at maximum one of the aggregation functions as suffix
 			if strings.HasSuffix(fldName, function) {
@@ -222,11 +225,11 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 				// constructedForField contains the field for which aggregate function has been queried.
 				// As all aggregate functions have length 3, removing last 3 characters from fldName.
 				constructedForField := fldName[:len(fldName)-3]
-				// isAggregateFieldVisited ensures that a field is added to Var query at maximum once.
+				// isAggregateVarAdded ensures that a field is added to Var query at maximum once.
 				// If a field has already been added to the var query, don't add it again.
 				// Eg. Even if scoreMax and scoreMin are queried, the query will contain only one expression
 				// of the from, "scoreVar as Tweets.score"
-				if !isAggregateFieldVisited[constructedForField] {
+				if !isAggregateVarAdded[constructedForField] {
 					child := &gql.GraphQuery{
 						Var:  constructedForField + "Var",
 						Attr: constructedForDgraphPredicate,
@@ -236,7 +239,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					//        scoreVar as Tweets.score
 					// }
 					mainQuery.Children = append(mainQuery.Children, child)
-					isAggregateFieldVisited[constructedForField] = true
+					isAggregateVarAdded[constructedForField] = true
 				}
 				finalQueryChild := &gql.GraphQuery{
 					Alias: f.DgraphAlias(),
@@ -1030,11 +1033,11 @@ func buildAggregateFields(
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
 	_ = addFilter(mainField, constructedForType, fieldFilter)
 
-	// isAggregateFieldVisited is a map from field name to boolean. It is used to
+	// isAggregateVarAdded is a map from field name to boolean. It is used to
 	// ensure that a field is added to Var query at maximum once.
 	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
 	// contain "scoreVar as Tweets.score" only once.
-	isAggregateFieldVisited := make(map[string]bool)
+	isAggregateVarAdded := make(map[string]bool)
 
 	// Iterate over fields queried inside aggregate.
 	for _, aggregateField := range f.SelectionSet() {
@@ -1042,7 +1045,7 @@ func buildAggregateFields(
 		// Handle count fields inside aggregate fields.
 		if aggregateField.Name() == "count" {
 			aggregateChild := &gql.GraphQuery{
-				Alias: aggregateField.Alias() + "_" + f.DgraphAlias(),
+				Alias: aggregateField.DgraphAlias() + "_" + f.DgraphAlias(),
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			// Add filter to count aggregation field.
@@ -1063,9 +1066,9 @@ func buildAggregateFields(
 				// constructedForDgraphPredicate stores the Dgraph predicate for which aggregate function
 				// has been queried. Eg. Post.name for nameMin
 				constructedForDgraphPredicateField := aggregateField.DgraphPredicateForAggregateField()
-				// Adding the corresponding var field if it has not been added before. isAggregateFieldVisited
+				// Adding the corresponding var field if it has not been added before. isAggregateVarAdded
 				// ensures that a var queried is added at maximum once.
-				if !isAggregateFieldVisited[constructedForField] {
+				if !isAggregateVarAdded[constructedForField] {
 					child := &gql.GraphQuery{
 						Var:  f.DgraphAlias() + "_" + constructedForField + "Var",
 						Attr: constructedForDgraphPredicateField,
@@ -1075,10 +1078,10 @@ func buildAggregateFields(
 					//   postsAggregate_nameVar as Post.name
 					// }
 					mainField.Children = append(mainField.Children, child)
-					isAggregateFieldVisited[constructedForField] = true
+					isAggregateVarAdded[constructedForField] = true
 				}
 				aggregateChild := &gql.GraphQuery{
-					Alias: aggregateField.Alias() + "_" + f.DgraphAlias(),
+					Alias: aggregateField.DgraphAlias() + "_" + f.DgraphAlias(),
 					Attr:  strings.ToLower(function) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
