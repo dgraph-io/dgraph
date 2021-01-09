@@ -63,7 +63,7 @@ $ dgraph cert -n localhost -c dgraphuser
 $ dgraph cert ls
 ```
 
-The default location where the _cert_ command stores certificates (and keys) is
+The default location where the `dgraph cert` command stores certificates (and keys) is
 **tls** under the Dgraph working directory. You can override the default path
 using the `--dir` option. For example:
 
@@ -103,8 +103,8 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 ### Certificate inspection
 
-The command **dgraph cert ls** lists all certificates and keys in the **--dir**
-directory (default 'tls'), along with details to inspect and validate cert/key pairs.
+The command `dgraph cert ls` lists all certificates and keys in the `--dir`
+directory (default `"tls"`), along with details to inspect and validate cert/key pairs.
 
 Example of command output:
 
@@ -267,7 +267,7 @@ $ cp /path/to/ca.crt /usr/local/share/ca-certificates/ca.crt
 # Update the CA store
 $ sudo update-ca-certificates`
 ```
-##### macOS X
+##### macOS
 ```sh
 $ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /path/to/ca.crt
 ```
