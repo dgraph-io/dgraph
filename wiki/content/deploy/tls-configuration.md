@@ -9,7 +9,7 @@ weight = 10
 Connections between Dgraph database and its clients can be secured using TLS. In
 addition, Dgraph can now secure gRPC communications between Dgraph Alpha and
 Dgraph Zero server nodes using mutual TLS (mTLS). Dgraph can now also secure
-communications over the Dgraph Zero `gRPC-external-private` port used by
+communications over the Dgraph Zero **gRPC-external-private** port used by
 Dgraph's Live Loader and Bulk Loader clients. To learn more about the HTTP and
 gRPC ports used by Dgraph Alpha and Dgraph Zero, see [Ports Usage](ports-usage).
 Password-protected private keys are **not supported**.
@@ -17,11 +17,12 @@ Password-protected private keys are **not supported**.
 To further improve TLS security, only TLS v1.2 cypher suites that use 128-bit or
 greater RSA or AES encryption are supported.
 
-{{% notice "tip" %}}If you're generating encrypted private keys with `openssl`,
-be sure to specify the encryption algorithm explicitly (like `-aes256`). This will
-force `openssl` to include `DEK-Info` header in private key, which is required
-to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't
-write that header and key can't be decrypted.{{% /notice %}}
+{{% notice "tip" %}}If you're generating encrypted private keys with the `openssl`
+command, be sure to specify the encryption algorithm explicitly
+(like **-aes256**). This will force `openssl` to include the **DEK-Info** header
+in the private key, which Dgraph requires to decrypt the key. When default
+encryption is used, `openssl` doesn't write that header and the key can't be
+decrypted.{{% /notice %}}
 
 ## Dgraph Certificate Management Tool
 
@@ -63,7 +64,7 @@ $ dgraph cert ls
 ```
 
 The default location where the _cert_ command stores certificates (and keys) is
-`tls` under the Dgraph working directory. You can override the default dir path
+**tls** under the Dgraph working directory. You can override the default path
 using the `--dir` option. For example:
 
 ```sh
@@ -88,7 +89,7 @@ The Root CA certificate is used for verifying node and client certificates, if c
 For client authentication, each client must have their own certificate and key.
 These are then used to connect to the Dgraph nodes.
 
-The node certificate `node.crt` can support multiple node names using multiple
+The node certificate (**node.crt**) can support multiple node names using multiple
 host names and/or IP address. Just separate the names with commas when
 generating the certificate.
 
@@ -102,7 +103,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 ### Certificate inspection
 
-The command `dgraph cert ls` lists all certificates and keys in the `--dir`
+The command **dgraph cert ls** lists all certificates and keys in the **--dir**
 directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
 Example of command output:
@@ -145,7 +146,7 @@ Important points:
   regenerated. If the Root CA pair differ, all cert/key must be regenerated; the flag `--force`
   can help.
 * All certificates must pass Dgraph CA verification.
-* All key files should have the least access permissions, especially the `ca.key`, but be readable.
+* All key files should have the least access permissions, especially the **ca.key**, but be readable.
 * Key files won't be overwritten if they have limited access, even with `--force`.
 * Node certificates are only valid for the hosts listed.
 * Client certificates are only valid for the named client/user.
@@ -280,22 +281,22 @@ $ certutil -addstore -f "ROOT" /path/to/ca.crt
 ##### Firefox
 
 * Goto Preferences -> Prvacy & Security -> View Certificates -> Authorities
-* Click on Import and import the `ca.crt`
+* Click on Import and import the **ca.crt**
 
 ##### Chrome
 
 * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Authorities
-* Click on Import and import the `ca.crt`
+* Click on Import and import the **ca.crt**
 
 ### Step 3. Point ratel to the `https://` endpoint of alpha server.
 
-* Change the Dgraph Alpha server address to `https://` instead of `http://`, for example `https://localhost:8080`.
+* Change the Dgraph Alpha server address to **https://** instead of **http://**, for example **https://localhost:8080**.
 
-For `REQUIREANY` and `REQUIREANDVERIFY` as `--tls_client_auth` option, you need to follow the steps above and you
+For `REQUIREANY` and `REQUIREANDVERIFY` as the `--tls_client_auth` option, you need to follow the steps above and you
 also need to install client certificate on your browser:
 
 1. Generate a client certificate: `dgraph cert -c laptopuser`.
-2. Convert it to a `.p12` file:
+2. Convert it to a **.p12** file:
    ```sh
    openssl pkcs12 -export \
       -out laptopuser.p12 \
@@ -306,17 +307,17 @@ also need to install client certificate on your browser:
 
 3. Import the client certificate to your browser. It can be done in chrome as follows:
    * Goto Settings -> Privacy and Security -> Security -> Manage Certificates -> Your Certificates
-   * Click on Import and import the `laptopuser.p12`. For mac OS, this process returns back to KeyChain, and under the area "My Certificates" select `laptopuser.p12`.
+   * Click on Import and import the **laptopuser.p12**. For macOS, this process returns back to KeyChain, and under the area "My Certificates" select **laptopuser.p12**.
 
 {{% notice "note" %}}
-Under macOS you can alternatively import the `.p12` file via command line by `security import ./laptopuser.p12 -P secretPassword`.
+Under macOS you can alternatively import the **.p12** file via command line using **security import ./laptopuser.p12 -P secretPassword**.
 {{% /notice %}}
 {{% notice "note" %}}
 Mutual TLS may not work in Firefox because Firefox is unable to send privately-signed client certificates, this issue is filed [here](https://bugzilla.mozilla.org/show_bug.cgi?id=1662607).
 {{% /notice %}}
 
 
-Next time you use Ratel to connect to an alpha with Client authentication
+Next time you use Ratel to connect to an Alpha node with Client authentication
 enabled the browser will prompt you for a client certificate to use. Select the client's
 certificate you've imported in the step above and queries/mutations will
 succeed.
@@ -324,7 +325,7 @@ succeed.
 ## Using Curl with Client authentication
 
 When TLS is enabled, `curl` requests to Dgraph will need some specific options
-to work. For example, see the following export:
+to work. For example, see the following export command:
 
 ```sh
 curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
@@ -345,13 +346,14 @@ If you are getting errors in Ratel when TLS is enabled, try opening your Dgraph
 Alpha URL as a web page.
 
 Assuming you are running Dgraph on your local machine, opening
-`https://localhost:8080/` in the browser should produce a message `Dgraph browser is available for running separately using the dgraph-ratel binary`.
+**https://localhost:8080** in the browser should produce the following message:
+**Dgraph browser is available for running separately using the dgraph-ratel binary**.
 
 In case you are getting a connection error, try not passing the
-`--tls_client_auth` flag when starting an alpha. If you are still getting an
+`--tls_client_auth` flag when starting an Alpha node. If you are still getting an
 error, check that your hostname is correct and the port is open; then make sure
-that "Dgraph Root CA" certificate is installed and trusted correctly.
+that the Dgraph Root CA certificate is installed and trusted correctly.
 
 After that, if things work without `--tls_client_auth` but stop working when
-`REQUIREANY` and `REQUIREANDVERIFY` is set make sure the `.p12` file is
+`REQUIREANY` and `REQUIREANDVERIFY` is set make sure the **.p12** file is
 installed correctly.

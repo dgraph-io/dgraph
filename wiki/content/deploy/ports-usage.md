@@ -46,13 +46,14 @@ clients cannot access this port.
 Users must modify security rules or open firewall ports depending upon their
 underlying network to allow communication between cluster nodes, between the
 Dgraph instances, and between Dgraph clients. In general, you should configure
-the gRPC and HTTP `external-public` ports for open access by Dgraph clients,
+the gRPC and HTTP external-public ports for open access by Dgraph clients,
 and configure the gRPC-internal ports for open access by the cluster nodes.
 
-**Ratel UI** accesses Dgraph Alpha on the `HTTP-external-public port` (which defaults to localhost:8080) and can be configured to talk to a remote Dgraph cluster. This
-way you can run Ratel on your local machine and point to a remote cluster. But,
-if you are deploying Ratel along with Dgraph cluster, then you may have to
-expose port 8000 to the public.
+**Ratel UI** accesses Dgraph Alpha on the HTTP-external-public port
+(which defaults to **localhost:8080**) and can be configured to talk to a remote
+Dgraph cluster. This way, you can run Ratel on your local machine and point to a
+remote cluster. But, if you are deploying Ratel along with Dgraph cluster, then
+you may have to expose port 8000 to the public.
 
 **Port Offset** To make it easier for users to set up a cluster, Dgraph has
 default values for the ports used by Dgraph nodes. To support multiple nodes
@@ -63,8 +64,8 @@ can also use port offsets when starting multiple Dgraph Zero nodes in a
 development environment.
 
 For example, when a user runs Dgraph Alpha with the `--port_offset 2` setting,
-then the Alpha node binds to port 7082 (`gRPC-internal-private`), 8082
-(`HTTP-external-public`) and 9082 (`gRPC-external-public`), respectively.
+then the Alpha node binds to port 7082 (gRPC-internal-private), 8082
+(HTTP-external-public) and 9082 (gRPC-external-public), respectively.
 
 **Ratel UI** by default listens on port 8000. You can use the `-port` flag to
 configure it to listen on any other port.
