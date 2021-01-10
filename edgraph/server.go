@@ -170,7 +170,17 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
-	return "", "", nil
+	//returning the schema node which is added last
+	schema := result.ExistingGQLSchema[0].Schema
+	uidMax := result.ExistingGQLSchema[0].Uid
+	for _, schNode := range result.ExistingGQLSchema[1:] {
+		if uidMax < schNode.Uid {
+			uidMax = schNode.Uid
+			schema = schNode.Schema
+		}
+	}
+	glog.Infof("Multiple schema node found,returning last added node")
+	return uidMax, schema, nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
