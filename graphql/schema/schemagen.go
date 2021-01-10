@@ -76,17 +76,35 @@ func (s *handler) DGSchema() string {
 // GQLSchemaWithoutApolloExtras return GraphQL schema string
 // excluding Apollo extras definitions and Apollo Queries
 func (s *handler) GQLSchemaWithoutApolloExtras() string {
-	astSchemaCopy := *s.completeSchema
-	delete(astSchemaCopy.Types, "_Entity")
+	typeMapCopy := make(map[string]*ast.Definition)
+	for typ, defn := range s.completeSchema.Types {
+		if typ == "_Entity" {
+			continue
+		}
+		typeMapCopy[typ] = defn
+	}
 	queryList := make(ast.FieldList, 0)
-	for _, qry := range astSchemaCopy.Query.Fields {
+	for _, qry := range s.completeSchema.Query.Fields {
 		if qry.Name == "_entities" || qry.Name == "_service" {
 			continue
 		}
 		queryList = append(queryList, qry)
 	}
-	astSchemaCopy.Query.Fields = queryList
-	return Stringify(s.completeSchema, s.originalDefs)
+	queryDefn := &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Query",
+		Fields: queryList,
+	}
+	astSchemaCopy := &ast.Schema{
+		Query:         queryDefn,
+		Mutation:      s.completeSchema.Mutation,
+		Subscription:  s.completeSchema.Subscription,
+		Types:         typeMapCopy,
+		Directives:    s.completeSchema.Directives,
+		PossibleTypes: s.completeSchema.PossibleTypes,
+		Implements:    s.completeSchema.Implements,
+	}
+	return Stringify(astSchemaCopy, s.originalDefs)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
