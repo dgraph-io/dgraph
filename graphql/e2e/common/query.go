@@ -3085,6 +3085,7 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
                 	count
 					nameMin
                 }
+				n: name
 			}
 		}`,
 	}
@@ -3095,7 +3096,8 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": null
+				"ag": null,
+				"n": "India"
 			}]
 		}`,
 		string(gqlResponse.Data))
