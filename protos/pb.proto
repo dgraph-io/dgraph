@@ -304,7 +304,7 @@ message RestoreRequest {
 message Proposal {
 	reserved 7; // Was used for string key.
 	Mutations mutations    		= 2;
-	repeated badgerpb2.KV kv  = 4;
+	repeated badgerpb3.KV kv  = 4;
 	MembershipState state  		= 5;
 	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
 	OracleDelta delta      		= 8;
@@ -552,7 +552,7 @@ service Worker {
 	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
 	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
 }
 
@@ -561,7 +561,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    badgerpb2.KVList kvs = 1;
+    badgerpb3.KVList kvs = 1;
 }
 
 message Num {
