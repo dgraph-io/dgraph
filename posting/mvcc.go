@@ -64,6 +64,12 @@ var (
 				return new([][]byte)
 			},
 		},
+		p0KeysCh: make(chan *[][]byte, 16),
+		p0KeysPool: &sync.Pool{
+			New: func() interface{} {
+				return new([][]byte)
+			},
+		},
 	}
 )
 
