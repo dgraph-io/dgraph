@@ -595,6 +595,29 @@ func TestIntrospection(t *testing.T) {
 	// introspection response or the JSON comparison. Needs deeper looking.
 }
 
+func TestApolloServiceResolver(t *testing.T) {
+	schema := `
+	type Todo @key(fields: "id") {
+		id: ID!
+		title: String!
+		topic: String
+	}
+	`
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
+	serviceQueryParams := &common.GraphQLParams{Query: `
+	query {
+		_service {
+			sdl
+		}
+	}`}
+	resp := serviceQueryParams.ExecuteAsPost(t, groupOneGraphQLServer)
+	common.RequireNoGQLErrors(t, resp)
+	queryResponse, err := ioutil.ReadFile("apolloServiceResponse.graphql")
+	require.NoError(t, err)
+	require.Equal(t, string(queryResponse), string(resp.Data))
+
+}
+
 func TestDeleteSchemaAndExport(t *testing.T) {
 	// first apply a schema
 	schema := `
