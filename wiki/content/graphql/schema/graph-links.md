@@ -124,3 +124,115 @@ type Post {
 ```
 
 Now, Dgraph will manage the connection between posts and authors and you can get on with concentrating on what your app needs to to - suggesting them interesting content.
+
+### M:M
+
+Here is a many to many relationship example:
+```graphql
+type Author {
+  id: ID!
+  name: String
+  articles: [Article] @hasInverse(field: authors)
+}
+
+type Article {
+  id: ID!
+  title: String
+  authors: [Author] @hasInverse(field: articles)
+}
+```
+
+The following subset of access patterns are enabled:
+
+```graphql
+
+mutation AddAuthor {
+  addAuthor(input: {name: "FirstAuthor"}) {
+    author {
+      id
+      name
+    }
+  }
+}
+
+query ListAuthors {
+  queryAuthor {
+    id
+    name
+    articles {
+      id
+      title
+    }
+  }
+}
+
+query GetAuthor {
+  #replace id with your own id
+  getAuthor(id: "0x4e22") {
+    id
+    name
+    articles {
+      id
+      title
+    }
+  }
+}
+
+mutation UpdateAuthor {
+  updateAuthor(input: {filter: {id: ["0x4e22"]}, set: {name: "FirstUsernameUpdated"}}) {
+    numUids
+  }
+}
+
+mutation DeleteAuthor {
+  deleteAuthor(filter: {id: ["0x4e23"]}) {
+    msg
+  }
+}
+
+mutation AddArticleToAuthor {
+  addArticle(input: {authors: {id: "0x4e22"}, title: "Second Article Title"}) {
+    article {
+      id
+      title
+    }
+  }
+}
+
+mutation UpdateArticleOfAuthor {
+  updateArticle(input: {filter: {id: ["0x4e25"]}, set: {title: "Updated title"}}) {
+		article {
+      id
+      title
+    }
+  }
+}
+
+mutation DeleteArticle {
+  deleteArticle(filter: {id: ["0x4e25"]}) {
+    msg
+  }
+}
+
+query ListAuthorsOfArticle {
+  queryArticle(filter: {id: ["0x4e26"], has: authors}) {
+    authors {
+      id
+      name
+    }
+  }
+}
+
+mutation AddUserToArticle {
+  updateArticle(input: {filter: {id: ["0x4e26"]}, set: {authors: {id: "0x4e28"}}}) {
+    numUids
+  }
+}
+
+mutation AddArticleToAuthors {
+  addArticle(input: {title: "Third article title", authors: [{id: "0x4e22"}, {id: "0x4e28"}]}) {
+    numUids
+  }
+}
+```
+
