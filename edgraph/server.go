@@ -163,14 +163,14 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	if len(result.ExistingGQLSchema) == 0 {
 		// no schema has been stored yet in Dgraph
 		return "", "", nil
-	} else if len(result.ExistingGQLSchema) == 1 {
+	} else {
 		// we found an existing GraphQL schema
 		gqlSchemaNode := result.ExistingGQLSchema[0]
 		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
-	return "", "", worker.ErrMultipleGraphQLSchemaNodes
+	return "", "", nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
