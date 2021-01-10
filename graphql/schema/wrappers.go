@@ -1045,9 +1045,17 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
-		// This is strange.  There was a case with a parsed schema and query where the field
-		// had a nil Definition ... how ???
 		t = f.field.Definition.Type
+	} else {
+		// If f is a field that isn't defined in the schema, then it would have nil definition.
+		// This can happen in case if the incoming request contains a query/mutation that isn't
+		// defined in the schema being served. Resolving such a query would report that no
+		// suitable resolver was found.
+		// In this case we are returning a nullable type named "__Undefined__" from here, instead
+		// of returning nil, so that the rest of the code can continue to work. The type is
+		// nullable so that if the request contained other valid queries, they should still get a
+		// data response.
+		t = &ast.Type{NamedType: "__Undefined__", NonNull: false}
 	}
 
 	return &astType{

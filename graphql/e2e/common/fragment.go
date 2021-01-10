@@ -19,7 +19,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -109,23 +108,15 @@ func fragmentInQuery(t *testing.T) {
 	queryStarshipExpected := fmt.Sprintf(`
 	{
 		"queryStarship":[{
-			"id": "%s",
+			"id":"%s",
 			"name":"Millennium Falcon",
-			"length":2
+			"length":2.000000
 		}]
 	}`, newStarship.ID)
 
-	var expected, result struct {
-		QueryStarship []*starship
-	}
-	err := json.Unmarshal([]byte(queryStarshipExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
+	JSONEqGraphQL(t, queryStarshipExpected, string(gqlResponse.Data))
 
-	require.Equal(t, expected, result)
-
-	cleanupStarwars(t, result.QueryStarship[0].ID, "", "")
+	cleanupStarwars(t, newStarship.ID, "", "")
 }
 
 func fragmentInQueryOnInterface(t *testing.T) {
@@ -397,11 +388,8 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		]
 	}`, humanID, newStarship.ID, droidID, humanID, humanID, droidID, thingOneId, thingTwoId,
 		thingOneId)
-	queryCharacterExpected = strings.ReplaceAll(queryCharacterExpected, "\r", "")
-	queryCharacterExpected = strings.ReplaceAll(queryCharacterExpected, "\n", "")
-	queryCharacterExpected = strings.ReplaceAll(queryCharacterExpected, "\t", "")
 
-	require.Equal(t, queryCharacterExpected, string(gqlResponse.Data))
+	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 	deleteThingOne(t, thingOneId)
@@ -562,31 +550,23 @@ func fragmentInQueryOnObject(t *testing.T) {
 	{
 		"queryHuman":[
 			{
-				"__typename": "Human",
-				"id": "%s",
-				"name": "Han",
-				"appearsIn": ["EMPIRE"],
-				"starships": [{
-					"__typename": "Starship",
-					"id": "%s",
-					"name": "Millennium Falcon",
-					"length": 2
+				"__typename":"Human",
+				"id":"%s",
+				"name":"Han",
+				"appearsIn":["EMPIRE"],
+				"starships":[{
+					"__typename":"Starship",
+					"id":"%s",
+					"name":"Millennium Falcon",
+					"length":2.000000
 				}],
-				"totalCredits": 10,
-				"ename": "Han_employee"
+				"totalCredits":10.000000,
+				"ename":"Han_employee"
 			}
 		]
 	}`, humanID, newStarship.ID)
 
-	var expected, result struct {
-		QueryHuman []map[string]interface{}
-	}
-	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
-
-	require.Equal(t, expected, result)
+	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }

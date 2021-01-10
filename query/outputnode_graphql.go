@@ -53,15 +53,12 @@ func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 }
 
 // TODO:
-//  * change query rewriting for scalar fields asked multiple times (DgraphAlias() thing).
-//    We may also need to pay attention to aggregate field rewriting as they just use fieldName
-//    and not DgraphAlias().
 //  * Scalar coercion
 //  * Enums
-//  * Null writing for root Aggregate queries
 //  * Password queries
-//  * Cleanup code from resolve pkg
-//  * make args like *bytes.Buffer the first arg in funcs as a best practice
+//  * (cleanup) Cleanup code from resolve pkg
+//  * (cleanup) make const args like *bytes.Buffer the first arg in funcs as a best practice.
+//  * (cleanup) refactor this func as `func (ctx *graphQLEncodingCtx) encode(enc *encoder, ...)`.
 func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIsRoot bool,
 	childSelectionSet []gqlSchema.Field, parentField gqlSchema.Field,
 	parentPath []interface{}) bool {
@@ -181,29 +178,32 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 		cur = child
 		next = cur.next
 
-		if skipField(curSelection, dgraphTypes, seenField, cnt) {
-			cnt = 0 // Reset the count,
-			// indicating that we need to write the JSON key in next iteration.
-			i++
-			// if this is the last field and shouldn't be included,
-			// then need to remove comma from the buffer if one was present.
-			if i == len(childSelectionSet) {
-				checkAndStripComma(ctx.buf)
-			}
-			// also if there was any data for this field, need to skip that
-			// there may not be data in case this field was added from a fragment on another type.
-			attrId := enc.idForAttr(curSelection.DgraphAlias())
-			if enc.getAttr(cur) == attrId {
-				for next != nil && enc.getAttr(next) == attrId {
-					next = next.next
-				}
-				child = next
-			}
-			continue
-		}
-
-		// Step-1: Write JSON key and opening [ for JSON arrays
+		// Step-1: Skip the field OR Write JSON key and opening [ for JSON arrays
 		if cnt == 1 {
+			// we need to check if the field should be skipped only when it is encountered for
+			// the first time
+			if skipField(curSelection, dgraphTypes, seenField) {
+				cnt = 0 // Reset the count,
+				// indicating that we need to write the JSON key in next iteration.
+				i++
+				// if this is the last field and shouldn't be included,
+				// then need to remove comma from the buffer if one was present.
+				if i == len(childSelectionSet) {
+					checkAndStripComma(ctx.buf)
+				}
+				// also if there was any data for this field, need to skip that. There may not be
+				// data in case this field was added from a fragment on another type.
+				attrId := enc.idForAttr(curSelection.DgraphAlias())
+				if enc.getAttr(cur) == attrId {
+					for next != nil && enc.getAttr(next) == attrId {
+						next = next.next
+					}
+					child = next
+				}
+				continue
+			}
+
+			// Write JSON key and opening [ for JSON arrays
 			writeKeyGraphQL(curSelection, ctx.buf)
 			keyEndPos = ctx.buf.Len()
 			curSelectionIsList = curSelection.Type().ListType() != nil
@@ -216,11 +216,11 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 		if curSelection.Name() == gqlSchema.Typename {
 			// If the current selection is __typename then we find out the typename using the
 			// dgraphTypes slice saved earlier.
+			// TODO (cleanup): refactor the TypeName method to accept []string
 			x.Check2(ctx.buf.Write([]byte(`"` + curSelection.TypeName(dgraphTypes) + `"`)))
 			// We don't need to iterate to next fastJson node in this case,
 			// as the current node will have data for the next field in the selection set.
 		} else if curSelection.DgraphAlias() != enc.attrForID(enc.getAttr(cur)) {
-			// TODO: use the correct alias everywhere
 			// if the current fastJson node doesn't hold data for the current GraphQL selection,
 			// then there can be two cases:
 			// 1. The current fastJson node holds data for a next selection and there was no data
@@ -235,6 +235,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 			//    and the end case would either be ignored by this for loop or handled as case 1.
 			// So, we don't have a need to handle case 2, and need to always write null with
 			// appropriate errors.
+			// TODO: check if case 2 can happen for @custom(dql: "")
 			if nullWritten = writeGraphQLNull(curSelection, ctx.buf, keyEndPos); !nullWritten {
 				ctx.gqlErrs = append(ctx.gqlErrs, curSelection.GqlErrorf(append(parentPath,
 					curSelection.ResponseName()), gqlSchema.ErrExpectedNonNull, curSelection.Name(),
@@ -395,7 +396,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 	for i < len(childSelectionSet) {
 		curSelection = childSelectionSet[i]
 
-		if skipField(curSelection, dgraphTypes, seenField, 1) {
+		if skipField(curSelection, dgraphTypes, seenField) {
 			i++
 			// if this is the last field and shouldn't be included,
 			// then need to remove comma from the buffer if one was present.
@@ -435,8 +436,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 	return true
 }
 
-func skipField(f gqlSchema.Field, dgraphTypes []interface{}, seenField map[string]bool,
-	cnt int) bool {
+func skipField(f gqlSchema.Field, dgraphTypes []interface{}, seenField map[string]bool) bool {
 	if f.Skip() || !f.Include() {
 		return true
 	}
@@ -451,12 +451,10 @@ func skipField(f gqlSchema.Field, dgraphTypes []interface{}, seenField map[strin
 	}
 	// if the field has already been seen at the current level, then we need to skip it.
 	// Otherwise, mark it seen.
-	if cnt == 1 {
-		if seenField[f.ResponseName()] {
-			return true
-		}
-		seenField[f.ResponseName()] = true
+	if seenField[f.ResponseName()] {
+		return true
 	}
+	seenField[f.ResponseName()] = true
 	return false
 }
 
