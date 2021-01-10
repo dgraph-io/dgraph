@@ -865,7 +865,10 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 		if gqlSchema.IsFederated() {
 			resolverFactory.WithQueryResolver("_service", func(s schema.Query) resolve.QueryResolver {
 				return resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
-					handler, _ := schema.NewHandler(as.schema.Schema, false)
+					as.mux.RLock()
+					defer as.mux.RUnlock()
+					sch := as.schema.Schema
+					handler, _ := schema.NewHandler(sch, false)
 					data := handler.GQLSchemaWithoutApolloExtras()
 					return &resolve.Resolved{
 						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
