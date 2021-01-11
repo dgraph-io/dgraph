@@ -526,7 +526,7 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = z.NewCloser(3)
+	admin.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
 
@@ -730,11 +730,6 @@ func run() {
 		var numShutDownSig int
 		for range sdCh {
 			closer := admin.ServerCloser
-			if closer == nil {
-				glog.Infoln("Caught Ctrl-C. Terminating now.")
-				os.Exit(1)
-			}
-
 			select {
 			case <-closer.HasBeenClosed():
 			default:

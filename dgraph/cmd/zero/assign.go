@@ -196,7 +196,7 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 	select {
 	case <-ctx.Done():
-		return reply, ctx.Err()
+		return &emptyAssignedIds, ctx.Err()
 	case err := <-c:
 		span.Annotatef(nil, "Error while leasing %+v: %v", num, err)
 		return reply, err
