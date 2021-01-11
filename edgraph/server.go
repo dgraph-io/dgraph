@@ -108,6 +108,14 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	schemas := schema.InitialSchema(namespace)
+	m.Schema = schemas
+	_, err := query.ApplyMutations(ctx, namespace, m)
+	return err
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -252,7 +260,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		//
 		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
 		// example?
-		if schema.IsPreDefPredChanged(update) {
+		if schema.IsPreDefPredChanged(op.Namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
 		}
@@ -275,7 +283,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefTypeChanged(typ) {
+		if schema.IsPreDefTypeChanged(op.Namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
 		}
@@ -341,7 +349,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, m)
+		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 		if err != nil {
 			return empty, err
 		}
@@ -373,7 +381,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		_, err = query.ApplyMutations(ctx, m)
+		_, err = query.ApplyMutations(ctx, op.Namespace, m)
 		if err != nil {
 			return empty, err
 		}
@@ -422,7 +430,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, m)
+		_, err = query.ApplyMutations(ctx, op.Namespace, m)
 		if err != nil {
 			return empty, err
 		}
@@ -445,7 +453,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
-		_, err := query.ApplyMutations(ctx, m)
+		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}
 
@@ -463,7 +471,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, m)
+	_, err = query.ApplyMutations(ctx, op.Namespace, m)
 	if err != nil {
 		return empty, err
 	}
@@ -512,7 +520,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// 2. For a uid variable that is part of an upsert query,
 	//    like uid(foo), the key would be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
+	edges, err := query.ToDirectedEdges(qc.namespace, qc.gmuList, newUids)
 	if err != nil {
 		return err
 	}
@@ -535,7 +543,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, m)
+	resp.Txn, err = query.ApplyMutations(ctx, qc.namespace, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
 	if x.WorkerConfig.LudicrousMode {
@@ -916,6 +924,8 @@ type queryContext struct {
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
+	// namespace of the given query.
+	namespace string
 }
 
 // Health handles /health and /health?all requests.
@@ -1056,7 +1066,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
+	qc := &queryContext{
+		req:       req,
+		latency:   l,
+		span:      span,
+		graphql:   isGraphQL,
+		namespace: req.Namespace,
+	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -1118,8 +1134,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
-		Latency:  qc.latency,
-		GqlQuery: &qc.gqlRes,
+		Latency:   qc.latency,
+		GqlQuery:  &qc.gqlRes,
+		Namespace: qc.namespace,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,

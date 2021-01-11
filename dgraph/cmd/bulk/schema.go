@@ -51,7 +51,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// the alpha is started (e.g ACL predicates) might be included but it's
 	// better to include them in case the input data contains triples with these
 	// predicates.
-	for _, update := range schema.CompleteInitialSchema() {
+	for _, update := range schema.CompleteInitialSchema("somerandom") {
 		s.schemaMap[update.Predicate] = update
 	}
 

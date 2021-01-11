@@ -368,7 +368,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 	if x.IsInternalPredicate(s.Predicate) {
 		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
@@ -383,16 +383,17 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
 		return errors.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
-		return errors.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+		return errors.Errorf("Cannot reverse for non-uid type on predicate %s",
+			x.ParseAttr(s.Predicate))
 	}
 
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
 	t, err := schema.State().TypeOf(s.Predicate)
@@ -415,14 +416,14 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from [%s] => %s without"+
-				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
+				" deleting pred: %s", t.Name(), typ.Name(), x.ParseAttr(s.Predicate))
 		}
 
 	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
-				" while there is data for pred: %s", s.Predicate)
+				" while there is data for pred: %s", x.ParseAttr(s.Predicate))
 		}
 	}
 	return nil
@@ -445,16 +446,18 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	switch {
 	case edge.Lang != "" && !su.GetLang():
 		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
-			edge.Attr, edge)
+			x.ParseAttr(edge.Attr), edge)
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:

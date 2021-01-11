@@ -4,6 +4,7 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+replace github.com/dgraph-io/dgo/v200 => /home/ash/go/src/github.com/dgraph-io/dgo
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -16,6 +17,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
+	github.com/davecgh/go-spew v1.1.1
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201214114056-bcfae6104545
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/gqlgen v0.13.2
@@ -31,10 +33,10 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getsentry/sentry-go v0.6.0
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.3.5
+	github.com/golang/protobuf v1.4.1
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.5.0
@@ -65,8 +67,8 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210105210732-16f7687f5001
 	golang.org/x/text v0.3.3
-	golang.org/x/tools v0.0.0-20201105001634-bc3cf281b174
-	google.golang.org/grpc v1.23.0
+	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
+	google.golang.org/grpc v1.27.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.4

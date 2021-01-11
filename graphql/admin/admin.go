@@ -347,11 +347,11 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":        commonAdminQueryMWs,
-		"listBackups":   commonAdminQueryMWs,
-		"getGQLSchema":  commonAdminQueryMWs,
+		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
+		"config":       commonAdminQueryMWs,
+		"listBackups":  commonAdminQueryMWs,
+		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
@@ -497,7 +497,7 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	prefix := x.DataKey(worker.GqlSchemaPred, 0)
+	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql.schema"), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.

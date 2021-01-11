@@ -536,8 +536,8 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the type updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
-func InitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(false)
+func InitialTypes(namespace string) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, false)
 }
 
 // CompleteInitialTypes returns all the type updates regardless of the worker
@@ -546,45 +546,45 @@ func InitialTypes() []*pb.TypeUpdate {
 // example of such situation is while allowing type updates to go through during
 // alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
-func CompleteInitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(true)
+func CompleteInitialTypes(namespace string) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, true)
 }
 
 // NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
-func initialTypesInternal(all bool) []*pb.TypeUpdate {
+func initialTypesInternal(namespace string, all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
 			TypeName: "dgraph.graphql",
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: "dgraph.graphql.schema",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
 					ValueType: pb.Posting_STRING,
 				},
 				{
-					Predicate: "dgraph.graphql.xid",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.xid"),
 					ValueType: pb.Posting_STRING,
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: "dgraph.graphql.history",
+			TypeName: x.NamespaceAttr(namespace, "dgraph.graphql.history"),
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: "dgraph.graphql.schema_history",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_history"),
 					ValueType: pb.Posting_STRING,
 				}, {
-					Predicate: "dgraph.graphql.schema_created_at",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_created_at"),
 					ValueType: pb.Posting_DATETIME,
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: "dgraph.graphql.persisted_query",
+			TypeName: x.NamespaceAttr(namespace, "dgraph.graphql.persisted_query"),
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: "dgraph.graphql.p_query",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_query"),
 					ValueType: pb.Posting_STRING,
 				}, {
-					Predicate: "dgraph.graphql.p_sha256hash",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_sha256hash"),
 					ValueType: pb.Posting_STRING,
 				},
 			},
@@ -594,44 +594,44 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
-			TypeName: "dgraph.type.User",
+			TypeName: x.NamespaceAttr(namespace, "dgraph.type.User"),
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: "dgraph.xid",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
 					ValueType: pb.Posting_STRING,
 				},
 				{
-					Predicate: "dgraph.password",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
 					ValueType: pb.Posting_PASSWORD,
 				},
 				{
-					Predicate: "dgraph.user.group",
+					Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
 					ValueType: pb.Posting_UID,
 				},
 			},
 		},
 			&pb.TypeUpdate{
-				TypeName: "dgraph.type.Group",
+				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Group"),
 				Fields: []*pb.SchemaUpdate{
 					{
-						Predicate: "dgraph.xid",
+						Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
 						ValueType: pb.Posting_STRING,
 					},
 					{
-						Predicate: "dgraph.acl.rule",
+						Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
 						ValueType: pb.Posting_UID,
 					},
 				},
 			},
 			&pb.TypeUpdate{
-				TypeName: "dgraph.type.Rule",
+				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Rule"),
 				Fields: []*pb.SchemaUpdate{
 					{
-						Predicate: "dgraph.rule.predicate",
+						Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
 						ValueType: pb.Posting_STRING,
 					},
 					{
-						Predicate: "dgraph.rule.permission",
+						Predicate: x.NamespaceAttr(namespace, "dgraph.rule.permission"),
 						ValueType: pb.Posting_INT,
 					},
 				},
@@ -644,8 +644,8 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(false)
+func InitialSchema(namespace string) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, false)
 }
 
 // CompleteInitialSchema returns all the schema updates regardless of the worker
@@ -653,50 +653,50 @@ func InitialSchema() []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(true)
+func CompleteInitialSchema(namespace string) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
-			Predicate: "dgraph.cors",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.cors"),
 			ValueType: pb.Posting_STRING,
 			List:      true,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.type",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.type"),
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			List:      true,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.drop.op",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.drop.op"),
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.xid",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.xid"),
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_history",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_history"),
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_created_at",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_created_at"),
 			ValueType: pb.Posting_DATETIME,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.p_query",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_query"),
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.p_sha256hash",
+			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_sha256hash"),
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
@@ -706,36 +706,36 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{
-				Predicate: "dgraph.xid",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{
-				Predicate: "dgraph.password",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
 				ValueType: pb.Posting_PASSWORD,
 			},
 			{
-				Predicate: "dgraph.user.group",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
 				Directive: pb.SchemaUpdate_REVERSE,
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.acl.rule",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.rule.predicate",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Tokenizer: []string{"exact"},
 				Upsert:    true, // Not really sure if this will work.
 			},
 			{
-				Predicate: "dgraph.rule.permission",
+				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.permission"),
 				ValueType: pb.Posting_INT,
 			},
 		}...)
@@ -747,13 +747,13 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
 // If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
+func IsPreDefPredChanged(namespace string, update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema()
+	initialSchema := CompleteInitialSchema(namespace)
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
@@ -766,13 +766,13 @@ func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 // IsPreDefTypeChanged returns true if the initial update for the pre-defined
 // type is different than the passed update.
 // If the passed update is not a pre-defined type than it just returns false.
-func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
+func IsPreDefTypeChanged(namespace string, update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
-	if !x.IsPreDefinedType(update.TypeName) {
+	if !x.IsPreDefinedType(x.ParseAttr(update.TypeName)) {
 		return false
 	}
 
-	initialTypes := CompleteInitialTypes()
+	initialTypes := CompleteInitialTypes(namespace)
 	for _, original := range initialTypes {
 		if original.TypeName != update.TypeName {
 			continue

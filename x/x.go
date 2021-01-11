@@ -125,7 +125,7 @@ const (
 
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
-		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With, X-Dgraph-Namespace"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 )
 
