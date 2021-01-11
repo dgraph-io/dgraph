@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // VerifySnapshot iterates over all the keys in badger. For all data keys it checks
@@ -77,7 +76,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 				}
 				return nil
 			})
-			x.Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
+			Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
 
 			if item.DiscardEarlierVersions() {
 				break
