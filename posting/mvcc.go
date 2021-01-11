@@ -131,6 +131,8 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 	defer limiter.Stop()
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
+	forceRollupTick := time.NewTicker(500 * time.Millisecond)
+	defer forceRollupTick.Stop()
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
@@ -160,6 +162,13 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				if currTs-ts >= int64(10*time.Second) {
 					delete(m, hash)
 				}
+			}
+		case <-forceRollupTick.C:
+			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
+			if len(*batch) > 0 {
+				doRollup(batch, 0)
+			} else {
+				ir.priorityKeys[0].keysPool.Put(batch)
 			}
 		case batch := <-ir.priorityKeys[0].keysCh:
 			doRollup(batch, 0)
