@@ -101,6 +101,8 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
+// TODO: When the opRollup is not running the keys from keysPool of ir are dropped. Figure out some
+// way to handle that.
 func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 	rki := ir.priorityKeys[priority]
 	batch := rki.keysPool.Get().(*[][]byte)
