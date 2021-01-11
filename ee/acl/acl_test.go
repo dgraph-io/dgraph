@@ -2345,6 +2345,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.cors"
     }
   ]
 }`
