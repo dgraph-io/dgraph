@@ -685,7 +685,7 @@
   dgquery: |-
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        id : uid
+        Author.id : uid
         Author.name : Author.name
       }
     }
@@ -739,7 +739,7 @@
           Post.title : Post.title
           Post.text : Post.text
           Post.author : Post.author {
-            id : uid
+            Author.id : uid
             Author.name : Author.name
           }
           dgraph.uid : uid
@@ -1290,7 +1290,7 @@
   dgquery: |-
     query {
       queryPost(func: type(Post)) @filter((gt(Post.numLikes, 10) OR ((ge(Post.numLikes, 10) OR ((lt(Post.numLikes, 10) OR ((le(Post.numLikes, 10) OR (eq(Post.numLikes, 10)))))))))) {
-        Author.title : Post.title
+        Post.title : Post.title
         dgraph.uid : uid
       }
     }
@@ -1440,9 +1440,9 @@
   dgquery: |-
     query {
       aggregateCountry() {
-        AggregateCountryResult.count : max(val(countVar))
-        AggregateCountryResult.nameMin : min(val(nameVar))
-        AggregateCountryResult.nameMax : max(val(nameVar))
+        CountryAggregateResult.count : max(val(countVar))
+        CountryAggregateResult.nameMin : min(val(nameVar))
+        CountryAggregateResult.nameMax : max(val(nameVar))
       }
       var(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
         countVar as count(uid)
@@ -1787,7 +1787,7 @@
   dgquery: |-
     query {
       queryHuman(func: type(Human)) @cascade(uid, Character.name, Employee.ename, Human.dob) {
-        id : uid
+        Human.id : uid
         Human.name : Character.name
         Human.ename : Employee.ename
         Human.dob : Human.dob
@@ -1808,7 +1808,7 @@
     query {
       queryCharacter(func: type(Character)) @cascade(uid, Character.name) {
         dgraph.type
-        id : uid
+        Character.id : uid
         Character.name : Character.name
       }
     }
@@ -1828,7 +1828,7 @@
   dgquery: |-
     query {
       getHuman(func: uid(0x1)) @filter(type(Human)) {
-        id : uid
+        Human.id : uid
         Human.name : Character.name
         Human.ename : Employee.ename
         Human.dob : Human.dob
@@ -1851,7 +1851,7 @@
   dgquery: |-
     query {
       queryHuman(func: type(Human)) {
-        id : uid
+        Human.id : uid
         Human.name : Character.name
         Human.ename : Employee.ename
         Human.dob : Human.dob
@@ -1901,10 +1901,10 @@
   dgquery: |-
     query {
       queryHuman(func: type(Human), orderasc: Employee.ename) @filter(anyofterms(Character.name, "GraphQL")) {
-        id : uid
+        Human.id : uid
         Human.name : Character.name
         Human.ename : Employee.ename
-        dob : Human.dob
+        Human.dob : Human.dob
       }
     }
 
@@ -1925,7 +1925,7 @@
     query {
       queryCharacter(func: type(Character)) {
         dgraph.type
-        id : uid
+        Character.id : uid
         Character.name : Character.name
         Human.female : Human.female
         Human.ename : Employee.ename
@@ -1952,7 +1952,7 @@
     query {
       queryCharacter(func: type(Character)) {
         dgraph.type
-        id : uid
+        Character.id : uid
         Character.name : Character.name
         Human.female : Human.female
         Human.ename : Employee.ename
@@ -1979,7 +1979,7 @@
     query {
       queryCharacter(func: type(Character)) {
         dgraph.type
-        id : uid
+        Character.id : uid
         Character.name : Character.name
         Employee.ename : Employee.ename
         Human.female : Human.female
@@ -2334,7 +2334,7 @@
       queryMovie(func: type(Movie)) {
         Movie.name : Movie.name
         Movie.director : ~directed.movies {
-          Director.name : MovieDirector.name
+          MovieDirector.name : MovieDirector.name
           dgraph.uid : uid
         }
         dgraph.uid : uid
@@ -2643,7 +2643,7 @@
     query {
       queryAuthor(func: type(Author)) {
         Author.name : Author.name
-        Author.posts : Author.posts @filter(eq(Post.isPublished, true)) {
+        Author.p1 : Author.posts @filter(eq(Post.isPublished, true)) {
           Post.title : Post.title
           Post.text : Post.text
           dgraph.uid : uid
@@ -2896,7 +2896,7 @@
   dgquery: |-
     query {
       queryHome(func: type(Home)) {
-        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot) OR type(Human) OR type(Plant))) {
+        Home.members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Parrot) OR type(Human) OR type(Plant))) {
           dgraph.type
           Dog.id : uid
         }
@@ -2923,7 +2923,7 @@
   dgquery: |-
     query {
       queryHome(func: type(Home)) {
-        members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Human) OR type(Parrot) OR type(Plant))) {
+        Home.members : Home.members @filter(((type(Dog) AND allofterms(Dog.breed, "German Shepherd")) OR type(Human) OR type(Parrot) OR type(Plant))) {
           dgraph.type
           Dog.id : uid
         }
@@ -2946,7 +2946,7 @@
     query {
       queryCountry(func: type(Country)) {
         Country.nm : Country.name
-        StateAggregateResult.cnt_Country.statesAggregate : count(Country.states)
+        StateAggregateResult.cnt_Country.ag : count(Country.states)
         dgraph.uid : uid
       }
     }
