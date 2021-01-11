@@ -37,6 +37,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	GQLSchemaWithoutApolloExtras() string
 }
 
 type handler struct {
@@ -70,6 +71,41 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+// GQLSchemaWithoutApolloExtras return GraphQL schema string
+// excluding Apollo extras definitions and Apollo Queries
+func (s *handler) GQLSchemaWithoutApolloExtras() string {
+	typeMapCopy := make(map[string]*ast.Definition)
+	for typ, defn := range s.completeSchema.Types {
+		if typ == "_Entity" {
+			continue
+		}
+		typeMapCopy[typ] = defn
+	}
+	queryList := make(ast.FieldList, 0)
+	for _, qry := range s.completeSchema.Query.Fields {
+		if qry.Name == "_entities" || qry.Name == "_service" {
+			continue
+		}
+		queryList = append(queryList, qry)
+	}
+	typeMapCopy["Query"].Fields = queryList
+	queryDefn := &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Query",
+		Fields: queryList,
+	}
+	astSchemaCopy := &ast.Schema{
+		Query:         queryDefn,
+		Mutation:      s.completeSchema.Mutation,
+		Subscription:  s.completeSchema.Subscription,
+		Types:         typeMapCopy,
+		Directives:    s.completeSchema.Directives,
+		PossibleTypes: s.completeSchema.PossibleTypes,
+		Implements:    s.completeSchema.Implements,
+	}
+	return Stringify(astSchemaCopy, s.originalDefs)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
