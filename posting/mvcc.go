@@ -36,17 +36,19 @@ import (
 	"github.com/pkg/errors"
 )
 
-// incrRollupi is used to batch keys for rollup incrementally.
-type incrRollupi struct {
+type pooledKeys struct {
 	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
 	keysCh chan *[][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
 	keysPool *sync.Pool
-	// forceKeysCh is populated with batch of 64 keys that needs to be rolled up with high priority
-	p0KeysCh chan *[][]byte
-	// keysPool is sync.Pool to share the batched keys to force rollup.
-	p0KeysPool *sync.Pool
-	count      uint64
+}
+
+// incrRollupi is used to batch keys for rollup incrementally.
+type incrRollupi struct {
+	// We are using 2 priorities with now, idx 0 represents the high priority keys to be rolled up
+	// while idx 1 represents low priority keys to be rolled up.
+	priorityKeys []*pooledKeys
+	count        uint64
 }
 
 var (
@@ -58,20 +60,23 @@ var (
 
 	// IncrRollup is used to batch keys for rollup incrementally.
 	IncrRollup = &incrRollupi{
-		keysCh: make(chan *[][]byte, 16),
-		keysPool: &sync.Pool{
-			New: func() interface{} {
-				return new([][]byte)
-			},
-		},
-		p0KeysCh: make(chan *[][]byte, 16),
-		p0KeysPool: &sync.Pool{
-			New: func() interface{} {
-				return new([][]byte)
-			},
-		},
+		priorityKeys: make([]*pooledKeys, 2),
 	}
 )
+
+func init() {
+	x.AssertTrue(len(IncrRollup.priorityKeys) == 2)
+	for i := range IncrRollup.priorityKeys {
+		IncrRollup.priorityKeys[i] = &pooledKeys{
+			keysCh: make(chan *[][]byte, 16),
+			keysPool: &sync.Pool{
+				New: func() interface{} {
+					return new([][]byte)
+				},
+			},
+		}
+	}
+}
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
 func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
@@ -96,45 +101,21 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
-func (ir *incrRollupi) addKeyToBatch(key []byte) {
-	// glog.Infof("== [DEBUG] == Adding key to batch %x (%s)", key, x.GetCallerFunctionName())
-	batch := ir.keysPool.Get().(*[][]byte)
+func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
+	rki := ir.priorityKeys[priority]
+	batch := rki.keysPool.Get().(*[][]byte)
 	*batch = append(*batch, key)
 	if len(*batch) < 16 {
-		ir.keysPool.Put(batch)
+		rki.keysPool.Put(batch)
 		return
 	}
 
 	select {
-	case ir.keysCh <- batch:
+	case rki.keysCh <- batch:
 	default:
-		// for _, b := range *batch {
-		// 	glog.Infof("== [DEBUG] Batch dropping key %x", b)
-		// }
 		// Drop keys and build the batch again. Lossy behavior.
 		*batch = (*batch)[:0]
-		ir.keysPool.Put(batch)
-	}
-}
-
-func (ir *incrRollupi) addP0KeyToBatch(key []byte) {
-	// glog.Infof("== [DEBUG] == Adding key to batch %x (%s)", x.GetCallerFunctionName())
-	batch := ir.p0KeysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
-	if len(*batch) < 16 {
-		ir.p0KeysPool.Put(batch)
-		return
-	}
-
-	select {
-	case ir.p0KeysCh <- batch:
-	default:
-		// for _, b := range *batch {
-		// 	glog.Infof("== [DEBUG] Batch dropping key %x", b)
-		// }
-		// Drop keys and build the batch again. Lossy behavior.
-		*batch = (*batch)[:0]
-		ir.p0KeysPool.Put(batch)
+		rki.keysPool.Put(batch)
 	}
 }
 
@@ -151,7 +132,7 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 	cleanupTick := time.NewTicker(5 * time.Minute)
 	defer cleanupTick.Stop()
 
-	doRollup := func(batch *[][]byte) {
+	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
@@ -159,14 +140,13 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 				// Key not present or Key present but last roll up was more than 10 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
-				// glog.Infof("== [DEBUG] Rolling up key %x", key)
 				if err := ir.rollUpKey(writer, key); err != nil {
 					glog.Warningf("Error %v rolling up key %v\n", err, key)
 				}
-			} else {
-				// glog.Infof("== [DEBUG] NOT Rolling up key %x", key)
 			}
 		}
+		*batch = (*batch)[:0]
+		ir.priorityKeys[priority].keysPool.Put(batch)
 	}
 
 	for {
@@ -181,18 +161,12 @@ func (ir *incrRollupi) Process(closer *z.Closer) {
 					delete(m, hash)
 				}
 			}
-		case batch := <-ir.p0KeysCh:
-			doRollup(batch)
-			// clear the batch and put it back in Sync keysPool
-			*batch = (*batch)[:0]
-			ir.p0KeysPool.Put(batch)
+		case batch := <-ir.priorityKeys[0].keysCh:
+			doRollup(batch, 0)
 			// Probably we don't need a limiter here because we expect not to call this function too frequently.
 
-		case batch := <-ir.keysCh:
-			doRollup(batch)
-			// clear the batch and put it back in Sync keysPool
-			*batch = (*batch)[:0]
-			ir.keysPool.Put(batch)
+		case batch := <-ir.priorityKeys[1].keysCh:
+			doRollup(batch, 1)
 
 			// throttle to 1 batch = 64 rollups per 100 ms.
 			<-limiter.C
@@ -260,7 +234,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		// Add these keys to be rolled up after we're done writing. This is the right place for them
 		// to be rolled up, because we just pushed these deltas over to Badger.
 		for _, key := range keys {
-			IncrRollup.addKeyToBatch([]byte(key))
+			IncrRollup.addKeyToBatch([]byte(key), 1)
 		}
 	}()
 
@@ -282,7 +256,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				// glog.Infof("== [DEBUG] writing key %x (%d)", key, commitTs)
 				err := btxn.SetEntry(&badger.Entry{
 					Key:      []byte(key),
 					Value:    data,
@@ -374,9 +347,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if deltaCount > 0 {
 			// If deltaCount is high, send it to hihg priority channel instead.
 			if deltaCount > 500 {
-				IncrRollup.addP0KeyToBatch(key)
+				IncrRollup.addKeyToBatch(key, 0)
 			} else {
-				IncrRollup.addKeyToBatch(key)
+				IncrRollup.addKeyToBatch(key, 1)
 			}
 		}
 	}()
