@@ -113,7 +113,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	req := &api.Request{
 		Query: `query{
 			me(func: has(dgraph.cors)){
-                uid
+				uid
 				dgraph.cors
 			}
 		}`,
@@ -147,7 +147,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 			cors = me.DgraphCors
 		}
 	}
-	glog.Infof("Multiple cors node found,returning last added node")
+	glog.Infof("Multiple nodes of type dgraph.type.cors found,returning last added node")
 	return uidMax, cors, nil
 }
 

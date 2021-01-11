@@ -104,8 +104,8 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		// if there was already a schema node, then just use the uid from that node
 		schemaNodeUid = res.GetUidMatrix()[0].GetUids()[0]
 	} else {
-		// there seems to be multiple nodes for GraphQL schema, we should never reach here
-		// returning the schema node which is added last
+		// there seems to be multiple nodes for GraphQL schema,Ideally we should never reach here
+		// But if by any bug we reach here then return the schema node which is added last
 		uidMax := res.GetUidMatrix()[0].GetUids()[0]
 		for _, schUid := range res.GetUidMatrix()[0].GetUids()[1:] {
 			if uidMax < schUid {

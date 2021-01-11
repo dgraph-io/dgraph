@@ -2304,7 +2304,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "fields": [
         {
           "name": "dgraph.cors"
-        },
+        }
       ],
       "name": "dgraph.type.cors"
     }
