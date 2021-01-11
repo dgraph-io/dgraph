@@ -2842,6 +2842,7 @@ func queryAggregateOnEmptyData(t *testing.T) {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
 				numLikesMax
+				type: __typename
 				titleMin
 			}
 		}`,
@@ -2854,6 +2855,7 @@ func queryAggregateOnEmptyData(t *testing.T) {
 			"aggregatePost": {
 				"count": 0,
 				"numLikesMax": null,
+				"type": "PostAggregateResult",
 				"titleMin": null
 			}
 		}`,
@@ -3025,6 +3027,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				name
 				ag : statesAggregate {
 					count
+					__typename
 					nameMin
 				}
 			}
@@ -3039,6 +3042,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				"name": "India",
 				"ag": { 
 					"count" : 3,
+					"__typename": "StateAggregateResult",
 					"nameMin": "Gujarat"
 				}
 			}]
@@ -3083,6 +3087,7 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 				name
 				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
                 	count
+					__typename
 					nameMin
                 }
 				n: name
