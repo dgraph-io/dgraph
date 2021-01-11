@@ -56,7 +56,7 @@ func ResetCors(closer *z.Closer) {
 						Subject:   "_:a",
 						Predicate: "dgraph.type",
 						ObjectValue: &api.Value{Val: &api.Value_StrVal{
-							StrVal: "dgraph.cors"}},
+							StrVal: "dgraph.type.cors"}},
 					},
 				},
 				Cond: `@if(eq(len(cors), 0))`,
@@ -123,14 +123,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if res.Size() == 0 {
-		ResetCors(nil)
-		res, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
-		if err != nil {
-			return "", nil, err
-		}
-		glog.Infof("No cors present,adding a core node with value * ")
-	}
 
 	type corsResponse struct {
 		Me []struct {
@@ -142,8 +134,9 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
 		return "", nil, err
 	}
-
-	if len(corsRes.Me) == 1 {
+	if len(corsRes.Me) == 0 {
+		return "", []string{}, fmt.Errorf("GetCorsOrigins returned 0 results")
+	} else if len(corsRes.Me) == 1 {
 		return corsRes.Me[0].Uid, corsRes.Me[0].DgraphCors, nil
 	}
 	cors := corsRes.Me[0].DgraphCors

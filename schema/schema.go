@@ -588,6 +588,14 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				},
 			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.type.cors",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.cors",
+					ValueType: pb.Posting_STRING,
+				},
+			},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
