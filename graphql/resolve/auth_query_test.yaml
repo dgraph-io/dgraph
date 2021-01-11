@@ -21,7 +21,7 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) {
-        id : uid
+        Contact.id : uid
         nickName : Contact.nickName
         adminTasks : Contact.adminTasks @filter(uid(AdminTask1)) {
           id : uid
