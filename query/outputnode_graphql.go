@@ -226,21 +226,32 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 			// 1. The current fastJson node holds data for a next selection and there was no data
 			//    present for the current GraphQL selection, so need to write null for the current
 			//    GraphQL selection with appropriate errors.
-			// 2. The current fastJson node holds data which wasn't requested by any GraphQL
+			// 2. The current fastJson node holds data for count(pred), the current GraphQL
+			//    selection is an aggregate field at child level and there was no data present for
+			//    it. So, need to write null for the current GraphQL selection but also need to
+			//    skip all the count(pred) fastJson nodes which were requested from within the
+			//    current GraphQL selection.
+			// 3. The current fastJson node holds data which wasn't requested by any GraphQL
 			//    selection, but instead by a DQL selection added by GraphQL layer; and the data
 			//    for current selection may be present in an upcoming fastJson node.
 			//    Point to note is that this case doesn't happen as the GraphQL layer adds such
 			//    DQL selections only at the beginning (dgraph.type) or end (dgraph.uid: uid) of a
 			//    DQL selection set, but not in middle. The beginning case we have already handled,
 			//    and the end case would either be ignored by this for loop or handled as case 1.
-			// So, we don't have a need to handle case 2, and need to always write null with
+			// So, we don't have a need to handle case 3, and need to always write null with
 			// appropriate errors.
-			// TODO: check if case 2 can happen for @custom(dql: "")
+			// TODO: check if case 3 can happen for @custom(dql: "")
+
+			// handles null writing for case 1 & 2
 			if nullWritten = writeGraphQLNull(curSelection, ctx.buf, keyEndPos); !nullWritten {
 				ctx.gqlErrs = append(ctx.gqlErrs, curSelection.GqlErrorf(append(parentPath,
 					curSelection.ResponseName()), gqlSchema.ErrExpectedNonNull, curSelection.Name(),
 					curSelection.Type()))
 				return false
+			}
+			// handles skipping for case 2
+			if !fjIsRoot && curSelection.IsAggregateField() {
+				child = skipCountAggregateChildren(curSelection, cur)
 			}
 			// we don't need to iterate to next fastJson node here.
 		} else {
@@ -497,11 +508,11 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 // 		{
 // 		  "aggregateCountry": [
 // 		    {
-// 		      "count": 3
+// 		      "CountryAggregateResult.count": 3
 // 		    }, {
-// 		      "nameMin": "US1"
+// 		      "CountryAggregateResult.nameMin": "US1"
 // 		    }, {
-// 		      "nameMax": "US2"
+// 		      "CountryAggregateResult.nameMax": "US2"
 // 		    }
 // 		  ]
 // 		}
@@ -546,15 +557,15 @@ func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJs
 // completeAggregateChildren build GraphQL JSON for aggregate fields at child levels.
 // Dgraph result:
 // 		{
-// 		  "statesAggregate": [
+// 		  "Country.statesAggregate": [
 // 		    {
 // 		      "State.name": "Calgary",
 // 		      "dgraph.uid": "0x2712"
 // 		    }
 // 		  ],
-// 		  "count_statesAggregate": 1,
-// 		  "nameMin_statesAggregate": "Calgary",
-// 		  "nameMax_statesAggregate": "Calgary"
+// 		  "StateAggregateResult.count_Country.statesAggregate": 1,
+// 		  "StateAggregateResult.nameMin_Country.statesAggregate": "Calgary",
+// 		  "StateAggregateResult.nameMax_Country.statesAggregate": "Calgary"
 // 		}
 // GraphQL result:
 // 		{
@@ -600,6 +611,19 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 	x.Check2(ctx.buf.WriteString("}"))
 
 	return fj
+}
+
+// skipCountAggregateChildren skips fastJson nodes returned for count field inside child aggregate
+// field. This needs to be done as the results for count are returned at the same level as the
+// field for which aggregation is being done. These results are returned even if the parent doesn't
+// have any edges to the field for which aggregation is being done. So, we need to skip them.
+func skipCountAggregateChildren(curSelection gqlSchema.Field, cur fastJsonNode) fastJsonNode {
+	for _, f := range curSelection.SelectionSet() {
+		if f.Name() == "count" {
+			cur = cur.next
+		}
+	}
+	return cur
 }
 
 // completeGeoObject builds a json GraphQL result object for the underlying geo type.

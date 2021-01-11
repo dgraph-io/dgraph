@@ -247,7 +247,7 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 				}
 				// This adds the following DQL query
 				// aggregateTweets() {
-				//        scoreMin : min(val(scoreVar))
+				//        TweetsAggregateResult.scoreMin : min(val(scoreVar))
 				// }
 				finalMainQuery.Children = append(finalMainQuery.Children, finalQueryChild)
 				break
@@ -1019,8 +1019,8 @@ func buildAggregateFields(
 	//   titleMin
 	// }
 	// is
-	// postsAggregate : Author.posts {
-	//   postsAggregate_titleVar as Post.title
+	// Author.postsAggregate : Author.posts {
+	//   Author.postsAggregate_titleVar as Post.title
 	//   ... other queried aggregate fields
 	// }
 	mainField := &gql.GraphQuery{
@@ -1074,8 +1074,8 @@ func buildAggregateFields(
 						Attr: constructedForDgraphPredicateField,
 					}
 					// The var field is added to mainQuery. This adds the following DQL query.
-					// postsAggregate : Author.posts {
-					//   postsAggregate_nameVar as Post.name
+					// Author.postsAggregate : Author.posts {
+					//   Author.postsAggregate_nameVar as Post.name
 					// }
 					mainField.Children = append(mainField.Children, child)
 					isAggregateVarAdded[constructedForField] = true
@@ -1085,7 +1085,7 @@ func buildAggregateFields(
 					Attr:  strings.ToLower(function) + "(val(" + "" + f.DgraphAlias() + "_" + constructedForField + "Var))",
 				}
 				// This adds the following DQL query
-				// nameMin_postsAggregate : min(val(postsAggregate_nameVar))
+				// PostAggregateResult.nameMin_Author.postsAggregate : min(val(Author.postsAggregate_nameVar))
 				otherAggregateChildren = append(otherAggregateChildren, aggregateChild)
 				break
 			}
