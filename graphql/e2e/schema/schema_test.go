@@ -607,15 +607,22 @@ func TestApolloServiceResolver(t *testing.T) {
 	serviceQueryParams := &common.GraphQLParams{Query: `
 	query {
 		_service {
-			sdl
+			s: sdl
 		}
 	}`}
 	resp := serviceQueryParams.ExecuteAsPost(t, groupOneGraphQLServer)
 	common.RequireNoGQLErrors(t, resp)
-	queryResponse, err := ioutil.ReadFile("apolloServiceResponse.json")
-	require.NoError(t, err)
-	testutil.CompareJSON(t, string(queryResponse), string(resp.Data))
+	var gqlRes struct {
+		Service struct {
+			S string
+		} `json:"_service"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &gqlRes))
 
+	sdl, err := ioutil.ReadFile("apolloServiceResponse.graphql")
+	require.NoError(t, err)
+
+	require.Equal(t, string(sdl), gqlRes.Service.S)
 }
 
 func TestDeleteSchemaAndExport(t *testing.T) {
