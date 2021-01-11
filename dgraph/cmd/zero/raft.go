@@ -316,9 +316,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	// We are storing only the MembershipState in the meta file. The other 2 fields of ZeroSnapshot;
-	// Index and CheckpointTs need not be persisted as they are used only for in-memory operations.
-	data, err := snap.GetState().Marshal()
+	data, err := snap.Marshal()
 	x.Check(err)
 
 	for {
@@ -550,11 +548,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var ms pb.MembershipState
-			x.Check(ms.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&ms)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, ms.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
@@ -869,9 +867,9 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {

@@ -612,7 +612,7 @@ func downloadDataFiles() {
 }
 
 func executePreRunSteps() error {
-	testutil.GeneratePlugins()
+	testutil.GeneratePlugins(*race)
 	return nil
 }
 

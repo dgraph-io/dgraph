@@ -15,9 +15,10 @@ package backup
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"os"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -236,19 +237,19 @@ func runRestoreCmd() error {
 		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
 		defer cancelTs()
 
-		_, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version})
-		if err != nil {
+		if _, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version}); err != nil {
 			fmt.Printf("Failed to assign timestamp %d in Zero: %v", result.Version, err)
 			return err
 		}
 
-		ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
-		defer cancelUid()
-
-		_, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid})
-		if err != nil {
-			fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
-			return err
+		// MaxLeaseUid can be zero if the backup was taken on an empty DB.
+		if result.MaxLeaseUid > 0 {
+			ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
+			defer cancelUid()
+			if _, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid}); err != nil {
+				fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
+				return err
+			}
 		}
 	}
 
