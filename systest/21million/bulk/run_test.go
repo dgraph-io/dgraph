@@ -18,7 +18,7 @@ package bulk
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/systest/21million/common"
 	"github.com/dgraph-io/dgraph/testutil"

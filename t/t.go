@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -350,7 +349,7 @@ func findPackagesFor(testName string) []string {
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
 		}
 	}

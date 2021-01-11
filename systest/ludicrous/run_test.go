@@ -22,7 +22,7 @@ import (
 	"context"
 	"flag"
 	"io/ioutil"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,7 +43,7 @@ var quiet = flag.Bool("quiet", false,
 
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := filepath.Join(path.Dir(thisFile), "queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
 	dg, err := testutil.DgraphClient(testutil.SockAddr)

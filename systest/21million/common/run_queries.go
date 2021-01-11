@@ -19,7 +19,7 @@ package common
 import (
 	"context"
 	"io/ioutil"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -39,7 +39,7 @@ import (
 
 func TestQueriesFor21Million(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := filepath.Join(path.Dir(thisFile), "../queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
 	// For this test we DON'T want to start with an empty database.
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))

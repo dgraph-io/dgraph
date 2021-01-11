@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -99,7 +98,7 @@ func disableDraining(t *testing.T) {
 
 func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := filepath.Join(path.Dir(thisFile), "queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
 	files, err := ioutil.ReadDir(queryDir)
 	require.NoError(t, err)
