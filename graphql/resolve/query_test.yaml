@@ -1441,7 +1441,9 @@
     query {
       aggregateCountry() {
         CountryAggregateResult.count : max(val(countVar))
+        CountryAggregateResult.cnt : max(val(countVar))
         CountryAggregateResult.nameMin : min(val(nameVar))
+        CountryAggregateResult.nm : min(val(nameVar))
         CountryAggregateResult.nameMax : max(val(nameVar))
       }
       var(func: type(Country)) @filter(regexp(Country.name, /.*ust.*/)) {
