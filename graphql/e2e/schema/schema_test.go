@@ -612,15 +612,9 @@ func TestApolloServiceResolver(t *testing.T) {
 	}`}
 	resp := serviceQueryParams.ExecuteAsPost(t, groupOneGraphQLServer)
 	common.RequireNoGQLErrors(t, resp)
-	queryResponse, err := ioutil.ReadFile("apolloServiceResponse.graphql")
+	queryResponse, err := ioutil.ReadFile("apolloServiceResponse.json")
 	require.NoError(t, err)
-
-	type Service struct {
-		Sdl time.Time `json:"sdl"`
-	}
-	var service Service
-	json.Unmarshal(resp.Data, &service)
-	require.Equal(t, string(queryResponse), service.Sdl)
+	testutil.CompareJSON(t, string(queryResponse), string(resp.Data))
 
 }
 
