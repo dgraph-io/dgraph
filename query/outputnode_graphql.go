@@ -216,8 +216,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 		if curSelection.Name() == gqlSchema.Typename {
 			// If the current selection is __typename then we find out the typename using the
 			// dgraphTypes slice saved earlier.
-			// TODO (cleanup): refactor the TypeName method to accept []string
-			x.Check2(ctx.buf.Write([]byte(`"` + curSelection.TypeName(dgraphTypes) + `"`)))
+			x.Check2(ctx.buf.Write(getTypename(curSelection, dgraphTypes)))
 			// We don't need to iterate to next fastJson node in this case,
 			// as the current node will have data for the next field in the selection set.
 		} else if curSelection.DgraphAlias() != enc.attrForID(enc.getAttr(cur)) {
@@ -476,6 +475,11 @@ func checkAndStripComma(buf *bytes.Buffer) {
 	}
 }
 
+func getTypename(f gqlSchema.Field, dgraphTypes []interface{}) []byte {
+	// TODO (cleanup): refactor the TypeName method to accept []string
+	return []byte(`"` + f.TypeName(dgraphTypes) + `"`)
+}
+
 func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool {
 	buf.Truncate(keyEndPos) // truncate to make sure we write null correctly
 	if f.Type().ListType() != nil {
@@ -527,25 +531,29 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 // Note that there can't be the case when an aggregate property was requested in DQL and not
 // returned by Dgraph because aggregate properties are calculated using math functions which
 // always give some result.
-// TODO:
-//  * handle __typename for root & child query. Also send results for child query for null case?
-//    add testcase for __typename with aggregate.
 func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	query gqlSchema.Field, qryPath []interface{}) fastJsonNode {
+	var val []byte
+	var err error
 	comma := ""
 
 	x.Check2(ctx.buf.WriteString("{"))
 	for _, f := range query.SelectionSet() {
 		x.Check2(ctx.buf.WriteString(comma))
 		writeKeyGraphQL(f, ctx.buf)
-		val, err := enc.getScalarVal(enc.children(fj))
-		if err != nil {
-			ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
-				err.Error()))
-			// all aggregate properties are nullable, so no special checks are required
-			val = jsonNull
+
+		if f.Name() == gqlSchema.Typename {
+			val = getTypename(f, nil)
+		} else {
+			val, err = enc.getScalarVal(enc.children(fj))
+			if err != nil {
+				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
+					err.Error()))
+				// all aggregate properties are nullable, so no special checks are required
+				val = jsonNull
+			}
+			fj = fj.next
 		}
-		fj = fj.next
 		x.Check2(ctx.buf.Write(val))
 		comma = ","
 	}
@@ -575,6 +583,9 @@ func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJs
 // 		    "nameMax": "Calgary"
 // 		  }
 // 		}
+// TODO:
+//  * should we send results for child query for null case? what if there was only __typename?
+//    should it still be null?
 func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	field gqlSchema.Field, fieldPath []interface{}) fastJsonNode {
 	// first we need to skip all the nodes returned with the attr of field as they are not needed
@@ -593,7 +604,10 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 	for _, f := range field.SelectionSet() {
 		x.Check2(ctx.buf.WriteString(comma))
 		writeKeyGraphQL(f, ctx.buf)
-		if f.DgraphAlias()+suffix == enc.attrForID(enc.getAttr(fj)) {
+
+		if f.Name() == gqlSchema.Typename {
+			val = getTypename(f, nil)
+		} else if f.DgraphAlias()+suffix == enc.attrForID(enc.getAttr(fj)) {
 			val, err = enc.getScalarVal(fj)
 			if err != nil {
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
