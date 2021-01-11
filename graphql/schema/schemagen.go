@@ -90,6 +90,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		}
 		queryList = append(queryList, qry)
 	}
+	typeMapCopy["Query"].Fields = queryList
 	queryDefn := &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Query",
