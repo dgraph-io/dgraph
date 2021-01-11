@@ -345,7 +345,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	deltaCount := 0
 	defer func() {
 		if deltaCount > 0 {
-			// If deltaCount is high, send it to hihg priority channel instead.
+			// If deltaCount is high, send it to high priority channel instead.
 			if deltaCount > 500 {
 				IncrRollup.addKeyToBatch(key, 0)
 			} else {
