@@ -221,11 +221,11 @@ func TestDateRDF(t *testing.T) {
 	require.NoError(t, err)
 	expected := `<0x1> <name> "Michonne" .
 <0x1> <gender> "female" .
-<0x1> <friend> <0x65> .
 <0x1> <friend> <0x19> .
 <0x1> <friend> <0x18> .
 <0x1> <friend> <0x17> .
 <0x1> <friend> <0x1f> .
+<0x1> <friend> <0x65> .
 <0x17> <name> "Rick Grimes" .
 <0x18> <name> "Glenn Rhee" .
 <0x19> <name> "Daryl Dixon" .
