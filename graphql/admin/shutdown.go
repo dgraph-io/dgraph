@@ -28,7 +28,7 @@ import (
 var (
 	// ServerCloser is used to signal and wait for other goroutines to return gracefully after user
 	// requests shutdown.
-	ServerCloser *z.Closer
+	ServerCloser = z.NewCloser(0)
 )
 
 func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

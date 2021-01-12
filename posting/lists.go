@@ -154,9 +154,19 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc.plists == nil {
-		return getNew(key, pstore, lc.startTs)
+	getNewPlistNil := func() (*List, error){
+		lc.RLock()
+		defer lc.RUnlock()
+		if lc.plists == nil {
+			return getNew(key, pstore, lc.startTs)
+		}
+		return nil, nil
 	}
+
+	if l, err := getNewPlistNil(); l != nil || err != nil {
+		return l, err
+	}
+
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil
