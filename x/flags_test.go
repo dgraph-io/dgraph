@@ -23,7 +23,7 @@ import (
 )
 
 func TestFlag(t *testing.T) {
-	opt := `bool_key=true; int-key=5; float-key=0.05; string_key=value`
+	opt := `bool_key=true; int-key=5; float-key=0.05; string_key=value; ;`
 	kvm := parseFlag(opt)
 	t.Logf("Got kvm: %+v\n", kvm)
 	require.NoError(t, CheckFlag(opt, "bool-key", "int-key", "string-key", "float-key"))

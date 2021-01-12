@@ -57,6 +57,9 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 func parseFlag(opt string) map[string]string {
 	kvm := make(map[string]string)
 	for _, kv := range strings.Split(opt, ";") {
+		if strings.TrimSpace(kv) == "" {
+			continue
+		}
 		splits := strings.SplitN(kv, "=", 2)
 		k := strings.TrimSpace(splits[0])
 		k = strings.ToLower(k)

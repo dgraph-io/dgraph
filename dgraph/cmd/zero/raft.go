@@ -444,7 +444,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
