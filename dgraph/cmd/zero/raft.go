@@ -119,7 +119,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		// unique key is randomly generated key and could have collision.
+		// This is to ensure that even if collision occurs, we retry.
+		for !n.Proposals.Store(key, pctx) {
+			glog.Warningf("Found existing proposal with key: [%v]", key)
+			key = n.uniqueKey()
+		}
 		defer n.Proposals.Delete(key)
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
