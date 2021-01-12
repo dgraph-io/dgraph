@@ -18,7 +18,10 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -26,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,7 +40,8 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest,
+	wg *sync.WaitGroup) (int, error) {
 	if req == nil {
 		return 0, errors.Errorf("restore request cannot be nil")
 	}
@@ -102,7 +105,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-
+		wg.Add(1)
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
@@ -114,6 +117,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 			if err := <-errCh; err != nil {
 				errs = append(errs, err)
 			}
+			wg.Done()
 		}
 		if err := rt.Done(restoreId, errs); err != nil {
 			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
