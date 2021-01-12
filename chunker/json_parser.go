@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	simdjson "github.com/minio/simdjson-go"
+	"github.com/minio/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -680,7 +680,7 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
 		return errors.New("CPU doesn't support simdjson for fast parsing")
 	}
-	parser := NewParser()
+	parser := NewParser(op)
 	if err := parser.Run(b); err != nil {
 		return err
 	}
@@ -697,6 +697,7 @@ func NewNQuad() *api.NQuad {
 type ParserState func(byte) (ParserState, error)
 
 type Parser struct {
+	Op           int
 	Cursor       uint64
 	StringCursor uint64
 	Quad         *api.NQuad
@@ -709,8 +710,9 @@ type Parser struct {
 	Iter         simdjson.Iter
 }
 
-func NewParser() *Parser {
+func NewParser(op int) *Parser {
 	return &Parser{
+		Op:     op,
 		Cursor: 1,
 		Quad:   NewNQuad(),
 		Quads:  make([]*api.NQuad, 0),
@@ -960,7 +962,9 @@ func (p *Parser) Uid(n byte) (ParserState, error) {
 	if n != '"' {
 		return nil, errors.New(fmt.Sprintf("expected uid string, instead found: %c\n", n))
 	}
-	p.Levels.FoundSubject(p.String())
+	s := p.String()
+
+	p.Levels.FoundSubject(s)
 	return p.Object, nil
 }
 
@@ -989,16 +993,30 @@ func (p *Parser) openValueLevel(closing byte, array bool, next ParserState) Pars
 func (p *Parser) getScalarValue(n byte) {
 	switch n {
 	case '"':
-		p.Quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{p.String()}}
+		s := p.String()
+		if s == "" && p.Op == DeleteNquads {
+			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
+			break
+		}
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{s}}
 	case 'l', 'u':
 		p.Cursor++
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_IntVal{int64(p.Parsed.Tape[p.Cursor])}}
 	case 'd':
 		p.Cursor++
-		p.Quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{math.Float64frombits(p.Parsed.Tape[p.Cursor])}}
+		n := math.Float64frombits(p.Parsed.Tape[p.Cursor])
+		if n == 0 && p.Op == DeleteNquads {
+			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
+			break
+		}
+		p.Quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{n}}
 	case 't':
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{true}}
 	case 'f':
+		if p.Op == DeleteNquads {
+			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
+			break
+		}
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{false}}
 	case 'n':
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BytesVal{nil}}
