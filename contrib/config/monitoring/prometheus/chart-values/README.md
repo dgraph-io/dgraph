@@ -41,7 +41,7 @@ You can use helmfile to manage multiple helm charts and corresponding helmcharts
 To use this, run the following:
 
 ```bash
-## set grafana secret admin password
+## set Grafana secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
@@ -81,7 +81,7 @@ You can use examples here to add alerts for Dgraph using Prometheus AlertManager
 With `helmfile`, you can deploy this using the following:
 
 ```bash
-## set grafana secret admin password
+## set Grafana secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
