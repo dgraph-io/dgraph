@@ -108,7 +108,7 @@ GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 export NAMESPACE="monitoring"
 ## enable dgraph alerting and Kubernetes CronJobs alerting
 export DGRAPH_ALERTS_ENABLED=1
-export DGRAPH_BACKUPS_ENABLED=1
+export DGRAPH_BACKUPS_ALERTS_ENABLED=1
 ## enable pagerduty and set integration key (optional)
 export PAGERDUTY_INTEGRATION_KEY='<pagerduty-intregration-key-goes-here>'
 

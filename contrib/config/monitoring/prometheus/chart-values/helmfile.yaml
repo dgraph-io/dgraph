@@ -17,8 +17,8 @@ releases:
       {{- if env "DGRAPH_ALERTS_ENABLED" }}
       - ./dgraph-app-alert-rules.yaml.gotmpl
       {{/* Dgraph Kubernetes CronJob Monitoring Support */}}
-      {{/* Set DGRAPH_BACKUPS_ENABLED=1 and DGRAPH_ALERTS_ENABLED=1 to enable this feature */}}
-      {{- if env "DGRAPH_BACKUPS_ENABLED" }}
+      {{/* Set DGRAPH_BACKUPS_ALERTS_ENABLED=1 and DGRAPH_ALERTS_ENABLED=1 to enable this feature */}}
+      {{- if env "DGRAPH_BACKUPS_ALERTS_ENABLED" }}
       - ./dgraph-backup-alert-rules.yaml
       {{- end }}
       {{- if env "PAGERDUTY_INTEGRATION_KEY" }}

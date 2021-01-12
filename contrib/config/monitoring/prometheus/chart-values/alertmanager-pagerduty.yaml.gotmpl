@@ -11,7 +11,7 @@ alertmanager:
         - match:
             alertname: dgraph*
           receiver: 'pagerduty-notifications'
-      {{- if env "DGRAPH_BACKUPS_ENABLED" }}
+      {{- if env "DGRAPH_BACKUPS_ALERTS_ENABLED" }}
         - match:
             alertname: CronJobStatusFailed
           receiver: 'pagerduty-notifications'
