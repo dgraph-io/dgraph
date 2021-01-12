@@ -490,7 +490,7 @@ func getPackages() []task {
 			continue
 		}
 
-		if has(skipPkgs, "pkg") {
+		if len(skipPkgs) > 0 && has(skipPkgs, pkg.ID) {
 			fmt.Printf("Skipping pacakge %s as its available in skip list \n", pkg.ID)
 			continue
 		}
