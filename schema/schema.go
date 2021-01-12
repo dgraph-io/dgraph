@@ -558,33 +558,33 @@ func initialTypesInternal(namespace string, all bool) []*pb.TypeUpdate {
 			TypeName: "dgraph.graphql",
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
+					Predicate: "dgraph.graphql.schema",
 					ValueType: pb.Posting_STRING,
 				},
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.xid"),
+					Predicate: "dgraph.graphql.xid",
 					ValueType: pb.Posting_STRING,
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: x.NamespaceAttr(namespace, "dgraph.graphql.history"),
+			TypeName: "dgraph.graphql.history",
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_history"),
+					Predicate: "dgraph.graphql.schema_history",
 					ValueType: pb.Posting_STRING,
 				}, {
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_created_at"),
+					Predicate: "dgraph.graphql.schema_created_at",
 					ValueType: pb.Posting_DATETIME,
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: x.NamespaceAttr(namespace, "dgraph.graphql.persisted_query"),
+			TypeName: "dgraph.graphql.persisted_query",
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_query"),
+					Predicate: "dgraph.graphql.p_query",
 					ValueType: pb.Posting_STRING,
 				}, {
-					Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_sha256hash"),
+					Predicate: "dgraph.graphql.p_sha256hash",
 					ValueType: pb.Posting_STRING,
 				},
 			},
@@ -594,50 +594,56 @@ func initialTypesInternal(namespace string, all bool) []*pb.TypeUpdate {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
-			TypeName: x.NamespaceAttr(namespace, "dgraph.type.User"),
+			TypeName: "dgraph.type.User",
 			Fields: []*pb.SchemaUpdate{
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
+					Predicate: "dgraph.xid",
 					ValueType: pb.Posting_STRING,
 				},
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
+					Predicate: "dgraph.password",
 					ValueType: pb.Posting_PASSWORD,
 				},
 				{
-					Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
+					Predicate: "dgraph.user.group",
 					ValueType: pb.Posting_UID,
 				},
 			},
 		},
 			&pb.TypeUpdate{
-				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Group"),
+				TypeName: "dgraph.type.Group",
 				Fields: []*pb.SchemaUpdate{
 					{
-						Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
+						Predicate: "dgraph.xid",
 						ValueType: pb.Posting_STRING,
 					},
 					{
-						Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
+						Predicate: "dgraph.acl.rule",
 						ValueType: pb.Posting_UID,
 					},
 				},
 			},
 			&pb.TypeUpdate{
-				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Rule"),
+				TypeName: "dgraph.type.Rule",
 				Fields: []*pb.SchemaUpdate{
 					{
-						Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
+						Predicate: "dgraph.rule.predicate",
 						ValueType: pb.Posting_STRING,
 					},
 					{
-						Predicate: x.NamespaceAttr(namespace, "dgraph.rule.permission"),
+						Predicate: "dgraph.rule.permission",
 						ValueType: pb.Posting_INT,
 					},
 				},
 			})
 	}
 
+	for _, typ := range initialTypes {
+		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		for _, fields := range typ.Fields {
+			fields.Predicate = x.NamespaceAttr(namespace, fields.Predicate)
+		}
+	}
 	return initialTypes
 }
 
@@ -662,41 +668,41 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.cors"),
+			Predicate: "dgraph.cors",
 			ValueType: pb.Posting_STRING,
 			List:      true,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.type"),
+			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			List:      true,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.drop.op"),
+			Predicate: "dgraph.drop.op",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema"),
+			Predicate: "dgraph.graphql.schema",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.xid"),
+			Predicate: "dgraph.graphql.xid",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_history"),
+			Predicate: "dgraph.graphql.schema_history",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.schema_created_at"),
+			Predicate: "dgraph.graphql.schema_created_at",
 			ValueType: pb.Posting_DATETIME,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_query"),
+			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
 		}, &pb.SchemaUpdate{
-			Predicate: x.NamespaceAttr(namespace, "dgraph.graphql.p_sha256hash"),
+			Predicate: "dgraph.graphql.p_sha256hash",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
@@ -706,41 +712,43 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
+				Predicate: "dgraph.xid",
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
 			},
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.password"),
+				Predicate: "dgraph.password",
 				ValueType: pb.Posting_PASSWORD,
 			},
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.user.group"),
+				Predicate: "dgraph.user.group",
 				Directive: pb.SchemaUpdate_REVERSE,
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.acl.rule"),
+				Predicate: "dgraph.acl.rule",
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
+				Predicate: "dgraph.rule.predicate",
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Tokenizer: []string{"exact"},
 				Upsert:    true, // Not really sure if this will work.
 			},
 			{
-				Predicate: x.NamespaceAttr(namespace, "dgraph.rule.permission"),
+				Predicate: "dgraph.rule.permission",
 				ValueType: pb.Posting_INT,
 			},
 		}...)
 	}
-
+	for _, sch := range initialSchema {
+		sch.Predicate = x.NamespaceAttr(namespace, sch.Predicate)
+	}
 	return initialSchema
 }
 
