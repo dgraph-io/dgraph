@@ -798,6 +798,9 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 			}
 		}
 		l = p.Levels.Pop()
+		if !l.FoundUid && p.Op == DeleteNquads {
+			return nil, errors.New("UID must be present and non-zero while deleting edges.")
+		}
 		p.Quads = append(p.Quads, l.Quads...)
 		return p.Object, nil
 	case ']':
@@ -945,6 +948,16 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 	}
 	switch n {
 	case '{':
+		if p.isGeo() {
+			l := p.Levels.Deeper(false)
+			l.Wait = p.Quad
+			p.Quad = NewNQuad()
+			if err := p.getGeoValue(); err != nil {
+				return nil, err
+			}
+			p.Levels.Pop()
+			return p.Object, nil
+		}
 		p.Levels.Deeper(false)
 		return p.Object, nil
 	case '}':
@@ -969,7 +982,6 @@ func (p *Parser) Value(n byte) (ParserState, error) {
 			l := p.Levels.Deeper(false)
 			l.Wait = p.Quad
 			p.Quad = NewNQuad()
-			// TODO: add predicate to Level wait
 			if err := p.getGeoValue(); err != nil {
 				return nil, err
 			}
@@ -1246,11 +1258,12 @@ type ParserLevels struct {
 }
 
 type ParserLevel struct {
-	Array   bool
-	Subject string
-	Scalars bool
-	Wait    *api.NQuad
-	Quads   []*api.NQuad
+	Array    bool
+	FoundUid bool
+	Subject  string
+	Scalars  bool
+	Wait     *api.NQuad
+	Quads    []*api.NQuad
 }
 
 func NewParserLevels() *ParserLevels {
@@ -1331,6 +1344,7 @@ func (p *ParserLevels) Subject() string {
 func (p *ParserLevels) FoundSubject(s string) {
 	l := p.Levels[len(p.Levels)-1]
 	l.Subject = s
+	l.FoundUid = true
 	// TODO: verify
 	for _, quad := range l.Quads {
 		quad.Subject = l.Subject
