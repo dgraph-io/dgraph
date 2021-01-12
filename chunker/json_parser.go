@@ -866,10 +866,11 @@ func (p *Parser) MapFacetVal(n byte) (ParserState, error) {
 	//       per facet map definition, rather than for each index-value
 	//
 	// find every quad that could be referenced by the facet
+	l := p.Levels.Get(0)
 	quads := make([]*api.NQuad, 0)
-	for i := len(p.Quads) - 1; i >= 0; i-- {
-		if p.Quads[i].Predicate == p.FacetPred {
-			quads = append(quads, p.Quads[i])
+	for i := len(l.Quads) - 1; i >= 0; i-- {
+		if l.Quads[i].Predicate == p.FacetPred {
+			quads = append(quads, l.Quads[i])
 		}
 	}
 	if p.FacetId > uint64(len(quads)) {
@@ -910,13 +911,14 @@ func (p *Parser) ScalarFacet(n byte) (ParserState, error) {
 	}
 	// we didn't find the predicate waiting on a Level, so go through quads
 	// in reverse order (it's most likely that the referenced quad is near
-	// the end of the p.Quads slice)
-	for i := len(p.Quads) - 1; i >= 0; i-- {
-		if p.Quads[i].Predicate == p.FacetPred {
-			if i != 0 && p.Quads[i-1].Predicate == p.FacetPred {
+	// the end of the l.Quads slice)
+	l := p.Levels.Get(0)
+	for i := len(l.Quads) - 1; i >= 0; i-- {
+		if l.Quads[i].Predicate == p.FacetPred {
+			if i != 0 && l.Quads[i-1].Predicate == p.FacetPred {
 				return nil, errors.New("scalar facet should be map")
 			}
-			p.Quads[i].Facets = append(p.Quads[i].Facets, p.Facet)
+			l.Quads[i].Facets = append(l.Quads[i].Facets, p.Facet)
 			p.Facet = &api.Facet{}
 			return p.Object, nil
 		}
