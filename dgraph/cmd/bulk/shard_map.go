@@ -38,7 +38,7 @@ func newShardMap(numShards int) *shardMap {
 
 func (m *shardMap) shardFor(pred string) int {
 	// Always assign NQuads with reserved predicates to the first map shard.
-	if x.IsReservedPredicate(x.ParseAttr(pred)) {
+	if x.IsReservedPredicate(pred) {
 		return 0
 	}
 
