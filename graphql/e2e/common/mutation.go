@@ -4675,6 +4675,7 @@ func mutationWithTypename(t *testing.T) {
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
             __typename
+			a:__typename
 			addpost1(input: [{title: "Dgraph", numLikes: 92233720 }]) {
     			__typename
 				post1 {
@@ -4691,6 +4692,7 @@ func mutationWithTypename(t *testing.T) {
 
 	addPost1Expected := `{
         "__typename":"Mutation",
+		"a":"Mutation",	
 		"addpost1": {
             "__typename":"Addpost1Payload",
 			"post1": [{
