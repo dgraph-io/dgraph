@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
@@ -122,13 +121,8 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
-
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
-
-	fmt.Println(string(b))
-	spew.Dump(nq)
-
 	require.Equal(t, 5, len(nq))
 	exp := &Experiment{
 		t:      t,
@@ -166,12 +160,7 @@ func TestNquadsFromJson2(t *testing.T) {
 
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
-
 	nq, err := Parse(b, SetNquads)
-
-	fmt.Println(string(b))
-	spew.Dump(nq)
-
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
 	exp := &Experiment{
@@ -208,9 +197,6 @@ func TestNquadsFromJson3(t *testing.T) {
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 
-	fmt.Println(string(b))
-	spew.Dump(nq)
-
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -231,9 +217,6 @@ func TestNquadsFromJson4(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
 	nq, err := Parse([]byte(json), SetNquads)
-
-	fmt.Println(json)
-	spew.Dump(nq)
 
 	require.NoError(t, err)
 	exp := &Experiment{
@@ -340,10 +323,6 @@ func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
-
-	fmt.Println(json)
-	fmt.Println()
-	spew.Dump(nq)
 
 	exp := &Experiment{
 		t:      t,
@@ -522,8 +501,6 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-
-	spew.Dump(nq)
 
 	for _, n := range nq {
 		glog.Infof("%v", n)

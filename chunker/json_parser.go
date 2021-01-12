@@ -706,7 +706,8 @@ type Parser struct {
 	Levels       *ParserLevels
 	Parsed       *simdjson.ParsedJson
 	FacetPred    string
-	FacetId      int
+	FacetId      uint64
+	FacetEnd     uint64
 	Iter         simdjson.Iter
 }
 
@@ -820,6 +821,12 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 					p.Cursor++
 					p.Iter.AdvanceInto()
 					return p.MapFacet, nil
+				} else if next == 'n' {
+					p.Cursor++
+					p.Iter.AdvanceInto()
+					return p.Object, nil
+				} else if next == '[' {
+					return nil, errors.New("facet values should not be list")
 				}
 				return p.ScalarFacet, nil
 			}
@@ -840,7 +847,7 @@ func (p *Parser) MapFacet(n byte) (ParserState, error) {
 	if n != '"' {
 		return p.Object, nil
 	}
-	id, err := strconv.Atoi(p.String())
+	id, err := strconv.ParseUint(p.String(), 10, 64)
 	if err != nil {
 		return nil, err
 	}
@@ -863,8 +870,23 @@ func (p *Parser) MapFacetVal(n byte) (ParserState, error) {
 			quads = append(quads, p.Quads[i])
 		}
 	}
-	for i := len(quads) - 1; i >= 0; i-- {
-		if i == len(quads)-1-p.FacetId {
+	if p.FacetId > uint64(len(quads)) {
+		p.Facet = &api.Facet{}
+		return p.MapFacet, nil
+	}
+	if len(quads) == 0 {
+		p.Facet = &api.Facet{}
+		return p.MapFacet, nil
+	}
+	if len(quads) == 1 {
+		if quads[0].ObjectValue.Size() == 0 {
+			p.Facet = &api.Facet{}
+			return p.MapFacet, nil
+		}
+		return nil, errors.New("predicate should be list")
+	}
+	for i := uint64(len(quads) - 1); i >= 0; i-- {
+		if i == uint64(len(quads)-1)-p.FacetId {
 			quads[i].Facets = append(quads[i].Facets, p.Facet)
 			p.Facet = &api.Facet{}
 			return p.MapFacet, nil
@@ -889,6 +911,9 @@ func (p *Parser) ScalarFacet(n byte) (ParserState, error) {
 	// the end of the p.Quads slice)
 	for i := len(p.Quads) - 1; i >= 0; i-- {
 		if p.Quads[i].Predicate == p.FacetPred {
+			if i != 0 && p.Quads[i-1].Predicate == p.FacetPred {
+				return nil, errors.New("scalar facet should be map")
+			}
 			p.Quads[i].Facets = append(p.Quads[i].Facets, p.Facet)
 			p.Facet = &api.Facet{}
 			return p.Object, nil
@@ -978,10 +1003,10 @@ func (p *Parser) Uid(n byte) (ParserState, error) {
 		s := stripSpaces(uidVal)
 		if len(uidVal) == 0 {
 			uid = 0
-		} else if ok := strings.HasPrefix(s, "-"); ok {
+		} else if ok := strings.HasPrefix(uidVal, "-"); ok {
 			return nil, errors.New("negative uid")
-		} else if ok := strings.HasPrefix(s, "0x"); ok {
-			u, err := strconv.ParseUint(s[:2], 16, 64)
+		} else if ok := strings.HasPrefix(uidVal, "0x"); ok {
+			u, err := strconv.ParseUint(uidVal[2:], 16, 64)
 			if err != nil {
 				return nil, err
 			}
@@ -1095,6 +1120,9 @@ func (p *Parser) getFacet(n byte) error {
 		}
 	case 'l', 'u', 'd', 't', 'f', 'n':
 		val = p.getFacetValue(n)
+	}
+	if val == nil {
+		return errors.New("only scalar values in facet map")
 	}
 	if p.Facet, err = facets.ToBinary(p.Facet.Key, val, p.Facet.ValType); err != nil {
 		return err
@@ -1228,6 +1256,9 @@ func NewParserLevels() *ParserLevels {
 
 func (p *ParserLevels) FoundScalarFacet(predicate string, facet *api.Facet) bool {
 	for i := len(p.Levels) - 1; i >= 0; i-- {
+		if p.Levels[i].Scalars {
+			continue
+		}
 		if p.Levels[i].Wait != nil && p.Levels[i].Wait.Predicate == predicate {
 			p.Levels[i].Wait.Facets = append(p.Levels[i].Wait.Facets, facet)
 			return true
