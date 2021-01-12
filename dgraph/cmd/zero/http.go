@@ -154,8 +154,6 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
 		return
 	}
-	// TODO: this should be namespace aware.
-	tablet = x.NamespaceAttr(x.DefaultNamespace, tablet)
 
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {

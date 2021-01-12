@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net/http"
 	"sort"
@@ -32,7 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -247,7 +245,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Core processing happens here.
-	spew.Dump("Query: ", req)
 	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -724,20 +721,4 @@ func jsonLineAndChar(input string, offset int) (line int, character int, err err
 	}
 
 	return line, character, nil
-}
-
-// namespaceHandler will helps to create namespace
-func namespaceHandler(w http.ResponseWriter, r *http.Request) {
-	keys, ok := r.URL.Query()["namespace"]
-
-	if !ok || len(keys[0]) < 1 {
-		log.Println("Url Param 'key' is missing")
-		return
-	}
-	namespace := keys[0]
-	err := (&edgraph.Server{}).CreateNamespace(context.Background(), namespace)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Fprintf(w, "Name = %s\n", "ok")
 }

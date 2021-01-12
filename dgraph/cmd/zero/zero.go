@@ -615,8 +615,8 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
-	_, predicate, _ := x.ParseNamespaceAttr(tablet.Predicate)
-	if x.IsReservedPredicate(predicate) {
+
+	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
 		// since they only need to open one pipeline to receive updates for all
