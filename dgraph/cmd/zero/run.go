@@ -77,6 +77,7 @@ instances to achieve high-availability.
 		Annotations: map[string]string{"group": "core"},
 	}
 	Zero.EnvPrefix = "DGRAPH_ZERO"
+	Zero.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 
 	flag := Zero.Cmd.Flags()
 	x.FillCommonFlags(flag)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tool
+package decrypt
 
 import (
 	"compress/gzip"
@@ -46,8 +46,10 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Decrypt.EnvPrefix = "DGRAPH_TOOL_DECRYPT"
+	Decrypt.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")

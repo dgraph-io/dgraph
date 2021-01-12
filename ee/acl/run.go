@@ -30,5 +30,6 @@ func init() {
 		Use:         "acl",
 		Short:       "Enterprise feature. Not supported in oss version",
 		Annotations: map[string]string{"group": "security"},
-	}
+	},
+		Acl.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1218,16 +1218,23 @@ VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.grou
  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Available Commands:
-DGRAPH CORE: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
+Dgraph Core: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-FAST DATA LOADING: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
+Data Loading: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-DGRAPH SECURITY: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
+Dgraph Security: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-MISCELLANEOUS:{{range .Commands}}{{if (or (and .IsAvailableCommand (not .Annotations.group)) (eq .Name "help"))}}
+Dgraph Debug: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "debug"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "tool"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+
+Miscellaneous:{{range .Commands}}{{if (or (and .IsAvailableCommand (not .Annotations.group)) (eq .Name "help"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Flags:

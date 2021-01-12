@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tool
+package increment
 
 import (
 	"context"

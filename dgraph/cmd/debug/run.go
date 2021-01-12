@@ -82,7 +82,9 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
+	Debug.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")

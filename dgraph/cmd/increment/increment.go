@@ -17,7 +17,7 @@
 // Package increment builds a tool that retrieves a value for UID=0x01, and increments
 // it by 1. If successful, it prints out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
-package tool
+package increment
 
 import (
 	"context"
@@ -44,8 +44,10 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run(Increment.Conf)
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
+	Increment.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 
 	flag := Increment.Cmd.Flags()
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")

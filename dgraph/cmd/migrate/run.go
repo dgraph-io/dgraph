@@ -45,8 +45,10 @@ func init() {
 				logger.Fatalf("%v\n", err)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
+	Migrate.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 
 	flag := Migrate.Cmd.Flags()
 	flag.StringP("user", "", "", "The user for logging in")

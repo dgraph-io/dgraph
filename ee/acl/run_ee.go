@@ -37,7 +37,7 @@ func init() {
 		Short:       "Run the Dgraph acl tool",
 		Annotations: map[string]string{"group": "security"},
 	}
-
+	CmdAcl.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")

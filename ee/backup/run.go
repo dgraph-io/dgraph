@@ -109,8 +109,9 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
-
+	Restore.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	flag := Restore.Cmd.Flags()
 	flag.StringVar(&opt.compression, "badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
@@ -174,8 +175,9 @@ $ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
-
+	LsBackup.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	flag := LsBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
@@ -285,6 +287,7 @@ func initExportBackup() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 
 	flag := ExportBackup.Cmd.Flags()

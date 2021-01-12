@@ -38,6 +38,6 @@ func init() {
 			os.Exit(0)
 		},
 		Annotations: map[string]string{"group": "version"},
-
 	}
+	Version.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 }
