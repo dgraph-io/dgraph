@@ -58,8 +58,7 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
-		_, attr, _ := x.ParseNamespaceAttr(q.Order[0].Attr)
-		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", attr)
+		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
 	}
 
 	if span := otrace.FromContext(ctx); span != nil {
@@ -198,14 +197,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return resultWithError(errors.Errorf("Attribute %s not defined in schema",
-			x.ParseAttr(order.Attr)))
+		return resultWithError(errors.Errorf("Attribute %s not defined in schema", order.Attr))
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ctx, order.Attr) {
-		return resultWithError(errors.Errorf("Attribute %s is not indexed.",
-			x.ParseAttr(order.Attr)))
+		return resultWithError(errors.Errorf("Attribute %s is not indexed.", order.Attr))
 	}
 
 	tokenizers := schema.State().Tokenizer(ctx, order.Attr)
@@ -223,12 +220,11 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// sortable.
 		if typ == types.StringID {
 			return resultWithError(errors.Errorf(
-				"Attribute %s does not have exact index for sorting.", x.ParseAttr(order.Attr)))
+				"Attribute %s does not have exact index for sorting.", order.Attr))
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return resultWithError(errors.Errorf("Attribute %s is not sortable.",
-			x.ParseAttr(order.Attr)))
+		return resultWithError(errors.Errorf("Attribute %s is not sortable.", order.Attr))
 	}
 
 	var prefix []byte
@@ -456,7 +452,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	// TODO (pawan) - Why check only the first attribute, what if other attributes are of list type?
 	if schema.State().IsList(ts.Order[0].Attr) {
 		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]",
-			x.ParseAttr(ts.Order[0].Attr))
+			ts.Order[0].Attr)
 	}
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.
