@@ -383,8 +383,8 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 			}
 		}
 
-		// Step-3: Write closing ] for JSON arrays
-		if next == nil || enc.getAttr(cur) != enc.getAttr(next) {
+		// Step-3: Update counters and Write closing ] for JSON arrays
+		if !curSelectionIsList || next == nil || enc.getAttr(cur) != enc.getAttr(next) {
 			if curSelectionIsList && !nullWritten {
 				x.Check2(ctx.buf.WriteRune(']'))
 			}
@@ -531,8 +531,19 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 // Note that there can't be the case when an aggregate property was requested in DQL and not
 // returned by Dgraph because aggregate properties are calculated using math functions which
 // always give some result.
+// But, auth queries may lead to generation of following DQL:
+// 		query {
+// 			aggregateCountry()
+// 		}
+// which doesn't request any aggregate properties. In this case the fastJson node won't have any
+// children and we just need to write null as the value of the query.
 func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	query gqlSchema.Field, qryPath []interface{}) fastJsonNode {
+	if enc.children(fj) == nil {
+		x.Check2(ctx.buf.Write(jsonNull))
+		return fj.next
+	}
+
 	var val []byte
 	var err error
 	comma := ""

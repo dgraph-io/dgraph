@@ -802,13 +802,13 @@ func (drw *deleteRewriter) Rewrite(
 			varGen:        varGen,
 			selector:      queryAuthSelector,
 			filterByUid:   true,
+			parentVarName: varGen.Next(queryField.Type(), "", "", false),
+			varName:       MutationQueryVar,
+			hasAuthRules:  hasAuthRules(queryField, authRw),
 		}
-		queryAuthRw.parentVarName = queryAuthRw.varGen.Next(queryField.Type(), "", "",
-			queryAuthRw.isWritingAuth)
-		queryAuthRw.varName = MutationQueryVar
-		queryAuthRw.hasAuthRules = hasAuthRules(queryField, authRw)
 
-		queryDel := rewriteAsQuery(queryField, queryAuthRw)
+		// these queries are responsible for querying the queryField
+		queryFieldQry := rewriteAsQuery(queryField, queryAuthRw)
 
 		// we don't want the `x` query to show up in GraphQL JSON response while querying the query
 		// field. So, need to make it `var` query and remove any children from it as there can be
@@ -821,11 +821,19 @@ func (drw *deleteRewriter) Rewrite(
 			Children: nil, // no need to copy children
 			Filter:   qry.Filter,
 		}
+		// if there wasn't any root func because auth RBAC processing may have filtered out
+		// everything, then need to append () to attr so that a valid DQL is formed.
 		if qryCopy.Func == nil {
 			qryCopy.Attr = qryCopy.Attr + "()"
 		}
-		queryDel = append(append([]*gql.GraphQuery{qryCopy}, dgQry[1:]...), queryDel...)
-		upserts = append(upserts, &UpsertMutation{Query: queryDel})
+		// if the queryFieldQry didn't use the variable `x`, then need to make qryCopy not use that
+		// variable name, so that a valid DQL is formed. This happens when RBAC processing returns
+		// false.
+		if queryFieldQry[0].Attr == queryField.DgraphAlias()+"()" {
+			qryCopy.Var = ""
+		}
+		queryFieldQry = append(append([]*gql.GraphQuery{qryCopy}, dgQry[1:]...), queryFieldQry...)
+		upserts = append(upserts, &UpsertMutation{Query: queryFieldQry})
 	}
 
 	return upserts, err
