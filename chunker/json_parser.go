@@ -951,7 +951,9 @@ func (p *Parser) Value(n byte) (ParserState, error) {
 	case '[':
 		return p.openValueLevel(']', true, p.Array), nil
 	case '"', 'l', 'u', 'd', 't', 'f', 'n':
-		p.getScalarValue(n)
+		if err := p.getScalarValue(n); err != nil {
+			return nil, err
+		}
 	}
 	return p.Object, nil
 }
@@ -959,12 +961,46 @@ func (p *Parser) Value(n byte) (ParserState, error) {
 // Uid is called when a "uid" string is encountered within Object. Its only job
 // is to set the uid on the current (top) Level.
 func (p *Parser) Uid(n byte) (ParserState, error) {
-	if n != '"' {
-		return nil, errors.New(fmt.Sprintf("expected uid string, instead found: %c\n", n))
+	switch n {
+	case 'l':
+		p.Cursor++
+		n := int64(p.Parsed.Tape[p.Cursor])
+		if n < 0 {
+			return nil, errors.Errorf("expected positive uid number, instead found: %c\n", n)
+		}
+		p.Levels.FoundSubject(fmt.Sprintf("%d", n))
+	case 'u':
+		p.Cursor++
+		p.Levels.FoundSubject(fmt.Sprintf("%d", p.Parsed.Tape[p.Cursor]))
+	case '"':
+		uid := uint64(0)
+		uidVal := p.String()
+		s := stripSpaces(uidVal)
+		if len(uidVal) == 0 {
+			uid = 0
+		} else if ok := strings.HasPrefix(s, "-"); ok {
+			return nil, errors.New("negative uid")
+		} else if ok := strings.HasPrefix(s, "0x"); ok {
+			u, err := strconv.ParseUint(s[:2], 16, 64)
+			if err != nil {
+				return nil, err
+			}
+			uid = u
+		} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
+			p.Levels.FoundSubject(uidVal)
+			return p.Object, nil
+		} else if ok := strings.HasPrefix(s, "uid("); ok {
+			p.Levels.FoundSubject(s)
+			return p.Object, nil
+		} else if u, err := strconv.ParseUint(uidVal, 0, 64); err == nil {
+			uid = u
+		}
+		if uid > 0 {
+			p.Levels.FoundSubject(fmt.Sprintf("%d", uid))
+		}
+	default:
+		return nil, errors.Errorf("expected uid string or number, instead found: %c\n", n)
 	}
-	s := p.String()
-
-	p.Levels.FoundSubject(s)
 	return p.Object, nil
 }
 
@@ -990,14 +1026,26 @@ func (p *Parser) openValueLevel(closing byte, array bool, next ParserState) Pars
 }
 
 // getScalarValue is used by Value and Array
-func (p *Parser) getScalarValue(n byte) {
+func (p *Parser) getScalarValue(n byte) error {
 	switch n {
 	case '"':
+		// default value is considered as S P * deletion
 		s := p.String()
 		if s == "" && p.Op == DeleteNquads {
 			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
 			break
 		}
+		// handle uid function in upsert block
+		s = stripSpaces(s)
+		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
+			if !strings.HasSuffix(s, ")") {
+				return errors.Errorf(
+					"While processing '%s', brackets are not closed properly", s)
+			}
+			p.Quad.ObjectId = s
+			break
+		}
+		// normal string value
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_StrVal{s}}
 	case 'l', 'u':
 		p.Cursor++
@@ -1005,14 +1053,17 @@ func (p *Parser) getScalarValue(n byte) {
 	case 'd':
 		p.Cursor++
 		n := math.Float64frombits(p.Parsed.Tape[p.Cursor])
+		// default value is considered as S P * deletion
 		if n == 0 && p.Op == DeleteNquads {
 			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
 			break
 		}
+		// normal float value
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{n}}
 	case 't':
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{true}}
 	case 'f':
+		// default value is considered as S P * deletion
 		if p.Op == DeleteNquads {
 			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{x.Star}}
 			break
@@ -1023,6 +1074,7 @@ func (p *Parser) getScalarValue(n byte) {
 	}
 	p.Quads = append(p.Quads, p.Quad)
 	p.Quad = NewNQuad()
+	return nil
 }
 
 func (p *Parser) getFacet(n byte) error {
