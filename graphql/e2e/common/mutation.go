@@ -4670,3 +4670,38 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
 }
+
+func mutationWithTypename(t *testing.T) {
+	addPost1Params := &GraphQLParams{
+		Query: `mutation {
+            __typename
+			addpost1(input: [{title: "Dgraph", numLikes: 92233720 }]) {
+    			__typename
+				post1 {
+					__typename
+					title
+					numLikes
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addPost1Expected := `{
+        "__typename":"Mutation",
+		"addpost1": {
+            "__typename":"Addpost1Payload",
+			"post1": [{
+				"__typename":"post1",
+				"title": "Dgraph",
+				"numLikes": 92233720
+
+			}]
+		}
+	}`
+	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
+	filter := map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}
+	DeleteGqlType(t, "post1", filter, 1, nil)
+}
