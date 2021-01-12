@@ -18,7 +18,9 @@ package tool
 import (
 	"strings"
 
-	tool "github.com/dgraph-io/dgraph/dgraph/cmd/tool/decrypt"
+	tool_conv "github.com/dgraph-io/dgraph/dgraph/cmd/tool/conv"
+	tool_decrypt "github.com/dgraph-io/dgraph/dgraph/cmd/tool/decrypt"
+	tool_increment "github.com/dgraph-io/dgraph/dgraph/cmd/tool/increment/increment"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,7 +29,7 @@ import (
 var Tool x.SubCommand
 
 var subcommands = []*x.SubCommand{
-	&tool.Decrypt,
+	&tool_decrypt.Decrypt, &tool_conv.Conv, &tool_increment.Increment,
 }
 
 func init() {

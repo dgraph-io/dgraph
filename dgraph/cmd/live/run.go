@@ -129,6 +129,7 @@ func init() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
 

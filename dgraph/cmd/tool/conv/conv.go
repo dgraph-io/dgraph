@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package conv
+package tool
 
 import (
 	"bufio"
@@ -28,7 +28,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/paulmach/go.geojson"
+	geojson "github.com/paulmach/go.geojson"
 )
 
 // TODO: Reconsider if we need this binary.

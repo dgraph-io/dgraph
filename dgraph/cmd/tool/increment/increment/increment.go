@@ -17,7 +17,7 @@
 // Package increment builds a tool that retrieves a value for UID=0x01, and increments
 // it by 1. If successful, it prints out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
-package increment
+package tool
 
 import (
 	"context"

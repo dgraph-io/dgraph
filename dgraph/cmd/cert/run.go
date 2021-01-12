@@ -45,6 +45,7 @@ func init() {
 			defer x.StartProfile(Cert.Conf).Stop()
 			return run()
 		},
+		Annotations: map[string]string{"group": "security"},
 	}
 
 	flag := Cert.Cmd.Flags()

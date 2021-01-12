@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,9 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
+
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debuginfo"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
@@ -76,8 +75,8 @@ var rootConf = viper.New()
 
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
-	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &increment.Increment, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
+	&bulk.Bulk, &cert.Cert, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
+	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
 	&raftmigrate.RaftMigrate, &tool.Tool,
 }
 
@@ -118,6 +117,42 @@ func initCmds() {
 	}
 	// For bash shell completion
 	RootCmd.AddCommand(shellCompletionCmd())
+	RootCmd.SetHelpTemplate(`Dgraph is a horizontally scalable and distributed graph database,
+	providing ACID transactions, consistent replication and linearizable reads.
+	It's built from ground up to perform for a rich set of queries. Being a native
+	graph database, it tightly controls how the data is arranged on disk to optimize
+	for query performance and throughput, reducing disk seeks and network calls in a
+	cluster.
+
+	Usage:{{if .Runnable}}
+	  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+	  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+	VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "version"))}}
+	 {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+	Available Commands:
+	DGRAPH CORE: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
+	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+	FAST DATA LOADING: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
+	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+	DGRAPH SECURITY: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
+		{{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+	Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+	Flags:
+	{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+
+	Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+	  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+	Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+	`)
 
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward

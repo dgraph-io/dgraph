@@ -37,5 +37,7 @@ func init() {
 			fmt.Print(x.BuildDetails())
 			os.Exit(0)
 		},
+		Annotations: map[string]string{"group": "version"},
+
 	}
 }

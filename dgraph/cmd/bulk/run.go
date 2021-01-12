@@ -52,6 +52,7 @@ func init() {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 

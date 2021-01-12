@@ -93,6 +93,7 @@ they form a Raft group and provide synchronous replication.
 			defer x.StartProfile(Alpha.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
 

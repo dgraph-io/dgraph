@@ -74,6 +74,7 @@ instances to achieve high-availability.
 			defer x.StartProfile(Zero.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
