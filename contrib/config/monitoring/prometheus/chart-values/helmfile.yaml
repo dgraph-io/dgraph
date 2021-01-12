@@ -5,8 +5,8 @@ repositories:
     url: https://charts.helm.sh/stable
 
 releases:
-  - name: prometheus
-    namespace: {{ env NAMESPACE | default "monitoring" }}
+  - name: my-prometheus
+    namespace: {{ env "NAMESPACE" | default "monitoring" }}
     chart: prometheus-community/kube-prometheus-stack
     values:
       - ./dgraph-prometheus-operator.yaml

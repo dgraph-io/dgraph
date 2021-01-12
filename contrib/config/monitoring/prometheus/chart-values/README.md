@@ -27,7 +27,7 @@ GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
 
-helm install my-prometheus-release \
+helm install my-prometheus \
   --values ./dgraph-prometheus-operator.yaml \
   --set grafana.adminPassword=$GRAFANA_ADMIN_PASSWORD \
   --namespace $NAMESPACE \
@@ -75,7 +75,7 @@ Here are some Helm chart values you may want to configure depending on your envi
 
 ## Binary Backup Monitoring Support
 
-If you enabled binary backups through Kubernetes CronJob exposed in Dgraph helm chart, you can use the examples here add monitoring of backup cron jobs.
+If you enabled binary backups through Kubernetes CronJob enabled with the Dgraph helm chart (see [backups/README.md](../backups/README.md)), you can use the examples here add monitoring of backup cron jobs.
 
 With `helmfile`, you can deploy this using the following:
 
