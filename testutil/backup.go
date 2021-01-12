@@ -77,8 +77,9 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	restoreDone := false
+	client := GetHttpsClient(t)
 	for {
-		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		resp, err := client.Post(AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)

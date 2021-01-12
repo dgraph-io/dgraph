@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
