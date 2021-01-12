@@ -797,10 +797,12 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 				}
 			}
 		}
-		p.Levels.Pop()
+		l = p.Levels.Pop()
+		p.Quads = append(p.Quads, l.Quads...)
 		return p.Object, nil
 	case ']':
-		p.Levels.Pop()
+		l := p.Levels.Pop()
+		p.Quads = append(p.Quads, l.Quads...)
 		return p.Object, nil
 	case '"':
 		s := p.String()
@@ -1097,7 +1099,8 @@ func (p *Parser) getScalarValue(n byte) error {
 	case 'n':
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BytesVal{nil}}
 	}
-	p.Quads = append(p.Quads, p.Quad)
+	l := p.Levels.Get(0)
+	l.Quads = append(l.Quads, p.Quad)
 	p.Quad = NewNQuad()
 	return nil
 }
@@ -1229,11 +1232,10 @@ func (p *Parser) getGeoValue() error {
 	if geoVal, err = types.ObjectValue(types.GeoID, geoStruct); err != nil {
 		return err
 	}
-	_ = geoVal
-	// TODO: move everything over to *api.NQuad so we can use this *api.Value
 	l := p.Levels.Get(0)
 	l.Wait.ObjectValue = geoVal
 	p.Quads = append(p.Quads, l.Wait)
+	//l.Quads = append(l.Quads, l.Wait)
 	return nil
 }
 
@@ -1244,8 +1246,9 @@ type ParserLevels struct {
 type ParserLevel struct {
 	Array   bool
 	Subject string
-	Wait    *api.NQuad
 	Scalars bool
+	Wait    *api.NQuad
+	Quads   []*api.NQuad
 }
 
 func NewParserLevels() *ParserLevels {
@@ -1303,6 +1306,7 @@ func (p *ParserLevels) Deeper(array bool) *ParserLevel {
 	level := &ParserLevel{
 		Array:   array,
 		Subject: subject,
+		Quads:   make([]*api.NQuad, 0),
 	}
 	p.Levels = append(p.Levels, level)
 	return level
@@ -1323,5 +1327,10 @@ func (p *ParserLevels) Subject() string {
 // FoundSubject is called when the Parser is in the Uid state and finds a valid
 // uid.
 func (p *ParserLevels) FoundSubject(s string) {
-	p.Levels[len(p.Levels)-1].Subject = s
+	l := p.Levels[len(p.Levels)-1]
+	l.Subject = s
+	// TODO: verify
+	for _, quad := range l.Quads {
+		quad.Subject = l.Subject
+	}
 }
