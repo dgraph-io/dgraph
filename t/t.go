@@ -430,7 +430,7 @@ func composeFileFor(pkg string) string {
 func getPackages() []task {
 	has := func(list []string, in string) bool {
 		for _, l := range list {
-			if strings.Contains(in, l) {
+			if len(l) > 0 && strings.Contains(in, l) {
 				return true
 			}
 		}
@@ -490,7 +490,7 @@ func getPackages() []task {
 			continue
 		}
 
-		if len(skipPkgs) > 0 && has(skipPkgs, pkg.ID) {
+		if has(skipPkgs, pkg.ID) {
 			fmt.Printf("Skipping pacakge %s as its available in skip list \n", pkg.ID)
 			continue
 		}
