@@ -523,6 +523,8 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 
+	spew.Dump(nq)
+
 	for _, n := range nq {
 		glog.Infof("%v", n)
 	}
