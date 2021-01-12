@@ -665,6 +665,7 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)

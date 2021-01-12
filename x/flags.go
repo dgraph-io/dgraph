@@ -72,7 +72,7 @@ func GetFlag(opt, key string) string {
 	kv := parseFlag(opt)
 	return kv[key]
 }
-func CheckFlag(opt string, keys ...string) error {
+func CheckFlag(opt string, keys ...string) {
 	kv := parseFlag(opt)
 	for _, k := range keys {
 		if _, ok := kv[k]; ok {
@@ -81,9 +81,9 @@ func CheckFlag(opt string, keys ...string) error {
 		}
 	}
 	if len(kv) > 0 {
-		return fmt.Errorf("Found extra keys: %+v\n", kv)
+		msg := fmt.Sprintf("Found invalid options from %q: %+v\n", opt, kv)
+		panic(msg)
 	}
-	return nil
 }
 func GetFlagBool(opt, key string) bool {
 	val := GetFlag(opt, key)

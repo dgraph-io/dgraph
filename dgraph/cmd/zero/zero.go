@@ -536,9 +536,7 @@ func (s *Server) Connect(ctx context.Context,
 				proposal.Member = m
 				return proposal
 			}
-			// TODO: Check if we should count this node towards NumReplicas or not.
-			// TODO: Should each Alpha just indicate which group it wants to be part of? So, we
-			// don't have to do that calculation here.
+			// TODO: Allow each Alpha to specify which group it should be part of.
 
 			// We don't have this server in the list.
 			if len(group.Members) < s.NumReplicas {

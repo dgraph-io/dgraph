@@ -26,11 +26,14 @@ func TestFlag(t *testing.T) {
 	opt := `bool_key=true; int-key=5; float-key=0.05; string_key=value; ;`
 	kvm := parseFlag(opt)
 	t.Logf("Got kvm: %+v\n", kvm)
-	require.NoError(t, CheckFlag(opt, "bool-key", "int-key", "string-key", "float-key"))
-	require.NoError(t, CheckFlag(opt, "bool-key", "int-key", "string-key", "float-key",
-		"other-key"))
+	CheckFlag(opt, "bool-key", "int-key", "string-key", "float-key")
+	CheckFlag(opt, "bool-key", "int-key", "string-key", "float-key", "other-key")
 	// Has a typo.
-	require.Error(t, CheckFlag(opt, "boolo-key", "int-key", "string-key", "float-key"))
+
+	c := func() {
+		CheckFlag(opt, "boolo-key", "int-key", "string-key", "float-key")
+	}
+	require.Panics(t, c)
 	require.Equal(t, true, GetFlagBool(opt, "bool-key"))
 	require.Equal(t, uint64(5), GetFlagUint64(opt, "int-key"))
 	require.Equal(t, "value", GetFlag(opt, "string-key"))

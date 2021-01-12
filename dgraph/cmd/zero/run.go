@@ -196,6 +196,7 @@ func run() {
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
+	x.CheckFlag(opts.raftOpts, "idx", "learner")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -232,7 +233,7 @@ func run() {
 
 	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
 	if nodeId == 0 {
-		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please try again with idx as a positive integer")
+		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	x.Check(err)
