@@ -38,6 +38,7 @@ func init() {
 		Short: "Run a Dgraph tool",
 		Long:  "A suite of Dgraph tools",
 	}
+	Tool.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	Tool.EnvPrefix = "DGRAPH_TOOL"
 	for _, sc := range subcommands {
 		Tool.Cmd.AddCommand(sc.Cmd)

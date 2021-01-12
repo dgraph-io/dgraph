@@ -54,6 +54,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "data-load"},
 	}
+	Bulk.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()

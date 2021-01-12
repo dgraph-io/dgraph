@@ -117,42 +117,7 @@ func initCmds() {
 	}
 	// For bash shell completion
 	RootCmd.AddCommand(shellCompletionCmd())
-	RootCmd.SetHelpTemplate(`Dgraph is a horizontally scalable and distributed graph database,
-	providing ACID transactions, consistent replication and linearizable reads.
-	It's built from ground up to perform for a rich set of queries. Being a native
-	graph database, it tightly controls how the data is arranged on disk to optimize
-	for query performance and throughput, reducing disk seeks and network calls in a
-	cluster.
-
-	Usage:{{if .Runnable}}
-	  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-	  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
-
-	VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "version"))}}
-	 {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-	Available Commands:
-	DGRAPH CORE: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
-	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-	FAST DATA LOADING: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
-	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-	DGRAPH SECURITY: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
-		{{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-	Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-	Flags:
-	{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
-
-
-	Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-	  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-
-	Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
-	`)
+	RootCmd.SetHelpTemplate(x.GetRootTemplate())
 
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward

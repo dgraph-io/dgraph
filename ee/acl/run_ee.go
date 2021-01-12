@@ -33,8 +33,9 @@ const defaultGroupList = "dgraph-unused-group"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Run the Dgraph acl tool",
+		Use:         "acl",
+		Short:       "Run the Dgraph acl tool",
+		Annotations: map[string]string{"group": "security"},
 	}
 
 	flag := CmdAcl.Cmd.PersistentFlags()
