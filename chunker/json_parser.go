@@ -697,6 +697,7 @@ func NewNQuad() *api.NQuad {
 type ParserState func(byte) (ParserState, error)
 
 type Parser struct {
+	Skip         bool
 	Op           int
 	Cursor       uint64
 	StringCursor uint64
@@ -731,7 +732,11 @@ func (p *Parser) Run(d []byte) (err error) {
 		if p.Cursor >= uint64(len(p.Parsed.Tape)) {
 			return
 		}
-		p.Iter.AdvanceInto()
+		if !p.Skip {
+			p.Iter.AdvanceInto()
+		} else {
+			p.Skip = false
+		}
 		//t := p.Iter.AdvanceInto()
 		//fmt.Printf("%v %d %c\n", t, p.Cursor, p.Parsed.Tape[p.Cursor]>>56)
 		if state, err = state(byte(p.Parsed.Tape[p.Cursor] >> 56)); err != nil {
@@ -955,8 +960,9 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 			if err := p.getGeoValue(); err != nil {
 				return nil, err
 			}
-			p.Levels.Pop()
-			return p.Object, nil
+			l = p.Levels.Pop()
+			p.Quads = append(p.Quads, l.Quads...)
+			return p.Array, nil
 		}
 		p.Levels.Deeper(false)
 		return p.Object, nil
@@ -966,6 +972,8 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 		p.Levels.Deeper(false)
 		return p.Array, nil
 	case ']':
+		l := p.Levels.Pop()
+		a.Quads = append(a.Quads, l.Quads...)
 		// return to Object rather than Array because it's the default state
 		return p.Object, nil
 	case '"', 'l', 'u', 'd', 't', 'f', 'n':
@@ -985,7 +993,8 @@ func (p *Parser) Value(n byte) (ParserState, error) {
 			if err := p.getGeoValue(); err != nil {
 				return nil, err
 			}
-			p.Levels.Pop()
+			l = p.Levels.Pop()
+			p.Quads = append(p.Quads, l.Quads...)
 			return p.Object, nil
 		}
 		return p.openValueLevel('}', false, p.Object), nil
@@ -1214,6 +1223,7 @@ func (p *Parser) isGeo() bool {
 
 func (p *Parser) getGeoValue() error {
 	// skip over the geo object
+	p.Skip = true
 	next := uint64(((p.Parsed.Tape[p.Cursor] << 8) >> 8) - 1)
 	stringSize := uint64(0)
 	for i := p.Cursor; i < next; i++ {
@@ -1248,8 +1258,8 @@ func (p *Parser) getGeoValue() error {
 	}
 	l := p.Levels.Get(0)
 	l.Wait.ObjectValue = geoVal
-	p.Quads = append(p.Quads, l.Wait)
-	//l.Quads = append(l.Quads, l.Wait)
+	//p.Quads = append(p.Quads, l.Wait)
+	l.Quads = append(l.Quads, l.Wait)
 	return nil
 }
 
