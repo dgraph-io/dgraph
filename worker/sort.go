@@ -19,7 +19,6 @@ package worker
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -126,7 +125,6 @@ func resultWithError(err error) *sortresult {
 }
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
-	fmt.Println("In sorting")
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithoutIndex")
 
@@ -755,6 +753,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 
 	// nullsList is the list of UIDs for which value doesn't exist.
 	var nullsList []uint64
+	var nullVals [][]types.Val
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
@@ -765,7 +764,9 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			if err != nil {
 				// Value couldn't be found or couldn't be converted to the sort type.
 				// It will be appended to the end of the result based on the pagination.
+				val.Value = nil
 				nullsList = append(nullsList, uid)
+				nullVals = append(nullVals, []types.Val{val})
 				continue
 			}
 			uids = append(uids, uid)
@@ -774,6 +775,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	}
 	err := types.Sort(values, &uids, []bool{order.Desc}, lang)
 	ul.Uids = append(uids, nullsList...)
+	values = append(values, nullVals...)
 	if len(ts.Order) > 1 {
 		for _, v := range values {
 			multiSortVals = append(multiSortVals, v[0])
