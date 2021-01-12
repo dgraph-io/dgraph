@@ -6,7 +6,7 @@ repositories:
 
 releases:
   - name: prometheus
-    namespace: default
+    namespace: {{ env NAMESPACE | default "monitoring" }}
     chart: prometheus-community/kube-prometheus-stack
     values:
       - ./dgraph-prometheus-operator.yaml
@@ -17,7 +17,7 @@ releases:
       {{- if env "DGRAPH_BACKUPS_ENABLED" }}
       - ./dgraph-backup-alert-rules.yaml
       {{- end }}
-      {{- if env "DGRAPH_PAGERDUTY_ENABLED" }}
+      {{- if env "PAGERDUTY_INTEGRATION_KEY" }}
       - ./alertmanager-pagerduty.yaml.gotmpl
       {{- end }}
     disableValidation: true

@@ -22,8 +22,10 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add stable https://charts.helm.sh/stable
 helm repo update
 
+## set grafanan secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
-NAMESPACE="monitoring"  # specify desired namespace
+## optionally set namespace (default=monitoring if not specified)
+export NAMESPACE="monitoring"
 
 helm install my-prometheus-release \
   --values ./dgraph-prometheus-operator.yaml \
@@ -39,9 +41,12 @@ You can use helmfile to manage multiple helm charts and corresponding helmcharts
 To use this, run the following:
 
 ```bash
-NAMESPACE="monitoring"  # specify desired namespace
+## set grafanan secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
-helmfile --namespace $NAMESPACE apply
+## optionally set namespace (default=monitoring if not specified)
+export NAMESPACE="monitoring"
+
+helmfile apply
 ```
 
 ## Grafana Dashboards
@@ -56,14 +61,41 @@ There's an example dash board for some metrics that you can use to monitor Dgrap
 
 Here are some Helm chart values you may want to configure depending on your environment.
 
-## General
+### General
 
 * `grafana.service.type` - set to `LoadBalancer` if you would like to expose this port.
 * `grafana.service.annotations` - add annotations to configure a `LoadBalancer` such as if it is internal or external facing, DNS name with external-dns, etc.
 * `prometheus.service.type` - set to `LoadBalancer` if you would like to expose this port.
 * `prometheus.service.annotations` - add annotations to configure a `LoadBalancer` such as if it is internal or external facing, DNS name with external-dns, etc.
 
-## Dgraph Service Monitors
+### Dgraph Service Monitors
 
 * `prometheus.additionalServiceMonitors.namespaceSelector.matchNames` - if you want to match a dgraph installed into a specific namespace.
 * `prometheus.additionalServiceMonitors.selector.matchLabels` - if you want to match through a specific labels in your dgraph deployment.  Currently matches `monitor: zero.dgraph-io` and `monitor: alpha.dgraph-io`, which si the default for [Dgraph helm chart](https://github.com/dgraph-io/charts).
+
+## Binary Backup Monitoring Support
+
+If you enabled binary backups through Kubernetes CronJob exposed in Dgraph helm chart, you can use the examples here add monitoring of backup cron jobs.
+
+With `helmfile`, you can deploy this using the following:
+
+```bash
+## set grafanan secret admin password
+GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
+## optionally set namespace (default=monitoring if not specified)
+export NAMESPACE="monitoring"
+## enable backups
+export DGRAPH_BACKUPS_ENABLED=1
+## enable pagerduty and set integration key
+export PAGERDUTY_INTEGRATION_KEY='<pagerduty-intregration-key-goes-here>'
+
+helmfile apply
+```
+
+For PagerDuty integration, you will need to add a service with integration type of `Prometheus` and later copy the integration key that is created.
+
+## Upgrading form previous versions
+
+Previously, this chart was called `stable/prometheus-operator`, which has been deprecated and now called `prometheus-community/kube-prometheus-stack`.  You will have to do a migration from the old chart to the new chart.  The prometheus community has created a migration guide for this process:
+
+* [Migrating from stable/prometheus-operator chart](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md#migrating-from-stableprometheus-operator-chart)
