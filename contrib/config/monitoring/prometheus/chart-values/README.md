@@ -22,7 +22,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add stable https://charts.helm.sh/stable
 helm repo update
 
-## set grafanan secret admin password
+## set Grafana secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
@@ -73,9 +73,10 @@ Here are some Helm chart values you may want to configure depending on your envi
 * `prometheus.additionalServiceMonitors.namespaceSelector.matchNames` - if you want to match a dgraph installed into a specific namespace.
 * `prometheus.additionalServiceMonitors.selector.matchLabels` - if you want to match through a specific labels in your dgraph deployment.  Currently matches `monitor: zero.dgraph-io` and `monitor: alpha.dgraph-io`, which si the default for [Dgraph helm chart](https://github.com/dgraph-io/charts).
 
-## Binary Backup Monitoring Support
 
-If you enabled binary backups through Kubernetes CronJob enabled with the Dgraph helm chart (see [backups/README.md](../backups/README.md)), you can use the examples here add monitoring of backup cron jobs.
+## Alerting for Dgraph
+
+You can use examples here to add alerts for Dgraph using Prometheus AlertManager.
 
 With `helmfile`, you can deploy this using the following:
 
@@ -84,9 +85,9 @@ With `helmfile`, you can deploy this using the following:
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
-## enable backups
-export DGRAPH_BACKUPS_ENABLED=1
-## enable pagerduty and set integration key
+## enable dgraph alerting
+export DGRAPH_ALERTS_ENABLED=1
+## enable pagerduty and set integration key (optional)
 export PAGERDUTY_INTEGRATION_KEY='<pagerduty-intregration-key-goes-here>'
 
 helmfile apply
@@ -94,8 +95,30 @@ helmfile apply
 
 For PagerDuty integration, you will need to add a service with integration type of `Prometheus` and later copy the integration key that is created.
 
-## Upgrading form previous versions
+### Alerting for Dgraph binary backups with Kubenretes CronJobs
 
-Previously, this chart was called `stable/prometheus-operator`, which has been deprecated and now called `prometheus-community/kube-prometheus-stack`.  You will have to do a migration from the old chart to the new chart.  The prometheus community has created a migration guide for this process:
+In addition to adding alerts for Dgraph, if you you enabled binary backups through Kubernetes CronJob enabled with the Dgraph helm chart (see [backups/README.md](../backups/README.md)), you can use the examples here add alerting for backup cron jobs.
+
+With `helmfile`, you can deploy this using the following:
+
+```bash
+## set grafanan secret admin password
+GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
+## optionally set namespace (default=monitoring if not specified)
+export NAMESPACE="monitoring"
+## enable dgraph alerting and Kubernetes CronJobs alerting
+export DGRAPH_ALERTS_ENABLED=1
+export DGRAPH_BACKUPS_ENABLED=1
+## enable pagerduty and set integration key (optional)
+export PAGERDUTY_INTEGRATION_KEY='<pagerduty-intregration-key-goes-here>'
+
+helmfile apply
+```
+
+## Upgrading from previous versions
+
+Previously, this chart was called `stable/prometheus-operator`, which has been deprecated and now called `prometheus-community/kube-prometheus-stack`. If you are using the old chart, you will have to do a migration to use the new chart.
+
+The prometheus community has created a migration guide for this process:
 
 * [Migrating from stable/prometheus-operator chart](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md#migrating-from-stableprometheus-operator-chart)

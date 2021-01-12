@@ -1,7 +1,7 @@
 additionalPrometheusRulesMap:
   backup-cron:
     groups:
-    - name: kube-cron
+    - name: kube-cron.rules
       rules:
       - record: job_cronjob:kube_job_status_start_time:max
         expr: |

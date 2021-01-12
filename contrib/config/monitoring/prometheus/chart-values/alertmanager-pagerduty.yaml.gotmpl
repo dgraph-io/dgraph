@@ -6,11 +6,17 @@ alertmanager:
 
     route:
       receiver: 'null'
+      {{- if env "DGRAPH_ALERTS_ENABLED" }}
       routes:
+        - match:
+            alertname: dgraph*
+          receiver: 'pagerduty-notifications'
+      {{- if env "DGRAPH_BACKUPS_ENABLED" }}
         - match:
             alertname: CronJobStatusFailed
           receiver: 'pagerduty-notifications'
-
+      {{- end }}
+      {{- end }}
     receivers:
     - name: 'pagerduty-notifications'
       pagerduty_configs:
