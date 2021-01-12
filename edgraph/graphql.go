@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/gql"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -141,13 +142,22 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	}
 	cors := corsRes.Me[0].DgraphCors
 	uidMax := corsRes.Me[0].Uid
+	uidMaxInt, err := gql.ParseUid(uidMax)
+	if err != nil {
+		return "", nil, err
+	}
 	for _, me := range corsRes.Me[1:] {
-		if uidMax < me.Uid {
+		cUidInt, err := gql.ParseUid(me.Uid)
+		if err != nil {
+			return "", nil, err
+		}
+		if uidMaxInt < cUidInt {
+			uidMaxInt = cUidInt
 			uidMax = me.Uid
 			cors = me.DgraphCors
 		}
 	}
-	glog.Infof("Multiple nodes of type dgraph.type.cors found,returning last added node")
+	glog.Errorf("Multiple nodes of type dgraph.type.cors found,returning last added node")
 	return uidMax, cors, nil
 }
 

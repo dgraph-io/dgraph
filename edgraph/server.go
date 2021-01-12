@@ -173,13 +173,22 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	// returning the schema node which is added last
 	schema := result.ExistingGQLSchema[0].Schema
 	uidMax := result.ExistingGQLSchema[0].Uid
+	uidMaxInt, err := gql.ParseUid(uidMax)
+	if err != nil {
+		return "", "", err
+	}
 	for _, schNode := range result.ExistingGQLSchema[1:] {
-		if uidMax < schNode.Uid {
+		cUidInt, err := gql.ParseUid(schNode.Uid)
+		if err != nil {
+			return "", "", err
+		}
+		if uidMaxInt < cUidInt {
+			uidMaxInt = cUidInt
 			uidMax = schNode.Uid
 			schema = schNode.Schema
 		}
 	}
-	glog.Infof("Multiple schema node found,returning last added node")
+	glog.Errorf("Multiple schema node found,returning last added node")
 	return uidMax, schema, nil
 }
 

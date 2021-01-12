@@ -112,7 +112,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 				uidMax = schUid
 			}
 		}
-		glog.Infof("Multiple schema node found,returning last added node")
+		glog.Errorf("Multiple schema node found,returning last added node")
 		schemaNodeUid = uidMax
 	}
 
