@@ -81,7 +81,7 @@ You can use examples here to add alerts for Dgraph using Prometheus AlertManager
 With `helmfile`, you can deploy this using the following:
 
 ```bash
-## set grafanan secret admin password
+## set grafana secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
@@ -102,7 +102,7 @@ In addition to adding alerts for Dgraph, if you you enabled binary backups throu
 With `helmfile`, you can deploy this using the following:
 
 ```bash
-## set grafanan secret admin password
+## set grafana secret admin password
 GRAFANA_ADMIN_PASSWORD='<put-complete-password-here>'
 ## optionally set namespace (default=monitoring if not specified)
 export NAMESPACE="monitoring"
