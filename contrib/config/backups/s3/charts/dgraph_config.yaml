@@ -2,7 +2,7 @@ backups:
   full:
     enabled: true
     debug: true
-    schedule: "*/5 * * * *"
+    schedule: "*/15 * * * *"
 alpha:
   configFile:
     config.hcl: |
