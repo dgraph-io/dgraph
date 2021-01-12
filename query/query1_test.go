@@ -1925,7 +1925,16 @@ func TestSortNull1(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameA","pred":"A"},{"predname":"nameB","pred":"B"},{"predname":"nameC","pred":"C"},{"predname":"nameD","pred":"D"},{"predname":"nameE","pred":"E"},{"predname":"nameF"},{"predname":"nameG"},{"predname":"nameH"},{"predname":"nameI"},{"predname":"nameJ"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"predname":"nameA","pred":"A"},
+	{"predname":"nameB","pred":"B"},
+	{"predname":"nameC","pred":"C"},
+	{"predname":"nameD","pred":"D"},
+	{"predname":"nameE","pred":"E"},
+	{"predname":"nameF"},
+	{"predname":"nameG"},
+	{"predname":"nameH"},
+	{"predname":"nameI"},
+	{"predname":"nameJ"}]}}`, js)
 }
 
 func TestSortNull1Desc(t *testing.T) {
@@ -1938,7 +1947,17 @@ func TestSortNull1Desc(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"},{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"},{"predname":"nameA","pred":"A"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameE","pred":"E"},
+		{"predname":"nameD","pred":"D"},
+		{"predname":"nameC","pred":"C"},
+		{"predname":"nameB","pred":"B"},
+		{"predname":"nameA","pred":"A"},
+		{"predname":"nameF"},
+		{"predname":"nameG"},
+		{"predname":"nameH"},
+		{"predname":"nameI"},
+		{"predname":"nameJ"}]}}`, js)
 }
 
 func TestSortNull2(t *testing.T) {
@@ -1951,7 +1970,14 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7) 
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameA","pred":"A"},{"predname":"nameB","pred":"B"},{"predname":"nameC","pred":"C"},{"predname":"nameD","pred":"D"},{"predname":"nameE","pred":"E"},{"predname":"nameF"},{"predname":"nameG"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameA","pred":"A"},
+		{"predname":"nameB","pred":"B"},
+		{"predname":"nameC","pred":"C"},
+		{"predname":"nameD","pred":"D"},
+		{"predname":"nameE","pred":"E"},
+		{"predname":"nameF"},
+		{"predname":"nameG"}]}}`, js)
 }
 
 func TestSortNull2Desc(t *testing.T) {
@@ -1964,7 +1990,14 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7)
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"},{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameE","pred":"E"},
+		{"predname":"nameD","pred":"D"},
+		{"predname":"nameC","pred":"C"},
+		{"predname":"nameB","pred":"B"},
+		{"predname":"nameA","pred":"A"},
+		{"predname":"nameF"},
+		{"predname":"nameG"}]}}`, js)
 }
 
 func TestSortNull3(t *testing.T) {
@@ -1977,7 +2010,14 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7, 
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameC","pred":"C"},{"predname":"nameD","pred":"D"},{"predname":"nameE","pred":"E"},{"predname":"nameF"},{"predname":"nameG"},{"predname":"nameH"},{"predname":"nameI"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameC","pred":"C"},
+		{"predname":"nameD","pred":"D"},
+		{"predname":"nameE","pred":"E"},
+		{"predname":"nameF"},
+		{"predname":"nameG"},
+		{"predname":"nameH"},
+		{"predname":"nameI"}]}}`, js)
 }
 
 func TestSortNull3Desc(t *testing.T) {
@@ -1990,7 +2030,14 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7,
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameH"},{"predname":"nameG"},{"predname":"nameF"},{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameC","pred":"C"},
+		{"predname":"nameB","pred":"B"},
+		{"predname":"nameA","pred":"A"},
+		{"predname":"nameF"},
+		{"predname":"nameG"},
+		{"predname":"nameH"},
+		{"predname":"nameI"}]}}`, js)
 }
 
 func TestSortNull4(t *testing.T) {
@@ -2003,7 +2050,11 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 4, 
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameF"},{"predname":"nameG"},{"predname":"nameH"},{"predname":"nameI"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameF"},
+		{"predname":"nameG"},
+		{"predname":"nameH"},
+		{"predname":"nameI"}]}}`, js)
 }
 
 func TestSortNull4Desc(t *testing.T) {
@@ -2016,7 +2067,11 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 4,
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameE","pred":"E"},{"predname":"nameD","pred":"D"},{"predname":"nameC","pred":"C"},{"predname":"nameB","pred":"B"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameF"},
+		{"predname":"nameG"},
+		{"predname":"nameH"},
+		{"predname":"nameI"}]}}`, js)
 }
 
 func TestSortNull5(t *testing.T) {
@@ -2029,7 +2084,9 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 2) 
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameA", "pred": "A"},{"predname":"nameB","pred":"B"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameA", "pred": "A"},
+		{"predname":"nameB","pred":"B"}]}}`, js)
 }
 
 func TestSortNull5Desc(t *testing.T) {
@@ -2042,7 +2099,9 @@ me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 2)
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameJ"},{"predname":"nameI"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[
+		{"predname":"nameE", "pred":"E"},
+		{"predname":"nameD", "pred": "D"}]}}`, js)
 }
 
 func TestMultiSortPaginateWithOffset(t *testing.T) {

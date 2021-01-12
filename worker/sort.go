@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -125,6 +126,7 @@ func resultWithError(err error) *sortresult {
 }
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	fmt.Println("In sorting")
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithoutIndex")
 
@@ -182,7 +184,6 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithIndex")
 
-	maxCount := 0
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
@@ -195,7 +196,6 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		out[i].ulist = &emptyList
 		out[i].skippedUids = &emptySkippedList
 		out[i].uset = map[uint64]struct{}{}
-		maxCount += len(ts.UidMatrix[i].Uids)
 	}
 
 	order := ts.Order[0]
@@ -283,12 +283,9 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			if !order.Desc {
-				maxCount = int(ts.Count)
-			}
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err = intersectBucket(ctx, ts, token, out, maxCount)
+			err = intersectBucket(ctx, ts, token, out)
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -331,40 +328,9 @@ BUCKETS:
 			}
 		}
 
-		if order.Desc {
-			// Arrange the null predicates in decreasing order of their UIDs.
-			revNullPreds := make([]uint64, len(nullPreds))
-			for j := 0; j < len(nullPreds); j++ {
-				revNullPreds[j] = nullPreds[len(nullPreds)-1-j]
-			}
-			// Append the UIDs which have been skipped while intersection and the UIDs which
-			// have null predicates to the result.
-			r.UidMatrix[i].Uids = append(out[i].skippedUids.Uids, r.UidMatrix[i].Uids...)
-			r.UidMatrix[i].Uids = append(revNullPreds, r.UidMatrix[i].Uids...)
-			// Apply the offset
-			if int(ts.Offset) < len(r.UidMatrix[i].Uids) {
-				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[ts.Offset:]
-			} else {
-				r.UidMatrix[i].Uids = []uint64{}
-			}
-			// Apply the count
-			if int(ts.Count) < len(r.UidMatrix[i].Uids) {
-				r.UidMatrix[i].Uids = r.UidMatrix[i].Uids[:ts.Count]
-			}
-		} else {
-			// Apply offset to the list of null predicates, if applicable.
-			if len(out[i].skippedUids.Uids) == len(ul.Uids)-len(nullPreds) {
-				start := int(ts.Offset) - len(out[i].skippedUids.Uids)
-				if start < len(nullPreds) {
-					nullPreds = nullPreds[start:]
-				} else {
-					nullPreds = []uint64{}
-				}
-			}
-			requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
-			canAppend := x.Min(uint64(requiredCount), uint64(len(nullPreds)))
-			r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
-		}
+		requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
+		canAppend := x.Min(uint64(requiredCount), uint64(len(nullPreds)))
+		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
 	}
 
 	select {
@@ -605,8 +571,9 @@ type intersectedList struct {
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
 func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
-	out []intersectedList, count int) error {
+	out []intersectedList) error {
 	order := ts.Order[0]
+	count := int(ts.Count)
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
 		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
@@ -786,25 +753,27 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 		return nil, errors.Errorf("Sorting on multiple language is not supported.")
 	}
 
+	// nullsList is the list of UIDs for which value doesn't exist.
+	var nullsList []uint64
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
 			return multiSortVals, ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			uids = append(uids, uid)
 			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
 			if err != nil {
-				// Value couldn't be found or couldn't be converted to the sort
-				// type.  By using a nil Value, it will appear at the
-				// end (start) for orderasc (orderdesc).
-				val.Value = nil
+				// Value couldn't be found or couldn't be converted to the sort type.
+				// It will be appended to the end of the result based on the pagination.
+				nullsList = append(nullsList, uid)
+				continue
 			}
+			uids = append(uids, uid)
 			values = append(values, []types.Val{val})
 		}
 	}
 	err := types.Sort(values, &uids, []bool{order.Desc}, lang)
-	ul.Uids = uids
+	ul.Uids = append(uids, nullsList...)
 	if len(ts.Order) > 1 {
 		for _, v := range values {
 			multiSortVals = append(multiSortVals, v[0])
