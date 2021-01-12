@@ -17,10 +17,10 @@
 package x
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
 
@@ -54,20 +54,33 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
 }
 
-func GetFlag(opt, key string) string {
+func parseFlag(opt string) map[string]string {
+	kvm := make(map[string]string)
 	for _, kv := range strings.Split(opt, ";") {
-		glog.Infof("Kv: %s\n", kv)
 		splits := strings.SplitN(kv, "=", 2)
 		k := strings.TrimSpace(splits[0])
 		k = strings.ToLower(k)
 		k = strings.ReplaceAll(k, "_", "-")
-		if k == key {
-			v := strings.TrimSpace(splits[1])
-			glog.V(2).Infof("Got value for key %s: %s\n", k, v)
-			return v
+		kvm[k] = strings.TrimSpace(splits[1])
+	}
+	return kvm
+}
+func GetFlag(opt, key string) string {
+	kv := parseFlag(opt)
+	return kv[key]
+}
+func CheckFlag(opt string, keys ...string) error {
+	kv := parseFlag(opt)
+	for _, k := range keys {
+		if _, ok := kv[k]; ok {
+			delete(kv, k)
+		} else {
 		}
 	}
-	return ""
+	if len(kv) > 0 {
+		return fmt.Errorf("Found extra keys: %+v\n", kv)
+	}
+	return nil
 }
 func GetFlagBool(opt, key string) bool {
 	val := GetFlag(opt, key)
