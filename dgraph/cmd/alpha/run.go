@@ -36,6 +36,8 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgraph/ee/audit"
+
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -195,6 +197,10 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
+	// todo(aman): check what to set audit_dir default to
+	flag.String("audit_dir", "./", "Set path to directory where to save the audit logs.")
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
@@ -422,18 +428,19 @@ func setupServer(closer *z.Closer) {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/query/", queryHandler)
-	http.HandleFunc("/mutate", mutationHandler)
-	http.HandleFunc("/mutate/", mutationHandler)
-	http.HandleFunc("/commit", commitHandler)
-	http.HandleFunc("/alter", alterHandler)
-	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/state", stateHandler)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
+	// http.HandleWithMidd("", mainhalder, middlewares....)
+	http.Handle("/query", auditRequest(queryHandler))
+	http.Handle("/query/", auditRequest(queryHandler))
+	http.Handle("/mutate", auditRequest(mutationHandler))
+	http.Handle("/mutate/", auditRequest(mutationHandler))
+	http.Handle("/commit", auditRequest(commitHandler))
+	http.Handle("/alter", auditRequest(alterHandler))
+	http.Handle("/health", auditRequest(healthCheck))
+	http.Handle("/state", auditRequest(stateHandler))
+	http.Handle("/jemalloc", auditRequest(x.JemallocHandler))
 
 	// TODO: Figure out what this is for?
-	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.Handle("/debug/store", auditRequest(storeStatsHandler))
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -456,8 +463,8 @@ func setupServer(closer *z.Closer) {
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	http.Handle("/graphql", mainServer.HTTPHandler())
-	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/graphql", auditRequestWithHandler(mainServer.HTTPHandler()))
+	http.Handle("/probe/graphql", auditRequest(func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
@@ -467,19 +474,20 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
-	})
-	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
+	}))
+	http.Handle("/admin", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler())))
+	}, adminAuthHandler(adminServer.HTTPHandler()))))
 
-	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
+	http.Handle("/admin/schema", auditRequestWithHandler(adminAuthHandler(http.HandlerFunc(func(
+		w http.ResponseWriter,
 		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
-	})))
+	}))))
 
-	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+	http.Handle("/admin/schema/validate", auditRequest(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		schema := readRequest(w, r)
 		w.Header().Set("Content-Type", "application/json")
@@ -494,31 +502,33 @@ func setupServer(closer *z.Closer) {
 		w.WriteHeader(http.StatusBadRequest)
 		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
 		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	}))
+	})))
 
-	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	http.Handle("/admin/shutdown", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{http.
+		MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
-		}))))
+		})))))
 
-	http.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/draining", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		drainingHandler(w, r, adminServer)
-	}))))
+	})))))
 
-	http.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	http.Handle("/admin/export", auditRequestWithHandler(allowedMethodsHandler(
+		allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			exportHandler(w, r, adminServer)
-		}))))
+		})))))
 
-	http.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/config/cache_mb", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		memoryLimitHandler(w, r, adminServer)
-	}))))
+	})))))
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
@@ -527,8 +537,8 @@ func setupServer(closer *z.Closer) {
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")
 
-	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/ui/keywords", keywordHandler)
+	http.Handle("/", auditRequest(homeHandler))
+	http.Handle("/ui/keywords", auditRequest(keywordHandler))
 
 	// Initialize the servers.
 	admin.ServerCloser.AddRunning(3)
@@ -602,6 +612,8 @@ func run() {
 
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
+		AuditEnabled:  Alpha.Conf.GetBool("audit_enabled"),
+		AuditDir:      Alpha.Conf.GetString("audit_dir"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -663,6 +675,8 @@ func run() {
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
+		AuditEnabled:         Alpha.Conf.GetBool("audit_enabled"),
+		HmacSecret:           opts.HmacSecret,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")
@@ -785,6 +799,7 @@ func run() {
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
 
+	x.Check(audit.InitAuditor())
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 
@@ -797,6 +812,8 @@ func run() {
 
 	adminCloser.SignalAndWait()
 	glog.Infoln("adminCloser closed.")
+
+	audit.Auditor.Close()
 
 	worker.State.Dispose()
 	x.RemoveCidFile()

@@ -70,6 +70,9 @@ type Options struct {
 	CachePercentage string
 	// CacheMb is the total memory allocated between all the caches.
 	CacheMb int64
+
+	AuditDir     string
+	AuditEnabled bool
 }
 
 // Config holds an instance of the server options..

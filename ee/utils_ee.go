@@ -37,5 +37,8 @@ func GetEEFeaturesList() []string {
 	} else {
 		ee = append(ee, "backup_restore")
 	}
+	if worker.Config.AuditEnabled {
+		ee = append(ee, "audit")
+	}
 	return ee
 }
