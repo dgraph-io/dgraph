@@ -325,8 +325,9 @@ language                       : [string] .
 score                          : [int] @index(int) .
 average                        : [float] @index(float) .
 gender                         : string .
-pred                           : string @index(exact) .
-predname                       : string .
+indexpred                      : string @index(exact) .
+pred                           : string .
+pname                          : string .
 `
 
 func populateCluster() {
@@ -768,16 +769,22 @@ func populateCluster() {
 		<64> <pred> "D" .
 		<65> <pred> "E" .
 
-		<61> <predname> "nameA" .
-		<62> <predname> "nameB" .
-		<63> <predname> "nameC" .
-		<64> <predname> "nameD" .
-		<65> <predname> "nameE" .
-		<66> <predname> "nameF" .
-		<67> <predname> "nameG" .
-		<68> <predname> "nameH" .
-		<69> <predname> "nameI" .
-		<70> <predname> "nameJ" .
+		<61> <indexpred> "A" .
+		<62> <indexpred> "B" .
+		<63> <indexpred> "C" .
+		<64> <indexpred> "D" .
+		<65> <indexpred> "E" .
+
+		<61> <pname> "nameA" .
+		<62> <pname> "nameB" .
+		<63> <pname> "nameC" .
+		<64> <pname> "nameD" .
+		<65> <pname> "nameE" .
+		<66> <pname> "nameF" .
+		<67> <pname> "nameG" .
+		<68> <pname> "nameH" .
+		<69> <pname> "nameI" .
+		<70> <pname> "nameJ" .
 
 	`)
 	if err != nil {

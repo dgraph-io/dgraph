@@ -1924,99 +1924,106 @@ func TestSortWithNulls(t *testing.T) {
 		desc   bool
 		result string
 	}{
-		{0, -1, -1, false, `{"data": {"me":[{"predname":"nameA","pred":"A"},
-			{"predname":"nameB","pred":"B"},
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameD","pred":"D"},
-			{"predname":"nameE","pred":"E"},
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"},
-			{"predname":"nameJ"}]}}`,
+		{0, -1, -1, false, `{"data": {"me":[
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
 		},
 		{1, -1, -1, true, `{"data": {"me":[
-			{"predname":"nameE","pred":"E"},
-			{"predname":"nameD","pred":"D"},
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameB","pred":"B"},
-			{"predname":"nameA","pred":"A"},
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"},
-			{"predname":"nameJ"}]}}`,
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
 		},
 		{2, -1, 2, false, `{"data": {"me":[
-			{"predname":"nameA", "pred": "A"},
-			{"predname":"nameB","pred":"B"}]}}`,
+			{"pname":"nameA", "pred": "A"},
+			{"pname":"nameB","pred":"B"}]}}`,
 		},
 		{4, -1, 2, true, `{"data": {"me":[
-			{"predname":"nameE", "pred":"E"},
-			{"predname":"nameD", "pred": "D"}]}}`,
+			{"pname":"nameE", "pred":"E"},
+			{"pname":"nameD", "pred": "D"}]}}`,
 		},
 		{5, -1, 7, false, `{"data": {"me":[
-			{"predname":"nameA","pred":"A"},
-			{"predname":"nameB","pred":"B"},
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameD","pred":"D"},
-			{"predname":"nameE","pred":"E"},
-			{"predname":"nameF"},
-			{"predname":"nameG"}]}}`,
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
 		},
 		{6, -1, 7, true, `{"data": {"me":[
-			{"predname":"nameE","pred":"E"},
-			{"predname":"nameD","pred":"D"},
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameB","pred":"B"},
-			{"predname":"nameA","pred":"A"},
-			{"predname":"nameF"},
-			{"predname":"nameG"}]}}`,
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
 		},
 		{7, 2, 7, false, `{"data": {"me":[
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameD","pred":"D"},
-			{"predname":"nameE","pred":"E"},
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"}]}}`,
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
 		},
 		{8, 2, 7, true, `{"data": {"me":[
-			{"predname":"nameC","pred":"C"},
-			{"predname":"nameB","pred":"B"},
-			{"predname":"nameA","pred":"A"},
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"}]}}`,
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
 		},
 		{9, 5, 5, false, `{"data": {"me":[
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"},
-			{"predname":"nameJ"}]}}`,
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
 		},
 		{10, 5, 5, true, `{"data": {"me":[
-			{"predname":"nameF"},
-			{"predname":"nameG"},
-			{"predname":"nameH"},
-			{"predname":"nameI"},
-			{"predname":"nameJ"}]}}`,
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
 		},
 		{11, 9, 5, false, `{"data": {"me":[
-			{"predname":"nameJ"}]}}`,
+			{"pname":"nameJ"}]}}`,
 		},
 		{12, 9, 5, true, `{"data": {"me":[
-			{"predname":"nameJ"}]}}`,
+			{"pname":"nameJ"}]}}`,
 		},
+		{13, 12, 5, false, `{"data": {"me":[]}}`},
+		{14, 12, 5, true, `{"data": {"me":[]}}`},
 	}
 
-	makeQuery := func(offset, first int32, desc bool, expected string) string {
-		order := "orderasc: pred"
+	makeQuery := func(offset, first int32, desc, index bool) string {
+		pred := "pred"
+		if index {
+			pred = "indexpred"
+		}
+		order := "orderasc: " + pred
 		if desc {
-			order = "orderdesc: pred"
+			order = "orderdesc: " + pred
 		}
 		qfunc := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), "
 		qfunc += order
@@ -2026,13 +2033,19 @@ func TestSortWithNulls(t *testing.T) {
 		if first != -1 {
 			qfunc += fmt.Sprintf(", first: %d", first)
 		}
-		query := "{" + qfunc + ") { predname pred } }"
+		query := "{" + qfunc + ") { pname " + pred + " } }"
 		return processQueryNoErr(t, query)
 	}
 
 	for _, tc := range tests {
-		actualRes := makeQuery(tc.offset, tc.first, tc.desc, tc.result)
-		require.JSONEqf(t, tc.result, actualRes, "Failed on testcase: %d\n", tc.index)
+		// Case of sort with Index.
+		expected := strings.Replace(tc.result, "pred", "indexpred", -1)
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
+		require.JSONEqf(t, expected, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
 	}
 }
 

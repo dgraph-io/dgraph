@@ -304,7 +304,8 @@ BUCKETS:
 	}
 
 	for i, ul := range ts.UidMatrix {
-		var nullPreds []uint64
+		// nullNodes is list of UIDs for which the value of the sort predicate is null.
+		var nullNodes []uint64
 		// present is a map[uid]->bool to keep track of the UIDs containing the sort predicate.
 		present := make(map[uint64]bool)
 
@@ -320,24 +321,19 @@ BUCKETS:
 		// nullPreds is a list of UIDs which doesn't contain the sort predicate.
 		for _, uid := range ul.Uids {
 			if _, ok := present[uid]; !ok {
-				nullPreds = append(nullPreds, uid)
+				nullNodes = append(nullNodes, uid)
 			}
 		}
 
-		// We didn't get anything in the intersected result, it is possible that complete offset
-		// is yet not applied. We need to apply the remainng offset on the null values.
-		if len(r.UidMatrix[i].Uids) == 0 {
-			start := int(ts.Offset) - len(out[i].skippedUids.Uids)
-			x.AssertTrue(start >= 0)
-			if start < len(nullPreds) {
-				nullPreds = nullPreds[start:]
-			} else {
-				nullPreds = []uint64{}
-			}
+		// Apply the offset on null nodes, if the nodes with value were not enough.
+		if out[i].offset < len(nullNodes) {
+			nullNodes = nullNodes[out[i].offset:]
+		} else {
+			nullNodes = nullNodes[:0]
 		}
 		remainingCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
-		canAppend := x.Min(uint64(remainingCount), uint64(len(nullPreds)))
-		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
+		canAppend := x.Min(uint64(remainingCount), uint64(len(nullNodes)))
+		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullNodes[:canAppend]...)
 	}
 
 	select {
