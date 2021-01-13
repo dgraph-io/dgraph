@@ -3483,9 +3483,11 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 	return filter
 }
 
-func queryTypenameInMutationPayload(t *testing.T) {
+func queryTypenameInMutation(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
+            __typename
+			a:__typename
 			addState(input: [{xcode: "S1", name: "State1"}]) {
 				state {
 					__typename
@@ -3501,6 +3503,8 @@ func queryTypenameInMutationPayload(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
+		"__typename":"Mutation",
+		"a":"Mutation",
 		"addState": {
 			"state": [{
 				"__typename": "State",
@@ -4669,41 +4673,4 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	require.Contains(t, response.Errors.Error(), "already exists")
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
-}
-
-func mutationWithTypename(t *testing.T) {
-	addPost1Params := &GraphQLParams{
-		Query: `mutation {
-            __typename
-			a:__typename
-			addpost1(input: [{title: "Dgraph", numLikes: 92233720 }]) {
-    			__typename
-				post1 {
-					__typename
-					title
-					numLikes
-				}
-			}
-		}`,
-	}
-
-	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	addPost1Expected := `{
-        "__typename":"Mutation",
-		"a":"Mutation",	
-		"addpost1": {
-            "__typename":"Addpost1Payload",
-			"post1": [{
-				"__typename":"post1",
-				"title": "Dgraph",
-				"numLikes": 92233720
-
-			}]
-		}
-	}`
-	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
-	filter := map[string]interface{}{"title": map[string]interface{}{"eq": "Dgraph"}}
-	DeleteGqlType(t, "post1", filter, 1, nil)
 }
