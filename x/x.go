@@ -1206,7 +1206,7 @@ func ToHex(i uint64, rdf bool) []byte {
 func GetRootTemplate() string {
 	return `Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
-It's built from ground up to perform for a rich set of queries. Being a native
+It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.` + BuildDetails() +
@@ -1218,6 +1218,7 @@ VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.grou
  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Available Commands:
+
 Dgraph Core: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
@@ -1234,7 +1235,7 @@ Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 
-Miscellaneous:{{range .Commands}}{{if (or (and .IsAvailableCommand (not .Annotations.group)) (eq .Name "help"))}}
+Miscellaneous:{{range .Commands}}{{if (or (and .IsAvailableCommand (not .Annotations.group)))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Flags:
@@ -1244,14 +1245,13 @@ Flags:
 Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
 
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
-	`
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}} `
 }
 
 func GetNonRootTemplate() string {
 	return `Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
-It's built from ground up to perform for a rich set of queries. Being a native
+It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.` + BuildDetails() +
@@ -1262,7 +1262,7 @@ cluster.` + BuildDetails() +
 VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "version"))}}
  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Flags:

@@ -49,7 +49,7 @@ var RootCmd = &cobra.Command{
 	Long: `
 Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
-It's built from ground up to perform for a rich set of queries. Being a native
+It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
@@ -176,7 +176,9 @@ func setGlogFlags(conf *viper.Viper) {
 }
 
 func shellCompletionCmd() *cobra.Command {
+
 	cmd := &cobra.Command{
+
 		Use:   "completion",
 		Short: "Generates shell completion scripts for bash or zsh",
 	}
@@ -220,4 +222,5 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 	})
 
 	return cmd
+
 }

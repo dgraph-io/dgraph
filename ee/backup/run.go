@@ -137,7 +137,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 func initBackupLs() {
 	LsBackup.Cmd = &cobra.Command{
 		Use:   "lsbackup",
-		Short: "List information on backups in given location",
+		Short: "List information on backups in a given location",
 		Long: `
 lsbackup looks at a location where backups are stored and prints information about them.
 
