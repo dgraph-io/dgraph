@@ -2615,7 +2615,6 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 		SrcUIDs: sg.DestUIDs,
 		ReadTs:  sg.ReadTs,
 	}
-	temp.Params.Namespace = sg.Params.Namespace
 	taskQuery, err := createTaskQuery(temp)
 	if err != nil {
 		return nil, err

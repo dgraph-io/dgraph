@@ -36,8 +36,9 @@ import (
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
-func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
-	edges, err := expandEdges(ctx, namespace, m)
+func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	// TODO(Ahsan): Make expand edges work with the namespaces for star predicates.
+	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
@@ -57,7 +58,7 @@ func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*ap
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
@@ -73,11 +74,8 @@ func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
-			// Convert reserved predicates for the given namespace.
-			for _, pred := range x.StarAllPredicates() {
-				preds = append(preds, x.NamespaceAttr(namespace, pred))
-			}
+			preds = append(preds, getPredicatesFromTypes("TODO", types)...)
+			preds = append(preds, x.StarAllPredicates()...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
 			// delete predicates to which the mutation has access
 			if edge.AllowedPreds != nil {

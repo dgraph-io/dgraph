@@ -341,7 +341,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
@@ -373,7 +373,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		_, err = query.ApplyMutations(ctx, op.Namespace, m)
+		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
@@ -422,7 +422,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, op.Namespace, m)
+		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
@@ -445,7 +445,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
@@ -463,7 +463,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, op.Namespace, m)
+	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		return empty, err
 	}
@@ -535,7 +535,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, qc.namespace, m)
+	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
 	if x.WorkerConfig.LudicrousMode {
