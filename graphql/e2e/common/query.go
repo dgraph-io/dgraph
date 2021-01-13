@@ -2842,6 +2842,7 @@ func queryAggregateOnEmptyData(t *testing.T) {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
 				numLikesMax
+				type: __typename
 				titleMin
 			}
 		}`,
@@ -2849,10 +2850,15 @@ func queryAggregateOnEmptyData(t *testing.T) {
 
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	testutil.CompareJSON(t,
+	require.JSONEq(t,
 		`{
-					"aggregatePost": null
-				}`,
+			"aggregatePost": {
+				"count": 0,
+				"numLikesMax": null,
+				"type": "PostAggregateResult",
+				"titleMin": null
+			}
+		}`,
 		string(gqlResponse.Data))
 }
 
@@ -3021,6 +3027,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				name
 				ag : statesAggregate {
 					count
+					__typename
 					nameMin
 				}
 			}
@@ -3035,6 +3042,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				"name": "India",
 				"ag": { 
 					"count" : 3,
+					"__typename": "StateAggregateResult",
 					"nameMin": "Gujarat"
 				}
 			}]
@@ -3079,8 +3087,10 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 				name
 				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
                 	count
+					__typename
 					nameMin
                 }
+				n: name
 			}
 		}`,
 	}
@@ -3091,7 +3101,12 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": null
+				"ag": {
+					"count": 0,
+					"__typename": "StateAggregateResult",
+					"nameMin": null
+				},
+				"n": "India"
 			}]
 		}`,
 		string(gqlResponse.Data))

@@ -232,9 +232,6 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
-	// map from field name to bool, indicating if a field name was repeated across different types
-	// implementing the same interface
-	repeatedFieldNames map[string]bool
 	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
 	// It is read-only.
 	// The outer map will contain typeName key only if one of the fields on that type has @custom.
@@ -581,54 +578,6 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
-func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) map[string]bool {
-	repeatedFieldNames := make(map[string]bool)
-
-	for _, typ := range s.Types {
-		if !isAbstractKind(typ.Kind) {
-			continue
-		}
-
-		type fieldInfo struct {
-			dgPred   string
-			repeated bool
-		}
-
-		repeatedFieldsInTypesWithCommonAncestor := make(map[string]*fieldInfo)
-		for _, typ := range s.PossibleTypes[typ.Name] {
-			typPreds := dgPreds[typ.Name]
-			for _, field := range typ.Fields {
-				// ignore this field if it was inherited from the common interface or is of ID type.
-				// We ignore ID type fields too, because they map only to uid in dgraph and can't
-				// map to two different predicates.
-				if field.Type.Name() == IDType {
-					continue
-				}
-				// if we find a field with same name from types implementing a common interface
-				// and its DgraphPredicate is different than what was previously encountered, then
-				// we mark it as repeated field, so that queries will rewrite it with correct alias.
-				// For fields, which these types have implemented from a common interface, their
-				// DgraphPredicate will be same, so they won't be marked as repeated.
-				dgPred := typPreds[field.Name]
-				if fInfo, ok := repeatedFieldsInTypesWithCommonAncestor[field.Name]; ok && fInfo.
-					dgPred != dgPred {
-					repeatedFieldsInTypesWithCommonAncestor[field.Name].repeated = true
-				} else {
-					repeatedFieldsInTypesWithCommonAncestor[field.Name] = &fieldInfo{dgPred: dgPred}
-				}
-			}
-		}
-
-		for fName, info := range repeatedFieldsInTypesWithCommonAncestor {
-			if info.repeated {
-				repeatedFieldNames[fName] = true
-			}
-		}
-	}
-
-	return repeatedFieldNames
-}
-
 // customAndLambdaMappings does following things:
 // * If there is @custom on any field, it removes the directive from the list of directives on
 //	 that field. Instead, it puts it in a map of typeName->fieldName->custom directive definition.
@@ -804,13 +753,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:             s,
-		dgraphPredicate:    dgraphPredicate,
-		typeNameAst:        typeMappings(s),
-		repeatedFieldNames: repeatedFieldMappings(s, dgraphPredicate),
-		customDirectives:   customDirs,
-		lambdaDirectives:   lambdaDirs,
-		authRules:          authRules,
+		schema:           s,
+		dgraphPredicate:  dgraphPredicate,
+		typeNameAst:      typeMappings(s),
+		customDirectives: customDirs,
+		lambdaDirectives: lambdaDirs,
+		authRules:        authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -833,25 +781,7 @@ func (f *field) Alias() string {
 }
 
 func (f *field) DgraphAlias() string {
-	// if this field is repeated, then it should be aliased using its dgraph predicate which will be
-	// unique across repeated fields
-	if f.op.inSchema.repeatedFieldNames[f.Name()] {
-		dgraphPredicate := f.DgraphPredicate()
-		// There won't be any dgraph predicate for fields in introspection queries, as they are not
-		// stored in dgraph. So we identify those fields using this condition, and just let the
-		// field name get returned for introspection query fields, because the raw data response is
-		// prepared for them using only the field name, so that is what should be used to pick them
-		// back up from that raw data response before completion is performed.
-		// Now, the reason to not combine this if check with the outer one is because this
-		// function is performance critical. If there are a million fields in the output,
-		// it would be called a million times. So, better to perform this check and allocate memory
-		// for the variable only when necessary to do so.
-		if dgraphPredicate != "" {
-			return dgraphPredicate
-		}
-	}
-	// if not repeated, alias it using its name
-	return f.Name()
+	return f.field.ObjectDefinition.Name + "." + f.field.Alias
 }
 
 func (f *field) ResponseName() string {
@@ -877,7 +807,7 @@ func (f *field) IsAuthQuery() bool {
 }
 
 func (f *field) IsAggregateField() bool {
-	return strings.HasSuffix(f.DgraphAlias(), "Aggregate") && f.Type().IsAggregateResult()
+	return strings.HasSuffix(f.Name(), "Aggregate") && f.Type().IsAggregateResult()
 }
 
 func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
@@ -1115,9 +1045,17 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
-		// This is strange.  There was a case with a parsed schema and query where the field
-		// had a nil Definition ... how ???
 		t = f.field.Definition.Type
+	} else {
+		// If f is a field that isn't defined in the schema, then it would have nil definition.
+		// This can happen in case if the incoming request contains a query/mutation that isn't
+		// defined in the schema being served. Resolving such a query would report that no
+		// suitable resolver was found.
+		// In this case we are returning a nullable type named "__Undefined__" from here, instead
+		// of returning nil, so that the rest of the code can continue to work. The type is
+		// nullable so that if the request contained other valid queries, they should still get a
+		// data response.
+		t = &ast.Type{NamedType: "__Undefined__", NonNull: false}
 	}
 
 	return &astType{
@@ -1831,10 +1769,7 @@ func (fd *fieldDefinition) Name() string {
 }
 
 func (fd *fieldDefinition) DgraphAlias() string {
-	if fd.inSchema.repeatedFieldNames[fd.Name()] {
-		return fd.DgraphPredicate()
-	}
-	return fd.Name()
+	return fd.parentType.Name() + "." + fd.fieldDef.Name
 }
 
 func (fd *fieldDefinition) DgraphPredicate() string {

@@ -225,7 +225,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 }
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault bool) ([]byte, error) {
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"%s","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
 
 	closedByDefaultStr := "false"
 	if closedByDefault {
@@ -246,7 +246,7 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 		verificationKey = string(bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110}))
 	}
 
-	authInfo = fmt.Sprintf(authInfo, verificationKey, closedByDefaultStr)
+	authInfo = fmt.Sprintf(authInfo, verificationKey, algo, closedByDefaultStr)
 	return append(schema, []byte(authInfo)...), nil
 }
 
