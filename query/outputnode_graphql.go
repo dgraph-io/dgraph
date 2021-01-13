@@ -605,6 +605,8 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 		for fj = fj.next; attrId == enc.getAttr(fj); fj = fj.next {
 			// do nothing
 		}
+		// there would always be some other fastJson node after the nodes for field are skipped
+		// corresponding to a selection inside field that. So, no need to check above if fj != nil.
 	}
 
 	// now fj points to a node containing data for a child of field
@@ -619,7 +621,7 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 
 		if f.Name() == gqlSchema.Typename {
 			val = getTypename(f, nil)
-		} else if f.DgraphAlias()+suffix == enc.attrForID(enc.getAttr(fj)) {
+		} else if fj != nil && f.DgraphAlias()+suffix == enc.attrForID(enc.getAttr(fj)) {
 			val, err = enc.getScalarVal(fj)
 			if err != nil {
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
