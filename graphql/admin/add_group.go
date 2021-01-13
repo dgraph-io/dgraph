@@ -37,6 +37,12 @@ func (mrw *addGroupRewriter) Rewrite(
 	return ((*resolve.AddRewriter)(mrw)).Rewrite(ctx, m)
 }
 
+func (mrw *addGroupRewriter) NewRewrite(
+	ctx context.Context,
+	m schema.Mutation) ([]*gql.GraphQuery, error) {
+	return ((*resolve.AddRewriter)(mrw)).NewRewrite(ctx, m)
+}
+
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
 func (mrw *addGroupRewriter) FromMutationResult(
 	ctx context.Context,

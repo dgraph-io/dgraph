@@ -82,6 +82,8 @@ type xidMetadata struct {
 	seenUIDs map[string]bool
 	// seenXIDs tells whether the XID for some type has been seen previously during DFS traversal
 	seenXIDs map[string]bool
+	// iDToVariable map stores XID / UID -> the variable map used in the query.
+	idToVariable map[string]string
 }
 
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
@@ -158,6 +160,9 @@ func newXidMetadata() *xidMetadata {
 		variableObjMap: make(map[string]map[string]interface{}),
 		seenAtTopLevel: make(map[string]bool),
 		queryExists:    make(map[string]bool),
+		seenXIDs:       make(map[string]bool),
+		seenUIDs:       make(map[string]bool),
+		idToVariable:   make(map[string]string),
 	}
 }
 
@@ -365,6 +370,20 @@ func (mrw *AddRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*g
 		queries := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMd)
 		ret = append(ret, queries...)
 	}
+	return ret, nil
+}
+
+func (mrw *UpdateRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
+
+	// Ubimplemented function for UpdateRewriter
+	var ret []*gql.GraphQuery
+	return ret, nil
+}
+
+func (mrw *deleteRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
+
+	// Ubimplemented function for UpdateRewriter
+	var ret []*gql.GraphQuery
 	return ret, nil
 }
 
@@ -1442,6 +1461,9 @@ func getExistenceQueries(
 				// Mark this UID as seen.
 				xidMetadata.seenUIDs[idVal.(string)] = true
 				variable := varGen.Next(typ, "", "", false)
+
+				xidMetadata.idToVariable[idVal.(string)] = variable
+
 				query := checkUIDExistsQuery(idVal, srcField, variable)
 				if query != nil {
 					ret = append(ret, query)
@@ -1483,16 +1505,29 @@ func getExistenceQueries(
 					return ret
 				}
 			}
+			xidData := typ.Name() + xidString
+
+			if xidMetadata.seenXIDs[xidData] {
+				// No need to move forward as already seen
+				// The assumption here is that when the XID is first seen, it may also contain
+				// the related edges/ scalar attributes if any. This may not be completely true
+				// Best way could be to check if its XID reference or XID (new node) and only allow
+				// new node XID once and XID reference as many times as possible.
+				return ret
+			}
+
 			variable := varGen.Next(typ, xid.Name(), xidString, false)
+			// Mark this XID as seen.
+			xidMetadata.seenXIDs[xidData] = true
+			xidMetadata.idToVariable[xidData] = variable
 
 			query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+
 			// No need to add this XID query if seen already
-			if query != nil && !xidMetadata.seenXIDs[variable] {
+			if query != nil {
 				ret = append(ret, query)
 				// Don't return just over here as there maybe more nodes in the children tree.
 			}
-			// Mark this XID as seen.
-			xidMetadata.seenXIDs[variable] = true
 		}
 	}
 	// Iterate on fields and call the same function recursively.
@@ -1500,7 +1535,6 @@ func getExistenceQueries(
 	for field := range obj {
 		fields = append(fields, field)
 	}
-	sort.Strings(fields)
 	for _, field := range fields {
 		val := obj[field]
 

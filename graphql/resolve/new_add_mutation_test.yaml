@@ -1,0 +1,463 @@
+-
+  name: "Add mutation with variables"
+  gqlmutation: |
+    mutation addAuthor($auth: AddAuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": []
+      }
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+
+-
+  name: "Add deep mutation with variables"
+  gqlmutation: |
+    mutation addAuthor($auth: AddAuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "posts": [{
+                "title": "post1",
+                "ps": {"title": "ps1"}
+        }, {
+                "title": "post2",
+                "ps": {"title": "ps2"}
+        }, {
+                "title": "post3",
+                "ps": {"title": "ps3"}
+        }, {
+                "title": "post4",
+                "ps": {"title": "ps4"}
+        }, {
+                "title": "post5",
+                "ps": {"title": "ps5"}
+        }, {
+                "title": "post6",
+                "ps": {"title": "ps6"}
+        }, {
+                "title": "post7",
+                "ps": {"title": "ps7"}
+        }, {
+                "title": "post8",
+                "ps": {"title": "ps8"}
+        }]
+      }
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+  dgquery: |-
+    query {
+      PostSecret1(func: eq(PostSecret.title, "ps1")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret2(func: eq(PostSecret.title, "ps2")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret3(func: eq(PostSecret.title, "ps3")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret4(func: eq(PostSecret.title, "ps4")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret5(func: eq(PostSecret.title, "ps5")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret6(func: eq(PostSecret.title, "ps6")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret7(func: eq(PostSecret.title, "ps7")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret8(func: eq(PostSecret.title, "ps8")) @filter(type(PostSecret)) {
+        uid
+      }
+    }
+
+-
+  name: "Add mutation with reference"
+  gqlmutation: |
+    mutation addAuthor($auth: AddAuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "country": { "id": "0x123" },
+        "posts": []
+      }
+    }
+  explanation: "The reference to country should get transformed to 'uid' for the
+    Dgraph JSON mutation"
+  dgquery: |-
+    query {
+      Country1(func: uid(0x123)) @filter(type(Country)) {
+        uid
+      }
+    }
+
+-
+  name: "Add mutation using xid code"
+  gqlmutation: |
+    mutation addState($input: AddStateInput!) {
+      addState(input: [$input]) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "nsw",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+    }
+
+-
+  name: "Add mutation using code on type which also has an ID field"
+  gqlmutation: |
+    mutation addEditor($input: AddEditorInput!) {
+      addEditor(input: [$input]) {
+        editor {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "editor",
+        "name": "A.N. Editor"
+      }
+    }
+  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  dgquery: |-
+    query {
+      Editor1(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
+        uid
+      }
+    }
+
+-
+  name: "Deep add with two existing"
+  gqlmutation: |
+    mutation addAuthor($author: AddAuthorInput!) {
+      addAuthor(input: [$author]) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author":
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "postID": "0x123",
+            "title": "Old post",
+            "text": "A really old post"
+          },
+          {
+            "postID": "0x456"
+          }
+        ]
+      }
+    }
+  dgquery: |-
+    query {
+      Post1(func: uid(0x123)) @filter(type(Post)) {
+        uid
+      }
+      Post2(func: uid(0x456)) @filter(type(Post)) {
+        uid
+      }
+    }
+
+-
+  name: "Deep add with null"
+  gqlmutation: |
+    mutation addAuthor($author: AddAuthorInput!) {
+      addAuthor(input: [$author]) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "author":
+      { "name": "A.N. Author",
+        "dob": "2000-01-01",
+        "posts": [
+          {
+            "postID": null,
+            "title": "New post",
+            "text": "A really new post"
+          }
+        ]
+      }
+    }
+
+-
+  name: "Add mutation with deep xid choices"
+  gqlmutation: |
+    mutation addCountry($input: AddCountryInput!) {
+      addCountry(input: [$input]) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "dg",
+          "name": "Dgraph"
+        } ]
+      }
+    }
+  explanation: "The add mutation has two options depending on if dg exists"
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
+    }
+
+-
+  name: "Add mutation with deep xid that must be reference"
+  gqlmutation: |
+    mutation addCountry($input: AddCountryInput!) {
+      addCountry(input: [$input]) {
+        country {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "name": "Dgraph Land",
+        "states": [ {
+          "code": "dg"
+        } ]
+      }
+    }
+  explanation: "The add mutation has only one option because the state isn't a valid create
+    because it's missing required field name"
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
+    }
+
+- name: "Deep Mutation Duplicate XIDs with same object Test"
+  gqlmutation: |
+    mutation addCity($input: [AddCityInput!]!) {
+      addCity(input: $input) {
+        city {
+          name
+          district {
+            code
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Bengaluru",
+          "district": {"code": "D1", "name": "Dist1"}
+        },
+        {
+          "name": "NY",
+          "district": {"code": "D1", "name": "Dist1"}
+        },
+        {
+         "name": "Sydney",
+         "district": {"code": "D1"}
+        }
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
+  is same or contains just xid, it should not return error."
+  dgquery: |-
+    query {
+      District1(func: eq(District.code, "D1")) @filter(type(District)) {
+        uid
+      }
+    }
+
+#- name: "Top Level Duplicate XIDs with same object Test"
+#  gqlmutation: |
+#    mutation addState($input: [AddStateInput!]!) {
+#      addState(input: $input) {
+#        state {
+#          code
+#          name
+#        }
+#      }
+#    }
+#  gqlvariables: |
+#    {
+#      "input": [
+#        {"name": "State1", "code": "S1"},
+#        {"name": "State1", "code": "S1"}
+#      ]
+#    }
+#  explanation: "When duplicate XIDs are given as input at top level, but the object structure is
+#  same, it should return error."
+#  error:
+#    message: "failed to rewrite mutation payload because duplicate XID found: S1"
+#
+#- name: "Top Level Duplicate XIDs with different object Test"
+#  gqlmutation: |
+#    mutation addState($input: [AddStateInput!]!) {
+#      addState(input: $input) {
+#        state {
+#          code
+#          name
+#        }
+#      }
+#    }
+#  gqlvariables: |
+#    {
+#      "input": [
+#        {"name": "State1", "code": "S1"},
+#        {"name": "State2", "code": "S1"}
+#      ]
+#    }
+#  explanation: "When duplicate XIDs are given as input at top level, but the object structure is
+#  different, it should still return error."
+#  error:
+#    message: "failed to rewrite mutation payload because duplicate XID found: S1"
+#
+
+- name: "Deep mutation alternate id xid"
+  gqlmutation: |
+    mutation addAuthor($city: AddCityInput!) {
+      addCity(input: [$city]) {
+        city {
+          name
+          district {
+            code
+            name
+            cities {
+              name
+              district {
+                code
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "city": {
+        "name": "c1",
+        "district":{
+                "name":"d1",
+                "code":"d1",
+                "cities":[{"name": "c2"}]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      District1(func: eq(District.code, "d1")) @filter(type(District)) {
+        uid
+      }
+    }
+
+- name: "Deep mutation three level xid"
+  gqlmutation: |
+    mutation($auth: [AddPost1Input!]!) {
+      addPost1(input: $auth) {
+        post1 {
+          id
+          comments {
+            id
+            replies {
+              id
+            }
+          }
+        }
+      }
+    }
+
+  gqlvariables: |
+    {
+      "auth": [{
+        "id": "post1",
+        "comments": [{
+          "id": "comment1",
+          "replies": [{
+            "id": "reply1"
+          }]
+        }]
+      },
+      {
+        "id": "post2",
+        "comments": [{
+          "id": "comment2",
+          "replies": [{
+            "id": "reply1"
+          }]
+        }]
+      }]
+    }
+  dgquery: |-
+    query {
+      Post11(func: eq(Post1.id, "post1")) @filter(type(Post1)) {
+        uid
+      }
+      Comment12(func: eq(Comment1.id, "comment1")) @filter(type(Comment1)) {
+        uid
+      }
+      Comment13(func: eq(Comment1.id, "reply1")) @filter(type(Comment1)) {
+        uid
+      }
+      Post14(func: eq(Post1.id, "post2")) @filter(type(Post1)) {
+        uid
+      }
+      Comment15(func: eq(Comment1.id, "comment2")) @filter(type(Comment1)) {
+        uid
+      }
+    }
