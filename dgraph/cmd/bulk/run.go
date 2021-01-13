@@ -47,7 +47,7 @@ var defaultOutDir = "./out"
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
-		Short: "Run Dgraph bulk loader",
+		Short: "Run Dgraph Bulk Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()

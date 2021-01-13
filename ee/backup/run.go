@@ -58,7 +58,7 @@ func init() {
 func initRestore() {
 	Restore.Cmd = &cobra.Command{
 		Use:   "restore",
-		Short: "Run Dgraph (EE) Restore backup",
+		Short: "Restore backup from Dgraph Enterprise Edition",
 		Long: `
 Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
 
@@ -137,7 +137,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 func initBackupLs() {
 	LsBackup.Cmd = &cobra.Command{
 		Use:   "lsbackup",
-		Short: "List info on backups in given location",
+		Short: "List information on backups in given location",
 		Long: `
 lsbackup looks at a location where backups are stored and prints information about them.
 

@@ -121,7 +121,7 @@ var (
 func init() {
 	Live.Cmd = &cobra.Command{
 		Use:   "live",
-		Short: "Run Dgraph live loader",
+		Short: "Run Dgraph Live Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
 			if err := run(); err != nil {

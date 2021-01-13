@@ -83,7 +83,7 @@ var (
 func init() {
 	Alpha.Cmd = &cobra.Command{
 		Use:   "alpha",
-		Short: "Run Dgraph Alpha",
+		Short: "Run Dgraph Alpha database server",
 		Long: `
 A Dgraph Alpha instance stores the data. Each Dgraph Alpha is responsible for
 storing and serving one data group. If multiple Alphas serve the same group,

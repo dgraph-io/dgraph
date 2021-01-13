@@ -40,7 +40,7 @@ var (
 func init() {
 	RaftMigrate.Cmd = &cobra.Command{
 		Use:   "raftmigrate",
-		Short: "Run the raft migrate tool",
+		Short: "Run the Raft migration tool",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(RaftMigrate.Conf); err != nil {
 				log.Fatalf("%v\n", err)

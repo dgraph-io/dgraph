@@ -39,7 +39,7 @@ var (
 func init() {
 	Migrate.Cmd = &cobra.Command{
 		Use:   "migrate",
-		Short: "Run the Dgraph migrate tool",
+		Short: "Run the Dgraph migration tool",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(Migrate.Conf); err != nil {
 				logger.Fatalf("%v\n", err)
