@@ -21,13 +21,13 @@ not interact directly with the filesystem. Instead it relies on
 
  Metrics                          	 | Description
  -------                          	 | -----------
- `badger_v2_disk_reads_total`        | Total count of disk reads in Badger.
- `badger_v2_disk_writes_total`       | Total count of disk writes in Badger.
- `badger_v2_gets_total`              | Total count of calls to Badger's `get`.
- `badger_v2_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
- `badger_v2_puts_total`              | Total count of calls to Badger's `put`.
- `badger_v2_read_bytes`              | Total bytes read from Badger.
- `badger_v2_written_bytes`           | Total bytes written to Badger.
+ `badger_v3_disk_reads_total`        | Total count of disk reads in Badger.
+ `badger_v3_disk_writes_total`       | Total count of disk writes in Badger.
+ `badger_v3_gets_total`              | Total count of calls to Badger's `get`.
+ `badger_v3_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
+ `badger_v3_puts_total`              | Total count of calls to Badger's `put`.
+ `badger_v3_read_bytes`              | Total bytes read from Badger.
+ `badger_v3_written_bytes`           | Total bytes written to Badger.
 
 ## Memory metrics
 
