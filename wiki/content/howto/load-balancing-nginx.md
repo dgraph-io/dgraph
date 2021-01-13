@@ -14,7 +14,7 @@ There might be times when you'll want to set up a load balancer to accomplish go
 
 Download the contents of this gist's ZIP file and extract it to a directory called `graph-nginx`
 
-```
+```sh
 mkdir dgraph-nginx
 cd dgraph-nginx
 wget -O dgraph-nginx.zip https://gist.github.com/danielmai/0cf7647b27c7626ad8944c4245a9981e/archive/5a2f1a49ca2f77bc39981749e4783e3443eb3ad9.zip
@@ -26,31 +26,31 @@ Two files will be created: `docker-compose.yml` and `nginx.conf`.
 
 Start a 6-node Dgraph cluster (3 Dgraph Zero, 3 Dgraph Alpha, replication setting 3) by starting the Docker Compose config:
 
-```
+```sh
 docker-compose up
 ```
 
 ## Setting up NGINX load balancer with Dgraph running directly on the host machine
 
-When you start your Dgraph Cluster directly on the host machine (e.g. with systemd) the procedure is the following:
+When you start your Dgraph cluster directly on the host machine (e.g. with systemd) the procedure is the following:
 
 ### Install nginx using the following `apt-get` command:
 
-After you have set up your Dgraph Clusteer, install the latest stable nginx. Use the following command:
-```
+After you have set up your Dgraph cluster, install the latest stable nginx. On Debian and Ubuntu systems use the following command:
+```sh
 apt-get install nginx
 ```
 ### Configure nginx as a load balancer 
 
-Make sure that your Dgraph Cluster is up and running (it this case we will refer to a 6 node cluster). Once nginx is installed, you can start to configure it for load balancing. In essence, all you need to do is set up nginx with instructions for which type of connections to listen to and where to redirect them. Create a new configuration:
+Make sure that your Dgraph cluster is up and running (it this case we will refer to a 6 node cluster). Once nginx is installed, you can start to configure it for load balancing. In essence, all you need to do is set up nginx with instructions for which type of connections to listen to and where to redirect them. Create a new configuration:
 
-```
+```sh
 sudo vim /etc/nginx/conf.d/load-balancer.conf
 ```
 
 In the load-balancer.conf you’ll need to define the following configuration file:
 
-```
+```sh
 upstream alpha_grpc {
   server alpha1:9080;
   server alpha2:9080;
@@ -89,13 +89,13 @@ server {
 
 Next, disable the default server configuration, on Debian and Ubuntu systems you’ll need to remove the default symbolic link from the sites-enabled folder.
 
-```
+```sh
 rm /etc/nginx/sites-enabled/default
 ```
 
 Now you can restart nginx service:
 
-```
+```sh
 systemctl restart nginx
 ```
 
@@ -103,13 +103,13 @@ systemctl restart nginx
 
 In a different shell, run the `dgraph increment` [docs](https://dgraph.io/docs/howto/#using-the-increment-tool) tool against the Nginx gRPC load balancer (`nginx:9080`):
 
-```
+```sh
 docker-compose exec alpha1 dgraph increment --alpha nginx:9080 --num=10
 ```
 
 If you have dgraph installed on your host machine, then you can also run this from the host:
 
-```
+```sh
 dgraph increment --alpha localhost:9080 --num=10
 ```
 
@@ -123,7 +123,7 @@ In the Nginx access logs (in the docker-compose up shell window), or if you are 
 It is important to take into account with gRPC load balancing that every request hits a different Alpha, potentially increasing read throughput.
 {{% /notice %}}
 
-```
+```sh
 nginx_1   | [15/Jan/2020:03:12:02 +0000] 172.20.0.9 - - -  nginx to: 172.20.0.7:9080: POST /api.Dgraph/Query HTTP/2.0 200 upstream_response_time 0.008 msec 1579057922.135 request_time 0.009
 nginx_1   | [15/Jan/2020:03:12:02 +0000] 172.20.0.9 - - -  nginx to: 172.20.0.2:9080: POST /api.Dgraph/Query HTTP/2.0 200 upstream_response_time 0.012 msec 1579057922.149 request_time 0.013
 nginx_1   | [15/Jan/2020:03:12:02 +0000] 172.20.0.9 - - -  nginx to: 172.20.0.5:9080: POST /api.Dgraph/Query HTTP/2.0 200 upstream_response_time 0.008 msec 1579057922.162 request_time 0.012
@@ -137,14 +137,14 @@ These logs show that traffic os being load balanced to the following upstream ad
 - `nginx to: 172.20.0.2`
 - `nginx to: 172.20.0.5`
 
-## Load Balancing methods
+## Load balancing methods
 
-By default, Nginx load balancing is done round-robin. By the way there are other load balancing methods availalbe like least connections, IP hashing. In case you want to use a diffrent menthod than round-robin you can do that by specifying the method you desire in the upsteram section. 
+By default, Nginx load balancing is done round-robin. By the way There are other load-balancing methods available such as least connections or IP hashing. In case you want to use a different method than round-robin you can do that by specifying the method you desire in the upstream section.
 
-```
+```sh
 # use least connection method
 upstream alpha_grpc {
-  least_conn; 
+  least_conn;
   server alpha1:9080;
   server alpha2:9080;
   server alpha3:9080;
