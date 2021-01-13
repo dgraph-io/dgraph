@@ -973,7 +973,13 @@ func TestLanguageOrderIndexed3(t *testing.T) {
 	require.JSONEq(t,
 		`{
 			"data": {
-				"q": []
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
 			}
 		}`,
 		js)
@@ -993,7 +999,13 @@ func TestLanguageOrderIndexed4(t *testing.T) {
 	require.JSONEq(t,
 		`{
 			"data": {
-				"q": []
+				"q": [{
+					"name_lang_index@de": "öffnen",
+					"name_lang_index@sv": "zon"
+				}, {
+					"name_lang_index@de": "zumachen",
+					"name_lang_index@sv": "öppna"
+				}]
 			}
 		}`,
 		js)
