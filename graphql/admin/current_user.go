@@ -22,10 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/pkg/errors"
 )
 
 type currentUserResolver struct {
@@ -38,31 +35,7 @@ func extractName(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// Code copied from access_ee.go. Couldn't put the code in x, because of dependency on
-	// worker. (worker.Config.HmacSecret)
-	token, err := jwt.Parse(accessJwt[0], func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.Errorf("unexpected signing method: %v",
-				token.Header["alg"])
-		}
-		return []byte(worker.Config.HmacSecret), nil
-	})
-
-	if err != nil {
-		return "", errors.Wrapf(err, "unable to parse jwt token")
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return "", errors.Errorf("claims in jwt token is not map claims")
-	}
-
-	userId, ok := claims["userid"].(string)
-	if !ok {
-		return "", errors.Errorf("userid in claims is not a string:%v", userId)
-	}
-
-	return userId, nil
+	return x.ExtractUserName(accessJwt[0])
 }
 
 func (gsr *currentUserResolver) Rewrite(ctx context.Context,
