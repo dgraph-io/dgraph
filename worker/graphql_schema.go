@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"github.com/golang/glog"
+	"sort"
 	"sync"
 	"time"
 
@@ -106,14 +107,11 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	} else {
 		// there seems to be multiple nodes for GraphQL schema,Ideally we should never reach here
 		// But if by any bug we reach here then return the schema node which is added last
-		uidMax := res.GetUidMatrix()[0].GetUids()[0]
-		for _, schUid := range res.GetUidMatrix()[0].GetUids()[1:] {
-			if uidMax < schUid {
-				uidMax = schUid
-			}
-		}
-		glog.Errorf("Multiple schema node found,returning last added node")
-		schemaNodeUid = uidMax
+		sort.Slice(res.GetUidMatrix()[0].GetUids(), func(i, j int) bool {
+			return res.GetUidMatrix()[0].GetUids()[i] < res.GetUidMatrix()[0].GetUids()[j]
+		})
+		glog.Errorf("Multiple schema node found, using the last one")
+		schemaNodeUid = res.GetUidMatrix()[0].GetUids()[len(res.GetUidMatrix()[0].GetUids())-1]
 	}
 
 	// prepare GraphQL schema mutation

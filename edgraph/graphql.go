@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/dgraph/gql"
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -127,7 +128,8 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 
 	type corsResponse struct {
 		Me []struct {
-			Uid        string   `json:"uid"`
+			Uid        string `json:"uid"`
+			UidInt     uint64
 			DgraphCors []string `json:"dgraph.cors"`
 		} `json:"me"`
 	}
@@ -140,25 +142,20 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	} else if len(corsRes.Me) == 1 {
 		return corsRes.Me[0].Uid, corsRes.Me[0].DgraphCors, nil
 	}
-	cors := corsRes.Me[0].DgraphCors
-	uidMax := corsRes.Me[0].Uid
-	uidMaxInt, err := gql.ParseUid(uidMax)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, me := range corsRes.Me[1:] {
-		cUidInt, err := gql.ParseUid(me.Uid)
+	// Multiple nodes for cors found, returning the one that is added last
+	for i, _ := range corsRes.Me {
+		UidInt, err := gql.ParseUid(corsRes.Me[i].Uid)
 		if err != nil {
 			return "", nil, err
 		}
-		if uidMaxInt < cUidInt {
-			uidMaxInt = cUidInt
-			uidMax = me.Uid
-			cors = me.DgraphCors
-		}
+		corsRes.Me[i].UidInt = UidInt
 	}
-	glog.Errorf("Multiple nodes of type dgraph.type.cors found,returning last added node")
-	return uidMax, cors, nil
+	sort.Slice(corsRes.Me, func(i, j int) bool {
+		return corsRes.Me[i].UidInt < corsRes.Me[j].UidInt
+	})
+	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
+	lastIndex := len(corsRes.Me) - 1
+	return corsRes.Me[lastIndex].Uid, corsRes.Me[lastIndex].DgraphCors, nil
 }
 
 // UpdateSchemaHistory updates graphql schema history.

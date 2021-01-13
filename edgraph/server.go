@@ -101,6 +101,7 @@ type Server struct{}
 // graphQLSchemaNode represents the node which contains GraphQL schema
 type graphQLSchemaNode struct {
 	Uid    string `json:"uid"`
+	UidInt uint64
 	Schema string `json:"dgraph.graphql.schema"`
 }
 
@@ -171,25 +172,20 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 
 	// found multiple GraphQL schema nodes, this should never happen
 	// returning the schema node which is added last
-	schema := result.ExistingGQLSchema[0].Schema
-	uidMax := result.ExistingGQLSchema[0].Uid
-	uidMaxInt, err := gql.ParseUid(uidMax)
-	if err != nil {
-		return "", "", err
-	}
-	for _, schNode := range result.ExistingGQLSchema[1:] {
-		cUidInt, err := gql.ParseUid(schNode.Uid)
+	for i, _ := range result.ExistingGQLSchema {
+		UidInt, err := gql.ParseUid(result.ExistingGQLSchema[i].Uid)
 		if err != nil {
 			return "", "", err
 		}
-		if uidMaxInt < cUidInt {
-			uidMaxInt = cUidInt
-			uidMax = schNode.Uid
-			schema = schNode.Schema
-		}
+		result.ExistingGQLSchema[i].UidInt = UidInt
 	}
-	glog.Errorf("Multiple schema node found,returning last added node")
-	return uidMax, schema, nil
+
+	sort.Slice(result.ExistingGQLSchema, func(i, j int) bool {
+		return result.ExistingGQLSchema[i].UidInt < result.ExistingGQLSchema[j].UidInt
+	})
+	glog.Errorf("Multiple schema node found, using the last one")
+	lastIndex := len(result.ExistingGQLSchema) - 1
+	return result.ExistingGQLSchema[lastIndex].Uid, result.ExistingGQLSchema[lastIndex].Schema, nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
