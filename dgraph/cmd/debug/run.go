@@ -84,7 +84,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "debug"},
 	}
-	Debug.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Debug.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")

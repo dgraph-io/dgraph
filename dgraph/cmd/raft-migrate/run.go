@@ -49,7 +49,7 @@ func init() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 	RaftMigrate.EnvPrefix = "DGRAPH_RAFT_MIGRATE"
-	RaftMigrate.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	RaftMigrate.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := RaftMigrate.Cmd.Flags()
 	flag.StringP("old-dir", "", "", "Path to the old (z)w directory.")

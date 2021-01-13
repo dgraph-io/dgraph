@@ -132,7 +132,7 @@ func init() {
 		Annotations: map[string]string{"group": "data-load"},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
-	Live.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Live.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")

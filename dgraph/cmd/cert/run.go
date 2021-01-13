@@ -47,7 +47,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "security"},
 	}
-	Cert.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Cert.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Cert.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")

@@ -1203,18 +1203,18 @@ func ToHex(i uint64, rdf bool) []byte {
 	return out
 }
 
-func GetRootTemplate() string {
-	return `Dgraph is a horizontally scalable and distributed graph database,
+// RootTemplate defines the help template for dgraph command.
+var RootTemplate string = `Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
 It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.` + BuildDetails() +
-		`Usage:{{if .Runnable}}
+	`Usage:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
 
-VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "version"))}}
+Default: {{range .Commands}} {{if (or (and .IsAvailableCommand (eq .Annotations.group "default")) (eq .Name "help"))}}
  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Available Commands:
@@ -1234,10 +1234,6 @@ Dgraph Debug: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations
 Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "tool"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-
-Miscellaneous:{{range .Commands}}{{if (or (and .IsAvailableCommand (not .Annotations.group)))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
@@ -1246,18 +1242,17 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}} `
-}
 
-func GetNonRootTemplate() string {
-	return `Dgraph is a horizontally scalable and distributed graph database,
+// NonRootTemplate defines the help template for dgraph sub-command.
+var NonRootTemplate string = `Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
 It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.` + BuildDetails() +
-		`Usage:{{if .Runnable}}
+	`Usage:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
 
 VERSION: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "version"))}}
  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
@@ -1274,4 +1269,3 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 	`
-}

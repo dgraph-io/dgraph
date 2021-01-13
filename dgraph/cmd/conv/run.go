@@ -47,7 +47,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "tool"},
 	}
-	Conv.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Conv.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Conv.Cmd.Flags()
 	flag.StringVar(&opt.geo, "geo", "", "Location of geo file to convert")

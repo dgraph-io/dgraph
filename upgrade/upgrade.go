@@ -148,7 +148,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "tool"},
 	}
-	Upgrade.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Upgrade.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Upgrade.Cmd.Flags()
 	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
 	flag.Bool(dryRun, false, "dry-run the upgrade")

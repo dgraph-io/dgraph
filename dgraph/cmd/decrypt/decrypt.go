@@ -49,7 +49,7 @@ func init() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 	Decrypt.EnvPrefix = "DGRAPH_TOOL_DECRYPT"
-	Decrypt.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Decrypt.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")

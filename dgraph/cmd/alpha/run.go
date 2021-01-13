@@ -96,7 +96,7 @@ they form a Raft group and provide synchronous replication.
 		Annotations: map[string]string{"group": "core"},
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
-	Alpha.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Alpha.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// If you change any of the flags below, you must also update run() to call Alpha.Conf.Get
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs

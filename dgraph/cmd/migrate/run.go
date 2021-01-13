@@ -48,7 +48,7 @@ func init() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
-	Migrate.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Migrate.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Migrate.Cmd.Flags()
 	flag.StringP("user", "", "", "The user for logging in")

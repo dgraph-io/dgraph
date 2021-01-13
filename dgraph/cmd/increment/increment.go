@@ -47,7 +47,7 @@ func init() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
-	Increment.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")

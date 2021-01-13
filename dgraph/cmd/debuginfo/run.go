@@ -56,7 +56,7 @@ func init() {
 		Annotations: map[string]string{"group": "debug"},
 	}
 	DebugInfo.EnvPrefix = "DGRAPH_AGENT_DEBUGINFO"
-	DebugInfo.Cmd.SetHelpTemplate(x.GetNonRootTemplate())
+	DebugInfo.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flags := DebugInfo.Cmd.Flags()
 	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "localhost:8080",

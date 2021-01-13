@@ -118,7 +118,7 @@ func initCmds() {
 	}
 	// For bash shell completion
 	RootCmd.AddCommand(shellCompletionCmd())
-	RootCmd.SetHelpTemplate(x.GetRootTemplate())
+	RootCmd.SetHelpTemplate(x.RootTemplate)
 
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward
@@ -179,9 +179,11 @@ func shellCompletionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 
-		Use:   "completion",
-		Short: "Generates shell completion scripts for bash or zsh",
+		Use:         "completion",
+		Short:       "Generates shell completion scripts for bash or zsh",
+		Annotations: map[string]string{"group": "tool"},
 	}
+	cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// bash subcommand
 	cmd.AddCommand(&cobra.Command{
