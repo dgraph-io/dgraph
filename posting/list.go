@@ -246,6 +246,7 @@ func (it *pIterator) next() error {
 
 func (it *pIterator) valid() (bool, error) {
 	if it.deleteBelowTs > 0 {
+		it.uids = nil
 		return false, nil
 	}
 
