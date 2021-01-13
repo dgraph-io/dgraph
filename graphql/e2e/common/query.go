@@ -3101,7 +3101,11 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": null,
+				"ag": {
+					"count": 0,
+					"__typename": "StateAggregateResult",
+					"nameMin": null
+				},
 				"n": "India"
 			}]
 		}`,
