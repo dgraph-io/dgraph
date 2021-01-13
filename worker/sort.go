@@ -189,10 +189,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		var emptyList pb.List
-		var emptySkippedList pb.List
-		out[i].ulist = &emptyList
-		out[i].skippedUids = &emptySkippedList
+		out[i].ulist = &pb.List{}
+		out[i].skippedUids = &pb.List{}
 		out[i].uset = map[uint64]struct{}{}
 	}
 
@@ -305,8 +303,8 @@ BUCKETS:
 		}
 	}
 
-	var nullPreds []uint64
 	for i, ul := range ts.UidMatrix {
+		var nullPreds []uint64
 		// present is a map[uid]->bool to keep track of the UIDs containing the sort predicate.
 		present := make(map[uint64]bool)
 
@@ -326,8 +324,19 @@ BUCKETS:
 			}
 		}
 
-		requiredCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
-		canAppend := x.Min(uint64(requiredCount), uint64(len(nullPreds)))
+		// We didn't get anything in the intersected result, it is possible that complete offset
+		// is yet not applied. We need to apply the remainng offset on the null values.
+		if len(r.UidMatrix[i].Uids) == 0 {
+			start := int(ts.Offset) - len(out[i].skippedUids.Uids)
+			x.AssertTrue(start >= 0)
+			if start < len(nullPreds) {
+				nullPreds = nullPreds[start:]
+			} else {
+				nullPreds = []uint64{}
+			}
+		}
+		remainingCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
+		canAppend := x.Min(uint64(remainingCount), uint64(len(nullPreds)))
 		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullPreds[:canAppend]...)
 	}
 
@@ -570,8 +579,8 @@ type intersectedList struct {
 // indexed bucket.
 func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	out []intersectedList) error {
-	order := ts.Order[0]
 	count := int(ts.Count)
+	order := ts.Order[0]
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
 		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)

@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -1915,193 +1916,124 @@ func TestMultiSort7Paginate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
-func TestSortNull1(t *testing.T) {
+func TestSortWithNulls(t *testing.T) {
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		desc   bool
+		result string
+	}{
+		{0, -1, -1, false, `{"data": {"me":[{"predname":"nameA","pred":"A"},
+			{"predname":"nameB","pred":"B"},
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameD","pred":"D"},
+			{"predname":"nameE","pred":"E"},
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"},
+			{"predname":"nameJ"}]}}`,
+		},
+		{1, -1, -1, true, `{"data": {"me":[
+			{"predname":"nameE","pred":"E"},
+			{"predname":"nameD","pred":"D"},
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameB","pred":"B"},
+			{"predname":"nameA","pred":"A"},
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"},
+			{"predname":"nameJ"}]}}`,
+		},
+		{2, -1, 2, false, `{"data": {"me":[
+			{"predname":"nameA", "pred": "A"},
+			{"predname":"nameB","pred":"B"}]}}`,
+		},
+		{4, -1, 2, true, `{"data": {"me":[
+			{"predname":"nameE", "pred":"E"},
+			{"predname":"nameD", "pred": "D"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"predname":"nameA","pred":"A"},
+			{"predname":"nameB","pred":"B"},
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameD","pred":"D"},
+			{"predname":"nameE","pred":"E"},
+			{"predname":"nameF"},
+			{"predname":"nameG"}]}}`,
+		},
+		{6, -1, 7, true, `{"data": {"me":[
+			{"predname":"nameE","pred":"E"},
+			{"predname":"nameD","pred":"D"},
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameB","pred":"B"},
+			{"predname":"nameA","pred":"A"},
+			{"predname":"nameF"},
+			{"predname":"nameG"}]}}`,
+		},
+		{7, 2, 7, false, `{"data": {"me":[
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameD","pred":"D"},
+			{"predname":"nameE","pred":"E"},
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"}]}}`,
+		},
+		{8, 2, 7, true, `{"data": {"me":[
+			{"predname":"nameC","pred":"C"},
+			{"predname":"nameB","pred":"B"},
+			{"predname":"nameA","pred":"A"},
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"}]}}`,
+		},
+		{9, 5, 5, false, `{"data": {"me":[
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"},
+			{"predname":"nameJ"}]}}`,
+		},
+		{10, 5, 5, true, `{"data": {"me":[
+			{"predname":"nameF"},
+			{"predname":"nameG"},
+			{"predname":"nameH"},
+			{"predname":"nameI"},
+			{"predname":"nameJ"}]}}`,
+		},
+		{11, 9, 5, false, `{"data": {"me":[
+			{"predname":"nameJ"}]}}`,
+		},
+		{12, 9, 5, true, `{"data": {"me":[
+			{"predname":"nameJ"}]}}`,
+		},
+	}
 
-	query := `{
-		me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred) {
-			predname
-			pred
+	makeQuery := func(offset, first int32, desc bool, expected string) string {
+		order := "orderasc: pred"
+		if desc {
+			order = "orderdesc: pred"
 		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"predname":"nameA","pred":"A"},
-	{"predname":"nameB","pred":"B"},
-	{"predname":"nameC","pred":"C"},
-	{"predname":"nameD","pred":"D"},
-	{"predname":"nameE","pred":"E"},
-	{"predname":"nameF"},
-	{"predname":"nameG"},
-	{"predname":"nameH"},
-	{"predname":"nameI"},
-	{"predname":"nameJ"}]}}`, js)
-}
-
-func TestSortNull1Desc(t *testing.T) {
-
-	query := `{
-		me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred) {
-			predname
-			pred
+		qfunc := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), "
+		qfunc += order
+		if offset != -1 {
+			qfunc += fmt.Sprintf(", offset: %d", offset)
 		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameE","pred":"E"},
-		{"predname":"nameD","pred":"D"},
-		{"predname":"nameC","pred":"C"},
-		{"predname":"nameB","pred":"B"},
-		{"predname":"nameA","pred":"A"},
-		{"predname":"nameF"},
-		{"predname":"nameG"},
-		{"predname":"nameH"},
-		{"predname":"nameI"},
-		{"predname":"nameJ"}]}}`, js)
-}
-
-func TestSortNull2(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7) {
-			predname
-			pred
+		if first != -1 {
+			qfunc += fmt.Sprintf(", first: %d", first)
 		}
-	}`
+		query := "{" + qfunc + ") { predname pred } }"
+		return processQueryNoErr(t, query)
+	}
 
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameA","pred":"A"},
-		{"predname":"nameB","pred":"B"},
-		{"predname":"nameC","pred":"C"},
-		{"predname":"nameD","pred":"D"},
-		{"predname":"nameE","pred":"E"},
-		{"predname":"nameF"},
-		{"predname":"nameG"}]}}`, js)
-}
-
-func TestSortNull2Desc(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameE","pred":"E"},
-		{"predname":"nameD","pred":"D"},
-		{"predname":"nameC","pred":"C"},
-		{"predname":"nameB","pred":"B"},
-		{"predname":"nameA","pred":"A"},
-		{"predname":"nameF"},
-		{"predname":"nameG"}]}}`, js)
-}
-
-func TestSortNull3(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 7, offset: 2) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameC","pred":"C"},
-		{"predname":"nameD","pred":"D"},
-		{"predname":"nameE","pred":"E"},
-		{"predname":"nameF"},
-		{"predname":"nameG"},
-		{"predname":"nameH"},
-		{"predname":"nameI"}]}}`, js)
-}
-
-func TestSortNull3Desc(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 7, offset: 2) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameC","pred":"C"},
-		{"predname":"nameB","pred":"B"},
-		{"predname":"nameA","pred":"A"},
-		{"predname":"nameF"},
-		{"predname":"nameG"},
-		{"predname":"nameH"},
-		{"predname":"nameI"}]}}`, js)
-}
-
-func TestSortNull4(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 4, offset: 5) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameF"},
-		{"predname":"nameG"},
-		{"predname":"nameH"},
-		{"predname":"nameI"}]}}`, js)
-}
-
-func TestSortNull4Desc(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 4, offset: 5) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameF"},
-		{"predname":"nameG"},
-		{"predname":"nameH"},
-		{"predname":"nameI"}]}}`, js)
-}
-
-func TestSortNull5(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: pred, first: 2) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameA", "pred": "A"},
-		{"predname":"nameB","pred":"B"}]}}`, js)
-}
-
-func TestSortNull5Desc(t *testing.T) {
-
-	query := `{
-me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderdesc: pred, first: 2) {
-			predname
-			pred
-		}
-	}`
-
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[
-		{"predname":"nameE", "pred":"E"},
-		{"predname":"nameD", "pred": "D"}]}}`, js)
+	for _, tc := range tests {
+		actualRes := makeQuery(tc.offset, tc.first, tc.desc, tc.result)
+		require.JSONEqf(t, tc.result, actualRes, "Failed on testcase: %d\n", tc.index)
+	}
 }
 
 func TestMultiSortPaginateWithOffset(t *testing.T) {
