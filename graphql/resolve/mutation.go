@@ -90,6 +90,7 @@ type MutationRewriter interface {
 	// with a query and multiple mutations guarded by conditions.
 	Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error)
 
+	NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error)
 	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
 	// mutation and constructs a Dgraph query.  It's used to find the return
 	// value from a GraphQL mutation - i.e. we've run the mutation indicated by m
