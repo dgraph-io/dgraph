@@ -36,7 +36,7 @@ When you start your Dgraph Cluster directly on the host machine (e.g. with syste
 
 ### Install nginx using the following `apt-get` command:
 
-After you have set up the, install the latest stable nginx. Use the following command:
+After you have set up your Dgraph Clusteer, install the latest stable nginx. Use the following command:
 ```
 apt-get install nginx
 ```
