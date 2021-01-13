@@ -1992,28 +1992,48 @@ func TestSortWithNulls(t *testing.T) {
 			{"pname":"nameH"},
 			{"pname":"nameI"}]}}`,
 		},
-		{9, 5, 5, false, `{"data": {"me":[
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
 			{"pname":"nameF"},
 			{"pname":"nameG"},
 			{"pname":"nameH"},
 			{"pname":"nameI"},
 			{"pname":"nameJ"}]}}`,
 		},
-		{10, 5, 5, true, `{"data": {"me":[
+		{10, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
 			{"pname":"nameF"},
 			{"pname":"nameG"},
 			{"pname":"nameH"},
 			{"pname":"nameI"},
 			{"pname":"nameJ"}]}}`,
 		},
-		{11, 9, 5, false, `{"data": {"me":[
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
 			{"pname":"nameJ"}]}}`,
 		},
-		{12, 9, 5, true, `{"data": {"me":[
+		{12, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
 			{"pname":"nameJ"}]}}`,
 		},
-		{13, 12, 5, false, `{"data": {"me":[]}}`},
-		{14, 12, 5, true, `{"data": {"me":[]}}`},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{14, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
+		{16, 12, 5, true, `{"data": {"me":[]}}`},
 	}
 
 	makeQuery := func(offset, first int32, desc, index bool) string {
@@ -2033,15 +2053,14 @@ func TestSortWithNulls(t *testing.T) {
 		if first != -1 {
 			qfunc += fmt.Sprintf(", first: %d", first)
 		}
-		query := "{" + qfunc + ") { pname " + pred + " } }"
+		query := "{" + qfunc + ") { pname pred:" + pred + " } }"
 		return processQueryNoErr(t, query)
 	}
 
 	for _, tc := range tests {
 		// Case of sort with Index.
-		expected := strings.Replace(tc.result, "pred", "indexpred", -1)
 		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
-		require.JSONEqf(t, expected, actual, "Failed on index-testcase: %d\n", tc.index)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
 
 		// Case of sort without index
 		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
