@@ -78,7 +78,7 @@ func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 			if atomic.LoadUint32(&auditEnabled) != 1 {
 				auditor.log = initlog(dir)
 				atomic.StoreUint32(&auditEnabled, 1)
-				glog.Info("audit logs are enabled")
+				glog.Infof("audit logs are enabled")
 			}
 		}
 	}
