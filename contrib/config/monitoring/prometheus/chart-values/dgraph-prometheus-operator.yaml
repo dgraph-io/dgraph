@@ -1,5 +1,5 @@
 prometheusOperator:
-  createCustomResource: false
+  createCustomResource: true
 
 grafana:
   enabled: true
