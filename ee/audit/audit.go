@@ -1,14 +1,13 @@
 package audit
 
 import (
+	"github.com/spf13/viper"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -33,67 +32,63 @@ const (
 var auditor *auditLogger
 
 type auditLogger struct {
-	mu   sync.RWMutex
+	log  *x.Logger
 	tick *time.Ticker
-	log  x.ILogger
 }
 
-func InitAuditorIfNecessary(dir string) {
-	auditor = &auditLogger{
-		mu: sync.RWMutex{},
-		tick: time.NewTicker(time.Minute * 5),
-	}
-
-	if !worker.EnterpriseEnabled() {
+func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
+	if !conf.GetBool("audit_enabled") {
 		return
 	}
-
-	initlog := func() x.ILogger{
-		logger, err := x.InitLogger(dir, "dgraph_audit.log")
-		if err != nil {
-			glog.Errorf("error while initiating auditor %v", err)
-			return nil
-		}
-		return logger
+	auditor = &auditLogger{
+		tick: time.NewTicker(time.Second * 5),
 	}
-	auditor.log = initlog()
+	if eeEnabled() {
+		auditor.log = initlog(conf.GetString("audit_dir"))
+		glog.Infoln("audit logs are enabled")
+	}
+
+	go checkIfEEEnabled(eeEnabled, conf.GetString("audit_dir"))
+}
+
+func initlog(dir string) *x.Logger {
+	logger, err := x.InitLogger(dir, "dgraph_audit.log")
+	if err != nil {
+		glog.Errorf("error while initiating auditor %v", err)
+		return nil
+	}
+	return logger
+}
+
+func checkIfEEEnabled(eeEnabledFunc func() bool, dir string) {
 	for {
 		select {
-		case <- auditor.tick.C:
-			if !worker.EnterpriseEnabled() {
+		case <-auditor.tick.C:
+			if !eeEnabledFunc() {
 				if atomic.LoadUint32(&auditEnabled) != 0 {
+					glog.Infof("audit logs are disabled")
 					atomic.StoreUint32(&auditEnabled, 0)
-					auditor.mu.Lock()
+					auditor.log.Sync()
 					auditor.log = nil
-					auditor.mu.Unlock()
-					continue
 				}
+				continue
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
+				glog.Info("audit logs are enabled")
+				auditor.log = initlog(dir)
 				atomic.StoreUint32(&auditEnabled, 1)
-				auditor.mu.Lock()
-				auditor.log = initlog()
-				auditor.mu.Unlock()
 			}
 		}
 	}
 }
 
 func Close() {
-	glog.Info("Closing auditor")
-	auditor.mu.Lock()
-	defer auditor.mu.Unlock()
 	auditor.tick.Stop()
 	auditor.log.Sync()
 }
 
-func (a *auditLogger) AuditFromEvent(event *AuditEvent) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.log == nil {
-		return
-	}
+func (a *auditLogger) AuditEvent(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
 		"user", event.User,
 		"server", event.ServerHost,
