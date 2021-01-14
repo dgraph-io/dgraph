@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -36,6 +37,9 @@ func TestDeleteEdges(t *testing.T) {
 	const numEdges = 1000000
 	const numBatches = 50
 	const uid = "0x1"
+
+	// Wait for the cluster to come up.
+	time.Sleep(5 * time.Second)
 
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
