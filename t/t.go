@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -211,7 +210,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 
 func hasTestFiles(pkg string) bool {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	dir = path.Join(*baseDir, dir)
+	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -245,7 +244,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		closer.Done()
 	}()
 
-	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
+	defaultCompose := filepath.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getClusterPrefix()
 
 	var started, stopped bool
@@ -344,7 +343,7 @@ func findPackagesFor(testName string) []string {
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
 		}
 	}
@@ -415,7 +414,7 @@ type task struct {
 
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	return path.Join(*baseDir, dir, "docker-compose.yml")
+	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
 func getPackages() []task {

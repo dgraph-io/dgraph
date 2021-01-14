@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -375,7 +375,7 @@ func TestMain(m *testing.M) {
 	fmt.Printf("alphaExportPath: %s\n", alphaExportPath)
 
 	_, thisFile, _, _ := runtime.Caller(0)
-	testDataDir = path.Dir(thisFile)
+	testDataDir = filepath.Dir(thisFile)
 	fmt.Printf("Using test data dir: %s\n", testDataDir)
 
 	var err error
