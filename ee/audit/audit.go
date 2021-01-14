@@ -1,12 +1,9 @@
 package audit
 
 import (
-	"encoding/json"
-	"errors"
-	"io/ioutil"
-	"log"
 	"net/http"
-	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -15,11 +12,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var auditEnabled uint32
+
 type AuditEvent struct {
 	User        string              `json:"user"`
 	ServerHost  string              `json:"server_host"`
 	ClientHost  string              `json:"client_host"`
-	Timestamp   int64               `json:"timestamp"`
+	Endpoint    string              `json:"endpoint"`
 	Req         string              `json:"req"`
 	Status      int                 `json:"status"`
 	QueryParams map[string][]string `json:"query_params"`
@@ -28,81 +27,81 @@ type AuditEvent struct {
 
 const (
 	UnauthorisedUser = "UnauthorisedUser"
-	NoUser           = "NoUser"
 	UnknownUser      = "UnknownUser"
 )
 
-var Auditor *AuditLogger
+var auditor *auditLogger
 
-// todo add file rotation etc
-type AuditLogger struct {
-	log            *log.Logger
-	AuditorEnabled bool
+type auditLogger struct {
+	mu   sync.RWMutex
+	tick *time.Ticker
+	log  x.ILogger
 }
 
-func InitAuditor() error {
+func InitAuditorIfNecessary(dir string) {
+	auditor = &auditLogger{
+		mu: sync.RWMutex{},
+		tick: time.NewTicker(time.Minute * 5),
+	}
+
 	if !worker.EnterpriseEnabled() {
-		return errors.New("enterprise features are disabled. You can enable them by " +
-			"supplying the appropriate license file to Dgraph Zero using the HTTP endpoint")
-	}
-
-	e, err := os.OpenFile(worker.Config.AuditDir+"/dgraph_audit.json",
-		os.O_WRONLY|os.O_CREATE|os.O_APPEND,
-		0666)
-	if err != nil {
-		return err
-	}
-
-	Auditor = &AuditLogger{
-		log:            log.New(e, "", 0),
-		AuditorEnabled: true,
-	}
-
-	//Auditor.startListeningToLogAudit()
-	return nil
-}
-
-func (a *AuditLogger) Close() {
-	glog.Infof("Closing auditor")
-}
-
-func (a *AuditLogger) MaybeAuditFromCtx(w *ResponseWriter, r *http.Request, startTime int64) {
-	var userId string
-	var err error
-	token := r.Header.Get("X-Dgraph-AccessToken")
-	if token == "" {
-		if x.WorkerConfig.AclEnabled {
-			userId = UnauthorisedUser
-		} else {
-			userId = NoUser
-		}
-	} else {
-		userId, err = x.ExtractUserName(token)
-		if err != nil {
-			userId = UnknownUser
-		}
-	}
-
-	all, _ := ioutil.ReadAll(r.Body)
-	event := &AuditEvent{
-		User:        userId,
-		ServerHost:  x.WorkerConfig.MyAddr,
-		ClientHost:  r.RemoteAddr,
-		Timestamp:   time.Now().Unix(),
-		Req:         string(all),
-		Status:      w.statusCode,
-		QueryParams: r.URL.Query(),
-		TimeTaken:   time.Now().UnixNano() - startTime,
-	}
-	a.MaybeAuditFromEvent(event)
-}
-
-func (a *AuditLogger) MaybeAuditFromEvent(event *AuditEvent) {
-	if !a.AuditorEnabled {
 		return
 	}
-	b, _ := json.Marshal(event)
-	a.log.Print(string(b))
+
+	initlog := func() x.ILogger{
+		logger, err := x.InitLogger(dir, "dgraph_audit.log")
+		if err != nil {
+			glog.Errorf("error while initiating auditor %v", err)
+			return nil
+		}
+		return logger
+	}
+	auditor.log = initlog()
+	for {
+		select {
+		case <- auditor.tick.C:
+			if !worker.EnterpriseEnabled() {
+				if atomic.LoadUint32(&auditEnabled) != 0 {
+					atomic.StoreUint32(&auditEnabled, 0)
+					auditor.mu.Lock()
+					auditor.log = nil
+					auditor.mu.Unlock()
+					continue
+				}
+			}
+
+			if atomic.LoadUint32(&auditEnabled) != 1 {
+				atomic.StoreUint32(&auditEnabled, 1)
+				auditor.mu.Lock()
+				auditor.log = initlog()
+				auditor.mu.Unlock()
+			}
+		}
+	}
+}
+
+func Close() {
+	glog.Info("Closing auditor")
+	auditor.mu.Lock()
+	defer auditor.mu.Unlock()
+	auditor.tick.Stop()
+	auditor.log.Sync()
+}
+
+func (a *auditLogger) AuditFromEvent(event *AuditEvent) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.log == nil {
+		return
+	}
+	a.log.AuditI(event.Endpoint,
+		"user", event.User,
+		"server", event.ServerHost,
+		"client", event.ClientHost,
+		"req_body", event.Req,
+		"query_param", event.QueryParams,
+		"status", event.Status,
+		"time", event.TimeTaken)
 }
 
 type ResponseWriter struct {

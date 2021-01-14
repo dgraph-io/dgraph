@@ -385,6 +385,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
@@ -423,19 +424,18 @@ func setupServer(closer *z.Closer) {
 		log.Fatal(err)
 	}
 
-	// http.HandleWithMidd("", mainhalder, middlewares....)
-	http.Handle("/query", auditRequest(queryHandler))
-	http.Handle("/query/", auditRequest(queryHandler))
-	http.Handle("/mutate", auditRequest(mutationHandler))
-	http.Handle("/mutate/", auditRequest(mutationHandler))
-	http.Handle("/commit", auditRequest(commitHandler))
-	http.Handle("/alter", auditRequest(alterHandler))
-	http.Handle("/health", auditRequest(healthCheck))
-	http.Handle("/state", auditRequest(stateHandler))
-	http.Handle("/jemalloc", auditRequest(x.JemallocHandler))
+	http.Handle("/query", audit.AuditRequestHttp(http.HandlerFunc(queryHandler)))
+	http.Handle("/query/", audit.AuditRequestHttp(http.HandlerFunc(queryHandler)))
+	http.Handle("/mutate", audit.AuditRequestHttp(http.HandlerFunc(mutationHandler)))
+	http.Handle("/mutate/", audit.AuditRequestHttp(http.HandlerFunc(mutationHandler)))
+	http.Handle("/commit", audit.AuditRequestHttp(http.HandlerFunc(commitHandler)))
+	http.Handle("/alter", audit.AuditRequestHttp(http.HandlerFunc(alterHandler)))
+	http.HandleFunc("/health", healthCheck)
+	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
-	http.Handle("/debug/store", auditRequest(storeStatsHandler))
+	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -458,8 +458,9 @@ func setupServer(closer *z.Closer) {
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	http.Handle("/graphql", auditRequestWithHandler(mainServer.HTTPHandler()))
-	http.Handle("/probe/graphql", auditRequest(func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/graphql", audit.AuditRequestHttp(mainServer.HTTPHandler()))
+	http.Handle("/probe/graphql", audit.AuditRequestHttp(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
@@ -469,20 +470,20 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
-	}))
-	http.Handle("/admin", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
+	})))
+	http.Handle("/admin", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
 	}, adminAuthHandler(adminServer.HTTPHandler()))))
 
-	http.Handle("/admin/schema", auditRequestWithHandler(adminAuthHandler(http.HandlerFunc(func(
+	http.Handle("/admin/schema", audit.AuditRequestHttp(adminAuthHandler(http.HandlerFunc(func(
 		w http.ResponseWriter,
 		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
 	}))))
 
-	http.Handle("/admin/schema/validate", auditRequest(http.HandlerFunc(func(w http.ResponseWriter,
+	http.Handle("/admin/schema/validate", audit.AuditRequestHttp(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		schema := readRequest(w, r)
 		w.Header().Set("Content-Type", "application/json")
@@ -499,26 +500,26 @@ func setupServer(closer *z.Closer) {
 		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
 	})))
 
-	http.Handle("/admin/shutdown", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{http.
+	http.Handle("/admin/shutdown", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{http.
 		MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
 		})))))
 
-	http.Handle("/admin/draining", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/draining", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		drainingHandler(w, r, adminServer)
 	})))))
 
-	http.Handle("/admin/export", auditRequestWithHandler(allowedMethodsHandler(
+	http.Handle("/admin/export", audit.AuditRequestHttp(allowedMethodsHandler(
 		allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			exportHandler(w, r, adminServer)
 		})))))
 
-	http.Handle("/admin/config/cache_mb", auditRequestWithHandler(allowedMethodsHandler(allowedMethods{
+	http.Handle("/admin/config/cache_mb", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -532,8 +533,8 @@ func setupServer(closer *z.Closer) {
 	// Add OpenCensus z-pages.
 	zpages.Handle(http.DefaultServeMux, "/z")
 
-	http.Handle("/", auditRequest(homeHandler))
-	http.Handle("/ui/keywords", auditRequest(keywordHandler))
+	http.Handle("/", audit.AuditRequestHttp(http.HandlerFunc(homeHandler)))
+	http.Handle("/ui/keywords", audit.AuditRequestHttp(http.HandlerFunc(keywordHandler)))
 
 	// Initialize the servers.
 	admin.ServerCloser.AddRunning(3)
@@ -793,7 +794,11 @@ func run() {
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
 
-	x.Check(audit.InitAuditor())
+	// Audit is enterprise feature. If enabled, audit logs will be generate in the audit directory.
+	if opts.AuditEnabled {
+		go audit.InitAuditorIfNecessary(opts.AuditDir)
+	}
+
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
 
@@ -807,7 +812,7 @@ func run() {
 	adminCloser.SignalAndWait()
 	glog.Infoln("adminCloser closed.")
 
-	audit.Auditor.Close()
+	audit.Close()
 
 	worker.State.Dispose()
 	x.RemoveCidFile()
