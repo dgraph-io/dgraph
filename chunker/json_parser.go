@@ -731,12 +731,12 @@ func (p *Parser) Run(d []byte) (err error) {
 			return
 		}
 		if !p.Skip {
+			// we advance the iter every state transition because we want it to
+			// stay next to p.Cursor incase we encounter a geojson object
 			p.Iter.AdvanceInto()
 		} else {
 			p.Skip = false
 		}
-		//t := p.Iter.AdvanceInto()
-		//fmt.Printf("%v %d %c\n", t, p.Cursor, p.Parsed.Tape[p.Cursor]>>56)
 		if state, err = state(byte(p.Parsed.Tape[p.Cursor] >> 56)); err != nil {
 			return
 		}
@@ -853,8 +853,6 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 func (p *Parser) MapFacet(n byte) (ParserState, error) {
 	// map facet keys must be (numerical) strings
 	if n != '"' {
-		//if n == '}' {
-		//}
 		return p.Object, nil
 	}
 	id, err := strconv.ParseUint(p.String(), 10, 64)
