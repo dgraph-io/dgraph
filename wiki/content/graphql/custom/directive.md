@@ -314,7 +314,7 @@ When a query returns an error while resolving from a custom HTTP endpoint, the e
 
 When a field returns an error while resolving a custom HTTP endpoint, the field's value becomes `null` and the error is added to the `errors` JSON array. The rest of the fields are still resolved as required by the request.
 
-For example:
+For example, a query from a custom HTTP endpoint will return an error in the following format:
 
 ```json
 {
