@@ -347,11 +347,11 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":        commonAdminQueryMWs,
-		"listBackups":   commonAdminQueryMWs,
-		"getGQLSchema":  commonAdminQueryMWs,
+		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
+		"config":       commonAdminQueryMWs,
+		"listBackups":  commonAdminQueryMWs,
+		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
@@ -722,14 +722,9 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
-				getResolver := &getSchemaResolver{
+				return &getSchemaResolver{
 					admin: as,
 				}
-
-				return resolve.NewQueryResolver(
-					getResolver,
-					getResolver,
-					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
@@ -774,7 +769,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			return resolve.QueryResolverFunc(resolveGetCors)
 		}).
 		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
-			// Add the desceding order to the created_at to get the schema history in
+			// Add the descending order to the created_at to get the schema history in
 			// descending order.
 			q.Arguments()["order"] = map[string]interface{}{"desc": "created_at"}
 			return resolve.NewQueryResolver(

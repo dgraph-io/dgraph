@@ -154,7 +154,7 @@ type adminExecutor struct {
 
 // A Resolved is the result of resolving a single field - generally a query or mutation.
 type Resolved struct {
-	Data       interface{}
+	Data       []byte
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
@@ -240,12 +240,8 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		WithMutationResolver("__typename",
 			func(m schema.Mutation) MutationResolver {
 				return MutationResolverFunc(func(ctx context.Context, m schema.Mutation) (*Resolved, bool) {
-					return &Resolved{
-						Data:       map[string]interface{}{"__typename": "Mutation"},
-						Field:      m,
-						Err:        nil,
-						Extensions: nil,
-					}, resolverSucceeded
+					return DataResult(m, map[string]interface{}{"__typename": "Mutation"}, nil),
+						resolverSucceeded
 				})
 			})
 }
@@ -576,19 +572,8 @@ func addResult(resp *schema.Response, res *Resolved) {
 		// According to GraphQL spec, out of all the queries in the request, if any one query
 		// returns null but expected return type is non-nullable then we set root data to null.
 		resp.SetDataNull()
-	} else if b, ok := res.Data.([]byte); ok {
-		resp.AddData(b)
 	} else {
-		path := make([]interface{}, 0, maxPathLength(res.Field))
-		//var b []byte
-		var gqlErr x.GqlErrorList
-
-		if res.Data != nil {
-			b, gqlErr = completeObject(path, []schema.Field{res.Field},
-				res.Data.(map[string]interface{}))
-		}
-		resp.WithError(gqlErr)
-		resp.AddData(b)
+		resp.AddData(res.Data)
 	}
 
 	resp.WithError(res.Err)
@@ -799,7 +784,8 @@ func completeDgraphResult(
 	}
 
 	return &Resolved{
-		Data:  valToComplete,
+		// TODO (cleanup): remove this function altogether, not needed anymore
+		Data:  nil, // valToComplete
 		Field: field,
 		Err:   errs,
 	}
@@ -2108,17 +2094,9 @@ func getBodyForLambda(ctx context.Context, field schema.Field, parents,
 }
 
 func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
-	emptyResult := func(err error) *Resolved {
-		return &Resolved{
-			Data:  map[string]interface{}{field.Name(): nil},
-			Field: field,
-			Err:   schema.AsGQLErrors(err),
-		}
-	}
-
 	hrc, err := field.CustomHTTPConfig()
 	if err != nil {
-		return emptyResult(err)
+		return EmptyResult(field, err)
 	}
 
 	var body string
@@ -2129,14 +2107,14 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		}
 		b, err := json.Marshal(jsonTemplate)
 		if err != nil {
-			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
+			return EmptyResult(field, jsonMarshalError(err, field, *hrc.Template))
 		}
 		body = string(b)
 	}
 
 	b, status, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
-		return emptyResult(externalRequestError(err, field))
+		return EmptyResult(field, externalRequestError(err, field))
 	}
 
 	// this means it had body and not graphql, so just unmarshal it and return
@@ -2145,18 +2123,14 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		var rerr restErr
 		if status >= 200 && status < 300 {
 			if err := json.Unmarshal(b, &result); err != nil {
-				return emptyResult(jsonUnmarshalError(err, field))
+				return EmptyResult(field, jsonUnmarshalError(err, field))
 			}
 		} else if err := json.Unmarshal(b, &rerr); err != nil {
 			err = errors.Errorf("unexpected error with: %v", status)
 			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
 
-		return &Resolved{
-			Data:  map[string]interface{}{field.Name(): result},
-			Field: field,
-			Err:   rerr.Errors,
-		}
+		return DataResult(field, map[string]interface{}{field.Name(): result}, rerr.Errors)
 	}
 
 	// we will reach here if it was a graphql request
@@ -2168,17 +2142,13 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if err != nil {
 		gqlErr := jsonUnmarshalError(err, field)
 		resp.Errors = append(resp.Errors, schema.AsGQLErrors(gqlErr)...)
-		return emptyResult(resp.Errors)
+		return EmptyResult(field, resp.Errors)
 	}
 	data, ok := resp.Data[hrc.RemoteGqlQueryName]
 	if !ok {
-		return emptyResult(resp.Errors)
+		return EmptyResult(field, resp.Errors)
 	}
-	return &Resolved{
-		Data:  map[string]interface{}{field.Name(): data},
-		Field: field,
-		Err:   resp.Errors,
-	}
+	return DataResult(field, map[string]interface{}{field.Name(): data}, resp.Errors)
 }
 
 func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -2193,9 +2163,20 @@ func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Muta
 
 func EmptyResult(f schema.Field, err error) *Resolved {
 	return &Resolved{
-		Data:  map[string]interface{}{f.Name(): nil},
+		Data:  []byte(`{"` + f.ResponseName() + `":null}`),
 		Field: f,
 		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
+	}
+}
+
+func DataResult(f schema.Field, data map[string]interface{}, err error) *Resolved {
+	b, errs := completeObject(make([]interface{}, 0, maxPathLength(f)), []schema.Field{f}, data)
+
+	return &Resolved{
+		Data:       b,
+		Field:      f,
+		Err:        schema.AppendGQLErrs(err, errs),
+		Extensions: nil, // TODO: what about queryUser ACL query, check once?
 	}
 }
 

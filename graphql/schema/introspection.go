@@ -211,7 +211,7 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspec
 		if i != 0 {
 			x.Check2(ec.b.WriteRune(','))
 		}
-		ec.writeKey(field.Name)
+		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
 			ec.writeStringValue("__EnumValue")
@@ -293,7 +293,7 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		if i != 0 {
 			x.Check2(ec.b.WriteRune(','))
 		}
-		ec.writeKey(field.Name)
+		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
 			ec.writeStringValue("__Schema")

@@ -54,10 +54,11 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 		worker.UpdateLogRequest(*input.LogRequest)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
+		nil,
+	), true
 }
 
 func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
@@ -66,10 +67,11 @@ func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
 	conf := make(map[string]interface{})
 	conf["cacheMb"] = float64(worker.Config.CacheMb)
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): conf},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): conf},
+		nil,
+	)
 
 }
 

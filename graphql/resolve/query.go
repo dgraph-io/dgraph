@@ -55,7 +55,7 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 
 // NewQueryResolver creates a new query resolver.  The resolver runs the pipeline:
 // 1) rewrite the query using qr (return error if failed)
-// 2) execute the rewritten query with qe (return error if failed)
+// 2) execute the rewritten query with ex (return error if failed)
 // 3) process the result with rc
 func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor, rc ResultCompleter) QueryResolver {
 	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: rc}
@@ -84,10 +84,6 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer timer.Stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
-	if resolved.Data == nil {
-		resolved.Data = map[string]interface{}{query.Name(): nil}
-	}
-
 	qr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
@@ -172,17 +168,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
 	data, err := schema.Introspect(q)
-
-	var result map[string]interface{}
-	var err2 error
-	if len(data) > 0 {
-		err2 = json.Unmarshal(data, &result)
-	}
-
 	return &Resolved{
-		Data:  result,
+		Data:  data,
 		Field: q,
-		Err:   schema.AppendGQLErrs(err, err2),
+		Err:   err,
 	}
 }
 

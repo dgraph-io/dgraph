@@ -39,10 +39,9 @@ func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
 	var health []map[string]interface{}
 	err = json.Unmarshal(resp.GetJson(), &health)
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): health},
-		Field: q,
-		Err:   err,
-	}
-
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): health},
+		err,
+	)
 }

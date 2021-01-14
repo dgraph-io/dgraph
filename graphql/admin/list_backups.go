@@ -83,10 +83,11 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		results = append(results, result)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): results},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): results},
+		nil,
+	)
 }
 
 func getLsBackupInput(q schema.Query) (*lsBackupInput, error) {
