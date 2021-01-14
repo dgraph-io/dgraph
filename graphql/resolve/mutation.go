@@ -90,7 +90,6 @@ type MutationRewriter interface {
 	// with a query and multiple mutations guarded by conditions.
 	Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error)
 
-	NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error)
 	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
 	// mutation and constructs a Dgraph query.  It's used to find the return
 	// value from a GraphQL mutation - i.e. we've run the mutation indicated by m
@@ -240,8 +239,16 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 			Extensions: ext,
 		}
 	}
+	var upserts []*UpsertMutation
+	var err error
+	switch mr.mutationRewriter.(type) {
+	case *AddRewriter:
+		// queries, err := NewRewrite(ctx, mutation)
 
-	upserts, err := mr.mutationRewriter.Rewrite(ctx, mutation)
+	default:
+		upserts, err = mr.mutationRewriter.Rewrite(ctx, mutation)
+	}
+
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed

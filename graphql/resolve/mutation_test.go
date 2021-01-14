@@ -274,10 +274,10 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 				require.NoError(t, err)
 			}
 			mut := test.GetMutation(t, op)
-			rewriterToTest := rewriterFactory()
+			// rewriterToTest := rewriterFactory()
 
 			// -- Act --
-			queries, err := rewriterToTest.NewRewrite(context.Background(), mut)
+			queries, err := NewRewrite(context.Background(), mut)
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)

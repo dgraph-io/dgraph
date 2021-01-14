@@ -80,8 +80,6 @@ type xidMetadata struct {
 	queryExists map[string]bool
 	// seenUIDs tells whether the UID is previously been seen during DFS traversal
 	seenUIDs map[string]bool
-	// seenXIDs tells whether the XID for some type has been seen previously during DFS traversal
-	seenXIDs map[string]bool
 	// iDToVariable map stores XID / UID -> the variable map used in the query.
 	idToVariable map[string]string
 }
@@ -160,7 +158,6 @@ func newXidMetadata() *xidMetadata {
 		variableObjMap: make(map[string]map[string]interface{}),
 		seenAtTopLevel: make(map[string]bool),
 		queryExists:    make(map[string]bool),
-		seenXIDs:       make(map[string]bool),
 		seenUIDs:       make(map[string]bool),
 		idToVariable:   make(map[string]string),
 	}
@@ -357,34 +354,30 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 // after complete refactoring of mutation rewriter. It currently returns the
 // queries made by mutation rewriter to check for existence of nodes with given
 // XIDs and IDs.
-func (mrw *AddRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
+func NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 	varGen := NewVariableGenerator()
 	xidMd := newXidMetadata()
 
 	var ret []*gql.GraphQuery
+	var retErrors error
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		queries := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMd)
+		queries, errs := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMd)
+		if len(errs) > 0 {
+			var gqlErrors x.GqlErrorList
+			for _, err := range errs {
+				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+
+			}
+			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+				"failed to rewrite mutation payload"))
+		}
 		ret = append(ret, queries...)
 	}
-	return ret, nil
-}
-
-func (mrw *UpdateRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
-
-	// Ubimplemented function for UpdateRewriter
-	var ret []*gql.GraphQuery
-	return ret, nil
-}
-
-func (mrw *deleteRewriter) NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
-
-	// Ubimplemented function for UpdateRewriter
-	var ret []*gql.GraphQuery
-	return ret, nil
+	return ret, retErrors
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -1422,11 +1415,11 @@ func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema
 func checkUIDExistsQuery(
 	val interface{},
 	srcField schema.FieldDefinition,
-	variable string) *gql.GraphQuery {
+	variable string) (*gql.GraphQuery, error) {
 
 	uid, err := asUID(val)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	query := &gql.GraphQuery{
@@ -1436,7 +1429,7 @@ func checkUIDExistsQuery(
 	}
 	addTypeFilter(query, srcField.Type())
 	addUIDFunc(query, []uint64{uid})
-	return query
+	return query, nil
 }
 
 func getExistenceQueries(
@@ -1445,9 +1438,11 @@ func getExistenceQueries(
 	srcField schema.FieldDefinition,
 	varGen *VariableGenerator,
 	obj map[string]interface{},
-	xidMetadata *xidMetadata) []*gql.GraphQuery {
+	xidMetadata *xidMetadata) ([]*gql.GraphQuery, []error) {
 
+	atTopLevel := srcField == nil
 	var ret []*gql.GraphQuery
+	var retErrors []error
 
 	id := typ.IDField()
 	if id != nil {
@@ -1456,7 +1451,7 @@ func getExistenceQueries(
 			if idVal != nil {
 				// No need to add query if the UID is already been seen.
 				if xidMetadata.seenUIDs[idVal.(string)] == true {
-					return ret
+					return ret, retErrors
 				}
 				// Mark this UID as seen.
 				xidMetadata.seenUIDs[idVal.(string)] = true
@@ -1464,11 +1459,13 @@ func getExistenceQueries(
 
 				xidMetadata.idToVariable[idVal.(string)] = variable
 
-				query := checkUIDExistsQuery(idVal, srcField, variable)
-				if query != nil {
-					ret = append(ret, query)
-					return ret
+				query, err := checkUIDExistsQuery(idVal, srcField, variable)
+
+				if err != nil {
+					retErrors = append(retErrors, err)
 				}
+				ret = append(ret, query)
+				return ret, retErrors
 				// Add check UID query and return it.
 				// There is no need to move forward. If reference ID field is given,
 				// it has to exist.
@@ -1484,17 +1481,20 @@ func getExistenceQueries(
 	if xid != nil {
 		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 			switch xid.Type().Name() {
-			// TODO: Better error handling in case of parsing errors
 			case "Int":
 				val, ok := xidVal.(int64)
 				if !ok {
-					return ret
+					retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
+					return nil, retErrors
 				}
 				xidString = strconv.FormatInt(val, 10)
 			case "Float":
 				val, ok := xidVal.(float64)
 				if !ok {
-					return ret
+					retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
+					return nil, retErrors
 				}
 				xidString = strconv.FormatFloat(val, 'f', -1, 64)
 			case "Int64":
@@ -1502,32 +1502,41 @@ func getExistenceQueries(
 			default:
 				xidString, ok = xidVal.(string)
 				if !ok {
-					return ret
+					retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+						"a String or Int64", xid.Name(), xid.Type().Name())))
+					return nil, retErrors
 				}
 			}
 			xidData := typ.Name() + xidString
+			variable := varGen.Next(typ, xid.Name(), xidString, false)
 
-			if xidMetadata.seenXIDs[xidData] {
-				// No need to move forward as already seen
-				// The assumption here is that when the XID is first seen, it may also contain
-				// the related edges/ scalar attributes if any. This may not be completely true
-				// Best way could be to check if its XID reference or XID (new node) and only allow
-				// new node XID once and XID reference as many times as possible.
-				return ret
+			if xidMetadata.variableObjMap[variable] != nil {
+				// if we already encountered an object with same xid earlier, and this object is
+				// considered a duplicate of the existing object, then return error.
+				if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
+					err := errors.Errorf("duplicate XID found: %s", xidString)
+					retErrors = append(retErrors, err)
+					return nil, retErrors
+				}
+				// In the other case it is not duplicate. In this case we don't move ahead and
+				// stop processing.
+				return ret, retErrors
 			}
 
-			variable := varGen.Next(typ, xid.Name(), xidString, false)
-			// Mark this XID as seen.
-			xidMetadata.seenXIDs[xidData] = true
 			xidMetadata.idToVariable[xidData] = variable
+
+			// if not encountered till now, add it to the map
+			xidMetadata.variableObjMap[variable] = obj
+
+			// save if this node was seen at top level.
+			if !xidMetadata.seenAtTopLevel[variable] {
+				xidMetadata.seenAtTopLevel[variable] = atTopLevel
+			}
 
 			query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
 
-			// No need to add this XID query if seen already
-			if query != nil {
-				ret = append(ret, query)
-				// Don't return just over here as there maybe more nodes in the children tree.
-			}
+			ret = append(ret, query)
+			// Don't return just over here as there maybe more nodes in the children tree.
 		}
 	}
 	// Iterate on fields and call the same function recursively.
@@ -1548,33 +1557,84 @@ func getExistenceQueries(
 
 		switch val := val.(type) {
 		case map[string]interface{}:
-			// TODO: Also handle the case of union and geo object
-			ret = append(ret, getExistenceQueries(ctx, fieldDef.Type(), fieldDef, varGen, val, xidMetadata)...)
-
+			if fieldDef.Type().IsUnion() {
+				fieldQueries, err := getExistenceQueriesUnion(ctx, typ, fieldDef, varGen, val, xidMetadata, -1)
+				retErrors = append(retErrors, err...)
+				ret = append(ret, fieldQueries...)
+			} else {
+				fieldQueries, err := getExistenceQueries(ctx, fieldDef.Type(), fieldDef, varGen, val, xidMetadata)
+				retErrors = append(retErrors, err...)
+				ret = append(ret, fieldQueries...)
+			}
 		case []interface{}:
-			ret = append(ret, newRewriteList(ctx, fieldDef.Type(), fieldDef, varGen, val, xidMetadata)...)
+			for i, object := range val {
+				switch object := object.(type) {
+				case map[string]interface{}:
+					var fieldQueries []*gql.GraphQuery
+					var err []error
+					if fieldDef.Type().IsUnion() {
+						fieldQueries, err = getExistenceQueriesUnion(ctx, typ, fieldDef, varGen, object, xidMetadata, i)
+					} else {
+						fieldQueries, err = getExistenceQueries(ctx, fieldDef.Type(), fieldDef, varGen, object, xidMetadata)
+					}
+					retErrors = append(retErrors, err...)
+					ret = append(ret, fieldQueries...)
+				default:
+					// This is a scalar list. So, it won't contain any XID.
+					// Don't do anything.
+				}
+
+			}
+		default:
+			// This field is either a scalar value or a null.
+			// Fields with ID directive cannot have empty values. Checking it here.
+			if fieldDef.HasIDDirective() && val == "" {
+				err := fmt.Errorf("encountered an empty value for @id field `%s`", fieldName)
+				retErrors = append(retErrors, err)
+				return nil, retErrors
+			}
 		}
 	}
 
-	return ret
+	return ret, retErrors
 }
 
-func newRewriteList(
+func getExistenceQueriesUnion(
 	ctx context.Context,
-	typ schema.Type,
+	parentTyp schema.Type,
 	srcField schema.FieldDefinition,
 	varGen *VariableGenerator,
-	objects []interface{},
-	xidMetadata *xidMetadata) []*gql.GraphQuery {
+	obj map[string]interface{},
+	xidMetadata *xidMetadata,
+	listIndex int) ([]*gql.GraphQuery, []error) {
 
-	var result []*gql.GraphQuery
-
-	for _, obj := range objects {
-		result = append(result, getExistenceQueries(ctx, typ, srcField, varGen, obj.(map[string]interface{}), xidMetadata)...)
+	var retError []error
+	if len(obj) != 1 {
+		var err error
+		// if this was called from rewriteList,
+		// the listIndex will tell which particular item in the list has an error.
+		if listIndex >= 0 {
+			err = fmt.Errorf(
+				"value for field `%s` in type `%s` index `%d` must have exactly one child, "+
+					"found %d children", srcField.Name(), parentTyp.Name(), listIndex, len(obj))
+		} else {
+			err = fmt.Errorf(
+				"value for field `%s` in type `%s` must have exactly one child, found %d children",
+				srcField.Name(), parentTyp.Name(), len(obj))
+		}
+		retError = append(retError, err)
+		return nil, retError
 	}
 
-	return result
-
+	var newtyp schema.Type
+	for memberRef, memberRefVal := range obj {
+		memberTypeName := strings.ToUpper(memberRef[:1]) + memberRef[1:len(
+			memberRef)-3]
+		srcField = srcField.WithMemberType(memberTypeName)
+		newtyp = srcField.Type()
+		obj = memberRefVal.(map[string]interface{})
+	}
+	return getExistenceQueries(ctx, newtyp, srcField, varGen, obj, xidMetadata)
 }
 
 // if this is a union field, then obj should have only one key which will be a ref
