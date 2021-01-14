@@ -378,12 +378,19 @@ still works if you set up a unique location for each series.
 
 ## Export Backups
 
-The `export_backup` tool lets you convert a binary backup into an exported directory.
+The `export_backup` tool lets you convert a binary backup into an exported folder.
 
-### Why not using just binary backups instead of exports
+If you need to upgrade between two major Dgraph versions that have incompatible changes,
+you can use the `export_backup` tool to apply changes (either to the exported `.rdf` file or to the schema file),
+and then import back the dataset into the new Dgraph version.
 
-Some times a user needs to upgrade between two major Dgraph versions that has braking changes, and to do so they need to apply some changes either to their exported rdf file or schema file in order to import back the dataset into the newer Dgraph Version. An example of this use case can be seen here:
-To migrate existing schemas from Dgraph v1.0 to Dgraph v1.1, update the schema file from an export so all predicates of type uid are changed to [uid]. Then use the updated schema when loading data into Dgraph v1.1. For example, for the following schema:
+### Using exports instead of binary backups
+
+An example of this use-case would be to migrate existing schemas from Dgraph v1.0 to Dgraph v1.1.
+You need to update the schema file from an export so all predicates of type `uid` are changed to `[uid]`.
+Then use the updated schema when loading data into Dgraph v1.1.
+
+For example, for the following schema:
 
 ```
 name: string .
@@ -397,18 +404,21 @@ name: string .
 friend: [uid] .
 ```
 
-As you can see here we need to do some modification to the schema itself, therefore you will need an export or you can use the export_backup tool to convert your binary backup into an export
+Since you have to do a modification to the schema itself, you need an export. 
+You can use the `export_backup` tool to convert your binary backup into an export folder.
 
-### How does the backup and export dir look like:
+### Binary Backups and Exports folders
 
-Binary Backup dir has the following tree:
+A Binary Backup directory has the following structure:
+
 ```
 dgraph.20210104.224757.709
 ├── manifest.json
 └── r9-g1.backup
 ```
 
-Export dir has the following tree:
+An Export directory has the following structure:
+
 ```
 dgraph.r9.u0108.1621
 ├── g01.gql_schema.gz
@@ -416,15 +426,17 @@ dgraph.r9.u0108.1621
 └── g01.schema.gz
 ```
 
-To recap, in case we need to do the changes cited above we need to edit the g01.schema.gz file
+If you want to do the changes cited above, you need to edit the `g01.schema.gz` file.
 
-### What are the benefits
+### Benefits
 
-In this case, we get the speed benefit from the binary backups that are way faster than exports. So people with a big dataset don't need to way a long time till an export is completed. Instead, they take binary backups and convert them into export (only if needed).
+In this case, we get the speed benefit from the binary backups that are way faster than exports.
+So people with a big dataset don't need to way a long time till an export is completed.
+Instead, they take binary backups and convert them into export (only if needed).
 
 ### How to use it
 
-Ensure that you have taken a binary backup. The dir tree of a binary backup usually looks like this:
+Ensure that you have created a binary backup. The directory tree of a binary backup usually looks like this:
 
 ```
 dgraph.20210104.224757.709
@@ -432,7 +444,8 @@ dgraph.20210104.224757.709
 └── r9-g1.backup
 ```
 
-run the following command:
+Then run the following command:
+
 ```sh
 dgraph export_backup -l <location-of-your-binary-backup> -d <destination-of-the-export-dir>
 ```
