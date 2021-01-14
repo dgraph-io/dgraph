@@ -235,6 +235,30 @@ weight
 	exp.verify()
 }
 
+// verify that ordering doesn't matter for uids
+func TestNquadsFromJson5(t *testing.T) {
+	json := `{
+		"friend": {
+			"name": "alice",
+			"friends": ["megan", "sarah"],
+			"uid": "1000"
+		},
+		"uid": "2222"
+	}`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+
+	subjects := make(map[string]int)
+	for _, quad := range nq {
+		subjects[quad.Subject]++
+	}
+
+	require.Equal(t, 3, subjects["1000"])
+	require.Equal(t, 1, subjects["2222"])
+	require.Equal(t, 2, len(subjects))
+}
+
 func TestNquadsFromJsonMap(t *testing.T) {
 	json := `{"name":"Alice",
 "age": 25,

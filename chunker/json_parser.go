@@ -778,7 +778,12 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 		if l.Wait != nil && !l.Scalars {
 			p.Quad = l.Wait
 			p.Quad.ObjectId = l.Subject
-			p.Quads = append(p.Quads, p.Quad)
+			u := p.Levels.Get(1)
+			if u != nil {
+				u.Quads = append(u.Quads, p.Quad)
+			} else {
+				p.Quads = append(p.Quads, p.Quad)
+			}
 			p.Quad = &api.NQuad{}
 		} else {
 			if p.Levels.InArray() {
@@ -1349,10 +1354,9 @@ func (p *ParserLevels) Subject() string {
 // FoundSubject is called when the Parser is in the Uid state and finds a valid
 // uid.
 func (p *ParserLevels) FoundSubject(s string) {
-	l := p.Levels[len(p.Levels)-1]
+	l := p.Get(0)
 	l.Subject = s
 	l.FoundUid = true
-	// TODO: verify
 	for _, quad := range l.Quads {
 		quad.Subject = l.Subject
 	}
