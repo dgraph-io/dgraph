@@ -143,7 +143,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 		return corsRes.Me[0].Uid, corsRes.Me[0].DgraphCors, nil
 	}
 	// Multiple nodes for cors found, returning the one that is added last
-	for i, _ := range corsRes.Me {
+	for i := range corsRes.Me {
 		iUid, err := gql.ParseUid(corsRes.Me[i].Uid)
 		if err != nil {
 			return "", nil, err

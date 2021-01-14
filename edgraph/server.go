@@ -172,7 +172,7 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 
 	// found multiple GraphQL schema nodes, this should never happen
 	// returning the schema node which is added last
-	for i, _ := range res {
+	for i := range res {
 		iUid, err := gql.ParseUid(res[i].Uid)
 		if err != nil {
 			return "", "", err
@@ -408,7 +408,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
-		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
+		if op.DropOp == api.Operation_ATTR && op.DropValue == "" {
 			return empty, errors.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
 		}
 
@@ -448,7 +448,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_TYPE {
-		if len(op.DropValue) == 0 {
+		if op.DropValue == "" {
 			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
@@ -622,7 +622,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 // buildUpsertQuery modifies the query to evaluate the
 // @if condition defined in Conditional Upsert.
 func buildUpsertQuery(qc *queryContext) string {
-	if len(qc.req.Query) == 0 || len(qc.gmuList) == 0 {
+	if qc.req.Query == "" || len(qc.gmuList) == 0 {
 		return qc.req.Query
 	}
 
@@ -667,7 +667,7 @@ func buildUpsertQuery(qc *queryContext) string {
 func updateMutations(qc *queryContext) error {
 	for i, condVar := range qc.condVars {
 		gmu := qc.gmuList[i]
-		if len(condVar) != 0 {
+		if condVar != "" {
 			uids, ok := qc.uidRes[condVar]
 			if !(ok && len(uids) == 1) {
 				gmu.Set = nil
@@ -1054,7 +1054,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	}
 
 	req.Query = strings.TrimSpace(req.Query)
-	isQuery := len(req.Query) != 0
+	isQuery := req.Query != ""
 	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
@@ -1119,7 +1119,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
 	resp := &api.Response{}
-	if len(qc.req.Query) == 0 {
+	if qc.req.Query == "" {
 		// No query, so make the query cost 0.
 		resp.Metrics = &api.Metrics{
 			NumUids: map[string]uint64{"_total": 0},
@@ -1283,7 +1283,7 @@ func parseRequest(qc *queryContext) error {
 		qc.valRes = make(map[string]map[uint64]types.Val)
 		upsertQuery = buildUpsertQuery(qc)
 		needVars = findMutationVars(qc)
-		if len(upsertQuery) == 0 {
+		if upsertQuery == "" {
 			if len(needVars) > 0 {
 				return errors.Errorf("variables %v not defined", needVars)
 			}
@@ -1301,11 +1301,7 @@ func parseRequest(qc *queryContext) error {
 	if err != nil {
 		return err
 	}
-	if err = validateQuery(qc.gqlRes.Query); err != nil {
-		return err
-	}
-
-	return nil
+	return validateQuery(qc.gqlRes.Query)
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
@@ -1396,7 +1392,7 @@ func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 }
 
 func hasPoormansAuth(ctx context.Context) error {
-	if len(worker.Config.AuthToken) == 0 {
+	if worker.Config.AuthToken == "" {
 		return nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -1540,7 +1536,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 
 func validateKey(key string) error {
 	switch {
-	case len(key) == 0:
+	case key == "":
 		return errors.Errorf("Has zero length")
 	case strings.ContainsAny(key, "~@"):
 		return errors.Errorf("Has invalid characters")
