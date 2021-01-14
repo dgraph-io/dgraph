@@ -19,7 +19,6 @@ package testutil
 import (
 	"fmt"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -47,7 +46,7 @@ func GeneratePlugins(raceEnabled bool) {
 		}
 		opts = append(opts, "-buildmode=plugin", "-o", so, src)
 		cmd := exec.Command("go", opts...)
-		cmd.Dir = path.Dir(curr)
+		cmd.Dir = filepath.Dir(curr)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			fmt.Printf("Output: %v\n", string(out))
