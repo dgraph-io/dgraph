@@ -98,8 +98,7 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
 	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
-	// todo(aman): check what to set audit_dir default to
-	flag.String("audit_dir", "./", "Set path to directory where to save the audit logs.")
+	flag.String("audit_dir", "za", "Set path to directory where to save the audit logs.")
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
@@ -271,15 +270,15 @@ func run() {
 	http.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
-	// This must be here. It does not work if placed before Grpc init.
-	x.Check(st.node.initAndStartNode())
-
 	audit.InitAuditorIfNecessary(Zero.Conf, func() bool {
 		if st.zero == nil || st.zero.state == nil {
 			return false
 		}
 		return st.zero.state.GetLicense().GetEnabled()
 	})
+
+	// This must be here. It does not work if placed before Grpc init.
+	x.Check(st.node.initAndStartNode())
 
 	if Zero.Conf.GetBool("telemetry") {
 		go st.zero.periodicallyPostTelemetry()

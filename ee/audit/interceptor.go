@@ -30,13 +30,11 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 }
 
 func AuditRequestHttp(next http.Handler) http.Handler {
-	if atomic.LoadUint32(&auditEnabled) == 0 {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r)
-		})
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.LoadUint32(&auditEnabled) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
 		startTime := time.Now().UnixNano()
 		lrw := NewResponseWriter(w)
 		var buf bytes.Buffer

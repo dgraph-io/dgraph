@@ -199,8 +199,7 @@ they form a Raft group and provide synchronous replication.
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
 	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
-	// todo(aman): check what to set audit_dir default to
-	flag.String("audit_dir", "./", "Set path to directory where to save the audit logs.")
+	flag.String("audit_dir", "aa", "Set path to directory where to save the audit logs.")
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
