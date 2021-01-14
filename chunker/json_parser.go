@@ -853,6 +853,8 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 func (p *Parser) MapFacet(n byte) (ParserState, error) {
 	// map facet keys must be (numerical) strings
 	if n != '"' {
+		//if n == '}' {
+		//}
 		return p.Object, nil
 	}
 	id, err := strconv.ParseUint(p.String(), 10, 64)
@@ -971,7 +973,9 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 		p.Levels.Deeper(false)
 		return p.Array, nil
 	case ']':
-		p.Quads = append(p.Quads, a.Quads...)
+		a = p.Levels.Pop()
+		l := p.Levels.Get(0)
+		l.Quads = append(l.Quads, a.Quads...)
 		// return to Object rather than Array because it's the default state
 		return p.Object, nil
 	case '"', 'l', 'u', 'd', 't', 'f', 'n':
@@ -1261,7 +1265,6 @@ func (p *Parser) getGeoValue() error {
 	}
 	l := p.Levels.Get(0)
 	l.Wait.ObjectValue = geoVal
-	//p.Quads = append(p.Quads, l.Wait)
 	l.Quads = append(l.Quads, l.Wait)
 	return nil
 }
