@@ -46,7 +46,7 @@ var (
 func init() {
 	DebugInfo.Cmd = &cobra.Command{
 		Use:   "debuginfo",
-		Short: "Generate debug info on the current node",
+		Short: "Generate debug information on the current node",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := collectDebugInfo(); err != nil {
 				glog.Errorf("error while collecting dgraph debug info: %s", err)

@@ -277,7 +277,7 @@ func runLsbackupCmd() error {
 func initExportBackup() {
 	ExportBackup.Cmd = &cobra.Command{
 		Use:   "export_backup",
-		Short: "Export data inside single full or incremental backup.",
+		Short: "Export data inside single full or incremental backup",
 		Long:  ``,
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
