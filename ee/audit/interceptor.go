@@ -25,7 +25,7 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 
 	startTime := time.Now().UnixNano()
 	response, err := handler(ctx, req)
-	maybeAuditGRPC(ctx, req, err, startTime)
+	maybeAuditGRPC(ctx, req, info, err, startTime)
 	return response, err
 }
 
@@ -48,7 +48,8 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	})
 }
 
-func maybeAuditGRPC(ctx context.Context, req interface{}, err error, startTime int64) {
+func maybeAuditGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error,
+	startTime int64) {
 	var code codes.Code
 	if serr, ok := status.FromError(err); !ok {
 		code = codes.Unknown
@@ -75,6 +76,7 @@ func maybeAuditGRPC(ctx context.Context, req interface{}, err error, startTime i
 		User:       getUserId(token),
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
+		Endpoint:   info.FullMethod,
 		Req:        fmt.Sprintf("%v", req),
 		Status:     int(code),
 		TimeTaken:  time.Now().UnixNano() - startTime,
