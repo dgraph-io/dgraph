@@ -673,9 +673,6 @@ func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 }
 
 // FastParseJSON currently parses NQuads about 230% faster than ParseJSON.
-//
-// NOTE: FastParseJSON uses simdjson which has "minor floating point number
-//       imprecisions"
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
 		return errors.New("CPU doesn't support simdjson for fast parsing")
@@ -686,10 +683,6 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	}
 	buf.nquads = parser.Quads
 	return nil
-}
-
-func NewNQuad() *api.NQuad {
-	return &api.NQuad{}
 }
 
 type ParserState func(byte) (ParserState, error)
@@ -714,7 +707,7 @@ func NewParser(op int) *Parser {
 	return &Parser{
 		Op:     op,
 		Cursor: 1,
-		Quad:   NewNQuad(),
+		Quad:   &api.NQuad{},
 		Quads:  make([]*api.NQuad, 0),
 		Levels: NewParserLevels(),
 		Facet:  &api.Facet{},
@@ -786,7 +779,7 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 			p.Quad = l.Wait
 			p.Quad.ObjectId = l.Subject
 			p.Quads = append(p.Quads, p.Quad)
-			p.Quad = NewNQuad()
+			p.Quad = &api.NQuad{}
 		} else {
 			if p.Levels.InArray() {
 				a := p.Levels.Get(1)
@@ -796,7 +789,7 @@ func (p *Parser) Object(n byte) (ParserState, error) {
 					p.Quad.ObjectId = l.Subject
 					p.Quad.Facets = a.Wait.Facets
 					p.Quads = append(p.Quads, p.Quad)
-					p.Quad = NewNQuad()
+					p.Quad = &api.NQuad{}
 				}
 			}
 		}
@@ -955,7 +948,7 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 			a.Scalars = true
 			l := p.Levels.Deeper(false)
 			l.Wait = p.Quad
-			p.Quad = NewNQuad()
+			p.Quad = &api.NQuad{}
 			if err := p.getGeoValue(); err != nil {
 				return nil, err
 			}
@@ -989,7 +982,7 @@ func (p *Parser) Value(n byte) (ParserState, error) {
 		if p.isGeo() {
 			l := p.Levels.Deeper(false)
 			l.Wait = p.Quad
-			p.Quad = NewNQuad()
+			p.Quad = &api.NQuad{}
 			if err := p.getGeoValue(); err != nil {
 				return nil, err
 			}
@@ -1070,7 +1063,7 @@ func (p *Parser) openValueLevel(closing byte, array bool, next ParserState) Pars
 	// the current quad is waiting until the object is done being parsed because
 	// we have to wait until we find/generate a uid
 	l.Wait = p.Quad
-	p.Quad = NewNQuad()
+	p.Quad = &api.NQuad{}
 	// either return to Object or Array, depending on the type
 	return next
 }
@@ -1129,7 +1122,7 @@ func (p *Parser) getScalarValue(n byte) error {
 	p.Quad.Predicate, p.Quad.Lang = x.PredicateLang(p.Quad.Predicate)
 	l := p.Levels.Get(0)
 	l.Quads = append(l.Quads, p.Quad)
-	p.Quad = NewNQuad()
+	p.Quad = &api.NQuad{}
 	return nil
 }
 
