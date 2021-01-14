@@ -45,10 +45,11 @@ func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 	}
 	if eeEnabled() {
 		auditor.log = initlog(conf.GetString("audit_dir"))
+		atomic.StoreUint32(&auditEnabled, 1)
 		glog.Infoln("audit logs are enabled")
 	}
 
-	go checkIfEEEnabled(eeEnabled, conf.GetString("audit_dir"))
+	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"))
 }
 
 func initlog(dir string) *x.Logger {
@@ -60,14 +61,14 @@ func initlog(dir string) *x.Logger {
 	return logger
 }
 
-func checkIfEEEnabled(eeEnabledFunc func() bool, dir string) {
+func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 	for {
 		select {
 		case <-auditor.tick.C:
 			if !eeEnabledFunc() {
 				if atomic.LoadUint32(&auditEnabled) != 0 {
-					glog.Infof("audit logs are disabled")
 					atomic.StoreUint32(&auditEnabled, 0)
+					glog.Infof("audit logs are disabled")
 					auditor.log.Sync()
 					auditor.log = nil
 				}
@@ -75,9 +76,9 @@ func checkIfEEEnabled(eeEnabledFunc func() bool, dir string) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				glog.Info("audit logs are enabled")
 				auditor.log = initlog(dir)
 				atomic.StoreUint32(&auditEnabled, 1)
+				glog.Info("audit logs are enabled")
 			}
 		}
 	}
