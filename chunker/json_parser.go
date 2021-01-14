@@ -954,6 +954,7 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 	switch n {
 	case '{':
 		if p.isGeo() {
+			a.Scalars = true
 			l := p.Levels.Deeper(false)
 			l.Wait = p.Quad
 			p.Quad = NewNQuad()
@@ -972,8 +973,8 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 		p.Levels.Deeper(false)
 		return p.Array, nil
 	case ']':
-		l := p.Levels.Pop()
-		a.Quads = append(a.Quads, l.Quads...)
+		l := p.Levels.Get(1)
+		p.Quads = append(p.Quads, l.Quads...)
 		// return to Object rather than Array because it's the default state
 		return p.Object, nil
 	case '"', 'l', 'u', 'd', 't', 'f', 'n':
