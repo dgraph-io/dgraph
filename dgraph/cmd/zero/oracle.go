@@ -134,7 +134,7 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	defer o.Unlock()
 
 	if o.hasConflict(src) {
-		return ErrConflict
+		return x.ErrConflict
 	}
 	// We store src.Keys as string to ensure compatibility with all the various language clients we
 	// have. But, really they are just uint64s encoded as strings. We use base 36 during creation of
@@ -309,9 +309,6 @@ func (o *Oracle) MaxPending() uint64 {
 	defer o.RUnlock()
 	return o.maxAssigned
 }
-
-// ErrConflict is returned when commit couldn't succeed due to conflicts.
-var ErrConflict = errors.New("Transaction conflict")
 
 // proposeTxn proposes a txn update, and then updates src to reflect the state
 // of the commit after proposal is run.

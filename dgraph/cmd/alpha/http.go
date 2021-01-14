@@ -31,8 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/ee/audit"
-
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -51,32 +49,6 @@ import (
 
 func allowed(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut
-}
-
-func auditRequestWithHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now().UnixNano()
-		lrw := audit.NewResponseWriter(w)
-		var buf bytes.Buffer
-		tee := io.TeeReader(r.Body, &buf)
-		r.Body = ioutil.NopCloser(tee)
-		next.ServeHTTP(lrw, r)
-		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-		audit.Auditor.MaybeAuditFromCtx(lrw, r, startTime)
-	})
-}
-
-func auditRequest(next http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now().UnixNano()
-		lrw := audit.NewResponseWriter(w)
-		var buf bytes.Buffer
-		tee := io.TeeReader(r.Body, &buf)
-		r.Body = ioutil.NopCloser(tee)
-		next.ServeHTTP(lrw, r)
-		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-		audit.Auditor.MaybeAuditFromCtx(lrw, r, startTime)
-	})
 }
 
 // Common functionality for these request handlers. Returns true if the request is completely

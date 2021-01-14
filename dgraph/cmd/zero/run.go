@@ -17,12 +17,9 @@
 package zero
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -30,8 +27,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -100,6 +95,11 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+
+	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
+	// todo(aman): check what to set audit_dir default to
+	flag.String("audit_dir", "./", "Set path to directory where to save the audit logs.")
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -259,26 +259,13 @@ func run() {
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
-	auditRequest := func(next http.HandlerFunc) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			startTime := time.Now().UnixNano()
-			lrw := audit.NewResponseWriter(w)
-			var buf bytes.Buffer
-			tee := io.TeeReader(r.Body, &buf)
-			r.Body = ioutil.NopCloser(tee)
-			next.ServeHTTP(lrw, r)
-			r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-			audit.Auditor.MaybeAuditFromCtx(lrw, r, startTime)
-		})
-	}
-
-	http.Handle("/health", auditRequest(st.pingResponse))
-	http.Handle("/state", auditRequest(st.getState))
-	http.Handle("/removeNode", auditRequest(st.removeNode))
-	http.Handle("/moveTablet", auditRequest(st.moveTablet))
-	http.Handle("/assign", auditRequest(st.assign))
-	http.Handle("/enterpriseLicense", auditRequest(st.applyEnterpriseLicense))
-	http.Handle("/jemalloc", auditRequest(x.JemallocHandler))
+	http.HandleFunc("/health", st.pingResponse)
+	http.HandleFunc("/state", st.getState)
+	http.HandleFunc("/removeNode", st.removeNode)
+	http.HandleFunc("/moveTablet", st.moveTablet)
+	http.HandleFunc("/assign", st.assign)
+	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	http.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
