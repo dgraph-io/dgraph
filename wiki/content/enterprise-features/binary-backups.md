@@ -386,7 +386,7 @@ and then import back the dataset into the new Dgraph version.
 
 ### Using exports instead of binary backups
 
-An example of this use-case would be to migrate existing schemas from Dgraph v1.0 to Dgraph v1.1.
+An example of this use-case would be to migrate existing schemas from Dgraph v1.0 to Dgraph v20.11.
 You need to update the schema file from an export so all predicates of type `uid` are changed to `[uid]`.
 Then use the updated schema when loading data into Dgraph v1.1.
 
