@@ -160,32 +160,32 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
 		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
 	}
-
-	if len(result.ExistingGQLSchema) == 0 {
+	res := result.ExistingGQLSchema
+	if len(res) == 0 {
 		// no schema has been stored yet in Dgraph
 		return "", "", nil
-	} else if len(result.ExistingGQLSchema) == 1 {
+	} else if len(res) == 1 {
 		// we found an existing GraphQL schema
-		gqlSchemaNode := result.ExistingGQLSchema[0]
+		gqlSchemaNode := res[0]
 		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
 	// returning the schema node which is added last
-	for i, _ := range result.ExistingGQLSchema {
-		UidInt, err := gql.ParseUid(result.ExistingGQLSchema[i].Uid)
+	for i, _ := range res {
+		iUid, err := gql.ParseUid(res[i].Uid)
 		if err != nil {
 			return "", "", err
 		}
-		result.ExistingGQLSchema[i].UidInt = UidInt
+		res[i].UidInt = iUid
 	}
 
-	sort.Slice(result.ExistingGQLSchema, func(i, j int) bool {
-		return result.ExistingGQLSchema[i].UidInt < result.ExistingGQLSchema[j].UidInt
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].UidInt < res[j].UidInt
 	})
 	glog.Errorf("Multiple schema node found, using the last one")
-	lastIndex := len(result.ExistingGQLSchema) - 1
-	return result.ExistingGQLSchema[lastIndex].Uid, result.ExistingGQLSchema[lastIndex].Schema, nil
+	resLast := res[len(res)-1]
+	return resLast.Uid, resLast.Schema, nil
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.

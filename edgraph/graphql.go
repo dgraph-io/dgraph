@@ -144,18 +144,18 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	}
 	// Multiple nodes for cors found, returning the one that is added last
 	for i, _ := range corsRes.Me {
-		UidInt, err := gql.ParseUid(corsRes.Me[i].Uid)
+		iUid, err := gql.ParseUid(corsRes.Me[i].Uid)
 		if err != nil {
 			return "", nil, err
 		}
-		corsRes.Me[i].UidInt = UidInt
+		corsRes.Me[i].UidInt = iUid
 	}
 	sort.Slice(corsRes.Me, func(i, j int) bool {
 		return corsRes.Me[i].UidInt < corsRes.Me[j].UidInt
 	})
 	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
-	lastIndex := len(corsRes.Me) - 1
-	return corsRes.Me[lastIndex].Uid, corsRes.Me[lastIndex].DgraphCors, nil
+	corsLast := corsRes.Me[len(corsRes.Me)-1]
+	return corsLast.Uid, corsLast.DgraphCors, nil
 }
 
 // UpdateSchemaHistory updates graphql schema history.

@@ -107,11 +107,12 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	} else {
 		// there seems to be multiple nodes for GraphQL schema,Ideally we should never reach here
 		// But if by any bug we reach here then return the schema node which is added last
-		sort.Slice(res.GetUidMatrix()[0].GetUids(), func(i, j int) bool {
-			return res.GetUidMatrix()[0].GetUids()[i] < res.GetUidMatrix()[0].GetUids()[j]
+		uidList := res.GetUidMatrix()[0].GetUids()
+		sort.Slice(uidList, func(i, j int) bool {
+			return uidList[i] < uidList[j]
 		})
 		glog.Errorf("Multiple schema node found, using the last one")
-		schemaNodeUid = res.GetUidMatrix()[0].GetUids()[len(res.GetUidMatrix()[0].GetUids())-1]
+		schemaNodeUid = uidList[len(uidList)-1]
 	}
 
 	// prepare GraphQL schema mutation
