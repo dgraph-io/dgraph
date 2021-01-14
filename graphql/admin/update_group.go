@@ -132,12 +132,6 @@ func (urw *updateGroupRewriter) Rewrite(
 	}}, schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
 
-func (mrw *updateGroupRewriter) NewRewrite(
-	ctx context.Context,
-	m schema.Mutation) ([]*gql.GraphQuery, error) {
-	return ((*resolve.UpdateRewriter)(mrw)).NewRewrite(ctx, m)
-}
-
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
 func (urw *updateGroupRewriter) FromMutationResult(
 	ctx context.Context,
