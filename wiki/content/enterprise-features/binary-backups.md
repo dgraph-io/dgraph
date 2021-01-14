@@ -430,9 +430,9 @@ If you want to do the changes cited above, you need to edit the `g01.schema.gz` 
 
 ### Benefits
 
-In this case, we get the speed benefit from the binary backups that are way faster than exports.
-So people with a big dataset don't need to way a long time till an export is completed.
-Instead, they take binary backups and convert them into export (only if needed).
+With the `export_backup` tool you get the speed benefit from the binary backups, which are faster than regular exports.
+So if you have a big dataset, you don't need to wait a long time until an export is completed.
+Instead, just take a binary backup and convert it to an export only when needed.
 
 ### How to use it
 
