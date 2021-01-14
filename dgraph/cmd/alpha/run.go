@@ -609,7 +609,6 @@ func run() {
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
 		AuditEnabled:  Alpha.Conf.GetBool("audit_enabled"),
-		AuditDir:      Alpha.Conf.GetString("audit_dir"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -671,7 +670,6 @@ func run() {
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
-		AuditEnabled:         Alpha.Conf.GetBool("audit_enabled"),
 		HmacSecret:           opts.HmacSecret,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
@@ -794,10 +792,8 @@ func run() {
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
 
-	// Audit is enterprise feature. If enabled, audit logs will be generate in the audit directory.
-	if opts.AuditEnabled {
-		go audit.InitAuditorIfNecessary(opts.AuditDir)
-	}
+	// Audit is enterprise feature.
+	audit.InitAuditorIfNecessary(Alpha.Conf, worker.EnterpriseEnabled)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")
@@ -813,7 +809,7 @@ func run() {
 	glog.Infoln("adminCloser closed.")
 
 	audit.Close()
-
+	glog.Infoln("audit logs are closed.")
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")

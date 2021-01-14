@@ -6,12 +6,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-type ILogger interface {
-	AuditI(string, ...interface{})
-	Sync()
-}
-
-func InitLogger(dir string, filename string) (ILogger, error) {
+func InitLogger(dir string, filename string) (*Logger, error) {
 	getWriterSyncer := func() zapcore.WriteSyncer {
 		return zapcore.AddSync(&lumberjack.Logger{
 			Filename: dir + "/" + filename,
@@ -22,16 +17,19 @@ func InitLogger(dir string, filename string) (ILogger, error) {
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 		getWriterSyncer(), zap.DebugLevel)
 
-	return &LoggerImpl{
+	return &Logger{
 		logger: zap.New(core),
 	}, nil
 }
 
-type LoggerImpl struct {
+type Logger struct {
 	logger *zap.Logger
 }
 
-func (l *LoggerImpl) AuditI(msg string, args ...interface{}) {
+func (l *Logger) AuditI(msg string, args ...interface{}) {
+	if l == nil {
+		return
+	}
 	flds := make([]zap.Field, len(args)/2)
 	for i := 0; i < len(args); i = i + 2 {
 		flds[i/2] = zap.Any(args[i].(string), args[i+1])
@@ -39,7 +37,10 @@ func (l *LoggerImpl) AuditI(msg string, args ...interface{}) {
 	l.logger.Info(msg, flds...)
 }
 
-func (l *LoggerImpl) AuditE(msg string, args ...interface{}) {
+func (l *Logger) AuditE(msg string, args ...interface{}) {
+	if l == nil {
+		return
+	}
 	flds := make([]zap.Field, len(args)/2)
 	for i := range args {
 		flds[i/2] = zap.Any(args[i].(string), args[i+1])
@@ -47,7 +48,7 @@ func (l *LoggerImpl) AuditE(msg string, args ...interface{}) {
 	l.logger.Error(msg, flds...)
 }
 
-func (l *LoggerImpl) Sync() {
+func (l *Logger) Sync() {
 	if l == nil {
 		return
 	}

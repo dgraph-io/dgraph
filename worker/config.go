@@ -71,7 +71,6 @@ type Options struct {
 	// CacheMb is the total memory allocated between all the caches.
 	CacheMb int64
 
-	AuditDir     string
 	AuditEnabled bool
 }
 

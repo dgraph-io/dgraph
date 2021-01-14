@@ -13,11 +13,16 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if atomic.LoadUint32(&auditEnabled) == 0 {
+		return handler(ctx, req)
+	}
+
 	startTime := time.Now().UnixNano()
 	response, err := handler(ctx, req)
 	maybeAuditGRPC(ctx, req, err, startTime)
@@ -25,6 +30,12 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 }
 
 func AuditRequestHttp(next http.Handler) http.Handler {
+	if atomic.LoadUint32(&auditEnabled) == 0 {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now().UnixNano()
 		lrw := NewResponseWriter(w)
@@ -68,7 +79,7 @@ func maybeAuditGRPC(ctx context.Context, req interface{}, err error, startTime i
 		Status:     int(code),
 		TimeTaken:  time.Now().UnixNano() - startTime,
 	}
-	auditor.AuditFromEvent(event)
+	auditor.AuditEvent(event)
 }
 
 func maybeAuditHttp(w *ResponseWriter, r *http.Request, startTime int64) {
@@ -83,7 +94,7 @@ func maybeAuditHttp(w *ResponseWriter, r *http.Request, startTime int64) {
 		QueryParams: r.URL.Query(),
 		TimeTaken:   time.Now().UnixNano() - startTime,
 	}
-	auditor.AuditFromEvent(event)
+	auditor.AuditEvent(event)
 }
 
 func getUserId(token string) string {

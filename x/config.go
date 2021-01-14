@@ -113,9 +113,6 @@ type WorkerOptions struct {
 	LogRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
-
-	// AuditEnabled determines whether the audit feature is enabled or not
-	AuditEnabled bool
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

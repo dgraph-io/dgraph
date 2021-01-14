@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"log"
 	"net"
 	"net/http"
@@ -117,6 +118,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
 	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
@@ -247,16 +249,24 @@ func run() {
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
 	http.HandleFunc("/health", st.pingResponse)
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	http.Handle("/state", audit.AuditRequestHttp(http.HandlerFunc(st.getState)))
+	http.Handle("/removeNode", audit.AuditRequestHttp(http.HandlerFunc(st.removeNode)))
+	http.Handle("/moveTablet", audit.AuditRequestHttp(http.HandlerFunc(st.moveTablet)))
+	http.Handle("/assign", audit.AuditRequestHttp(http.HandlerFunc(st.assign)))
+	http.Handle("/enterpriseLicense",
+		audit.AuditRequestHttp(http.HandlerFunc(st.applyEnterpriseLicense)))
 	http.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
+
+	audit.InitAuditorIfNecessary(Zero.Conf, func() bool {
+		if st.zero == nil || st.zero.state == nil {
+			return false
+		}
+		return st.zero.state.GetLicense().GetEnabled()
+	})
 
 	if Zero.Conf.GetBool("telemetry") {
 		go st.zero.periodicallyPostTelemetry()
@@ -313,4 +323,6 @@ func run() {
 	glog.Infof("Raft WAL closed with err: %v\n", err)
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
+	audit.Close()
+	glog.Infoln("audit logs are closed")
 }
