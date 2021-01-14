@@ -330,14 +330,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
-	// Keys are added to the rollup batches here instead of at the point at which the
-	// transaction is committed because the transaction context does not keep track
-	// of the badger keys touched by mutations. It's useful to roll up lists even if
-	// the transaction is eventually aborted.
-	if len(l.mutationMap) > 0 {
-		IncrRollup.addKeyToBatch(l.key)
-	}
-
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
 		plist := &pb.PostingList{}
@@ -918,6 +910,7 @@ func (out *rollupOutput) marshalPostingListPart(alloc *z.Allocator,
 // MarshalPostingList returns a KV with the marshalled posting list. The caller
 // SHOULD SET the Key and Version for the returned KV.
 func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
+	x.VerifyPack(plist)
 	kv := y.NewKV(alloc)
 	if isPlistEmpty(plist) {
 		kv.Value = nil
@@ -1073,6 +1066,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		}
 	} else {
 		// We already have a nicely packed posting list. Just use it.
+		x.VerifyPack(l.plist)
 		out.plist = l.plist
 	}
 

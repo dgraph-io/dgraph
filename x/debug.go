@@ -26,8 +26,14 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
+
+// VerifyPack checks that the Pack should not be nil if the postings exist.
+func VerifyPack(plist *pb.PostingList) {
+	if plist.Pack == nil && len(plist.Postings) > 0 {
+		log.Panic("UID Pack verification failed: Pack is nil for posting list: %+v", plist)
+	}
+}
 
 // VerifySnapshot iterates over all the keys in badger. For all data keys it checks
 // if key is a split key and it verifies if all part are present in badger as well.
@@ -54,6 +60,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 			err := item.Value(func(v []byte) error {
 				plist := &pb.PostingList{}
 				Check(plist.Unmarshal(v))
+				VerifyPack(plist)
 				if len(plist.Splits) == 0 {
 					return nil
 				}
@@ -77,7 +84,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 				}
 				return nil
 			})
-			x.Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
+			Checkf(err, "Error getting value of key: %v version: %v", k, item.Version())
 
 			if item.DiscardEarlierVersions() {
 				break

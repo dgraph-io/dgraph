@@ -373,6 +373,9 @@ func (w *DiskStorage) NumLogFiles() int {
 
 // Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
 func (w *DiskStorage) Sync() error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
 	if err := w.meta.Sync(); err != nil {
 		return errors.Wrapf(err, "while syncing meta")
 	}
