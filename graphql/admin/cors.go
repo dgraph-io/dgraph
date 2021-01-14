@@ -68,7 +68,7 @@ func resolveReplaceAllowedCORSOrigins(ctx context.Context, m schema.Mutation) (*
 
 // resolveGetCors retrieves cors details from the database.
 func resolveGetCors(ctx context.Context, q schema.Query) *resolve.Resolved {
-	origins, err := edgraph.GetCorsOrigins(ctx)
+	_, origins, err := edgraph.GetCorsOrigins(ctx)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}

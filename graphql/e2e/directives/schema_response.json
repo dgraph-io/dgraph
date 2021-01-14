@@ -968,6 +968,56 @@
                 }
             ],
             "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Book.name"
+                },
+                {
+                    "name": "Book.desc"
+                },
+                {
+                    "name": "Book.bookId"
+                }
+            ],
+            "name": "Book"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Chapter.name"
+                },
+                {
+                    "name": "Chapter.bookId"
+                },
+                {
+                    "name": "Chapter.chapterId"
+                }
+            ],
+            "name": "Chapter"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Section.sectionId"
+                },
+                {
+                    "name": "Section.chapterId"
+                },
+                {
+                    "name": "Section.name"
+                }
+            ],
+            "name": "Section"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.cors"
+                }
+            ],
+            "name": "dgraph.type.cors"
         }
     ]
 }
