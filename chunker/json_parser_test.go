@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
@@ -569,7 +568,6 @@ func TestNquadsFromJsonFacets3(t *testing.T) {
 	]`
 
 	nqs, err := Parse([]byte(json), SetNquads)
-	spew.Dump(nqs)
 	require.NoError(t, err)
 	require.Equal(t, 4, len(nqs))
 	for _, nq := range nqs {
@@ -754,8 +752,6 @@ func TestNquadsFromJsonList(t *testing.T) {
 	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876],"points":[{"type":"Point", "coordinates":[1.1,2.0]},{"type":"Point", "coordinates":[2.0,1.1]}]}`
 
 	nq, err := Parse([]byte(json), SetNquads)
-	spew.Dump(nq)
-
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
 }

@@ -689,9 +689,7 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 }
 
 func NewNQuad() *api.NQuad {
-	return &api.NQuad{
-		Facets: make([]*api.Facet, 0),
-	}
+	return &api.NQuad{}
 }
 
 type ParserState func(byte) (ParserState, error)
@@ -973,8 +971,7 @@ func (p *Parser) Array(n byte) (ParserState, error) {
 		p.Levels.Deeper(false)
 		return p.Array, nil
 	case ']':
-		l := p.Levels.Get(1)
-		p.Quads = append(p.Quads, l.Quads...)
+		p.Quads = append(p.Quads, a.Quads...)
 		// return to Object rather than Array because it's the default state
 		return p.Object, nil
 	case '"', 'l', 'u', 'd', 't', 'f', 'n':
@@ -1121,8 +1118,13 @@ func (p *Parser) getScalarValue(n byte) error {
 		}
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BoolVal{false}}
 	case 'n':
+		if p.Op == DeleteNquads {
+			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
+			break
+		}
 		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BytesVal{nil}}
 	}
+	p.Quad.Predicate, p.Quad.Lang = x.PredicateLang(p.Quad.Predicate)
 	l := p.Levels.Get(0)
 	l.Quads = append(l.Quads, p.Quad)
 	p.Quad = NewNQuad()
