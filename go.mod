@@ -4,7 +4,6 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-replace github.com/dgraph-io/dgo/v200 => /home/ash/go/src/github.com/dgraph-io/dgo
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -17,7 +16,6 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/davecgh/go-spew v1.1.1
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20201214114056-bcfae6104545
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/gqlgen v0.13.2
