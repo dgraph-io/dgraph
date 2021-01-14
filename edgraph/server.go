@@ -203,7 +203,8 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		if err = validateAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
-		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+		namespace := x.ExtractNamespace(ctx)
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(namespace, op); err != nil {
 			return nil, err
 		}
 	}
@@ -250,7 +251,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
+func parseSchemaFromAlterOperation(namespace string, op *api.Operation) (*schema.ParsedSchema, error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -267,7 +268,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		//
 		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
 		// example?
-		if schema.IsPreDefPredChanged(op.Namespace, update) {
+		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
 		}
@@ -290,7 +291,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefTypeChanged(op.Namespace, typ) {
+		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
 		}
@@ -463,8 +464,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-
-	result, err := parseSchemaFromAlterOperation(op)
+	namespace := x.ExtractNamespace(ctx)
+	result, err := parseSchemaFromAlterOperation(namespace, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
 		time.Sleep(time.Second)
