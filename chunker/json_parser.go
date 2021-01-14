@@ -1122,7 +1122,7 @@ func (p *Parser) getScalarValue(n byte) error {
 			p.Quad.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			break
 		}
-		p.Quad.ObjectValue = &api.Value{Val: &api.Value_BytesVal{nil}}
+		return nil
 	}
 	p.Quad.Predicate, p.Quad.Lang = x.PredicateLang(p.Quad.Predicate)
 	l := p.Levels.Get(0)
