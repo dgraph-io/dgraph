@@ -1063,7 +1063,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		latency:   l,
 		span:      span,
 		graphql:   isGraphQL,
-		namespace: req.Namespace,
+		namespace: x.ExtractNamespace(ctx),
 	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
@@ -1126,9 +1126,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
-		Latency:   qc.latency,
-		GqlQuery:  &qc.gqlRes,
-		Namespace: qc.namespace,
+		Latency:  qc.latency,
+		GqlQuery: &qc.gqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,

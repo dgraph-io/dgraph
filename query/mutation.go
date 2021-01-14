@@ -37,7 +37,6 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	// TODO(Ahsan): Make expand edges work with the namespaces for star predicates.
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
@@ -74,8 +73,9 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes("TODO", types)...)
-			preds = append(preds, x.StarAllPredicates()...)
+			namespace := x.ExtractNamespace(ctx)
+			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
+			preds = append(preds, x.StarAllPredicates(namespace)...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
 			// delete predicates to which the mutation has access
 			if edge.AllowedPreds != nil {
@@ -205,9 +205,7 @@ func ToDirectedEdges(namespace string, gmuList []*gql.Mutation, newUids map[stri
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
 		if wnq.Predicate != x.Star {
-			if wnq.Predicate != x.Star {
-				wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
-			}
+			wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
 		}
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {

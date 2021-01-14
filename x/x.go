@@ -250,6 +250,18 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+func ExtractNamespace(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return DefaultNamespace
+	}
+	ns := md.Get("namespace")
+	if len(ns) == 0 {
+		return DefaultNamespace
+	}
+	return md.Get("namespace")[0]
+}
+
 func ExtractJwt(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)

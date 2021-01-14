@@ -725,8 +725,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the pb.SubGraph instance type.
-func ToSubGraph(ctx context.Context, namespace string, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, namespace, gq)
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
@@ -773,10 +773,11 @@ func (sg *SubGraph) populate(uids []uint64) error {
 }
 
 // newGraph returns the SubGraph and its task query.
-func newGraph(ctx context.Context, namespace string, gq *gql.GraphQuery) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 
+	namespace := x.ExtractNamespace(ctx)
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
@@ -2685,8 +2686,7 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	Vars      map[string]varValue
-	Namespace string
+	Vars map[string]varValue
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2710,7 +2710,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			return errors.Errorf("Invalid query. No function used at root and no aggregation" +
 				" or math variables found in the body.")
 		}
-		sg, err := ToSubGraph(ctx, req.Namespace, gq)
+		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
 			return errors.Wrapf(err, "while converting to subgraph")
 		}
@@ -2860,12 +2860,12 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		calculateMetrics(sg, metrics)
 	}
 	er.Metrics = metrics
-
+	namespace := x.ExtractNamespace(ctx)
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
 		preds := []string{}
 		for _, pred := range req.GqlQuery.Schema.Predicates {
-			preds = append(preds, x.NamespaceAttr(req.Namespace, pred))
+			preds = append(preds, x.NamespaceAttr(namespace, pred))
 		}
 		req.GqlQuery.Schema.Predicates = preds
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
@@ -2873,7 +2873,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		}
 		typeNames := []string{}
 		for _, typeName := range req.GqlQuery.Schema.Types {
-			typeNames = append(typeNames, x.NamespaceAttr(req.Namespace, typeName))
+			typeNames = append(typeNames, x.NamespaceAttr(namespace, typeName))
 		}
 		req.GqlQuery.Schema.Types = typeNames
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {

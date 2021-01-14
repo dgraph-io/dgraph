@@ -679,10 +679,10 @@ func IsAclPredicate(pred string) bool {
 
 // StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func StarAllPredicates() []string {
+func StarAllPredicates(namespace string) []string {
 	preds := make([]string, 0, len(starAllPredicateMap))
 	for pred := range starAllPredicateMap {
-		preds = append(preds, pred)
+		preds = append(preds, NamespaceAttr(namespace, pred))
 	}
 	return preds
 }
