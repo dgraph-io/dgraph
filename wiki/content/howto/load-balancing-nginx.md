@@ -8,11 +8,11 @@ weight = 8
 
 There might be times when you'll want to set up a load balancer to accomplish goals such as increasing the utilization of your database by sending queries from the app to multiple database server replicas. You can follow these steps to get started with that.
 
-## Setting up NGINX load balancer using docker-compose
+## Setting up NGINX load balancer using Docker Compose
 
 ### Dowload ZIP
 
-Download the contents of this gist's ZIP file and extract it to a directory called `graph-nginx`
+Download the contents of this gist's ZIP file and extract it to a directory called `graph-nginx`, as follows:
 
 ```sh
 mkdir dgraph-nginx
@@ -32,23 +32,23 @@ docker-compose up
 
 ## Setting up NGINX load balancer with Dgraph running directly on the host machine
 
-When you start your Dgraph cluster directly on the host machine (e.g. with systemd) the procedure is the following:
+You can start your Dgraph cluster directly on the host machine (for example, with systemd) as follows:
 
-### Install nginx using the following `apt-get` command:
+### Install NGINX using the following `apt-get` command:
 
 After you have set up your Dgraph cluster, install the latest stable nginx. On Debian and Ubuntu systems use the following command:
 ```sh
 apt-get install nginx
 ```
-### Configure nginx as a load balancer 
+### Configure NGINX as a load balancer 
 
-Make sure that your Dgraph cluster is up and running (it this case we will refer to a 6 node cluster). Once nginx is installed, you can start to configure it for load balancing. In essence, all you need to do is set up nginx with instructions for which type of connections to listen to and where to redirect them. Create a new configuration:
+Make sure that your Dgraph cluster is up and running (it this case we will refer to a 6 node cluster). After installing NGINX, you can configure it for load balancing. You do this by specifying which types of connections to listen to, and where to redirect them. Create a new configuration file called `load-balancer.conf`:
 
 ```sh
 sudo vim /etc/nginx/conf.d/load-balancer.conf
 ```
 
-In the load-balancer.conf you’ll need to define the following configuration file:
+and edit it to read as follows:
 
 ```sh
 upstream alpha_grpc {
@@ -66,7 +66,7 @@ upstream alpha_http {
 # $upstream_addr is the ip:port of the Dgraph Alpha defined in the upstream
 # Example: 172.25.0.2, 172.25.0.7, 172.25.0.5 are the IP addresses of alpha1, alpha2, and alpha3
 # /var/log/nginx/access.log will contain these logs showing "localhost to <upstream address>"
-# for the different backends. By default, Nginx load balancing is round robin.
+# for the different backends. By default, NGINX load balancing is round robin.
 
 log_format upstreamlog '[$time_local] $remote_addr - $remote_user - $server_name $host to: $upstream_addr: $request $status upstream_response_time $upstream_response_time msec $msec request_time $request_time';
 
@@ -87,13 +87,13 @@ server {
 }
 ```
 
-Next, disable the default server configuration, on Debian and Ubuntu systems you’ll need to remove the default symbolic link from the sites-enabled folder.
+Next, disable the default server configuration; on Debian and Ubuntu systems you’ll need to remove the default symbolic link from the **sites-enabled** folder.
 
 ```sh
 rm /etc/nginx/sites-enabled/default
 ```
 
-Now you can restart nginx service:
+Now you can restart `nginx`:
 
 ```sh
 systemctl restart nginx
@@ -101,13 +101,13 @@ systemctl restart nginx
 
 ## Use the increment tool to start a gRPC LB
 
-In a different shell, run the `dgraph increment` [docs](https://dgraph.io/docs/howto/#using-the-increment-tool) tool against the Nginx gRPC load balancer (`nginx:9080`):
+In a different shell, run the `dgraph increment` [docs](https://dgraph.io/docs/howto/#using-the-increment-tool) tool against the NGINX gRPC load balancer (`nginx:9080`):
 
 ```sh
 docker-compose exec alpha1 dgraph increment --alpha nginx:9080 --num=10
 ```
 
-If you have dgraph installed on your host machine, then you can also run this from the host:
+If you have Dgraph installed on your host machine, then you can also run this from the host:
 
 ```sh
 dgraph increment --alpha localhost:9080 --num=10
@@ -117,10 +117,10 @@ The increment tool uses the Dgraph Go client to establish a gRPC connection agai
 
 ## Check logs
 
-In the Nginx access logs (in the docker-compose up shell window), or if you are not using docker-compose you can tail logs from `/var/log/nginx/access.log`. You'll see access logs like the following:
+In the NGINX access logs (in the `docker-compose` up shell window), or if you are not using docker-compose you can tail logs from `/var/log/nginx/access.log`. You'll see access logs like the following:
 
 {{% notice "note" %}}
-It is important to take into account with gRPC load balancing that every request hits a different Alpha, potentially increasing read throughput.
+With gRPC load balancing, each request can hit a different Alpha node. This can potentially increase read throughput.
 {{% /notice %}}
 
 ```sh
@@ -139,7 +139,7 @@ These logs show that traffic os being load balanced to the following upstream ad
 
 ## Load balancing methods
 
-By default, Nginx load balancing is done round-robin. By the way There are other load-balancing methods available such as least connections or IP hashing. In case you want to use a different method than round-robin you can do that by specifying the method you desire in the upstream section.
+By default, NGINX load balancing is done round-robin. By the way There are other load-balancing methods available such as least connections or IP hashing. To use a different method than round-robin, specify the desired load-balancing method in the upstream section of `load-balancer.conf`.
 
 ```sh
 # use least connection method
