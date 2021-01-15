@@ -597,10 +597,36 @@ func TestIntrospection(t *testing.T) {
 
 func TestApolloServiceResolver(t *testing.T) {
 	schema := `
-	type Todo @key(fields: "id") {
+	type Mission {
 		id: ID!
-		title: String!
-		topic: String
+		crew: [Astronaut]
+		designation: String!
+		startDate: String
+		endDate: String
+	}
+	
+	type Astronaut @key(fields: "id") @extends {
+		id: ID! @external
+		missions: [Mission]
+	}
+	
+	type User @remote {
+		id: ID!
+		name: String!
+	}
+	
+	type Car @auth(
+		password: { rule: "{$ROLE: { eq: \"Admin\" } }"}
+	){
+		id: ID!
+		name: String!
+	}
+	
+	type Query {
+		getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+			url: "http://my-api.com",
+			method: "GET"
+		})
 	}
 	`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)

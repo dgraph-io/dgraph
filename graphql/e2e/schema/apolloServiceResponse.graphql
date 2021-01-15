@@ -2,10 +2,27 @@
 # Input Schema
 #######################
 
-type Todo @key(fields: "id") {
+type Mission {
 	id: ID!
-	title: String!
-	topic: String
+	crew: [Astronaut]
+	designation: String!
+	startDate: String
+	endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+	id: ID! @external
+	missions: [Mission]
+}
+
+type User @remote {
+	id: ID!
+	name: String!
+}
+
+type Car {
+	id: ID!
+	name: String!
 }
 
 #######################
@@ -268,82 +285,77 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	numUids: Int
-}
-
-type DeleteTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	msg: String
-	numUids: Int
-}
-
-type TodoAggregateResult {
+type CarAggregateResult {
 	count: Int
-	titleMin: String
-	titleMax: String
-	topicMin: String
-	topicMax: String
+	nameMin: String
+	nameMax: String
 }
 
-type UpdateTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	numUids: Int
+type MissionAggregateResult {
+	count: Int
+	designationMin: String
+	designationMax: String
+	startDateMin: String
+	startDateMax: String
+	endDateMin: String
+	endDateMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum TodoHasFilter {
-	title
-	topic
+enum CarHasFilter {
+	name
 }
 
-enum TodoOrderable {
-	title
-	topic
+enum CarOrderable {
+	name
+}
+
+enum MissionHasFilter {
+	crew
+	designation
+	startDate
+	endDate
+}
+
+enum MissionOrderable {
+	designation
+	startDate
+	endDate
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddTodoInput {
-	title: String!
-	topic: String
-}
-
-input TodoFilter {
+input CarFilter {
 	id: [ID!]
-	has: TodoHasFilter
-	and: [TodoFilter]
-	or: [TodoFilter]
-	not: TodoFilter
+	has: CarHasFilter
+	and: [CarFilter]
+	or: [CarFilter]
+	not: CarFilter
 }
 
-input TodoOrder {
-	asc: TodoOrderable
-	desc: TodoOrderable
-	then: TodoOrder
+input CarOrder {
+	asc: CarOrderable
+	desc: CarOrderable
+	then: CarOrder
 }
 
-input TodoPatch {
-	title: String
-	topic: String
+input MissionFilter {
+	id: [ID!]
+	has: MissionHasFilter
+	and: [MissionFilter]
+	or: [MissionFilter]
+	not: MissionFilter
 }
 
-input TodoRef {
-	id: ID
-	title: String
-	topic: String
-}
-
-input UpdateTodoInput {
-	filter: TodoFilter!
-	set: TodoPatch
-	remove: TodoPatch
+input MissionOrder {
+	asc: MissionOrderable
+	desc: MissionOrderable
+	then: MissionOrder
 }
 
 #######################
@@ -351,18 +363,11 @@ input UpdateTodoInput {
 #######################
 
 type Query {
-	getTodo(id: ID!): Todo
-	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	aggregateTodo(filter: TodoFilter): TodoAggregateResult
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+	getMission(id: ID!): Mission
+	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	aggregateMission(filter: MissionFilter): MissionAggregateResult
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
 }
-
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addTodo(input: [AddTodoInput!]!): AddTodoPayload
-	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
-	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
-}
-
