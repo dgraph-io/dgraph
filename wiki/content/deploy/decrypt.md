@@ -12,7 +12,7 @@ reasons, including:
 * Making major changes to your data or schema by directly editing an RDF file or
   schema file
 
-To support these scenarios, Dgraph Enterprise Edition includes a `decrypt`
+To support these scenarios, Dgraph includes a `decrypt`
 command that decrypts encrypted RDF and schema files. To learn how to export RDF
 and schema files from Dgraph, see:
 [Dgraph Administration: Export database](/deploy/dgraph-administration/#exporting-database).
