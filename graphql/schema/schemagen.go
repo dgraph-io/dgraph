@@ -81,7 +81,41 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		if typ == "_Entity" {
 			continue
 		}
-		typeMapCopy[typ] = defn
+		fldListCopy := make(ast.FieldList, 0)
+		for _, fld := range defn.Fields {
+			fldDirectiveListCopy := make(ast.DirectiveList, 0)
+			for _, dir := range fld.Directives {
+				if dir.Name == "custom" {
+					continue
+				}
+				fldDirectiveListCopy = append(fldDirectiveListCopy, dir)
+			}
+			newFld := &ast.FieldDefinition{
+				Name:         fld.Name,
+				Arguments:    fld.Arguments,
+				DefaultValue: fld.DefaultValue,
+				Type:         fld.Type,
+				Directives:   fldDirectiveListCopy,
+				Position:     fld.Position,
+			}
+			fldListCopy = append(fldListCopy, newFld)
+		}
+
+		directiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range defn.Directives {
+			if dir.Name == "generate" || dir.Name == "auth" || dir.Name == "remote" {
+				continue
+			}
+			directiveListCopy = append(directiveListCopy, dir)
+		}
+		typeMapCopy[typ] = &ast.Definition{
+			Kind:       defn.Kind,
+			Name:       defn.Name,
+			Directives: directiveListCopy,
+			Fields:     fldListCopy,
+			BuiltIn:    defn.BuiltIn,
+			EnumValues: defn.EnumValues,
+		}
 	}
 	queryList := make(ast.FieldList, 0)
 	for _, qry := range s.completeSchema.Query.Fields {
@@ -161,7 +195,7 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string, validateOnly bool) (Handler, error) {
+func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
@@ -259,7 +293,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 
 	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
