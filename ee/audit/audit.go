@@ -47,7 +47,7 @@ func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 		return
 	}
 	if eeEnabled() {
-		InitAuditor(true, conf.GetString("audit_dir"))
+		InitAuditor(conf.GetString("audit_dir"))
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
 	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"))
@@ -56,10 +56,7 @@ func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 // InitAuditor initializes the auditor.
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
-func InitAuditor(enabled bool, dir string) {
-	if !enabled{
-		return
-	}
+func InitAuditor(dir string) {
 	auditor.log = initlog(dir)
 	atomic.StoreUint32(&auditEnabled, 1)
 	glog.Infoln("audit logs are enabled")
