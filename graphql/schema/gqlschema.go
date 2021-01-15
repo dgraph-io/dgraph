@@ -100,7 +100,9 @@ const (
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
-	schemaExtras = `
+
+	// Just remove directive definitions and not the input types
+	schemaInputs = `
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
 Int64 can represent values in range [-(2^63),(2^63 - 1)].
@@ -265,7 +267,8 @@ input GenerateMutationParams {
 	update: Boolean
 	delete: Boolean
 }
-
+`
+	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -287,7 +290,21 @@ directive @generate(
 	query: GenerateQueryParams,
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
+`
 
+	apolloSupportedDirectiveDefs = `
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+`
+	filterInputs = `
 input IntFilter {
 	eq: Int
 	le: Int
@@ -659,6 +676,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 // expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
 // implementing types
 func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
+	schemaExtras := schemaInputs + directiveDefs + filterInputs
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
@@ -2382,7 +2400,7 @@ func generateUnionString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
-func Stringify(schema *ast.Schema, originalTypes []string) string {
+func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bool) string {
 	var sch, original, object, input, enum strings.Builder
 
 	if schema.Types == nil {
@@ -2419,6 +2437,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// schemaExtras gets added to the result as a string, but we need to mark
 	// off all it's contents as printed, so nothing in there gets printed with
 	// the generated definitions.
+	schemaExtras := schemaInputs + directiveDefs + filterInputs
+	if apolloServiceQuery {
+		schemaExtras = schemaInputs + apolloSupportedDirectiveDefs + filterInputs
+	}
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)

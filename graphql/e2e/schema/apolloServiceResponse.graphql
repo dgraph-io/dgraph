@@ -200,21 +200,10 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
-directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -363,7 +352,7 @@ input MissionOrder {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+	getMyFavoriteUsers(id: ID!): [User]
 	getMission(id: ID!): Mission
 	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
 	aggregateMission(filter: MissionFilter): MissionAggregateResult

@@ -66,7 +66,7 @@ func FromString(schema string) (Schema, error) {
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.originalDefs)
+	return Stringify(s.completeSchema, s.originalDefs, false)
 }
 
 func (s *handler) DGSchema() string {
@@ -122,8 +122,22 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		if qry.Name == "_entities" || qry.Name == "_service" {
 			continue
 		}
-		queryList = append(queryList, qry)
+		qryDirectiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range qry.Directives {
+			if dir.Name == "custom" {
+				continue
+			}
+			qryDirectiveListCopy = append(qryDirectiveListCopy, dir)
+		}
+		queryList = append(queryList, &ast.FieldDefinition{
+			Name:       qry.Name,
+			Arguments:  qry.Arguments,
+			Type:       qry.Type,
+			Directives: qryDirectiveListCopy,
+			Position:   qry.Position,
+		})
 	}
+
 	typeMapCopy["Query"].Fields = queryList
 	queryDefn := &ast.Definition{
 		Kind:   ast.Object,
@@ -139,7 +153,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		PossibleTypes: s.completeSchema.PossibleTypes,
 		Implements:    s.completeSchema.Implements,
 	}
-	return Stringify(astSchemaCopy, s.originalDefs)
+	return Stringify(astSchemaCopy, s.originalDefs, true)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
