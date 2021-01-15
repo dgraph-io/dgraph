@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 const (
@@ -229,12 +229,12 @@ func generateDishes(rest *restaurant) []dish {
 
 func readRestaurantData() (dataFile, error) {
 	restaurantDataFile := viper.GetString(restaurantDataFilePath)
-	if !path.IsAbs(restaurantDataFile) {
+	if !filepath.IsAbs(restaurantDataFile) {
 		dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 		if err != nil {
 			return nil, err
 		}
-		restaurantDataFile = path.Join(dir, restaurantDataFile)
+		restaurantDataFile = filepath.Join(dir, restaurantDataFile)
 	}
 
 	b, err := ioutil.ReadFile(restaurantDataFile)

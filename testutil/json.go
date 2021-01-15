@@ -23,7 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -107,7 +107,7 @@ func sdiffJSON(wantBuf, gotBuf []byte, savepath string, quiet bool) string {
 	var wantFile, gotFile *os.File
 
 	if savepath != "" {
-		_ = os.MkdirAll(path.Dir(savepath), 0700)
+		_ = os.MkdirAll(filepath.Dir(savepath), 0700)
 		wantFile, _ = os.Create(savepath + ".expected.json")
 		gotFile, _ = os.Create(savepath + ".received.json")
 	} else {
