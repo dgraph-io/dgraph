@@ -1,6 +1,6 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
-title = "Load balancing queries with Nginx"
+title = "Load balancing queries with NGINX"
 weight = 8
 [menu.main]
     parent = "howto"
@@ -101,7 +101,7 @@ systemctl restart nginx
 
 ## Use the increment tool to start a gRPC LB
 
-In a different shell, run the `dgraph increment` [docs](https://dgraph.io/docs/howto/#using-the-increment-tool) tool against the NGINX gRPC load balancer (`nginx:9080`):
+In a different shell, run the `dgraph increment` ([docs](https://dgraph.io/docs/howto/#using-the-increment-tool)) tool against the NGINX gRPC load balancer (`nginx:9080`):
 
 ```sh
 docker-compose exec alpha1 dgraph increment --alpha nginx:9080 --num=10
@@ -117,10 +117,10 @@ The increment tool uses the Dgraph Go client to establish a gRPC connection agai
 
 ## Check logs
 
-In the NGINX access logs (in the `docker-compose` up shell window), or if you are not using docker-compose you can tail logs from `/var/log/nginx/access.log`. You'll see access logs like the following:
+In the NGINX access logs (in the `docker-compose` up shell window), or if you are not using Docker Compose you can tail logs from `/var/log/nginx/access.log`. You'll see access logs like the following:
 
 {{% notice "note" %}}
-With gRPC load balancing, each request can hit a different Alpha node. This can potentially increase read throughput.
+With gRPC load balancing, each request can hit a different Alpha node. This can increase read throughput.
 {{% /notice %}}
 
 ```sh
