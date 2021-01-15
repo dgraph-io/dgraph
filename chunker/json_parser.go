@@ -83,6 +83,8 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 			jsonValue = jsonInt
 			valueType = api.Facet_INT
 		}
+	// these int64/float64 cases are needed for the FastParseJSON simdjson
+	// parser, which doesn't use json.Number
 	case int64:
 		jsonValue = v
 		valueType = api.Facet_INT
@@ -208,6 +210,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		}
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
 
+	// this int64 case is needed for FastParseJSON, which doesn't use json.Number
 	case int64:
 		if v == 0 && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
@@ -413,6 +416,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			uid = uint64(ui)
 
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
 		case int64:
 			uid = uint64(uidVal)
 
@@ -490,6 +494,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
 		switch v := v.(type) {
+		// these int64/float64 cases are needed for FastParseJSON, which doesn't use json.Number
 		case int64, float64:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
