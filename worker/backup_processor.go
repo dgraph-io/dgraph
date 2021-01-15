@@ -318,6 +318,7 @@ func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 	bk := parsedKey.ToBackupKey()
 
 	out := tl.alloc.Allocate(proto.Size(bk))
+	out = out[:0]
 	out, err = proto.MarshalOptions{}.MarshalAppend(out, bk)
 	return out, err
 }

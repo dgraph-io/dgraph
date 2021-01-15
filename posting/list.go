@@ -876,6 +876,7 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	bl.Splits = ol.Splits
 
 	val := alloc.Allocate(proto.Size(bl))
+	val = val[:0]
 	val, err = proto.MarshalOptions{}.MarshalAppend(val, bl)
 	if err != nil {
 		return nil, err
@@ -924,6 +925,7 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 	}
 
 	out := alloc.Allocate(proto.Size(plist))
+	out = out[:0]
 	out, err := proto.MarshalOptions{}.MarshalAppend(out, plist)
 	x.Check(err)
 	if plist.Pack != nil {
