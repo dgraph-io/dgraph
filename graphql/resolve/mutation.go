@@ -256,7 +256,6 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		// Execute queries and parse its result into a map
 		qry := dgraph.AsString(queries)
 		req.Query = qry
-		req.ReadOnly = true
 		var mutResp *dgoapi.Response
 		if req.Query != "" {
 			mutResp, err = mr.executor.Execute(ctx, req)
@@ -266,8 +265,6 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 				err, mutation.Location(), "mutation %s failed", mutation.Name())
 			return emptyResult(gqlErr), resolverFailed
 		}
-
-		req.ReadOnly = false // Setting it to false as future requests are mutations and not requests.
 
 		// Parse the result now.
 		queryResultMap := make(map[string][]map[string]string)
