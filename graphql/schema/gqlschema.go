@@ -973,20 +973,20 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 			}
 		}
 
-		if hasExtends(defn) {
+		if apolloServiceQuery && hasExtends(defn) {
 			continue
 		}
 
 		// types and inputs needed for query and search
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
-		addFieldFilters(sch, defn)
+		addFieldFilters(sch, defn, apolloServiceQuery)
 		addAggregationResultType(sch, defn)
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 		// We need to call this at last as aggregateFields
 		// should not be part of HasFilter or UpdatePayloadType etc.
-		addAggregateFields(sch, defn)
+		addAggregateFields(sch, defn, apolloServiceQuery)
 	}
 }
 
@@ -1249,7 +1249,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 //     ...
 //   }
 // }
-func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
+func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
@@ -1257,7 +1257,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
-		if hasExtends(schema.Types[fld.Type.Name()]) {
+		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
 			continue
 		}
 
@@ -1284,10 +1284,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 // The following aggregate field is added to type T
 // fieldAAggregate(filter : AFilter) : AAggregateResult
 // These fields are added to support aggregate queries like count, avg, min
-func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
+func addAggregateFields(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 
-		if hasExtends(schema.Types[fld.Type.Name()]) {
+		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
 			continue
 		}
 		// Aggregate Fields only makes sense for fields of
