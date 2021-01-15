@@ -356,7 +356,6 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 }
 
 func TestAddDeepFilter(t *testing.T) {
-	t.Skip()
 	// Column can only be added if the user has ADMIN role attached to the corresponding project.
 	testCases := []TestCase{{
 		// Test case fails as there are no roles.
@@ -470,7 +469,6 @@ func TestAddDeepFilter(t *testing.T) {
 }
 
 func TestAddOrRBACFilter(t *testing.T) {
-	t.Skip()
 	// Column can only be added if the user has ADMIN role attached to the
 	// corresponding project or if the user is ADMIN.
 
@@ -651,7 +649,6 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 }
 
 func TestAddAndRBACFilter(t *testing.T) {
-	t.Skip()
 	testCases := []TestCase{{
 		user:   "user7",
 		role:   "ADMIN",
