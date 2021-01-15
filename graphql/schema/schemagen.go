@@ -74,10 +74,14 @@ func (s *handler) DGSchema() string {
 }
 
 // GQLSchemaWithoutApolloExtras return GraphQL schema string
-// excluding Apollo extras definitions and Apollo Queries
+// excluding Apollo extras definitions and Apollo Queries and
+// some directives which are not exposed to the Apollo Gateway
+// as they are failing in the schema validation which is a bug
+// in their library.
 func (s *handler) GQLSchemaWithoutApolloExtras() string {
 	typeMapCopy := make(map[string]*ast.Definition)
 	for typ, defn := range s.completeSchema.Types {
+		// Exclude "union _Entity = ..." definition from types
 		if typ == "_Entity" {
 			continue
 		}
@@ -85,6 +89,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		for _, fld := range defn.Fields {
 			fldDirectiveListCopy := make(ast.DirectiveList, 0)
 			for _, dir := range fld.Directives {
+				// Drop "@custom" directive from the field's definition.
 				if dir.Name == "custom" {
 					continue
 				}
@@ -103,6 +108,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 
 		directiveListCopy := make(ast.DirectiveList, 0)
 		for _, dir := range defn.Directives {
+			// Drop @generate and @auth directive from the Type Definition.
 			if dir.Name == "generate" || dir.Name == "auth" {
 				continue
 			}
@@ -119,11 +125,13 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 	}
 	queryList := make(ast.FieldList, 0)
 	for _, qry := range s.completeSchema.Query.Fields {
+		// Drop Apollo Queries from the List of Queries.
 		if qry.Name == "_entities" || qry.Name == "_service" {
 			continue
 		}
 		qryDirectiveListCopy := make(ast.DirectiveList, 0)
 		for _, dir := range qry.Directives {
+			// Drop @custom directive from the Queries.
 			if dir.Name == "custom" {
 				continue
 			}

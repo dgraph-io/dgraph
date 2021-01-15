@@ -895,6 +895,8 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
+// In case of Apollo service Query, input types from mutations and mutations
+// are excluded due to the limited support currently.
 func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bool) {
 	query := sch.Types["Query"]
 	if query != nil {
@@ -1275,6 +1277,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuer
 			continue
 		}
 
+		// Don't add Filters for @extended types as they can't be filtered.
 		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
 			continue
 		}
@@ -1305,6 +1308,8 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuer
 func addAggregateFields(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 
+		// Don't generate Aggregate Queries for field whose types are extended
+		// in the schema.
 		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
 			continue
 		}
@@ -2400,6 +2405,9 @@ func generateUnionString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
+// var "apolloServiceQuery" is used to distinguish Schema String from what should be
+// returned as a result of apollo service query. In case of Apollo service query, Schema
+// misses some of the directive definitions which are currently not supported at the GateWay.
 func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bool) string {
 	var sch, original, object, input, enum strings.Builder
 
@@ -2437,6 +2445,8 @@ func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bo
 	// schemaExtras gets added to the result as a string, but we need to mark
 	// off all it's contents as printed, so nothing in there gets printed with
 	// the generated definitions.
+	// In case of ApolloServiceQuery, schemaExtras is little different.
+	// It excludes some of the directive definitions.
 	schemaExtras := schemaInputs + directiveDefs + filterInputs
 	if apolloServiceQuery {
 		schemaExtras = schemaInputs + apolloSupportedDirectiveDefs + filterInputs
