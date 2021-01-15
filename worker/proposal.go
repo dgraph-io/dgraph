@@ -196,14 +196,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	data, err := proto.Marshal(proposal)
+	data := make([]byte, 8+proto.Size(proposal))
+	binary.BigEndian.PutUint64(data[:8], key)
+	entry := data[8:]
+	entry = entry[:0]
+	_, err := proto.MarshalOptions{}.MarshalAppend(entry, proposal)
 	if err != nil {
 		return err
 	}
-	bkey := make([]byte, 8)
-	binary.BigEndian.PutUint64(bkey, key)
-
-	data = append(bkey, data...)
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")

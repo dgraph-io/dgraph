@@ -909,8 +909,10 @@ func (n *node) proposeSnapshot(discardN int) error {
 		Snapshot: snap,
 	}
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
-	data, err := proto.Marshal(proposal)
-	data = append(make([]byte, 8), data...)
+	data := make([]byte, 8+proto.Size(proposal))
+	entry := data[8:]
+	entry = entry[:0]
+	_, err = proto.MarshalOptions{}.MarshalAppend(entry, proposal)
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
 }

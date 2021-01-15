@@ -991,12 +991,10 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	}
 
 	m := protojson.MarshalOptions{EmitUnpopulated: true}
-	var jsonState []byte
-	var err error
-	if jsonState, err = m.Marshal(ms); err != nil {
+	jsonState, err := m.Marshal(ms)
+	if err != nil {
 		return nil, errors.Errorf("Error marshalling state information to JSON")
 	}
-
 	return &api.Response{Json: jsonState}, nil
 }
 

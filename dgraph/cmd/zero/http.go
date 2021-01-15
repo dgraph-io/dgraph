@@ -90,9 +90,9 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buf []byte
 	m := protojson.MarshalOptions{EmitUnpopulated: true}
-	if buf, err = m.Marshal(ids); err != nil {
+	buf, err := m.Marshal(ids)
+	if err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
@@ -227,10 +227,9 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buf []byte
-	var err error
 	m := protojson.MarshalOptions{EmitUnpopulated: true}
-	if buf, err = m.Marshal(mstate); err != nil {
+	buf, err := m.Marshal(mstate)
+	if err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
