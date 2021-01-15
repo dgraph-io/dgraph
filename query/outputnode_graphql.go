@@ -59,6 +59,7 @@ func cantCoerceScalar(val []byte, field gqlSchema.Field) bool {
 		// valToBytes() uses []byte(strconv.FormatInt(num, 10)) to convert int values to byte slice.
 		// so, we should do the reverse, parse the string back to int and check that it fits in the
 		// range of int32.
+		// TODO: think if we can do this check in a better way without parsing the bytes.
 		if _, err := strconv.ParseInt(string(val), 10, 32); err != nil {
 			return true
 		}

@@ -716,54 +716,31 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
-			return &updateSchemaResolver{
-				admin: as,
-			}
+			return &updateSchemaResolver{admin: as}
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
-				return &getSchemaResolver{
-					admin: as,
-				}
+				return &getSchemaResolver{admin: as}
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getCurrentUser",
 			func(q schema.Query) resolve.QueryResolver {
-				cuResolver := &currentUserResolver{
-					baseRewriter: qryRw,
-				}
-
-				return resolve.NewQueryResolver(
-					cuResolver,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(&currentUserResolver{baseRewriter: qryRw}, dgEx)
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
@@ -772,52 +749,31 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			// Add the descending order to the created_at to get the schema history in
 			// descending order.
 			q.Arguments()["order"] = map[string]interface{}{"desc": "created_at"}
-			return resolve.NewQueryResolver(
-				qryRw,
-				dgEx,
-				resolve.StdQueryCompletion())
+			return resolve.NewQueryResolver(qryRw, dgEx)
 		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewAddRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					NewAddGroupRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(NewAddGroupRewriter(), dgEx)
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewUpdateRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewUpdateRewriter(), dgEx)
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					NewUpdateGroupRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(NewUpdateGroupRewriter(), dgEx)
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewDeleteRewriter(),
-					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewDeleteRewriter(),
-					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			}).
 		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(resolveReplaceAllowedCORSOrigins)

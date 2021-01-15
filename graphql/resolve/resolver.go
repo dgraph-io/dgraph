@@ -94,13 +94,6 @@ type ResolverFactory interface {
 	WithSchemaIntrospection() ResolverFactory
 }
 
-// A ResultCompleter can take a []byte slice representing an intermediate result
-// in resolving field and applies a completion step - for example, apply GraphQL
-// error propagation or massaging error paths.
-type ResultCompleter interface {
-	Complete(ctx context.Context, resolved *Resolved)
-}
-
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -162,15 +155,6 @@ type Resolved struct {
 // restErr is Error returned from custom REST endpoint
 type restErr struct {
 	Errors x.GqlErrorList `json:"errors,omitempty"`
-}
-
-// CompletionFunc is an adapter that allows us to compose completions and build a
-// ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
-type CompletionFunc func(ctx context.Context, resolved *Resolved)
-
-// Complete calls cf(ctx, resolved)
-func (cf CompletionFunc) Complete(ctx context.Context, resolved *Resolved) {
-	cf(ctx, resolved)
 }
 
 // NewDgraphExecutor builds a DgraphExecutor for proxying requests through dgraph.
@@ -253,7 +237,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries = append(queries, s.Queries(schema.AggregateQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
+			return NewQueryResolver(fns.Qrw, fns.Ex)
 		})
 	}
 
@@ -262,32 +246,32 @@ func (rf *resolverFactory) WithConventionResolvers(
 			return NewHTTPQueryResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, StdQueryCompletion())
+			})
 		})
 	}
 
 	for _, q := range s.Queries(schema.DQLQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			// DQL queries don't need any QueryRewriter
-			return NewQueryResolver(nil, fns.Ex, StdQueryCompletion())
+			return NewQueryResolver(nil, fns.Ex)
 		})
 	}
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.Name()))
+			return NewDgraphResolver(fns.Arw(), fns.Ex)
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.Name()))
+			return NewDgraphResolver(fns.Urw(), fns.Ex)
 		})
 	}
 
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Drw, fns.Ex, StdDeleteCompletion(m.Name()))
+			return NewDgraphResolver(fns.Drw, fns.Ex)
 		})
 	}
 
@@ -296,7 +280,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 			return NewHTTPMutationResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, StdQueryCompletion())
+			})
 		})
 	}
 
@@ -336,21 +320,6 @@ func NewResolverFactory(
 		queryError:    queryError,
 		mutationError: mutationError,
 	}
-}
-
-// StdQueryCompletion is the completion steps that get run for queries
-func StdQueryCompletion() CompletionFunc {
-	return noopCompletion
-}
-
-// StdMutationCompletion is the completion steps that get run for add and update mutations
-func StdMutationCompletion(name string) CompletionFunc {
-	return noopCompletion
-}
-
-// StdDeleteCompletion is the completion steps that get run for delete mutations
-func StdDeleteCompletion(name string) CompletionFunc {
-	return noopCompletion
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -1711,20 +1680,19 @@ func mismatched(path []interface{}, field schema.Field) ([]byte, x.GqlErrorList)
 // a httpResolver can resolve a single GraphQL field from an HTTP endpoint
 type httpResolver struct {
 	*http.Client
-	resultCompleter ResultCompleter
 }
 
 type httpQueryResolver httpResolver
 type httpMutationResolver httpResolver
 
 // NewHTTPQueryResolver creates a resolver that can resolve GraphQL query from an HTTP endpoint
-func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
-	return &httpQueryResolver{hc, rc}
+func NewHTTPQueryResolver(hc *http.Client) QueryResolver {
+	return &httpQueryResolver{hc}
 }
 
 // NewHTTPMutationResolver creates a resolver that resolves GraphQL mutation from an HTTP endpoint
-func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter) MutationResolver {
-	return &httpMutationResolver{hc, rc}
+func NewHTTPMutationResolver(hc *http.Client) MutationResolver {
+	return &httpMutationResolver{hc}
 }
 
 func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolved {
@@ -1733,7 +1701,6 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 	defer stop()
 
 	resolved := hr.rewriteAndExecute(ctx, field)
-	hr.resultCompleter.Complete(ctx, resolved)
 	return resolved
 }
 

@@ -146,15 +146,10 @@ func (mr MutationResolverFunc) Resolve(ctx context.Context, m schema.Mutation) (
 // 2) execute the mutation with me (return error if failed)
 // 3) write a query for the mutation with mr (return error if failed)
 // 4) execute the query with qe (return error if failed)
-// 5) process the result with rc
-func NewDgraphResolver(
-	mr MutationRewriter,
-	ex DgraphExecutor,
-	rc ResultCompleter) MutationResolver {
+func NewDgraphResolver(mr MutationRewriter, ex DgraphExecutor) MutationResolver {
 	return &dgraphResolver{
 		mutationRewriter: mr,
 		executor:         ex,
-		resultCompleter:  rc,
 	}
 }
 
@@ -162,7 +157,6 @@ func NewDgraphResolver(
 type dgraphResolver struct {
 	mutationRewriter MutationRewriter
 	executor         DgraphExecutor
-	resultCompleter  ResultCompleter
 }
 
 func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Resolved, bool) {
@@ -184,7 +178,6 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 	defer timer.Stop()
 
 	resolved, success := mr.rewriteAndExecute(ctx, m)
-	mr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved, success
