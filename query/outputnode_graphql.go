@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,10 +49,41 @@ func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
 	x.Check2(out.WriteString(`":`))
 }
 
+func cantCoerceScalar(val []byte, field gqlSchema.Field) bool {
+	switch field.Type().Name() {
+	case "Int":
+		// Although GraphQL layer would have input coercion for Int,
+		// we still need to do this as there can be cases like schema migration when Int64 was
+		// changed to Int, or if someone was using DQL mutations but GraphQL queries. The GraphQL
+		// layer must always honor the spec.
+		// valToBytes() uses []byte(strconv.FormatInt(num, 10)) to convert int values to byte slice.
+		// so, we should do the reverse, parse the string back to int and check that it fits in the
+		// range of int32.
+		if _, err := strconv.ParseInt(string(val), 10, 32); err != nil {
+			return true
+		}
+	case "String", "ID", "Boolean", "Int64", "Float", "DateTime":
+		// do nothing, as for these types the GraphQL schema is same as the dgraph schema.
+		// Hence, the value coming in from fastJson node should already be in the correct form.
+		// So, no need to coerce it.
+	default:
+		enumValues := field.EnumValues()
+		// At this point we should only get fields which are of ENUM type, so we can return
+		// an error if we don't get any enum values.
+		if len(enumValues) == 0 {
+			return true
+		}
+		// Lets check that the enum value is valid.
+		strVal := string(val)
+		strVal = strVal[1 : len(strVal)-1] // remove `"` from beginning and end
+		if !x.HasString(enumValues, strVal) {
+			return true
+		}
+	}
+	return false
+}
+
 // TODO:
-//  * Scalar coercion
-//  * Enums
-//  * Password queries
 //  * (cleanup) Cleanup code from resolve pkg
 //  * (cleanup) make const args like *bytes.Buffer the first arg in funcs as a best practice.
 //  * (cleanup) refactor this func as `func (ctx *graphQLEncodingCtx) encode(enc *encoder, ...)`.
@@ -95,9 +127,19 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				return false
 			}
 		} else {
+			// we got a scalar
+			// check coercion rules to see if it matches the GraphQL spec requirements.
+			if cantCoerceScalar(val, parentField) {
+				ctx.gqlErrs = append(ctx.gqlErrs, parentField.GqlErrorf(parentPath,
+					"Error coercing value '%s' for field '%s' to type %s.",
+					string(val), parentField.Name(), parentField.Type().Name()))
+				// if it can't be coerced, return false so that the caller can appropriately
+				// handle null writing
+				return false
+			}
 			x.Check2(ctx.buf.Write(val))
 		}
-		// we have successfully written the scalar value, lets return true to indicate that this
+		// we have successfully written the value, lets return true to indicate that this
 		// call to encodeGraphQL() was successful.
 		return true
 	}

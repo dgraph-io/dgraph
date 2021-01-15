@@ -390,6 +390,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 			}
 		case schema.NumUid:
 			// TODO: apply coercion here as per Int rules? or change the schema to Int64?
+			// I think, changing the schema to Int64 is better.
 			x.Check2(buf.WriteString(strconv.Itoa(numUids)))
 		default: // this has to be queryField
 			if len(qryResult) == 0 {
