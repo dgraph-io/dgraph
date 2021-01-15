@@ -624,6 +624,9 @@ const (
 )
 
 // FastParseJSON currently parses NQuads about 30% faster than ParseJSON.
+//
+// This function is very similar to buf.ParseJSON, but we just replace encoding/json with
+// simdjson-go.
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
 		// default to slower / old parser
@@ -743,7 +746,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 // to high memory usage. So be careful using this.
 func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	err := buf.ParseJSON(b, op)
+	err := buf.FastParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err
 	}
