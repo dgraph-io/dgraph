@@ -27,15 +27,14 @@ type Post {
 }
 ```
 
-### **Example**: Add new nested object
-
+### **Example**: Adding deep nested post with new author mutation using variables
 ```graphql
-mutation updateAuthorWithNewPost($author: DeepAuthorInput!) {
-  updateAuthor(input: [$author]) {
+mutation addAuthorWithPost($author: addAuthorInput!) {
+  addAuthor(input: [$author]) {
     author {
       id
       name
-      post {
+      posts {
         title
         text
       }
@@ -60,7 +59,7 @@ Variables:
 }
 ```
 
-### **Example**: Link existing nested object
+### **Example**: Update mutation on deeply nested post and link to an existing author using variables
 
 The following example assumes that the post with the postID of `0x456` already exists, and is not currently nested under the author having the id of `0x123`.
 
@@ -73,7 +72,7 @@ mutation updateAuthorWithExistingPost($patch: UpdateAuthorInput!) {
   updateAuthor(input: $patch) {
     author {
       id
-      post {
+      posts {
         title
         text
       }

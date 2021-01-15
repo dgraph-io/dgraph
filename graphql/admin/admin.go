@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -347,11 +347,11 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":        commonAdminQueryMWs,
-		"listBackups":   commonAdminQueryMWs,
-		"getGQLSchema":  commonAdminQueryMWs,
+		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
+		"config":       commonAdminQueryMWs,
+		"listBackups":  commonAdminQueryMWs,
+		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},

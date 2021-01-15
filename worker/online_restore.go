@@ -20,13 +20,14 @@ package worker
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
 	return x.ErrNotSupported
 }

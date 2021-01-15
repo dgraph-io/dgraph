@@ -27,7 +27,7 @@ package worker
 // "sync/atomic"
 // "testing"
 
-// "github.com/dgraph-io/badger/v2"
+// "github.com/dgraph-io/badger/v3"
 // "github.com/golang/glog"
 // "github.com/stretchr/testify/require"
 // "google.golang.org/grpc"

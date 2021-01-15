@@ -30,7 +30,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
@@ -74,8 +74,8 @@ func sendRestoreRequest(t *testing.T, location string) {
 
 	var restoreResp struct {
 		Restore struct {
-			Code      string
-			Message   string
+			Code    string
+			Message string
 		}
 	}
 
@@ -192,7 +192,7 @@ func TestBackupFilesystem(t *testing.T) {
 	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "name", "dgraph.graphql.xid",
 		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
 		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query", "dgraph.type.cors"}
 	testutil.CheckSchema(t, preds, types)
 
 	verifyUids := func(count int) {

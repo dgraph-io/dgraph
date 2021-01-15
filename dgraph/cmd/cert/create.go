@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -278,7 +277,7 @@ func createCerts(opt *options) error {
 	}
 
 	// no path then save it in certsDir.
-	if path.Base(opt.caKey) == opt.caKey {
+	if filepath.Base(opt.caKey) == opt.caKey {
 		opt.caKey = filepath.Join(opt.dir, opt.caKey)
 	}
 	opt.caCert = filepath.Join(opt.dir, defaultCACert)

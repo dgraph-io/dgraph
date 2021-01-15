@@ -34,6 +34,7 @@ package raftwal
 
 import (
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -345,6 +346,84 @@ func TestEntryFile(t *testing.T) {
 	require.Equal(t, uint64(1), entries[0].Index)
 	require.Equal(t, uint64(1), entries[0].Term)
 	require.Equal(t, "abc", string(entries[0].Data))
+}
+
+func TestTruncateStorage(t *testing.T) {
+	dir, err := ioutil.TempDir("", "raftwal")
+	require.NoError(t, err)
+	ds, err := InitEncrypted(dir, nil)
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	const numEntries = uint64(maxNumEntries*3) / 2
+	const numTruncated = numEntries / 2
+
+	// Insert entries.
+	for i := uint64(0); i < numEntries; i++ {
+		var typ raftpb.EntryType
+		if i%3 == 0 {
+			typ = raftpb.EntryConfChange
+		} else {
+			typ = raftpb.EntryNormal
+		}
+
+		idx := i + 1
+		entry := raftpb.Entry{
+			Term:  idx,
+			Index: idx,
+			Type:  typ,
+			Data:  []byte(fmt.Sprintf("entry %d", idx)),
+		}
+		ds.addEntries([]raftpb.Entry{entry})
+	}
+
+	// Verify all entries.
+	entries := ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntries))
+	for i := uint64(0); i < numEntries; i++ {
+		idx := i + 1
+		require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
+	}
+
+	// Truncate entries.
+	ds.TruncateEntriesUntil(numTruncated)
+
+	// Verify all entries.
+	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntries))
+	for i := uint64(0); i < numEntries; i++ {
+		idx := i + 1
+		if idx < numTruncated && i%3 != 0 {
+			require.Empty(t, entries[i].Data)
+		} else {
+			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
+		}
+	}
+
+	// Insert more entries.
+	const numEntriesNew = numEntries + maxNumEntries
+	for i := numEntries; i < numEntriesNew; i++ {
+		idx := i + 1
+		entry := raftpb.Entry{
+			Term:  idx,
+			Index: idx,
+			Type:  raftpb.EntryNormal,
+			Data:  []byte(fmt.Sprintf("entry %d", idx)),
+		}
+		ds.addEntries([]raftpb.Entry{entry})
+	}
+
+	// Verify all entries.
+	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntriesNew))
+	for i := uint64(0); i < numEntriesNew; i++ {
+		idx := i + 1
+		if idx < numTruncated && i%3 != 0 {
+			require.Empty(t, entries[i].Data)
+		} else {
+			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
+		}
+	}
 }
 
 func TestStorageOnlySnap(t *testing.T) {

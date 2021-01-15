@@ -61,6 +61,22 @@ to the key `blank-0`. You could specify your own key like
 In this case, the assigned uids map would have a key called `diggy` with the value being the uid
 assigned to it.
 
+### Forbidden values
+ 
+{{% notice "note" %}}
+When using JSON mutations, the following string values are not accepted: `uid( )`, `val( )` 
+{{% /notice %}}
+
+For example, the following JSON can't be processed by Dgraph:
+
+```json
+{
+  "uid": "uid(t)",
+  "user_name": "uid(s ia)",
+  "name": "val (s kl)",
+}
+```
+
 ## Language support
 
 An important difference between RDF and JSON mutations is in regards to specifying a string value's
@@ -319,7 +335,7 @@ upsert {
 }' | jq
 ```
 
-## Creating a list with JSON and interacting with
+## Creating a list with JSON and interacting with it
 
 Schema:
 

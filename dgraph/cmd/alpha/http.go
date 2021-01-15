@@ -642,6 +642,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachAuthToken(ctx, r)
 
 	return adminServer.Resolve(ctx, gqlReq)
 }
