@@ -254,7 +254,7 @@ func TestInvalidAuthInfo(t *testing.T) {
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
 	require.NoError(t, err)
-	_, err = schema.NewHandler(string(authSchema), false)
+	_, err = schema.NewHandler(string(authSchema), false, false)
 	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
 }
 
@@ -263,7 +263,7 @@ func TestMissingAudienceWithJWKUrl(t *testing.T) {
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
 	require.NoError(t, err)
-	_, err = schema.NewHandler(string(authSchema), false)
+	_, err = schema.NewHandler(string(authSchema), false, false)
 	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
 }
 
