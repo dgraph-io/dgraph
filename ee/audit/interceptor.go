@@ -4,22 +4,38 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"sync/atomic"
-	"time"
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	if atomic.LoadUint32(&auditEnabled) == 0 {
+	skip := func(method string) bool {
+		skipApis := []string{"Heartbeat", "RaftMessage", "JoinCluster", "IsPeer", // raft server
+			"StreamMembership", "UpdateMembership", "Oracle", // zero server
+			"Check", "Watch", // health server
+		}
+
+		for _, api := range skipApis {
+			if strings.HasSuffix(method, api) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
 		return handler(ctx, req)
 	}
 
@@ -75,6 +91,7 @@ func maybeAuditGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServer
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
+		ReqType:    Grpc,
 		Req:        fmt.Sprintf("%v", req),
 		Status:     int(code),
 		TimeTaken:  time.Now().UnixNano() - startTime,
@@ -89,6 +106,7 @@ func maybeAuditHttp(w *ResponseWriter, r *http.Request, startTime int64) {
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
+		ReqType:     Http,
 		Req:         string(all),
 		Status:      w.statusCode,
 		QueryParams: r.URL.Query(),

@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/audit"
 	"log"
 	"net"
 	"net/http"
@@ -29,6 +28,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -227,7 +228,6 @@ func run() {
 	x.Check(err)
 	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').",
 		Zero.Conf.Get("audit_dir"))
-
 
 	if opts.rebalanceInterval <= 0 {
 		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",

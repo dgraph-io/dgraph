@@ -1,9 +1,10 @@
 package audit
 
 import (
-	"github.com/spf13/viper"
 	"sync/atomic"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/golang/glog"
 
@@ -13,19 +14,22 @@ import (
 var auditEnabled uint32
 
 type AuditEvent struct {
-	User        string              `json:"user"`
-	ServerHost  string              `json:"server_host"`
-	ClientHost  string              `json:"client_host"`
-	Endpoint    string              `json:"endpoint"`
-	Req         string              `json:"req"`
-	Status      int                 `json:"status"`
-	QueryParams map[string][]string `json:"query_params"`
-	TimeTaken   int64               `json:"time_taken"`
+	User        string
+	ServerHost  string
+	ClientHost  string
+	Endpoint    string
+	ReqType     string
+	Req         string
+	Status      int
+	QueryParams map[string][]string
+	TimeTaken   int64
 }
 
 const (
 	UnauthorisedUser = "UnauthorisedUser"
 	UnknownUser      = "UnknownUser"
+	Grpc             = "Grpc"
+	Http             = "Http"
 )
 
 var auditor *auditLogger
@@ -96,9 +100,9 @@ func (a *auditLogger) AuditEvent(event *AuditEvent) {
 		"user", event.User,
 		"server", event.ServerHost,
 		"client", event.ClientHost,
+		"req_type", event.ReqType,
 		"req_body", event.Req,
 		"query_param", event.QueryParams,
 		"status", event.Status,
 		"time", event.TimeTaken)
 }
-
