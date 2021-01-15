@@ -1,16 +1,16 @@
 package x
 
 import (
+	"os"
+	"path/filepath"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"os"
-	"path/filepath"
 )
 
 func InitLogger(dir string, filename string) (*Logger, error) {
-	err := os.MkdirAll(dir, 0700)
-	if err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	path, err := filepath.Abs(filepath.Join(dir, filename))
@@ -36,13 +36,14 @@ type Logger struct {
 	logger *zap.Logger
 }
 
+// AuditI logs audit message as info. args are key value pairs with key as string value
 func (l *Logger) AuditI(msg string, args ...interface{}) {
 	if l == nil {
 		return
 	}
-	flds := make([]zap.Field, len(args)/2)
+	flds := make([]zap.Field, 0)
 	for i := 0; i < len(args); i = i + 2 {
-		flds[i/2] = zap.Any(args[i].(string), args[i+1])
+		flds = append(flds, zap.Any(args[i].(string), args[i+1]))
 	}
 	l.logger.Info(msg, flds...)
 }
@@ -51,9 +52,9 @@ func (l *Logger) AuditE(msg string, args ...interface{}) {
 	if l == nil {
 		return
 	}
-	flds := make([]zap.Field, len(args)/2)
-	for i := range args {
-		flds[i/2] = zap.Any(args[i].(string), args[i+1])
+	flds := make([]zap.Field, 0)
+	for i := 0; i < len(args); i = i + 2 {
+		flds = append(flds, zap.Any(args[i].(string), args[i+1]))
 	}
 	l.logger.Error(msg, flds...)
 }
