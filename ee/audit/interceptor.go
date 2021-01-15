@@ -60,32 +60,32 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 }
 
 func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
-	var code codes.Code
-	if serr, ok := status.FromError(err); !ok {
-		code = codes.Unknown
-	} else {
-		code = serr.Code()
-	}
 	clientHost := ""
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
 
-	token := ""
+	userId := ""
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if t := md.Get("accessJwt"); len(t) > 0 {
-			token = t[0]
+			userId = getUserId(t[0], false)
+		} else if t := md.Get("auth-token"); len(t) > 0 {
+			userId = getUserId(t[0], true)
 		}
 	}
 
+	cd := codes.Unknown
+	if serr, ok := status.FromError(err); ok {
+		cd = serr.Code()
+	}
 	auditor.AuditEvent(&AuditEvent{
-		User:       getUserId(token),
+		User:       userId,
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
 		Req:        fmt.Sprintf("%v", req),
-		Status:     code.String(),
+		Status:     cd.String(),
 	})
 }
 
@@ -94,8 +94,17 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	if err != nil {
 		rb = []byte(err.Error())
 	}
+
+	userId := ""
+	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
+		userId = getUserId(token, false)
+	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
+		userId = getUserId(token, true)
+	} else {
+		userId = getUserId("", false)
+	}
 	auditor.AuditEvent(&AuditEvent{
-		User:        getUserId(r.Header.Get("X-Dgraph-AccessToken")),
+		User:        userId,
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
@@ -106,7 +115,10 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	})
 }
 
-func getUserId(token string) string {
+func getUserId(token string, poorman bool) string {
+	if poorman {
+		return PoorManAuth
+	}
 	var userId string
 	var err error
 	if token == "" {

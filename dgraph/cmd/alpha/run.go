@@ -815,7 +815,7 @@ func run() {
 	glog.Infoln("adminCloser closed.")
 
 	audit.Close()
-	glog.Infoln("audit logs are closed.")
+	glog.Infoln("audit logs if enabled are closed.")
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")

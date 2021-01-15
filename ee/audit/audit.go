@@ -27,31 +27,42 @@ type AuditEvent struct {
 const (
 	UnauthorisedUser = "UnauthorisedUser"
 	UnknownUser      = "UnknownUser"
+	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
 	Http             = "Http"
 )
 
-var auditor *auditLogger
+var auditor *auditLogger = &auditLogger{}
 
 type auditLogger struct {
 	log  *x.Logger
 	tick *time.Ticker
 }
 
+// InitAuditorIfNecessary accepts conf and enterprise edition check function.
+// This method keep tracks whether cluster is part of enterprise edition or not.
+// It pools eeEnabled function every five minutes to check if the license is still valid or not.
 func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 	if !conf.GetBool("audit_enabled") {
 		return
 	}
-	auditor = &auditLogger{
-		tick: time.NewTicker(time.Minute * 5),
-	}
 	if eeEnabled() {
-		auditor.log = initlog(conf.GetString("audit_dir"))
-		atomic.StoreUint32(&auditEnabled, 1)
-		glog.Infoln("audit logs are enabled")
+		InitAuditor(true, conf.GetString("audit_dir"))
 	}
-
+	auditor.tick = time.NewTicker(time.Minute * 5)
 	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"))
+}
+
+// InitAuditor initializes the auditor.
+// This method doesnt keep track of whether cluster is part of enterprise edition or not.
+// Client has to keep track of that.
+func InitAuditor(enabled bool, dir string) {
+	if !enabled{
+		return
+	}
+	auditor.log = initlog(dir)
+	atomic.StoreUint32(&auditEnabled, 1)
+	glog.Infoln("audit logs are enabled")
 }
 
 func initlog(dir string) *x.Logger {
@@ -86,12 +97,15 @@ func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 	}
 }
 
+// Close stops the ticker and sync the pending logs in buffer.
+// It also sets the log to nil, because its being called by zero when license expires.
+// If license added, InitLogger will take care of the file.
 func Close() {
-	if auditor == nil {
-		return
+	if auditor.tick != nil {
+		auditor.tick.Stop()
 	}
-	auditor.tick.Stop()
 	auditor.log.Sync()
+	auditor.log = nil
 }
 
 func (a *auditLogger) AuditEvent(event *AuditEvent) {
