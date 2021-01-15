@@ -641,7 +641,7 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	// if root array, this will be filled
 	arr := &simdjson.Array{}
 
-	// grab the first elemtn
+	// grab the first element
 	typ := iter.Advance()
 	switch typ {
 	case simdjson.TypeRoot:
