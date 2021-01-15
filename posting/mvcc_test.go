@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRollupTimestamp(t *testing.T) {
@@ -84,7 +85,7 @@ func TestPostingListRead(t *testing.T) {
 	assertLength(9, 1)
 
 	var empty pb.PostingList
-	data, err := empty.Marshal()
+	data, err := proto.Marshal(&empty)
 	require.NoError(t, err)
 
 	writer = NewTxnWriter(pstore)

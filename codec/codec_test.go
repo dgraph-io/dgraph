@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func getUids(size int) []uint64 {
@@ -263,7 +264,7 @@ func benchmarkUidPackEncode(b *testing.B, blockSize int) {
 	var data []byte
 	for i := 0; i < b.N; i++ {
 		pack := Encode(uids, blockSize)
-		out, err := pack.Marshal()
+		out, err := proto.Marshal(pack)
 		FreePack(pack)
 		if err != nil {
 			b.Fatalf("Error marshaling uid pack: %s", err.Error())
@@ -298,7 +299,7 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 	b.Logf("Dataset Len=%d. Size: %s", len(uids), humanize.Bytes(sz))
 
 	pack := Encode(uids, blockSize)
-	data, err := pack.Marshal()
+	data, err := proto.Marshal(pack)
 	defer FreePack(pack)
 	x.Check(err)
 	b.Logf("Output size: %s. Compression: %.2f",

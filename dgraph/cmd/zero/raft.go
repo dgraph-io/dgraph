@@ -129,7 +129,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		defer n.Proposals.Delete(key)
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
-		data := make([]byte, 8+proto.Size(proposal))
+		sz := proto.Size(proposal)
+		data := make([]byte, 8+sz)
 		binary.BigEndian.PutUint64(data[:8], key)
 		entry := data[8:]
 		entry = entry[:0]
@@ -137,6 +138,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		if err != nil {
 			return err
 		}
+		data = data[:8+sz]
+
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)

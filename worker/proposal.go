@@ -196,7 +196,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	data := make([]byte, 8+proto.Size(proposal))
+	sz := proto.Size(proposal)
+	data := make([]byte, 8+sz)
 	binary.BigEndian.PutUint64(data[:8], key)
 	entry := data[8:]
 	entry = entry[:0]
@@ -204,6 +205,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	if err != nil {
 		return err
 	}
+	data = data[:8+sz]
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")

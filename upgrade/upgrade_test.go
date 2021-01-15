@@ -178,7 +178,7 @@ func Test(t *testing.T) {
 	}
 	fmt.Println(nq)
 	fmt.Println(nq.String())
-	b, err := nq.Marshal()
+	b, err := proto.Marshal(nq)
 	fmt.Println(string(b))
 	fmt.Println(err)
 

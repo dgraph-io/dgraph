@@ -46,6 +46,7 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	pb "go.etcd.io/etcd/raft/raftpb"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestStorageTerm(t *testing.T) {
@@ -118,12 +119,12 @@ func TestStorageEntries(t *testing.T) {
 		// even if maxsize is zero, the first entry should be returned
 		{4, 7, 0, nil, []pb.Entry{{Index: 4, Term: 4}}},
 		// limit to 2
-		{4, 7, uint64(ents[1].Size() + ents[2].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(proto.Size(ents[1]) + proto.Size(ents[2])), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
 		// limit to 2
-		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()/2), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size() - 1), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(proto.Size(ents[1]) + proto.Size(ents[2]) + proto.Size(ents[3])/2), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(proto.Size(ents[1]) + proto.Size(ents[2]) + proto.Size(ents[3]) - 1), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
 		// all
-		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
+		{4, 7, uint64(proto.Size(ents[1]) + proto.Size(ents[2]) + proto.Size(ents[3])), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
 	}
 
 	for i, tt := range tests {

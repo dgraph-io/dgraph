@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
@@ -126,7 +126,7 @@ func populateGraphExport(t *testing.T) {
 func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
-	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
+	val, err := proto.Marshal(&pb.SchemaUpdate{ValueType: pb.Posting_UID})
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -135,7 +135,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	require.NoError(t, err)
-	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
+	val, err = proto.Marshal(&pb.SchemaUpdate{ValueType: pb.Posting_UID})
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
@@ -145,7 +145,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.Set(x.SchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
-	val, err = personType.Marshal()
+	val, err = proto.Marshal(personType)
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)

@@ -30,6 +30,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -1155,7 +1156,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)
 		require.NoError(t, err)
-		data, err := part.Marshal()
+		data, err := proto.Marshal(part)
 		require.NoError(t, err)
 		require.Equal(t, data, kvs[i+1].Value)
 		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)

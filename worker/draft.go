@@ -712,7 +712,7 @@ func (n *node) processApplyCh() {
 					previous[key] = p
 				}
 				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					glog.Errorf("Applying proposal. Error: %v. Proposal: %v.", perr, proposal)
 				}
 				n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
 					key, proposal.Index, perr)
@@ -909,11 +909,13 @@ func (n *node) proposeSnapshot(discardN int) error {
 		Snapshot: snap,
 	}
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
-	data := make([]byte, 8+proto.Size(proposal))
+	sz := proto.Size(proposal)
+	data := make([]byte, 8+sz)
 	entry := data[8:]
 	entry = entry[:0]
 	_, err = proto.MarshalOptions{}.MarshalAppend(entry, proposal)
 	x.Check(err)
+	data = data[:8+sz]
 	return n.Raft().Propose(n.ctx, data)
 }
 
