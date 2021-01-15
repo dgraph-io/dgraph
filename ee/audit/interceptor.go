@@ -37,7 +37,6 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
 		return handler(ctx, req)
 	}
-
 	response, err := handler(ctx, req)
 	auditGrpc(ctx, req, info, err)
 	return response, err
@@ -79,7 +78,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		}
 	}
 
-	event := &AuditEvent{
+	auditor.AuditEvent(&AuditEvent{
 		User:       getUserId(token),
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
@@ -87,8 +86,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		ReqType:    Grpc,
 		Req:        fmt.Sprintf("%v", req),
 		Status:     code.String(),
-	}
-	auditor.AuditEvent(event)
+	})
 }
 
 func auditHttp(w *ResponseWriter, r *http.Request) {
@@ -96,7 +94,7 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	if err != nil {
 		rb = []byte(err.Error())
 	}
-	event := &AuditEvent{
+	auditor.AuditEvent(&AuditEvent{
 		User:        getUserId(r.Header.Get("X-Dgraph-AccessToken")),
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
@@ -105,8 +103,7 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		Req:         string(rb),
 		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
-	}
-	auditor.AuditEvent(event)
+	})
 }
 
 func getUserId(token string) string {
