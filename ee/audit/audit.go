@@ -2,7 +2,6 @@ package audit
 
 import (
 	"github.com/spf13/viper"
-	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -85,6 +84,9 @@ func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 }
 
 func Close() {
+	if auditor == nil {
+		return
+	}
 	auditor.tick.Stop()
 	auditor.log.Sync()
 }
@@ -100,18 +102,3 @@ func (a *auditLogger) AuditEvent(event *AuditEvent) {
 		"time", event.TimeTaken)
 }
 
-type ResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	// WriteHeader(int) is not called if our response implicitly returns 200 OK, so
-	// we default to that status code.
-	return &ResponseWriter{w, http.StatusOK}
-}
-
-func (lrw *ResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
-}

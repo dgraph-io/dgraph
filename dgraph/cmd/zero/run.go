@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -219,6 +220,14 @@ func run() {
 			return true, true
 		}
 	}
+
+	wd, err := filepath.Abs(opts.w)
+	x.Check(err)
+	ad, err := filepath.Abs(Zero.Conf.GetString("audit_dir"))
+	x.Check(err)
+	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').",
+		Zero.Conf.Get("audit_dir"))
+
 
 	if opts.rebalanceInterval <= 0 {
 		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",

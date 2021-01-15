@@ -112,3 +112,19 @@ func getUserId(token string) string {
 	}
 	return userId
 }
+
+type ResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
+	// WriteHeader(int) is not called if our response implicitly returns 200 OK, so
+	// we default to that status code.
+	return &ResponseWriter{w, http.StatusOK}
+}
+
+func (lrw *ResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
