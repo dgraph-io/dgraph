@@ -103,7 +103,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 
 		directiveListCopy := make(ast.DirectiveList, 0)
 		for _, dir := range defn.Directives {
-			if dir.Name == "generate" || dir.Name == "auth" || dir.Name == "remote" {
+			if dir.Name == "generate" || dir.Name == "auth" {
 				continue
 			}
 			directiveListCopy = append(directiveListCopy, dir)
