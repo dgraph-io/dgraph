@@ -142,7 +142,7 @@ func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
 	return &ResponseWriter{w, http.StatusOK}
 }
 
-func (lrw *ResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
+func (rw *ResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
