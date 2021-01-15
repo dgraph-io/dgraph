@@ -196,7 +196,7 @@ func TestPasswordReturn(t *testing.T) {
 
 func TestGetCurrentUser(t *testing.T) {
 	token := testutil.GrootHttpLogin(adminEndpoint)
-	
+
 	currentUser := getCurrentUser(t, token)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
@@ -229,8 +229,8 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	token := testutil.GrootHttpLogin(adminEndpoint)
 	resp := createUser(t, token, userid, userpassword)
 	require.Equal(t, x.GqlErrorList{{
-		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
-			" for type User",
+		Message: "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id" +
+			" alice already exists for type User",
 	}}, resp.Errors)
 	checkUserCount(t, resp.Data, 0)
 
