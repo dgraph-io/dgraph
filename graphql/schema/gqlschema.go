@@ -1726,7 +1726,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && !hasXIDField {
+	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
 
@@ -1749,12 +1749,12 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField {
-		name := xidTypeFor(defn)
+	if hasXIDField && defn.Kind != "INTERFACE" {
+		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
 			Type: &ast.Type{
-				NamedType: "String",
+				NamedType: dtype,
 				NonNull:   !hasIDField,
 			},
 		})
@@ -2363,13 +2363,13 @@ func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
 
-func xidTypeFor(defn *ast.Definition) string {
+func xidTypeFor(defn *ast.Definition) (string, string) {
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			return fld.Name
+			return fld.Name, fld.Type.Name()
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
