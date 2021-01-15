@@ -15,7 +15,7 @@
 #
 
 DGO_PATH    := github.com/dgraph-io/dgo/v200
-BADGER_PATH := github.com/dgraph-io/badger/v2
+BADGER_PATH := github.com/dgraph-io/badger/v3
 
 TMPDIR     := $(shell mktemp -d)
 PROTO_PATH := ${TMPDIR}/src:.
@@ -40,7 +40,7 @@ check:
 copy-protos:
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
-	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb2.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb3.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
 
 .PHONY: regenerate

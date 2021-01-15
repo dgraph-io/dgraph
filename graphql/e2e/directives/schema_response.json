@@ -1069,6 +1069,14 @@
                 }
             ],
             "name": "Section"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.cors"
+                }
+            ],
+            "name": "dgraph.type.cors"
         }
     ]
 }

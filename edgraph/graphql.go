@@ -23,6 +23,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/gql"
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -52,6 +54,12 @@ func ResetCors(closer *z.Closer) {
 						Predicate:   "dgraph.cors",
 						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
 					},
+					{
+						Subject:   "_:a",
+						Predicate: "dgraph.type",
+						ObjectValue: &api.Value{Val: &api.Value_StrVal{
+							StrVal: "dgraph.type.cors"}},
+					},
 				},
 				Cond: `@if(eq(len(cors), 0))`,
 			},
@@ -71,38 +79,43 @@ func ResetCors(closer *z.Closer) {
 	}
 }
 
-func generateNquadsForCors(origins []string) []byte {
+func generateNquadsForCors(uid string, origins []string) []byte {
 	out := &bytes.Buffer{}
 	for _, origin := range origins {
-		out.Write([]byte(fmt.Sprintf("uid(cors) <dgraph.cors> \"%s\" . \n", origin)))
+		out.Write([]byte(fmt.Sprintf("<%s> <dgraph.cors> \"%s\" . \n", uid, origin)))
 	}
 	return out.Bytes()
 }
 
 // AddCorsOrigins Adds the cors origins to the Dgraph.
 func AddCorsOrigins(ctx context.Context, origins []string) error {
+	uid, _, err := GetCorsOrigins(ctx)
+	if err != nil {
+		return err
+	}
 	req := &api.Request{
 		Query: `query{
 			cors as var(func: has(dgraph.cors))
 		}`,
 		Mutations: []*api.Mutation{
 			{
-				SetNquads: generateNquadsForCors(origins),
-				Cond:      `@if(eq(len(cors), 1))`,
-				DelNquads: []byte(`uid(cors) <dgraph.cors> * .`),
+				SetNquads: generateNquadsForCors(uid, origins),
+				Cond:      `@if(gt(len(cors), 0))`,
+				DelNquads: []byte(`<` + uid + `>` + ` <dgraph.cors> * .`),
 			},
 		},
 		CommitNow: true,
 	}
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+	_, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	return err
 }
 
 // GetCorsOrigins retrieve all the cors origin from the database.
-func GetCorsOrigins(ctx context.Context) ([]string, error) {
+func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	req := &api.Request{
 		Query: `query{
 			me(func: has(dgraph.cors)){
+				uid
 				dgraph.cors
 			}
 		}`,
@@ -110,22 +123,39 @@ func GetCorsOrigins(ctx context.Context) ([]string, error) {
 	}
 	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	type corsResponse struct {
 		Me []struct {
+			Uid        string `json:"uid"`
+			UidInt     uint64
 			DgraphCors []string `json:"dgraph.cors"`
 		} `json:"me"`
 	}
 	corsRes := &corsResponse{}
 	if err = json.Unmarshal(res.Json, corsRes); err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	if len(corsRes.Me) != 1 {
-		return []string{}, fmt.Errorf("GetCorsOrigins returned %d results", len(corsRes.Me))
+	if len(corsRes.Me) == 0 {
+		return "", []string{}, fmt.Errorf("GetCorsOrigins returned 0 results")
+	} else if len(corsRes.Me) == 1 {
+		return corsRes.Me[0].Uid, corsRes.Me[0].DgraphCors, nil
 	}
-	return corsRes.Me[0].DgraphCors, nil
+	// Multiple nodes for cors found, returning the one that is added last
+	for i := range corsRes.Me {
+		iUid, err := gql.ParseUid(corsRes.Me[i].Uid)
+		if err != nil {
+			return "", nil, err
+		}
+		corsRes.Me[i].UidInt = iUid
+	}
+	sort.Slice(corsRes.Me, func(i, j int) bool {
+		return corsRes.Me[i].UidInt < corsRes.Me[j].UidInt
+	})
+	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
+	corsLast := corsRes.Me[len(corsRes.Me)-1]
+	return corsLast.Uid, corsLast.DgraphCors, nil
 }
 
 // UpdateSchemaHistory updates graphql schema history.

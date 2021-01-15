@@ -28,8 +28,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"

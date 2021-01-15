@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -585,6 +585,14 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 					ValueType: pb.Posting_STRING,
 				}, {
 					Predicate: "dgraph.graphql.p_sha256hash",
+					ValueType: pb.Posting_STRING,
+				},
+			},
+		}, &pb.TypeUpdate{
+			TypeName: "dgraph.type.cors",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.cors",
 					ValueType: pb.Posting_STRING,
 				},
 			},

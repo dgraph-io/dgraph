@@ -28,8 +28,8 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"

@@ -33,8 +33,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 	"google.golang.org/protobuf/proto"
 

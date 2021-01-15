@@ -18,7 +18,7 @@ package bulk
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/testutil"
 
@@ -31,8 +31,8 @@ import (
 //}
 
 func TestMain(m *testing.M) {
-	schemaFile := path.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := path.Join(testutil.TestDataDirectory, "21million.rdf.gz")
+	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
 
 	if err := testutil.LiveLoad(testutil.LiveOpts{
 		Alpha:      testutil.ContainerAddr("alpha1", 9080),
