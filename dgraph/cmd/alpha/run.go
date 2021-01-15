@@ -670,6 +670,7 @@ func run() {
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
 		HmacSecret:           opts.HmacSecret,
+		AuditDir:             Alpha.Conf.GetString("audit_dir"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
