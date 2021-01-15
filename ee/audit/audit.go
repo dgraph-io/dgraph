@@ -20,9 +20,8 @@ type AuditEvent struct {
 	Endpoint    string
 	ReqType     string
 	Req         string
-	Status      int
+	Status      string
 	QueryParams map[string][]string
-	TimeTaken   int64
 }
 
 const (
@@ -44,7 +43,7 @@ func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 		return
 	}
 	auditor = &auditLogger{
-		tick: time.NewTicker(time.Second * 5),
+		tick: time.NewTicker(time.Minute * 5),
 	}
 	if eeEnabled() {
 		auditor.log = initlog(conf.GetString("audit_dir"))
@@ -64,17 +63,17 @@ func initlog(dir string) *x.Logger {
 	return logger
 }
 
+// trackIfEEValid tracks enterprise license of the cluster.
+// Right now alpha doesn't know about the enterprise/licence.
+// That's why we needed to track if the current node is part of enterprise edition cluster
 func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 	for {
 		select {
 		case <-auditor.tick.C:
-			if !eeEnabledFunc() {
-				if atomic.LoadUint32(&auditEnabled) != 0 {
-					atomic.StoreUint32(&auditEnabled, 0)
-					glog.Infof("audit logs are disabled")
-					auditor.log.Sync()
-					auditor.log = nil
-				}
+			if !eeEnabledFunc() && atomic.CompareAndSwapUint32(&auditEnabled, 1, 0) {
+				glog.Infof("audit logs are disabled")
+				auditor.log.Sync()
+				auditor.log = nil
 				continue
 			}
 
@@ -103,6 +102,5 @@ func (a *auditLogger) AuditEvent(event *AuditEvent) {
 		"req_type", event.ReqType,
 		"req_body", event.Req,
 		"query_param", event.QueryParams,
-		"status", event.Status,
-		"time", event.TimeTaken)
+		"status", event.Status)
 }
