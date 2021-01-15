@@ -48,7 +48,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	}
 
 	// map to graphql response structure
-	state := convertToGraphQLResp(ms)
+	state := convertToGraphQLResp(&ms)
 	b, err := json.Marshal(state)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -71,7 +71,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 // values and not the keys. For pb.MembershipState.Group, the keys are the group IDs
 // and pb.Group didn't contain this ID, so we are creating a custom clusterGroup type,
 // which is same as pb.Group and also contains the ID for the group.
-func convertToGraphQLResp(ms pb.MembershipState) membershipState {
+func convertToGraphQLResp(ms *pb.MembershipState) membershipState {
 	var state membershipState
 
 	state.Counter = ms.Counter

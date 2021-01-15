@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"google.golang.org/protobuf/proto"
 )
 
 func Test_version_String(t *testing.T) {

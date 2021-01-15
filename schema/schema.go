@@ -24,9 +24,9 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"google.golang.org/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
