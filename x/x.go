@@ -123,7 +123,7 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
-	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
+	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
