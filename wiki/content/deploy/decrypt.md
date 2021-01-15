@@ -9,7 +9,7 @@ You might need to decrypt data from an encrypted Dgraph cluster for a variety of
 reasons, including:
 
 * Migration of data from an encrypted cluster to a non-encrypted cluster
-* Making major changes to your data or schema by directly editing an RDF file or
+* Making large changes to your data or schema by directly editing an RDF file or
   schema file
 
 To support these scenarios, Dgraph includes a `decrypt`
