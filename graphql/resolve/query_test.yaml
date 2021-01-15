@@ -965,7 +965,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, "2.5")) OR (le(Author.dob, "2001-01-01")))) {
+      queryAuthor(func: type(Author)) @filter(((eq(Author.name, "A. N. Author") AND gt(Author.reputation, 2.5)) OR (le(Author.dob, "2001-01-01")))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -981,7 +981,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((le(Author.dob, "2001-01-01") AND gt(Author.reputation, "2.5"))))) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((le(Author.dob, "2001-01-01") AND gt(Author.reputation, 2.5))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -997,7 +997,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((gt(Author.reputation, "2.5") OR (le(Author.dob, "2001-01-01")))))) {
+      queryAuthor(func: type(Author)) @filter((eq(Author.name, "A. N. Author") OR ((gt(Author.reputation, 2.5) OR (le(Author.dob, "2001-01-01")))))) {
         name : Author.name
         dgraph.uid : uid
       }
@@ -1242,7 +1242,7 @@
     }
   dgquery: |-
     query {
-      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, "1.1") OR ((ge(Author.reputation, "1.1") OR ((lt(Author.reputation, "1.1") OR ((le(Author.reputation, "1.1") OR (eq(Author.reputation, "1.1")))))))))) {
+      queryAuthor(func: type(Author)) @filter((gt(Author.reputation, 1.1) OR ((ge(Author.reputation, 1.1) OR ((lt(Author.reputation, 1.1) OR ((le(Author.reputation, 1.1) OR (eq(Author.reputation, 1.1)))))))))) {
         name : Author.name
         dgraph.uid : uid
       }
