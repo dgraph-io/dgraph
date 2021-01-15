@@ -582,6 +582,7 @@ var preDefinedTypeMap = map[string]struct{}{
 	"dgraph.type.Rule":               {},
 	"dgraph.graphql.history":         {},
 	"dgraph.graphql.persisted_query": {},
+	"dgraph.type.cors":               {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.

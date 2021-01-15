@@ -93,6 +93,9 @@ type <dgraph.graphql> {
 	dgraph.graphql.schema
 	dgraph.graphql.xid
 }
+type <dgraph.type.cors> {
+	dgraph.cors
+}
 type <dgraph.graphql.history> {
 	dgraph.graphql.schema_history
 	dgraph.graphql.schema_created_at

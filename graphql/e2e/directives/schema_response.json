@@ -968,6 +968,14 @@
                 }
             ],
             "name": "test.dgraph.employee.en"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.cors"
+                }
+            ],
+            "name": "dgraph.type.cors"
         }
     ]
 }
