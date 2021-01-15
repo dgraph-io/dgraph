@@ -304,6 +304,7 @@ func (s Student) add(t *testing.T) {
 	require.JSONEq(t, result, string(gqlResponse.Data))
 }
 
+/*
 func TestAddMutationWithXid(t *testing.T) {
 	mutation := `
 	mutation addTweets($tweet: AddTweetsInput!){
@@ -339,6 +340,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)
 }
+*/
 
 func TestAuthWithDgraphDirective(t *testing.T) {
 	students := []Student{

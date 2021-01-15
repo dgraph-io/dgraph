@@ -354,18 +354,20 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 // after complete refactoring of mutation rewriter. It currently returns the
 // queries made by mutation rewriter to check for existence of nodes with given
 // XIDs and IDs.
-func NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error) {
+func NewRewrite(
+	ctx context.Context,
+	m schema.Mutation,
+	varGen *VariableGenerator,
+	xidMetadata *xidMetadata) ([]*gql.GraphQuery, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
-	varGen := NewVariableGenerator()
-	xidMd := newXidMetadata()
 
 	var ret []*gql.GraphQuery
 	var retErrors error
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		queries, errs := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMd)
+		queries, errs := getExistenceQueries(ctx, mutatedType, nil, varGen, obj, xidMetadata)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -380,6 +382,76 @@ func NewRewrite(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, erro
 	return ret, retErrors
 }
 
+func NewCreateMutations(
+	ctx context.Context,
+	m schema.Mutation,
+	varGen *VariableGenerator,
+	xidMetadata *xidMetadata,
+	existenceQueriesResult map[string]string) ([]*UpsertMutation, [][]*mutationFragment, error) {
+	mutatedType := m.MutatedType()
+	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
+
+	var ret []*UpsertMutation
+	var fragments []*mutationFragment
+	var frags [][]*mutationFragment
+	var retErrors error
+
+	for _, i := range val {
+		obj := i.(map[string]interface{})
+		fragment, errs := newRewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, existenceQueriesResult)
+		if len(errs) > 0 {
+			var gqlErrors x.GqlErrorList
+			for _, err := range errs {
+				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+
+			}
+			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+				"failed to rewrite mutation payload"))
+		}
+		fragments = append(fragments, fragment)
+		var tmp []*mutationFragment
+		tmp = append(tmp, fragment)
+		frags = append(frags, tmp)
+	}
+
+	mutationsAll := []*dgoapi.Mutation{}
+
+	buildMutations := func(mutationsAll []*dgoapi.Mutation, frag []*mutationFragment) []*dgoapi.Mutation {
+		mutations, _ := mutationsFromFragments(
+			frag,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+
+		mutationsAll = append(mutationsAll, mutations...)
+
+		return mutationsAll
+	}
+
+	mutationsAll = buildMutations(mutationsAll, fragments)
+	newNodes := make(map[string]schema.Type)
+	for _, frag := range fragments {
+		// squashFragments puts all the new nodes into the first fragment, so we only
+		// need to collect from there.
+		copyTypeMap(frag.newNodes, newNodes)
+	}
+
+	if len(mutationsAll) > 0 {
+		ret = append(ret, &UpsertMutation{
+			Mutations: mutationsAll,
+			NewNodes:  newNodes,
+		})
+	}
+
+	return ret, frags, retErrors
+}
+
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
 func (mrw *AddRewriter) FromMutationResult(
 	ctx context.Context,
@@ -392,6 +464,61 @@ func (mrw *AddRewriter) FromMutationResult(
 	uids := make([]uint64, 0)
 
 	for _, frag := range mrw.frags {
+		err := checkResult(frag, result)
+		errs = schema.AppendGQLErrs(errs, err)
+		if err != nil {
+			continue
+		}
+
+		node := strings.TrimPrefix(frag[0].
+			fragment.(map[string]interface{})["uid"].(string), "_:")
+		val, ok := assigned[node]
+		if !ok {
+			continue
+		}
+		uid, err := strconv.ParseUint(val, 0, 64)
+		if err != nil {
+			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+				"received %s as an assigned uid from Dgraph,"+
+					" but couldn't parse it as uint64",
+				assigned[node]))
+		}
+
+		uids = append(uids, uid)
+	}
+
+	if len(assigned) == 0 && errs == nil {
+		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
+	}
+
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	authRw := &authRewriter{
+		authVariables: customClaims.AuthVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      queryAuthSelector,
+		parentVarName: mutation.MutatedType().Name() + "Root",
+	}
+	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
+
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
+}
+
+func NewFromMutationResult(
+	ctx context.Context,
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{},
+	frags [][]*mutationFragment) ([]*gql.GraphQuery, error) {
+
+	var errs error
+
+	uids := make([]uint64, 0)
+
+	for _, frag := range frags {
 		err := checkResult(frag, result)
 		errs = schema.AppendGQLErrs(errs, err)
 		if err != nil {
@@ -1432,6 +1559,243 @@ func checkUIDExistsQuery(
 	return query, nil
 }
 
+func newAsIDReference(
+	ctx context.Context,
+	val interface{},
+	srcField schema.FieldDefinition,
+	srcUID string) *mutationFragment {
+
+	result := make(map[string]interface{}, 2)
+	frag := newFragment(result)
+
+	// No need to check if this is a valid UID. It is because this would have been checked
+	// in checkUIDExistsQuery function called from corresponding getExistenceQueries function.
+
+	result["uid"] = val // val will contain the UID string.
+
+	addInverseLink(result, srcField, srcUID)
+
+	// TODO: Additional Deletes
+	return frag
+
+}
+
+func newRewriteObject(
+	ctx context.Context,
+	typ schema.Type,
+	srcField schema.FieldDefinition,
+	srcUID string,
+	varGen *VariableGenerator,
+	obj map[string]interface{},
+	xidMetadata *xidMetadata,
+	existenceQueriesResult map[string]string) (*mutationFragment, []error) {
+
+	// There could be the following cases:
+	// 1. We need to create a new node.
+	// 2. We use an existing node and link it to the parent.
+	//    We may have to add an inverse edge in this case. But generally, no other amendments
+	//    to the node need to be done.
+	// Note that as similar traversal of input tree was carried with getExistenceQueries, we
+	// don't have to report the same errors.
+
+	var retErrors []error
+	variable := ""
+
+	id := typ.IDField()
+	if id != nil {
+		// Check if the ID field is referenced in the mutation
+		if idVal, ok := obj[id.Name()]; ok {
+			if idVal != nil {
+				// This node is referenced and must definitely exist.
+				// If it does not exist, we should be throwing an error.
+				// No need to add query if the UID is already been seen.
+
+				// Fetch corresponding variable name
+				variable = varGen.Next(typ, id.Name(), idVal.(string), false)
+
+				// Get whether UID exists or not from existenceQueriesResult
+				if _, ok := existenceQueriesResult[variable]; ok {
+					// UID exists.
+					return newAsIDReference(ctx, idVal, srcField, srcUID), nil
+
+				} else {
+					// Reference UID does not exist. This is an error.
+					err := errors.Errorf("Node with ID %s does not exist", idVal.(string))
+					retErrors = append(retErrors, err)
+					return nil, retErrors
+				}
+			}
+			// As the type has not been referenced by ID field, remove it so that it does
+			// not interfere with further processing.
+			delete(obj, id.Name())
+		}
+	}
+
+	xid := typ.XIDField()
+	var xidString string
+	if xid != nil {
+		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+			// TODO: Add a function for parsing idVal. This is repeatitive
+			switch xid.Type().Name() {
+			case "Int":
+				val, _ := xidVal.(int64)
+				xidString = strconv.FormatInt(val, 10)
+			case "Float":
+				val, _ := xidVal.(float64)
+				xidString = strconv.FormatFloat(val, 'f', -1, 64)
+			case "Int64":
+				fallthrough
+			default:
+				xidString, ok = xidVal.(string)
+			}
+			variable = varGen.Next(typ, xid.Name(), xidString, false)
+
+			// Three cases:
+			// 1. If the queryResult UID exists. Add a reference.
+			// 2. If the queryResult UID does not exist and this is the first time we are seeing
+			//    this. Then, return error.
+			// 3. The queryResult UID does not exist. But, this could be a reference to an XID
+			//    node added during the mutation rewriting. This is handled by adding the new blank UID
+			//    to existenceQueryResult.
+
+			// Get whether node with XID exists or not from existenceQueriesResult
+			if uid, ok := existenceQueriesResult[variable]; ok {
+				// node with XID exists. This is a reference.
+				return newAsIDReference(ctx, uid, srcField, srcUID), nil
+
+			} else {
+				// Node with XID does not exist. It means this is a new node.
+				// This node will be created later.
+				exclude := ""
+				if srcField != nil {
+					invField := srcField.Inverse()
+					if invField != nil {
+						exclude = invField.Name()
+					}
+				}
+				if err := typ.EnsureNonNulls(obj, exclude); err != nil {
+					// This object does not contain XID. This is an error.
+					retErrors = append(retErrors, err)
+					return nil, retErrors
+				}
+				// Set existenceQueryResult to _:variable. This is to make referencing to
+				// this node later easier.
+				existenceQueriesResult[variable] = fmt.Sprintf("_:%s", variable)
+			}
+		} else {
+			// This is an error as XID value has to exist no matter what.
+			err := errors.Errorf("XID field %s cannot be empty", xid.Name())
+			retErrors = append(retErrors, err)
+			return nil, retErrors
+		}
+	}
+
+	// This is not an XID reference. This is also not a UID reference.
+	// This is definitely a new node.
+	// Create new node
+	if variable == "" {
+		// This will happen in case when this is a new node and does not contain XID.
+		variable = varGen.Next(typ, "", "", false)
+	}
+
+	// myUID is used for referencing this node. It is set to _:variable
+	myUID := fmt.Sprintf("_:%s", variable)
+
+	// Assign dgraph.types attribute.
+	dgraphTypes := []string{typ.DgraphName()}
+	dgraphTypes = append(dgraphTypes, typ.Interfaces()...)
+
+	// Create newObj map. This map will be returned as part of mutationFragment.
+	newObj := make(map[string]interface{}, len(obj))
+	newObj["dgraph.type"] = dgraphTypes
+	newObj["uid"] = myUID
+
+	// Add Inverse Link if necessary
+	deleteInverseObject(obj, srcField)
+	addInverseLink(newObj, srcField, srcUID)
+
+	frag := newFragment(newObj)
+	frag.newNodes[variable] = typ
+
+	// Iterate on fields and call the same function recursively.
+	var fields []string
+	for field := range obj {
+		fields = append(fields, field)
+	}
+
+	for _, field := range fields {
+		val := obj[field]
+
+		fieldDef := typ.Field(field)
+		fieldName := typ.DgraphPredicate(field)
+
+		// This fixes mutation when dgraph predicate has special characters. PR #5526
+		if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+			fieldName = fieldName[1 : len(fieldName)-1]
+		}
+
+		switch val := val.(type) {
+		case map[string]interface{}:
+			if fieldDef.Type().IsUnion() {
+				fieldMutationFragment, err := newRewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, existenceQueriesResult)
+				newObj[fieldName] = fieldMutationFragment.fragment
+				copyTypeMap(fieldMutationFragment.newNodes, frag.newNodes)
+				retErrors = append(retErrors, err...)
+			} else if fieldDef.Type().IsGeo() {
+				newObj[fieldName] = newFragment(
+					map[string]interface{}{
+						"type":        fieldDef.Type().Name(),
+						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
+					},
+				)
+			} else {
+				fieldMutationFragment, err := newRewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, existenceQueriesResult)
+				newObj[fieldName] = fieldMutationFragment.fragment
+				copyTypeMap(fieldMutationFragment.newNodes, frag.newNodes)
+				retErrors = append(retErrors, err...)
+			}
+		case []interface{}:
+			var mutationFragments []interface{}
+			var fieldMutationFragment *mutationFragment
+			var err []error
+			for _, object := range val {
+				switch object := object.(type) {
+				// TODO: Check if one needs to consider the case of geo object. Also check if type for list is same as object
+				case map[string]interface{}:
+					if fieldDef.Type().IsUnion() {
+						fieldMutationFragment, err = newRewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, existenceQueriesResult)
+					} else {
+						fieldMutationFragment, err = newRewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, existenceQueriesResult)
+					}
+					mutationFragments = append(mutationFragments, fieldMutationFragment.fragment)
+					copyTypeMap(fieldMutationFragment.newNodes, frag.newNodes)
+					retErrors = append(retErrors, err...)
+				default:
+					// This is a scalar list.
+					mutationFragments = append(mutationFragments, object)
+				}
+
+			}
+			if newObj[fieldName] != nil {
+				newObj[fieldName] = append(newObj[fieldName].([]interface{}), mutationFragments...)
+			} else {
+				newObj[fieldName] = mutationFragments
+			}
+		default:
+			// This field is either a scalar value or a null.
+			// Fields with ID directive cannot have empty values. Checking it here.
+			if fieldDef.HasIDDirective() && val == "" {
+				err := fmt.Errorf("encountered an empty value for @id field `%s`", fieldName)
+				retErrors = append(retErrors, err)
+				return nil, retErrors
+			}
+			newObj[fieldName] = val
+		}
+	}
+
+	return frag, retErrors
+}
+
 func getExistenceQueries(
 	ctx context.Context,
 	typ schema.Type,
@@ -1455,7 +1819,7 @@ func getExistenceQueries(
 				}
 				// Mark this UID as seen.
 				xidMetadata.seenUIDs[idVal.(string)] = true
-				variable := varGen.Next(typ, "", "", false)
+				variable := varGen.Next(typ, id.Name(), idVal.(string), false)
 
 				xidMetadata.idToVariable[idVal.(string)] = variable
 
@@ -1544,6 +1908,7 @@ func getExistenceQueries(
 	for field := range obj {
 		fields = append(fields, field)
 	}
+
 	for _, field := range fields {
 		val := obj[field]
 
@@ -1635,6 +2000,26 @@ func getExistenceQueriesUnion(
 		obj = memberRefVal.(map[string]interface{})
 	}
 	return getExistenceQueries(ctx, newtyp, srcField, varGen, obj, xidMetadata)
+}
+
+func newRewriteUnionField(
+	ctx context.Context,
+	srcField schema.FieldDefinition,
+	srcUID string,
+	varGen *VariableGenerator,
+	obj map[string]interface{},
+	xidMetadata *xidMetadata,
+	existenceQueriesResult map[string]string) (*mutationFragment, []error) {
+
+	var newtyp schema.Type
+	for memberRef, memberRefVal := range obj {
+		memberTypeName := strings.ToUpper(memberRef[:1]) + memberRef[1:len(
+			memberRef)-3]
+		srcField = srcField.WithMemberType(memberTypeName)
+		newtyp = srcField.Type()
+		obj = memberRefVal.(map[string]interface{})
+	}
+	return newRewriteObject(ctx, newtyp, srcField, srcUID, varGen, obj, xidMetadata, existenceQueriesResult)
 }
 
 // if this is a union field, then obj should have only one key which will be a ref
