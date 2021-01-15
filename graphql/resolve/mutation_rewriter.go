@@ -1619,6 +1619,8 @@ func newRewriteObject(
 					return newAsIDReference(ctx, idVal, srcField, srcUID), nil
 
 				} else {
+					// Maybe don't throw error depending on current behaviour.
+
 					// Reference UID does not exist. This is an error.
 					err := errors.Errorf("Node with ID %s does not exist", idVal.(string))
 					retErrors = append(retErrors, err)
@@ -1742,12 +1744,11 @@ func newRewriteObject(
 				copyTypeMap(fieldMutationFragment.newNodes, frag.newNodes)
 				retErrors = append(retErrors, err...)
 			} else if fieldDef.Type().IsGeo() {
-				newObj[fieldName] = newFragment(
+				newObj[fieldName] =
 					map[string]interface{}{
 						"type":        fieldDef.Type().Name(),
 						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
-					},
-				)
+					}
 			} else {
 				fieldMutationFragment, err := newRewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, existenceQueriesResult)
 				newObj[fieldName] = fieldMutationFragment.fragment
@@ -1760,10 +1761,16 @@ func newRewriteObject(
 			var err []error
 			for _, object := range val {
 				switch object := object.(type) {
-				// TODO: Check if one needs to consider the case of geo object. Also check if type for list is same as object
 				case map[string]interface{}:
 					if fieldDef.Type().IsUnion() {
 						fieldMutationFragment, err = newRewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, existenceQueriesResult)
+					} else if fieldDef.Type().IsGeo() {
+						fieldMutationFragment = newFragment(
+							map[string]interface{}{
+								"type":        fieldDef.Type().Name(),
+								"coordinates": rewriteGeoObject(object, fieldDef.Type()),
+							},
+						)
 					} else {
 						fieldMutationFragment, err = newRewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, existenceQueriesResult)
 					}
