@@ -22,18 +22,20 @@
 
 syntax = "proto3";
 
-package pb;
+/* package pb; */
 
-import "api.proto";
+import "github.com/dgraph-io/dgo/v200/protos/api.proto";
 import "github.com/dgraph-io/badger/v2/pb/pb.proto";
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
+/* option go_package = "github.com/dgraph-io/dgraph/protos/pb"; */
 /* import "gogoproto/gogo.proto"; */
 
 /* option (gogoproto.marshaler_all) = true; */
 /* option (gogoproto.sizer_all) = true; */
 /* option (gogoproto.unmarshaler_all) = true; */
 /* option (gogoproto.goproto_getters_all) = true; */
+
+option go_package = "github.com/dgraph-io/dgraph/protos/pb";
 
 message List {
 	repeated fixed64 uids = 1;
@@ -124,14 +126,14 @@ message RaftContext {
 // one RAFT node per server serving that group.
 message Member {
 	fixed64 id = 1;
-	uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];
+	uint32 group_id = 2;
 	string addr = 3;
 	bool leader = 4;
-	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
-	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
+	bool am_dead = 5;
+	uint64 last_update = 6;
 
-	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
-	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
+	bool cluster_info_only = 13;
+	bool force_group_id = 14;
 }
 
 message Group {
@@ -199,14 +201,14 @@ message HealthInfo {
 }
 
 message Tablet {
-    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+    uint32 group_id = 1; // Served by which group.
     string predicate = 2;
     bool force = 3; // Used while moving predicate.
     int64 on_disk_bytes = 7;
     bool remove = 8;
-    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
-	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
+    bool read_only = 9; // If true, do not ask zero to serve any tablets.
+    uint64 move_ts = 10;
+    int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
 
 message DirectedEdge {

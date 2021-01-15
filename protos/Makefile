@@ -16,7 +16,6 @@
 
 DGO_PATH    := github.com/dgraph-io/dgo/v200
 BADGER_PATH := github.com/dgraph-io/badger/v2
-GOGO_PATH   := github.com/gogo/protobuf
 
 TMPDIR     := $(shell mktemp -d)
 PROTO_PATH := ${TMPDIR}/src:.
@@ -35,17 +34,14 @@ clean:
 check:
 	@./depcheck.sh && \
 		(echo "Installing proto libraries to versions in go.mod." ; \
-		go install github.com/golang/protobuf/protoc-gen-go ; \
-		go install github.com/gogo/protobuf/protoc-gen-gofast)
+		go install github.com/golang/protobuf/protoc-gen-go )
 
 .PHONY: copy-protos
 copy-protos:
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
-	@mkdir -p ${TMPDIR}/src/${GOGO_PATH}/gogoproto
 	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb2.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
 regenerate: copy-protos check clean
@@ -53,7 +49,8 @@ regenerate: copy-protos check clean
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
+		--go_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
+		--go_opt=paths=source_relative \
 		pb.proto
 	@rm -rf ${TMPDIR}
 	@echo Done.

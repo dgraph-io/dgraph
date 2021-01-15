@@ -24,8 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	humanize "github.com/dustin/go-humanize"
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 )
 
 // proposeTrialLicense proposes an enterprise license valid for 30 days.

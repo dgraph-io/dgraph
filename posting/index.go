@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
@@ -692,7 +693,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	tmpStream.Send = func(buf *z.Buffer) error {
 		return buf.SliceIterate(func(slice []byte) error {
 			kv := &bpb.KV{}
-			if err := kv.Unmarshal(slice); err != nil {
+			if err := proto.Unmarshal(slice, kv); err != nil {
 				return err
 			}
 			if len(kv.Value) == 0 {

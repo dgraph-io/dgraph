@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -316,16 +317,16 @@ func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 	}
 	bk := parsedKey.ToBackupKey()
 
-	out := tl.alloc.Allocate(bk.Size())
-	n, err := bk.MarshalToSizedBuffer(out)
-	return out[:n], err
+	out := tl.alloc.Allocate(proto.Size(bk))
+	out, err = proto.MarshalOptions{}.MarshalAppend(out, bk)
+	return out, err
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {
-	if err := binary.Write(w, binary.LittleEndian, uint64(list.Size())); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, uint64(proto.Size(list))); err != nil {
 		return err
 	}
-	buf, err := list.Marshal()
+	buf, err := proto.Marshal(list)
 	if err != nil {
 		return err
 	}

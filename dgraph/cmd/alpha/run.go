@@ -61,6 +61,7 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/protobuf/proto"
 
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
@@ -814,7 +815,7 @@ func listenForCorsUpdate(closer *z.Closer) {
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
-		err := pl.Unmarshal(kv.GetValue())
+		err := proto.Unmarshal(kv.GetValue(), pl)
 		if err != nil {
 			glog.Errorf("Unable to unmarshal the posting list for cors update %s", err)
 			return

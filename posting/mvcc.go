@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -320,7 +320,7 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 			// empty pl
 			return nil
 		}
-		return plist.Unmarshal(val)
+		return proto.Unmarshal(val, plist)
 	})
 }
 
@@ -391,7 +391,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
-				if err := pl.Unmarshal(val); err != nil {
+				if err := proto.Unmarshal(val, pl); err != nil {
 					return err
 				}
 				pl.CommitTs = item.Version()

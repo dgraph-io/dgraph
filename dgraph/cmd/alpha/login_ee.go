@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +53,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jwt := &api.Jwt{}
-	if err := jwt.Unmarshal(resp.Json); err != nil {
+	if err := proto.Unmarshal(resp.Json, jwt); err != nil {
 		x.SetStatusWithData(w, x.Error, err.Error())
 	}
 

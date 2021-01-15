@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
 
@@ -441,7 +441,7 @@ func Load(predicate string) error {
 	}
 	var s pb.SchemaUpdate
 	err = item.Value(func(val []byte) error {
-		x.Check(s.Unmarshal(val))
+		x.Check(proto.Unmarshal(val, &s))
 		return nil
 	})
 	if err != nil {
@@ -486,7 +486,7 @@ func LoadSchemaFromDb() error {
 			if len(val) == 0 {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
-			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+			x.Checkf(proto.Unmarshal(val, &s), "Error while loading schema from db")
 			State().Set(attr, &s)
 			return nil
 		})
@@ -522,7 +522,7 @@ func LoadTypesFromDb() error {
 			if len(val) == 0 {
 				t = pb.TypeUpdate{TypeName: attr}
 			}
-			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
+			x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
 			State().SetType(attr, t)
 			return nil
 		})

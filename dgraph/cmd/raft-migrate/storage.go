@@ -27,12 +27,13 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	raftproto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
+	"google.golang.org/protobuf/proto"
 )
 
 // versionKey is hardcoded into the special key used to fetch the maximum version from the DB.
@@ -248,7 +249,7 @@ func (w *OldDiskStorage) StoreRaftId(id uint64) error {
 // UpdateCheckpoint writes the given snapshot to disk.
 func (w *OldDiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
 	return w.update(func(txn *badger.Txn) error {
-		data, err := snap.Marshal()
+		data, err := proto.Marshal(snap)
 		if err != nil {
 			return err
 		}
@@ -269,7 +270,7 @@ func (w *OldDiskStorage) Checkpoint() (uint64, error) {
 		}
 		return item.Value(func(val []byte) error {
 			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
+			if err := proto.Unmarshal(val, &snap); err != nil {
 				return err
 			}
 			applied = snap.Index
@@ -476,7 +477,7 @@ func (w *OldDiskStorage) setSnapshot(batch *badger.WriteBatch, s *raftpb.Snapsho
 		}
 	}
 	// Cache snapshot.
-	w.cache.Store(snapshotKey, proto.Clone(s))
+	w.cache.Store(snapshotKey, raftproto.Clone(s))
 	return nil
 }
 

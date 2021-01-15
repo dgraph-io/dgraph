@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	cindex "github.com/google/codesearch/index"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
@@ -38,7 +39,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		ReadTs: arg.q.ReadTs,
 		First:  int(arg.q.First),
 	}
-	if intersect.Size() > 0 {
+	if proto.Size(intersect) > 0 {
 		opts.Intersect = intersect
 	}
 
@@ -65,7 +66,7 @@ func uidsForRegex(attr string, arg funcArgs,
 				algo.IntersectWith(results, trigramUids, results)
 			}
 
-			if results.Size() == 0 {
+			if proto.Size(results) == 0 {
 				return results, nil
 			}
 		}
@@ -79,7 +80,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results.Size() == 0 {
+			if proto.Size(results) == 0 {
 				return results, nil
 			}
 		}

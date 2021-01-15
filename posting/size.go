@@ -110,7 +110,7 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 
 	// XXX_unrecognized take one byte.
 	// Adding size of each entry.
-	size += uint64(cap(list.XXX_unrecognized))
+	// size += uint64(cap(list.XXX_unrecognized))
 
 	return size
 }
@@ -149,7 +149,7 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 	}
 
 	// Add the size of each entry in XXX_unrecognized array.
-	size += uint64(cap(posting.XXX_unrecognized))
+	// size += uint64(cap(posting.XXX_unrecognized))
 
 	return size
 }
@@ -175,7 +175,7 @@ func calculatePackSize(pack *pb.UidPack) uint64 {
 	}
 	// Adding the size each entry in XXX_unrecognized array.
 	// Each entry consumes 1 word.
-	size += uint64(cap(pack.XXX_unrecognized))
+	// size += uint64(cap(pack.XXX_unrecognized))
 
 	return size
 }
@@ -198,7 +198,7 @@ func calculateUIDBlock(block *pb.UidBlock) uint64 {
 	size += uint64(cap(block.Deltas))
 
 	// Adding the size of each entry in XXX_unrecognized array.
-	size += uint64(cap(block.XXX_unrecognized))
+	// size += uint64(cap(block.XXX_unrecognized))
 
 	return size
 }
@@ -231,6 +231,6 @@ func calculateFacet(facet *api.Facet) uint64 {
 	// Adding size of each entry in Alias Array.
 	size += uint64(len(facet.Alias))
 	// Adding size of each entry in XXX_unrecognized array.
-	size += uint64(len(facet.XXX_unrecognized))
+	// size += uint64(len(facet.XXX_unrecognized))
 	return size
 }

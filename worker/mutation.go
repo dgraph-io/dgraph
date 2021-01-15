@@ -25,6 +25,7 @@ import (
 	"time"
 
 	ostats "go.opencensus.io/stats"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -265,7 +266,7 @@ func updateSchema(s *pb.SchemaUpdate) error {
 	schema.State().DeleteMutSchema(s.Predicate)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	data, err := s.Marshal()
+	data, err := proto.Marshal(s)
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
 		Key:      x.SchemaKey(s.Predicate),
@@ -320,7 +321,7 @@ func updateType(typeName string, t pb.TypeUpdate) error {
 	schema.State().SetType(typeName, t)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	data, err := t.Marshal()
+	data, err := proto.Marshal(&t)
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
 		Key:      x.TypeKey(typeName),

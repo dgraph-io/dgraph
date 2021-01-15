@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/ristretto/z"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -290,7 +291,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		val, err := item.ValueCopy(nil)
 		x.Check(err)
 		var plist pb.PostingList
-		x.Check(plist.Unmarshal(val))
+		x.Check(proto.Unmarshal(val, &plist))
 
 		x.AssertTrue(len(plist.Postings) <= 1)
 		var num int
@@ -397,21 +398,21 @@ func history(lookup []byte, itr *badger.Iterator) {
 		fmt.Fprintln(&buf)
 		if meta&posting.BitDeltaPosting > 0 {
 			plist := &pb.PostingList{}
-			x.Check(plist.Unmarshal(val))
+			x.Check(proto.Unmarshal(val, plist))
 			for _, p := range plist.Postings {
 				appendPosting(&buf, p)
 			}
 		}
 		if meta&posting.BitCompletePosting > 0 {
 			var plist pb.PostingList
-			x.Check(plist.Unmarshal(val))
+			x.Check(proto.Unmarshal(val, &plist))
 
 			for _, p := range plist.Postings {
 				appendPosting(&buf, p)
 			}
 
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
+				codec.ExactLen(plist.Pack), proto.Size(plist.Pack))
 			dec := codec.Decoder{Pack: plist.Pack}
 			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
 				for _, uid := range uids {
@@ -645,7 +646,7 @@ func printKeys(db *badger.DB) {
 		var count int
 		err := buf.SliceIterate(func(s []byte) error {
 			var kv bpb.KV
-			if err := kv.Unmarshal(s); err != nil {
+			if err := proto.Unmarshal(s, &kv); err != nil {
 				return err
 			}
 			x.Check2(w.Write(kv.Value))

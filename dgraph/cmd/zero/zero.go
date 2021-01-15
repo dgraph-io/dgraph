@@ -33,8 +33,8 @@ import (
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -255,7 +255,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 func (s *Server) MarshalMembershipState() ([]byte, error) {
 	s.Lock()
 	defer s.Unlock()
-	return s.state.Marshal()
+	return proto.Marshal(s.state)
 }
 
 func (s *Server) membershipState() *pb.MembershipState {

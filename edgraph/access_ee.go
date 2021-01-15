@@ -40,6 +40,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type predsAndvars struct {
@@ -102,7 +103,7 @@ func (s *Server) Login(ctx context.Context,
 		RefreshJwt: refreshJwt,
 	}
 
-	jwtBytes, err := loginJwt.Marshal()
+	jwtBytes, err := proto.Marshal(&loginJwt)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
@@ -137,7 +138,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate: "+
+			return nil, errors.Errorf("unable to authenticate: " +
 				"invalid username or password")
 		}
 
@@ -154,7 +155,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate: "+
+		return nil, errors.Errorf("unable to authenticate: " +
 			"invalid username or password")
 	}
 	if !user.PasswordMatch {

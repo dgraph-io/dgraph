@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/protobuf/proto"
 
 	ostats "go.opencensus.io/stats"
 	tag "go.opencensus.io/tag"
@@ -195,15 +196,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
-	data := make([]byte, 8+proposal.Size())
-	binary.BigEndian.PutUint64(data, key)
-	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data, err := proto.Marshal(proposal)
 	if err != nil {
 		return err
 	}
+	bkey := make([]byte, 8)
+	binary.BigEndian.PutUint64(bkey, key)
 
-	// Trim data to the new size after Marshal.
-	data = data[:8+sz]
+	data = append(bkey, data...)
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "n.proposeAndWait")

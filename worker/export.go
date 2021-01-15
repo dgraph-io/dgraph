@@ -35,6 +35,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
@@ -635,7 +636,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		case pk.IsSchema():
 			var update pb.SchemaUpdate
 			err := item.Value(func(val []byte) error {
-				return update.Unmarshal(val)
+				return proto.Unmarshal(val, &update)
 			})
 			if err != nil {
 				// Let's not propagate this error. We just log this and continue onwards.
@@ -647,7 +648,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		case pk.IsType():
 			var update pb.TypeUpdate
 			err := item.Value(func(val []byte) error {
-				return update.Unmarshal(val)
+				return proto.Unmarshal(val, &update)
 			})
 			if err != nil {
 				// Let's not propagate this error. We just log this and continue onwards.
@@ -755,7 +756,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		kv := &bpb.KV{}
 		return buf.SliceIterate(func(s []byte) error {
 			kv.Reset()
-			if err := kv.Unmarshal(s); err != nil {
+			if err := proto.Unmarshal(s, kv); err != nil {
 				return err
 			}
 			// Skip nodes that have no data. Otherwise, the exported data could have

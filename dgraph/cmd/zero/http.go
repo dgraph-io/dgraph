@@ -23,9 +23,10 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 )
 
@@ -89,11 +90,13 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{EmitDefaults: true}
-	if err := m.Marshal(w, ids); err != nil {
+	var buf []byte
+	m := protojson.MarshalOptions{EmitUnpopulated: true}
+	if buf, err = m.Marshal(ids); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
+	w.Write(buf)
 }
 
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
@@ -224,11 +227,14 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{EmitDefaults: true}
-	if err := m.Marshal(w, mstate); err != nil {
+	var buf []byte
+	var err error
+	m := protojson.MarshalOptions{EmitUnpopulated: true}
+	if buf, err = m.Marshal(mstate); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
+	w.Write(buf)
 }
 
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {

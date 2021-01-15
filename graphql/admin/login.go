@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 )
 
 type loginInput struct {
@@ -46,7 +47,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 	}
 
 	jwt := &dgoapi.Jwt{}
-	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
+	if err := proto.Unmarshal(resp.GetJson(), jwt); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 

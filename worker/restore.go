@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -133,7 +134,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 		}
 
 		list := &bpb.KVList{}
-		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
+		if err := proto.Unmarshal(unmarshalBuf[:sz], list); err != nil {
 			return 0, err
 		}
 
@@ -173,11 +174,11 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 			switch kv.GetUserMeta()[0] {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 				backupPl := &pb.BackupPostingList{}
-				if err := backupPl.Unmarshal(kv.Value); err != nil {
+				if err := proto.Unmarshal(kv.Value, backupPl); err != nil {
 					return 0, errors.Wrapf(err, "while reading backup posting list")
 				}
 				pl := posting.FromBackupPostingList(backupPl)
-				shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
+				shouldSplit := proto.Size(pl) >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
 
 				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 					// This covers two cases.
@@ -251,7 +252,7 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 
 func fromBackupKey(key []byte) ([]byte, error) {
 	backupKey := &pb.BackupKey{}
-	if err := backupKey.Unmarshal(key); err != nil {
+	if err := proto.Unmarshal(key, backupKey); err != nil {
 		return nil, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
 	}
 	return x.FromBackupKey(backupKey), nil

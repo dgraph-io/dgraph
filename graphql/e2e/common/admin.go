@@ -17,7 +17,6 @@
 package common
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io/ioutil"
@@ -25,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -471,7 +470,7 @@ func adminState(t *testing.T) {
 	defer resp.Body.Close()
 	stateRes, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
+	require.NoError(t, protojson.Unmarshal(stateRes, &state))
 
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)

@@ -17,7 +17,6 @@
 package edgraph
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,7 +29,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
@@ -41,6 +39,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -976,13 +975,14 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	m := jsonpb.Marshaler{EmitDefaults: true}
-	var jsonState bytes.Buffer
-	if err := m.Marshal(&jsonState, ms); err != nil {
+	m := protojson.MarshalOptions{EmitUnpopulated: true}
+	var jsonState []byte
+	var err error
+	if jsonState, err = m.Marshal(ms); err != nil {
 		return nil, errors.Errorf("Error marshalling state information to JSON")
 	}
 
-	return &api.Response{Json: jsonState.Bytes()}, nil
+	return &api.Response{Json: jsonState}, nil
 }
 
 // Query handles queries or mutations

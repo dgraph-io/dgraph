@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 )
 
 type subMutation struct {
@@ -153,7 +154,7 @@ func (e *executor) worker(mut *mutation) {
 	var esize int64
 	ptxn := posting.NewTxn(payload.startTs)
 	for _, edge := range payload.edges {
-		esize += int64(edge.Size())
+		esize += int64(proto.Size(edge))
 		for {
 			err := runMutation(payload.ctx, edge, ptxn)
 			if err == nil {
@@ -305,7 +306,7 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 			payload = payloadMap[edge.Attr]
 		}
 		payload.edges = append(payload.edges, edge)
-		esize += int64(edge.Size())
+		esize += int64(proto.Size(edge))
 	}
 
 	// Lock() in case the channel gets closed from underneath us.

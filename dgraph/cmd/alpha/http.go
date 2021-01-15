@@ -42,9 +42,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func allowed(method string) bool {
@@ -571,8 +571,9 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO(Naman): Confirm if this is correct way.
 	op := &api.Operation{}
-	if err := jsonpb.UnmarshalString(string(b), op); err != nil {
+	if err := protojson.Unmarshal(b, op); err != nil {
 		op.Schema = string(b)
 	}
 

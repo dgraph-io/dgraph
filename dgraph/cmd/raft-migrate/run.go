@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.etcd.io/etcd/raft/raftpb"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -74,11 +75,11 @@ func parseAndConvertSnapshot(snap *raftpb.Snapshot) {
 	var ms pb.MembershipState
 	var zs pb.ZeroSnapshot
 	var err error
-	x.Check(ms.Unmarshal(snap.Data))
+	x.Check(proto.Unmarshal(snap.Data, &ms))
 	zs.State = &ms
 	zs.Index = snap.Metadata.Index
 	// It is okay to not set zs.CheckpointTs as it is used for purgeBelow.
-	snap.Data, err = zs.Marshal()
+	snap.Data, err = proto.Marshal(&zs)
 	x.Check(err)
 }
 

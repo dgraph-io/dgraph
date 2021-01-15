@@ -33,6 +33,7 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
+	"google.golang.org/protobuf/proto"
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
@@ -271,7 +272,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.DeletePeer(cc.NodeID)
 	} else if len(cc.Context) > 0 {
 		var rc pb.RaftContext
-		x.Check(rc.Unmarshal(cc.Context))
+		x.Check(proto.Unmarshal(cc.Context, &rc))
 		n.Connect(rc.Id, rc.Addr)
 	}
 
@@ -605,7 +606,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		glog.Infof("Creating snapshot at Index: %d, ReadTs: %d\n", snap.Index, snap.ReadTs)
 
-		data, err := snap.Marshal()
+		data, err := proto.Marshal(snap)
 		x.Check(err)
 		for {
 			// We should never let CreateSnapshot have an error.
@@ -686,7 +687,7 @@ func (n *node) processApplyCh() {
 
 			var proposal pb.Proposal
 			key := binary.BigEndian.Uint64(entry.Data[:8])
-			x.Check(proposal.Unmarshal(entry.Data[8:]))
+			x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
 			proposal.Index = entry.Index
 
 			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
@@ -838,7 +839,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 		return nil, err
 	}
 	res := &pb.Snapshot{}
-	if err := res.Unmarshal(snap.Data); err != nil {
+	if err := proto.Unmarshal(snap.Data, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -908,9 +909,8 @@ func (n *node) proposeSnapshot(discardN int) error {
 		Snapshot: snap,
 	}
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
-	data := make([]byte, 8+proposal.Size())
-	sz, err := proposal.MarshalToSizedBuffer(data[8:])
-	data = data[:8+sz]
+	data, err := proto.Marshal(proposal)
+	data = append(make([]byte, 8), data...)
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
 }
@@ -1135,7 +1135,7 @@ func (n *node) Run() {
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
 				var snap pb.Snapshot
-				x.Check(snap.Unmarshal(rd.Snapshot.Data))
+				x.Check(proto.Unmarshal(rd.Snapshot.Data, &snap))
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
@@ -1239,7 +1239,7 @@ func (n *node) Run() {
 						}
 						if x.WorkerConfig.LudicrousMode {
 							var p pb.Proposal
-							if err := p.Unmarshal(entry.Data[8:]); err != nil {
+							if err := proto.Unmarshal(entry.Data[8:], &p); err != nil {
 								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
 									err, entry.Data)
 								break
@@ -1509,7 +1509,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 	var snap pb.Snapshot
 	if len(rsnap.Data) > 0 {
-		if err := snap.Unmarshal(rsnap.Data); err != nil {
+		if err := proto.Unmarshal(rsnap.Data, &snap); err != nil {
 			return nil, err
 		}
 	}
@@ -1567,7 +1567,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				continue
 			}
 			var proposal pb.Proposal
-			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
+			if err := proto.Unmarshal(entry.Data[8:], &proposal); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return nil, err
 			}

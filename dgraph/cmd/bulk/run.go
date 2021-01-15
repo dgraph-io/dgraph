@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
@@ -312,7 +313,7 @@ func run() {
 		}
 
 		var bulkMeta pb.BulkMeta
-		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
+		if err = proto.Unmarshal(bulkMetaData, &bulkMeta); err != nil {
 			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
 			os.Exit(1)
 		}
@@ -327,7 +328,7 @@ func run() {
 			EdgeCount: loader.prog.mapEdgeCount,
 			SchemaMap: loader.schema.schemaMap,
 		}
-		bulkMetaData, err := bulkMeta.Marshal()
+		bulkMetaData, err := proto.Marshal(&bulkMeta)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)
