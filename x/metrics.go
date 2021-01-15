@@ -318,6 +318,10 @@ func init() {
 }
 
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
+// metrics name and description are supposed to be same
+// but badger v3 was released after dgraph v20.11.
+// Hence to maintain the backward compatibility, name has been upgraded but not the description.
+// This will be fixed in next major release.
 func NewBadgerCollector() prometheus.Collector {
 	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_v3_disk_reads_total": prometheus.NewDesc(
