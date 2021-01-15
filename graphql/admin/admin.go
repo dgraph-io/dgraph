@@ -325,7 +325,7 @@ const (
 		config(input: ConfigInput!): ConfigPayload
 
 		replaceAllowedCORSOrigins(origins: [String]): Cors
-		
+
 		` + adminMutations + `
 	}
  `
