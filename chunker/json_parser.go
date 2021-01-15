@@ -618,13 +618,11 @@ const (
 	DeleteNquads
 )
 
-// FastParseJSON currently parses NQuads about 50% faster than ParseJSON.
-//
-// NOTE: FastParseJSON uses simdjson which has "minor floating point number
-//       imprecisions"
+// FastParseJSON currently parses NQuads about 30% faster than ParseJSON.
 func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if !simdjson.SupportedCPU() {
-		return errors.New("CPU doesn't support simdjson for fast parsing")
+		// default to slower / old parser
+		return buf.ParseJSON(b, op)
 	}
 	// parse the json into tape format
 	tape, err := simdjson.Parse(b, nil)
