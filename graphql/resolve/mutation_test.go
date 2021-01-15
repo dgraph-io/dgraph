@@ -277,7 +277,9 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 			// rewriterToTest := rewriterFactory()
 
 			// -- Act --
-			queries, err := NewRewrite(context.Background(), mut)
+			varGen := NewVariableGenerator()
+			xidMd := newXidMetadata()
+			queries, err := NewRewrite(context.Background(), mut, varGen, xidMd)
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)

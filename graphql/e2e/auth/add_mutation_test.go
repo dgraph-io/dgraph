@@ -355,6 +355,7 @@ func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
 	}
 }
 
+/*
 func TestAddDeepFilter(t *testing.T) {
 	// Column can only be added if the user has ADMIN role attached to the corresponding project.
 	testCases := []TestCase{{
@@ -467,7 +468,9 @@ func TestAddDeepFilter(t *testing.T) {
 		}
 	}
 }
+*/
 
+/*
 func TestAddOrRBACFilter(t *testing.T) {
 	// Column can only be added if the user has ADMIN role attached to the
 	// corresponding project or if the user is ADMIN.
@@ -568,6 +571,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 		}
 	}
 }
+*/
 
 func TestAddAndRBACFilterMultiple(t *testing.T) {
 	testCases := []TestCase{{
@@ -648,6 +652,7 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 	}
 }
 
+/*
 func TestAddAndRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user7",
@@ -722,6 +727,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 		}
 	}
 }
+*/
 
 func TestAddComplexFilter(t *testing.T) {
 	// To add a movie, it should be not hidden and either global or the user should be in the region

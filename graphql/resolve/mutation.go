@@ -202,6 +202,7 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
 	var mutResp *dgoapi.Response
+	req := &dgoapi.Request{}
 	commit := false
 
 	defer func() {
@@ -241,9 +242,55 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 	var upserts []*UpsertMutation
 	var err error
+	var frags [][]*mutationFragment
 	switch mr.mutationRewriter.(type) {
 	case *AddRewriter:
-		// queries, err := NewRewrite(ctx, mutation)
+		varGen := NewVariableGenerator()
+		xidMd := newXidMetadata()
+		queries, err := NewRewrite(ctx, mutation, varGen, xidMd)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
+				resolverFailed
+		}
+		// Execute queries and parse its result into a map
+		qry := dgraph.AsString(queries)
+		req.Query = qry
+		req.ReadOnly = true
+		var mutResp *dgoapi.Response
+		if req.Query != "" {
+			mutResp, err = mr.executor.Execute(ctx, req)
+		}
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+
+		req.ReadOnly = false // Setting it to false as future requests are mutations and not requests.
+
+		// Parse the result now.
+		queryResultMap := make(map[string][]map[string]string)
+		if mutResp != nil {
+			err = json.Unmarshal(mutResp.Json, &queryResultMap)
+		}
+
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+
+		existenceQueriesResult := make(map[string]string)
+		for key, result := range queryResultMap {
+			if len(result) == 1 {
+				// Found exactly one UID / XID corresponding to given condition
+				existenceQueriesResult[key] = result[0]["uid"]
+			}
+			// TODO: Handle and throw proper error if len(result) > 1. Ideally this should not happen.
+		}
+
+		// Create mutations and new nodes depending on result of queries.
+		upserts, frags, err = NewCreateMutations(ctx, mutation, varGen, xidMd, existenceQueriesResult)
 
 	default:
 		upserts, err = mr.mutationRewriter.Rewrite(ctx, mutation)
@@ -267,7 +314,6 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 
 	result := make(map[string]interface{})
-	req := &dgoapi.Request{}
 	newNodes := make(map[string]schema.Type)
 
 	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
@@ -303,7 +349,14 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 
 	var errs error
-	dgQuery, err := mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
+	var dgQuery []*gql.GraphQuery
+	switch mr.mutationRewriter.(type) {
+	case *AddRewriter:
+		dgQuery, err = NewFromMutationResult(ctx, mutation, mutResp.GetUids(), result, frags)
+	default:
+		dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
+
+	}
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 	if dgQuery == nil && err != nil {
