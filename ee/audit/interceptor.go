@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
@@ -39,9 +38,8 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 		return handler(ctx, req)
 	}
 
-	startTime := time.Now().UnixNano()
 	response, err := handler(ctx, req)
-	maybeAuditGRPC(ctx, req, info, err, startTime)
+	auditGrpc(ctx, req, info, err)
 	return response, err
 }
 
@@ -51,19 +49,18 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		startTime := time.Now().UnixNano()
-		lrw := NewResponseWriter(w)
+
+		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
 		r.Body = ioutil.NopCloser(tee)
-		next.ServeHTTP(lrw, r)
+		next.ServeHTTP(rw, r)
 		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-		maybeAuditHttp(lrw, r, startTime)
+		auditHttp(rw, r)
 	})
 }
 
-func maybeAuditGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error,
-	startTime int64) {
+func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
 	var code codes.Code
 	if serr, ok := status.FromError(err); !ok {
 		code = codes.Unknown
@@ -71,21 +68,17 @@ func maybeAuditGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServer
 		code = serr.Code()
 	}
 	clientHost := ""
-	p, ok := peer.FromContext(ctx)
-	if ok {
+	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
+	token := ""
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if t := md.Get("accessJwt"); len(t) > 0 {
+			token = t[0]
+		}
 	}
 
-	token := ""
-	t := md.Get("accessJwt")
-	if len(t) > 0 {
-		token = t[0]
-	}
 	event := &AuditEvent{
 		User:       getUserId(token),
 		ServerHost: x.WorkerConfig.MyAddr,
@@ -93,24 +86,25 @@ func maybeAuditGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServer
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
 		Req:        fmt.Sprintf("%v", req),
-		Status:     int(code),
-		TimeTaken:  time.Now().UnixNano() - startTime,
+		Status:     code.String(),
 	}
 	auditor.AuditEvent(event)
 }
 
-func maybeAuditHttp(w *ResponseWriter, r *http.Request, startTime int64) {
-	all, _ := ioutil.ReadAll(r.Body)
+func auditHttp(w *ResponseWriter, r *http.Request) {
+	rb, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		rb = []byte(err.Error())
+	}
 	event := &AuditEvent{
 		User:        getUserId(r.Header.Get("X-Dgraph-AccessToken")),
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
 		ReqType:     Http,
-		Req:         string(all),
-		Status:      w.statusCode,
+		Req:         string(rb),
+		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
-		TimeTaken:   time.Now().UnixNano() - startTime,
 	}
 	auditor.AuditEvent(event)
 }
@@ -123,8 +117,7 @@ func getUserId(token string) string {
 			userId = UnauthorisedUser
 		}
 	} else {
-		userId, err = x.ExtractUserName(token)
-		if err != nil {
+		if userId, err = x.ExtractUserName(token); err != nil {
 			userId = UnknownUser
 		}
 	}

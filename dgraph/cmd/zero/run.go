@@ -267,7 +267,7 @@ func run() {
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	audit.InitAuditorIfNecessary(Zero.Conf, func() bool {
-		if st.zero == nil || st.zero.state == nil {
+		if st.zero.state == nil {
 			return false
 		}
 		return st.zero.state.GetLicense().GetEnabled()
