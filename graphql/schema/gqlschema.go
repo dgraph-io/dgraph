@@ -877,7 +877,7 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
-func completeSchema(sch *ast.Schema, definitions []string) {
+func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bool) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
@@ -913,52 +913,68 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 		defn := sch.Types[key]
-		if defn.Kind == ast.Union {
-			// TODO: properly check the case of reverse predicates (~) with union members and clean
-			// them from unionRef or unionFilter as required.
-			addUnionReferenceType(sch, defn)
-			addUnionFilterType(sch, defn)
-			addUnionMemberTypeEnum(sch, defn)
-			continue
+		params := &GenerateDirectiveParams{
+			generateGetQuery:       true,
+			generateFilterQuery:    true,
+			generatePasswordQuery:  true,
+			generateAggregateQuery: true,
+			generateAddMutation:    true,
+			generateUpdateMutation: true,
+			generateDeleteMutation: true,
+			generateSubscription:   false,
 		}
+		if !apolloServiceQuery {
+			if defn.Kind == ast.Union {
+				// TODO: properly check the case of reverse predicates (~) with union members and clean
+				// them from unionRef or unionFilter as required.
+				addUnionReferenceType(sch, defn)
+				addUnionFilterType(sch, defn)
+				addUnionMemberTypeEnum(sch, defn)
+				continue
+			}
 
-		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
-			continue
-		}
+			if defn.Kind != ast.Interface && defn.Kind != ast.Object {
+				continue
+			}
 
-		params := parseGenerateDirectiveParams(defn)
+			params = parseGenerateDirectiveParams(defn)
 
-		// Common types to both Interface and Object.
-		addReferenceType(sch, defn)
+			// Common types to both Interface and Object.
+			addReferenceType(sch, defn)
 
-		if params.generateUpdateMutation {
-			addPatchType(sch, defn)
-			addUpdateType(sch, defn)
-			addUpdatePayloadType(sch, defn)
-		}
-
-		if params.generateDeleteMutation {
-			addDeletePayloadType(sch, defn)
-		}
-
-		switch defn.Kind {
-		case ast.Interface:
-			// addInputType doesn't make sense as interface is like an abstract class and we can't
-			// create objects of its type.
 			if params.generateUpdateMutation {
-				addUpdateMutation(sch, defn)
-			}
-			if params.generateDeleteMutation {
-				addDeleteMutation(sch, defn)
+				addPatchType(sch, defn)
+				addUpdateType(sch, defn)
+				addUpdatePayloadType(sch, defn)
 			}
 
-		case ast.Object:
-			// types and inputs needed for mutations
-			if params.generateAddMutation {
-				addInputType(sch, defn)
-				addAddPayloadType(sch, defn)
+			if params.generateDeleteMutation {
+				addDeletePayloadType(sch, defn)
 			}
-			addMutations(sch, defn, params)
+
+			switch defn.Kind {
+			case ast.Interface:
+				// addInputType doesn't make sense as interface is like an abstract class and we can't
+				// create objects of its type.
+				if params.generateUpdateMutation {
+					addUpdateMutation(sch, defn)
+				}
+				if params.generateDeleteMutation {
+					addDeleteMutation(sch, defn)
+				}
+
+			case ast.Object:
+				// types and inputs needed for mutations
+				if params.generateAddMutation {
+					addInputType(sch, defn)
+					addAddPayloadType(sch, defn)
+				}
+				addMutations(sch, defn, params)
+			}
+		}
+
+		if hasExtends(defn) {
+			continue
 		}
 
 		// types and inputs needed for query and search
@@ -1241,6 +1257,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 			continue
 		}
 
+		if hasExtends(schema.Types[fld.Type.Name()]) {
+			continue
+		}
+
 		// Filtering makes sense both for lists (= return only items that match
 		// this filter) and for singletons (= only have this value in the result
 		// if it satisfies this filter)
@@ -1266,6 +1286,10 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 // These fields are added to support aggregate queries like count, avg, min
 func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
+
+		if hasExtends(schema.Types[fld.Type.Name()]) {
+			continue
+		}
 		// Aggregate Fields only makes sense for fields of
 		// list types of kind Object or Interface
 		// (not scalar lists or not singleton types or lists of other kinds).
