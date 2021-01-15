@@ -247,7 +247,8 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	case *AddRewriter:
 		varGen := NewVariableGenerator()
 		xidMd := newXidMetadata()
-		queries, err := NewRewrite(ctx, mutation, varGen, xidMd)
+		var queries []*gql.GraphQuery
+		queries, err = NewRewrite(ctx, mutation, varGen, xidMd)
 		if err != nil {
 			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 				resolverFailed

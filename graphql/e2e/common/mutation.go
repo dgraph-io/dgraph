@@ -3002,7 +3002,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		`couldn't rewrite query for mutation addPost because ID "0x0" isn't a Author`)
+		`because ID "0x0" isn't a Author`)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
