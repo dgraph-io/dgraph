@@ -31,7 +31,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getsentry/sentry-go v0.6.0
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.3.5
@@ -65,7 +65,7 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210105210732-16f7687f5001
 	golang.org/x/text v0.3.3
-	golang.org/x/tools v0.0.0-20201105001634-bc3cf281b174
+	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
