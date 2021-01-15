@@ -1084,13 +1084,13 @@ func (p *Parser) getScalarValue(n byte) error {
 			break
 		}
 		// handle uid function in upsert block
-		s = stripSpaces(s)
-		if strings.HasPrefix(s, "uid(") || strings.HasPrefix(s, "val(") {
-			if !strings.HasSuffix(s, ")") {
+		u := stripSpaces(s)
+		if strings.HasPrefix(u, "uid(") || strings.HasPrefix(u, "val(") {
+			if !strings.HasSuffix(u, ")") {
 				return errors.Errorf(
 					"While processing '%s', brackets are not closed properly", s)
 			}
-			p.Quad.ObjectId = s
+			p.Quad.ObjectId = u
 			break
 		}
 		// normal string value
