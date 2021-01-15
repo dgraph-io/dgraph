@@ -25,10 +25,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	jsonNull = []byte("null")
-)
-
 type graphQLEncodingCtx struct {
 	// buf is the buffer which stores the encoded GraphQL response.
 	buf *bytes.Buffer
@@ -120,7 +116,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
 	// the response as it is always written first in DQL query. So, if we get data for dgraph.type
 	// predicate then just save it in dgraphTypes slice, no need to write it to JSON yet.
-	var dgraphTypes []interface{}
+	var dgraphTypes []string
 	for enc.getAttr(child) == ctx.dgraphTypeAttrId {
 		val, err := enc.getScalarVal(child) // val is a quoted string like: "Human"
 		if err != nil {
@@ -182,7 +178,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 		if cnt == 1 {
 			// we need to check if the field should be skipped only when it is encountered for
 			// the first time
-			if skipField(curSelection, dgraphTypes, seenField) {
+			if curSelection.SkipField(dgraphTypes, seenField) {
 				cnt = 0 // Reset the count,
 				// indicating that we need to write the JSON key in next iteration.
 				i++
@@ -286,8 +282,8 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 				// which may trigger the object to turn out to be null.
 				if !enc.encodeGraphQL(ctx, cur, false, curSelection.SelectionSet(), curSelection,
 					append(parentPath, curSelection.ResponseName(), cnt-1)) {
-					// Unlike the choice in writeGraphQLNull(), where we turn missing
-					// lists into [], the spec explicitly calls out:
+					// Unlike the choice in curSelection.NullValue(), where we turn missing
+					// list fields into [], the spec explicitly calls out:
 					//  "If a List type wraps a Non-Null type, and one of the
 					//  elements of that list resolves to null, then the entire list
 					//  must resolve to null."
@@ -303,10 +299,10 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 					typ := curSelection.Type()
 					if typ.ListType().Nullable() {
 						ctx.buf.Truncate(itemPos)
-						x.Check2(ctx.buf.Write(jsonNull))
+						x.Check2(ctx.buf.Write(gqlSchema.JsonNull))
 					} else if typ.Nullable() {
 						ctx.buf.Truncate(keyEndPos)
-						x.Check2(ctx.buf.Write(jsonNull))
+						x.Check2(ctx.buf.Write(gqlSchema.JsonNull))
 						// set nullWritten to true so we don't write closing ] for this list
 						nullWritten = true
 						// skip all data for the current list selection
@@ -408,7 +404,7 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 	for i < len(childSelectionSet) {
 		curSelection = childSelectionSet[i]
 
-		if skipField(curSelection, dgraphTypes, seenField) {
+		if curSelection.SkipField(dgraphTypes, seenField) {
 			i++
 			// if this is the last field and shouldn't be included,
 			// then need to remove comma from the buffer if one was present.
@@ -448,28 +444,6 @@ func (enc *encoder) encodeGraphQL(ctx *graphQLEncodingCtx, fj fastJsonNode, fjIs
 	return true
 }
 
-func skipField(f gqlSchema.Field, dgraphTypes []interface{}, seenField map[string]bool) bool {
-	if f.Skip() || !f.Include() {
-		return true
-	}
-	// If typ is an interface, and dgraphTypes contains another type, then we ignore
-	// fields which don't start with that type. This would happen when multiple
-	// fragments (belonging to different types) are requested within a query for an interface.
-
-	// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
-	// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
-	if len(dgraphTypes) > 0 && !f.IncludeInterfaceField(dgraphTypes) {
-		return true
-	}
-	// if the field has already been seen at the current level, then we need to skip it.
-	// Otherwise, mark it seen.
-	if seenField[f.ResponseName()] {
-		return true
-	}
-	seenField[f.ResponseName()] = true
-	return false
-}
-
 func checkAndStripComma(buf *bytes.Buffer) {
 	b := buf.Bytes()
 	if len(b) > 0 && b[len(b)-1] == ',' {
@@ -477,32 +451,17 @@ func checkAndStripComma(buf *bytes.Buffer) {
 	}
 }
 
-func getTypename(f gqlSchema.Field, dgraphTypes []interface{}) []byte {
-	// TODO (cleanup): refactor the TypeName method to accept []string
+func getTypename(f gqlSchema.Field, dgraphTypes []string) []byte {
 	return []byte(`"` + f.TypeName(dgraphTypes) + `"`)
 }
 
 func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool {
-	buf.Truncate(keyEndPos) // truncate to make sure we write null correctly
-	if f.Type().ListType() != nil {
-		// We could choose to set this to null.  This is our decision, not
-		// anything required by the GraphQL spec.
-		//
-		// However, if we query, for example, for a person's friends with
-		// some restrictions, and there aren't any, is that really a case to
-		// set this at null and error if the list is required?  What
-		// about if a person has just been added and doesn't have any friends?
-		// Doesn't seem right to add null and cause error propagation.
-		//
-		// Seems best if we pick [], rather than null, as the list value if
-		// there's nothing in the Dgraph result.
-		x.Check2(buf.Write([]byte("[]")))
-	} else if f.Type().Nullable() {
-		x.Check2(buf.Write(jsonNull))
-	} else {
-		return false
+	if b := f.NullValue(); b != nil {
+		buf.Truncate(keyEndPos) // truncate to make sure we write null correctly
+		x.Check2(buf.Write(b))
+		return true
 	}
-	return true
+	return false
 }
 
 // completeRootAggregateQuery builds GraphQL JSON for aggregate queries at root.
@@ -542,7 +501,7 @@ func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool 
 func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJsonNode,
 	query gqlSchema.Field, qryPath []interface{}) fastJsonNode {
 	if enc.children(fj) == nil {
-		x.Check2(ctx.buf.Write(jsonNull))
+		x.Check2(ctx.buf.Write(gqlSchema.JsonNull))
 		return fj.next
 	}
 
@@ -563,7 +522,7 @@ func completeRootAggregateQuery(enc *encoder, ctx *graphQLEncodingCtx, fj fastJs
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(qryPath, f.ResponseName()),
 					err.Error()))
 				// all aggregate properties are nullable, so no special checks are required
-				val = jsonNull
+				val = gqlSchema.JsonNull
 			}
 			fj = fj.next
 		}
@@ -627,11 +586,11 @@ func completeAggregateChildren(enc *encoder, ctx *graphQLEncodingCtx, fj fastJso
 				ctx.gqlErrs = append(ctx.gqlErrs, f.GqlErrorf(append(fieldPath, f.ResponseName()),
 					err.Error()))
 				// all aggregate properties are nullable, so no special checks are required
-				val = jsonNull
+				val = gqlSchema.JsonNull
 			}
 			fj = fj.next
 		} else {
-			val = jsonNull
+			val = gqlSchema.JsonNull
 		}
 		x.Check2(ctx.buf.Write(val))
 		comma = ","

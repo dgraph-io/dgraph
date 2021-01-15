@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -37,7 +36,7 @@ func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
 	}
 
 	var health []map[string]interface{}
-	err = json.Unmarshal(resp.GetJson(), &health)
+	err = resolve.Unmarshal(resp.GetJson(), &health)
 
 	return resolve.DataResult(
 		q,

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -1290,6 +1289,9 @@ func completeAlias(field schema.Field, buf *bytes.Buffer) {
 
 // completeObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
+// At present, it is only used for building custom results by:
+//  * Admin Server
+//  * @custom(http: {...}) query/mutation
 //
 // fields are all the fields from this bracketed level in the GraphQL  query, e.g:
 // {
@@ -1330,66 +1332,28 @@ func completeObject(
 	var buf bytes.Buffer
 	comma := ""
 
-	// Below map keeps track of fields which have been seen as part of
+	// seenField keeps track of fields which have been seen as part of
 	// interface to avoid double entry in the resulting response
 	seenField := make(map[string]bool)
 
 	x.Check2(buf.WriteRune('{'))
-	dgraphTypes, ok := res["dgraph.type"].([]interface{})
+	// @custom(http: {...}) query/mutation results may return __typename in response for abstract
+	// fields, lets use that information if present.
+	typename, ok := res[schema.Typename].(string)
+	var dgraphTypes []string
+	if ok && len(typename) > 0 {
+		dgraphTypes = []string{typename}
+	}
 
-	// fieldSeenCount is to keep track the number of times a specific field
-	// has been seen till now. It is used in generating Unique Dgraph Alias
-	// to extract out the corresponding value of field from the response.
-	fieldSeenCount := make(map[string]int)
 	for _, f := range fields {
-		if f.Skip() || !f.Include() {
-			continue
-		}
-
-		includeField := true
-		// If typ is an interface, and dgraphTypes contains another type, then we ignore
-		// fields which don't start with that type. This would happen when multiple
-		// fragments (belonging to different types) are requested within a query for an interface.
-
-		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
-		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
-		if len(dgraphTypes) > 0 {
-			includeField = f.IncludeInterfaceField(dgraphTypes)
-		}
-		if _, ok := seenField[f.ResponseName()]; ok {
-			includeField = false
-		}
-		if !includeField {
+		if f.SkipField(dgraphTypes, seenField) {
 			continue
 		}
 
 		x.Check2(buf.WriteString(comma))
 		completeAlias(f, &buf)
 
-		seenField[f.ResponseName()] = true
-
-		var uniqueDgraphAlias string
-		// In case of InbuiltType or Enums, only one alias was passed into the dgraph query.
-		// So just map its value to all of its occurences.
-		if f.Type().IsInbuiltOrEnumType() {
-			uniqueDgraphAlias = f.DgraphAlias()
-		} else {
-			uniqueDgraphAlias = generateUniqueDgraphAlias(f, fieldSeenCount)
-		}
-		val := res[f.Name()] // temp change just for making admin work
-		// Handle aggregate queries:
-		// Aggregate Fields in DQL response don't follow the same response as other queries.
-		// Create a map aggregateVal and store response of aggregate fields in a way which
-		// GraphQL aggregate fields expect it to be. completeValue function called later on
-		// will convert then fill up the GraphQL response.
-		if f.IsAggregateField() {
-			aggregateVal := make(map[string]interface{})
-			for _, aggregateField := range f.SelectionSet() {
-				aggregateFieldName := aggregateField.Name()
-				aggregateVal[aggregateFieldName] = res[aggregateFieldName+"_"+uniqueDgraphAlias]
-			}
-			val = aggregateVal
-		}
+		val := res[f.Name()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
@@ -1397,56 +1361,19 @@ func completeObject(
 			// meta‐field  __typename: String! when querying against any Object, Interface,
 			// or Union. It returns the name of the object type currently being queried."
 
-			// If we have dgraph.type information, we will use that to figure out the type
+			// If we have __typename information, we will use that to figure out the type
 			// otherwise we will get it from the schema.
-			if ok {
-				val = f.TypeName(dgraphTypes)
-			} else {
-				val = f.GetObjectName()
-			}
+			val = f.TypeName(dgraphTypes)
 		}
 
-		// Check that we should check that data should be of list type when we expect
-		// f.Type().ListType() to be non-nil.
+		// Check that data should be of list type when we expect f.Type().ListType() to be non-nil.
 		if val != nil && f.Type().ListType() != nil {
 			switch val.(type) {
 			case []interface{}, []map[string]interface{}:
 			default:
 				// We were expecting a list but got a value which wasn't a list. Lets return an
 				// error.
-				return nil, x.GqlErrorList{&x.GqlError{
-					Message:   schema.ErrExpectedList,
-					Locations: []x.Location{f.Location()},
-					Path:      copyPath(path),
-				}}
-			}
-		}
-
-		// Handle the case of empty data in Aggregate Queries. If count of data is equal
-		// to 0, set the val map to nil. This makes the aggregateField return null instead
-		// of returning "0.0000" for Min, Max function on strings and 0 for Min, Max functions
-		// on integers/float.
-		if strings.HasSuffix(f.Type().Name(), "AggregateResult") && val != nil {
-			var count json.Number
-			countVal := val.(map[string]interface{})["count"]
-			if countVal == nil {
-				// This case may happen in case of auth queries when the user does not have
-				// sufficient permission to query aggregate fields. We set val to nil in this
-				// case
-				val = nil
-			} else {
-				if count, ok = countVal.(json.Number); !ok {
-					// This is to handle case in which countVal is of any other type than
-					// json.Number. This should never happen. We return an error.
-					return nil, x.GqlErrorList{&x.GqlError{
-						Message:   "Expected count field of type json.Number inside Aggregate Field",
-						Locations: []x.Location{f.Location()},
-						Path:      copyPath(path),
-					}}
-				}
-				if count == "0" {
-					val = nil
-				}
+				return nil, x.GqlErrorList{f.GqlErrorf(path, schema.ErrExpectedList)}
 			}
 		}
 
@@ -1456,11 +1383,10 @@ func completeObject(
 			if !f.Type().Nullable() {
 				return nil, errs
 			}
-			completed = []byte(`null`)
+			completed = schema.JsonNull
 		}
 		x.Check2(buf.Write(completed))
 		comma = ", "
-		fieldSeenCount[f.DgraphAlias()]++
 	}
 	x.Check2(buf.WriteRune('}'))
 
@@ -1478,26 +1404,13 @@ func completeValue(
 	case map[string]interface{}:
 		switch field.Type().Name() {
 		case "String", "ID", "Boolean", "Float", "Int", "Int64", "DateTime":
-			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   schema.ErrExpectedScalar,
-				Locations: []x.Location{field.Location()},
-				Path:      copyPath(path),
-			}}
+			return nil, x.GqlErrorList{field.GqlErrorf(path, schema.ErrExpectedScalar)}
 		}
 		enumValues := field.EnumValues()
 		if len(enumValues) > 0 {
-			return nil, x.GqlErrorList{&x.GqlError{
-				Message:   schema.ErrExpectedScalar,
-				Locations: []x.Location{field.Location()},
-				Path:      copyPath(path),
-			}}
+			return nil, x.GqlErrorList{field.GqlErrorf(path, schema.ErrExpectedScalar)}
 		}
-
-		if field.Type().IsGeo() {
-			return completeGeoObject(path, field, val)
-		} else {
-			return completeObject(path, field.SelectionSet(), val)
-		}
+		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
 	case []map[string]interface{}:
@@ -1510,219 +1423,68 @@ func completeValue(
 		return completeList(path, field, listVal)
 	default:
 		if val == nil {
-			if field.Type().ListType() != nil {
-				// We could choose to set this to null.  This is our decision, not
-				// anything required by the GraphQL spec.
-				//
-				// However, if we query, for example, for a persons's friends with
-				// some restrictions, and there aren't any, is that really a case to
-				// set this at null and error if the list is required?  What
-				// about if an person has just been added and doesn't have any friends?
-				// Doesn't seem right to add null and cause error propagation.
-				//
-				// Seems best if we pick [], rather than null, as the list value if
-				// there's nothing in the Dgraph result.
-				return []byte("[]"), nil
+			if b := field.NullValue(); b != nil {
+				return b, nil
 			}
 
-			if field.Type().Nullable() {
-				return []byte("null"), nil
-			}
-
-			gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(), field.Type()).WithLocations(field.Location())
-			gqlErr.Path = copyPath(path)
-			return nil, x.GqlErrorList{gqlErr}
+			return nil, x.GqlErrorList{field.GqlErrorf(path, schema.ErrExpectedNonNull,
+				field.Name(), field.Type())}
 		}
 
 		// val is a scalar
 		val, gqlErr := coerceScalar(val, field, path)
-		if len(gqlErr) != 0 {
+		if len(gqlErr) > 0 {
 			return nil, gqlErr
 		}
 
 		// Can this ever error?  We can't have an unsupported type or value because
-		// we just unmarshaled this val.
+		// we just unmarshalled this val.
 		b, err := json.Marshal(val)
 		if err != nil {
-			gqlErr := x.GqlErrorf(
+			gqlErr := x.GqlErrorList{field.GqlErrorf(path,
 				"Error marshalling value for field '%s' (type %s).  "+
 					"Resolved as null (which may trigger GraphQL error propagation) ",
-				field.Name(), field.Type()).
-				WithLocations(field.Location())
-			gqlErr.Path = copyPath(path)
+				field.Name(), field.Type())}
 
 			if field.Type().Nullable() {
-				return []byte("null"), x.GqlErrorList{gqlErr}
+				return schema.JsonNull, gqlErr
 			}
 
-			return nil, x.GqlErrorList{gqlErr}
+			return nil, gqlErr
 		}
 
 		return b, nil
 	}
 }
 
-// completeGeoObject builds a json GraphQL result object for the underlying geo type.
-// Currently, it supports Point, Polygon and MultiPolygon.
-func completeGeoObject(path []interface{}, field schema.Field,
-	val map[string]interface{}) ([]byte, x.GqlErrorList) {
-	coordinate, _ := val[schema.Coordinates].([]interface{})
-	if coordinate == nil {
-		gqlErr := x.GqlErrorf(schema.ErrExpectedNonNull, field.Name(),
-			field.Type()).WithLocations(field.Location())
-		gqlErr.Path = copyPath(path)
-		return nil, x.GqlErrorList{gqlErr}
-	}
-
-	typ, _ := val["type"].(string)
-	var buf bytes.Buffer
-	switch typ {
-	case schema.Point:
-		completePoint(field, coordinate, &buf)
-	case schema.Polygon:
-		completePolygon(field, coordinate, &buf)
-	case schema.MultiPolygon:
-		completeMultiPolygon(field, coordinate, &buf)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// completePoint takes in coordinates from dgraph response like [12.32, 123.32], and builds
-// a JSON GraphQL result object for Point like { "longitude" : 12.32 , "latitude" : 123.32 }.
-func completePoint(field schema.Field, coordinate []interface{}, buf *bytes.Buffer) {
-	comma := ""
-
-	x.Check2(buf.WriteRune('{'))
-	for _, f := range field.SelectionSet() {
-		x.Check2(buf.WriteString(comma))
-		completeAlias(f, buf)
-
-		switch f.Name() {
-		case schema.Longitude:
-			x.Check2(buf.WriteString(fmt.Sprintf("%v", coordinate[0])))
-		case schema.Latitude:
-			x.Check2(buf.WriteString(fmt.Sprintf("%v", coordinate[1])))
-		case schema.Typename:
-			x.Check2(buf.WriteString(`"Point"`))
-		}
-		comma = ","
-	}
-	x.Check2(buf.WriteRune('}'))
-}
-
-// completePolygon converts the Dgraph result to GraphQL Polygon type.
-// Dgraph output: coordinate: [[[22.22,11.11],[16.16,15.15],[21.21,20.2]],[[22.28,11.18],[16.18,15.18],[21.28,20.28]]]
-// Graphql output: { coordinates: [ { points: [{ latitude: 11.11, longitude: 22.22}, { latitude: 15.15, longitude: 16.16} , { latitude: 20.20, longitude: 21.21} ]}, { points: [{ latitude: 11.18, longitude: 22.28}, { latitude: 15.18, longitude: 16.18} , { latitude: 20.28, longitude: 21.28}]} ] }
-func completePolygon(field schema.Field, polygon []interface{}, buf *bytes.Buffer) {
-	comma1 := ""
-
-	x.Check2(buf.WriteRune('{'))
-	for _, f1 := range field.SelectionSet() {
-		x.Check2(buf.WriteString(comma1))
-		completeAlias(f1, buf)
-
-		switch f1.Name() {
-		case schema.Coordinates:
-			x.Check2(buf.WriteRune('['))
-			comma2 := ""
-
-			for _, ring := range polygon {
-				x.Check2(buf.WriteString(comma2))
-				x.Check2(buf.WriteRune('{'))
-				comma3 := ""
-
-				for _, f2 := range f1.SelectionSet() {
-					x.Check2(buf.WriteString(comma3))
-					completeAlias(f2, buf)
-
-					switch f2.Name() {
-					case schema.Points:
-						x.Check2(buf.WriteRune('['))
-						comma4 := ""
-
-						r, _ := ring.([]interface{})
-						for _, point := range r {
-							x.Check2(buf.WriteString(comma4))
-
-							p, _ := point.([]interface{})
-							completePoint(f2, p, buf)
-
-							comma4 = ","
-						}
-						x.Check2(buf.WriteRune(']'))
-					case schema.Typename:
-						x.Check2(buf.WriteString(`"PointList"`))
-					}
-					comma3 = ","
-				}
-				x.Check2(buf.WriteRune('}'))
-				comma2 = ","
-			}
-			x.Check2(buf.WriteRune(']'))
-		case schema.Typename:
-			x.Check2(buf.WriteString(`"Polygon"`))
-		}
-		comma1 = ","
-	}
-	x.Check2(buf.WriteRune('}'))
-}
-
-// completeMultiPolygon converts the Dgraph result to GraphQL MultiPolygon type.
-func completeMultiPolygon(field schema.Field, multiPolygon []interface{}, buf *bytes.Buffer) {
-	comma1 := ""
-
-	x.Check2(buf.WriteRune('{'))
-	for _, f := range field.SelectionSet() {
-		x.Check2(buf.WriteString(comma1))
-		completeAlias(f, buf)
-
-		switch f.Name() {
-		case schema.Polygons:
-			x.Check2(buf.WriteRune('['))
-			comma2 := ""
-
-			for _, polygon := range multiPolygon {
-				x.Check2(buf.WriteString(comma2))
-
-				p, _ := polygon.([]interface{})
-				completePolygon(f, p, buf)
-
-				comma2 = ","
-			}
-			x.Check2(buf.WriteRune(']'))
-		case schema.Typename:
-			x.Check2(buf.WriteString(`"MultiPolygon"`))
-		}
-		comma1 = ","
-	}
-	x.Check2(buf.WriteRune('}'))
-}
-
 // coerceScalar coerces a scalar value to field.Type() if possible according to the coercion rules
-// defined in the GraphQL spec. If this is not possible, then it returns an error.
+// defined in the GraphQL spec. If this is not possible, then it returns an error. The crux of
+// coercion rules defined in the spec is to not lose information during coercion.
+// Note that, admin server specifically uses these:
+//  * json.Number (Query.config.cacheMb)
+//  * resolve.Unmarshal() everywhere else
+// And, @custom(http: {...}) query/mutation would always use resolve.Unmarshal().
+// Now, resolve.Unmarshal() can only give one of the following types for scalars:
+//  * bool
+//  * string
+//  * json.Number (because it uses custom JSON decoder which preserves number precision)
+// So, we need to consider only these cases at present.
 func coerceScalar(val interface{}, field schema.Field, path []interface{}) (interface{},
 	x.GqlErrorList) {
 
 	valueCoercionError := func(val interface{}) x.GqlErrorList {
-		gqlErr := x.GqlErrorf(
+		return x.GqlErrorList{field.GqlErrorf(path,
 			"Error coercing value '%+v' for field '%s' to type %s.",
-			val, field.Name(), field.Type().Name()).
-			WithLocations(field.Location())
-		gqlErr.Path = copyPath(path)
-		return x.GqlErrorList{gqlErr}
+			val, field.Name(), field.Type().Name())}
 	}
 
 	switch field.Type().Name() {
 	case "String", "ID":
 		switch v := val.(type) {
-		case float64:
-			val = strconv.FormatFloat(v, 'f', -1, 64)
-		case int64:
-			val = strconv.FormatInt(v, 10)
 		case bool:
 			val = strconv.FormatBool(v)
 		case string:
+			// do nothing, val is already string
 		case json.Number:
 			val = v.String()
 		default:
@@ -1730,9 +1492,10 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		}
 	case "Boolean":
 		switch v := val.(type) {
+		case bool:
+			// do nothing, val is already bool
 		case string:
 			val = len(v) > 0
-		case bool:
 		case json.Number:
 			valFloat, _ := v.Float64()
 			val = valFloat != 0
@@ -1741,19 +1504,6 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		}
 	case "Int":
 		switch v := val.(type) {
-		case float64:
-			// The spec says that we can coerce a Float value to Int, if we don't lose information.
-			// See: https: //spec.graphql.org/June2018/#sec-Float
-			// Lets try to see if this number could be converted to int32 without losing
-			// information, otherwise return error.
-			// See: https://github.com/golang/go/issues/19405 to understand why the comparison
-			// should be done after double conversion.
-			i32Val := int32(v)
-			if v == float64(i32Val) {
-				val = i32Val
-			} else {
-				return nil, valueCoercionError(v)
-			}
 		case bool:
 			if v {
 				val = 1
@@ -1761,42 +1511,29 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 				val = 0
 			}
 		case string:
-			i, err := strconv.ParseFloat(v, 64)
-			// An error can be encountered if we had a value that can't be fit into
-			// a 64 bit floating point number..
-			// Lets try to see if this number could be converted to int32 without losing
-			// information, otherwise return error.
+			floatVal, err := strconv.ParseFloat(v, 64)
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			i32Val := int32(i)
-			if i == float64(i32Val) {
+			i32Val := int32(floatVal)
+			if floatVal == float64(i32Val) {
 				val = i32Val
 			} else {
-				return nil, valueCoercionError(v)
-			}
-		case int64:
-			if v > math.MaxInt32 || v < math.MinInt32 {
-				return nil, valueCoercionError(v)
-			}
-		case int:
-			// numUids are added as int, so we need special handling for that.
-			if v > math.MaxInt32 || v < math.MinInt32 {
 				return nil, valueCoercionError(v)
 			}
 		case json.Number:
-			// We have already checked range for int32 at input validation time.
-			// So now just parse and check errors.
-			i, err := strconv.ParseFloat(v.String(), 64)
+			// float64 can always contain 32 bit integers without any information loss
+			floatVal, err := v.Float64()
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			i32Val := int32(i)
-			if i == float64(i32Val) {
-				val = i32Val
-			} else {
+			i32Val := int32(floatVal) // convert the float64 value to int32
+			// now if converting the int32 back to float64 results in a mismatch means we lost
+			// information during conversion, so return error.
+			if floatVal != float64(i32Val) {
 				return nil, valueCoercionError(v)
 			}
+			// otherwise, do nothing as val is already a valid number in int32 range
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1810,20 +1547,15 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case string:
 			i, err := strconv.ParseInt(v, 10, 64)
-			// An error can be encountered if we had a value that can't be fit into
-			// a 64 bit int or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
 			val = i
 		case json.Number:
-			// To use whole 64-bit range for int64 without any coercing,
-			// We pass int64 values as string to dgraph and parse it as integer here
-			i, err := strconv.ParseInt(v.String(), 10, 64)
-			if err != nil {
+			if _, err := v.Int64(); err != nil {
 				return nil, valueCoercionError(v)
 			}
-			val = i
+			// do nothing, as val is already a valid number in int64 range
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1837,30 +1569,34 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 			}
 		case string:
 			i, err := strconv.ParseFloat(v, 64)
-			// An error can be encountered if we had a value that can't be fit into
-			// a 64 bit floating point number or because of other parsing issues.
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
 			val = i
 		case json.Number:
-			i, err := strconv.ParseFloat(v.String(), 64)
+			_, err := v.Float64()
 			if err != nil {
 				return nil, valueCoercionError(v)
 			}
-			val = i
-		case float64:
+			// do nothing, as val is already a valid number in float
 		default:
 			return nil, valueCoercionError(v)
 		}
 	case "DateTime":
 		switch v := val.(type) {
 		case string:
-			if _, err := types.ParseTime(v); err != nil {
+			if t, err := types.ParseTime(v); err != nil {
 				return nil, valueCoercionError(v)
+			} else {
+				// let's make sure that we always return a string in RFC3339 format as the original
+				// string could have been in some other format.
+				val = t.Format(time.RFC3339)
 			}
 		case json.Number:
-			valFloat, _ := v.Float64()
+			valFloat, err := v.Float64()
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
 			truncated := math.Trunc(valFloat)
 			if truncated == valFloat {
 				// Lets interpret int values as unix timestamp.
@@ -1882,16 +1618,10 @@ func coerceScalar(val interface{}, field schema.Field, path []interface{}) (inte
 		switch v := val.(type) {
 		case string:
 			// Lets check that the enum value is valid.
-			valid := false
-			for _, ev := range enumValues {
-				if ev == v {
-					valid = true
-					break
-				}
-			}
-			if !valid {
+			if !x.HasString(enumValues, v) {
 				return nil, valueCoercionError(val)
 			}
+			// do nothing, as val already has a valid value
 		default:
 			return nil, valueCoercionError(v)
 		}
@@ -1921,18 +1651,18 @@ func completeList(
 	field schema.Field,
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
-	var buf bytes.Buffer
-	var errs x.GqlErrorList
-	comma := ""
-
 	if field.Type().ListType() == nil {
-		// This means a bug on our part - in rewriting, schema generation,
-		// or Dgraph returned something unexpected.
+		// This means either a bug on our part - in admin server.
+		// or @custom query/mutation returned something unexpected.
 		//
 		// Let's crush it to null so we still get something from the rest of the
 		// query and log the error.
-		return mismatched(path, field, values)
+		return mismatched(path, field)
 	}
+
+	var buf bytes.Buffer
+	var errs x.GqlErrorList
+	comma := ""
 
 	x.Check2(buf.WriteRune('['))
 	for i, b := range values {
@@ -1957,7 +1687,7 @@ func completeList(
 				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 				return nil, errs
 			}
-			x.Check2(buf.WriteString("null"))
+			x.Check2(buf.Write(schema.JsonNull))
 		} else {
 			x.Check2(buf.Write(r))
 		}
@@ -1968,51 +1698,14 @@ func completeList(
 	return buf.Bytes(), errs
 }
 
-func mismatched(
-	path []interface{},
-	field schema.Field,
-	values []interface{}) ([]byte, x.GqlErrorList) {
-
+func mismatched(path []interface{}, field schema.Field) ([]byte, x.GqlErrorList) {
 	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
 		"but its type is %s.\n"+
 		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
-	gqlErr := &x.GqlError{
-		Message:   schema.ErrExpectedSingleItem,
-		Locations: []x.Location{field.Location()},
-		Path:      copyPath(path),
-	}
-
 	val, errs := completeValue(path, field, nil)
-	return val, append(errs, gqlErr)
-}
-
-func copyPath(path []interface{}) []interface{} {
-	result := make([]interface{}, len(path))
-	copy(result, path)
-	return result
-}
-
-// maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
-// Used to pre-allocate a path buffer of the correct size before running completeObject on
-// the top level query - means that we aren't reallocating slices multiple times
-// during the complete* functions.
-func maxPathLength(f schema.Field) int {
-	childMax := 0
-	for _, chld := range f.SelectionSet() {
-		d := maxPathLength(chld)
-		if d > childMax {
-			childMax = d
-		}
-	}
-	if f.Type().ListType() != nil {
-		// It's f: [...], so add a space for field name and
-		// a space for the index into the list
-		return 2 + childMax
-	}
-
-	return 1 + childMax
+	return val, append(errs, field.GqlErrorf(path, schema.ErrExpectedSingleItem))
 }
 
 // a httpResolver can resolve a single GraphQL field from an HTTP endpoint
@@ -2122,10 +1815,10 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		var result interface{}
 		var rerr restErr
 		if status >= 200 && status < 300 {
-			if err := json.Unmarshal(b, &result); err != nil {
+			if err := Unmarshal(b, &result); err != nil {
 				return EmptyResult(field, jsonUnmarshalError(err, field))
 			}
-		} else if err := json.Unmarshal(b, &rerr); err != nil {
+		} else if err := Unmarshal(b, &rerr); err != nil {
 			err = errors.Errorf("unexpected error with: %v", status)
 			rerr.Errors = x.GqlErrorList{externalRequestError(err, field)}
 		}
@@ -2138,7 +1831,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 		Data   map[string]interface{} `json:"data,omitempty"`
 		Errors x.GqlErrorList         `json:"errors,omitempty"`
 	}
-	err = json.Unmarshal(b, &resp)
+	err = Unmarshal(b, &resp)
 	if err != nil {
 		gqlErr := jsonUnmarshalError(err, field)
 		resp.Errors = append(resp.Errors, schema.AsGQLErrors(gqlErr)...)
@@ -2161,22 +1854,29 @@ func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Muta
 	return resolved, resolved.Err == nil || resolved.Err.Error() == ""
 }
 
+// Unmarshal is like json.Unmarshal() except it uses a custom decoder which preserves number
+// precision by unmarshalling them into json.Number.
+func Unmarshal(data []byte, v interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(v)
+}
+
 func EmptyResult(f schema.Field, err error) *Resolved {
 	return &Resolved{
-		Data:  []byte(`{"` + f.ResponseName() + `":null}`),
+		Data:  f.NullResponse(),
 		Field: f,
 		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
 	}
 }
 
 func DataResult(f schema.Field, data map[string]interface{}, err error) *Resolved {
-	b, errs := completeObject(make([]interface{}, 0, maxPathLength(f)), []schema.Field{f}, data)
+	b, errs := completeObject(make([]interface{}, 0, f.MaxPathLength()), []schema.Field{f}, data)
 
 	return &Resolved{
-		Data:       b,
-		Field:      f,
-		Err:        schema.AppendGQLErrs(err, errs),
-		Extensions: nil, // TODO: what about queryUser ACL query, check once?
+		Data:  b,
+		Field: f,
+		Err:   schema.AppendGQLErrs(err, errs),
 	}
 }
 

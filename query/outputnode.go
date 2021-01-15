@@ -1098,7 +1098,8 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 			buf:              &bufw,
 			dgraphTypeAttrId: enc.idForAttr("dgraph.type"),
 		}
-		if !enc.encodeGraphQL(gqlEncCtx, n, true, []gqlSchema.Field{field}, nil, nil) {
+		if !enc.encodeGraphQL(gqlEncCtx, n, true, []gqlSchema.Field{field}, nil,
+			make([]interface{}, 0, field.MaxPathLength())) {
 			// if enc.encodeGraphQL() didn't finish successfully here, that means we need to send
 			// data as null in the GraphQL response like this:
 			// 		{

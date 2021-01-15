@@ -234,8 +234,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			// all the standard mutations are nullable
-			Data:  []byte(`{"` + mutation.ResponseName() + `":null}`),
+			// all the standard mutations are nullable objects, so Data should pretty-much be
+			// {"mutAlias":null} everytime.
+			Data:  mutation.NullResponse(),
 			Field: mutation,
 			// there is no completion down the pipeline, so error's path should be prepended with
 			// mutation's alias before returning the response.
@@ -388,6 +389,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 				x.Check2(buf.WriteString(`"Deleted"`))
 			}
 		case schema.NumUid:
+			// TODO: apply coercion here as per Int rules? or change the schema to Int64?
 			x.Check2(buf.WriteString(strconv.Itoa(numUids)))
 		default: // this has to be queryField
 			if len(qryResult) == 0 {

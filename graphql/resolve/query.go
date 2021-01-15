@@ -103,14 +103,12 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	}
 
 	emptyResult := func(err error) *Resolved {
-		var nullVal string
-		if query.Type().ListType() != nil {
-			nullVal = "[]"
-		} else {
-			nullVal = "null"
-		}
 		return &Resolved{
-			Data:       []byte(`{"` + query.ResponseName() + `":` + nullVal + `}`),
+			// all the auto-generated queries are nullable, but users may define queries with
+			// @custom(dql: ...) which may be non-nullable. So, we need to set the Data field
+			// only if the query was nullable and keep it nil if it was non-nullable.
+			// query.NullResponse() method handles that.
+			Data:       query.NullResponse(),
 			Field:      query,
 			Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
 			Extensions: ext,
