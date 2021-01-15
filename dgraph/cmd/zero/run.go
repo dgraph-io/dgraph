@@ -57,6 +57,8 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
+	auditEnabled      bool
+	auditDir          string
 }
 
 var opts options
@@ -189,6 +191,8 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
+		auditEnabled:      Zero.Conf.GetBool("audit_enabled"),
+		auditDir:          Zero.Conf.GetString("audit_dir"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 
@@ -215,10 +219,9 @@ func run() {
 
 	wd, err := filepath.Abs(opts.w)
 	x.Check(err)
-	ad, err := filepath.Abs(Zero.Conf.GetString("audit_dir"))
+	ad, err := filepath.Abs(opts.auditDir)
 	x.Check(err)
-	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').",
-		Zero.Conf.Get("audit_dir"))
+	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", opts.auditDir)
 
 	if opts.rebalanceInterval <= 0 {
 		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
@@ -265,13 +268,6 @@ func run() {
 		audit.AuditRequestHttp(http.HandlerFunc(st.applyEnterpriseLicense)))
 	http.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(http.DefaultServeMux, "/z")
-
-	audit.InitAuditorIfNecessary(Zero.Conf, func() bool {
-		if st.zero.state == nil {
-			return false
-		}
-		return st.zero.state.GetLicense().GetEnabled()
-	})
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
@@ -332,5 +328,5 @@ func run() {
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 	audit.Close()
-	glog.Infoln("audit logs are closed")
+	glog.Infoln("audit logs if enabled are closed.")
 }
