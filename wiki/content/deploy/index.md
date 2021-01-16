@@ -100,7 +100,7 @@ sudo apt-get install gcc make
 
 After installing Go, run
 ```sh
-# This should install dgraph binary in your $GOPATH/bin.
+# This should install dgraph binary in your $GOPATH/bin. 
 
 git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
@@ -2101,6 +2101,41 @@ $ dgraph bulk -f <./path-to-gzipped-RDF-or-JSON-files> ...
 $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
+### How to properly bulk load
+Starting from Dgraph v20.03.7, v20.07.3 and v20.11.0 onwards, depending on your dataset size, you can follow one of the following ways to use bulk loader and initialize your new Cluster.
+
+*The following procedure is particularly relevant for Clusters that have `--replicas` flag greater than 1*
+
+#### For small dataset
+In case your dataset is small (a few GBs) it would be convenient to start by initializing just one Alpha node and then let the snapshot be streamed among the other Alpha replicas. You can follow these steps:
+1. Run bulk loader only on one server
+2. Once the `p` directory has been created by the bulk loader, then start **only** the first Alpha replica
+3. Wait for 1 minute to ensure that a snapshot has been taken by the first Alpha node replica. You can confirm that a snapshot has been taken by looking for the following message":
+```
+I1227 13:12:24.202196   14691 draft.go:571] Creating snapshot at index: 30. ReadTs: 4.
+```
+4. After confirming that the snapshot has been taken, you can start the other Alpha node replicas (number of Alpha nodes must be equal to the `--replicas` flag value set in the zero nodes). Now the Alpha node (the one started in point 2) will be printing similar messages:
+```
+I1227 13:18:16.154674   16779 snapshot.go:246] Streaming done. Sent 1093470 entries. Waiting for ACK...
+I1227 13:18:17.126494   16779 snapshot.go:251] Received ACK with done: true
+I1227 13:18:17.126514   16779 snapshot.go:292] Stream snapshot: OK
+```
+These messages indicate that all replica nodes are now using the same snapshot. Thus, all your data is correctly in sync across the cluster. Also, the other alpha nodes will be printing (in their logs) something similar to:
+```
+I1227 13:18:17.126621    1720 draft.go:567] Skipping snapshot at 28, because found one at 28
+```
+
+#### For bigger dataset
+When your dataset is pretty big (e.g. dataset size > 10GB) it will be faster that you just copy the generated `p` directory (by the bulk loader) among all the Alphas nodes. You can follow these steps:
+1. Run bulk loader only on one server
+2. Copy (or use `rsync`) the `p` directory to the other servers (the servers you will be using to start the other Alpha nodes)
+3. Now, start all Alpha nodes at the same time
+
+If the process went well **all** Alpha nodes will take a snapshot after 1 minute. You will be seeing something similar to this in the Alpha logs:
+```
+I1227 13:27:53.959671   29781 draft.go:571] Creating snapshot at index: 34. ReadTs: 6.
+```
+Note that `snapshot at index` value must be the same within the same Alpha group and `ReadTs` must be the same value within and among all the Alpha groups.
 
 #### Encryption at rest with Bulk Loader
 
