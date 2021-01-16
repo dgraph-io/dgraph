@@ -80,14 +80,6 @@ const (
 	}
 
 	"""
-	PersistedQuery contains the query and sha256hash of the query.
-	"""
-	type PersistedQuery @dgraph(type: "dgraph.graphql.persisted_query") {
-		query: String! @dgraph(pred: "dgraph.graphql.p_query")
-		sha256Hash: String! @id @dgraph(pred: "dgraph.graphql.p_sha256hash")
-	}
-
-	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
