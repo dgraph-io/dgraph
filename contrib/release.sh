@@ -146,7 +146,7 @@ pushd $basedir
   git clone https://github.com/dgraph-io/badger.git
   # Check out badger version specific to the Dgraph release.
   cd ./badger
-  ref="$(grep github.com/dgraph-io/badger/v2 $basedir/dgraph/go.mod | grep -v replace |  awk '{ print $2 }')"
+  ref="$(grep github.com/dgraph-io/badger/v3 $basedir/dgraph/go.mod | grep -v replace |  awk '{ print $2 }')"
   commitish="$(echo "$ref" | awk -F- '{ print $NF }')"
   git checkout "$commitish"
 popd
