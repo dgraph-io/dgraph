@@ -100,7 +100,7 @@ sudo apt-get install gcc make
 
 After installing Go, run
 ```sh
-# This should install dgraph binary in your $GOPATH/bin.
+# This should install dgraph binary in your $GOPATH/bin. 
 
 git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
