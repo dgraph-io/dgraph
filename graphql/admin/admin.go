@@ -848,6 +848,7 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
+// Todo(Minhaj): Fetch NewHandler for service query only once
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
