@@ -152,7 +152,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
-	gr.proposeInitialSchema()
+	gr.applyInitialSchema()
 	gr.proposeInitialTypes()
 
 	x.UpdateHealthStatus(true)
@@ -203,21 +203,46 @@ func (g *groupi) proposeInitialTypes() {
 	}
 }
 
-func (g *groupi) proposeInitialSchema() {
+func (g *groupi) applySchema(ctx context.Context, s *pb.SchemaUpdate) {
+	if err := updateSchema(s); err != nil {
+		glog.Errorf("Error while applying initial schema: %s", err)
+	}
+
+	// initialTypes := schema.InitialTypes()
+	// for _, t := range initialTypes {
+	// 	if err := updateType(t.GetTypeName(), *t); err != nil {
+	// 		glog.Errorf("Error while applying initial schema: %s", err)
+	// 	}
+}
+
+func (g *groupi) applyInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	ctx := g.Ctx()
+	applySchema := func(s *pb.SchemaUpdate) {
+		if err := updateSchema(s); err != nil {
+			glog.Errorf("Error while applying initial schema: %s", err)
+		}
+		if servesTablet, err := g.ServesTablet(s.Predicate); err != nil {
+			glog.Errorf("Error while applying initial schema: %s", err)
+		} else if !servesTablet {
+			glog.Errorf("group 1 should always serve reserved predicate %s",
+				s.Predicate)
+		}
+	}
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s, nil)
+			applySchema(s)
 		} else if gid == 0 {
-			g.upsertSchema(s, nil)
+			// The tablet is not being served currently.
+			applySchema(s)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s, nil)
+			// g.upsertSchema(s, nil)
+			applySchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
 			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
