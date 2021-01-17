@@ -261,26 +261,10 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	numUids: Int
-}
-
 type CarAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
-}
-
-type DeleteCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	msg: String
-	numUids: Int
-}
-
-type UpdateCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	numUids: Int
 }
 
 #######################
@@ -299,10 +283,6 @@ enum CarOrderable {
 # Generated Inputs
 #######################
 
-input AddCarInput {
-	name: String!
-}
-
 input CarFilter {
 	id: [ID!]
 	has: CarHasFilter
@@ -317,21 +297,6 @@ input CarOrder {
 	then: CarOrder
 }
 
-input CarPatch {
-	name: String
-}
-
-input CarRef {
-	id: ID
-	name: String
-}
-
-input UpdateCarInput {
-	filter: CarFilter!
-	set: CarPatch
-	remove: CarPatch
-}
-
 #######################
 # Generated Query
 #######################
@@ -341,15 +306,5 @@ type Query {
 	getCar(id: ID!): Car
 	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	aggregateCar(filter: CarFilter): CarAggregateResult
-}
-
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addCar(input: [AddCarInput!]!): AddCarPayload
-	updateCar(input: UpdateCarInput!): UpdateCarPayload
-	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
 
