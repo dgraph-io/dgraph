@@ -147,7 +147,10 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		})
 	}
 
-	typeMapCopy["Query"].Fields = queryList
+	if typeMapCopy["Query"] != nil {
+		typeMapCopy["Query"].Fields = queryList
+	}
+
 	queryDefn := &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Query",
