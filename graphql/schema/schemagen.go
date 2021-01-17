@@ -77,7 +77,8 @@ func (s *handler) DGSchema() string {
 // excluding Apollo extras definitions and Apollo Queries and
 // some directives which are not exposed to the Apollo Gateway
 // as they are failing in the schema validation which is a bug
-// in their library.
+// in their library. See here:
+// https://github.com/apollographql/apollo-server/issues/3655
 func (s *handler) GQLSchemaWithoutApolloExtras() string {
 	typeMapCopy := make(map[string]*ast.Definition)
 	for typ, defn := range s.completeSchema.Types {
