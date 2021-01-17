@@ -104,7 +104,7 @@ func TestSchemaString(t *testing.T) {
 
 func TestApolloServiceQueryResult(t *testing.T) {
 	inputDir := "testdata/apolloservice/input/"
-	outputDir := "testData/apolloservice/output/"
+	outputDir := "testdata/apolloservice/output/"
 
 	files, err := ioutil.ReadDir(inputDir)
 	require.NoError(t, err)
