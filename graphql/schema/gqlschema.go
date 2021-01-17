@@ -895,7 +895,7 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
-// In case of Apollo service Query, input types from mutations and mutations
+// In case of Apollo service Query, input types from queries and mutations
 // are excluded due to the limited support currently.
 func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bool) {
 	query := sch.Types["Query"]
@@ -933,6 +933,10 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 			continue
 		}
 		defn := sch.Types[key]
+		if apolloServiceQuery && hasExtends(defn) {
+			continue
+		}
+
 		params := &GenerateDirectiveParams{
 			generateGetQuery:       true,
 			generateFilterQuery:    true,
@@ -991,10 +995,6 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 				}
 				addMutations(sch, defn, params)
 			}
-		}
-
-		if apolloServiceQuery && hasExtends(defn) {
-			continue
 		}
 
 		// types and inputs needed for query and search
@@ -2407,7 +2407,7 @@ func generateUnionString(typ *ast.Definition) string {
 // mutations all in alphabetical order.
 // var "apolloServiceQuery" is used to distinguish Schema String from what should be
 // returned as a result of apollo service query. In case of Apollo service query, Schema
-// misses some of the directive definitions which are currently not supported at the GateWay.
+// removes some of the directive definitions which are currently not supported at the gateway.
 func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bool) string {
 	var sch, original, object, input, enum strings.Builder
 
