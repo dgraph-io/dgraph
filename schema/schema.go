@@ -784,7 +784,7 @@ func IsPreDefPredChanged(namespace string, update *pb.SchemaUpdate) bool {
 // If the passed update is not a pre-defined type than it just returns false.
 func IsPreDefTypeChanged(namespace string, update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
-	if !x.IsPreDefinedType(x.ParseAttr(update.TypeName)) {
+	if !x.IsPreDefinedType(update.TypeName) {
 		return false
 	}
 

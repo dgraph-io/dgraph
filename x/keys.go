@@ -652,7 +652,7 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // 	2. dgraph.blah (reserved = true,  pre_defined = false)
 // 	3. person.name (reserved = false, pre_defined = false)
 func IsReservedPredicate(pred string) bool {
-	return isReservedName(pred)
+	return isReservedName(ParseAttr(pred))
 }
 
 // IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally
@@ -667,6 +667,7 @@ func IsReservedPredicate(pred string) bool {
 //
 // Pre-defined predicates are subset of reserved predicates.
 func IsPreDefinedPredicate(pred string) bool {
+	pred = ParseAttr(pred)
 	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
@@ -715,7 +716,7 @@ func IsInternalPredicate(pred string) bool {
 // When critical, use IsPreDefinedType(typ string) to find out whether the typ was
 // actually defined internally or not.
 func IsReservedType(typ string) bool {
-	return isReservedName(typ)
+	return isReservedName(ParseAttr(typ))
 }
 
 // IsPreDefinedType returns true only if the typ has been defined by dgraph internally.
@@ -727,7 +728,7 @@ func IsReservedType(typ string) bool {
 //
 // Pre-defined types are subset of reserved types.
 func IsPreDefinedType(typ string) bool {
-	_, ok := preDefinedTypeMap[typ]
+	_, ok := preDefinedTypeMap[ParseAttr(typ)]
 	return ok
 }
 

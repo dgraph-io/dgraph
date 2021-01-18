@@ -268,6 +268,8 @@ func parseSchemaFromAlterOperation(namespace string, op *api.Operation) (*schema
 		//
 		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
 		// example?
+
+		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
 		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
@@ -291,6 +293,7 @@ func parseSchemaFromAlterOperation(namespace string, op *api.Operation) (*schema
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
+		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
