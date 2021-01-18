@@ -2880,9 +2880,54 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+	// Filter the schema nodes for the given namespace.
+	er.SchemaNode = filterSchemaNodeForNamespace(namespace, er.SchemaNode)
+	// Filter the types for the given namespace.
+	er.Types = filterTypesForNamespace(namespace, er.Types)
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
+}
+
+// filterTypesForNamespace filters types for the given namespace.
+func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
+	out := []*pb.TypeUpdate{}
+	for _, update := range types {
+		// Type name doesn't have reverse.
+		typeNamespace, typeName, _ := x.ParseNamespaceAttr(update.TypeName)
+		if typeNamespace != namespace {
+			continue
+		}
+		update.TypeName = typeName
+		fields := []*pb.SchemaUpdate{}
+		// Convert field name for the current namespace.
+		for _, field := range update.Fields {
+			_, fieldName, reverse := x.ParseNamespaceAttr(field.Predicate)
+			if reverse {
+				fieldName = "~" + fieldName
+			}
+			field.Predicate = fieldName
+			fields = append(fields, field)
+		}
+		update.Fields = fields
+		out = append(out, update)
+	}
+	return out
+}
+
+// filterSchemaNodeForNamespace filters schema nodes for the given namespace.
+func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*pb.SchemaNode {
+	out := []*pb.SchemaNode{}
+
+	for _, node := range nodes {
+		nodeNamespace, attrName, _ := x.ParseNamespaceAttr(node.Predicate)
+		if nodeNamespace != namespace {
+			continue
+		}
+		node.Predicate = attrName
+		out = append(out, node)
+	}
+	return out
 }
 
 // StripBlankNode returns a copy of the map where all the keys have the blank node prefix removed.
