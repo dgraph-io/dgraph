@@ -382,13 +382,15 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 				x.Check2(buf.WriteString(`"Deleted"`))
 			}
 		case schema.NumUid:
-			// TODO: apply coercion here as per Int rules? or change the schema to Int64?
-			// I think, changing the schema to Int64 is better.
+			// Although theoretically it is possible that numUids can be out of the int32 range but
+			// we don't need to apply coercion rules here as per Int type because carrying out a
+			// mutation which mutates more than 2 billion uids doesn't seem a practical case.
+			// So, we are skipping coercion here.
 			x.Check2(buf.WriteString(strconv.Itoa(numUids)))
 		default: // this has to be queryField
 			if len(qryResult) == 0 {
 				// don't write null, instead write [] as query field is always a nullable list
-				x.Check2(buf.WriteString("[]"))
+				x.Check2(buf.Write(schema.JsonEmptyList))
 			} else {
 				// need to write only the value returned for query field, so need to remove the JSON
 				// key till colon (:) and also the ending brace }.

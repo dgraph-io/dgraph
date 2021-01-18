@@ -189,7 +189,7 @@ func (r *Response) Output() interface{} {
 			Data   json.RawMessage `json:"data,omitempty"`
 		}{
 			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
-			Data:   []byte("null"),
+			Data:   JsonNull,
 		}
 	}
 
