@@ -536,7 +536,6 @@ func (s *Server) Connect(ctx context.Context,
 				proposal.Member = m
 				return proposal
 			}
-			// TODO: Allow each Alpha to specify which group it should be part of.
 
 			// We don't have this server in the list.
 			if len(group.Members) < s.NumReplicas {
