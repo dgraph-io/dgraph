@@ -3377,7 +3377,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
-						reputation
+                        reputation
                         posts {
                           text
                         }
@@ -3404,7 +3404,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
-						reputation
+                        reputation
                         posts {
                           text
                         }
@@ -3431,7 +3431,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
-						reputation
+                        reputation
                         posts {
                           title
                         }
@@ -3467,7 +3467,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query{
 			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
 			           name
-						reputation
+                       reputation
 			           posts {
 			             title
 			           }
@@ -3483,7 +3483,9 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 								  "title": "A show about nothing"
 								}
 							  ]
-							}`,
+							}
+						  ]
+						}`,
 		},
 		{
 
@@ -3528,7 +3530,6 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 				Query:     tcase.query,
 				Variables: tcase.variables,
 			}
-			fmt.Printf(tcase.query)
 			resp := params.ExecuteAsPost(t, GraphqlURL)
 			RequireNoGQLErrors(t, resp)
 			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
