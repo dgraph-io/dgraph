@@ -613,6 +613,7 @@ func run() {
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
 		AuditEnabled:  Alpha.Conf.GetBool("audit_enabled"),
+		AuditDir:      Alpha.Conf.GetString("audit_dir"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -675,7 +676,6 @@ func run() {
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
 		HmacSecret:           opts.HmacSecret,
-		AuditDir:             Alpha.Conf.GetString("audit_dir"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")

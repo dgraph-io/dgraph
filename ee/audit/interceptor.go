@@ -1,37 +1,52 @@
+/*
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package audit
 
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	skip := func(method string) bool {
-		skipApis := []string{"Heartbeat", "RaftMessage", "JoinCluster", "IsPeer", // raft server
-			"StreamMembership", "UpdateMembership", "Oracle", // zero server
-			"Check", "Watch", // health server
+		skipApis := map[string]bool{
+			// raft server
+			"Heartbeat":   true,
+			"RaftMessage": true,
+			"JoinCluster": true,
+			"IsPeer":      true,
+			// zero server
+			"StreamMembership": true,
+			"UpdateMembership": true,
+			"Oracle":           true,
+			"Timestamps":       true,
+			// health server
+			"Check": true,
+			"Watch": true,
 		}
-
-		for _, api := range skipApis {
-			if strings.HasSuffix(method, api) {
-				return true
-			}
-		}
-		return false
+		return skipApis[info.FullMethod[strings.LastIndex(info.FullMethod, "/")+1:]]
 	}
 
 	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
@@ -57,80 +72,6 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
 		auditHttp(rw, r)
 	})
-}
-
-func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
-	clientHost := ""
-	if p, ok := peer.FromContext(ctx); ok {
-		clientHost = p.Addr.String()
-	}
-
-	userId := ""
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if t := md.Get("accessJwt"); len(t) > 0 {
-			userId = getUserId(t[0], false)
-		} else if t := md.Get("auth-token"); len(t) > 0 {
-			userId = getUserId(t[0], true)
-		}
-	}
-
-	cd := codes.Unknown
-	if serr, ok := status.FromError(err); ok {
-		cd = serr.Code()
-	}
-	auditor.AuditEvent(&AuditEvent{
-		User:       userId,
-		ServerHost: x.WorkerConfig.MyAddr,
-		ClientHost: clientHost,
-		Endpoint:   info.FullMethod,
-		ReqType:    Grpc,
-		Req:        fmt.Sprintf("%v", req),
-		Status:     cd.String(),
-	})
-}
-
-func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		rb = []byte(err.Error())
-	}
-
-	userId := ""
-	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
-		userId = getUserId(token, false)
-	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
-		userId = getUserId(token, true)
-	} else {
-		userId = getUserId("", false)
-	}
-	auditor.AuditEvent(&AuditEvent{
-		User:        userId,
-		ServerHost:  x.WorkerConfig.MyAddr,
-		ClientHost:  r.RemoteAddr,
-		Endpoint:    r.URL.Path,
-		ReqType:     Http,
-		Req:         string(rb),
-		Status:      http.StatusText(w.statusCode),
-		QueryParams: r.URL.Query(),
-	})
-}
-
-func getUserId(token string, poorman bool) string {
-	if poorman {
-		return PoorManAuth
-	}
-	var userId string
-	var err error
-	if token == "" {
-		if x.WorkerConfig.AclEnabled {
-			userId = UnauthorisedUser
-		}
-	} else {
-		if userId, err = x.ExtractUserName(token); err != nil {
-			userId = UnknownUser
-		}
-	}
-	return userId
 }
 
 type ResponseWriter struct {
