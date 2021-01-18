@@ -294,6 +294,9 @@ func parseSchemaFromAlterOperation(namespace string, op *api.Operation) (*schema
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		for _, field := range typ.Fields {
+			field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
+		}
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
