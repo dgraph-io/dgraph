@@ -31,6 +31,10 @@ help:
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
+.PHONY: get-deps
+get-deps:
+	go get -v github.com/dgraph-io/dgraph
+
 .PHONY: check
 check:
 	@./depcheck.sh && \
@@ -48,7 +52,7 @@ copy-protos:
 	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate: copy-protos check clean
+regenerate: get-deps copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
