@@ -312,7 +312,7 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(` --raft='%s'`, raft)
 
 	// Don't assign idx, let it auto-assign.
-	// svc.Command += fmt.Sprintf(" --idx=%d", idx)
+	// svc.Command += fmt.Sprintf(" --raft='idx=%d'", idx)
 	if opts.Vmodule != "" {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}

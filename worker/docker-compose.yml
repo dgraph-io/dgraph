@@ -121,7 +121,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --idx=1 --my=zero1:5080
+    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=1" --my=zero1:5080
       --replicas=3 --logtostderr -v=2 --bindall
   zero2:
     image: dgraph/dgraph:latest
@@ -138,7 +138,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --idx=2 --my=zero2:5080
+    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=2" --my=zero2:5080
       --replicas=3 --logtostderr -v=2 --peer=zero1:5080
   zero3:
     image: dgraph/dgraph:latest
@@ -155,6 +155,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --idx=3 --my=zero3:5080
+    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=3" --my=zero3:5080
       --replicas=3 --logtostderr -v=2 --peer=zero1:5080
 volumes: {}
