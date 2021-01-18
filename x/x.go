@@ -40,8 +40,8 @@ import (
 
 	"google.golang.org/grpc/peer"
 
-	"github.com/dgraph-io/badger/v2"
-	bo "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -123,7 +123,7 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
-	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
+	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"

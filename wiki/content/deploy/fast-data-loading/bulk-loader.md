@@ -286,6 +286,3 @@ higher CPU utilization.
 - The `--map_shards` flag controls the number of separate map output shards.
   Increasing this increases memory consumption but balances the resultant
 Dgraph alpha instances more evenly.
-
-- The `--shufflers` controls the level of parallelism in the shuffle/reduce
-  stage. Increasing this increases memory consumption.

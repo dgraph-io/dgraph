@@ -693,7 +693,7 @@ func RunAll(t *testing.T) {
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
-	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
+	t.Run("query typename in mutation", queryTypenameInMutation)
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)

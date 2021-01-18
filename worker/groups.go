@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
