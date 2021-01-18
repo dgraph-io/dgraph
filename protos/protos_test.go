@@ -16,7 +16,6 @@
 package protos
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -25,8 +24,6 @@ import (
 )
 
 func TestProtosRegenerate(t *testing.T) {
-	d, _ := os.Getwd()
-	t.Logf("CWD: %v\n", d)
 	err := testutil.Exec("make", "regenerate")
 	require.NoError(t, err, "Got error while regenerating protos: %v\n", err)
 
