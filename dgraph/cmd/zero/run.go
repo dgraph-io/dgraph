@@ -48,7 +48,7 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	nodeId            uint64
+	raftOpts          string
 	numReplicas       int
 	peer              string
 	w                 string
@@ -82,7 +82,13 @@ instances to achieve high-availability.
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
+	flag.String("raft", "idx=1; learner=false",
+		`Raft options for group zero.
+		idx=N provides the Raft ID that this server would use to join the Zero group.
+			N cannot be 0.
+		learner=true would make this Zero a "learner" node. In learner node, the Zero would not
+			participate in Raft elections. This can be used to achieve a read-only replica.
+		`)
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
@@ -121,7 +127,13 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
+	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	rc := pb.RaftContext{
+		Id:        nodeId,
+		Addr:      x.WorkerConfig.MyAddr,
+		Group:     0,
+		IsLearner: x.GetFlagBool(opts.raftOpts, "learner"),
+	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
@@ -175,7 +187,7 @@ func run() {
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		nodeId:            uint64(Zero.Conf.GetInt("idx")),
+		raftOpts:          Zero.Conf.GetString("raft"),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
@@ -183,11 +195,8 @@ func run() {
 		tlsClientConfig:   tlsConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
-
-	if opts.nodeId == 0 {
-		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
-	}
 	x.WorkerConfig.Parse(Zero.Conf)
+	x.CheckFlag(opts.raftOpts, "idx", "learner")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -222,6 +231,10 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
+	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	if nodeId == 0 {
+		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
+	}
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
@@ -230,7 +243,7 @@ func run() {
 	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	store := raftwal.Init(opts.w)
-	store.SetUint(raftwal.RaftId, opts.nodeId)
+	store.SetUint(raftwal.RaftId, nodeId)
 	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 
 	// Initialize the servers.

@@ -393,6 +393,8 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 	}
 
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
+	// Note: If we have a big transaction of say 1M postings, then this loop would be taking up all
+	// the time, because it is O(N^2), where N = number of postings added.
 	for i, prev := range plist.Postings {
 		if prev.Uid == mpost.Uid {
 			plist.Postings[i] = mpost

@@ -215,7 +215,16 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
-	if !has && len(group.Members) >= n.server.NumReplicas {
+	var numReplicas int
+	for _, gm := range group.Members {
+		if !gm.Learner {
+			numReplicas++
+		}
+	}
+	switch {
+	case has || member.GetLearner():
+		// pass
+	case numReplicas >= n.server.NumReplicas:
 		// We shouldn't allow more members than the number of replicas.
 		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
@@ -225,8 +234,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
-	if member.GroupId == n.server.nextGroup &&
-		len(group.Members) >= n.server.NumReplicas {
+	if member.GroupId == n.server.nextGroup && numReplicas >= n.server.NumReplicas {
 		n.server.nextGroup++
 	}
 	if member.Leader {
@@ -436,7 +444,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {

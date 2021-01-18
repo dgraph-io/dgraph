@@ -86,26 +86,33 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 			zeroAddr, x.WorkerConfig.MyAddr)
 	}
 
-	if x.WorkerConfig.RaftId == 0 {
-		id := walStore.Uint(raftwal.RaftId)
-		x.WorkerConfig.RaftId = id
+	raftIdx := x.GetFlagUint64(x.WorkerConfig.Raft, "idx")
+	if raftIdx == 0 {
+		raftIdx = walStore.Uint(raftwal.RaftId)
 
 		// If the w directory already contains raft information, ignore the proposed
 		// group ID stored inside the p directory.
-		if id > 0 {
+		if raftIdx > 0 {
 			x.WorkerConfig.ProposedGroupId = 0
 		}
 	}
-	glog.Infof("Current Raft Id: %#x\n", x.WorkerConfig.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", raftIdx)
 
+	if x.WorkerConfig.ProposedGroupId == 0 {
+		x.WorkerConfig.ProposedGroupId = x.GetFlagUint32(x.WorkerConfig.Raft, "group")
+	}
 	// Successfully connect with dgraphzero, before doing anything else.
-
 	// Connect with Zero leader and figure out what group we should belong to.
-	m := &pb.Member{Id: x.WorkerConfig.RaftId, GroupId: x.WorkerConfig.ProposedGroupId,
-		Addr: x.WorkerConfig.MyAddr}
+	m := &pb.Member{
+		Id:      raftIdx,
+		GroupId: x.WorkerConfig.ProposedGroupId,
+		Addr:    x.WorkerConfig.MyAddr,
+		Learner: x.GetFlagBool(x.WorkerConfig.Raft, "learner"),
+	}
 	if m.GroupId > 0 {
 		m.ForceGroupId = true
 	}
+	glog.Infof("Sending member request to Zero: %+v\n", m)
 	var connState *pb.ConnectionState
 	var err error
 
@@ -125,22 +132,22 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
-	x.WorkerConfig.RaftId = connState.GetMember().GetId()
-	glog.Infof("Raft Id after connection to Zero: %#x\n", x.WorkerConfig.RaftId)
+	raftIdx = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", raftIdx)
 
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	gr.applyState(connState.GetState())
+	gr.applyState(raftIdx, connState.GetState())
 
 	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.RaftId, raftIdx)
 	walStore.SetUint(raftwal.GroupId, uint64(gid))
 
-	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
+	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
@@ -300,11 +307,11 @@ func UpdateMembershipState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	g.applyState(state.GetState())
+	g.applyState(g.Node.Id, state.GetState())
 	return nil
 }
 
-func (g *groupi) applyState(state *pb.MembershipState) {
+func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -322,7 +329,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
-			if x.WorkerConfig.RaftId == member.Id {
+			if myId == member.Id {
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
@@ -346,7 +353,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if !foundSelf {
 		// I'm not part of this cluster. I should crash myself.
 		glog.Fatalf("Unable to find myself [id:%d group:%d] in membership state: %+v. Goodbye!",
-			g.Node.Id, g.groupId(), state)
+			myId, g.groupId(), state)
 	}
 
 	// While restarting we fill Node information after retrieving initial state.
@@ -696,7 +703,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
-		Id:         x.WorkerConfig.RaftId,
+		Id:         g.Node.Id,
 		GroupId:    g.groupId(),
 		Addr:       x.WorkerConfig.MyAddr,
 		Leader:     leader,
@@ -862,7 +869,7 @@ OUTER:
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
-			g.applyState(state)
+			g.applyState(g.Node.Id, state)
 		case <-ticker.C:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
