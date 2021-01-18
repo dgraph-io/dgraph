@@ -387,7 +387,7 @@ var (
 )
 
 func SchemaValidate(sch string) error {
-	schHandler, err := schema.NewHandler(sch, true)
+	schHandler, err := schema.NewHandler(sch, true, false)
 	if err != nil {
 		return err
 	}
@@ -650,7 +650,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema, false)
+	schHandler, err := schema.NewHandler(sch.Schema, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -848,6 +848,7 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
+// Todo(Minhaj): Fetch NewHandler for service query only once
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
@@ -868,7 +869,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 					as.mux.RLock()
 					defer as.mux.RUnlock()
 					sch := as.schema.Schema
-					handler, _ := schema.NewHandler(sch, false)
+					handler, _ := schema.NewHandler(sch, false, true)
 					data := handler.GQLSchemaWithoutApolloExtras()
 					return &resolve.Resolved{
 						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},

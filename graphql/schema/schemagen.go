@@ -66,7 +66,7 @@ func FromString(schema string) (Schema, error) {
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.originalDefs)
+	return Stringify(s.completeSchema, s.originalDefs, false)
 }
 
 func (s *handler) DGSchema() string {
@@ -74,23 +74,83 @@ func (s *handler) DGSchema() string {
 }
 
 // GQLSchemaWithoutApolloExtras return GraphQL schema string
-// excluding Apollo extras definitions and Apollo Queries
+// excluding Apollo extras definitions and Apollo Queries and
+// some directives which are not exposed to the Apollo Gateway
+// as they are failing in the schema validation which is a bug
+// in their library. See here:
+// https://github.com/apollographql/apollo-server/issues/3655
 func (s *handler) GQLSchemaWithoutApolloExtras() string {
 	typeMapCopy := make(map[string]*ast.Definition)
 	for typ, defn := range s.completeSchema.Types {
+		// Exclude "union _Entity = ..." definition from types
 		if typ == "_Entity" {
 			continue
 		}
-		typeMapCopy[typ] = defn
+		fldListCopy := make(ast.FieldList, 0)
+		for _, fld := range defn.Fields {
+			fldDirectiveListCopy := make(ast.DirectiveList, 0)
+			for _, dir := range fld.Directives {
+				// Drop "@custom" directive from the field's definition.
+				if dir.Name == "custom" {
+					continue
+				}
+				fldDirectiveListCopy = append(fldDirectiveListCopy, dir)
+			}
+			newFld := &ast.FieldDefinition{
+				Name:         fld.Name,
+				Arguments:    fld.Arguments,
+				DefaultValue: fld.DefaultValue,
+				Type:         fld.Type,
+				Directives:   fldDirectiveListCopy,
+				Position:     fld.Position,
+			}
+			fldListCopy = append(fldListCopy, newFld)
+		}
+
+		directiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range defn.Directives {
+			// Drop @generate and @auth directive from the Type Definition.
+			if dir.Name == "generate" || dir.Name == "auth" {
+				continue
+			}
+			directiveListCopy = append(directiveListCopy, dir)
+		}
+		typeMapCopy[typ] = &ast.Definition{
+			Kind:       defn.Kind,
+			Name:       defn.Name,
+			Directives: directiveListCopy,
+			Fields:     fldListCopy,
+			BuiltIn:    defn.BuiltIn,
+			EnumValues: defn.EnumValues,
+		}
 	}
 	queryList := make(ast.FieldList, 0)
 	for _, qry := range s.completeSchema.Query.Fields {
+		// Drop Apollo Queries from the List of Queries.
 		if qry.Name == "_entities" || qry.Name == "_service" {
 			continue
 		}
-		queryList = append(queryList, qry)
+		qryDirectiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range qry.Directives {
+			// Drop @custom directive from the Queries.
+			if dir.Name == "custom" {
+				continue
+			}
+			qryDirectiveListCopy = append(qryDirectiveListCopy, dir)
+		}
+		queryList = append(queryList, &ast.FieldDefinition{
+			Name:       qry.Name,
+			Arguments:  qry.Arguments,
+			Type:       qry.Type,
+			Directives: qryDirectiveListCopy,
+			Position:   qry.Position,
+		})
 	}
-	typeMapCopy["Query"].Fields = queryList
+
+	if typeMapCopy["Query"] != nil {
+		typeMapCopy["Query"].Fields = queryList
+	}
+
 	queryDefn := &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Query",
@@ -105,7 +165,7 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 		PossibleTypes: s.completeSchema.PossibleTypes,
 		Implements:    s.completeSchema.Implements,
 	}
-	return Stringify(astSchemaCopy, s.originalDefs)
+	return Stringify(astSchemaCopy, s.originalDefs, true)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
@@ -161,7 +221,7 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string, validateOnly bool) (Handler, error) {
+func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
@@ -259,7 +319,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 
 	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {

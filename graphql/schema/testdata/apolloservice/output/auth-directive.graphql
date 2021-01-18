@@ -2,27 +2,22 @@
 # Input Schema
 #######################
 
-type Mission {
+type Todo @secret(field: "pwd") {
 	id: ID!
-	crew: [Astronaut]
-	designation: String!
-	startDate: String
-	endDate: String
+	title: String
+	text: String
+	isPublic: Boolean @search
+	dateCompleted: String @search
+	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	owner(filter: UserFilter): User @hasInverse(field: "todos")
+	somethingPrivate: String
+	sharedWithAggregate(filter: UserFilter): UserAggregateResult
 }
 
-type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	missions: [Mission]
-}
-
-type User @remote {
-	id: ID!
-	name: String!
-}
-
-type Car {
-	id: ID!
-	name: String!
+type User @key(fields: "username") {
+	username: String! @id
+	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+	todosAggregate(filter: TodoFilter): TodoAggregateResult
 }
 
 #######################
@@ -274,77 +269,86 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type CarAggregateResult {
+type TodoAggregateResult {
 	count: Int
-	nameMin: String
-	nameMax: String
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	dateCompletedMin: String
+	dateCompletedMax: String
+	somethingPrivateMin: String
+	somethingPrivateMax: String
 }
 
-type MissionAggregateResult {
+type UserAggregateResult {
 	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
+	usernameMin: String
+	usernameMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum CarHasFilter {
-	name
+enum TodoHasFilter {
+	title
+	text
+	isPublic
+	dateCompleted
+	sharedWith
+	owner
+	somethingPrivate
 }
 
-enum CarOrderable {
-	name
+enum TodoOrderable {
+	title
+	text
+	dateCompleted
+	somethingPrivate
 }
 
-enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
+enum UserHasFilter {
+	username
+	todos
 }
 
-enum MissionOrderable {
-	designation
-	startDate
-	endDate
+enum UserOrderable {
+	username
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input CarFilter {
+input TodoFilter {
 	id: [ID!]
-	has: CarHasFilter
-	and: [CarFilter]
-	or: [CarFilter]
-	not: CarFilter
+	isPublic: Boolean
+	dateCompleted: StringTermFilter
+	has: TodoHasFilter
+	and: [TodoFilter]
+	or: [TodoFilter]
+	not: TodoFilter
 }
 
-input CarOrder {
-	asc: CarOrderable
-	desc: CarOrderable
-	then: CarOrder
+input TodoOrder {
+	asc: TodoOrderable
+	desc: TodoOrderable
+	then: TodoOrder
 }
 
-input MissionFilter {
-	id: [ID!]
-	has: MissionHasFilter
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
+input UserFilter {
+	username: StringHashFilter
+	has: UserHasFilter
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
 }
 
-input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
 #######################
@@ -352,12 +356,12 @@ input MissionOrder {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User]
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
-	getCar(id: ID!): Car
-	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	aggregateCar(filter: CarFilter): CarAggregateResult
+	getTodo(id: ID!): Todo
+	checkTodoPassword(id: ID!, pwd: String!): Todo
+	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
+	getUser(username: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 

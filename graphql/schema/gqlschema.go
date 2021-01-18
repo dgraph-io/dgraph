@@ -100,7 +100,9 @@ const (
 	// schemaExtras is everything that gets added to an input schema to make it
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
-	schemaExtras = `
+
+	// Just remove directive definitions and not the input types
+	schemaInputs = `
 """
 The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
 Int64 can represent values in range [-(2^63),(2^63 - 1)].
@@ -265,7 +267,8 @@ input GenerateMutationParams {
 	update: Boolean
 	delete: Boolean
 }
-
+`
+	directiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -287,7 +290,21 @@ directive @generate(
 	query: GenerateQueryParams,
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
+`
 
+	apolloSupportedDirectiveDefs = `
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+`
+	filterInputs = `
 input IntFilter {
 	eq: Int
 	le: Int
@@ -659,6 +676,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 // expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
 // implementing types
 func expandSchema(doc *ast.SchemaDocument) *gqlerror.Error {
+	schemaExtras := schemaInputs + directiveDefs + filterInputs
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)
@@ -877,7 +895,9 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned in the schema.
-func completeSchema(sch *ast.Schema, definitions []string) {
+// In case of Apollo service Query, input types from queries and mutations
+// are excluded due to the limited support currently.
+func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bool) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
@@ -913,64 +933,80 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 			continue
 		}
 		defn := sch.Types[key]
-		if defn.Kind == ast.Union {
-			// TODO: properly check the case of reverse predicates (~) with union members and clean
-			// them from unionRef or unionFilter as required.
-			addUnionReferenceType(sch, defn)
-			addUnionFilterType(sch, defn)
-			addUnionMemberTypeEnum(sch, defn)
+		if apolloServiceQuery && hasExtends(defn) {
 			continue
 		}
 
-		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
-			continue
+		params := &GenerateDirectiveParams{
+			generateGetQuery:       true,
+			generateFilterQuery:    true,
+			generatePasswordQuery:  true,
+			generateAggregateQuery: true,
+			generateAddMutation:    true,
+			generateUpdateMutation: true,
+			generateDeleteMutation: true,
+			generateSubscription:   false,
 		}
+		if !apolloServiceQuery {
+			if defn.Kind == ast.Union {
+				// TODO: properly check the case of reverse predicates (~) with union members and clean
+				// them from unionRef or unionFilter as required.
+				addUnionReferenceType(sch, defn)
+				addUnionFilterType(sch, defn)
+				addUnionMemberTypeEnum(sch, defn)
+				continue
+			}
 
-		params := parseGenerateDirectiveParams(defn)
+			if defn.Kind != ast.Interface && defn.Kind != ast.Object {
+				continue
+			}
 
-		// Common types to both Interface and Object.
-		addReferenceType(sch, defn)
+			params = parseGenerateDirectiveParams(defn)
 
-		if params.generateUpdateMutation {
-			addPatchType(sch, defn)
-			addUpdateType(sch, defn)
-			addUpdatePayloadType(sch, defn)
-		}
+			// Common types to both Interface and Object.
+			addReferenceType(sch, defn)
 
-		if params.generateDeleteMutation {
-			addDeletePayloadType(sch, defn)
-		}
-
-		switch defn.Kind {
-		case ast.Interface:
-			// addInputType doesn't make sense as interface is like an abstract class and we can't
-			// create objects of its type.
 			if params.generateUpdateMutation {
-				addUpdateMutation(sch, defn)
-			}
-			if params.generateDeleteMutation {
-				addDeleteMutation(sch, defn)
+				addPatchType(sch, defn)
+				addUpdateType(sch, defn)
+				addUpdatePayloadType(sch, defn)
 			}
 
-		case ast.Object:
-			// types and inputs needed for mutations
-			if params.generateAddMutation {
-				addInputType(sch, defn)
-				addAddPayloadType(sch, defn)
+			if params.generateDeleteMutation {
+				addDeletePayloadType(sch, defn)
 			}
-			addMutations(sch, defn, params)
+
+			switch defn.Kind {
+			case ast.Interface:
+				// addInputType doesn't make sense as interface is like an abstract class and we can't
+				// create objects of its type.
+				if params.generateUpdateMutation {
+					addUpdateMutation(sch, defn)
+				}
+				if params.generateDeleteMutation {
+					addDeleteMutation(sch, defn)
+				}
+
+			case ast.Object:
+				// types and inputs needed for mutations
+				if params.generateAddMutation {
+					addInputType(sch, defn)
+					addAddPayloadType(sch, defn)
+				}
+				addMutations(sch, defn, params)
+			}
 		}
 
 		// types and inputs needed for query and search
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
-		addFieldFilters(sch, defn)
+		addFieldFilters(sch, defn, apolloServiceQuery)
 		addAggregationResultType(sch, defn)
 		addQueries(sch, defn, params)
 		addTypeHasFilter(sch, defn)
 		// We need to call this at last as aggregateFields
 		// should not be part of HasFilter or UpdatePayloadType etc.
-		addAggregateFields(sch, defn)
+		addAggregateFields(sch, defn, apolloServiceQuery)
 	}
 }
 
@@ -1233,11 +1269,16 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 //     ...
 //   }
 // }
-func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
+func addFieldFilters(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
 		if hasCustomOrLambda(fld) {
+			continue
+		}
+
+		// Don't add Filters for @extended types as they can't be filtered.
+		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
 			continue
 		}
 
@@ -1264,8 +1305,14 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 // The following aggregate field is added to type T
 // fieldAAggregate(filter : AFilter) : AAggregateResult
 // These fields are added to support aggregate queries like count, avg, min
-func addAggregateFields(schema *ast.Schema, defn *ast.Definition) {
+func addAggregateFields(schema *ast.Schema, defn *ast.Definition, apolloServiceQuery bool) {
 	for _, fld := range defn.Fields {
+
+		// Don't generate Aggregate Queries for field whose types are extended
+		// in the schema.
+		if apolloServiceQuery && hasExtends(schema.Types[fld.Type.Name()]) {
+			continue
+		}
 		// Aggregate Fields only makes sense for fields of
 		// list types of kind Object or Interface
 		// (not scalar lists or not singleton types or lists of other kinds).
@@ -2358,7 +2405,10 @@ func generateUnionString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
-func Stringify(schema *ast.Schema, originalTypes []string) string {
+// var "apolloServiceQuery" is used to distinguish Schema String from what should be
+// returned as a result of apollo service query. In case of Apollo service query, Schema
+// removes some of the directive definitions which are currently not supported at the gateway.
+func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bool) string {
 	var sch, original, object, input, enum strings.Builder
 
 	if schema.Types == nil {
@@ -2395,6 +2445,12 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// schemaExtras gets added to the result as a string, but we need to mark
 	// off all it's contents as printed, so nothing in there gets printed with
 	// the generated definitions.
+	// In case of ApolloServiceQuery, schemaExtras is little different.
+	// It excludes some of the directive definitions.
+	schemaExtras := schemaInputs + directiveDefs + filterInputs
+	if apolloServiceQuery {
+		schemaExtras = schemaInputs + apolloSupportedDirectiveDefs + filterInputs
+	}
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
 		x.Panic(gqlErr)

@@ -2,25 +2,12 @@
 # Input Schema
 #######################
 
-type Mission {
-	id: ID!
-	crew: [Astronaut]
-	designation: String!
-	startDate: String
-	endDate: String
-}
-
-type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	missions: [Mission]
-}
-
 type User @remote {
 	id: ID!
 	name: String!
 }
 
-type Car {
+type Car @key(fields: "id") {
 	id: ID!
 	name: String!
 }
@@ -280,16 +267,6 @@ type CarAggregateResult {
 	nameMax: String
 }
 
-type MissionAggregateResult {
-	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
-}
-
 #######################
 # Generated Enums
 #######################
@@ -300,19 +277,6 @@ enum CarHasFilter {
 
 enum CarOrderable {
 	name
-}
-
-enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
-}
-
-enum MissionOrderable {
-	designation
-	startDate
-	endDate
 }
 
 #######################
@@ -333,29 +297,12 @@ input CarOrder {
 	then: CarOrder
 }
 
-input MissionFilter {
-	id: [ID!]
-	has: MissionHasFilter
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
-}
-
-input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
-}
-
 #######################
 # Generated Query
 #######################
 
 type Query {
 	getMyFavoriteUsers(id: ID!): [User]
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
 	getCar(id: ID!): Car
 	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	aggregateCar(filter: CarFilter): CarAggregateResult

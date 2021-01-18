@@ -1,0 +1,12 @@
+type Mission @key(fields: "id") {
+    id: ID!
+    crew: [Astronaut]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    missions: [Mission]
+}

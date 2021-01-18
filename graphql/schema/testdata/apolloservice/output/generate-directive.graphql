@@ -2,25 +2,22 @@
 # Input Schema
 #######################
 
-type Mission {
+interface Character @secret(field: "password") {
 	id: ID!
-	crew: [Astronaut]
-	designation: String!
-	startDate: String
-	endDate: String
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
-type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	missions: [Mission]
-}
-
-type User @remote {
+type Human @secret(field: "password") {
 	id: ID!
-	name: String!
+	name: String! @search(by: [exact])
+	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	totalCredits: Int
+	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
-type Car {
+type Person @withSubscription {
 	id: ID!
 	name: String!
 }
@@ -274,77 +271,106 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type CarAggregateResult {
+type CharacterAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
 }
 
-type MissionAggregateResult {
+type HumanAggregateResult {
 	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
+	nameMin: String
+	nameMax: String
+	totalCreditsMin: Int
+	totalCreditsMax: Int
+	totalCreditsSum: Int
+	totalCreditsAvg: Float
+}
+
+type PersonAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum CarHasFilter {
+enum CharacterHasFilter {
+	name
+	friends
+}
+
+enum CharacterOrderable {
 	name
 }
 
-enum CarOrderable {
+enum HumanHasFilter {
+	name
+	friends
+	totalCredits
+}
+
+enum HumanOrderable {
+	name
+	totalCredits
+}
+
+enum PersonHasFilter {
 	name
 }
 
-enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
-}
-
-enum MissionOrderable {
-	designation
-	startDate
-	endDate
+enum PersonOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input CarFilter {
+input CharacterFilter {
 	id: [ID!]
-	has: CarHasFilter
-	and: [CarFilter]
-	or: [CarFilter]
-	not: CarFilter
+	name: StringExactFilter
+	has: CharacterHasFilter
+	and: [CharacterFilter]
+	or: [CharacterFilter]
+	not: CharacterFilter
 }
 
-input CarOrder {
-	asc: CarOrderable
-	desc: CarOrderable
-	then: CarOrder
+input CharacterOrder {
+	asc: CharacterOrderable
+	desc: CharacterOrderable
+	then: CharacterOrder
 }
 
-input MissionFilter {
+input HumanFilter {
 	id: [ID!]
-	has: MissionHasFilter
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
+	name: StringExactFilter
+	has: HumanHasFilter
+	and: [HumanFilter]
+	or: [HumanFilter]
+	not: HumanFilter
 }
 
-input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
+input HumanOrder {
+	asc: HumanOrderable
+	desc: HumanOrderable
+	then: HumanOrder
+}
+
+input PersonFilter {
+	id: [ID!]
+	has: PersonHasFilter
+	and: [PersonFilter]
+	or: [PersonFilter]
+	not: PersonFilter
+}
+
+input PersonOrder {
+	asc: PersonOrderable
+	desc: PersonOrderable
+	then: PersonOrder
 }
 
 #######################
@@ -352,12 +378,25 @@ input MissionOrder {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User]
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
-	getCar(id: ID!): Car
-	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	aggregateCar(filter: CarFilter): CarAggregateResult
+	getCharacter(id: ID!): Character
+	checkCharacterPassword(id: ID!, password: String!): Character
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
+	getHuman(id: ID!): Human
+	checkHumanPassword(id: ID!, password: String!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
+	getPerson(id: ID!): Person
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	aggregatePerson(filter: PersonFilter): PersonAggregateResult
 }
 
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getPerson(id: ID!): Person
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	aggregatePerson(filter: PersonFilter): PersonAggregateResult
+}
