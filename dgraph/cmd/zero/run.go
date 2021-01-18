@@ -82,7 +82,7 @@ instances to achieve high-availability.
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.String("raft", "idx=0; learner=false",
+	flag.String("raft", "idx=1; learner=false",
 		`Raft options for group zero.
 		idx=N provides the Raft ID that this server would use to join the Zero group.
 			N cannot be 0.
