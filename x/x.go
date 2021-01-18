@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
@@ -1201,4 +1202,9 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+func MarshalToSizedBuffer(buf []byte, m proto.Message) ([]byte, error) {
+	buf = buf[:0]
+	return proto.MarshalOptions{}.MarshalAppend(buf, m)
 }

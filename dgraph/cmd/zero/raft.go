@@ -132,9 +132,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		sz := proto.Size(proposal)
 		data := make([]byte, 8+sz)
 		binary.BigEndian.PutUint64(data[:8], key)
-		entry := data[8:]
-		entry = entry[:0]
-		_, err := proto.MarshalOptions{}.MarshalAppend(entry, proposal)
+		_, err := x.MarshalToSizedBuffer(data[8:], proposal)
 		if err != nil {
 			return err
 		}

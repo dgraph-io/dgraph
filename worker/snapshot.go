@@ -46,7 +46,7 @@ type badgerWriter interface {
 }
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
+func (n *node) populateSnapshot(snap *pb.Snapshot, pl *conn.Pool) error {
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
@@ -62,7 +62,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	if err := stream.Send(&snap); err != nil {
+	if err := stream.Send(snap); err != nil {
 		return err
 	}
 

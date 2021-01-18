@@ -35,8 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
-	"google.golang.org/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 type groupi struct {
@@ -214,7 +214,7 @@ func (g *groupi) proposeInitialSchema() {
 		} else if gid == 0 {
 			g.upsertSchema(s, nil)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
-			!proto.Equal(s, &curr) {
+			!proto.Equal(s, curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
 			g.upsertSchema(s, nil)

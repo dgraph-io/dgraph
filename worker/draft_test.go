@@ -34,9 +34,7 @@ func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
 	sz := proto.Size(&proposal)
 	data := make([]byte, 8+sz)
-	entry := data[8:]
-	entry = entry[:0]
-	_, err := proto.MarshalOptions{}.MarshalAppend(entry, &proposal)
+	_, err := x.MarshalToSizedBuffer(data[8:], &proposal)
 	x.Check(err)
 	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
@@ -48,9 +46,7 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Delta: delta}
 	sz := proto.Size(&proposal)
 	data := make([]byte, 8+sz)
-	entry := data[8:]
-	entry = entry[:0]
-	_, err := proto.MarshalOptions{}.MarshalAppend(entry, &proposal)
+	_, err := x.MarshalToSizedBuffer(data[8:], &proposal)
 	x.Check(err)
 	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}

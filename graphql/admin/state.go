@@ -14,23 +14,45 @@ import (
 )
 
 type membershipState struct {
-	Counter    uint64         `json:"counter,omitempty"`
-	Groups     []clusterGroup `json:"groups,omitempty"`
-	Zeros      []*pb.Member   `json:"zeros,omitempty"`
-	MaxLeaseId uint64         `json:"maxLeaseId,omitempty"`
-	MaxTxnTs   uint64         `json:"maxTxnTs,omitempty"`
-	MaxRaftId  uint64         `json:"maxRaftId,omitempty"`
-	Removed    []*pb.Member   `json:"removed,omitempty"`
-	Cid        string         `json:"cid,omitempty"`
-	License    *pb.License    `json:"license,omitempty"`
+	Counter    uint64         `json:"counter"`
+	Groups     []clusterGroup `json:"groups"`
+	Zeros      []member       `json:"zeros"`
+	MaxLeaseId uint64         `json:"maxLeaseId"`
+	MaxTxnTs   uint64         `json:"maxTxnTs"`
+	MaxRaftId  uint64         `json:"maxRaftId"`
+	Removed    []*pb.Member   `json:"removed"`
+	Cid        string         `json:"cid"`
+	License    *pb.License    `json:"license"`
 }
 
 type clusterGroup struct {
-	Id         uint32       `json:"id,omitempty"`
-	Members    []*pb.Member `json:"members,omitempty"`
-	Tablets    []*pb.Tablet `json:"tablets,omitempty"`
-	SnapshotTs uint64       `json:"snapshotTs,omitempty"`
-	Checksum   uint64       `json:"checksum,omitempty"`
+	Id         uint32   `json:"id"`
+	Members    []member `json:"members"`
+	Tablets    []tablet `json:"tablets"`
+	SnapshotTs uint64   `json:"snapshotTs"`
+	Checksum   uint64   `json:"checksum"`
+}
+
+type member struct {
+	Id              uint64 `json:"id"`
+	GroupId         uint32 `json:"groupId"`
+	Addr            string `json:"addr"`
+	Leader          bool   `json:"leader"`
+	AmDead          bool   `json:"amDead"`
+	LastUpdate      uint64 `json:"lastUpdate"`
+	ClusterInfoOnly bool   `json:"clusterInfoOnly"`
+	ForceGroupId    bool   `json:"forceGroupId"`
+}
+
+type tablet struct {
+	GroupId           uint32 `json:"groupId"`
+	Predicate         string `json:"predicate"`
+	Force             bool   `json:"force"`
+	OnDiskBytes       int64  `json:"onDiskBytes"`
+	Remove            bool   `json:"remove"`
+	ReadOnly          bool   `json:"readOnly"`
+	MoveTs            uint64 `json:"moveTs"`
+	UncompressedBytes int64  `json:"uncompressedBytes"`
 }
 
 func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
@@ -46,7 +68,6 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
-
 	// map to graphql response structure
 	state := convertToGraphQLResp(&ms)
 	b, err := json.Marshal(state)
@@ -76,13 +97,31 @@ func convertToGraphQLResp(ms *pb.MembershipState) membershipState {
 
 	state.Counter = ms.Counter
 	for k, v := range ms.Groups {
-		var members = make([]*pb.Member, 0, len(v.Members))
-		for _, v1 := range v.Members {
-			members = append(members, v1)
+		var members = make([]member, 0, len(v.Members))
+		for id, v1 := range v.Members {
+			members = append(members, member{
+				Id:              id,
+				GroupId:         v1.GroupId,
+				Addr:            v1.Addr,
+				Leader:          v1.Leader,
+				AmDead:          v1.AmDead,
+				LastUpdate:      v1.LastUpdate,
+				ClusterInfoOnly: v1.ClusterInfoOnly,
+				ForceGroupId:    v1.ForceGroupId,
+			})
 		}
-		var tablets = make([]*pb.Tablet, 0, len(v.Tablets))
+		var tablets = make([]tablet, 0, len(v.Tablets))
 		for _, v1 := range v.Tablets {
-			tablets = append(tablets, v1)
+			tablets = append(tablets, tablet{
+				GroupId:           v1.GroupId,
+				Predicate:         v1.Predicate,
+				Force:             v1.Force,
+				OnDiskBytes:       v1.OnDiskBytes,
+				Remove:            v1.Remove,
+				ReadOnly:          v1.ReadOnly,
+				MoveTs:            v1.MoveTs,
+				UncompressedBytes: v1.UncompressedBytes,
+			})
 		}
 		state.Groups = append(state.Groups, clusterGroup{
 			Id:         k,
@@ -92,9 +131,18 @@ func convertToGraphQLResp(ms *pb.MembershipState) membershipState {
 			Checksum:   v.Checksum,
 		})
 	}
-	state.Zeros = make([]*pb.Member, 0, len(ms.Zeros))
+	state.Zeros = make([]member, 0, len(ms.Zeros))
 	for _, v := range ms.Zeros {
-		state.Zeros = append(state.Zeros, v)
+		state.Zeros = append(state.Zeros, member{
+			Id:              v.Id,
+			GroupId:         v.GroupId,
+			Addr:            v.Addr,
+			Leader:          v.Leader,
+			AmDead:          v.AmDead,
+			LastUpdate:      v.LastUpdate,
+			ClusterInfoOnly: v.ClusterInfoOnly,
+			ForceGroupId:    v.ForceGroupId,
+		})
 	}
 	state.MaxLeaseId = ms.MaxLeaseId
 	state.MaxTxnTs = ms.MaxTxnTs

@@ -77,7 +77,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	if err := ValidateAndConvert(edge, &su); err != nil {
+	if err := ValidateAndConvert(edge, su); err != nil {
 		return err
 	}
 
@@ -227,7 +227,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		rebuild := posting.IndexRebuild{
 			Attr:          su.Predicate,
 			StartTs:       startTs,
-			OldSchema:     &old,
+			OldSchema:     old,
 			CurrentSchema: su,
 		}
 		querySchema := rebuild.GetQuerySchema()
@@ -288,7 +288,7 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) erro
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
-		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
+		s = &pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 		// For type UidID, set List to true. This is done because previously
 		// all predicates of type UidID were implicitly considered lists.
 		if typ == types.UidID {
@@ -303,25 +303,25 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) erro
 		default:
 		}
 	}
-	if err := checkSchema(&s); err != nil {
+	if err := checkSchema(s); err != nil {
 		return err
 	}
-	return updateSchema(&s)
+	return updateSchema(s)
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
-	current := *update
+	current := proto.Clone(update).(*pb.TypeUpdate)
 	schema.State().SetType(update.TypeName, current)
-	return updateType(update.TypeName, *update)
+	return updateType(update.TypeName, update)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateType(typeName string, t pb.TypeUpdate) error {
+func updateType(typeName string, t *pb.TypeUpdate) error {
 	schema.State().SetType(typeName, t)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	data, err := proto.Marshal(&t)
+	data, err := proto.Marshal(t)
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
 		Key:      x.TypeKey(typeName),

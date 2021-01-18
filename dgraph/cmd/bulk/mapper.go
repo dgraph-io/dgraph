@@ -102,8 +102,7 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
 
 	if psz > 0 {
 		pbuf := dst[16+n:]
-		pbuf = pbuf[:0]
-		pbuf, err := proto.MarshalOptions{}.MarshalAppend(pbuf[:psz], p)
+		_, err := x.MarshalToSizedBuffer(pbuf, p)
 		x.Check(err)
 	}
 

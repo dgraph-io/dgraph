@@ -151,7 +151,7 @@ func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 		pred, typ, schema.Tokenizer, schema.Directive, schema.Count)
 }
 
-func logTypeUpdate(typ pb.TypeUpdate, typeName string) string {
+func logTypeUpdate(typ *pb.TypeUpdate, typeName string) string {
 	return fmt.Sprintf("Setting type definition for type %s: %v\n", typeName, typ)
 }
 
@@ -200,15 +200,15 @@ func GetIndexingPredicates() []string {
 
 // SetType sets the type for the given predicate in memory.
 // schema mutations must flow through the update function, which are synced to the db.
-func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
+func (s *state) SetType(typeName string, typ *pb.TypeUpdate) {
 	s.Lock()
 	defer s.Unlock()
-	s.types[typeName] = &typ
+	s.types[typeName] = typ
 	s.elog.Printf(logTypeUpdate(typ, typeName))
 }
 
 // Get gets the schema for the given predicate.
-func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
+func (s *state) Get(ctx context.Context, pred string) (*pb.SchemaUpdate, bool) {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
@@ -216,15 +216,15 @@ func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
 	// If mutSchema doesn't have the predicate key, we use the schema from s.predicate.
 	if isWrite {
 		if schema, ok := s.mutSchema[pred]; ok {
-			return *schema, true
+			return proto.Clone(schema).(*pb.SchemaUpdate), true
 		}
 	}
 
 	schema, ok := s.predicate[pred]
 	if !ok {
-		return pb.SchemaUpdate{}, false
+		return &pb.SchemaUpdate{}, false
 	}
-	return *schema, true
+	return proto.Clone(schema).(*pb.SchemaUpdate), true
 }
 
 // GetType gets the type definition for the given type name.
@@ -523,7 +523,7 @@ func LoadTypesFromDb() error {
 				t = pb.TypeUpdate{TypeName: attr}
 			}
 			x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
-			State().SetType(attr, t)
+			State().SetType(attr, &t)
 			return nil
 		})
 		if err != nil {

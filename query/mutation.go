@@ -23,6 +23,7 @@ import (
 	"time"
 
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -94,9 +95,9 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 		}
 
 		for _, pred := range preds {
-			edgeCopy := *edge
+			edgeCopy := proto.Clone(edge).(*pb.DirectedEdge)
 			edgeCopy.Attr = pred
-			edges = append(edges, &edgeCopy)
+			edges = append(edges, edgeCopy)
 		}
 	}
 

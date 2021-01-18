@@ -352,7 +352,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Propose initial types as well after a drop all as they would have been cleared.
 		initialTypes := schema.InitialTypes()
 		for _, t := range initialTypes {
-			if err := updateType(t.GetTypeName(), *t); err != nil {
+			if err := updateType(t.GetTypeName(), t); err != nil {
 				return err
 			}
 		}
@@ -845,7 +845,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 	return res, nil
 }
 
-func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
+func (n *node) retrieveSnapshot(snap *pb.Snapshot) error {
 	closer, err := n.startTask(opSnapshot)
 	if err != nil {
 		return err
@@ -911,9 +911,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
 	sz := proto.Size(proposal)
 	data := make([]byte, 8+sz)
-	entry := data[8:]
-	entry = entry[:0]
-	_, err = proto.MarshalOptions{}.MarshalAppend(entry, proposal)
+	_, err = x.MarshalToSizedBuffer(data[8:], proposal)
 	x.Check(err)
 	data = data[:8+sz]
 	return n.Raft().Propose(n.ctx, data)
@@ -1174,7 +1172,7 @@ func (n *node) Run() {
 						snap, n.gid, rc.Id)
 
 					for {
-						err := n.retrieveSnapshot(snap)
+						err := n.retrieveSnapshot(&snap)
 						if err == nil {
 							glog.Infoln("---> Retrieve snapshot: OK.")
 							break

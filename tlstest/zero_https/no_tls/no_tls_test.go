@@ -45,7 +45,7 @@ func TestZeroWithNoTLS(t *testing.T) {
 		}
 
 		body := readResponseBody(t, do)
-		if !strings.Contains(string(body), test.response) {
+		if !strings.Contains(strings.ReplaceAll(string(body), " ", ""), test.response) {
 			t.Fatalf("response is not same. Got: %s Expected: %s", string(body), test.response)
 		}
 	}

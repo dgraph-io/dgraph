@@ -268,7 +268,7 @@ func TestRebuildTokIndex(t *testing.T) {
 		Attr:          "name2",
 		StartTs:       5,
 		OldSchema:     nil,
-		CurrentSchema: &currentSchema,
+		CurrentSchema: currentSchema,
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 		Attr:          "name2",
 		StartTs:       5,
 		OldSchema:     nil,
-		CurrentSchema: &currentSchema,
+		CurrentSchema: currentSchema,
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
@@ -334,8 +334,8 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 	rb = IndexRebuild{
 		Attr:          "name2",
 		StartTs:       6,
-		OldSchema:     &currentSchema,
-		CurrentSchema: &newSchema,
+		OldSchema:     currentSchema,
+		CurrentSchema: newSchema,
 	}
 	prefixes, err = prefixesForTokIndexes(context.Background(), &rb)
 	require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		Attr:          "friend",
 		StartTs:       16,
 		OldSchema:     nil,
-		CurrentSchema: &currentSchema,
+		CurrentSchema: currentSchema,
 	}
 	// TODO: Remove after fixing sync marks.
 	require.NoError(t, rebuildReverseEdges(context.Background(), &rb))
