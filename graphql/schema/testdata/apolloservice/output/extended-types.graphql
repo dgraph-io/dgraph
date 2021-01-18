@@ -4,17 +4,15 @@
 
 type Mission @key(fields: "id") {
 	id: ID!
-	crew(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+	crew: [Astronaut]
 	designation: String!
 	startDate: String
 	endDate: String
-	crewAggregate(filter: AstronautFilter): AstronautAggregateResult
 }
 
 type Astronaut @key(fields: "id") @extends {
 	id: ID! @external
-	missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	missionsAggregate(filter: MissionFilter): MissionAggregateResult
+	missions: [Mission]
 }
 
 #######################
@@ -266,34 +264,6 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
-}
-
-type AddMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
-}
-
-type AstronautAggregateResult {
-	count: Int
-	idMin: ID
-	idMax: ID
-}
-
-type DeleteAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	msg: String
-	numUids: Int
-}
-
-type DeleteMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	msg: String
-	numUids: Int
-}
-
 type MissionAggregateResult {
 	count: Int
 	designationMin: String
@@ -304,27 +274,9 @@ type MissionAggregateResult {
 	endDateMax: String
 }
 
-type UpdateAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
-}
-
-type UpdateMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
-}
-
 #######################
 # Generated Enums
 #######################
-
-enum AstronautHasFilter {
-	missions
-}
-
-enum AstronautOrderable {
-	id
-}
 
 enum MissionHasFilter {
 	crew
@@ -343,41 +295,6 @@ enum MissionOrderable {
 # Generated Inputs
 #######################
 
-input AddAstronautInput {
-	id: ID!
-	missions: [MissionRef]
-}
-
-input AddMissionInput {
-	crew: [AstronautRef]
-	designation: String!
-	startDate: String
-	endDate: String
-}
-
-input AstronautFilter {
-	id: [ID!]
-	has: AstronautHasFilter
-	and: [AstronautFilter]
-	or: [AstronautFilter]
-	not: AstronautFilter
-}
-
-input AstronautOrder {
-	asc: AstronautOrderable
-	desc: AstronautOrderable
-	then: AstronautOrder
-}
-
-input AstronautPatch {
-	missions: [MissionRef]
-}
-
-input AstronautRef {
-	id: ID
-	missions: [MissionRef]
-}
-
 input MissionFilter {
 	id: [ID!]
 	has: MissionHasFilter
@@ -392,33 +309,6 @@ input MissionOrder {
 	then: MissionOrder
 }
 
-input MissionPatch {
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
-}
-
-input MissionRef {
-	id: ID
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
-}
-
-input UpdateAstronautInput {
-	filter: AstronautFilter!
-	set: AstronautPatch
-	remove: AstronautPatch
-}
-
-input UpdateMissionInput {
-	filter: MissionFilter!
-	set: MissionPatch
-	remove: MissionPatch
-}
-
 #######################
 # Generated Query
 #######################
@@ -427,21 +317,5 @@ type Query {
 	getMission(id: ID!): Mission
 	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
 	aggregateMission(filter: MissionFilter): MissionAggregateResult
-	getAstronaut(id: ID!): Astronaut
-	queryAstronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	aggregateAstronaut(filter: AstronautFilter): AstronautAggregateResult
-}
-
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addMission(input: [AddMissionInput!]!): AddMissionPayload
-	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
-	deleteMission(filter: MissionFilter!): DeleteMissionPayload
-	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
-	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
-	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
 }
 
