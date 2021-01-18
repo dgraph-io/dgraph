@@ -28,7 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"

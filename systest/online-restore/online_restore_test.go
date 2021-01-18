@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -98,7 +98,7 @@ func disableDraining(t *testing.T) {
 
 func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Join(path.Dir(thisFile), "queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
 	files, err := ioutil.ReadDir(queryDir)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
-		filename := path.Join(queryDir, file.Name())
+		filename := filepath.Join(queryDir, file.Name())
 		reader, cleanup := chunker.FileReader(filename, nil)
 		bytes, err := ioutil.ReadAll(reader)
 		require.NoError(t, err)

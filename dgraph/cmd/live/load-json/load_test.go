@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -174,7 +174,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	testDataDir = path.Dir(thisFile)
+	testDataDir = filepath.Dir(thisFile)
 
 	var err error
 	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)

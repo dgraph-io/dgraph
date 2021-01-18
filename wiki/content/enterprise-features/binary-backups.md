@@ -376,6 +376,90 @@ same reason as the point above.
 - You can have multiple backup series in the same location although the feature
 still works if you set up a unique location for each series.
 
+## Export Backups
+
+The `export_backup` tool lets you convert a binary backup into an exported folder.
+
+If you need to upgrade between two major Dgraph versions that have incompatible changes,
+you can use the `export_backup` tool to apply changes (either to the exported `.rdf` file or to the schema file),
+and then import back the dataset into the new Dgraph version.
+
+### Using exports instead of binary backups
+
+An example of this use-case would be to migrate existing schemas from Dgraph v1.0 to Dgraph v20.11.
+You need to update the schema file from an export so all predicates of type `uid` are changed to `[uid]`.
+Then use the updated schema when loading data into Dgraph v1.1.
+
+For example, for the following schema:
+
+```
+name: string .
+friend: uid .
+```
+
+becomes
+
+```
+name: string .
+friend: [uid] .
+```
+
+Since you have to do a modification to the schema itself, you need an export. 
+You can use the `export_backup` tool to convert your binary backup into an export folder.
+
+### Binary Backups and Exports folders
+
+A Binary Backup directory has the following structure:
+
+```
+dgraph.20210104.224757.709
+├── manifest.json
+└── r9-g1.backup
+```
+
+An Export directory has the following structure:
+
+```
+dgraph.r9.u0108.1621
+├── g01.gql_schema.gz
+├── g01.rdf.gz
+└── g01.schema.gz
+```
+
+If you want to do the changes cited above, you need to edit the `g01.schema.gz` file.
+
+### Benefits
+
+With the `export_backup` tool you get the speed benefit from the binary backups, which are faster than regular exports.
+So if you have a big dataset, you don't need to wait a long time until an export is completed.
+Instead, just take a binary backup and convert it to an export only when needed.
+
+### How to use it
+
+Ensure that you have created a binary backup. The directory tree of a binary backup usually looks like this:
+
+```
+dgraph.20210104.224757.709
+├── manifest.json
+└── r9-g1.backup
+```
+
+Then run the following command:
+
+```sh
+dgraph export_backup -l <location-of-your-binary-backup> -d <destination-of-the-export-dir>
+```
+
+Once completed you will find your export folder (in this case `dgraph.r9.u0108.1621`).
+The tree of the directory should look like this:
+
+```
+dgraph.r9.u0108.1621
+├── g01.gql_schema.gz
+├── g01.rdf.gz
+└── g01.schema.gz
+```
+
 ## Encrypted Backups
 
 Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups.

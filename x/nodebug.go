@@ -19,9 +19,9 @@
 package x
 
 import (
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 

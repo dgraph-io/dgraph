@@ -2301,6 +2301,14 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.cors"
+        }
+      ],
+      "name": "dgraph.type.cors"
     }
   ]
 }`
@@ -2339,6 +2347,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.cors"
     }
   ]
 }`
