@@ -3400,7 +3400,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 		},
 		{
 
-			name: "Query using single ID in a filter of type integer coerced to string ",
+			name: "Query using single ID given in variable of type integer coerced to string ",
 			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
@@ -3427,7 +3427,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 		},
 		{
 
-			name: "Query using multiple ID in a filter of type integer coerced to string",
+			name: "Query using multiple ID given in variable of type integer coerced to string",
 			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
@@ -3460,6 +3460,30 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 							}
 						  ]
 						}`,
+		},
+		{
+
+			name: "Query using single ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
+			           name
+						reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							}`,
 		},
 		{
 
