@@ -146,15 +146,10 @@ func (mr MutationResolverFunc) Resolve(ctx context.Context, m schema.Mutation) (
 // 2) execute the mutation with me (return error if failed)
 // 3) write a query for the mutation with mr (return error if failed)
 // 4) execute the query with qe (return error if failed)
-// 5) process the result with rc
-func NewDgraphResolver(
-	mr MutationRewriter,
-	ex DgraphExecutor,
-	rc ResultCompleter) MutationResolver {
+func NewDgraphResolver(mr MutationRewriter, ex DgraphExecutor) MutationResolver {
 	return &dgraphResolver{
 		mutationRewriter: mr,
 		executor:         ex,
-		resultCompleter:  rc,
 	}
 }
 
@@ -162,7 +157,6 @@ func NewDgraphResolver(
 type dgraphResolver struct {
 	mutationRewriter MutationRewriter
 	executor         DgraphExecutor
-	resultCompleter  ResultCompleter
 }
 
 func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Resolved, bool) {
@@ -184,7 +178,6 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 	defer timer.Stop()
 
 	resolved, success := mr.rewriteAndExecute(ctx, m)
-	mr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved, success
@@ -234,8 +227,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			// all the standard mutations are nullable
-			Data:  []byte(`{"` + mutation.ResponseName() + `":null}`),
+			// all the standard mutations are nullable objects, so Data should pretty-much be
+			// {"mutAlias":null} everytime.
+			Data:  mutation.NullResponse(),
 			Field: mutation,
 			// there is no completion down the pipeline, so error's path should be prepended with
 			// mutation's alias before returning the response.
@@ -388,11 +382,15 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 				x.Check2(buf.WriteString(`"Deleted"`))
 			}
 		case schema.NumUid:
+			// Although theoretically it is possible that numUids can be out of the int32 range but
+			// we don't need to apply coercion rules here as per Int type because carrying out a
+			// mutation which mutates more than 2 billion uids doesn't seem a practical case.
+			// So, we are skipping coercion here.
 			x.Check2(buf.WriteString(strconv.Itoa(numUids)))
 		default: // this has to be queryField
 			if len(qryResult) == 0 {
 				// don't write null, instead write [] as query field is always a nullable list
-				x.Check2(buf.WriteString("[]"))
+				x.Check2(buf.Write(schema.JsonEmptyList))
 			} else {
 				// need to write only the value returned for query field, so need to remove the JSON
 				// key till colon (:) and also the ending brace }.

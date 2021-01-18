@@ -328,13 +328,11 @@ func TestCustomHTTPMutation(t *testing.T) {
 			gqlMutation := test.GetMutation(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPMutationResolver(client, StdQueryCompletion())
+			resolver := NewHTTPMutationResolver(client)
 			resolved, isResolved := resolver.Resolve(context.Background(), gqlMutation)
 			require.True(t, isResolved)
 
-			b, err := json.Marshal(resolved.Data)
-			require.NoError(t, err)
-			testutil.CompareJSON(t, tcase.ResolvedResponse, string(b))
+			testutil.CompareJSON(t, tcase.ResolvedResponse, string(resolved.Data))
 		})
 	}
 }

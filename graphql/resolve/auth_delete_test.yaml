@@ -344,7 +344,7 @@
     }
   dgquerysec: |-
     query {
-      x as var()
+      var()
       DeleteLogPayload.log()
     }
 

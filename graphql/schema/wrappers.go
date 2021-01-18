@@ -125,6 +125,12 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
+	// SkipField tells whether to skip this field during completion or not based on:
+	//  * @skip
+	//  * @include
+	//  * __typename: used for skipping fields in abstract types
+	//  * seenField: used for skipping when the field has already been seen at the current level
+	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
 	HasCustomDirective() (bool, map[string]FieldDefinition)
 	HasLambdaDirective() bool
@@ -133,10 +139,10 @@ type Field interface {
 	Location() x.Location
 	DgraphPredicate() string
 	Operation() Operation
-	// AbstractType tells us whether this field represents a GraphQL Interface.
+	// AbstractType tells us whether this field represents a GraphQL Interface/Union.
 	AbstractType() bool
-	IncludeInterfaceField(types []interface{}) bool
-	TypeName(dgraphTypes []interface{}) string
+	IncludeAbstractField(types []string) bool
+	TypeName(dgraphTypes []string) string
 	GetObjectName() string
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
@@ -146,6 +152,24 @@ type Field interface {
 	DgraphPredicateForAggregateField() string
 	IsAggregateField() bool
 	GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError
+	// MaxPathLength finds the max length (including list indexes) of any path in the 'query' f.
+	// Used to pre-allocate a path buffer of the correct size before running completeObject on
+	// the top level query - means that we aren't reallocating slices multiple times
+	// during the complete* functions.
+	MaxPathLength() int
+	// NullValue returns the appropriate null bytes to be written as value in the JSON response for
+	// this field.
+	//  * If this field is a list field then it returns []byte("[]").
+	//  * If it is nullable, it returns []byte("null").
+	//  * Otherwise, this field is non-nullable and so it will return a nil slice to indicate that.
+	NullValue() []byte
+	// NullResponse returns the bytes representing a JSON object to be used for setting the Data
+	// field of a Resolved, when this field resolves to a NullValue.
+	//  * If this field is a list field then it returns []byte(`{"fieldAlias":[]}`).
+	//  * If it is nullable, it returns []byte(`{"fieldAlias":null}`).
+	//  * Otherwise, this field is non-nullable and so it will return a nil slice to indicate that.
+	// This is useful only for top-level fields like a query or mutation.
+	NullResponse() []byte
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -820,6 +844,68 @@ func (f *field) GqlErrorf(path []interface{}, message string, args ...interface{
 	}
 }
 
+func (f *field) MaxPathLength() int {
+	childMax := 0
+	for _, child := range f.SelectionSet() {
+		d := child.MaxPathLength()
+		if d > childMax {
+			childMax = d
+		}
+	}
+	if f.Type().ListType() != nil {
+		// It's f: [...], so add a space for field name and
+		// a space for the index into the list
+		return 2 + childMax
+	}
+
+	return 1 + childMax
+}
+
+func (f *field) NullValue() []byte {
+	typ := f.Type()
+	if typ.ListType() != nil {
+		// We could choose to set this to null.  This is our decision, not
+		// anything required by the GraphQL spec.
+		//
+		// However, if we query, for example, for a person's friends with
+		// some restrictions, and there aren't any, is that really a case to
+		// set this at null and error if the list is required?  What
+		// about if a person has just been added and doesn't have any friends?
+		// Doesn't seem right to add null and cause error propagation.
+		//
+		// Seems best if we pick [], rather than null, as the list value if
+		// there's nothing in the Dgraph result.
+		return JsonEmptyList
+	}
+
+	if typ.Nullable() {
+		return JsonNull
+	}
+
+	// this is a non-nullable field, so return a nil slice to indicate that.
+	return nil
+}
+
+func (f *field) NullResponse() []byte {
+	val := f.NullValue()
+	if val == nil {
+		// this is a non-nullable field, so return a nil slice to indicate that.
+		return nil
+	}
+
+	key := []byte(f.ResponseName())
+
+	buf := make([]byte, 0, 5+len(key)+len(val)) // 5 = 2 + 2 + 1
+	buf = append(buf, '{', '"')
+	buf = append(buf, key...)
+	buf = append(buf, '"', ':')
+	buf = append(buf, val...)
+	buf = append(buf, '}')
+
+	// finally return a JSON like: {"fieldAlias":null}
+	return buf
+}
+
 func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -862,6 +948,25 @@ func (f *field) Include() bool {
 		return true
 	}
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
+}
+
+func (f *field) SkipField(dgraphTypes []string, seenField map[string]bool) bool {
+	if f.Skip() || !f.Include() {
+		return true
+	}
+	// If typ is an abstract type, and typename is a concrete type, then we ignore fields which
+	// aren't part of that concrete type. This would happen when multiple fragments (belonging
+	// to different concrete types) are requested within a query for an abstract type.
+	if len(dgraphTypes) > 0 && !f.IncludeAbstractField(dgraphTypes) {
+		return true
+	}
+	// if the field has already been seen at the current level, then we need to skip it.
+	// Otherwise, mark it seen.
+	if seenField[f.ResponseName()] {
+		return true
+	}
+	seenField[f.ResponseName()] = true
+	return false
 }
 
 func (f *field) Cascade() []string {
@@ -1233,14 +1338,9 @@ func (f *field) DgraphPredicate() string {
 	return f.op.inSchema.dgraphPredicate[f.field.ObjectDefinition.Name][f.Name()]
 }
 
-func (f *field) TypeName(dgraphTypes []interface{}) string {
+func (f *field) TypeName(dgraphTypes []string) string {
 	for _, typ := range dgraphTypes {
-		styp, ok := typ.(string)
-		if !ok {
-			continue
-		}
-
-		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
+		for _, origTyp := range f.op.inSchema.typeNameAst[typ] {
 			if origTyp.Kind != ast.Object {
 				continue
 			}
@@ -1251,15 +1351,11 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 	return f.GetObjectName()
 }
 
-func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+func (f *field) IncludeAbstractField(dgraphTypes []string) bool {
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
-		styp, ok := typ.(string)
-		if !ok {
-			continue
-		}
-		for _, origTyp := range f.op.inSchema.typeNameAst[styp] {
+		for _, origTyp := range f.op.inSchema.typeNameAst[typ] {
 			if origTyp.Kind == ast.Object {
 				// For fields coming from fragments inside an abstract type, there are two cases:
 				// * If the field is from an interface implemented by this object, and was fetched
@@ -1298,6 +1394,18 @@ func (q *query) IsAggregateField() bool {
 
 func (q *query) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
 	return (*field)(q).GqlErrorf(path, message, args...)
+}
+
+func (q *query) MaxPathLength() int {
+	return (*field)(q).MaxPathLength()
+}
+
+func (q *query) NullValue() []byte {
+	return (*field)(q).NullValue()
+}
+
+func (q *query) NullResponse() []byte {
+	return (*field)(q).NullResponse()
 }
 
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
@@ -1351,6 +1459,10 @@ func (q *query) Skip() bool {
 
 func (q *query) Include() bool {
 	return true
+}
+
+func (q *query) SkipField(dgraphTypes []string, seenField map[string]bool) bool {
+	return (*field)(q).SkipField(dgraphTypes, seenField)
 }
 
 func (q *query) Cascade() []string {
@@ -1548,12 +1660,12 @@ func (q *query) AbstractType() bool {
 	return (*field)(q).AbstractType()
 }
 
-func (q *query) TypeName(dgraphTypes []interface{}) string {
+func (q *query) TypeName(dgraphTypes []string) string {
 	return (*field)(q).TypeName(dgraphTypes)
 }
 
-func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
-	return (*field)(q).IncludeInterfaceField(dgraphTypes)
+func (q *query) IncludeAbstractField(dgraphTypes []string) bool {
+	return (*field)(q).IncludeAbstractField(dgraphTypes)
 }
 
 func (m *mutation) Name() string {
@@ -1590,6 +1702,10 @@ func (m *mutation) Skip() bool {
 
 func (m *mutation) Include() bool {
 	return true
+}
+
+func (m *mutation) SkipField(dgraphTypes []string, seenField map[string]bool) bool {
+	return (*field)(m).SkipField(dgraphTypes, seenField)
 }
 
 func (m *mutation) Cascade() []string {
@@ -1706,12 +1822,12 @@ func (m *mutation) DgraphPredicate() string {
 	return (*field)(m).DgraphPredicate()
 }
 
-func (m *mutation) TypeName(dgraphTypes []interface{}) string {
+func (m *mutation) TypeName(dgraphTypes []string) string {
 	return (*field)(m).TypeName(dgraphTypes)
 }
 
-func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
-	return (*field)(m).IncludeInterfaceField(dgraphTypes)
+func (m *mutation) IncludeAbstractField(dgraphTypes []string) bool {
+	return (*field)(m).IncludeAbstractField(dgraphTypes)
 }
 
 func (m *mutation) IsAuthQuery() bool {
@@ -1724,6 +1840,18 @@ func (m *mutation) IsAggregateField() bool {
 
 func (m *mutation) GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError {
 	return (*field)(m).GqlErrorf(path, message, args...)
+}
+
+func (m *mutation) MaxPathLength() int {
+	return (*field)(m).MaxPathLength()
+}
+
+func (m *mutation) NullValue() []byte {
+	return (*field)(m).NullValue()
+}
+
+func (m *mutation) NullResponse() []byte {
+	return (*field)(m).NullResponse()
 }
 
 func (t *astType) AuthRules() *TypeAuth {

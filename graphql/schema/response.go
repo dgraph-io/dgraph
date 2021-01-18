@@ -54,6 +54,13 @@ const (
 		"GraphQL error propagation triggered."
 )
 
+var (
+	// JsonNull are the bytes to represent null in JSON.
+	JsonNull = []byte("null")
+	// JsonEmptyList are the bytes to represent an empty list in JSON.
+	JsonEmptyList = []byte("[]")
+)
+
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 
@@ -139,7 +146,7 @@ func (r *Response) AddData(p []byte) {
 func (r *Response) SetDataNull() {
 	r.dataIsNull = true
 	r.Data.Reset()
-	x.Check2(r.Data.WriteString("null"))
+	x.Check2(r.Data.Write(JsonNull))
 }
 
 // MergeExtensions merges the extensions given in ext to r.
@@ -182,7 +189,7 @@ func (r *Response) Output() interface{} {
 			Data   json.RawMessage `json:"data,omitempty"`
 		}{
 			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
-			Data:   []byte("null"),
+			Data:   JsonNull,
 		}
 	}
 

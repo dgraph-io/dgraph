@@ -734,7 +734,7 @@ func checkAddUpdateCase(
 		skipAuth:    tcase.SkipAuth,
 		length:      length,
 	}
-	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
+	resolver := NewDgraphResolver(rewriter(), ex)
 
 	// -- Act --
 	resolved, _ := resolver.Resolve(ctx, mut)

@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -54,22 +55,23 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 		worker.UpdateLogRequest(*input.LogRequest)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
+		nil,
+	), true
 }
 
 func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
 	glog.Info("Got config query through GraphQL admin API")
 
-	conf := make(map[string]interface{})
-	conf["cacheMb"] = float64(worker.Config.CacheMb)
-
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): conf},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): map[string]interface{}{
+			"cacheMb": json.Number(strconv.FormatInt(worker.Config.CacheMb, 10)),
+		}},
+		nil,
+	)
 
 }
 
