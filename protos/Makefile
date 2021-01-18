@@ -34,9 +34,9 @@ help:
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
-.PHONY: get-deps
-get-deps:
-	go get -v github.com/dgraph-io/dgraph/dgraph
+.PHONY: tidy-deps
+tidy-deps:
+	@go mod tidy -v
 
 .PHONY: check
 check:
@@ -58,7 +58,7 @@ copy-protos:
 	 ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate: get-deps copy-protos check clean
+regenerate: tidy-deps copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
