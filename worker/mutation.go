@@ -767,6 +767,10 @@ func typeSanityCheck(t *pb.TypeUpdate) error {
 func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
 	defer span.End()
+	if tc.Aborted {
+		// The client called Discard
+		ostats.Record(ctx, x.TxnDiscards.M(1))
+	}
 
 	pl := groups().Leader(0)
 	if pl == nil {
@@ -785,6 +789,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
+		// The server aborted the txn (not the client)
 		ostats.Record(ctx, x.TxnAborts.M(1))
 		return 0, dgo.ErrAborted
 	}

@@ -99,9 +99,12 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
-	// TxnCommits records count of aborted transactions.
+	// TxnCommits records count of committed transactions.
 	TxnCommits = stats.Int64("txn_commits_total",
 		"Number of transaction commits", stats.UnitDimensionless)
+	// TxnDiscards records count of discarded transactions.
+	TxnDiscards = stats.Int64("txn_discards_total",
+		"Number of transaction discards", stats.UnitDimensionless)
 	// TxnAborts records count of aborted transactions.
 	TxnAborts = stats.Int64("txn_aborts_total",
 		"Number of transaction aborts", stats.UnitDimensionless)
@@ -198,6 +201,13 @@ var (
 			Name:        TxnCommits.Name(),
 			Measure:     TxnCommits,
 			Description: TxnCommits.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        TxnDiscards.Name(),
+			Measure:     TxnDiscards,
+			Description: TxnDiscards.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},
