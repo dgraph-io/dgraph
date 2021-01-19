@@ -617,7 +617,7 @@ func run() {
 
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
-		Audit:      Alpha.Conf.GetString("audit"),
+		Audit:         Alpha.Conf.GetString("audit"),
 	}
 
 	x.CheckFlag(opts.Audit, "dir", "compress", "encrypt-file")

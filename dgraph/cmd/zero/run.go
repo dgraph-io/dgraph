@@ -231,9 +231,9 @@ func run() {
 		}
 	}
 
-	wd, err := filepath.Abs(opts.w)
-	x.Check(err)
 	if len(opts.audit) > 0 {
+		wd, err := filepath.Abs(opts.w)
+		x.Check(err)
 		dir := x.GetFlagString(opts.audit, "dir")
 		if len(dir) == 0 {
 			glog.Fatal("audit flag is provided but dir is not specified")

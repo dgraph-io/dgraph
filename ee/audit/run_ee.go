@@ -81,7 +81,7 @@ func run() error {
 	defer file.Close()
 
 	outfile, err := os.OpenFile(decryptCmd.Conf.GetString("out"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
-		0600)
+		os.ModePerm)
 	x.Check(err)
 	defer outfile.Close()
 
@@ -89,27 +89,21 @@ func run() error {
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
 	iv := make([]byte, aes.BlockSize)
-	_, err = file.ReadAt(iv, 0)
-	x.Check(err)
+	x.Check2(file.ReadAt(iv, 0))
 
 	var iterator int64 = 16
 	for {
 		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		_, err = file.ReadAt(content, iterator)
-		x.Check(err)
-
+		x.Check2(file.ReadAt(content, iterator))
 		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
-		_, err = outfile.Write(content)
-		x.Check(err)
-
+		x.Check2(outfile.Write(content))
 		// if its the end of data. finish encoding
 		if iterator >= stat.Size() {
 			break
 		}
-		_, err = file.ReadAt(iv[12:], iterator)
-		x.Check(err)
+		x.Check2(file.ReadAt(iv[12:], iterator))
 		iterator = iterator + 4
 	}
 	return nil

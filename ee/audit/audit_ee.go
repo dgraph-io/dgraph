@@ -13,15 +13,7 @@
 package audit
 
 import (
-	"context"
-	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
-	"net/http"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -154,78 +146,4 @@ func (a *auditLogger) Audit(event *AuditEvent) {
 		"req_body", event.Req,
 		"query_param", event.QueryParams,
 		"status", event.Status)
-}
-
-func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
-	clientHost := ""
-	if p, ok := peer.FromContext(ctx); ok {
-		clientHost = p.Addr.String()
-	}
-
-	userId := ""
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if t := md.Get("accessJwt"); len(t) > 0 {
-			userId = getUserId(t[0], false)
-		} else if t := md.Get("auth-token"); len(t) > 0 {
-			userId = getUserId(t[0], true)
-		}
-	}
-
-	cd := codes.Unknown
-	if serr, ok := status.FromError(err); ok {
-		cd = serr.Code()
-	}
-	auditor.Audit(&AuditEvent{
-		User:       userId,
-		ServerHost: x.WorkerConfig.MyAddr,
-		ClientHost: clientHost,
-		Endpoint:   info.FullMethod,
-		ReqType:    Grpc,
-		Req:        fmt.Sprintf("%+v", req),
-		Status:     cd.String(),
-	})
-}
-
-func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		rb = []byte(err.Error())
-	}
-
-	userId := ""
-	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
-		userId = getUserId(token, false)
-	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
-		userId = getUserId(token, true)
-	} else {
-		userId = getUserId("", false)
-	}
-	auditor.Audit(&AuditEvent{
-		User:        userId,
-		ServerHost:  x.WorkerConfig.MyAddr,
-		ClientHost:  r.RemoteAddr,
-		Endpoint:    r.URL.Path,
-		ReqType:     Http,
-		Req:         string(rb),
-		Status:      http.StatusText(w.statusCode),
-		QueryParams: r.URL.Query(),
-	})
-}
-
-func getUserId(token string, poorman bool) string {
-	if poorman {
-		return PoorManAuth
-	}
-	var userId string
-	var err error
-	if token == "" {
-		if x.WorkerConfig.AclEnabled {
-			userId = UnauthorisedUser
-		}
-	} else {
-		if userId, err = x.ExtractUserName(token); err != nil {
-			userId = UnknownUser
-		}
-	}
-	return userId
 }

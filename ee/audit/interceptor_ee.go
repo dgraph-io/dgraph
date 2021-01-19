@@ -11,10 +11,15 @@
  */
 package audit
 
-
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -22,6 +27,10 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc"
+)
+
+const (
+	maxReqLength = 512 << 10 // 512 KB
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},
@@ -71,6 +80,80 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	})
 }
 
+func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
+	clientHost := ""
+	if p, ok := peer.FromContext(ctx); ok {
+		clientHost = p.Addr.String()
+	}
+
+	userId := ""
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if t := md.Get("accessJwt"); len(t) > 0 {
+			userId = getUserId(t[0], false)
+		} else if t := md.Get("auth-token"); len(t) > 0 {
+			userId = getUserId(t[0], true)
+		}
+	}
+
+	cd := codes.Unknown
+	if serr, ok := status.FromError(err); ok {
+		cd = serr.Code()
+	}
+	auditor.Audit(&AuditEvent{
+		User:       userId,
+		ServerHost: x.WorkerConfig.MyAddr,
+		ClientHost: clientHost,
+		Endpoint:   info.FullMethod,
+		ReqType:    Grpc,
+		Req:        truncate(fmt.Sprintf("%+v", req), maxReqLength),
+		Status:     cd.String(),
+	})
+}
+
+func auditHttp(w *ResponseWriter, r *http.Request) {
+	rb, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		rb = []byte(err.Error())
+	}
+
+	userId := ""
+	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
+		userId = getUserId(token, false)
+	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
+		userId = getUserId(token, true)
+	} else {
+		userId = getUserId("", false)
+	}
+	auditor.Audit(&AuditEvent{
+		User:        userId,
+		ServerHost:  x.WorkerConfig.MyAddr,
+		ClientHost:  r.RemoteAddr,
+		Endpoint:    r.URL.Path,
+		ReqType:     Http,
+		Req:         truncate(string(rb), maxReqLength),
+		Status:      http.StatusText(w.statusCode),
+		QueryParams: r.URL.Query(),
+	})
+}
+
+func getUserId(token string, poorman bool) string {
+	if poorman {
+		return PoorManAuth
+	}
+	var userId string
+	var err error
+	if token == "" {
+		if x.WorkerConfig.AclEnabled {
+			userId = UnauthorisedUser
+		}
+	} else {
+		if userId, err = x.ExtractUserName(token); err != nil {
+			userId = UnknownUser
+		}
+	}
+	return userId
+}
+
 type ResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -85,4 +168,11 @@ func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
 func (rw *ResponseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func truncate(s string, l int) string {
+	if len(s) > l {
+		return s[:l]
+	}
+	return s
 }
