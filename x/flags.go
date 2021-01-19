@@ -134,15 +134,3 @@ func (sf *SuperFlag) GetUint32(opt string) uint32 {
 	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, opt, sf)
 	return uint32(u)
 }
-func CheckFlagOpts(flag string, opts ...string) {
-	kv := parseFlag(flag)
-	for _, k := range opts {
-		if _, ok := kv[k]; ok {
-			delete(kv, k)
-		}
-	}
-	if len(kv) > 0 {
-		msg := fmt.Sprintf("Found invalid options from %q: %+v\n", flag, kv)
-		panic(msg)
-	}
-}
