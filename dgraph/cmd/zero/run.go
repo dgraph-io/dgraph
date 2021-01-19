@@ -48,7 +48,7 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	raft              *x.SuperFlag
+	Raft              *x.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
@@ -127,12 +127,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	nodeId := opts.raft.GetUint64("idx")
+	nodeId := opts.Raft.GetUint64("idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
 		Addr:      x.WorkerConfig.MyAddr,
 		Group:     0,
-		IsLearner: opts.raft.GetBool("learner"),
+		IsLearner: opts.Raft.GetBool("learner"),
 	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
@@ -189,7 +189,7 @@ func run() {
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		raft:              raft,
+		Raft:              raft,
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
@@ -232,7 +232,7 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
-	nodeId := opts.raft.GetUint64("idx")
+	nodeId := opts.Raft.GetUint64("idx")
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}

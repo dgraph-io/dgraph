@@ -17,7 +17,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha1:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
@@ -33,7 +33,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha2:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
@@ -49,7 +49,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha3:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   alpha4:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha4
@@ -65,7 +65,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha4:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   alpha5:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha5
@@ -81,7 +81,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha5:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   alpha6:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha6
@@ -97,7 +97,7 @@ services:
       read_only: true
     command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha6:7080
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --snapshot_after=100
+      --raft="snapshot-after=100"
   jaeger:
     image: jaegertracing/all-in-one:1.18
     working_dir: /working/jaeger
