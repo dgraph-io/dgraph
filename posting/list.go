@@ -114,7 +114,7 @@ type pIterator struct {
 	deleteBelowTs uint64
 }
 
-func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
+func (it *pIterator) seek(l *List, afterUid, deleteBelowTs uint64) error {
 	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
 		return errors.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
 			deleteBelowTs, l.minTs)
@@ -209,24 +209,19 @@ func (it *pIterator) moveToNextValidPart() error {
 		return nil
 	}
 
-	// If there are no more UIDs to iterate over, move to the next part of the
-	// list that contains valid data.
-	if len(it.uids) == 0 {
-		for it.splitIdx <= len(it.l.plist.Splits)-2 {
-			// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
-			// continue until len(splits) - 2.
-			if err := it.moveToNextPart(); err != nil {
-				return err
-			}
-
-			if len(it.uids) > 0 {
-				return nil
-			}
+	// Iterate while there are no UIDs, and while we have more splits to iterate over.
+	for len(it.uids) == 0 && it.splitIdx < len(it.l.plist.Splits)-1 {
+		// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
+		// continue until len(splits)-1.
+		if err := it.moveToNextPart(); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
+// next advances pIterator to the next valid part.
 func (it *pIterator) next() error {
 	if it.deleteBelowTs > 0 {
 		it.uids = nil
@@ -244,7 +239,14 @@ func (it *pIterator) next() error {
 		hex.EncodeToString(it.l.key))
 }
 
+// valid asserts that pIterator has valid uids, or advances it to the next valid part.
+// It returns false if there are no more valid parts.
 func (it *pIterator) valid() (bool, error) {
+	if it.deleteBelowTs > 0 {
+		it.uids = nil
+		return false, nil
+	}
+
 	if len(it.uids) > 0 {
 		return true, nil
 	}
@@ -560,7 +562,8 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	l.Unlock()
 }
 
-// Iterate will allow you to iterate over this posting List, while having acquired a read lock.
+// Iterate will allow you to iterate over the mutable and immutable layers of
+// this posting List, while having acquired a read lock.
 // So, please keep this iteration cheap, otherwise mutations would get stuck.
 // The iteration will start after the provided UID. The results would not include this uid.
 // The function will loop until either the posting List is fully iterated, or you return a false
@@ -643,6 +646,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
+	// mposts is the list of mutable postings
 	deleteBelowTs, mposts := l.pickPostings(readTs)
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
@@ -662,7 +666,9 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		prevUid uint64
 		err     error
 	)
-	err = pitr.init(l, afterUid, deleteBelowTs)
+
+	// pitr iterates through immutable postings
+	err = pitr.seek(l, afterUid, deleteBelowTs)
 	if err != nil {
 		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate")
 	}
@@ -1429,6 +1435,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	return fcs, nil
 }
 
+// readListPart reads one split of a posting list from Badger.
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	key, err := x.SplitKey(l.key, startUid)
 	if err != nil {
