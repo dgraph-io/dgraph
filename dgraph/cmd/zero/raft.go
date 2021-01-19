@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,6 +37,8 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	otrace "go.opencensus.io/trace"
 )
 
 type node struct {
