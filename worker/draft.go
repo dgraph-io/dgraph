@@ -1113,15 +1113,17 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
+				// ctx, _ := tag.New(context.Background(), tag.Upsert(x.KeyGroup, "10"))
+				ctx := context.Background()
 				if rd.SoftState.Lead != raft.None {
-					ostats.Record(context.Background(), x.RaftHasLeader.M(1))
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
 				} else {
-					ostats.Record(context.Background(), x.RaftHasLeader.M(0))
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
 				}
 				if leader {
-					ostats.Record(context.Background(), x.RaftIsLeader.M(1))
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
 				} else {
-					ostats.Record(context.Background(), x.RaftIsLeader.M(0))
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
 				}
 			}
 			if leader {
