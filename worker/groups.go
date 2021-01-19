@@ -206,6 +206,9 @@ func (g *groupi) applyInitialTypes() {
 }
 
 func (g *groupi) applyInitialSchema() {
+	if g.groupId() != 1 {
+		return
+	}
 	initialSchema := schema.InitialSchema()
 	ctx := g.Ctx()
 
