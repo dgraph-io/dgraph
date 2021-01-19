@@ -79,6 +79,9 @@ func NewSuperFlag(flag string) *SuperFlag {
 	}
 }
 func (sf *SuperFlag) String() string {
+	if sf == nil {
+		return ""
+	}
 	var kvs []string
 	for k, v := range sf.m {
 		kvs = append(kvs, fmt.Sprintf("%s=%s", k, v))
@@ -86,6 +89,12 @@ func (sf *SuperFlag) String() string {
 	return strings.Join(kvs, "; ")
 }
 func (sf *SuperFlag) MergeAndCheckDefault(flag string) *SuperFlag {
+	if sf == nil {
+		sf = &SuperFlag{
+			m: parseFlag(flag),
+		}
+		return sf
+	}
 	numKeys := len(sf.m)
 	src := parseFlag(flag)
 	for k := range src {
@@ -105,6 +114,9 @@ func (sf *SuperFlag) MergeAndCheckDefault(flag string) *SuperFlag {
 	return sf
 }
 func (sf *SuperFlag) Get(opt string) string {
+	if sf == nil {
+		return ""
+	}
 	return sf.m[opt]
 }
 func (sf *SuperFlag) GetBool(opt string) bool {
