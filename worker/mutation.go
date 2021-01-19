@@ -785,10 +785,10 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
-		ostats.Record(context.Background(), x.TxnAborts.M(1))
+		ostats.Record(ctx, x.TxnAborts.M(1))
 		return 0, dgo.ErrAborted
 	}
-	ostats.Record(context.Background(), x.TxnCommits.M(1))
+	ostats.Record(ctx, x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 
