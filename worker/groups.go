@@ -212,14 +212,9 @@ func (g *groupi) applyInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	ctx := g.Ctx()
 
-	applySchema := func(s *pb.SchemaUpdate) {
-		if err := updateSchema(s); err != nil {
+	apply := func(s *pb.SchemaUpdate) {
+		if err := applySchema(s); err != nil {
 			glog.Errorf("Error while applying initial schema: %s", err)
-		}
-		if servesTablet, err := g.ServesTablet(s.Predicate); err != nil {
-			glog.Errorf("Error while applying initial schema: %s", err)
-		} else if !servesTablet {
-			glog.Errorf("group 1 should always serve reserved predicate %s", s.Predicate)
 		}
 	}
 
@@ -227,21 +222,33 @@ func (g *groupi) applyInitialSchema() {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			applySchema(s)
+			apply(s)
 		} else if gid == 0 {
 			// The tablet is not being served currently.
-			applySchema(s)
+			apply(s)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			applySchema(s)
+			apply(s)
 		} else {
 			// The schema for this predicate has already been proposed.
 			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
 			continue
 		}
 	}
+}
+
+func applySchema(s *pb.SchemaUpdate) error {
+	if err := updateSchema(s); err != nil {
+		return err
+	}
+	if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
+		return err
+	} else if !servesTablet {
+		return errors.Errorf("group 1 should always serve reserved predicate %s", s.Predicate)
+	}
+	return nil
 }
 
 // No locks are acquired while accessing this function.
