@@ -788,6 +788,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		ostats.Record(context.Background(), x.TxnAborts.M(1))
 		return 0, dgo.ErrAborted
 	}
+	ostats.Record(context.Background(), x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 
