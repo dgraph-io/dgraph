@@ -82,7 +82,7 @@ instances to achieve high-availability.
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.String("raft", "idx=1; learner=false",
+	flag.String("raft", raftDefault,
 		`Raft options for group zero.
 		idx=N provides the Raft ID that this server would use to join the Zero group.
 			N cannot be 0.
@@ -184,10 +184,12 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
+
+	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		raft:              x.NewSuperFlag(Zero.Conf.GetString("raft")),
+		raft:              raft,
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
@@ -196,7 +198,6 @@ func run() {
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
-	opts.raft.CheckValid("idx", "learner")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")

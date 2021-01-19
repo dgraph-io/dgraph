@@ -41,6 +41,8 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
+var raftDefault = "idx=1; learner=false"
+
 type node struct {
 	*conn.Node
 	server *Server

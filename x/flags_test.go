@@ -27,18 +27,14 @@ func TestFlag(t *testing.T) {
 	sf := NewSuperFlag(opt)
 	t.Logf("Got SuperFlag: %s\n", sf)
 
-	// Should pass.
-	sf.CheckValid("bool-key", "int-key", "string-key", "float-key")
-
-	// Add an extra undefined key.
-	sf.CheckValid("bool-key", "int-key", "string-key", "float-key", "other-key")
+	def := `bool_key=false; int-key=0; float-key=1.0; string-key=; other-key=5`
 
 	// bool-key and int-key should not be overwritten. Only other-key should be set.
-	sf.SetIfAbsent("bool-key=false; int-key=7; other-key=5")
+	sf.MergeAndCheckDefault(def)
 
 	c := func() {
 		// Has a typo.
-		sf.CheckValid("boolo-key", "int-key", "string-key", "float-key")
+		NewSuperFlag("boolo-key=true").MergeAndCheckDefault(def)
 	}
 	require.Panics(t, c)
 	require.Equal(t, true, sf.GetBool("bool-key"))

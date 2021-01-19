@@ -85,27 +85,24 @@ func (sf *SuperFlag) String() string {
 	}
 	return strings.Join(kvs, "; ")
 }
-func (sf *SuperFlag) CheckValid(opts ...string) {
-	parsed := len(sf.m)
-	for _, k := range opts {
+func (sf *SuperFlag) MergeAndCheckDefault(flag string) *SuperFlag {
+	numKeys := len(sf.m)
+	src := parseFlag(flag)
+	for k := range src {
 		if _, ok := sf.m[k]; ok {
-			parsed--
+			numKeys--
 		}
 	}
-	if parsed != 0 {
-		msg := fmt.Sprintf("Found invalid options in %s. Valid options: %v", sf, opts)
+	if numKeys != 0 {
+		msg := fmt.Sprintf("Found invalid options in %s. Valid options: %v", sf, flag)
 		panic(msg)
 	}
-}
-
-// SetIfAbsent is the equivalent of Merge.
-func (sf *SuperFlag) SetIfAbsent(flag string) {
-	src := parseFlag(flag)
 	for k, v := range src {
 		if _, ok := sf.m[k]; !ok {
 			sf.m[k] = v
 		}
 	}
+	return sf
 }
 func (sf *SuperFlag) Get(opt string) string {
 	return sf.m[opt]

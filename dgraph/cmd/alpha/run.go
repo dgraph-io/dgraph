@@ -75,9 +75,8 @@ var (
 	Alpha x.SubCommand
 
 	// need this here to refer it in admin_backup.go
-	adminServer  web.IServeGraphQL
-	initDone     uint32
-	raftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
+	adminServer web.IServeGraphQL
+	initDone    uint32
 )
 
 func init() {
@@ -128,7 +127,7 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 
-	flag.String("raft", raftDefaults,
+	flag.String("raft", worker.RaftDefaults,
 		`Various raft options.
 	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
 	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
@@ -642,8 +641,7 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft"))
-	raft.CheckValid("group", "idx", "learner", "snapshot-after")
+	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
