@@ -109,6 +109,13 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	m.Schema = schema.InitialSchema(namespace)
+	_, err := query.ApplyMutations(ctx, m)
+	return err
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")

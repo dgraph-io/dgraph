@@ -146,6 +146,22 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	return durationValue, nil
 }
 
+// namespaceHandler will helps to create namespace
+func namespaceHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["namespace"]
+	if !ok || len(keys[0]) < 1 {
+		glog.Error("The URL doesn't contain namespace key")
+		return
+	}
+	namespace := keys[0]
+	err := (&edgraph.Server{}).CreateNamespace(context.Background(), namespace)
+	if err != nil {
+		fmt.Fprintf(w, "[FAIL] Failed to create namespace: %s\n", namespace)
+		return
+	}
+	fmt.Fprintf(w, "[OK] Namespace Created: %s\n", namespace)
+}
+
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
