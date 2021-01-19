@@ -238,7 +238,7 @@ func (g *groupi) applyInitialSchema() {
 			applySchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			glog.V(1).Infof("Schema found for predicate %s: ", s.Predicate)
 			continue
 		}
 	}
