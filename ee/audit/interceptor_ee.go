@@ -65,7 +65,17 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 
 func AuditRequestHttp(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadUint32(&auditEnabled) == 0 {
+		skip := func(method string) bool {
+			skipApis := map[string]bool{
+				// raft server
+				"/health":   true,
+				"/jemalloc": true,
+				"/state": true,
+			}
+			return skipApis[r.URL.Path]
+		}
+
+		if atomic.LoadUint32(&auditEnabled) == 0 || skip(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}

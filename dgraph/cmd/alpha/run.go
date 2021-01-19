@@ -433,15 +433,18 @@ func setupServer(closer *z.Closer) {
 		log.Fatal(err)
 	}
 
-	http.Handle("/query", audit.AuditRequestHttp(http.HandlerFunc(queryHandler)))
-	http.Handle("/query/", audit.AuditRequestHttp(http.HandlerFunc(queryHandler)))
-	http.Handle("/mutate", audit.AuditRequestHttp(http.HandlerFunc(mutationHandler)))
-	http.Handle("/mutate/", audit.AuditRequestHttp(http.HandlerFunc(mutationHandler)))
-	http.Handle("/commit", audit.AuditRequestHttp(http.HandlerFunc(commitHandler)))
-	http.Handle("/alter", audit.AuditRequestHttp(http.HandlerFunc(alterHandler)))
-	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/state", stateHandler)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.Handle("/query", http.HandlerFunc(queryHandler))
+	baseMux.Handle("/query/", http.HandlerFunc(queryHandler))
+	baseMux.Handle("/mutate", http.HandlerFunc(mutationHandler))
+	baseMux.Handle("/mutate/", http.HandlerFunc(mutationHandler))
+	baseMux.Handle("/commit", http.HandlerFunc(commitHandler))
+	baseMux.Handle("/alter", http.HandlerFunc(alterHandler))
+	baseMux.HandleFunc("/health", healthCheck)
+	baseMux.HandleFunc("/state", stateHandler)
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -467,8 +470,8 @@ func setupServer(closer *z.Closer) {
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	http.Handle("/graphql", audit.AuditRequestHttp(mainServer.HTTPHandler()))
-	http.Handle("/probe/graphql", audit.AuditRequestHttp(http.HandlerFunc(func(w http.ResponseWriter,
+	baseMux.Handle("/graphql", mainServer.HTTPHandler())
+	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter,
 		r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
@@ -479,20 +482,20 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
-	})))
-	http.Handle("/admin", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
+	})
+	baseMux.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler()))))
+	}, adminAuthHandler(adminServer.HTTPHandler())))
 
-	http.Handle("/admin/schema", audit.AuditRequestHttp(adminAuthHandler(http.HandlerFunc(func(
+	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
 		w http.ResponseWriter,
 		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
-	}))))
+	})))
 
-	http.Handle("/admin/schema/validate", audit.AuditRequestHttp(http.HandlerFunc(func(w http.ResponseWriter,
+	baseMux.HandleFunc("/admin/schema/validate", func(w http.ResponseWriter,
 		r *http.Request) {
 		schema := readRequest(w, r)
 		w.Header().Set("Content-Type", "application/json")
@@ -507,43 +510,43 @@ func setupServer(closer *z.Closer) {
 		w.WriteHeader(http.StatusBadRequest)
 		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
 		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	})))
+	})
 
-	http.Handle("/admin/shutdown", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{http.
+	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.
 		MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
-		})))))
+		}))))
 
-	http.Handle("/admin/draining", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
+	baseMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		drainingHandler(w, r, adminServer)
-	})))))
+	}))))
 
-	http.Handle("/admin/export", audit.AuditRequestHttp(allowedMethodsHandler(
+	baseMux.Handle("/admin/export", allowedMethodsHandler(
 		allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			exportHandler(w, r, adminServer)
-		})))))
+		}))))
 
-	http.Handle("/admin/config/cache_mb", audit.AuditRequestHttp(allowedMethodsHandler(allowedMethods{
+	baseMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		memoryLimitHandler(w, r, adminServer)
-	})))))
+	}))))
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
 
 	// Add OpenCensus z-pages.
-	zpages.Handle(http.DefaultServeMux, "/z")
+	zpages.Handle(baseMux, "/z")
 
-	http.Handle("/", audit.AuditRequestHttp(http.HandlerFunc(homeHandler)))
-	http.Handle("/ui/keywords", audit.AuditRequestHttp(http.HandlerFunc(keywordHandler)))
+	baseMux.Handle("/", http.HandlerFunc(homeHandler))
+	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the servers.
 	admin.ServerCloser.AddRunning(3)

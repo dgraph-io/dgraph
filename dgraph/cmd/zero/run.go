@@ -283,15 +283,17 @@ func run() {
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
-	http.HandleFunc("/health", st.pingResponse)
-	http.Handle("/state", audit.AuditRequestHttp(http.HandlerFunc(st.getState)))
-	http.Handle("/removeNode", audit.AuditRequestHttp(http.HandlerFunc(st.removeNode)))
-	http.Handle("/moveTablet", audit.AuditRequestHttp(http.HandlerFunc(st.moveTablet)))
-	http.Handle("/assign", audit.AuditRequestHttp(http.HandlerFunc(st.assign)))
-	http.Handle("/enterpriseLicense",
-		audit.AuditRequestHttp(http.HandlerFunc(st.applyEnterpriseLicense)))
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
-	zpages.Handle(http.DefaultServeMux, "/z")
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.HandleFunc("/health", st.pingResponse)
+	baseMux.Handle("/state", http.HandlerFunc(st.getState))
+	baseMux.Handle("/removeNode", http.HandlerFunc(st.removeNode))
+	baseMux.Handle("/moveTablet", http.HandlerFunc(st.moveTablet))
+	baseMux.Handle("/assign", http.HandlerFunc(st.assign))
+	baseMux.Handle("/enterpriseLicense", http.HandlerFunc(st.applyEnterpriseLicense))
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
