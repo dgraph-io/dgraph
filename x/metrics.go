@@ -202,21 +202,21 @@ var (
 			Measure:     TxnCommits,
 			Description: TxnCommits.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 		{
 			Name:        TxnDiscards.Name(),
 			Measure:     TxnDiscards,
 			Description: TxnDiscards.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 		{
 			Name:        TxnAborts.Name(),
 			Measure:     TxnAborts,
 			Description: TxnAborts.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 
 		// Last value aggregations
