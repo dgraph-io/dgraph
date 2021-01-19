@@ -161,7 +161,14 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		if parsedKey.IsType() {
 			return true
 		}
-
+		// Ignore versions less than given timestamp, or skip older versions of
+		// the given key.
+		// Do not do this for schema and type keys. Those keys always have a
+		// version of one so they would be incorrectly rejected by above check.
+		if item.UserMeta() != posting.BitSchemaPosting &&
+			(item.Version() < pr.Request.SinceTs || item.IsDeletedOrExpired()) {
+			return false
+		}
 		// Only backup schema and data keys for the requested predicates.
 		_, ok := predMap[parsedKey.Attr]
 		return ok
@@ -246,14 +253,6 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	var dropOp *pb.DropOperation
 
 	item := itr.Item()
-	if item.UserMeta() != posting.BitSchemaPosting &&
-		(item.Version() < tl.Request.SinceTs || item.IsDeletedOrExpired()) {
-		// Ignore versions less than given timestamp, or skip older versions of
-		// the given key by returning an empty list.
-		// Do not do this for schema and type keys. Those keys always have a
-		// version of one so they would be incorrectly rejected by above check.
-		return list, nil, nil
-	}
 
 	switch item.UserMeta() {
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
