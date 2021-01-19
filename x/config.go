@@ -89,9 +89,6 @@ type WorkerOptions struct {
 	AclEnabled bool
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
-	// SnapshotAfter indicates the number of entries in the RAFT logs that are needed
-	// to allow a snapshot to be created.
-	SnapshotAfter int
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32

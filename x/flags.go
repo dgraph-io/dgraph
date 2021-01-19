@@ -54,9 +54,9 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
 }
 
-func parseFlag(opt string) map[string]string {
+func parseFlag(flag string) map[string]string {
 	kvm := make(map[string]string)
-	for _, kv := range strings.Split(opt, ";") {
+	for _, kv := range strings.Split(flag, ";") {
 		if strings.TrimSpace(kv) == "" {
 			continue
 		}
@@ -68,47 +68,84 @@ func parseFlag(opt string) map[string]string {
 	}
 	return kvm
 }
-func GetFlag(opt, key string) string {
-	kv := parseFlag(opt)
-	return kv[key]
+
+type SuperFlag struct {
+	m map[string]string
 }
-func CheckFlag(opt string, keys ...string) {
-	kv := parseFlag(opt)
-	for _, k := range keys {
-		if _, ok := kv[k]; ok {
-			delete(kv, k)
-		} else {
+
+func NewSuperFlag(flag string) *SuperFlag {
+	return &SuperFlag{
+		m: parseFlag(flag),
+	}
+}
+func (sf *SuperFlag) String() string {
+	var kvs []string
+	for k, v := range sf.m {
+		kvs = append(kvs, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(kvs, "; ")
+}
+func (sf *SuperFlag) CheckValid(opts ...string) {
+	parsed := len(sf.m)
+	for _, k := range opts {
+		if _, ok := sf.m[k]; ok {
+			parsed--
 		}
 	}
-	if len(kv) > 0 {
-		msg := fmt.Sprintf("Found invalid options from %q: %+v\n", opt, kv)
+	if parsed != 0 {
+		msg := fmt.Sprintf("Found invalid options in %s. Valid options: %v", sf, opts)
 		panic(msg)
 	}
 }
-func GetFlagBool(opt, key string) bool {
-	val := GetFlag(opt, key)
+
+// SetIfAbsent is the equivalent of Merge.
+func (sf *SuperFlag) SetIfAbsent(flag string) {
+	src := parseFlag(flag)
+	for k, v := range src {
+		if _, ok := sf.m[k]; !ok {
+			sf.m[k] = v
+		}
+	}
+}
+func (sf *SuperFlag) Get(opt string) string {
+	return sf.m[opt]
+}
+func (sf *SuperFlag) GetBool(opt string) bool {
+	val := sf.Get(opt)
 	if val == "" {
 		return false
 	}
 	b, err := strconv.ParseBool(val)
-	Checkf(err, "Unable to parse %s as bool for key: %s. Options: %s\n", val, key, opt)
+	Checkf(err, "Unable to parse %s as bool for key: %s. Options: %s\n", val, opt, sf)
 	return b
 }
-func GetFlagUint64(opt, key string) uint64 {
-	val := GetFlag(opt, key)
+func (sf *SuperFlag) GetUint64(opt string) uint64 {
+	val := sf.Get(opt)
 	if val == "" {
 		return 0
 	}
 	u, err := strconv.ParseUint(val, 0, 64)
-	Checkf(err, "Unable to parse %s as uint64 for key: %s. Options: %s\n", val, key, opt)
+	Checkf(err, "Unable to parse %s as uint64 for key: %s. Options: %s\n", val, opt, sf)
 	return u
 }
-func GetFlagUint32(opt, key string) uint32 {
-	val := GetFlag(opt, key)
+func (sf *SuperFlag) GetUint32(opt string) uint32 {
+	val := sf.Get(opt)
 	if val == "" {
 		return 0
 	}
 	u, err := strconv.ParseUint(val, 0, 32)
-	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, key, opt)
+	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, opt, sf)
 	return uint32(u)
+}
+func CheckFlagOpts(flag string, opts ...string) {
+	kv := parseFlag(flag)
+	for _, k := range opts {
+		if _, ok := kv[k]; ok {
+			delete(kv, k)
+		}
+	}
+	if len(kv) > 0 {
+		msg := fmt.Sprintf("Found invalid options from %q: %+v\n", flag, kv)
+		panic(msg)
+	}
 }

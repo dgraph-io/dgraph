@@ -7,6 +7,10 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+	math_bits "math/bits"
+
 	pb "github.com/dgraph-io/badger/v3/pb"
 	api "github.com/dgraph-io/dgo/v200/protos/api"
 	_ "github.com/gogo/protobuf/gogoproto"
@@ -14,9 +18,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	io "io"
-	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1339,13 +1340,14 @@ type ZeroProposal struct {
 	MaxLeaseId           uint64            `protobuf:"varint,4,opt,name=maxLeaseId,proto3" json:"maxLeaseId,omitempty"`
 	MaxTxnTs             uint64            `protobuf:"varint,5,opt,name=maxTxnTs,proto3" json:"maxTxnTs,omitempty"`
 	MaxRaftId            uint64            `protobuf:"varint,6,opt,name=maxRaftId,proto3" json:"maxRaftId,omitempty"`
-	Txn                  *api.TxnContext   `protobuf:"bytes,7,opt,name=txn,proto3" json:"txn,omitempty"`
-	Cid                  string            `protobuf:"bytes,9,opt,name=cid,proto3" json:"cid,omitempty"`
-	License              *License          `protobuf:"bytes,10,opt,name=license,proto3" json:"license,omitempty"`
-	Snapshot             *ZeroSnapshot     `protobuf:"bytes,11,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	MaxNamespaceId       uint64
+	Txn                  *api.TxnContext `protobuf:"bytes,7,opt,name=txn,proto3" json:"txn,omitempty"`
+	Cid                  string          `protobuf:"bytes,9,opt,name=cid,proto3" json:"cid,omitempty"`
+	License              *License        `protobuf:"bytes,10,opt,name=license,proto3" json:"license,omitempty"`
+	Snapshot             *ZeroSnapshot   `protobuf:"bytes,11,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *ZeroProposal) Reset()         { *m = ZeroProposal{} }

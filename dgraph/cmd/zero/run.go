@@ -127,12 +127,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	nodeId := x.GetOptUint64(opts.raftOpts, "idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
 		Addr:      x.WorkerConfig.MyAddr,
 		Group:     0,
-		IsLearner: x.GetFlagBool(opts.raftOpts, "learner"),
+		IsLearner: x.GetOptBool(opts.raftOpts, "learner"),
 	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
@@ -196,7 +196,7 @@ func run() {
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
-	x.CheckFlag(opts.raftOpts, "idx", "learner")
+	x.CheckFlagOpts(opts.raftOpts, "idx", "learner")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -231,7 +231,7 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
-	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	nodeId := x.GetOptUint64(opts.raftOpts, "idx")
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}
