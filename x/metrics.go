@@ -112,9 +112,9 @@ var (
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
 	// MaxAssignedTs records the latest max assigned timestamp.
-	RaftHasLeader = stats.Int64("has_leader",
+	RaftHasLeader = stats.Int64("raft_has_leader",
 		"Whether or not a leader exists for the group", stats.UnitDimensionless)
-	RaftIsLeader = stats.Int64("is_leader",
+	RaftIsLeader = stats.Int64("raft_is_leader",
 		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
