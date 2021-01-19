@@ -1113,6 +1113,16 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(context.Background(), x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(context.Background(), x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(context.Background(), x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(context.Background(), x.RaftIsLeader.M(0))
+				}
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
