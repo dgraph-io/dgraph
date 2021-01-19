@@ -48,7 +48,7 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	raftOpts          string
+	Raft              *x.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
@@ -82,7 +82,7 @@ instances to achieve high-availability.
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.String("raft", "idx=1; learner=false",
+	flag.String("raft", raftDefault,
 		`Raft options for group zero.
 		idx=N provides the Raft ID that this server would use to join the Zero group.
 			N cannot be 0.
@@ -127,12 +127,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	nodeId := opts.Raft.GetUint64("idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
 		Addr:      x.WorkerConfig.MyAddr,
 		Group:     0,
-		IsLearner: x.GetFlagBool(opts.raftOpts, "learner"),
+		IsLearner: opts.Raft.GetBool("learner"),
 	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
@@ -184,10 +184,12 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
+
+	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		raftOpts:          Zero.Conf.GetString("raft"),
+		Raft:              raft,
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
@@ -196,7 +198,6 @@ func run() {
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
-	x.CheckFlag(opts.raftOpts, "idx", "learner")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -231,7 +232,7 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
-	nodeId := x.GetFlagUint64(opts.raftOpts, "idx")
+	nodeId := opts.Raft.GetUint64("idx")
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}

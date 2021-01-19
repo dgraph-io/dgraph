@@ -229,7 +229,7 @@ func GetOngoingTasks() []string {
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	glog.Infof("Node ID: %#x with GroupID: %d\n", id, gid)
 
-	isLearner := x.GetFlagBool(x.WorkerConfig.Raft, "learner")
+	isLearner := x.WorkerConfig.Raft.GetBool("learner")
 	rc := &pb.RaftContext{
 		Addr:      myAddr,
 		Group:     gid,
@@ -952,6 +952,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
+	snapshotAfter := x.WorkerConfig.Raft.GetUint64("snapshot-after")
+	x.AssertTruef(snapshotAfter > 10, "raft.snapshot-after must be a number greater than 10")
+
 	for {
 		select {
 		case <-slowTicker.C:
@@ -982,10 +985,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = calculate || chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = calculate || chk >= first+snapshotAfter
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
-							x.WorkerConfig.SnapshotAfter, calculate)
+							snapshotAfter, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
