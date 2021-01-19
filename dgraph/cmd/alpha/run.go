@@ -199,8 +199,7 @@ they form a Raft group and provide synchronous replication.
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
 	flag.String("audit", "",
-		`Various audit options. 
-	enable=true/false enables the audit logs (default behaviour is false).
+		`Various audit options.
 	dir=/path/to/audits to define the path where to store the audit logs.
 	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
 	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the

@@ -18,44 +18,19 @@
 
 package audit
 
-import (
-	"context"
-	"google.golang.org/grpc"
-	"net/http"
 
-	"github.com/spf13/viper"
-)
-
-var auditEnabled uint32
-
-type AuditEvent struct {
-
+func ReadAuditEncKey(conf string) ([]byte, error) {
+	return nil, nil
 }
 
-var auditor *auditLogger
-
-type auditLogger struct {
-}
-
-func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
+func InitAuditorIfNecessary(conf string, eeEnabled func() bool) {
 	return
 }
 
-func InitAuditor(dir string) {
+func InitAuditor(dir string, key []byte) {
 	return
 }
+
 func Close() {
-	return
-}
-
-func (a *auditLogger) Audit(event *AuditEvent) {
-	return
-}
-
-func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
-	return
-}
-
-func auditHttp(w *ResponseWriter, r *http.Request) {
 	return
 }
