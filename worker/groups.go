@@ -238,7 +238,7 @@ func (g *groupi) applyInitialSchema() {
 			applySchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, s)
+			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
 			continue
 		}
 	}
