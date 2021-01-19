@@ -536,7 +536,8 @@ func newAdminResolver(
 		}
 		server.mux.RLock()
 		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update because we got an old schema.")
+			glog.Infof("Skipping GraphQL schema update because either we got same schema or schema with older" +
+				" version than version of current schema ")
 			server.mux.RUnlock()
 			return
 		}
