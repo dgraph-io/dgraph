@@ -18,6 +18,9 @@ package admin
 
 import (
 	"context"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgraph/gql"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -383,7 +386,13 @@ var (
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
+	pstore          *badger.DB
 )
+
+// Init resets the schema state, setting the underlying DB to the given pointer.
+func Init(ps *badger.DB) {
+	pstore = ps
+}
 
 func SchemaValidate(sch string) error {
 	schHandler, err := schema.NewHandler(sch, true)
@@ -506,7 +515,6 @@ func newAdminResolver(
 		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
-
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -523,7 +531,6 @@ func newAdminResolver(
 				len(pl.Postings))
 			return
 		}
-
 		pk, err := x.Parse(kv.GetKey())
 		if err != nil {
 			glog.Errorf("Unable to find uid of updated schema %s", err)
@@ -536,8 +543,7 @@ func newAdminResolver(
 		}
 		server.mux.RLock()
 		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update because either we got same schema or schema with older" +
-				" version than version of current schema ")
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.", newSchema.Version, server.schema.Version)
 			server.mux.RUnlock()
 			return
 		}
@@ -557,7 +563,6 @@ func newAdminResolver(
 
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
-
 		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 	}, 1, closer)
 
@@ -643,8 +648,24 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 	if err != nil {
 		return nil, err
 	}
+	if graphQLSchema == "" {
+		return &gqlSchema{ID: uid, Version: 0, Schema: graphQLSchema}, nil
+	}
+	//getting version of the current schema.
+	intUid, err := gql.ParseUid(uid)
+	if err != nil {
+		return nil, err
+	}
 
-	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
+	prefix := x.DataKey(worker.GqlSchemaPred, intUid)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	item, err := txn.Get(prefix) // This will get the item with the latest version.
+	if err != nil {
+		return nil, err
+	}
+
+	version := item.Version()
+	return &gqlSchema{ID: uid, Version: version, Schema: graphQLSchema}, nil
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
