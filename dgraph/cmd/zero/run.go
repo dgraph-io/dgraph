@@ -57,9 +57,7 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
-	auditEnabled      bool
-	auditDir          string
-	encryptionKey     []byte
+	audit             string
 }
 
 var opts options
@@ -102,10 +100,14 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
-	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
-	flag.String("audit_dir", "za", "Set path to directory where to save the audit logs.")
+	flag.String("audit", "",
+		`Various audit options.
+	dir=/path/to/audits to define the path where to store the audit logs.
+	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
+	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	flag. 
+	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
-	enc.RegisterFlags(flag)
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -197,7 +199,6 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	key, err := enc.ReadKey(Zero.Conf)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -207,13 +208,12 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
-		auditEnabled:      Zero.Conf.GetBool("audit_enabled"),
-		auditDir:          Zero.Conf.GetString("audit_dir"),
-		encryptionKey:     key,
+		audit:             Zero.Conf.GetString("audit"),
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
 	x.CheckFlag(opts.raftOpts, "idx", "learner")
+	x.CheckFlag(opts.audit, "dir", "compress", "encrypt-file")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -233,9 +233,15 @@ func run() {
 
 	wd, err := filepath.Abs(opts.w)
 	x.Check(err)
-	ad, err := filepath.Abs(opts.auditDir)
-	x.Check(err)
-	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", opts.auditDir)
+	if len(opts.audit) > 0 {
+		dir := x.GetFlagString(opts.audit, "dir")
+		if len(dir) == 0 {
+			glog.Fatal("audit flag is provided but dir is not specified")
+		}
+		ad, err := filepath.Abs(dir)
+		x.Check(err)
+		x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", dir)
+	}
 
 	if opts.rebalanceInterval <= 0 {
 		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",

@@ -88,29 +88,29 @@ func run() error {
 	block, err := aes.NewCipher(key)
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
+	iv := make([]byte, aes.BlockSize)
+	_, err = file.ReadAt(iv, 0)
+	x.Check(err)
 
-	var iterator int64 = 0
+	var iterator int64 = 16
 	for {
-		if iterator >= stat.Size() {
-			break
-		}
-		l := make([]byte, 4)
-		_, err := file.ReadAt(l, iterator)
-		x.Check(err)
-		iterator = iterator + 4
-		content := make([]byte, binary.BigEndian.Uint32(l))
+		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
 		_, err = file.ReadAt(content, iterator)
 		x.Check(err)
 
-		iterator = iterator + int64(binary.BigEndian.Uint32(l))
-		iv := make([]byte, aes.BlockSize)
-		_, err = file.ReadAt(iv, iterator)
-		iterator = iterator + aes.BlockSize
-
+		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		_, err = outfile.Write(content)
 		x.Check(err)
+
+		// if its the end of data. finish encoding
+		if iterator >= stat.Size() {
+			break
+		}
+		_, err = file.ReadAt(iv[12:], iterator)
+		x.Check(err)
+		iterator = iterator + 4
 	}
 	return nil
 }

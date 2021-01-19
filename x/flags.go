@@ -112,3 +112,7 @@ func GetFlagUint32(opt, key string) uint32 {
 	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, key, opt)
 	return uint32(u)
 }
+func GetFlagString(opt, key string) string {
+	val := GetFlag(opt, key)
+	return val
+}

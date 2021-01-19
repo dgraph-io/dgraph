@@ -15,7 +15,6 @@ package audit
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -23,12 +22,12 @@ import (
 	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"github.com/spf13/viper"
 )
 
 var auditEnabled uint32
@@ -59,23 +58,39 @@ type auditLogger struct {
 	tick *time.Ticker
 }
 
+func ReadAuditEncKey(conf string) ([]byte, error) {
+	encFile := x.GetFlagString(conf, "encrypt-file")
+	if encFile == "" {
+		return nil, nil
+	}
+	path, err := filepath.Abs(encFile)
+	if err != nil {
+		return nil, err
+	}
+	encKey, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return encKey, nil
+}
+
 // InitAuditorIfNecessary accepts conf and enterprise edition check function.
 // This method keep tracks whether cluster is part of enterprise edition or not.
 // It pools eeEnabled function every five minutes to check if the license is still valid or not.
-func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
-	if !conf.GetBool("audit_enabled") {
+func InitAuditorIfNecessary(conf string, eeEnabled func() bool) {
+	if conf == "" {
 		return
 	}
-	key, err := enc.ReadKey(conf)
+	encKey, err := ReadAuditEncKey(conf)
 	if err != nil {
+		glog.Errorf("error while reading encryption file", err)
 		return
 	}
 	if eeEnabled() {
-
-		InitAuditor(conf.GetString("audit_dir"), key)
+		InitAuditor(x.GetFlagString(conf, "dir"), encKey)
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
-	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"), key)
+	go trackIfEEValid(x.GetFlagString(conf, "dir"), encKey, eeEnabled)
 }
 
 // InitAuditor initializes the auditor.
@@ -99,7 +114,7 @@ func initlog(dir string, key []byte) *x.Logger {
 // trackIfEEValid tracks enterprise license of the cluster.
 // Right now alpha doesn't know about the enterprise/licence.
 // That's why we needed to track if the current node is part of enterprise edition cluster
-func trackIfEEValid(eeEnabledFunc func() bool, dir string, key []byte) {
+func trackIfEEValid(dir string, key []byte, eeEnabledFunc func() bool) {
 	for {
 		select {
 		case <-auditor.tick.C:

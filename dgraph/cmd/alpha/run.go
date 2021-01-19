@@ -198,8 +198,14 @@ they form a Raft group and provide synchronous replication.
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
-	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
-	flag.String("audit_dir", "aa", "Set path to directory where to save the audit logs.")
+	flag.String("audit", "",
+		`Various audit options. 
+	enable=true/false enables the audit logs (default behaviour is false).
+	dir=/path/to/audits to define the path where to store the audit logs.
+	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
+	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	flag. 
+	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
@@ -612,10 +618,10 @@ func run() {
 
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
-		AuditEnabled:  Alpha.Conf.GetBool("audit_enabled"),
-		AuditDir:      Alpha.Conf.GetString("audit_dir"),
+		Audit:      Alpha.Conf.GetString("audit"),
 	}
 
+	x.CheckFlag(opts.Audit, "dir", "compress", "encrypt-file")
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
@@ -676,6 +682,7 @@ func run() {
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
 		HmacSecret:           opts.HmacSecret,
+		Audit:                opts.Audit,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")
@@ -799,7 +806,7 @@ func run() {
 	adminCloser := z.NewCloser(1)
 
 	// Audit is enterprise feature.
-	audit.InitAuditorIfNecessary(Alpha.Conf, worker.EnterpriseEnabled)
+	audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")

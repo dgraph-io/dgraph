@@ -22,25 +22,26 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func InitLogger(dir string, filename string, key []byte) (*Logger, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
+	if key != nil {
+		filename = filename + ".enc"
+	}
+
 	path, err := filepath.Abs(filepath.Join(dir, filename))
 	if err != nil {
 		return nil, err
 	}
 	getWriterSyncer := func() zapcore.WriteSyncer {
-		w := &lumberjack.Logger{
-			Filename: path,
+		w := &LogWriter{
+			FilePath: path,
 			MaxSize:  100,
 			MaxAge:   30,
-		}
-		if key != nil {
-			w.EncryptionKey = key
+			EncryptionKey: key,
 		}
 		return zapcore.AddSync(w)
 	}

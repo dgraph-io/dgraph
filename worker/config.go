@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"github.com/golang/glog"
 	"path/filepath"
 	"time"
 
@@ -71,8 +72,7 @@ type Options struct {
 	// CacheMb is the total memory allocated between all the caches.
 	CacheMb int64
 
-	AuditEnabled bool
-	AuditDir string
+	Audit string
 }
 
 // Config holds an instance of the server options..
@@ -97,12 +97,19 @@ func (opt *Options) validate() {
 	x.Check(err)
 	td, err := filepath.Abs(x.WorkerConfig.TmpDir)
 	x.Check(err)
-	ad, err := filepath.Abs(opt.AuditDir)
-	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
 	x.AssertTruef(pd != td, "Posting and Tmp directory cannot be the same ('%s').", opt.PostingDir)
 	x.AssertTruef(wd != td, "WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
-	x.AssertTruef(ad != pd, "Posting and Audit Directory cannot be the same ('%s').", opt.AuditDir)
-	x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", opt.AuditDir)
-	x.AssertTruef(ad != td, "Tmp and Audit directory cannot be the same ('%s').", opt.AuditDir)
+	if opt.Audit !="" {
+		dir := x.GetFlagString(opt.Audit, "dir")
+		if dir == "" {
+			glog.Fatal("audit flag is provided but dir is not specified")
+		}
+		ad, err := filepath.Abs(dir)
+		x.Check(err)
+		x.AssertTruef(ad != pd, "Posting and Audit Directory cannot be the same ('%s').", dir)
+		x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", dir)
+		x.AssertTruef(ad != td, "Tmp and Audit directory cannot be the same ('%s').", dir)
+
+	}
 }
