@@ -42,6 +42,7 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 			"UpdateMembership": true,
 			"Oracle":           true,
 			"Timestamps":       true,
+			"ShouldServe":      true,
 			// health server
 			"Check": true,
 			"Watch": true,

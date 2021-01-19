@@ -25,7 +25,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-func InitLogger(dir string, filename string) (*Logger, error) {
+func InitLogger(dir string, filename string, key []byte) (*Logger, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
@@ -34,11 +34,15 @@ func InitLogger(dir string, filename string) (*Logger, error) {
 		return nil, err
 	}
 	getWriterSyncer := func() zapcore.WriteSyncer {
-		return zapcore.AddSync(&lumberjack.Logger{
+		w := &lumberjack.Logger{
 			Filename: path,
 			MaxSize:  100,
 			MaxAge:   30,
-		})
+		}
+		if key != nil {
+			w.EncryptionKey = key
+		}
+		return zapcore.AddSync(w)
 	}
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 		getWriterSyncer(), zap.DebugLevel)

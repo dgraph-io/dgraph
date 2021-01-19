@@ -403,7 +403,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
 		if state.License.Enabled && opts.auditEnabled {
-			audit.InitAuditor(opts.auditDir)
+			audit.InitAuditor(opts.auditDir, opts.encryptionKey)
 		}
 	}
 	if p.Snapshot != nil {

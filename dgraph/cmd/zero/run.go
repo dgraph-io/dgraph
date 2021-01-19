@@ -59,6 +59,7 @@ type options struct {
 	tlsClientConfig   *tls.Config
 	auditEnabled      bool
 	auditDir          string
+	encryptionKey     []byte
 }
 
 var opts options
@@ -104,6 +105,7 @@ instances to achieve high-availability.
 	flag.Bool("audit_enabled", false, "Set to true to enable audit logs.")
 	flag.String("audit_dir", "za", "Set path to directory where to save the audit logs.")
 
+	enc.RegisterFlags(flag)
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -194,6 +196,8 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
+
+	key, err := enc.ReadKey(Zero.Conf)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -205,6 +209,7 @@ func run() {
 		tlsClientConfig:   tlsConf,
 		auditEnabled:      Zero.Conf.GetBool("audit_enabled"),
 		auditDir:          Zero.Conf.GetString("audit_dir"),
+		encryptionKey:     key,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)

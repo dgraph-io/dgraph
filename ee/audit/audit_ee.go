@@ -1,19 +1,13 @@
 // +build !oss
 
 /*
- * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
 package audit
@@ -21,6 +15,7 @@ package audit
 import (
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -71,24 +66,29 @@ func InitAuditorIfNecessary(conf *viper.Viper, eeEnabled func() bool) {
 	if !conf.GetBool("audit_enabled") {
 		return
 	}
+	key, err := enc.ReadKey(conf)
+	if err != nil {
+		return
+	}
 	if eeEnabled() {
-		InitAuditor(conf.GetString("audit_dir"))
+
+		InitAuditor(conf.GetString("audit_dir"), key)
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
-	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"))
+	go trackIfEEValid(eeEnabled, conf.GetString("audit_dir"), key)
 }
 
 // InitAuditor initializes the auditor.
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
-func InitAuditor(dir string) {
-	auditor.log = initlog(dir)
+func InitAuditor(dir string, key []byte) {
+	auditor.log = initlog(dir, key)
 	atomic.StoreUint32(&auditEnabled, 1)
 	glog.Infoln("audit logs are enabled")
 }
 
-func initlog(dir string) *x.Logger {
-	logger, err := x.InitLogger(dir, "dgraph_audit.log")
+func initlog(dir string, key []byte) *x.Logger {
+	logger, err := x.InitLogger(dir, "dgraph_audit.log", key)
 	if err != nil {
 		glog.Errorf("error while initiating auditor %v", err)
 		return nil
@@ -99,7 +99,7 @@ func initlog(dir string) *x.Logger {
 // trackIfEEValid tracks enterprise license of the cluster.
 // Right now alpha doesn't know about the enterprise/licence.
 // That's why we needed to track if the current node is part of enterprise edition cluster
-func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
+func trackIfEEValid(eeEnabledFunc func() bool, dir string, key []byte) {
 	for {
 		select {
 		case <-auditor.tick.C:
@@ -111,7 +111,7 @@ func trackIfEEValid(eeEnabledFunc func() bool, dir string) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				auditor.log = initlog(dir)
+				auditor.log = initlog(dir, key)
 				atomic.StoreUint32(&auditEnabled, 1)
 				glog.Infof("audit logs are enabled")
 			}
@@ -166,7 +166,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
-		Req:        fmt.Sprintf("%v", req),
+		Req:        fmt.Sprintf("%+v", req),
 		Status:     cd.String(),
 	})
 }
