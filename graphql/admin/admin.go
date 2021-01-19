@@ -649,7 +649,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 		return nil, err
 	}
 	if graphQLSchema == "" {
-		return &gqlSchema{ID: uid, Version: 0, Schema: graphQLSchema}, nil
+		return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 	}
 	//getting version of the current schema.
 	intUid, err := gql.ParseUid(uid)
@@ -659,7 +659,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 
 	prefix := x.DataKey(worker.GqlSchemaPred, intUid)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	item, err := txn.Get(prefix) // This will get the item with the latest version.
+	item, err := txn.Get(prefix)
 	if err != nil {
 		return nil, err
 	}
