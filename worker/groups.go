@@ -86,7 +86,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 			zeroAddr, x.WorkerConfig.MyAddr)
 	}
 
-	raftIdx := x.GetOptUint64(x.WorkerConfig.Raft, "idx")
+	raftIdx := x.WorkerConfig.Raft.GetUint64("idx")
 	if raftIdx == 0 {
 		raftIdx = walStore.Uint(raftwal.RaftId)
 
@@ -99,7 +99,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	glog.Infof("Current Raft Id: %#x\n", raftIdx)
 
 	if x.WorkerConfig.ProposedGroupId == 0 {
-		x.WorkerConfig.ProposedGroupId = x.GetOptUint32(x.WorkerConfig.Raft, "group")
+		x.WorkerConfig.ProposedGroupId = x.WorkerConfig.Raft.GetUint32("group")
 	}
 	// Successfully connect with dgraphzero, before doing anything else.
 	// Connect with Zero leader and figure out what group we should belong to.
@@ -107,7 +107,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 		Id:      raftIdx,
 		GroupId: x.WorkerConfig.ProposedGroupId,
 		Addr:    x.WorkerConfig.MyAddr,
-		Learner: x.GetOptBool(x.WorkerConfig.Raft, "learner"),
+		Learner: x.WorkerConfig.Raft.GetBool("learner"),
 	}
 	if m.GroupId > 0 {
 		m.ForceGroupId = true

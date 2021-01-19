@@ -78,7 +78,7 @@ type WorkerOptions struct {
 	// TLS server config which will be used to initiate server internal port
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
-	Raft string
+	Raft *SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// MaxRetries is the maximum number of times to retry a commit before giving up.

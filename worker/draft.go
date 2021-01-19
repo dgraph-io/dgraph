@@ -229,7 +229,7 @@ func GetOngoingTasks() []string {
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	glog.Infof("Node ID: %#x with GroupID: %d\n", id, gid)
 
-	isLearner := x.GetOptBool(x.WorkerConfig.Raft, "learner")
+	isLearner := x.WorkerConfig.Raft.GetBool("learner")
 	rc := &pb.RaftContext{
 		Addr:      myAddr,
 		Group:     gid,
@@ -962,7 +962,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
-	snapshotAfter := x.GetOptUint64(x.WorkerConfig.Raft, "snapshot-after")
+	snapshotAfter := x.WorkerConfig.Raft.GetUint64("snapshot-after")
 	x.AssertTruef(snapshotAfter > 10, "raft.snapshot-after must be a number greater than 10")
 
 	for {

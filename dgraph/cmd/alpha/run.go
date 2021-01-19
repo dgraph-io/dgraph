@@ -642,12 +642,14 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
+	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft"))
+	raft.CheckValid("group", "idx", "learner", "snapshot-after")
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
-		Raft:                 Alpha.Conf.GetString("raft"),
+		Raft:                 raft,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
@@ -660,7 +662,6 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
-	x.CheckFlagOpts(x.WorkerConfig.Raft, "group", "idx", "learner", "snapshot-after")
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
