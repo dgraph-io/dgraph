@@ -113,9 +113,9 @@ var (
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
 	// MaxAssignedTs records the latest max assigned timestamp.
 	RaftHasLeader = stats.Int64("has_leader",
-		"Whether or not a leader exists", stats.UnitDimensionless)
+		"Whether or not a leader exists for the group", stats.UnitDimensionless)
 	RaftIsLeader = stats.Int64("is_leader",
-		"Whether or not a leader exists", stats.UnitDimensionless)
+		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
