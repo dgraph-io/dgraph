@@ -337,18 +337,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
-				if err := updateSchema(s); err != nil {
-					return err
-				}
-
-				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
-					return err
-				} else if !servesTablet {
-					return errors.Errorf("group 1 should always serve reserved predicate %s",
-						s.Predicate)
-				}
+				applySchema(s)
 			}
-
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.

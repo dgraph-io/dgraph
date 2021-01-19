@@ -159,8 +159,8 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
-	gr.proposeInitialSchema()
-	gr.proposeInitialTypes()
+	gr.applyInitialSchema()
+	gr.applyInitialTypes()
 
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
@@ -200,73 +200,62 @@ func (g *groupi) informZeroAboutTablets() {
 	}
 }
 
-func (g *groupi) proposeInitialTypes() {
+func (g *groupi) applyInitialTypes() {
 	initialTypes := schema.InitialTypes()
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		g.upsertSchema(nil, t)
+		if err := updateType(t.GetTypeName(), *t); err != nil {
+			glog.Errorf("Error while applying initial type: %s", err)
+		}
 	}
 }
 
-func (g *groupi) proposeInitialSchema() {
+func (g *groupi) applyInitialSchema() {
+	if g.groupId() != 1 {
+		return
+	}
 	initialSchema := schema.InitialSchema()
 	ctx := g.Ctx()
+
+	apply := func(s *pb.SchemaUpdate) {
+		if err := applySchema(s); err != nil {
+			glog.Errorf("Error while applying initial schema: %s", err)
+		}
+	}
+
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s, nil)
+			apply(s)
 		} else if gid == 0 {
-			g.upsertSchema(s, nil)
+			// The tablet is not being served currently.
+			apply(s)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s, nil)
+			apply(s)
 		} else {
 			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
 			continue
 		}
 	}
 }
 
-func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
-	// Propose schema mutation.
-	var m pb.Mutations
-	// schema for a reserved predicate is not changed once set.
-	var ts *pb.AssignedIds
-	for {
-		ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
-		var err error
-		ts, err = Timestamps(ctx, &pb.Num{Val: 1})
-		cancel()
-		if err == nil {
-			break
-		}
-		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
+func applySchema(s *pb.SchemaUpdate) error {
+	if err := updateSchema(s); err != nil {
+		return err
 	}
-
-	m.StartTs = ts.StartId
-	if sch != nil {
-		m.Schema = append(m.Schema, sch)
+	if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
+		return err
+	} else if !servesTablet {
+		return errors.Errorf("group 1 should always serve reserved predicate %s", s.Predicate)
 	}
-	if typ != nil {
-		m.Types = append(m.Types, typ)
-	}
-
-	// This would propose the schema mutation and make sure some node serves this predicate
-	// and has the schema defined above.
-	for {
-		_, err := MutateOverNetwork(gr.Ctx(), &m)
-		if err == nil {
-			break
-		}
-		glog.Errorf("Error while proposing initial schema: %v\n", err)
-		time.Sleep(100 * time.Millisecond)
-	}
+	return nil
 }
 
 // No locks are acquired while accessing this function.
