@@ -58,6 +58,8 @@ func TestLogWriterWithCompression(t *testing.T) {
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
+// if this test failed and you changed anything, please check the dgraph audit decrypt command.
+// The dgraph audit decrypt command uses the same decryption method
 func TestLogWriterWithEncryption(t *testing.T) {
 	path, _ := filepath.Abs("./log_test/audit.log")
 	defer os.RemoveAll(filepath.Dir(path))
