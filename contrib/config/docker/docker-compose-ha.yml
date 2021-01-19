@@ -26,7 +26,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
+    command: dgraph zero --my=zero1:5080 --replicas 3 --raft="idx=1"
   zero2:
     image: dgraph/dgraph:latest
     volumes:
@@ -40,7 +40,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
+    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --raft="idx=2"
   zero3:
     image: dgraph/dgraph:latest
     volumes:
@@ -54,7 +54,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero3:5082 --replicas 3 --peer zero1:5080 --idx 3
+    command: dgraph zero -o 2 --my=zero3:5082 --replicas 3 --peer zero1:5080 --raft="idx=3"
   alpha1:
     image: dgraph/dgraph:latest
     hostname: "alpha1"

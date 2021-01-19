@@ -35,7 +35,7 @@ import (
 	"syscall"
 	"time"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -131,8 +131,13 @@ they form a Raft group and provide synchronous replication.
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
-	flag.Uint64("idx", 0,
-		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
+	flag.String("raft", "idx=0; group=0; learner=false",
+		`Various raft options.
+	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
+	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
+	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would
+		not participate in Raft elections. This can be used to achieve a read-only replica.
+	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -647,7 +652,7 @@ func run() {
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
-		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
+		Raft:                 Alpha.Conf.GetString("raft"),
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
@@ -661,6 +666,7 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)

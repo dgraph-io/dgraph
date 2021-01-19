@@ -85,7 +85,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --idx=1 --my=zero1:5080 --replicas=3 --logtostderr
+    command: /gobin/dgraph zero --raft="idx=1" --my=zero1:5080 --replicas=3 --logtostderr
       -v=2 --bindall
 volumes:
   data: {}

@@ -77,9 +77,8 @@ type WorkerOptions struct {
 	TLSClientConfig *tls.Config
 	// TLS server config which will be used to initiate server internal port
 	TLSServerConfig *tls.Config
-	// RaftId represents the id of this alpha instance for participating in the RAFT
-	// consensus protocol.
-	RaftId uint64
+	// Raft stores options related to Raft.
+	Raft string
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// MaxRetries is the maximum number of times to retry a commit before giving up.

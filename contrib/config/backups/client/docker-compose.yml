@@ -13,7 +13,7 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    command: dgraph zero --my=zero1:5080 --replicas 1 --idx 1
+    command: dgraph zero --my=zero1:5080 --replicas 1 --raft="idx=1"
 
   alpha1:
     ## DGRAPH_VERSION set by ./compose-setup.sh

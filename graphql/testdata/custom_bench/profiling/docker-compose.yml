@@ -25,7 +25,7 @@ services:
       target: /data/alpha1/p
       read_only: false
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --logtostderr -v=2 --raft="idx=1" --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -44,7 +44,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr -v=2
+    command: /gobin/dgraph zero -o 100 --raft="idx=1" --my=zero1:5180 --logtostderr -v=2
       --bindall
 volumes: {}
 

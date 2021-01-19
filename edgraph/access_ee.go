@@ -28,7 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
@@ -137,7 +137,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate: "+
+			return nil, errors.Errorf("unable to authenticate: " +
 				"invalid username or password")
 		}
 
@@ -154,7 +154,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate: "+
+		return nil, errors.Errorf("unable to authenticate: " +
 			"invalid username or password")
 	}
 	if !user.PasswordMatch {
