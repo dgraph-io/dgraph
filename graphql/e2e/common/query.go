@@ -3467,7 +3467,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query{
 			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
 			           name
-                       reputation
+					   reputation
 			           posts {
 			             title
 			           }
@@ -3493,7 +3493,7 @@ func queryFilterWithIDInputCoercion(t *testing.T) {
 			query: `query{
 			         queryAuthor(filter:{id:[` + authorIdsDecimal[0] + `,` + authorIdsDecimal[1] + `]}){
 			           name
-						reputation
+                       reputation
 			           posts {
 			             title
 			           }
