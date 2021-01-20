@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -240,6 +242,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 			Extensions: ext,
 		}
 	}
+
 	var upserts []*UpsertMutation
 	var err error
 	var frags [][]*mutationFragment
@@ -257,6 +260,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		qry := dgraph.AsString(queries)
 		req.Query = qry
 		var mutResp *dgoapi.Response
+
+		// The query will be empty in case there is no reference XID / UID in the mutation.
+		// Don't execute the query in those cases.
 		if req.Query != "" {
 			mutResp, err = mr.executor.Execute(ctx, req)
 		}
@@ -266,29 +272,56 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 			return emptyResult(gqlErr), resolverFailed
 		}
 
-		// Parse the result now.
+		// Parse the result of query.
+		// mutResp.Json will contain response to the query.
+		// The response is parsed to existenceQueriesResult
+		// Example Response:
+		// {
+		// 	Project1 :
+		//		[
+		//			{
+		//				"uid" : "0x123"
+		// 			}
+		//		],
+		//	Column2 :
+		//		[
+		//			{
+		//				"uid": "0x234"
+		// 			}
+		//		]
+		// }
 		queryResultMap := make(map[string][]map[string]string)
 		if mutResp != nil {
 			err = json.Unmarshal(mutResp.Json, &queryResultMap)
 		}
-
 		if err != nil {
 			gqlErr := schema.GQLWrapLocationf(
 				err, mutation.Location(), "mutation %s failed", mutation.Name())
 			return emptyResult(gqlErr), resolverFailed
 		}
 
-		existenceQueriesResult := make(map[string]string)
+		// The above response is parsed into map[string]string as follows:
+		// {
+		// 		"Project1" : "0x123",
+		// 		"Column2" : "0x234"
+		// }
+		qNameToUID := make(map[string]string)
 		for key, result := range queryResultMap {
 			if len(result) == 1 {
 				// Found exactly one UID / XID corresponding to given condition
-				existenceQueriesResult[key] = result[0]["uid"]
+				qNameToUID[key] = result[0]["uid"]
+			} else if len(result) > 1 {
+				// Found multiple UIDs for query. This should ideally not happen.
+				// This indicates that there are multiple nodes with same XIDs / UIDs. Throw an error.
+				err = errors.New(fmt.Sprintf("Found multiple nodes with ID: %s", result[0]["uid"]))
+				gqlErr := schema.GQLWrapLocationf(
+					err, mutation.Location(), "mutation %s failed", mutation.Name())
+				return emptyResult(gqlErr), resolverFailed
 			}
-			// TODO: Handle and throw proper error if len(result) > 1. Ideally this should not happen.
 		}
 
 		// Create mutations and new nodes depending on result of queries.
-		upserts, frags, err = NewCreateMutations(ctx, mutation, varGen, xidMd, existenceQueriesResult)
+		upserts, frags, err = NewCreateMutations(ctx, mutation, varGen, xidMd, qNameToUID)
 
 	default:
 		upserts, err = mr.mutationRewriter.Rewrite(ctx, mutation)

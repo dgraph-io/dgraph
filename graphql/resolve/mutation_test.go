@@ -238,20 +238,6 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	/*
-		compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
-			require.Len(t, generated, len(test))
-			for i, expected := range test {
-				require.Equal(t, expected.Cond, generated[i].Cond)
-				if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
-					require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
-				}
-				if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
-					require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
-				}
-			}
-		}*/
-
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 			// -- Arrange --

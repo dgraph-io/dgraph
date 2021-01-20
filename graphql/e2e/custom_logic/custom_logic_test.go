@@ -1615,7 +1615,6 @@ func addCharacter(t *testing.T, name string, episodes interface{}) {
 }
 
 func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
-	t.Skip()
 	schema := `
 	type Episode {
 		name: String! @id
