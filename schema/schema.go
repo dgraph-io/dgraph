@@ -536,7 +536,7 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the type updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
-func InitialTypes(namespace string) []*pb.TypeUpdate {
+func InitialTypes(namespace uint64) []*pb.TypeUpdate {
 	return initialTypesInternal(namespace, false)
 }
 
@@ -546,12 +546,12 @@ func InitialTypes(namespace string) []*pb.TypeUpdate {
 // example of such situation is while allowing type updates to go through during
 // alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
-func CompleteInitialTypes(namespace string) []*pb.TypeUpdate {
+func CompleteInitialTypes(namespace uint64) []*pb.TypeUpdate {
 	return initialTypesInternal(namespace, true)
 }
 
 // NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
-func initialTypesInternal(namespace string, all bool) []*pb.TypeUpdate {
+func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
@@ -658,7 +658,7 @@ func initialTypesInternal(namespace string, all bool) []*pb.TypeUpdate {
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema(namespace string) []*pb.SchemaUpdate {
+func InitialSchema(namespace uint64) []*pb.SchemaUpdate {
 	return initialSchemaInternal(namespace, false)
 }
 
@@ -667,11 +667,11 @@ func InitialSchema(namespace string) []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema(namespace string) []*pb.SchemaUpdate {
+func CompleteInitialSchema(namespace uint64) []*pb.SchemaUpdate {
 	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema,
@@ -763,7 +763,7 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
 // If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(namespace string, update *pb.SchemaUpdate) bool {
+func IsPreDefPredChanged(namespace uint64, update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
@@ -782,7 +782,7 @@ func IsPreDefPredChanged(namespace string, update *pb.SchemaUpdate) bool {
 // IsPreDefTypeChanged returns true if the initial update for the pre-defined
 // type is different than the passed update.
 // If the passed update is not a pre-defined type than it just returns false.
-func IsPreDefTypeChanged(namespace string, update *pb.TypeUpdate) bool {
+func IsPreDefTypeChanged(namespace uint64, update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
 	if !x.IsPreDefinedType(update.TypeName) {
 		return false

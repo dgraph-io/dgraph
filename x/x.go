@@ -250,7 +250,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
-func ExtractNamespace(ctx context.Context) string {
+func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return DefaultNamespace
@@ -259,7 +259,9 @@ func ExtractNamespace(ctx context.Context) string {
 	if len(ns) == 0 {
 		return DefaultNamespace
 	}
-	return md.Get("namespace")[0]
+	namespace, err := strconv.ParseUint(ns[0], 10, 64)
+	Check(err)
+	return namespace
 }
 
 func ExtractJwt(ctx context.Context) ([]string, error) {

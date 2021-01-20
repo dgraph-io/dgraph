@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -148,18 +149,19 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 
 // namespaceHandler will helps to create namespace
 func namespaceHandler(w http.ResponseWriter, r *http.Request) {
-	keys, ok := r.URL.Query()["namespace"]
-	if !ok || len(keys[0]) < 1 {
+	ns := r.URL.Query().Get("namespace")
+	if ns == "" {
 		glog.Error("The URL doesn't contain namespace key")
 		return
 	}
-	namespace := keys[0]
+	// TODO(Ahsan): Need to add check for ns being convertible to uint64.
+	namespace := binary.BigEndian.Uint64([]byte(ns))
 	err := (&edgraph.Server{}).CreateNamespace(context.Background(), namespace)
 	if err != nil {
-		fmt.Fprintf(w, "[FAIL] Failed to create namespace: %s\n", namespace)
+		fmt.Fprintf(w, "[FAIL] Failed to create namespace: %d\n", namespace)
 		return
 	}
-	fmt.Fprintf(w, "[OK] Namespace Created: %s\n", namespace)
+	fmt.Fprintf(w, "[OK] Namespace Created: %d\n", namespace)
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.

@@ -109,7 +109,7 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-func (s *Server) CreateNamespace(ctx context.Context, namespace string) error {
+func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(namespace)
 	_, err := query.ApplyMutations(ctx, m)
@@ -258,7 +258,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(namespace string, op *api.Operation) (*schema.ParsedSchema, error) {
+func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema.ParsedSchema, error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -946,7 +946,7 @@ type queryContext struct {
 	// a single request.
 	nquadsCount int
 	// namespace of the given query.
-	namespace string
+	namespace uint64
 }
 
 // Health handles /health and /health?all requests.

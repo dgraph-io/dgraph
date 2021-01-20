@@ -19,6 +19,7 @@ package x
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strings"
 
@@ -50,22 +51,17 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
-	// NamespaceSeparator is a constant used as seperator between namespace and attr name.
-	// byte 30 is chosen beacuse it is ascii separator standard.
-	// refer:
-	// https://theasciicode.com.ar/ascii-control-characters/unit-separator-ascii-code-31.html
-	NamespaceSeparator = byte(30)
 	// DefaultNamespace is the default namespace name.
-	DefaultNamespace = "default"
+	DefaultNamespace = uint64(0)
 )
 
 // NamespaceAttr is used to generate attr from namespace.
-func NamespaceAttr(namespace, attr string) string {
-	if namespace == "" {
-		namespace = DefaultNamespace
-	}
+func NamespaceAttr(ns uint64, attr string) string {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, ns)
+	namespace := fmt.Sprintf("%s", buf)
 	if len(attr) == 0 {
-		return namespace + string(NamespaceSeparator) + attr
+		return namespace
 	}
 	if attr[0] == '~' {
 		attr = attr[1:]
@@ -73,25 +69,26 @@ func NamespaceAttr(namespace, attr string) string {
 		// that predicate will be reverse indexed.
 		namespace = "~" + namespace
 	}
-	return namespace + string(NamespaceSeparator) + attr
+	return namespace + attr
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
-func ParseNamespaceAttr(attr string) (string, string, bool) {
-	splits := strings.Split(attr, string(NamespaceSeparator))
-	AssertTruef(len(splits) == 2, "Cannot split the key: %s\n", attr)
-	reverse := splits[0][0] == '~'
+func ParseNamespaceAttr(attr string) (uint64, string, bool) {
+	// TODO(Ahsan): Some byte in uint64 might have ~ representation in string. Need to fix.
+	reverse := attr[0] == '~'
 	if reverse {
-		splits[0] = splits[0][1:]
+		return binary.BigEndian.Uint64([]byte(attr[1:9])), attr[9:], reverse
 	}
-	return splits[0], splits[1], reverse
+	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], reverse
 }
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	splits := strings.Split(attr, string(NamespaceSeparator))
-	AssertTrue(len(splits) == 2)
-	return splits[1]
+	reverse := attr[0] == '~'
+	if reverse {
+		return attr[9:]
+	}
+	return attr[8:]
 }
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -681,7 +678,7 @@ func IsAclPredicate(pred string) bool {
 
 // StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func StarAllPredicates(namespace string) []string {
+func StarAllPredicates(namespace uint64) []string {
 	preds := make([]string, 0, len(starAllPredicateMap))
 	for pred := range starAllPredicateMap {
 		preds = append(preds, NamespaceAttr(namespace, pred))

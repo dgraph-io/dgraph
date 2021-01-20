@@ -25,6 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNameSpace(t *testing.T) {
+	ns := uint64(133)
+	attr := "name"
+	nsAttr := NamespaceAttr(ns, attr)
+	require.Equal(t, 8+len(attr), len(nsAttr))
+	parsedAttr := ParseAttr(nsAttr)
+	require.Equal(t, attr, parsedAttr)
+}
+
 func TestDataKey(t *testing.T) {
 	var uid uint64
 

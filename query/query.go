@@ -205,7 +205,7 @@ type params struct {
 	// For OSS this should remain nil.
 	AllowedPreds []string
 	// Namespace of the given subgraph
-	Namespace string
+	Namespace uint64
 }
 
 type pathMetadata struct {
@@ -1965,7 +1965,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			if typeNamespace != child.Params.Namespace {
 				return out, errors.Errorf(
-					"Expected namespace while expanding subgraph %s but got %s",
+					"Expected namespace while expanding subgraph %d but got %d",
 					child.Params.Namespace, typeNamespace)
 			}
 			temp := &SubGraph{
@@ -2628,7 +2628,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
-func getPredicatesFromTypes(namespace string, typeNames []string) []string {
+func getPredicatesFromTypes(namespace uint64, typeNames []string) []string {
 	var preds []string
 
 	for _, typeName := range typeNames {
@@ -2890,7 +2890,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 }
 
 // filterTypesForNamespace filters types for the given namespace.
-func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
+func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.TypeUpdate {
 	out := []*pb.TypeUpdate{}
 	for _, update := range types {
 		// Type name doesn't have reverse.
@@ -2916,7 +2916,7 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 }
 
 // filterSchemaNodeForNamespace filters schema nodes for the given namespace.
-func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*pb.SchemaNode {
+func filterSchemaNodeForNamespace(namespace uint64, nodes []*pb.SchemaNode) []*pb.SchemaNode {
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
