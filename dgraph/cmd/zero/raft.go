@@ -20,13 +20,14 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/audit"
 	"log"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	otrace "go.opencensus.io/trace"
 

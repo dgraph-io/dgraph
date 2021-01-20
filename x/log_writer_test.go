@@ -23,13 +23,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestLogWriter(t *testing.T) {

@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
-	"github.com/dgraph-io/badger/v3/y"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -29,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/v3/y"
 )
 
 const (

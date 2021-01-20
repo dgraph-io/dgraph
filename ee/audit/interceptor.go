@@ -20,8 +20,9 @@ package audit
 
 import (
 	"context"
-	"google.golang.org/grpc"
 	"net/http"
+
+	"google.golang.org/grpc"
 )
 
 func AuditRequestGRPC(ctx context.Context, req interface{},

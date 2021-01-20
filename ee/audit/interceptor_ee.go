@@ -15,16 +15,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	"google.golang.org/grpc"
 )

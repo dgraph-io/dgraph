@@ -15,11 +15,12 @@ package zero
 import (
 	"bytes"
 	"context"
-	"github.com/dgraph-io/dgraph/ee/audit"
 	"io/ioutil"
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
