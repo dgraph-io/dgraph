@@ -714,7 +714,6 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
 	posting.Init(worker.State.Pstore, postingListCacheSize)
-	admin.Init(worker.State.Pstore)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 

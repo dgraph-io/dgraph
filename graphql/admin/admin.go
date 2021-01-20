@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"github.com/dgraph-io/badger/v3"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -384,13 +383,7 @@ var (
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
-	pstore          *badger.DB
 )
-
-// Init resets the schema state, setting the underlying DB to the given pointer.
-func Init(ps *badger.DB) {
-	pstore = ps
-}
 
 func SchemaValidate(sch string) error {
 	schHandler, err := schema.NewHandler(sch, true)
