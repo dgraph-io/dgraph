@@ -338,7 +338,11 @@ func (rf *resolverFactory) WithConventionResolvers(
 			// 2. We are using filter Query to resolve the Fields so filter queries must not be turned off in the Schema.
 			// Once we get it all working, later we should do it by adding new rewriter so that we don't have to depend on
 			// @generate directive turning off the filter query.
-			ConstructEntitiesQuery(keyFieldValueList, typeNames[0], query)
+			var typeName string
+			for k := range typeNames {
+				typeName = k
+			}
+			qr, err := schema.ConstructEntitiesQuery(keyFieldValueList, typeName, query)
 			if err != nil {
 				return EmptyResult(q, err)
 			}
