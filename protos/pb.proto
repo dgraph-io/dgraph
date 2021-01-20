@@ -163,6 +163,7 @@ message ZeroProposal {
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
+	uint64 maxLeaseNsID = 12;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -178,6 +179,7 @@ message MembershipState {
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 	License license = 9;
+	uint64 maxLeaseNsID = 12;
 }
 
 message ConnectionState {
@@ -537,6 +539,7 @@ service Zero {
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
 	rpc AssignUids (Num)               returns (AssignedIds) {}
+	rpc AssignNsIDs (Num)              returns (AssignedIds) {}
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}

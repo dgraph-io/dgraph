@@ -406,7 +406,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 
 	num := pb.Num{Val: 1}
-	assigned, err := s.lease(ctx, &num, true)
+	assigned, err := s.lease(ctx, &num, leaseTxnTs)
 	if err != nil {
 		return err
 	}
@@ -515,7 +515,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	reply, err := s.lease(ctx, num, true)
+	reply, err := s.lease(ctx, num, leaseTxnTs)
 	span.Annotatef(nil, "Response: %+v. Error: %v", reply, err)
 
 	switch err {
