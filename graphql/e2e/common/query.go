@@ -373,7 +373,7 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
-func inFilter(t *testing.T) {
+func inFilterOnString(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {
 			addState(input: [{name: $name1, xcode: $code1},{name: $name2, xcode: $code2}]) {
@@ -457,6 +457,70 @@ func inFilter(t *testing.T) {
 
 	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
 	DeleteGqlType(t, "State", deleteFilter, 2, nil)
+}
+
+func inFilterOnInt(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost(filter: {numLikes: {in: [1, 77, 100, 150, 200]}}) {
+				title
+				numLikes
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(result.QueryPost))
+}
+
+func inFilterOnFloat(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: {reptutation: {in: [6.6, 8.9, 9.5]}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryAuthor))
+}
+
+func inFilterOnDateTime(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: {dob: {in: ["2001-01-01","2002-02-01", "2005-01-01"]}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
 }
 
 func betweenFilter(t *testing.T) {
