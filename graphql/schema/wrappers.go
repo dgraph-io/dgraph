@@ -2635,12 +2635,12 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	return rf, err
 }
 
-// ConstructFilterQueryFromKeyField constructs a filter Query for a type from typeName.
+// ConstructEntitiesQuery constructs a filter Query from an Entities Query.
 // Filter Arguments are the values of KeyField which is the argument of @key directive.
-// This method is called from  apollo entity Resolver to resolve a typeName filtered by its
+// This method is called from  apollo entity Resolver to resolve a type filtered by its
 // key field.
-func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName string, Alias string, op Operation, selection []Field) (Query, error) {
-	oprn := op.(*operation)
+func ConstructEntitiesQuery(keyFieldValueList []string, typeName string, q Query) (Query, error) {
+	oprn := q.Operation().(*operation)
 
 	typeDefn := oprn.inSchema.schema.Types[typeName]
 	keyDir := typeDefn.Directives.ForName(apolloKeyDirective)
@@ -2650,7 +2650,7 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 	keyFldTypeName := keyFldDefn.Type.NamedType
 
 	var filterValueKind ast.ValueKind
-	if keyFldTypeName == "String" || keyFldTypeName == "ID" {
+	if keyFldTypeName == "String" || keyFldTypeName == IDType {
 		filterValueKind = ast.StringValue
 	} else if keyFldTypeName == "Int" {
 		filterValueKind = ast.IntValue
@@ -2669,11 +2669,6 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 		})
 	}
 
-	filterValue := &ast.Value{
-		Children: idChildren,
-		Kind:     ast.ListValue,
-	}
-
 	// If the key field is not of "ID" type, then it must having
 	// @id directive on it. Construct filter with using `in` filter
 	// in that case. For eg:-
@@ -2681,19 +2676,28 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 	// 			...
 	// 			...
 	// 		}
-	if keyFldTypeName != "ID" {
-		filterValue = &ast.Value{
+	var fieldFilterValue *ast.Value
+	if keyFldTypeName == IDType {
+		fieldFilterValue = &ast.Value{
+			Children: idChildren,
+			Kind:     ast.ListValue,
+		}
+	} else {
+		fieldFilterValue = &ast.Value{
 			Kind: ast.ObjectValue,
 			Children: ast.ChildValueList{
 				&ast.ChildValue{
-					Name:  "in",
-					Value: filterValue,
+					Name: "in",
+					Value: &ast.Value{
+						Children: idChildren,
+						Kind:     ast.ListValue,
+					},
 				}},
 		}
 	}
 
 	var selectionSet ast.SelectionSet
-	for _, fld := range selection {
+	for _, fld := range q.SelectionSet() {
 		sel, ok := fld.(*field)
 		if !ok {
 			return &query{}, fmt.Errorf("Got Error in TypeCasting Selection Fields")
@@ -2703,7 +2707,7 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 
 	fld := &ast.Field{
 		Name:  string(FilterQuery) + typeName,
-		Alias: Alias,
+		Alias: q.Alias(),
 		Arguments: ast.ArgumentList{&ast.Argument{
 			Name: FilterArgName,
 			Value: &ast.Value{
@@ -2711,7 +2715,7 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 				Children: ast.ChildValueList{
 					&ast.ChildValue{
 						Name:  keyFieldName,
-						Value: filterValue,
+						Value: fieldFilterValue,
 					}},
 			},
 		}},
@@ -2719,5 +2723,5 @@ func ConstructFilterQueryFromKeyField(keyFieldValueList []string, typeName strin
 		SelectionSet: selectionSet,
 	}
 
-	return &query{field: fld, op: oprn, sel: nil}, nil
+	return &query{field: fld, op: oprn, sel: fld}, nil
 }
