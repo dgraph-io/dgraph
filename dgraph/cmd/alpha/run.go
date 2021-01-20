@@ -604,7 +604,6 @@ func run() {
 
 	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
 
-	x.CheckFlag(Alpha.Conf.GetString("audit"), "dir", "compress", "encrypt-file")
 	conf, err := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	x.Check(err)
 	opts := worker.Options{

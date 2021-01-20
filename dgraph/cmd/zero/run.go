@@ -200,8 +200,6 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
-
-	x.CheckFlag(Zero.Conf.GetString("audit"), "dir", "compress", "encrypt-file")
 	conf, err := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	x.Check(err)
 	opts = options{

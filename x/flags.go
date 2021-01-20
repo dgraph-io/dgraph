@@ -146,7 +146,6 @@ func (sf *SuperFlag) GetUint32(opt string) uint32 {
 	Checkf(err, "Unable to parse %s as uint32 for key: %s. Options: %s\n", val, opt, sf)
 	return uint32(u)
 }
-func GetFlagString(opt, key string) string {
-	val := GetFlag(opt, key)
-	return val
+func (sf *SuperFlag) GetString(opt string) string {
+	return sf.Get(opt)
 }

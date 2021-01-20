@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	defaultAuditConf     = "dir=;compress=false;encrypt-file="
 	defaultAuditFilename = "dgraph_audit.log"
 )
 
@@ -65,23 +66,24 @@ func GetAuditConf(conf string) (*AuditConf, error) {
 	if conf == "" {
 		return nil, nil
 	}
-	encBytes, err := readAuditEncKey(conf)
-	if err != nil {
-		return nil, err
-	}
-	dir := x.GetFlagString(conf, "dir")
+	auditFlag := x.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
+	dir := auditFlag.GetString("dir")
 	if dir == "" {
 		return nil, fmt.Errorf("dir flag is not provided for the audit logs")
 	}
+	encBytes, err := readAuditEncKey(auditFlag)
+	if err != nil {
+		return nil, err
+	}
 	return &AuditConf{
-		Compress:     x.GetFlagBool(conf, "compress"),
+		Compress:     auditFlag.GetBool("compress"),
 		Dir:          dir,
 		EncryptBytes: encBytes,
 	}, nil
 }
 
-func readAuditEncKey(conf string) ([]byte, error) {
-	encFile := x.GetFlagString(conf, "encrypt-file")
+func readAuditEncKey(conf *x.SuperFlag) ([]byte, error) {
+	encFile := conf.GetString("encrypt-file")
 	if encFile == "" {
 		return nil, nil
 	}
