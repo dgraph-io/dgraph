@@ -59,7 +59,7 @@ type Server struct {
 	state       *pb.MembershipState
 	nextRaftId  uint64
 
-	nextLease  map[leaseType]uint64
+	nextLease  map[pb.NumLeaseType]uint64
 	readOnlyTs uint64
 	leaseLock  sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
 
@@ -89,11 +89,11 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
-	s.nextLease = make(map[leaseType]uint64)
+	s.nextLease = make(map[pb.NumLeaseType]uint64)
 	s.nextRaftId = 1
-	s.nextLease[leaseUID] = 1
-	s.nextLease[leaseTxnTs] = 1
-	s.nextLease[leaseNsID] = 1
+	s.nextLease[pb.Num_UID] = 1
+	s.nextLease[pb.Num_TXN_TS] = 1
+	s.nextLease[pb.Num_NS_ID] = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = z.NewCloser(2) // grpc and http

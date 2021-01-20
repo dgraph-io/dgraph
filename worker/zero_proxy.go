@@ -14,7 +14,7 @@ func forwardAssignUidsToZero(ctx context.Context, in *pb.Num) (*pb.AssignedIds, 
 		return nil, conn.ErrNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
-	return zc.AssignUids(ctx, in)
+	return zc.AssignIds(ctx, in)
 }
 
 // RegisterZeroProxyServer forwards select GRPC calls over to Zero

@@ -283,7 +283,7 @@ func MaxLeaseId() uint64 {
 	if g.state == nil {
 		return 0
 	}
-	return g.state.MaxLeaseId
+	return g.state.MaxUID
 }
 
 // GetMembershipState returns the current membership state.

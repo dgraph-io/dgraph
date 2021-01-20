@@ -29,40 +29,35 @@ import (
 
 var emptyAssignedIds pb.AssignedIds
 
-type leaseType int
-
 const (
-	leaseBandwidth           = uint64(10000)
-	leaseTxnTs     leaseType = iota
-	leaseUID
-	leaseNsID
+	leaseBandwidth = uint64(10000)
 )
 
 func (s *Server) updateLeases() {
 	var startTs uint64
 	s.Lock()
-	s.nextLease[leaseUID] = s.state.MaxLeaseId + 1
-	s.nextLease[leaseTxnTs] = s.state.MaxTxnTs + 1
-	s.nextLease[leaseNsID] = s.state.MaxLeaseNsID + 1
+	s.nextLease[pb.Num_UID] = s.state.MaxUID + 1
+	s.nextLease[pb.Num_TXN_TS] = s.state.MaxTxnTs + 1
+	s.nextLease[pb.Num_NS_ID] = s.state.MaxNsID + 1
 
-	startTs = s.nextLease[leaseTxnTs]
+	startTs = s.nextLease[pb.Num_TXN_TS]
 	glog.Infof("Updated Lease id: %d. Txn Ts: %d. NsID: %d.",
-		s.nextLease[leaseUID], s.nextLease[leaseTxnTs], s.nextLease[leaseNsID])
+		s.nextLease[pb.Num_UID], s.nextLease[pb.Num_TXN_TS], s.nextLease[pb.Num_NS_ID])
 	s.Unlock()
 	s.orc.updateStartTxnTs(startTs)
 }
 
-func (s *Server) maxLease(typ leaseType) uint64 {
+func (s *Server) maxLease(typ pb.NumLeaseType) uint64 {
 	s.RLock()
 	defer s.RUnlock()
 	var maxlease uint64
 	switch typ {
-	case leaseUID:
-		maxlease = s.state.MaxLeaseId
-	case leaseTxnTs:
+	case pb.Num_UID:
+		maxlease = s.state.MaxUID
+	case pb.Num_TXN_TS:
 		maxlease = s.state.MaxTxnTs
-	case leaseNsID:
-		maxlease = s.state.MaxLeaseNsID
+	case pb.Num_NS_ID:
+		maxlease = s.state.MaxNsID
 	}
 	return maxlease
 }
@@ -73,7 +68,8 @@ var errServedFromMemory = errors.New("Lease was served from memory")
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func (s *Server) lease(ctx context.Context, num *pb.Num, typ leaseType) (*pb.AssignedIds, error) {
+func (s *Server) lease(ctx context.Context, num *pb.Num, typ pb.NumLeaseType) (*pb.AssignedIds,
+	error) {
 	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
@@ -92,15 +88,15 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ leaseType) (*pb.Ass
 	s.leaseLock.Lock()
 	defer s.leaseLock.Unlock()
 
-	if typ == leaseTxnTs {
+	if typ == pb.Num_TXN_TS {
 		if num.Val == 0 && num.ReadOnly {
 			// If we're only asking for a readonly timestamp, we can potentially
 			// service it directly.
 			if glog.V(3) {
 				glog.Infof("Attempting to serve read only txn ts [%d, %d]",
-					s.readOnlyTs, s.nextLease[leaseTxnTs])
+					s.readOnlyTs, s.nextLease[pb.Num_TXN_TS])
 			}
-			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextLease[leaseTxnTs]-1 {
+			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextLease[pb.Num_TXN_TS]-1 {
 				return &pb.AssignedIds{ReadOnly: s.readOnlyTs}, errServedFromMemory
 			}
 		}
@@ -117,7 +113,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ leaseType) (*pb.Ass
 		howMany = num.Val + leaseBandwidth
 	}
 
-	if s.nextLease[leaseUID] == 0 || s.nextLease[leaseTxnTs] == 0 || s.nextLease[leaseNsID] == 0 {
+	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 || s.nextLease[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
 	}
 
@@ -129,15 +125,15 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ leaseType) (*pb.Ass
 
 	maxLease = s.maxLease(typ)
 	switch typ {
-	case leaseTxnTs:
-		available = maxLease - s.nextLease[leaseTxnTs] + 1
+	case pb.Num_TXN_TS:
+		available = maxLease - s.nextLease[pb.Num_TXN_TS] + 1
 		proposal.MaxTxnTs = maxLease + howMany
-	case leaseUID:
-		available = maxLease - s.nextLease[leaseUID] + 1
-		proposal.MaxLeaseId = maxLease + howMany
-	case leaseNsID:
-		available = maxLease - s.nextLease[leaseNsID] + 1
-		proposal.MaxLeaseNsID = maxLease + howMany
+	case pb.Num_UID:
+		available = maxLease - s.nextLease[pb.Num_UID] + 1
+		proposal.MaxUID = maxLease + howMany
+	case pb.Num_NS_ID:
+		available = maxLease - s.nextLease[pb.Num_NS_ID] + 1
+		proposal.MaxNsID = maxLease + howMany
 	}
 
 	// If we have less available than what we need, we need to renew our lease.
@@ -149,44 +145,36 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ leaseType) (*pb.Ass
 	}
 
 	out := &pb.AssignedIds{}
-	if typ == leaseTxnTs {
+	if typ == pb.Num_TXN_TS {
 		if num.Val > 0 {
-			out.StartId = s.nextLease[leaseTxnTs]
+			out.StartId = s.nextLease[pb.Num_TXN_TS]
 			out.EndId = out.StartId + num.Val - 1
-			s.nextLease[leaseTxnTs] = out.EndId + 1
+			s.nextLease[pb.Num_TXN_TS] = out.EndId + 1
 		}
 		if num.ReadOnly {
-			s.readOnlyTs = s.nextLease[leaseTxnTs]
-			s.nextLease[leaseTxnTs]++
+			s.readOnlyTs = s.nextLease[pb.Num_TXN_TS]
+			s.nextLease[pb.Num_TXN_TS]++
 			out.ReadOnly = s.readOnlyTs
 		}
 		s.orc.doneUntil.Begin(x.Max(out.EndId, out.ReadOnly))
-	} else if typ == leaseUID {
-		out.StartId = s.nextLease[leaseUID]
+	} else if typ == pb.Num_UID {
+		out.StartId = s.nextLease[pb.Num_UID]
 		out.EndId = out.StartId + num.Val - 1
-		s.nextLease[leaseUID] = out.EndId + 1
-	} else if typ == leaseNsID {
-		out.StartId = s.nextLease[leaseNsID]
+		s.nextLease[pb.Num_UID] = out.EndId + 1
+	} else if typ == pb.Num_NS_ID {
+		out.StartId = s.nextLease[pb.Num_NS_ID]
 		out.EndId = out.StartId + num.Val - 1
-		s.nextLease[leaseNsID] = out.EndId + 1
+		s.nextLease[pb.Num_NS_ID] = out.EndId + 1
 
 	} else {
-		glog.Errorf("Unknown lease type: %v\n", typ)
+		return out, errors.Errorf("Unknown lease type: %v\n", typ)
 	}
 	return out, nil
 }
 
-func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	return s.AssignIds(ctx, num, leaseUID)
-}
-
-func (s *Server) AssignNsIDs(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	return s.AssignIds(ctx, num, leaseNsID)
-}
-
 // AssignIds is used to assign new ids (UIDs, NsIDs) by communicating with the leader of the
 // RAFT group responsible for handing out ids.
-func (s *Server) AssignIds(ctx context.Context, num *pb.Num, typ leaseType) (*pb.AssignedIds, error) {
+func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
@@ -198,7 +186,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num, typ leaseType) (*pb
 		var err error
 		if s.Node.AmLeader() {
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
-			reply, err = s.lease(ctx, num, typ)
+			reply, err = s.lease(ctx, num, num.GetType())
 			return err
 		}
 		span.Annotate(nil, "Not Zero leader")
@@ -215,7 +203,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num, typ leaseType) (*pb
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())
 		num.Forwarded = true
-		reply, err = zc.AssignUids(ctx, num)
+		reply, err = zc.AssignIds(ctx, num)
 		return err
 	}
 

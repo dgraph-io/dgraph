@@ -506,7 +506,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.AssignUids(ctx, num)
+	num.Type = pb.Num_UID
+	return c.AssignIds(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
