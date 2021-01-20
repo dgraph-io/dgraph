@@ -43,7 +43,7 @@ check:
 	@./depcheck.sh && \
 		(echo "Installing proto libraries to versions in go.mod." ; \
 		go install github.com/golang/protobuf/protoc-gen-go ; \
-		go install github.com/gogo/protobuf/protoc-gen-gogofast)
+		go install github.com/gogo/protobuf/protoc-gen-gogofaster)
 
 .PHONY: copy-protos
 copy-protos:
