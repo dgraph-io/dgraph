@@ -99,7 +99,7 @@ func run() error {
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(content, content)
 		x.Check2(outfile.Write(content))
-		// if its the end of data. finish encoding
+		// if its the end of data. finish decrypting
 		if iterator >= stat.Size() {
 			break
 		}

@@ -60,15 +60,13 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 	if l.file == nil {
 		l.manageLogDir()
 		// open file
-		err = l.open()
-		if err != nil {
+		if err = l.open(); err != nil {
 			return 0, fmt.Errorf("not able to create new file %v", err)
 		}
 	}
 
 	if l.size+int64(len(p)) >= l.MaxSize*1024*1024 {
-		err := l.rotate()
-		if err != nil {
+		if err = l.rotate(); err != nil {
 			return 0, err
 		}
 	}
@@ -100,8 +98,7 @@ func (l *LogWriter) Close() error {
 }
 
 func (l *LogWriter) open() error {
-	err := os.MkdirAll(filepath.Dir(l.FilePath), 0755)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Dir(l.FilePath), 0755); err != nil {
 		return err
 	}
 
@@ -149,8 +146,7 @@ func (l *LogWriter) open() error {
 
 	// If not able to read the baseIv, then this file might be corrupted.
 	// open the new file in that case
-	_, err = f.ReadAt(l.baseIv[:], 0)
-	if err != nil {
+	if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
 		return openNew()
 	}
 	l.file = f
@@ -169,8 +165,7 @@ func (l *LogWriter) rotate() error {
 		return err
 	}
 
-	_, err = os.Stat(l.FilePath)
-	if err == nil {
+	if _, err = os.Stat(l.FilePath); err != nil {
 		// move the existing file
 		newname := backupName(l.FilePath)
 		if err := os.Rename(l.FilePath, newname); err != nil {
