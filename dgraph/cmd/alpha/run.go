@@ -436,12 +436,12 @@ func setupServer(closer *z.Closer) {
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
-	baseMux.Handle("/query", http.HandlerFunc(queryHandler))
-	baseMux.Handle("/query/", http.HandlerFunc(queryHandler))
-	baseMux.Handle("/mutate", http.HandlerFunc(mutationHandler))
-	baseMux.Handle("/mutate/", http.HandlerFunc(mutationHandler))
-	baseMux.Handle("/commit", http.HandlerFunc(commitHandler))
-	baseMux.Handle("/alter", http.HandlerFunc(alterHandler))
+	baseMux.HandleFunc("/query", queryHandler)
+	baseMux.HandleFunc("/query/", queryHandler)
+	baseMux.HandleFunc("/mutate", mutationHandler)
+	baseMux.HandleFunc("/mutate/", mutationHandler)
+	baseMux.HandleFunc("/commit", commitHandler)
+	baseMux.HandleFunc("/alter", alterHandler)
 	baseMux.HandleFunc("/health", healthCheck)
 	baseMux.HandleFunc("/state", stateHandler)
 	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
@@ -727,6 +727,9 @@ func run() {
 
 	worker.InitServerState()
 
+	// Audit is enterprise feature.
+	x.Check(audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled))
+
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
@@ -806,9 +809,6 @@ func run() {
 	// Graphql subscribes to alpha to get schema updates. We need to close that before we
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
-
-	// Audit is enterprise feature.
-	audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled)
 
 	setupServer(adminCloser)
 	glog.Infoln("GRPC and HTTP stopped.")

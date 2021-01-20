@@ -287,11 +287,11 @@ func run() {
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
 	baseMux.HandleFunc("/health", st.pingResponse)
-	baseMux.Handle("/state", http.HandlerFunc(st.getState))
-	baseMux.Handle("/removeNode", http.HandlerFunc(st.removeNode))
-	baseMux.Handle("/moveTablet", http.HandlerFunc(st.moveTablet))
-	baseMux.Handle("/assign", http.HandlerFunc(st.assign))
-	baseMux.Handle("/enterpriseLicense", http.HandlerFunc(st.applyEnterpriseLicense))
+	baseMux.HandleFunc("/state", st.getState)
+	baseMux.HandleFunc("/removeNode", st.removeNode)
+	baseMux.HandleFunc("/moveTablet", st.moveTablet)
+	baseMux.HandleFunc("/assign", st.assign)
+	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
 	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/z")
 

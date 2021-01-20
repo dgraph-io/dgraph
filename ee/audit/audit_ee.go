@@ -22,6 +22,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	defaultAuditFilename = "dgraph_audit.log"
+)
+
 var auditEnabled uint32
 
 type AuditEvent struct {
@@ -69,44 +73,43 @@ func ReadAuditEncKey(conf string) ([]byte, error) {
 // InitAuditorIfNecessary accepts conf and enterprise edition check function.
 // This method keep tracks whether cluster is part of enterprise edition or not.
 // It pools eeEnabled function every five minutes to check if the license is still valid or not.
-func InitAuditorIfNecessary(conf string, eeEnabled func() bool) {
+func InitAuditorIfNecessary(conf string, eeEnabled func() bool) error {
 	if conf == "" {
-		return
+		return nil
 	}
 	encKey, err := ReadAuditEncKey(conf)
 	if err != nil {
 		glog.Errorf("error while reading encryption file", err)
-		return
+		return err
 	}
 	if eeEnabled() {
-		InitAuditor(x.GetFlagString(conf, "dir"), encKey)
+		if err := InitAuditor(x.GetFlagString(conf, "dir"), encKey); err != nil {
+			return err
+		}
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
 	go trackIfEEValid(x.GetFlagString(conf, "dir"), encKey, eeEnabled)
+	return nil
 }
 
 // InitAuditor initializes the auditor.
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
-func InitAuditor(dir string, key []byte) {
-	auditor.log = initlog(dir, key)
+func InitAuditor(dir string, key []byte) error {
+	var err error
+	if auditor.log, err = x.InitLogger(dir, defaultAuditFilename, key); err != nil {
+		return err
+	}
 	atomic.StoreUint32(&auditEnabled, 1)
 	glog.Infoln("audit logs are enabled")
-}
-
-func initlog(dir string, key []byte) *x.Logger {
-	logger, err := x.InitLogger(dir, "dgraph_audit.log", key)
-	if err != nil {
-		glog.Errorf("error while initiating auditor %v", err)
-		return nil
-	}
-	return logger
+	return nil
 }
 
 // trackIfEEValid tracks enterprise license of the cluster.
 // Right now alpha doesn't know about the enterprise/licence.
 // That's why we needed to track if the current node is part of enterprise edition cluster
 func trackIfEEValid(dir string, key []byte, eeEnabledFunc func() bool) {
+	var err error
 	for {
 		select {
 		case <-auditor.tick.C:
@@ -118,7 +121,9 @@ func trackIfEEValid(dir string, key []byte, eeEnabledFunc func() bool) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				auditor.log = initlog(dir, key)
+				if auditor.log, err = x.InitLogger(dir, defaultAuditFilename, key); err != nil {
+					continue
+				}
 				atomic.StoreUint32(&auditEnabled, 1)
 				glog.Infof("audit logs are enabled")
 			}

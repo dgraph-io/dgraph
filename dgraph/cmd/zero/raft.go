@@ -406,7 +406,9 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 			if encKey, err := audit.ReadAuditEncKey(opts.audit); err != nil {
 				glog.Errorf("error while reading encryption file %+v", err)
 			} else {
-				audit.InitAuditor(x.GetFlagString(opts.audit, "dir"), encKey)
+				if err := audit.InitAuditor(x.GetFlagString(opts.audit, "dir"), encKey); err != nil {
+					glog.Errorf("error while initializing audit logs %+v", err)
+				}
 			}
 		}
 	}
