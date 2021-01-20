@@ -147,7 +147,9 @@ func calculatePackSize(pack *pb.UidPack) uint64 {
 	}
 
 	var size uint64 = 1*8 + // BlockSize consists of 1 word.
-		3*8 // Blocks array consists of 3 words.
+		3*8 + // Blocks array consists of 3 words.
+		1*8 + // AllocRef consists of 1 word.
+		8 // Rounding it to 6 words by adding 1.
 
 	// Adding size of each entry in Blocks array.
 	// Each entry consumes 1 word.
@@ -168,7 +170,8 @@ func calculateUIDBlock(block *pb.UidBlock) uint64 {
 
 	var size uint64 = 1*8 + // Base consists of 1 word.
 		3*8 + // Delta array consists of 3 words.
-		1*8 // NumUids consists of 1 word.
+		1*8 + // NumUids consists of 1 word.
+		1*8 // Rounding it to 6 words by adding 1.
 
 	// Adding the size of each entry in Deltas array.
 	size += uint64(cap(block.Deltas))
@@ -186,7 +189,11 @@ func calculateFacet(facet *api.Facet) uint64 {
 		3*8 + // Value array consists of 3 words.
 		1*8 + // ValType consists of 1 word.
 		3*8 + // Tokens array consists of 3 words.
-		1*8 // Alias consists of 1 word.
+		1*8 + // Alias consists of 1 word.
+		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because it is empty struct.
+		3*8 + // XXX_unrecognized array consists of 3 word.
+		1*8 + // XXX_sizecache consists of 1 word.
+		3*8 // rounding to 16 so adding 3
 
 	// Adding size of each entry in Key array.
 	size += uint64(len(facet.Key))
@@ -199,5 +206,7 @@ func calculateFacet(facet *api.Facet) uint64 {
 	}
 	// Adding size of each entry in Alias Array.
 	size += uint64(len(facet.Alias))
+	// Adding size of each entry in XXX_unrecognized array.
+	size += uint64(len(facet.XXX_unrecognized))
 	return size
 }
