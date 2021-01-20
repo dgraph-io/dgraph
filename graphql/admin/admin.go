@@ -19,8 +19,6 @@ package admin
 import (
 	"context"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/gql"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -648,24 +646,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 	if err != nil {
 		return nil, err
 	}
-	if graphQLSchema == "" {
-		return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
-	}
-	//getting version of the current schema.
-	intUid, err := gql.ParseUid(uid)
-	if err != nil {
-		return nil, err
-	}
-
-	prefix := x.DataKey(worker.GqlSchemaPred, intUid)
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	item, err := txn.Get(prefix)
-	if err != nil {
-		return nil, err
-	}
-
-	version := item.Version()
-	return &gqlSchema{ID: uid, Version: version, Schema: graphQLSchema}, nil
+	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
