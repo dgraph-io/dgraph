@@ -18,17 +18,20 @@
 
 package audit
 
+type AuditConf struct {
+	Dir string
+}
 
-func ReadAuditEncKey(conf string) ([]byte, error) {
+func GetAuditConf(conf string) (*AuditConf, error) {
 	return nil, nil
 }
 
-func InitAuditorIfNecessary(conf string, eeEnabled func() bool) {
-	return
+func InitAuditorIfNecessary(conf *AuditConf, eeEnabled func() bool) error {
+	return nil
 }
 
-func InitAuditor(dir string, key []byte) {
-	return
+func InitAuditor(conf *AuditConf) error {
+	return nil
 }
 
 func Close() {

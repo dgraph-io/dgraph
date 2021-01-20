@@ -70,7 +70,7 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 				// list of endpoints that needs to be skipped
 				"/health":   true,
 				"/jemalloc": true,
-				"/state": true,
+				"/state":    true,
 			}
 			return skipEPs[r.URL.Path]
 		}

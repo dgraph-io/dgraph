@@ -13,6 +13,7 @@
 package audit
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"sync/atomic"
@@ -27,6 +28,12 @@ const (
 )
 
 var auditEnabled uint32
+
+type AuditConf struct {
+	Compress     bool
+	Dir          string
+	EncryptBytes []byte
+}
 
 type AuditEvent struct {
 	User        string
@@ -54,7 +61,26 @@ type auditLogger struct {
 	tick *time.Ticker
 }
 
-func ReadAuditEncKey(conf string) ([]byte, error) {
+func GetAuditConf(conf string) (*AuditConf, error) {
+	if conf == "" {
+		return nil, nil
+	}
+	encBytes, err := readAuditEncKey(conf)
+	if err != nil {
+		return nil, err
+	}
+	dir := x.GetFlagString(conf, "dir")
+	if dir == "" {
+		return nil, fmt.Errorf("dir flag is not provided for the audit logs")
+	}
+	return &AuditConf{
+		Compress:     x.GetFlagBool(conf, "compress"),
+		Dir:          dir,
+		EncryptBytes: encBytes,
+	}, nil
+}
+
+func readAuditEncKey(conf string) ([]byte, error) {
 	encFile := x.GetFlagString(conf, "encrypt-file")
 	if encFile == "" {
 		return nil, nil
@@ -73,31 +99,27 @@ func ReadAuditEncKey(conf string) ([]byte, error) {
 // InitAuditorIfNecessary accepts conf and enterprise edition check function.
 // This method keep tracks whether cluster is part of enterprise edition or not.
 // It pools eeEnabled function every five minutes to check if the license is still valid or not.
-func InitAuditorIfNecessary(conf string, eeEnabled func() bool) error {
-	if conf == "" {
+func InitAuditorIfNecessary(conf *AuditConf, eeEnabled func() bool) error {
+	if conf == nil {
 		return nil
 	}
-	encKey, err := ReadAuditEncKey(conf)
-	if err != nil {
-		glog.Errorf("error while reading encryption file", err)
-		return err
-	}
 	if eeEnabled() {
-		if err := InitAuditor(x.GetFlagString(conf, "dir"), encKey); err != nil {
+		if err := InitAuditor(conf); err != nil {
 			return err
 		}
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
-	go trackIfEEValid(x.GetFlagString(conf, "dir"), encKey, eeEnabled)
+	go trackIfEEValid(conf, eeEnabled)
 	return nil
 }
 
 // InitAuditor initializes the auditor.
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
-func InitAuditor(dir string, key []byte) error {
+func InitAuditor(conf *AuditConf) error {
 	var err error
-	if auditor.log, err = x.InitLogger(dir, defaultAuditFilename, key); err != nil {
+	if auditor.log, err = x.InitLogger(conf.Dir, defaultAuditFilename, conf.EncryptBytes,
+		conf.Compress); err != nil {
 		return err
 	}
 	atomic.StoreUint32(&auditEnabled, 1)
@@ -108,7 +130,7 @@ func InitAuditor(dir string, key []byte) error {
 // trackIfEEValid tracks enterprise license of the cluster.
 // Right now alpha doesn't know about the enterprise/licence.
 // That's why we needed to track if the current node is part of enterprise edition cluster
-func trackIfEEValid(dir string, key []byte, eeEnabledFunc func() bool) {
+func trackIfEEValid(conf *AuditConf, eeEnabledFunc func() bool) {
 	var err error
 	for {
 		select {
@@ -121,7 +143,8 @@ func trackIfEEValid(dir string, key []byte, eeEnabledFunc func() bool) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				if auditor.log, err = x.InitLogger(dir, defaultAuditFilename, key); err != nil {
+				if auditor.log, err = x.InitLogger(conf.Dir, defaultAuditFilename, conf.EncryptBytes,
+					conf.Compress); err != nil {
 					continue
 				}
 				atomic.StoreUint32(&auditEnabled, 1)

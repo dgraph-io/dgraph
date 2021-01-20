@@ -57,7 +57,7 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
-	audit             string
+	audit             *audit.AuditConf
 }
 
 var opts options
@@ -199,6 +199,9 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
+	x.CheckFlag(Zero.Conf.GetString("audit"), "dir", "compress", "encrypt-file")
+	conf, err := audit.GetAuditConf(Zero.Conf.GetString("audit"))
+	x.Check(err)
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -208,12 +211,11 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
-		audit:             Zero.Conf.GetString("audit"),
+		audit:             conf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
 	x.CheckFlag(opts.raftOpts, "idx", "learner")
-	x.CheckFlag(opts.audit, "dir", "compress", "encrypt-file")
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
 		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
@@ -231,16 +233,12 @@ func run() {
 		}
 	}
 
-	if len(opts.audit) > 0 {
+	if opts.audit != nil {
 		wd, err := filepath.Abs(opts.w)
 		x.Check(err)
-		dir := x.GetFlagString(opts.audit, "dir")
-		if len(dir) == 0 {
-			glog.Fatal("audit flag is provided but dir is not specified")
-		}
-		ad, err := filepath.Abs(dir)
+		ad, err := filepath.Abs(opts.audit.Dir)
 		x.Check(err)
-		x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", dir)
+		x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
 	}
 
 	if opts.rebalanceInterval <= 0 {

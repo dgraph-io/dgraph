@@ -608,6 +608,10 @@ func run() {
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
 	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+
+	x.CheckFlag(Alpha.Conf.GetString("audit"), "dir", "compress", "encrypt-file")
+	conf, err := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
+	x.Check(err)
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
@@ -620,10 +624,9 @@ func run() {
 
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
-		Audit:         Alpha.Conf.GetString("audit"),
+		Audit:         conf,
 	}
 
-	x.CheckFlag(opts.Audit, "dir", "compress", "encrypt-file")
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
@@ -684,7 +687,7 @@ func run() {
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
 		HmacSecret:           opts.HmacSecret,
-		Audit:                opts.Audit,
+		Audit:                opts.Audit != nil,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")

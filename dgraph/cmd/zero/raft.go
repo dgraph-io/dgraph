@@ -402,13 +402,9 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
-		if state.License.Enabled && len(opts.audit) > 0 {
-			if encKey, err := audit.ReadAuditEncKey(opts.audit); err != nil {
-				glog.Errorf("error while reading encryption file %+v", err)
-			} else {
-				if err := audit.InitAuditor(x.GetFlagString(opts.audit, "dir"), encKey); err != nil {
-					glog.Errorf("error while initializing audit logs %+v", err)
-				}
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
 			}
 		}
 	}

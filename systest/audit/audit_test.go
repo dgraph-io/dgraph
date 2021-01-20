@@ -20,13 +20,15 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
 )
+
 func TestZeroAudit(t *testing.T) {
 	zeroCmd := map[string][]string{
 		"/removeNode": []string{`--location`, "--request", "GET",

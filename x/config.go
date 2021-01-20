@@ -114,7 +114,7 @@ type WorkerOptions struct {
 	HardSync bool
 
 	// Audit contains the audit flags that enables the audit.
-	Audit string
+	Audit bool
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

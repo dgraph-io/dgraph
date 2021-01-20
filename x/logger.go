@@ -24,7 +24,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func InitLogger(dir string, filename string, key []byte) (*Logger, error) {
+func InitLogger(dir string, filename string, key []byte, compress bool) (*Logger, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
@@ -38,10 +38,11 @@ func InitLogger(dir string, filename string, key []byte) (*Logger, error) {
 	}
 	getWriterSyncer := func() zapcore.WriteSyncer {
 		w := &LogWriter{
-			FilePath: path,
-			MaxSize:  100,
-			MaxAge:   30,
+			FilePath:      path,
+			MaxSize:       100,
+			MaxAge:        30,
 			EncryptionKey: key,
+			Compress:      compress,
 		}
 		return zapcore.AddSync(w)
 	}

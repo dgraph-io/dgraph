@@ -18,12 +18,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 )
 
 var CmdAudit x.SubCommand
@@ -66,13 +68,16 @@ func initSubcommands() []*x.SubCommand {
 	decFlags.String("in", "", "input file that needs to decrypted.")
 	decFlags.String("out", "audit_log_out.log",
 		"output file to which decrypted output will be dumped.")
-	enc.RegisterFlags(decFlags)
+	decFlags.String("encryption_key_file", "", "path to encrypt files.")
 	return []*x.SubCommand{&decryptCmd}
 }
 
 func run() error {
-	key, err := enc.ReadKey(decryptCmd.Conf)
+	path, err := filepath.Abs(decryptCmd.Conf.GetString("encryption_key_file"))
 	x.Check(err)
+	key, err := ioutil.ReadFile(path)
+	x.Check(err)
+
 	if key == nil {
 		return errors.New("no encryption key provided")
 	}
@@ -106,5 +111,8 @@ func run() error {
 		x.Check2(file.ReadAt(iv[12:], iterator))
 		iterator = iterator + 4
 	}
+	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
+		decryptCmd.Conf.GetString("in"),
+		decryptCmd.Conf.GetString("out"))
 	return nil
 }
