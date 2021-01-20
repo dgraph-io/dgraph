@@ -303,7 +303,7 @@ var (
 			Measure:     RaftLeaderChangesSeenTotal,
 			Description: RaftLeaderChangesSeenTotal.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     nil,
+			TagKeys:     allRaftKeys,
 		},
 		{
 			Name:        MaxAssignedTs.Name(),
