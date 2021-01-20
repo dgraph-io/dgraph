@@ -506,6 +506,7 @@ func newAdminResolver(
 		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
+
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -522,11 +523,13 @@ func newAdminResolver(
 				len(pl.Postings))
 			return
 		}
+
 		pk, err := x.Parse(kv.GetKey())
 		if err != nil {
 			glog.Errorf("Unable to find uid of updated schema %s", err)
 			return
 		}
+
 		newSchema := &gqlSchema{
 			ID:      query.UidToHex(pk.Uid),
 			Version: kv.GetVersion(),
@@ -554,6 +557,7 @@ func newAdminResolver(
 
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
+
 		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 	}, 1, closer)
 
@@ -639,6 +643,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 }
 
