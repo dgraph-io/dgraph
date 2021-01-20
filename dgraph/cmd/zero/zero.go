@@ -93,6 +93,7 @@ func (s *Server) Init() {
 	s.nextRaftId = 1
 	s.nextLease[leaseUID] = 1
 	s.nextLease[leaseTxnTs] = 1
+	s.nextLease[leaseNsID] = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = z.NewCloser(2) // grpc and http

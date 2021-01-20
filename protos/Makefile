@@ -58,7 +58,7 @@ copy-protos:
 	 ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate:  copy-protos check clean
+regenerate: tidy-deps copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \

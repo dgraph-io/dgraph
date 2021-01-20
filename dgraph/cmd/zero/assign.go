@@ -55,16 +55,16 @@ func (s *Server) updateLeases() {
 func (s *Server) maxLease(typ leaseType) uint64 {
 	s.RLock()
 	defer s.RUnlock()
+	var maxlease uint64
 	switch typ {
 	case leaseUID:
-		return s.state.MaxLeaseId
+		maxlease = s.state.MaxLeaseId
 	case leaseTxnTs:
-		return s.state.MaxTxnTs
+		maxlease = s.state.MaxTxnTs
 	case leaseNsID:
-		return s.state.MaxLeaseNsID
+		maxlease = s.state.MaxLeaseNsID
 	}
-	// TODO(Ahsan): Verify if it is fine to return 0 here
-	return 0
+	return maxlease
 }
 
 var errServedFromMemory = errors.New("Lease was served from memory")
