@@ -72,7 +72,26 @@ func adminAuthHandler(next http.Handler) http.Handler {
 	})
 }
 
-func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func getAdminMux() *http.ServeMux {
+	adminMux := http.NewServeMux()
+	adminMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(adminSchemaHandler)))
+	adminMux.Handle("/admin/schema/validate", schemaValidateHandler())
+	adminMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(shutDownHandler))))
+	adminMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+		http.MethodPut:  true,
+		http.MethodPost: true,
+	}, adminAuthHandler(http.HandlerFunc(drainingHandler))))
+	adminMux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(exportHandler))))
+	adminMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
+		http.MethodGet: true,
+		http.MethodPut: true,
+	}, adminAuthHandler(http.HandlerFunc(memoryLimitHandler))))
+	return adminMux
+}
+
+func drainingHandler(w http.ResponseWriter, r *http.Request) {
 	enableStr := r.URL.Query().Get("enable")
 
 	enable, err := strconv.ParseBool(enableStr)
@@ -99,7 +118,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer web.ISe
 		`"message": "draining mode has been set to %v"}`, enable))))
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	gqlReq := &schema.Request{
 		Query: `
 		mutation {
@@ -115,7 +134,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer web.ISe
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
-func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
@@ -155,7 +174,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServ
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
-func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		memoryLimitGetHandler(w, r, adminServer)

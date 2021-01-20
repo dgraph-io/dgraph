@@ -29,7 +29,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/dgraph/graphql/admin"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -601,7 +604,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponse(w, r)
 }
 
-func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
 	}
@@ -634,6 +637,38 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 	}
 
 	writeSuccessResponse(w, r)
+}
+
+func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch *uint64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		healthStatus := gqlHealthStore.GetHealth()
+		httpStatusCode := http.StatusOK
+		if !healthStatus.Healthy {
+			httpStatusCode = http.StatusServiceUnavailable
+		}
+		w.WriteHeader(httpStatusCode)
+		w.Header().Set("Content-Type", "application/json")
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, atomic.LoadUint64(globalEpoch)))))
+	})
+}
+
+func schemaValidateHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sch := readRequest(w, r)
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(sch))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.SetStatus(w, "success", "Schema is valid")
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+	})
 }
 
 func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,

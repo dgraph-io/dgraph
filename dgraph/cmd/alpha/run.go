@@ -442,7 +442,7 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
-	http.HandleFunc("/debug/store", storeStatsHandler)
+	baseMux.HandleFunc("/debug/store", storeStatsHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -466,72 +466,30 @@ func setupServer(closer *z.Closer) {
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
 	baseMux.Handle("/graphql", mainServer.HTTPHandler())
-	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter,
-		r *http.Request) {
-		healthStatus := gqlHealthStore.GetHealth()
-		httpStatusCode := http.StatusOK
-		if !healthStatus.Healthy {
-			httpStatusCode = http.StatusServiceUnavailable
-		}
-		w.WriteHeader(httpStatusCode)
-		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
-			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
-	})
+	baseMux.Handle("/probe/graphql", graphqlProbeHandler(gqlHealthStore, &globalEpoch))
 	baseMux.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
 	}, adminAuthHandler(adminServer.HTTPHandler())))
 
-	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
-		w http.ResponseWriter,
-		r *http.Request) {
-		adminSchemaHandler(w, r, adminServer)
-	})))
-
-	baseMux.HandleFunc("/admin/schema/validate", func(w http.ResponseWriter,
-		r *http.Request) {
-		schema := readRequest(w, r)
-		w.Header().Set("Content-Type", "application/json")
-
-		err := admin.SchemaValidate(string(schema))
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-			x.SetStatus(w, "success", "Schema is valid")
-			return
-		}
-
-		w.WriteHeader(http.StatusBadRequest)
-		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	})
-
-	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.
-		MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			shutDownHandler(w, r, adminServer)
-		}))))
+	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(adminSchemaHandler)))
+	baseMux.Handle("/admin/schema/validate", schemaValidateHandler())
+	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(shutDownHandler))))
 
 	baseMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		drainingHandler(w, r, adminServer)
-	}))))
+	}, adminAuthHandler(http.HandlerFunc(drainingHandler))))
 
-	baseMux.Handle("/admin/export", allowedMethodsHandler(
-		allowedMethods{http.MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			exportHandler(w, r, adminServer)
-		}))))
+	baseMux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(exportHandler))))
 
 	baseMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		memoryLimitHandler(w, r, adminServer)
-	}))))
+	}, adminAuthHandler(http.HandlerFunc(memoryLimitHandler))))
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
@@ -540,8 +498,8 @@ func setupServer(closer *z.Closer) {
 	// Add OpenCensus z-pages.
 	zpages.Handle(baseMux, "/z")
 
-	baseMux.Handle("/", http.HandlerFunc(homeHandler))
-	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
+	baseMux.HandleFunc("/", homeHandler)
+	baseMux.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
 	admin.ServerCloser.AddRunning(3)
