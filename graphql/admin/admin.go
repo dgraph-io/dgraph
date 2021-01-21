@@ -141,6 +141,7 @@ const (
 		groups: [ClusterGroup]
 		zeros: [Member]
 		maxUID: Int
+		maxNsID: Int
 		maxTxnTs: Int
 		maxRaftId: Int
 		removed: [Member]
