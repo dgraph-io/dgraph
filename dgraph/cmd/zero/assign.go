@@ -113,26 +113,23 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ pb.NumLeaseType) (*
 		howMany = num.Val + leaseBandwidth
 	}
 
-	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 || s.nextLease[pb.Num_NS_ID] == 0 {
+	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 ||
+		s.nextLease[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
 	}
 
-	var maxLease, available uint64
 	var proposal pb.ZeroProposal
 
 	// Calculate how many ids do we have available in memory, before we need to
 	// renew our lease.
-
-	maxLease = s.maxLease(typ)
+	maxLease := s.maxLease(typ)
+	available := maxLease - s.nextLease[typ] + 1
 	switch typ {
 	case pb.Num_TXN_TS:
-		available = maxLease - s.nextLease[pb.Num_TXN_TS] + 1
 		proposal.MaxTxnTs = maxLease + howMany
 	case pb.Num_UID:
-		available = maxLease - s.nextLease[pb.Num_UID] + 1
 		proposal.MaxUID = maxLease + howMany
 	case pb.Num_NS_ID:
-		available = maxLease - s.nextLease[pb.Num_NS_ID] + 1
 		proposal.MaxNsID = maxLease + howMany
 	}
 
