@@ -484,7 +484,7 @@ func inFilterOnInt(t *testing.T) {
 func inFilterOnFloat(t *testing.T) {
 	queryAuthorParams := &GraphQLParams{
 		Query: `query {
-			queryAuthor(filter: {reptutation: {in: [6.6, 8.9, 9.5]}}) {
+			queryAuthor(filter: {reputation: {in: [6.6, 8.9, 9.5]}}) {
 				name
 			}
 		}`,
