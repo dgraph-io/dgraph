@@ -399,7 +399,7 @@ func entitiesQuery(t *testing.T) {
 
 	entitiesQueryParams := &GraphQLParams{
 		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!){
-			_entities(representations: [{__typename: $typeName, id: $id1}, {_typename: $typeName, id: $id2 }]) {
+			_entities(representations: [{__typename: $typeName, id: $id1}, {__typename: $typeName, id: $id2 }]) {
 				... on SpaceShip {
 					missions {
 						id
