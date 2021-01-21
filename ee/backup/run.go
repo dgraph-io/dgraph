@@ -136,37 +136,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 func initBackupLs() {
 	LsBackup.Cmd = &cobra.Command{
 		Use:   "lsbackup",
-		Short: "List info on backups in given location",
-		Long: `
-lsbackup looks at a location where backups are stored and prints information about them.
-
-Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
-command. Restore is intended to be used with new Dgraph clusters in offline state.
-
-The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
-the schemes used for backup.
-
-Source URI formats:
-  [scheme]://[host]/[path]?[args]
-  [scheme]:///[path]?[args]
-  /[path]?[args] (only for local or NFS)
-
-Source URI parts:
-  scheme - service handler, one of: "s3", "minio", "file"
-    host - remote address. ex: "dgraph.s3.amazonaws.com"
-    path - directory, bucket or container at target. ex: "/dgraph/backups/"
-    args - specific arguments that are ok to appear in logs.
-
-Dgraph backup creates a unique backup object for each node group, and restore will create
-a posting directory 'p' matching the backup group ID. Such that a backup file
-named '.../r32-g2.backup' will be loaded to posting dir 'p2'.
-
-Usage examples:
-
-# Run using location in S3:
-$ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
-		`,
-		Args: cobra.NoArgs,
+		Short: "List info on backups in a given location",
+		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Restore.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
@@ -264,9 +235,8 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tSince\tGroups\tEncrypted\n")
 	for path, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted)
+		fmt.Printf("%v%v\n%v%v\n%v\t%v\n%v%v\n%v%v\n", "Name:", path, "Since:", manifest.Since, "Groups:", manifest.Groups, "Encrypted:", manifest.Encrypted, "Type:", manifest.Type)
 	}
 
 	return nil
