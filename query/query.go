@@ -1957,12 +1957,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
-			typeNamespace, attr, reverse := x.ParseNamespaceAttr(pred)
-			if reverse {
-				// Add reverse to the attr so, createTaskQuery will
-				// handle the reverse accordingly.
-				attr = "~" + attr
-			}
+			typeNamespace, attr := x.ParseNamespaceAttr(pred)
 			if typeNamespace != child.Params.Namespace {
 				return out, errors.Errorf(
 					"Expected namespace while expanding subgraph %d but got %d",
@@ -2894,7 +2889,7 @@ func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.Typ
 	out := []*pb.TypeUpdate{}
 	for _, update := range types {
 		// Type name doesn't have reverse.
-		typeNamespace, typeName, _ := x.ParseNamespaceAttr(update.TypeName)
+		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue
 		}
@@ -2902,10 +2897,7 @@ func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.Typ
 		fields := []*pb.SchemaUpdate{}
 		// Convert field name for the current namespace.
 		for _, field := range update.Fields {
-			_, fieldName, reverse := x.ParseNamespaceAttr(field.Predicate)
-			if reverse {
-				fieldName = "~" + fieldName
-			}
+			_, fieldName := x.ParseNamespaceAttr(field.Predicate)
 			field.Predicate = fieldName
 			fields = append(fields, field)
 		}
@@ -2920,7 +2912,7 @@ func filterSchemaNodeForNamespace(namespace uint64, nodes []*pb.SchemaNode) []*p
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
-		nodeNamespace, attrName, _ := x.ParseNamespaceAttr(node.Predicate)
+		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
 			continue
 		}

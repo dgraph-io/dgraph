@@ -60,34 +60,18 @@ func NamespaceAttr(ns uint64, attr string) string {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, ns)
 	namespace := fmt.Sprintf("%s", buf)
-	if len(attr) == 0 {
-		return namespace
-	}
-	if attr[0] == '~' {
-		attr = attr[1:]
-		// If the attr is reverse we need to convert that into ~namespaceattr so
-		// that predicate will be reverse indexed.
-		namespace = "~" + namespace
-	}
 	return namespace + attr
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
-func ParseNamespaceAttr(attr string) (uint64, string, bool) {
-	// TODO(Ahsan): Some byte in uint64 might have ~ representation in string. Need to fix.
-	reverse := attr[0] == '~'
-	if reverse {
-		return binary.BigEndian.Uint64([]byte(attr[1:9])), attr[9:], reverse
-	}
-	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:], reverse
+func ParseNamespaceAttr(attr string) (uint64, string) {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
 }
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	reverse := attr[0] == '~'
-	if reverse {
-		return attr[9:]
-	}
+	AssertTrue(len(attr) >= 8)
 	return attr[8:]
 }
 
