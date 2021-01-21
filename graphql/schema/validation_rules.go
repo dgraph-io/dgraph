@@ -33,11 +33,16 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 		if value.Kind == ast.Variable {
 			return
 		}
+		if value.ExpectedType.NamedType == IDType {
+			value.Kind = ast.StringValue
+		}
 		// If the expected value is a list (ExpectedType.Elem != nil) && the value is not of list type,
 		// then we need to coerce the value to a list, otherwise, we can return here as we do below.
-
 		if !(value.ExpectedType.Elem != nil && value.Kind != ast.ListValue) {
 			return
+		}
+		if value.ExpectedType.Elem.NamedType == IDType {
+			value.Kind = ast.StringValue
 		}
 		val := *value
 		child := &ast.ChildValue{Value: &val}
