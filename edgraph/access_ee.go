@@ -351,7 +351,13 @@ func RefreshAcls(closer *z.Closer) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
-		if err := retrieveAcls(kvs.Kv[0].Version); err != nil {
+		var maxVs uint64
+		for _, kv := range kvs.GetKv() {
+			if kv.Version > maxVs {
+				maxVs = kv.Version
+			}
+		}
+		if err := retrieveAcls(maxVs); err != nil {
 			glog.Errorf("Error while retrieving acls: %v", err)
 		}
 	}, 1, closer)

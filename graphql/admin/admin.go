@@ -495,9 +495,14 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
+		// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+		// KV contain the latest value.
+		var kv badgerpb.KV
+		for _, Kv := range kvs.GetKv() {
+			if Kv.GetVersion() > kv.GetVersion() {
+				kv = *Kv
+			}
+		}
 
 		glog.Infof("Updating GraphQL schema from subscription.")
 
