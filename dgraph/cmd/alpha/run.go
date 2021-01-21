@@ -808,15 +808,8 @@ func listenForCorsUpdate(closer *z.Closer) {
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
-		// KV contain the latest value.
-		var kv badgerpb.KV
-		for _, Kv := range kvs.GetKv() {
-			if Kv.GetVersion() > kv.GetVersion() {
-				kv = *Kv
-			}
-		}
 
+		kv := x.KvWithMaxVersion(kvs)
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}

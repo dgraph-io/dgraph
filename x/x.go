@@ -42,6 +42,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -1201,4 +1202,17 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+// KvWithMaxVersion returns a KV with the max version from the list of KVs.
+func KvWithMaxVersion(kvs *badgerpb.KVList) *badgerpb.KV {
+	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+	// KV contain the latest value.
+	var kv badgerpb.KV
+	for _, Kv := range kvs.GetKv() {
+		if Kv.GetVersion() > kv.GetVersion() {
+			kv = *Kv
+		}
+	}
+	return &kv
 }
