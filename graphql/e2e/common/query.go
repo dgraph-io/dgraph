@@ -411,7 +411,7 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"typeName": "SpaceShip",
 			"id1":      "SpaceShip1",
-			"id2":      "SpapceShip2",
+			"id2":      "SpaceShip2",
 		},
 	}
 
