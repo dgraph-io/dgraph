@@ -383,18 +383,22 @@ func NewCreateMutations(
 	m schema.Mutation,
 	varGen *VariableGenerator,
 	xidMetadata *xidMetadata,
-	existenceQueriesResult map[string]string) ([]*UpsertMutation, [][]*mutationFragment, error) {
+	idExistence map[string]string) ([]*UpsertMutation, [][]*mutationFragment, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
+	// ret stores a slice of Upsert Mutations. These are used in executing upsert queries in graphql/resolve/mutation.go
 	var ret []*UpsertMutation
+	// fragments stores a slice of mutationFragments. This is used in constructing mutationsAll which is returned back to the caller
+	// of this function as UpsertMutation.mutation
 	var fragments []*mutationFragment
+	// frags is returned to the caller of NewCreateMutations. It is used in applying auth on new nodes crated during add mutations.
 	var frags [][]*mutationFragment
 	var retErrors error
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, errs := newRewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, existenceQueriesResult)
+		fragment, errs := newRewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -405,9 +409,7 @@ func NewCreateMutations(
 		}
 		if fragment != nil {
 			fragments = append(fragments, fragment)
-			var tmp []*mutationFragment
-			tmp = append(tmp, fragment)
-			frags = append(frags, tmp)
+			frags = append(frags, []*mutationFragment{fragment})
 		}
 	}
 
@@ -443,10 +445,12 @@ func NewCreateMutations(
 		queries = nil
 	}
 
+	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
+	// This is collated from newNodes of each fragment.
+	// Example
+	// newNodes["Project3"] = schema.Type(Project)
 	newNodes := make(map[string]schema.Type)
 	for _, frag := range fragments {
-		// squashFragments puts all the new nodes into the first fragment, so we only
-		// need to collect from there.
 		copyTypeMap(frag.newNodes, newNodes)
 	}
 
@@ -1760,7 +1764,14 @@ func newRewriteObject(
 	}
 
 	// Iterate on fields and call the same function recursively.
+	var fields []string
 	for field := range obj {
+		fields = append(fields, field)
+	}
+	// Fields are sorted to ensure that they are traversed in specific order each time. Golang maps
+	// don't store keys in sorted order.
+	sort.Strings(fields)
+	for _, field := range fields {
 		val := obj[field]
 
 		fieldDef := typ.Field(field)
@@ -1943,8 +1954,14 @@ func existenceQueries(
 	}
 
 	// Iterate on fields and call the same function recursively.
-
+	var fields []string
 	for field := range obj {
+		fields = append(fields, field)
+	}
+	// Fields are sorted to ensure that they are traversed in specific order each time. Golang maps
+	// don't store keys in sorted order.
+	sort.Strings(fields)
+	for _, field := range fields {
 		val := obj[field]
 
 		fieldDef := typ.Field(field)

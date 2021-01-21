@@ -3326,5 +3326,5 @@
   explanation: "The add mutation should not be allowed since the union input is invalid"
   error:
     message: |-
-      failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
       failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
+      failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
