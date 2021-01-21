@@ -315,6 +315,8 @@ type Mission @key(fields: "id") {
     endDate: String
 }
 
+# Todo(Minhaj): Add test case for entities resolver
+# for objects of Astronaut type. 
 type Astronaut @key(fields: "id") @extends {
     id: ID! @external
     missions: [Mission]

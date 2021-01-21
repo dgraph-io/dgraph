@@ -1497,6 +1497,9 @@ func (q *query) EnumValues() []string {
 
 func (q *query) KeyField(typeName string) (string, bool, error) {
 	typ := q.op.inSchema.schema.Types[typeName]
+	if typ == nil {
+		return "", false, fmt.Errorf("Type %s not found in the schema", typeName)
+	}
 	keyDir := typ.Directives.ForName(apolloKeyDirective)
 	if keyDir == nil {
 		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)

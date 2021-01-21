@@ -162,8 +162,8 @@ func (qr *queryRewriter) Rewrite(
 	}
 }
 
-// entitiesQuery rewrites The DQL Query from the Apollo `_entities` Query which is sent
-// from the gateway to the Dgraph Service to resolve types `extended` and defined by this service.
+// entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
+// This query is sent to the Dgraph service to resolve types `extended` and defined by this service.
 func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
 
 	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
@@ -190,18 +190,18 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	keyFieldIsID := false
 	keyFieldName := ""
 	var err error
-	for _, rep := range representations {
+	for i, rep := range representations {
 		representation, ok := rep.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("Error parsing `_representations` argument")
+			return nil, fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
 		}
 
 		typename, ok := representation["__typename"].(string)
 		if !ok {
-			return nil, fmt.Errorf("Unable to extract __typename from `_representations` argument")
+			return nil, fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
 		}
 
-		// Store all the typeNames into an Map to perfrom Validation at last.
+		// Store all the typeNames into an map to perfrom validation at last.
 		typeNames[typename] = true
 		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
 		if err != nil {
@@ -209,7 +209,7 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 		}
 		keyFieldValue, ok := representation[keyFieldName]
 		if !ok {
-			return nil, fmt.Errorf("Unable to extract value for key field `%s` from `_representations` argument", keyFieldName)
+			return nil, fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
 		}
 		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
 	}
@@ -219,8 +219,8 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 		return nil, fmt.Errorf("Expect one typename in `_representations` argument, got none")
 	}
 
-	// Since We have Restricted that All the typeNames for the inputs in the
-	// representation List should be same, we need to validate it and throw error
+	// Since we have restricted that all the typeNames for the inputs in the
+	// representation list should be same, we need to validate it and throw error
 	// if represenation of more than one type exists.
 	if len(typeNames) > 1 {
 		keys := make([]string, len(typeNames))
@@ -277,12 +277,7 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	addUID(dgQuery)
 
 	dgQueries := authRw.addAuthQueries(typeDefn, []*gql.GraphQuery{dgQuery}, rbac)
-
-	if len(selectionAuth) > 0 {
-		return append(dgQueries, selectionAuth...), nil
-	}
-
-	return dgQueries, nil
+	return append(dgQueries, selectionAuth...), nil
 
 }
 
