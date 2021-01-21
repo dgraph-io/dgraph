@@ -3401,10 +3401,10 @@ func cyclicMutation(t *testing.T) {
 						teaches (order: {asc:xid}) {
 							xid
 							name
-							taughtBy {
+							taughtBy (order:{asc:xid}) {
 								name
 								xid
-								teaches {
+								teaches (order:{asc:xid}) {
 									xid
 									name
 								}
