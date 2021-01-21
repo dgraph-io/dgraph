@@ -419,7 +419,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
 		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
-			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID\n",
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID=%d\n",
 			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
