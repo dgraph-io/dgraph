@@ -645,7 +645,7 @@ func TestApolloServiceResolver(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &gqlRes))
 
-	sdl, err := ioutil.ReadFile("apolloServiceResponse.graphql")
+	sdl, err := ioutil.ReadFile("apollo_service_response.graphql")
 	require.NoError(t, err)
 
 	require.Equal(t, string(sdl), gqlRes.Service.S)
