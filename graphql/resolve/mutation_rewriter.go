@@ -1796,7 +1796,7 @@ func newRewriteObject(
 				retErrors = append(retErrors, err...)
 			}
 		case []interface{}:
-			var mutationFragments []interface{}
+			mutationFragments := make([]interface{}, 0)
 			var fieldMutationFragment *mutationFragment
 			var err []error
 			for _, object := range val {
