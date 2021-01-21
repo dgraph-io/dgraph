@@ -373,6 +373,81 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
+func entitiesQuery(t *testing.T) {
+	addSpaceShipParams := &GraphQLParams{
+		Query: `mutation addSpaceShip($id1: String!, $missionId1: String!, $id2: String!, $missionId2: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+				spaceShip {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1":        "SpaceShip1",
+			"missionId1": "Mission1",
+			"id2":        "SpaceShip2",
+			"missionId2": "Mission2",
+		},
+	}
+
+	gqlResponse := addSpaceShipParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!){
+			_entities(representations: [{__typename: $typeName, id: $id1}, {_typename: $typeName, id: $id2 }]) {
+				... on SpaceShip {
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "SpaceShip",
+			"id1":      "SpaceShip1",
+			"id2":      "SpapceShip2",
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{
+		"_entities": [
+		  {
+			"missions": [
+			  {
+				"id": "Mission1",
+				"designation": "Apollo1"
+			  }
+			]
+		  },
+		  {
+			"missions": [
+			  {
+				"id": "Mission2",
+				"designation": "Apollo2"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 2, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
+
+}
 func inFilter(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {

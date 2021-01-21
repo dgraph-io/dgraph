@@ -383,7 +383,7 @@ type Node {
 # test for entities resolver
 
 type Mission @key(fields: "id") {
-    id: ID!
+    id: String! @id
     crew: [Astronaut]
     spaceShip: [SpaceShip]
     designation: String!
