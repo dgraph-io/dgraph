@@ -266,90 +266,12 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	queries = append(queries, s.Queries(schema.AggregateQuery)...)
+	queries = append(queries, s.Queries(schema.EntitiesQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
 		})
 	}
-
-	rf.WithQueryResolver("_entities", func(q schema.Query) QueryResolver {
-		return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
-
-			// Input Argument to the Query is a List of "__typename" and "keyField" pair.
-			// For this type Extension:-
-			// 	extend type Product @key(fields: "upc") {
-			// 		upc: String @external
-			// 		reviews: [Review]
-			// 	}
-			// Input to the Query will be
-			// "_representations": [
-			// 		{
-			// 		  "__typename": "Product",
-			// 	 	 "upc": "B00005N5PF"
-			// 		},
-			// 		...
-			//   ]
-
-			representations := query.ArgValue("representations").([]interface{})
-
-			typeNames := make(map[string]bool)
-			keyFieldValueList := make([]string, 0)
-			for _, rep := range representations {
-				representation, ok := rep.(map[string]interface{})
-				if !ok {
-					return EmptyResult(q, fmt.Errorf("Error unmarshelling `_representations` argument"))
-				}
-
-				typename, ok := representation["__typename"].(string)
-				if !ok {
-					return EmptyResult(q, fmt.Errorf("Unable to extract __typename from `_representations` argument"))
-				}
-
-				// Store all the typeNames into an Array to perfrom Validation at last.
-				typeNames[typename] = true
-				keyFieldName, err := query.KeyField(typename)
-				if err != nil {
-					return EmptyResult(q, err)
-				}
-
-				keyFieldValue, ok := representation[keyFieldName].(string)
-				if !ok {
-					return EmptyResult(q, fmt.Errorf("Unable to extract value for key field `%s` from `_representations` argument", keyFieldName))
-				}
-				keyFieldValueList = append(keyFieldValueList, keyFieldValue)
-
-			}
-
-			// Since We have Restricted that All the typeNames for the inputs in the
-			// representation List should be same, we need to validate it and throw error
-			// if represenation of more than one type exists.
-			if len(typeNames) > 0 {
-				keys := make([]string, len(typeNames))
-				i := 0
-				for k := range typeNames {
-					keys[i] = k
-					i++
-				}
-				return EmptyResult(q, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys))
-			}
-
-			// Construct Filter Query to resolve the Type. Few things need to be understood.
-			// 1. We have restricted the representation to only one type there is only one filter query.
-			// 2. We are using filter Query to resolve the Fields so filter queries must not be turned off in the Schema.
-			// Once we get it all working, later we should do it by adding new rewriter so that we don't have to depend on
-			// @generate directive turning off the filter query.
-			var typeName string
-			for k := range typeNames {
-				typeName = k
-			}
-			qr, err := schema.ConstructEntitiesQuery(keyFieldValueList, typeName, query)
-			if err != nil {
-				return EmptyResult(q, err)
-			}
-
-			return rf.queryResolverFor(qr).Resolve(ctx, qr)
-		})
-	})
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {

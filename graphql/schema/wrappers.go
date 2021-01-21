@@ -77,6 +77,7 @@ const (
 	FilterQuery          QueryType    = "query"
 	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
+	EntitiesQuery        QueryType    = "entities"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
 	DQLQuery             QueryType    = "dql"
@@ -163,7 +164,8 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
-	KeyField(typeName string) (string, error)
+	KeyField(typeName string) (string, bool, error)
+	BuildType(typeName string) Type
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
@@ -1136,6 +1138,18 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	return
 }
 
+func (q *query) BuildType(typeName string) Type {
+	t := &ast.Type{}
+	t.NamedType = q.op.inSchema.schema.Types[typeName].Name
+	return &astType{
+		typ: &ast.Type{
+			Elem: t,
+		},
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
@@ -1483,15 +1497,16 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
-func (q *query) KeyField(typeName string) (string, error) {
+// Todo , modify to return isIDType
+func (q *query) KeyField(typeName string) (string, bool, error) {
 	typ := q.op.inSchema.schema.Types[typeName]
 	keyDir := typ.Directives.ForName(apolloKeyDirective)
 	if keyDir == nil {
-		return "", fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
+		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
 	}
 	fldName := keyDir.Arguments[0].Value.Raw
-	return fldName, nil
-
+	fldType := typ.Fields.ForName(fldName).Type
+	return fldName, fldType.Name() == IDType, nil
 }
 
 func (m *mutation) ConstructedFor() Type {
@@ -1614,6 +1629,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 			return DQLQuery
 		}
 		return HTTPQuery
+	case name == "_entities":
+		return EntitiesQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
 	case name == "__schema" || name == "__type" || name == "__typename":
@@ -2633,95 +2650,4 @@ func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{"+args+"}", false)
 	return rf, err
-}
-
-// ConstructEntitiesQuery constructs a filter Query from an Entities Query.
-// Filter Arguments are the values of KeyField which is the argument of @key directive.
-// This method is called from  apollo entity Resolver to resolve a type filtered by its
-// key field.
-func ConstructEntitiesQuery(keyFieldValueList []string, typeName string, q Query) (Query, error) {
-	oprn := q.Operation().(*operation)
-
-	typeDefn := oprn.inSchema.schema.Types[typeName]
-	keyDir := typeDefn.Directives.ForName(apolloKeyDirective)
-	keyFieldName := keyDir.Arguments[0].Value.Raw
-
-	keyFldDefn := oprn.inSchema.schema.Types[typeName].Fields.ForName(keyFieldName)
-	keyFldTypeName := keyFldDefn.Type.NamedType
-
-	var filterValueKind ast.ValueKind
-	if keyFldTypeName == "String" || keyFldTypeName == IDType {
-		filterValueKind = ast.StringValue
-	} else if keyFldTypeName == "Int" {
-		filterValueKind = ast.IntValue
-	} else if keyFldTypeName == "Float" {
-		filterValueKind = ast.FloatValue
-	}
-
-	var idChildren ast.ChildValueList
-	for _, val := range keyFieldValueList {
-		idChildren = append(idChildren, &ast.ChildValue{
-			Name: "",
-			Value: &ast.Value{
-				Kind: filterValueKind,
-				Raw:  val,
-			},
-		})
-	}
-
-	// If the key field is not of "ID" type, then it must having
-	// @id directive on it. Construct filter with using `in` filter
-	// in that case. For eg:-
-	// 		queryProduct(filter: { keyfldName: {in: [val1, ...]}}){
-	// 			...
-	// 			...
-	// 		}
-	var fieldFilterValue *ast.Value
-	if keyFldTypeName == IDType {
-		fieldFilterValue = &ast.Value{
-			Children: idChildren,
-			Kind:     ast.ListValue,
-		}
-	} else {
-		fieldFilterValue = &ast.Value{
-			Kind: ast.ObjectValue,
-			Children: ast.ChildValueList{
-				&ast.ChildValue{
-					Name: "in",
-					Value: &ast.Value{
-						Children: idChildren,
-						Kind:     ast.ListValue,
-					},
-				}},
-		}
-	}
-
-	var selectionSet ast.SelectionSet
-	for _, fld := range q.SelectionSet() {
-		sel, ok := fld.(*field)
-		if !ok {
-			return &query{}, fmt.Errorf("Got Error in TypeCasting Selection Fields")
-		}
-		selectionSet = append(selectionSet, sel.field)
-	}
-
-	fld := &ast.Field{
-		Name:  string(FilterQuery) + typeName,
-		Alias: q.Alias(),
-		Arguments: ast.ArgumentList{&ast.Argument{
-			Name: FilterArgName,
-			Value: &ast.Value{
-				Kind: ast.ObjectValue,
-				Children: ast.ChildValueList{
-					&ast.ChildValue{
-						Name:  keyFieldName,
-						Value: fieldFilterValue,
-					}},
-			},
-		}},
-		Definition:   oprn.inSchema.schema.Query.Fields.ForName(string(FilterQuery) + typeName),
-		SelectionSet: selectionSet,
-	}
-
-	return &query{field: fld, op: oprn, sel: fld}, nil
 }

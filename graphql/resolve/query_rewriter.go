@@ -155,9 +155,141 @@ func (qr *queryRewriter) Rewrite(
 		return passwordQuery(gqlQuery, authRw)
 	case schema.AggregateQuery:
 		return aggregateQuery(gqlQuery, authRw), nil
+	case schema.EntitiesQuery:
+		return entitiesQuery(gqlQuery, authRw)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+// entitiesQuery rewrites The DQL Query from the Apollo `_entities` Query which is sent
+// from the gateway to the Dgraph Service to resolve `extended` types.
+func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+
+	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
+	// For this type Extension:-
+	// 	extend type Product @key(fields: "upc") {
+	// 		upc: String @external
+	// 		reviews: [Review]
+	// 	}
+	// Input to the Query will be
+	// "_representations": [
+	// 		{
+	// 		  "__typename": "Product",
+	// 	 	 "upc": "B00005N5PF"
+	// 		},
+	// 		...
+	//   ]
+
+	representations := field.ArgValue("representations").([]interface{})
+
+	typeNames := make(map[string]bool)
+	keyFieldValueList := make([]interface{}, 0)
+	keyFieldIsID := false
+	keyFieldName := ""
+	for _, rep := range representations {
+		representation, ok := rep.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("Error unmarshelling `_representations` argument")
+		}
+
+		typename, ok := representation["__typename"].(string)
+		if !ok {
+			return nil, fmt.Errorf("Unable to extract __typename from `_representations` argument")
+		}
+
+		// Store all the typeNames into an Array to perfrom Validation at last.
+		typeNames[typename] = true
+		keyFieldname, isIDType, err := field.KeyField(typename)
+		if err != nil {
+			return nil, err
+		}
+		keyFieldIsID = isIDType
+		keyFieldName = keyFieldname
+		keyFieldValue, ok := representation[keyFieldName]
+		if !ok {
+			return nil, fmt.Errorf("Unable to extract value for key field `%s` from `_representations` argument", keyFieldName)
+		}
+		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
+	}
+	// Since We have Restricted that All the typeNames for the inputs in the
+	// representation List should be same, we need to validate it and throw error
+	// if represenation of more than one type exists.
+	if len(typeNames) > 1 {
+		keys := make([]string, len(typeNames))
+		i := 0
+		for k := range typeNames {
+			keys[i] = k
+			i++
+		}
+		return nil, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
+	}
+
+	var typeName string
+	for k := range typeNames {
+		typeName = k
+	}
+
+	typeDefn := field.BuildType(typeName)
+	rbac := authRw.evaluateStaticRules(typeDefn)
+
+	dgQuery := &gql.GraphQuery{
+		Attr: field.Name(),
+	}
+
+	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
+		return []*gql.GraphQuery{dgQuery}, nil
+	}
+
+	// Construct Filter at Root Func.
+	// if keyFieldsIsID = true and keyFieldValueList = {"0x1", "0x2"}
+	// then query will be formed as:-
+	// 	_entities(func: uid("0x1", "0x2") {
+	//		...
+	//	}
+	// if keyFieldsValue = false then query will be like:-
+	// 	_entities(func: eq(keyFieldName,"0x1", "0x2") {
+	//		...
+	//	}
+
+	if keyFieldIsID {
+		ids := convertIDs(keyFieldValueList)
+		dgQuery.Func = &gql.Function{
+			Name: "uid",
+			UID:  ids,
+		}
+	} else {
+		args := []gql.Arg{{Value: typeDefn.DgraphPredicate(keyFieldName)}}
+		for _, v := range keyFieldValueList {
+			args = append(args, gql.Arg{Value: maybeQuoteArg("eq", v)})
+		}
+		dgQuery.Func = &gql.Function{
+			Name: "eq",
+			Args: args,
+		}
+	}
+
+	// AddTypeFilter in as the Filter to the Root the Query.
+	// Query will be like :-
+	// 	_entities(func: ...) @filter(type(typeName)) {
+	//		...
+	// 	}
+	addTypeFilter(dgQuery, typeDefn)
+
+	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
+	// we don't need to query uid for auth queries, as they always have at least one field in their
+	// selection set.
+	addUID(dgQuery)
+
+	dgQueries := authRw.addAuthQueries(field.BuildType(typeName), []*gql.GraphQuery{dgQuery}, rbac)
+
+	if len(selectionAuth) > 0 {
+		return append(dgQueries, selectionAuth...), nil
+	}
+
+	return dgQueries, nil
+
 }
 
 func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery {

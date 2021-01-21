@@ -3145,3 +3145,51 @@
         dgraph.uid : uid
       }
     }
+
+- 
+  name: "entities query for extended type having @key field of ID type"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1" },{__typename: "Astronaut", id: "0x2" }]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  dgquery:  |-
+    query {
+      _entities(func: uid(0x1, 0x2)) @filter(type(Astronaut)) {
+        dgraph.type
+        Astronaut.missions : Astronaut.missions {
+          designation : Mission.designation
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "entities query for extended type having @key field of string type with @id directive"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "SpaceShip", id: "0x1" },{__typename: "SpaceShip", id: "0x2" }]) {
+        ... on SpaceShip {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  dgquery:  |-
+    query {
+      _entities(func: eq(SpaceShip.id, "0x1", "0x2")) @filter(type(SpaceShip)) {
+        dgraph.type
+        SpaceShip.missions : SpaceShip.missions {
+          designation : Mission.designation
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
