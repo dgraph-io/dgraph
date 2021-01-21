@@ -807,6 +807,9 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -859,6 +862,10 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(context.Background(), x.RaftLeaderChangesSeenTotal.M(1))
+				}
 				if rd.SoftState.Lead != raft.None {
 					ostats.Record(context.Background(), x.RaftHasLeader.M(1))
 				} else {
