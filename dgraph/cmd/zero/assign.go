@@ -41,7 +41,7 @@ func (s *Server) updateLeases() {
 	s.nextLease[pb.Num_NS_ID] = s.state.MaxNsID + 1
 
 	startTs = s.nextLease[pb.Num_TXN_TS]
-	glog.Infof("Updated Lease id: %d. Txn Ts: %d. NsID: %d.",
+	glog.Infof("Updated UID: %d. Txn Ts: %d. NsID: %d.",
 		s.nextLease[pb.Num_UID], s.nextLease[pb.Num_TXN_TS], s.nextLease[pb.Num_NS_ID])
 	s.Unlock()
 	s.orc.updateStartTxnTs(startTs)
@@ -68,8 +68,8 @@ var errServedFromMemory = errors.New("Lease was served from memory")
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func (s *Server) lease(ctx context.Context, num *pb.Num, typ pb.NumLeaseType) (*pb.AssignedIds,
-	error) {
+func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	typ := num.GetType()
 	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
@@ -82,7 +82,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, typ pb.NumLeaseType) (*
 		return &emptyAssignedIds, errors.Errorf("Nothing to be leased")
 	}
 	if glog.V(3) {
-		glog.Infof("Got lease request for type: %v. Num: %+v\n", typ, num)
+		glog.Infof("Got lease request for Type: %v. Num: %+v\n", typ, num)
 	}
 
 	s.leaseLock.Lock()
@@ -183,7 +183,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		var err error
 		if s.Node.AmLeader() {
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
-			reply, err = s.lease(ctx, num, num.GetType())
+			reply, err = s.lease(ctx, num)
 			return err
 		}
 		span.Annotate(nil, "Not Zero leader")

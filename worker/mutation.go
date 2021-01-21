@@ -506,6 +506,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_UID
 	return c.AssignIds(ctx, num)
 }
 

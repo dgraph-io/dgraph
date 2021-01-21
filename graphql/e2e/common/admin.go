@@ -417,6 +417,7 @@ func adminState(t *testing.T) {
 				}
 				maxUID
 				maxTxnTs
+				maxNsID
 				maxRaftId
 				removed {
 					id
@@ -451,6 +452,7 @@ func adminState(t *testing.T) {
 			Zeros     []*pb.Member
 			MaxUID    uint64
 			MaxTxnTs  uint64
+			MaxNsID   uint64
 			MaxRaftId uint64
 			Removed   []*pb.Member
 			Cid       string
@@ -501,6 +503,7 @@ func adminState(t *testing.T) {
 	}
 	require.Equal(t, state.MaxUID, result.State.MaxUID)
 	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)
+	require.Equal(t, state.MaxNsID, result.State.MaxNsID)
 	require.Equal(t, state.MaxRaftId, result.State.MaxRaftId)
 	require.True(t, len(state.Removed) == len(result.State.Removed))
 	if len(state.Removed) != 0 {

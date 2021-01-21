@@ -164,6 +164,7 @@ message ZeroProposal {
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
+	// 12 has already been used.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -180,6 +181,7 @@ message MembershipState {
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 	License license = 9;
+	// 10 has already been used.
 }
 
 message ConnectionState {

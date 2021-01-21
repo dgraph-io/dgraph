@@ -413,11 +413,14 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		state.MaxUID = p.MaxUID
 	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	case p.MaxUID != 0 || p.MaxTxnTs != 0:
+	case p.MaxNsID > state.MaxNsID:
+		state.MaxNsID = p.MaxNsID
+	case p.MaxUID != 0 || p.MaxTxnTs != 0 || p.MaxNsID != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
 		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
-			"maxUID=%dmaxTxnTs=%d\n", p.MaxUID, p.MaxTxnTs, state.MaxUID, state.MaxTxnTs)
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID\n",
+			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)

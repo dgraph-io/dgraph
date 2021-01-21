@@ -854,7 +854,9 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 	case zpr.Tablet != nil:
 		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
 	case zpr.MaxUID > 0:
-		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxUID)
+		fmt.Fprintf(buf, " MaxUID: %d .", zpr.MaxUID)
+	case zpr.MaxNsID > 0:
+		fmt.Fprintf(buf, " MaxNsID: %d .", zpr.MaxNsID)
 	case zpr.MaxRaftId > 0:
 		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
 	case zpr.MaxTxnTs > 0:
