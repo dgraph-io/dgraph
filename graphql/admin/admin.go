@@ -80,14 +80,6 @@ const (
 	}
 
 	"""
-	PersistedQuery contains the query and sha256hash of the query.
-	"""
-	type PersistedQuery @dgraph(type: "dgraph.graphql.persisted_query") {
-		query: String! @dgraph(pred: "dgraph.graphql.p_query")
-		sha256Hash: String! @id @dgraph(pred: "dgraph.graphql.p_sha256hash")
-	}
-
-	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -426,6 +418,7 @@ func (g *GraphQLHealthStore) updatingSchema() {
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
 	Schema          string `json:"schema,omitempty"`
+	Version         uint64
 	GeneratedSchema string
 }
 
@@ -530,12 +523,13 @@ func newAdminResolver(
 		}
 
 		newSchema := &gqlSchema{
-			ID:     query.UidToHex(pk.Uid),
-			Schema: string(pl.Postings[0].Value),
+			ID:      query.UidToHex(pk.Uid),
+			Version: kv.GetVersion(),
+			Schema:  string(pl.Postings[0].Value),
 		}
 		server.mux.RLock()
-		if newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.", newSchema.Version, server.schema.Version)
 			server.mux.RUnlock()
 			return
 		}

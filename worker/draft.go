@@ -229,11 +229,14 @@ func GetOngoingTasks() []string {
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	glog.Infof("Node ID: %#x with GroupID: %d\n", id, gid)
 
+	isLearner := x.WorkerConfig.Raft.GetBool("learner")
 	rc := &pb.RaftContext{
-		Addr:  myAddr,
-		Group: gid,
-		Id:    id,
+		Addr:      myAddr,
+		Group:     gid,
+		Id:        id,
+		IsLearner: isLearner,
 	}
+	glog.Infof("RaftContext: %+v\n", rc)
 	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig)
 
 	n := &node{
@@ -334,18 +337,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
-				if err := updateSchema(s); err != nil {
-					return err
-				}
-
-				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
-					return err
-				} else if !servesTablet {
-					return errors.Errorf("group 1 should always serve reserved predicate %s",
-						s.Predicate)
-				}
+				applySchema(s)
 			}
-
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.
@@ -562,7 +555,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		n.elog.Printf("Applying state for key: %s", key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
-		groups().applyState(proposal.State)
+		groups().applyState(groups().Node.Id, proposal.State)
 		return nil
 
 	case len(proposal.CleanPredicate) > 0:
@@ -959,6 +952,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
+	snapshotAfter := x.WorkerConfig.Raft.GetUint64("snapshot-after")
+	x.AssertTruef(snapshotAfter > 10, "raft.snapshot-after must be a number greater than 10")
+
 	for {
 		select {
 		case <-slowTicker.C:
@@ -989,10 +985,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = calculate || chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = calculate || chk >= first+snapshotAfter
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
 							"snapshotAfter:%d snap:%v", first, chk, chk-first,
-							x.WorkerConfig.SnapshotAfter, calculate)
+							snapshotAfter, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -1020,7 +1016,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		case <-n.closer.HasBeenClosed():
 			glog.Infof("Stopping node.Run")
 			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				n.Raft().TransferLeadership(n.ctx, n.Id, peerId)
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()

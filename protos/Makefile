@@ -14,8 +14,11 @@
 # limitations under the License.
 #
 
+# Update BADGER_PB_VERSION when upgrading Badger major versions
+BADGER_PB_VERSION = 3
+
 DGO_PATH    := github.com/dgraph-io/dgo/v200
-BADGER_PATH := github.com/dgraph-io/badger/v3
+BADGER_PATH := github.com/dgraph-io/badger/v${BADGER_PB_VERSION}
 GOGO_PATH   := github.com/gogo/protobuf
 
 TMPDIR     := $(shell mktemp -d)
@@ -31,6 +34,10 @@ help:
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
+.PHONY: tidy-deps
+tidy-deps:
+	@go mod tidy -v
+
 .PHONY: check
 check:
 	@./depcheck.sh && \
@@ -43,12 +50,15 @@ copy-protos:
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
 	@mkdir -p ${TMPDIR}/src/${GOGO_PATH}/gogoproto
-	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb3.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb${BADGER_PB_VERSION}.proto \
+	 ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto \
+	 ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto \
+	 ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate: copy-protos check clean
+regenerate: tidy-deps copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \

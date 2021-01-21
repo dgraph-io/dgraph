@@ -111,13 +111,13 @@ func startCluster(composeFile, prefix string) error {
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
-	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
 			strings.Join(cmd.Args, " "), err)
 		return err
 	}
-	fmt.Printf("CLUSTER UP: %s\n", prefix)
+	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
 
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {

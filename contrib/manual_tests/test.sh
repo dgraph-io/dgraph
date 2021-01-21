@@ -75,7 +75,7 @@ function dgraph::start_zero() {
     portkill "$port"
   done
 
-  local zero_args_default=(--cwd "$DGRAPH_PATH/zero$i" --idx "$i" --port_offset "$i")
+  local zero_args_default=(--cwd "$DGRAPH_PATH/zero$i" --raft="idx=$i" --port_offset "$i")
 
   if [ "$i" -ne 1 ]; then
     zero_args_default+=(--peer 'localhost:5081')

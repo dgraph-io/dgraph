@@ -76,8 +76,7 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer web.IServeGraphQL
-
-	initDone uint32
+	initDone    uint32
 )
 
 func init() {
@@ -113,10 +112,6 @@ they form a Raft group and provide synchronous replication.
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
-	flag.Int("snapshot_after", 10000,
-		"Create a new Raft snapshot after this many number of Raft entries. The"+
-			" lower this number, the more frequent snapshot creation would be."+
-			" Also determines how often Rollups would happen.")
 	flag.String("abort_older_than", "5m",
 		"Abort any pending transactions older than this duration. The liveness of a"+
 			" transaction is determined by its last mutation.")
@@ -131,8 +126,16 @@ they form a Raft group and provide synchronous replication.
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
-	flag.Uint64("idx", 0,
-		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
+
+	flag.String("raft", worker.RaftDefaults,
+		`Various raft options.
+	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
+	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
+	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would
+		not participate in Raft elections. This can be used to achieve a read-only replica.
+	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
+		The lower this number, the more frequent snapshot creation would be.
+	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -148,9 +151,6 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Float64P("lru_mb", "l", 0, // TODO: Remove this flag in the next release.
-		"[Deprecated] Estimated memory the LRU cache can take. "+
-			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -641,17 +641,17 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
+	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
-		RaftId:               cast.ToUint64(Alpha.Conf.GetString("idx")),
+		Raft:                 raft,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:           secretFile != "",
-		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:       abortDur,
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
