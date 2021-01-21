@@ -175,7 +175,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
-	ctx, span := otrace.StartSpan(ctx, "Zero.AssignUids")
+	ctx, span := otrace.StartSpan(ctx, "Zero.AssignIds")
 	defer span.End()
 
 	reply := &emptyAssignedIds
@@ -190,7 +190,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		// I'm not the leader and this request was forwarded to me by a peer, who thought I'm the
 		// leader.
 		if num.Forwarded {
-			return errors.Errorf("Invalid Zero received AssignUids request forward. Please retry")
+			return errors.Errorf("Invalid Zero received AssignIds request forward. Please retry")
 		}
 		// This is an original request. Forward it to the leader.
 		pl := s.Leader(0)
