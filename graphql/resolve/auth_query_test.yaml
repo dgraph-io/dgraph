@@ -1835,3 +1835,81 @@
         pwd as checkpwd(Post.pwd, "something")
       }
     }
+
+
+- name: "Entities query with all levels of @auth rule true"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+    USER: "user"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot)) {
+        dgraph.type
+        Astronaut.missions : Astronaut.missions @filter(uid(Mission1)) {
+          designation : Mission.designation
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Astronaut4))
+      Astronaut4 as var(func: uid(0x1, 0x2, 0x3)) @filter(type(Astronaut))
+      var(func: uid(_EntityRoot)) {
+        Mission2 as Astronaut.missions
+      }
+      Mission1 as var(func: uid(Mission2)) @filter(uid(MissionAuth3))
+      MissionAuth3 as var(func: uid(Mission2)) @filter(eq(Mission.supervisorName, "user")) @cascade {
+        Mission.id : Mission.id
+      }
+    }
+
+- name: "Entities query with all levels of @auth rule false"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "user"
+  dgquery: |-
+    query {
+      _entities()
+    }
+
+- name: "Entities query with Deep @auth rules false"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot)) {
+        dgraph.type
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Astronaut3))
+      Astronaut3 as var(func: uid(0x1, 0x2, 0x3)) @filter(type(Astronaut))
+    }
+
