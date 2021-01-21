@@ -3361,6 +3361,92 @@ func threeLevelDeepMutation(t *testing.T) {
 
 }
 
+func cyclicMutation(t *testing.T) {
+	// Student HS1 -->taught by --> Teacher T0 --> teaches --> Student HS2 --> taught by --> Teacher T1 --> teaches --> Student HS1
+	newStudent := &student{
+		Xid:  "HS1",
+		Name: "Stud1",
+		TaughtBy: []*teacher{
+			{
+				Xid:  "HT0",
+				Name: "Teacher0",
+				Teaches: []*student{{
+					Xid:  "HS2",
+					Name: "Stud2",
+					TaughtBy: []*teacher{
+						{
+							Xid:  "HT1",
+							Name: "Teacher1",
+							Teaches: []*student{{
+								Xid: "HS1",
+							}},
+						},
+					},
+				}},
+			},
+		},
+	}
+
+	newStudents := []*student{newStudent}
+
+	addStudentParams := &GraphQLParams{
+		Query: `mutation addStudent($input: [AddStudentInput!]!) {
+			addStudent(input: $input) {
+				student {
+					xid
+					name
+					taughtBy (order: {asc:xid}) {
+						xid
+						name
+						teaches (order: {asc:xid}) {
+							xid
+							name
+							taughtBy {
+								name
+								xid
+								teaches {
+									xid
+									name
+								}
+							}
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newStudents},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, addStudentParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddStudent struct {
+			Student []*student
+		}
+	}
+
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+
+	require.Equal(t, actualResult.AddStudent.Student[0].Xid, "HS1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Xid, "HT0")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[1].Xid, "HT1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].Xid, "HS1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].TaughtBy[0].Xid, "HT0")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].Xid, "HS2")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].TaughtBy[0].Xid, "HT0")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[1].Teaches[0].Xid, "HS1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[1].Teaches[1].Xid, "HS2")
+
+	// cleanup
+	filter := getXidFilter("xid", []string{"HS1", "HS2"})
+	DeleteGqlType(t, "Student", filter, 2, nil)
+	filter = getXidFilter("xid", []string{"HT0", "HT1"})
+	DeleteGqlType(t, "Teacher", filter, 2, nil)
+
+}
+
 func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 	newStudents := []*student{
 		{
@@ -4673,4 +4759,199 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	require.Contains(t, response.Errors.Error(), "already exists")
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
+}
+
+func threeLevelDoubleXID(t *testing.T) {
+	// Query added to test if the bug https://discuss.dgraph.io/t/mutation-fails-because-of-error-some-variables-are-defined-twice/9487
+	// has been fixed.
+	mutation := &GraphQLParams{
+		Query: `mutation {
+  					addCountry(input: [{
+    					name: "c1",
+    					states: [{
+      						xcode: "s11",
+      						name: "s11",
+      						region: {
+        						id: "r1",
+        						name: "r1",
+        						district: {
+          							id: "d1",
+          							name: "d1"
+        						}
+      						}
+    					}]
+  					}]) {
+    					country {
+							id
+      						name
+      						states {
+        						xcode
+        						name
+        						region {
+          							id
+          							name 
+          							district {
+            							id
+            							name
+          							}
+        						}
+      						}
+    					}
+					}
+				}`,
+	}
+	gqlResponse := mutation.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var addCountryExpected = `{
+    "addCountry": {
+      "country": [
+        {
+          "name": "c1",
+          "states": [
+            {
+              "xcode": "s11",
+              "name": "s11",
+              "region": {
+                "id": "r1",
+                "name": "r1",
+                "district": {
+                  "id": "d1",
+                  "name": "d1"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }`
+
+	var result, expected struct {
+		AddCountry struct {
+			Country []*country
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(addCountryExpected), &expected)
+	require.NoError(t, err)
+
+	require.Equal(t, len(result.AddCountry.Country), 1)
+	countryID := result.AddCountry.Country[0].ID
+	requireUID(t, countryID)
+
+	opt := cmpopts.IgnoreFields(country{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	// Clean Up
+	filter := map[string]interface{}{"id": []string{countryID}}
+	deleteCountry(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "s11"}}
+	deleteState(t, filter, 1, nil)
+	DeleteGqlType(t, "Region", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "District", map[string]interface{}{}, 1, nil)
+}
+
+func twoLevelsLinkedToXID(t *testing.T) {
+	// Query added to test if the bug https://discuss.dgraph.io/t/create-child-nodes-with-addparent/11311/5
+	// has been fixed.
+
+	// Add Owner
+	query := &GraphQLParams{
+		Query: `mutation {
+					addOwner(input: 
+  						[
+    						{
+      							username: "user",
+      							password: "password"
+    						}
+  						]) {
+    							owner {
+      								username
+								}
+  							}
+					}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"addOwner": {
+				"owner": [{
+					"username": "user"
+				}]
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// Add dataset and project
+	query = &GraphQLParams{
+		Query: `mutation {
+  					addProject(input:
+  					[
+    					{
+      						id: "p1",
+      						owner: {
+        						username: "user"
+      						},
+      						name: "project",
+      						datasets:
+							[
+        						{
+          							id: "d1",
+      								owner: {
+        								username: "user"
+      								}
+      								name: "dataset"
+        						}
+      						]
+    					}
+  					]
+			) {
+    			project  {
+      				id
+					owner {
+						username
+					}
+					name
+					datasets {
+						id
+						owner {
+							username
+						}
+						name
+					}
+    			}
+  			}
+		}`,
+	}
+
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	expected = `{
+			"addProject": {
+				"project": [{
+					"id": "p1",
+					"owner": {
+						"username": "user"
+					},
+					"name": "project",
+					"datasets": [{
+						"id": "d1",
+						"owner": {
+							"username": "user"
+						},
+						"name": "dataset"
+					}]
+				}]
+			}
+		}`
+	require.JSONEq(t, expected, string(response.Data))
+	DeleteGqlType(t, "Project", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Owner", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Dataset", map[string]interface{}{}, 1, nil)
+
 }
