@@ -1140,11 +1140,9 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 
 func (q *query) BuildType(typeName string) Type {
 	t := &ast.Type{}
-	t.NamedType = q.op.inSchema.schema.Types[typeName].Name
+	t.NamedType = typeName
 	return &astType{
-		typ: &ast.Type{
-			Elem: t,
-		},
+		typ:             t,
 		inSchema:        q.op.inSchema,
 		dgraphPredicate: q.op.inSchema.dgraphPredicate,
 	}
@@ -1497,7 +1495,6 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
-// Todo , modify to return isIDType
 func (q *query) KeyField(typeName string) (string, bool, error) {
 	typ := q.op.inSchema.schema.Types[typeName]
 	keyDir := typ.Directives.ForName(apolloKeyDirective)
