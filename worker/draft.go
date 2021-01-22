@@ -1061,6 +1061,9 @@ func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
 	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
 	lastLead := uint64(math.MaxUint64)
 
 	firstRun := true

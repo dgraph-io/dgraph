@@ -809,6 +809,9 @@ const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
 	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
 	lastLead := uint64(math.MaxUint64)
 
 	var leader bool
