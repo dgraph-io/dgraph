@@ -77,6 +77,7 @@ const (
 	FilterQuery          QueryType    = "query"
 	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
+	EntitiesQuery        QueryType    = "entities"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
 	DQLQuery             QueryType    = "dql"
@@ -163,6 +164,8 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
+	KeyField(typeName string) (string, bool, error)
+	BuildType(typeName string) Type
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
@@ -1135,6 +1138,16 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	return
 }
 
+func (q *query) BuildType(typeName string) Type {
+	t := &ast.Type{}
+	t.NamedType = typeName
+	return &astType{
+		typ:             t,
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
@@ -1482,6 +1495,20 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (q *query) KeyField(typeName string) (string, bool, error) {
+	typ := q.op.inSchema.schema.Types[typeName]
+	if typ == nil {
+		return "", false, fmt.Errorf("Type %s not found in the schema", typeName)
+	}
+	keyDir := typ.Directives.ForName(apolloKeyDirective)
+	if keyDir == nil {
+		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
+	}
+	fldName := keyDir.Arguments[0].Value.Raw
+	fldType := typ.Fields.ForName(fldName).Type
+	return fldName, fldType.Name() == IDType, nil
+}
+
 func (m *mutation) ConstructedFor() Type {
 	return (*field)(m).ConstructedFor()
 }
@@ -1602,6 +1629,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 			return DQLQuery
 		}
 		return HTTPQuery
+	case name == "_entities":
+		return EntitiesQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
 	case name == "__schema" || name == "__type" || name == "__typename":
