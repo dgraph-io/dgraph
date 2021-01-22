@@ -2128,7 +2128,7 @@ func (t *astType) IDField() FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
 	// If the field is of ID type but it is an external field,
 	// then it is stored in Dgraph as string type with Hash index.
-	// So the this field is actually not stored as id type.
+	// So the this field is actually not stored as ID type.
 	if (def.Kind != ast.Object && def.Kind != ast.Interface) || hasExtends(def) {
 		return nil
 	}

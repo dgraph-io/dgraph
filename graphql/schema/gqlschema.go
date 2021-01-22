@@ -987,7 +987,7 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 		addFieldFilters(sch, defn, apolloServiceQuery)
 		addAggregationResultType(sch, defn)
 		// Don't expose queries for the @extends type to the gateway
-		// as it is resolver through `_entities` resolver.
+		// as it is resolved through `_entities` resolver.
 		if !(apolloServiceQuery && hasExtends(defn)) {
 			addQueries(sch, defn, params)
 		}
