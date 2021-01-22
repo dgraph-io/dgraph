@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -469,7 +470,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	mc, err := newMinioClient(uri, &Credentials{
+	mc, err := minioclient.NewMinioClient(uri, &minioclient.Credentials{
 		AccessKey:    in.AccessKey,
 		SecretKey:    in.SecretKey,
 		SessionToken: in.SessionToken,
@@ -479,7 +480,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	bucket, prefix, err := validateBucket(mc, uri)
+	bucket, prefix, err := minioclient.ValidateBucket(mc, uri)
 	if err != nil {
 		return nil, err
 	}

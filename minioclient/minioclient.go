@@ -121,11 +121,19 @@ func NewMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
 	return mc, nil
 }
 
-func ValidateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
-	// split path into bucketName and blobPrefix
-	parts := strings.Split(uri.Path[1:], "/")
+// ParseBucketAndPrefix returns the bucket and prefix given a path string
+func ParseBucketAndPrefix(path string) (string, string) {
+	parts := strings.Split(path[1:], "/")
 	bucketName := parts[0] // bucket
 	objectPrefix := ""
+	if len(parts) > 1 {
+		objectPrefix = filepath.Join(parts[1:]...)
+	}
+	return bucketName, objectPrefix
+}
+
+func ValidateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
+	bucketName, objectPrefix := ParseBucketAndPrefix(uri.Path)
 
 	glog.Info("Verifying Bucket Exists: ", bucketName)
 	// verify the requested bucket exists.
@@ -135,9 +143,6 @@ func ValidateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
 	}
 	if !found {
 		return "", "", errors.Errorf("Bucket was not found: %s", bucketName)
-	}
-	if len(parts) > 1 {
-		objectPrefix = filepath.Join(parts[1:]...)
 	}
 
 	return bucketName, objectPrefix, nil

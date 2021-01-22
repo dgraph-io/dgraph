@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/protos/pb"
 
 	"github.com/golang/glog"
@@ -43,7 +44,7 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 		SecretAccessKey: req.SecretKey,
 		SessionToken:    req.SessionToken,
 	}
-	provider := credentialsProvider(uri.Scheme, defaultCreds)
+	provider := minioclient.CredentialsProvider(uri.Scheme, defaultCreds)
 
 	creds, _ := provider.Retrieve() // Error is always nil.
 
@@ -60,7 +61,7 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
-	creds                    *Credentials
+	creds                    *minioclient.Credentials
 	uri                      *url.URL
 }
 
@@ -68,12 +69,12 @@ type s3Handler struct {
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
-	mc, err := newMinioClient(uri, h.creds)
+	mc, err := minioclient.NewMinioClient(uri, h.creds)
 	if err != nil {
 		return nil, err
 	}
 
-	h.bucketName, h.objectPrefix, err = validateBucket(mc, uri)
+	h.bucketName, h.objectPrefix, err = minioclient.ValidateBucket(mc, uri)
 
 	return mc, err
 }

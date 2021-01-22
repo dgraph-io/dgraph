@@ -164,7 +164,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 }
 
 func readSchema(opt *options) *schema.ParsedSchema {
-	f, err := os.Open(opt.SchemaFile)
+	f, err := OpenLocalOrRemoteFile(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
 
@@ -278,7 +278,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		return
 	}
 
-	f, err := os.Open(ld.opt.GqlSchemaFile)
+	f, err := OpenLocalOrRemoteFile(ld.opt.GqlSchemaFile)
 	x.Check(err)
 	defer f.Close()
 
