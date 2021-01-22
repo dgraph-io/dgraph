@@ -114,7 +114,3 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, snap)
 }
-
-func TestRaftMetrics(t *testing.T) {
-	// TODO
-}

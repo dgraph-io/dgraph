@@ -117,8 +117,8 @@ var (
 	// RaftIsLeader records whether this instance is the leader
 	RaftIsLeader = stats.Int64("raft_is_leader",
 		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
-	// RaftLeaderChangesSeenTotal records the total number of leader changes seen.
-	RaftLeaderChangesSeenTotal = stats.Int64("raft_leader_changes_seen_total",
+	// RaftLeaderChanges records the total number of leader changes seen.
+	RaftLeaderChanges = stats.Int64("raft_leader_changes_total",
 		"Total number of leader changes seen", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.

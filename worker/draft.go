@@ -1125,7 +1125,7 @@ func (n *node) Run() {
 				// detect leadership changes
 				if rd.SoftState.Lead != lastLead {
 					lastLead = rd.SoftState.Lead
-					ostats.Record(ctx, x.RaftLeaderChangesSeenTotal.M(1))
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
 				}
 				if rd.SoftState.Lead != raft.None {
 					ostats.Record(ctx, x.RaftHasLeader.M(1))
