@@ -809,7 +809,7 @@ func listenForCorsUpdate(closer *z.Closer) {
 	prefix = prefix[:len(prefix)-8]
 	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
 
-		kv := x.KvWithMaxVersion(kvs)
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}

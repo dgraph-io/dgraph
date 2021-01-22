@@ -351,7 +351,7 @@ func RefreshAcls(closer *z.Closer) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
-		kv := x.KvWithMaxVersion(kvs)
+		kv := x.KvWithMaxVersion(kvs, aclPrefixes, "ACL Subscription")
 		if err := retrieveAcls(kv.GetVersion()); err != nil {
 			glog.Errorf("Error while retrieving acls: %v", err)
 		}
