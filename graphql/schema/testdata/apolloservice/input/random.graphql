@@ -1,4 +1,0 @@
-type Astronaut @key(fields: "id") {
-	id: ID!
-	name: String
-}
