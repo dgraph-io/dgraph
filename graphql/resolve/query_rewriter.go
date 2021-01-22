@@ -260,12 +260,13 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	//		...
 	//	}
 
-	if keyFieldIsID {
+	// If key field is of ID type but it is an external field,
+	// then it is stored in Dgraph as string type with Hash index
+	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
 		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
 	} else {
 		addEqFunc(dgQuery, typeDefn.DgraphPredicate(keyFieldName), keyFieldValueList)
 	}
-
 	// AddTypeFilter in as the Filter to the Root the Query.
 	// Query will be like :-
 	// 	_entities(func: ...) @filter(type(typeName)) {
@@ -1386,7 +1387,9 @@ func addSelectionSetFrom(
 			Alias: generateUniqueDgraphAlias(f, fieldSeenCount),
 		}
 
-		if f.Type().Name() == schema.IDType {
+		// if field of IDType has @external directive then it means that
+		// it stored as String with Hash index internally in the dgraph.
+		if f.Type().Name() == schema.IDType && !f.IsExternal() {
 			child.Attr = "uid"
 		} else {
 			child.Attr = f.DgraphPredicate()

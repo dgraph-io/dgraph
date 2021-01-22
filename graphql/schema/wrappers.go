@@ -131,6 +131,7 @@ type Field interface {
 	HasCustomDirective() (bool, map[string]FieldDefinition)
 	HasLambdaDirective() bool
 	Type() Type
+	IsExternal() bool
 	SelectionSet() []Field
 	Location() x.Location
 	DgraphPredicate() string
@@ -209,6 +210,7 @@ type FieldDefinition interface {
 	Type() Type
 	ParentType() Type
 	IsID() bool
+	IsExternal() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -504,7 +506,10 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, fld := range fields {
-			if isID(fld) {
+			// If key field is of ID type but it is an external field,
+			// then it is stored in Dgraph as string type with Hash index.
+			// So we need the predicate mapping in this case.
+			if isID(fld) && !hasExternal(fld) {
 				// We don't need a mapping for the field, as we the dgraph predicate for them is
 				// fixed i.e. uid.
 				continue
@@ -717,6 +722,22 @@ func hasExtends(def *ast.Definition) bool {
 
 func hasExternal(f *ast.FieldDefinition) bool {
 	return f.Directives.ForName(apolloExternalDirective) != nil
+}
+
+func (f *field) IsExternal() bool {
+	return hasExternal(f.field.Definition)
+}
+
+func (q *query) IsExternal() bool {
+	return (*field)(q).IsExternal()
+}
+
+func (m *mutation) IsExternal() bool {
+	return (*field)(m).IsExternal()
+}
+
+func (f *fieldDefinition) IsExternal() bool {
+	return hasExternal(f.fieldDef)
 }
 
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
@@ -2105,7 +2126,10 @@ func (t *astType) String() string {
 
 func (t *astType) IDField() FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
-	if def.Kind != ast.Object && def.Kind != ast.Interface {
+	// If the field is of ID type but it is an external field,
+	// then it is stored in Dgraph as string type with Hash index.
+	// So the this field is actually not stored as id type.
+	if (def.Kind != ast.Object && def.Kind != ast.Interface) || hasExtends(def) {
 		return nil
 	}
 
@@ -2146,8 +2170,11 @@ func (t *astType) XIDField() FieldDefinition {
 		return nil
 	}
 
+	// If field is of ID type but it is an external field,
+	// then it is stored in Dgraph as string type with Hash index.
+	// So it should be returned as an XID Field.
 	for _, fd := range def.Fields {
-		if hasIDDirective(fd) {
+		if hasIDDirective(fd) || (hasExternal(fd) && isID(fd)) {
 			return &fieldDefinition{
 				fieldDef:   fd,
 				inSchema:   t.inSchema,
