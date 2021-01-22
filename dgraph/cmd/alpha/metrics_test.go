@@ -152,7 +152,7 @@ func fetchMetrics(t *testing.T, metrics ...string) map[string]int {
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err)
 
-	countMap := make(map[string]int, 0)
+	countMap := make(map[string]int)
 	for _, metric := range metrics {
 		if count, ok := metricsMap[metric]; ok {
 			n, err := strconv.Atoi(count.(string))
