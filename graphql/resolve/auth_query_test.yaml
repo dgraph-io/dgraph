@@ -1836,8 +1836,35 @@
       }
     }
 
-
-- name: "Entities query with all levels of @auth rule true"
+- name: "Entities query with query auth rules"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Mission", id: "0x1"}{__typename: "Mission", id: "0x2"}, {__typename: "Mission", id: "0x3"}]) {
+        ... on Mission {
+          id
+          designation
+          startDate
+        }
+      }
+    }
+  jwtvar:
+    USER: "user"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot)) {
+        dgraph.type
+        id : Mission.id
+        designation : Mission.designation
+        startDate : Mission.startDate
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Mission1)) @filter(uid(MissionAuth2))
+      Mission1 as var(func: eq(Mission.id, "0x1", "0x2", "0x3")) @filter(type(Mission))
+      MissionAuth2 as var(func: uid(Mission1)) @filter(eq(Mission.supervisorName, "user")) @cascade {
+        id : Mission.id
+      }
+    }
+- name: "Entities query with top level RBAC rule true and level 1 query auth rule"
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
@@ -1855,7 +1882,7 @@
     query {
       _entities(func: uid(_EntityRoot)) {
         dgraph.type
-        Astronaut.missions : Astronaut.missions @filter(uid(Mission1)) {
+        missions : Astronaut.missions @filter(uid(Mission1)) {
           designation : Mission.designation
           dgraph.uid : uid
         }
@@ -1868,11 +1895,11 @@
       }
       Mission1 as var(func: uid(Mission2)) @filter(uid(MissionAuth3))
       MissionAuth3 as var(func: uid(Mission2)) @filter(eq(Mission.supervisorName, "user")) @cascade {
-        Mission.id : Mission.id
+        id : Mission.id
       }
     }
 
-- name: "Entities query with all levels of @auth rule false"
+- name: "Entities query with RBAC rule false"
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
@@ -1890,7 +1917,7 @@
       _entities()
     }
 
-- name: "Entities query with Deep @auth rules false"
+- name: "Entities query with top RBAC rules true and missing JWT variable for level 1 query auth rule"
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {

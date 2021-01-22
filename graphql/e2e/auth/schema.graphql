@@ -788,7 +788,6 @@ type Mission @key(fields: "id") @auth(
     id: String! @id
     crew: [Astronaut]
     supervisorName: String @search(by: [exact])
-    spaceShip: [SpaceShip]
     designation: String!
     startDate: String
     endDate: String
