@@ -74,8 +74,7 @@ func retryableFetchMetrics(t *testing.T, expected int) error {
 		txnMetric)
 }
 
-func fetchMetric(t *testing.T) int {
-	requiredMetric := "dgraph_txn_aborts_total"
+func fetchMetrics(t *testing.T, metrics ...string) map[string]int {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
 	_, body, _, err := runRequest(req)
@@ -83,10 +82,13 @@ func fetchMetric(t *testing.T) int {
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err)
 
-	txnAbort, ok := metricsMap[requiredMetric]
-	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
-	m, _ := strconv.Atoi(txnAbort.(string))
-	return m
+	counts := make(map[string]int, 0)
+	for _, metric := range metrics {
+		txnMetric, ok := metricsMap[metric]
+		require.True(t, ok, "the required metric '%s' is not found", metric)
+		counts[metric], _ = strconv.Atoi(txnMetric.(string))
+	}
+	return counts
 }
 
 func TestMetrics(t *testing.T) {
