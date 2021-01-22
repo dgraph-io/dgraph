@@ -271,10 +271,27 @@ input StringHashFilter {
 # Generated Types
 #######################
 
+type AddHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	numUids: Int
+}
+
 type CharacterAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+}
+
+type DeleteCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	msg: String
+	numUids: Int
+}
+
+type DeleteHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	msg: String
+	numUids: Int
 }
 
 type HumanAggregateResult {
@@ -291,6 +308,21 @@ type PersonAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+}
+
+type UpdateCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	numUids: Int
+}
+
+type UpdateHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	numUids: Int
+}
+
+type UpdatePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	numUids: Int
 }
 
 #######################
@@ -329,6 +361,13 @@ enum PersonOrderable {
 # Generated Inputs
 #######################
 
+input AddHumanInput {
+	name: String!
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String!
+}
+
 input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
@@ -342,6 +381,16 @@ input CharacterOrder {
 	asc: CharacterOrderable
 	desc: CharacterOrderable
 	then: CharacterOrder
+}
+
+input CharacterPatch {
+	name: String
+	friends: [CharacterRef]
+	password: String
+}
+
+input CharacterRef {
+	id: ID!
 }
 
 input HumanFilter {
@@ -359,6 +408,21 @@ input HumanOrder {
 	then: HumanOrder
 }
 
+input HumanPatch {
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
+}
+
+input HumanRef {
+	id: ID
+	name: String
+	friends: [CharacterRef]
+	totalCredits: Int
+	password: String
+}
+
 input PersonFilter {
 	id: [ID!]
 	has: PersonHasFilter
@@ -373,22 +437,58 @@ input PersonOrder {
 	then: PersonOrder
 }
 
+input PersonPatch {
+	name: String
+}
+
+input PersonRef {
+	id: ID
+	name: String
+}
+
+input UpdateCharacterInput {
+	filter: CharacterFilter!
+	set: CharacterPatch
+	remove: CharacterPatch
+}
+
+input UpdateHumanInput {
+	filter: HumanFilter!
+	set: HumanPatch
+	remove: HumanPatch
+}
+
+input UpdatePersonInput {
+	filter: PersonFilter!
+	set: PersonPatch
+	remove: PersonPatch
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getCharacter(id: ID!): Character
-	checkCharacterPassword(id: ID!, password: String!): Character
 	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
 	getHuman(id: ID!): Human
 	checkHumanPassword(id: ID!, password: String!): Human
 	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	getPerson(id: ID!): Person
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
-	aggregatePerson(filter: PersonFilter): PersonAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
+	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 }
 
 #######################
@@ -396,7 +496,8 @@ type Query {
 #######################
 
 type Subscription {
-	getPerson(id: ID!): Person
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	aggregateHuman(filter: HumanFilter): HumanAggregateResult
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
-	aggregatePerson(filter: PersonFilter): PersonAggregateResult
 }

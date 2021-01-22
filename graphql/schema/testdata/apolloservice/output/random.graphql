@@ -2,22 +2,9 @@
 # Input Schema
 #######################
 
-type Todo @secret(field: "pwd") {
+type Astronaut @key(fields: "id") {
 	id: ID!
-	title: String
-	text: String
-	isPublic: Boolean @search
-	dateCompleted: String @search
-	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	owner(filter: UserFilter): User @hasInverse(field: "todos")
-	somethingPrivate: String
-	sharedWithAggregate(filter: UserFilter): UserAggregateResult
-}
-
-type User @key(fields: "username") {
-	username: String! @id
-	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
-	todosAggregate(filter: TodoFilter): TodoAggregateResult
+	name: String
 }
 
 #######################
@@ -269,178 +256,75 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+type AddAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	numUids: Int
 }
 
-type AddUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	numUids: Int
+type AstronautAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
 }
 
-type DeleteTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+type DeleteAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	msg: String
 	numUids: Int
 }
 
-type DeleteUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	msg: String
+type UpdateAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	numUids: Int
-}
-
-type TodoAggregateResult {
-	count: Int
-	titleMin: String
-	titleMax: String
-	textMin: String
-	textMax: String
-	dateCompletedMin: String
-	dateCompletedMax: String
-	somethingPrivateMin: String
-	somethingPrivateMax: String
-}
-
-type UpdateTodoPayload {
-	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	numUids: Int
-}
-
-type UpdateUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	numUids: Int
-}
-
-type UserAggregateResult {
-	count: Int
-	usernameMin: String
-	usernameMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum TodoHasFilter {
-	title
-	text
-	isPublic
-	dateCompleted
-	sharedWith
-	owner
-	somethingPrivate
+enum AstronautHasFilter {
+	name
 }
 
-enum TodoOrderable {
-	title
-	text
-	dateCompleted
-	somethingPrivate
-}
-
-enum UserHasFilter {
-	username
-	todos
-}
-
-enum UserOrderable {
-	username
+enum AstronautOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddTodoInput {
-	title: String
-	text: String
-	isPublic: Boolean
-	dateCompleted: String
-	sharedWith: [UserRef]
-	owner: UserRef
-	somethingPrivate: String
-	pwd: String!
+input AddAstronautInput {
+	name: String
 }
 
-input AddUserInput {
-	username: String!
-	todos: [TodoRef]
-}
-
-input TodoFilter {
+input AstronautFilter {
 	id: [ID!]
-	isPublic: Boolean
-	dateCompleted: StringTermFilter
-	has: TodoHasFilter
-	and: [TodoFilter]
-	or: [TodoFilter]
-	not: TodoFilter
+	has: AstronautHasFilter
+	and: [AstronautFilter]
+	or: [AstronautFilter]
+	not: AstronautFilter
 }
 
-input TodoOrder {
-	asc: TodoOrderable
-	desc: TodoOrderable
-	then: TodoOrder
+input AstronautOrder {
+	asc: AstronautOrderable
+	desc: AstronautOrderable
+	then: AstronautOrder
 }
 
-input TodoPatch {
-	title: String
-	text: String
-	isPublic: Boolean
-	dateCompleted: String
-	sharedWith: [UserRef]
-	owner: UserRef
-	somethingPrivate: String
-	pwd: String
+input AstronautPatch {
+	name: String
 }
 
-input TodoRef {
+input AstronautRef {
 	id: ID
-	title: String
-	text: String
-	isPublic: Boolean
-	dateCompleted: String
-	sharedWith: [UserRef]
-	owner: UserRef
-	somethingPrivate: String
-	pwd: String
+	name: String
 }
 
-input UpdateTodoInput {
-	filter: TodoFilter!
-	set: TodoPatch
-	remove: TodoPatch
-}
-
-input UpdateUserInput {
-	filter: UserFilter!
-	set: UserPatch
-	remove: UserPatch
-}
-
-input UserFilter {
-	username: StringHashFilter
-	has: UserHasFilter
-	and: [UserFilter]
-	or: [UserFilter]
-	not: UserFilter
-}
-
-input UserOrder {
-	asc: UserOrderable
-	desc: UserOrderable
-	then: UserOrder
-}
-
-input UserPatch {
-	todos: [TodoRef]
-}
-
-input UserRef {
-	username: String
-	todos: [TodoRef]
+input UpdateAstronautInput {
+	filter: AstronautFilter!
+	set: AstronautPatch
+	remove: AstronautPatch
 }
 
 #######################
@@ -448,13 +332,9 @@ input UserRef {
 #######################
 
 type Query {
-	getTodo(id: ID!): Todo
-	checkTodoPassword(id: ID!, pwd: String!): Todo
-	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
-	aggregateTodo(filter: TodoFilter): TodoAggregateResult
-	getUser(username: String!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	aggregateUser(filter: UserFilter): UserAggregateResult
+	getAstronaut(id: ID!): Astronaut
+	queryAstronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+	aggregateAstronaut(filter: AstronautFilter): AstronautAggregateResult
 }
 
 #######################
@@ -462,11 +342,8 @@ type Query {
 #######################
 
 type Mutation {
-	addTodo(input: [AddTodoInput!]!): AddTodoPayload
-	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
-	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
-	updateUser(input: UpdateUserInput!): UpdateUserPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload
+	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
+	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
+	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
 }
 
