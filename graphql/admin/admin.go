@@ -495,10 +495,8 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
 
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
