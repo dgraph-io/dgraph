@@ -38,6 +38,7 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -862,19 +863,21 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
 				if rd.SoftState.Lead != lastLead {
 					lastLead = rd.SoftState.Lead
-					ostats.Record(context.Background(), x.RaftLeaderChangesSeenTotal.M(1))
+					ostats.Record(ctx, x.RaftLeaderChangesSeenTotal.M(1))
 				}
 				if rd.SoftState.Lead != raft.None {
-					ostats.Record(context.Background(), x.RaftHasLeader.M(1))
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
 				} else {
-					ostats.Record(context.Background(), x.RaftHasLeader.M(0))
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
 				}
 				if leader {
-					ostats.Record(context.Background(), x.RaftIsLeader.M(1))
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
 				} else {
-					ostats.Record(context.Background(), x.RaftIsLeader.M(0))
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
 				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
