@@ -299,9 +299,9 @@ var (
 			TagKeys:     allRaftKeys,
 		},
 		{
-			Name:        RaftLeaderChangesSeenTotal.Name(),
-			Measure:     RaftLeaderChangesSeenTotal,
-			Description: RaftLeaderChangesSeenTotal.Description(),
+			Name:        RaftLeaderChanges.Name(),
+			Measure:     RaftLeaderChanges,
+			Description: RaftLeaderChanges.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allRaftKeys,
 		},
