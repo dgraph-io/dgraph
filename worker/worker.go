@@ -26,8 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2"
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,7 +44,6 @@ var (
 	pstore       *badger.DB
 	workerServer *grpc.Server
 	raftServer   conn.RaftServer
-	rt           *restoreTracker
 
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
@@ -59,7 +58,6 @@ func workerPort() int {
 // Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
-	rt = newRestoreTracker()
 	// needs to be initialized after group config
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
 	go limiter.bleed()

@@ -19,6 +19,9 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"sync"
+
+	"github.com/dgraph-io/dgraph/edgraph"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -66,9 +69,10 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultField:        input.VaultField,
 		VaultFormat:       input.VaultFormat,
 	}
-	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
+
+	wg := &sync.WaitGroup{}
+	err = worker.ProcessRestoreRequest(context.Background(), &req, wg)
 	if err != nil {
-		worker.DeleteRestoreId(restoreId)
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code": "Failure",
@@ -78,11 +82,15 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		}, false
 	}
 
+	go func() {
+		wg.Wait()
+		edgraph.ResetAcl(nil)
+	}()
+
 	return &resolve.Resolved{
 		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"code":      "Success",
-			"message":   "Restore operation started.",
-			"restoreId": restoreId,
+			"code":    "Success",
+			"message": "Restore operation started.",
 		}},
 		Field: m,
 	}, true

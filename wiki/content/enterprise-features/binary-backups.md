@@ -248,7 +248,7 @@ mutation {
 }
 ```
 
-## Listing backups.
+## Listing Backups
 
 The GraphQL admin interface includes the `listBackups` endpoint that lists the
 backups in the given location along with the information included in their
@@ -376,27 +376,111 @@ same reason as the point above.
 - You can have multiple backup series in the same location although the feature
 still works if you set up a unique location for each series.
 
+## Export Backups
+
+The `export_backup` tool lets you convert a binary backup into an exported folder.
+
+If you need to upgrade between two major Dgraph versions that have incompatible changes,
+you can use the `export_backup` tool to apply changes (either to the exported `.rdf` file or to the schema file),
+and then import back the dataset into the new Dgraph version.
+
+### Using exports instead of binary backups
+
+An example of this use-case would be to migrate existing schemas from Dgraph v1.0 to Dgraph v20.11.
+You need to update the schema file from an export so all predicates of type `uid` are changed to `[uid]`.
+Then use the updated schema when loading data into Dgraph v1.1.
+
+For example, for the following schema:
+
+```
+name: string .
+friend: uid .
+```
+
+becomes
+
+```
+name: string .
+friend: [uid] .
+```
+
+Since you have to do a modification to the schema itself, you need an export. 
+You can use the `export_backup` tool to convert your binary backup into an export folder.
+
+### Binary Backups and Exports folders
+
+A Binary Backup directory has the following structure:
+
+```
+dgraph.20210104.224757.709
+├── manifest.json
+└── r9-g1.backup
+```
+
+An Export directory has the following structure:
+
+```
+dgraph.r9.u0108.1621
+├── g01.gql_schema.gz
+├── g01.rdf.gz
+└── g01.schema.gz
+```
+
+If you want to do the changes cited above, you need to edit the `g01.schema.gz` file.
+
+### Benefits
+
+With the `export_backup` tool you get the speed benefit from the binary backups, which are faster than regular exports.
+So if you have a big dataset, you don't need to wait a long time until an export is completed.
+Instead, just take a binary backup and convert it to an export only when needed.
+
+### How to use it
+
+Ensure that you have created a binary backup. The directory tree of a binary backup usually looks like this:
+
+```
+dgraph.20210104.224757.709
+├── manifest.json
+└── r9-g1.backup
+```
+
+Then run the following command:
+
+```sh
+dgraph export_backup -l <location-of-your-binary-backup> -d <destination-of-the-export-dir>
+```
+
+Once completed you will find your export folder (in this case `dgraph.r9.u0108.1621`).
+The tree of the directory should look like this:
+
+```
+dgraph.r9.u0108.1621
+├── g01.gql_schema.gz
+├── g01.rdf.gz
+└── g01.schema.gz
+```
+
 ## Encrypted Backups
 
 Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups.
 Starting with v20.07.0, we also added support for Encrypted Backups using encryption keys sitting on Vault.
 
 
-## New flag “Encrypted” in manifest.json
+### New flag “Encrypted” in manifest.json
 
 A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
 
 For a series of full and incremental backups, per the current design, we don't allow the mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
 
 
-## AES And Chaining with Gzip
+### AES And Chaining with Gzip
 
 If encryption is turned on an Alpha server, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 
-## Backup
+### Backup
 
 Backup is an online tool, meaning it is available when Alpha server is running. For encrypted backups, the Alpha server must be configured with the “encryption_key_file”. Starting with v20.07.0, the Alpha server can alternatively be configured to interface with Vault server to obtain keys.
 
@@ -404,7 +488,7 @@ Backup is an online tool, meaning it is available when Alpha server is running. 
 `encryption_key_file` or `vault_*` options was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-## Online restore
+### Online restore
 
 To restore from a backup to a live cluster, execute a mutation on the `/admin`
 endpoint with the following format.
@@ -426,6 +510,14 @@ Online restores only require you to send this request. The UID and timestamp
 leases are updated accordingly. The latest backup to be restored should contain
 the same number of groups in its manifest.json file as the cluster to which it
 is being restored.
+
+{{% notice "note" %}}
+When using backups made from a Dgraph cluster that uses encryption (so backups are encrypted),
+you need to use the same key from that original cluster when doing a restore process.
+Dgraph's [Encryption at Rest]({{< relref "enterprise-features/encryption-at-rest.md" >}}) uses a symmetric-key
+algorithm where the same key is used for both encryption and decryption, so the encryption key from that
+cluster is needed for the restore process.
+{{% /notice %}}
 
 Restore can be performed from Amazon S3 / Minio or from a local directory. Below
 is the documentation for the fields inside `RestoreInput` that can be passed into
@@ -526,7 +618,7 @@ query status() {
 }
 ```
 
-## Offline restore using `dgraph restore`
+### Offline restore using `dgraph restore`
 
 {{% notice "note" %}}
 `dgraph restore` is being deprecated, please use GraphQL API for Restoring from Backup.

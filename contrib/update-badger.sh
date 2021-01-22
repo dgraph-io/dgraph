@@ -54,7 +54,7 @@ do
 	git checkout -b $branch
 
 	echo "Updating badger to master branch version"
-	go get -v github.com/dgraph-io/badger/v2@master
+	go get -v github.com/dgraph-io/badger/v3@master
 
 	go mod tidy
 

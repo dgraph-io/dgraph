@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/var/lib/dgraph
 Restart=on-failure
-ExecStart=/bin/bash -c '/usr/local/bin/dgraph zero --my={{ myhostname }}:5080 --peer {{ zero-0 }}:5080 --wal /var/lib/dgraph/zw --idx=2 --replicas 3'
+ExecStart=/bin/bash -c '/usr/local/bin/dgraph zero --my={{ myhostname }}:5080 --peer {{ zero-0 }}:5080 --wal /var/lib/dgraph/zw --raft="idx=2" --replicas 3'
 StandardOutput=journal
 StandardError=journal
 User=dgraph

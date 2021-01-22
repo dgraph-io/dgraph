@@ -6,7 +6,7 @@ weight = 1
     parent = "query-language"
 +++
 
-Dgraph Query Language (DQL) is based on the [GraphQL](https://facebook.github.io/graphql/) specification created by Facebook. GraphQL wasn't developed for Graph databases, but its graph-like query syntax, schema validation and subgraph-shaped response make it a great language choice. We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''DQL'' (formerly known as ''GraphQL+-'').
+Dgraph Query Language, _DQL_, ([previously named GraphQL+-](https://dgraph.io/blog/post/graphql+-to-dql/)) is based on [GraphQL](http://spec.graphql.org/) maintained by the [GraphQL Foundation](https://foundation.graphql.org/).  GraphQL wasn't developed for Graph databases, but its graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.
 
 DQL is a work in progress. We're adding more features and we might further simplify existing ones.
 

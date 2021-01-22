@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -508,7 +508,7 @@ func GetHttpsClient(t *testing.T) http.Client {
 func GetAlphaClientConfig(t *testing.T) *tls.Config {
 	_, filename, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	tlsDir := path.Join(path.Dir(filename), "../tlstest/mtls_internal/tls/live")
+	tlsDir := filepath.Join(filepath.Dir(filename), "../tlstest/mtls_internal/tls/live")
 	c := &x.TLSHelperConfig{
 		CertRequired:     true,
 		Cert:             tlsDir + "/client.liveclient.crt",

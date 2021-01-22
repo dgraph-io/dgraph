@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	bo "github.com/dgraph-io/badger/v2/options"
+	bo "github.com/dgraph-io/badger/v3/options"
 
 	"github.com/dgraph-io/dgraph/x"
 )

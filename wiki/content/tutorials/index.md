@@ -12,7 +12,7 @@ This is a tutorial series on getting started with Dgraph. You can find a
 single page quickstart guide [here]({{< relref "get-started/index.md" >}}).
 {{% /notice %}}
 
-**Welcome to Dgraph. Here are a series of tutorials for getting started :**
+**Welcome to Dgraph. Here are a series of tutorials for getting started:**
 
 <section class="toc">
   <div class="container">
@@ -128,5 +128,4 @@ with Dgraph from your application.
 
 ## Need Help
 
-* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
-* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs, and discussions.

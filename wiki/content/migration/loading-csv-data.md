@@ -3,14 +3,21 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Loading CSV Data"
 weight = 6
 [menu.main]
-    parent = "howto"
+    parent = "migration"
 +++
 
 [Dgraph mutations]({{< relref "mutations/_index.md" >}}) are accepted in RDF
 N-Quad and JSON formats. To load CSV-formatted data into Dgraph, first convert
 the dataset into one of the accepted formats and then load the resulting dataset
-into Dgraph. This section demonstrates converting CSV into JSON. There are
-many tools available to convert CSV to JSON. For example, you can use
+into Dgraph. This section demonstrates converting CSV into JSON. 
+
+{{% notice "tip" %}}
+Once you have converted your `.csv` files to [RDF N-Quad/Triple](https://www.w3.org/TR/n-quads/) or JSON, 
+you can use [Dgraph Live Loader]({{< relref "/deploy/fast-data-loading/live-loader.md" >}}) or 
+[Dgraph Bulk Loader]({{< relref "/deploy/fast-data-loading/bulk-loader.md" >}}) to import your data.
+{{% /notice %}}
+
+There are many tools available to convert CSV to JSON. For example, you can use
 [`d3-dsv`](https://github.com/d3/d3-dsv)'s `csv2json` tool as shown below:
 
 ```csv

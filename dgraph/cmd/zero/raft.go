@@ -41,6 +41,8 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
+var raftDefault = "idx=1; learner=false"
+
 type node struct {
 	*conn.Node
 	server *Server
@@ -119,7 +121,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		// unique key is randomly generated key and could have collision.
+		// This is to ensure that even if collision occurs, we retry.
+		for !n.Proposals.Store(key, pctx) {
+			glog.Warningf("Found existing proposal with key: [%v]", key)
+			key = n.uniqueKey()
+		}
 		defer n.Proposals.Delete(key)
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
@@ -210,7 +217,16 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
-	if !has && len(group.Members) >= n.server.NumReplicas {
+	var numReplicas int
+	for _, gm := range group.Members {
+		if !gm.Learner {
+			numReplicas++
+		}
+	}
+	switch {
+	case has || member.GetLearner():
+		// pass
+	case numReplicas >= n.server.NumReplicas:
 		// We shouldn't allow more members than the number of replicas.
 		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
@@ -220,8 +236,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
-	if member.GroupId == n.server.nextGroup &&
-		len(group.Members) >= n.server.NumReplicas {
+	if member.GroupId == n.server.nextGroup && numReplicas >= n.server.NumReplicas {
 		n.server.nextGroup++
 	}
 	if member.Leader {
@@ -311,9 +326,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	// We are storing only the MembershipState in the meta file. The other 2 fields of ZeroSnapshot;
-	// Index and CheckpointTs need not be persisted as they are used only for in-memory operations.
-	data, err := snap.GetState().Marshal()
+	data, err := snap.Marshal()
 	x.Check(err)
 
 	for {
@@ -433,7 +446,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
@@ -545,11 +563,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var ms pb.MembershipState
-			x.Check(ms.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&ms)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, ms.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
@@ -864,9 +882,9 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {

@@ -29,7 +29,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr --jaeger.collector=http://ocagent:14268 -v=2 --bindall
+    command: /gobin/dgraph zero -o 100 --raft="idx=1" --my=zero1:5180 --replicas=3 --logtostderr --jaeger.collector=http://ocagent:14268 -v=2 --bindall
   ocagent:
     image: omnition/opencensus-agent:0.1.6
     container_name: ocagent

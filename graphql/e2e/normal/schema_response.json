@@ -1068,6 +1068,14 @@
                 }
             ],
             "name": "post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "dgraph.cors"
+                }
+            ],
+            "name": "dgraph.type.cors"
         }
     ]
 }

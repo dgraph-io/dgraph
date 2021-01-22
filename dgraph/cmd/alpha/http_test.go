@@ -67,7 +67,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 			return nil, err
 		}
 		req.Header.Add("Content-Type", contentType)
-		req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
+		req.Header.Set("X-Dgraph-AccessToken", token.getAccessJWTToken())
 
 		if gzReq {
 			req.Header.Set("Content-Encoding", "gzip")
@@ -79,15 +79,10 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 
 		resp, err = client.Do(req)
 		if err != nil && strings.Contains(err.Error(), "Token is expired") {
-			newToken, err := testutil.HttpLogin(&testutil.LoginParams{
-				Endpoint:   addr + "/admin",
-				RefreshJwt: token.RefreshToken,
-			})
+			err := token.refreshToken()
 			if err != nil {
 				return nil, err
 			}
-			token.AccessJwt = newToken.AccessJwt
-			token.RefreshToken = newToken.RefreshToken
 			continue
 		} else if err != nil {
 			return nil, err
@@ -168,33 +163,8 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 }
 
 func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
-	params := make([]string, 0, 2)
-	if debug != "" {
-		params = append(params, "debug="+debug)
-	}
-	if ts != 0 {
-		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
-	}
-	url := addr + "/query?" + strings.Join(params, "&")
-
-	_, body, err := runWithRetries("POST", contentType, url, queryText)
-	if err != nil {
-		return "", 0, err
-	}
-
-	var r res
-	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, err
-	}
-	startTs := r.Extensions.Txn.StartTs
-
-	// Remove the extensions.
-	r2 := res{
-		Data: r.Data,
-	}
-	output, err := json.Marshal(r2)
-
-	return string(output), startTs, err
+	out, startTs, _, err := queryWithTsForResp(queryText, contentType, debug, ts)
+	return out, startTs, err
 }
 
 // queryWithTsForResp query the dgraph and returns it's http response and result.
@@ -296,92 +266,14 @@ func createRequest(method, contentType, url string, body string) (*http.Request,
 
 func runWithRetries(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
-
-	req, err := createRequest(method, contentType, url, body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	qr, respBody, err := runRequest(req)
-	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		token, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/admin",
-			RefreshJwt: token.RefreshToken,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, contentType, url, body)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return runRequest(retryReq)
-	}
+	qr, respBody, _, err := runWithRetriesForResp(method, contentType, url, body)
 	return qr, respBody, err
 }
 
 // attach the grootAccessJWT to the request and sends the http request
-func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
+func runRequest(req *http.Request) (*x.QueryResWithData, []byte, *http.Response, error) {
 	client := &http.Client{}
-	req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	if status := resp.StatusCode; status != http.StatusOK {
-		return nil, nil, errors.Errorf("Unexpected status code: %v", status)
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, errors.Errorf("unable to read from body: %v", err)
-	}
-
-	qr := new(x.QueryResWithData)
-	json.Unmarshal(body, qr) // Don't check error.
-	if len(qr.Errors) > 0 {
-		return nil, nil, errors.New(qr.Errors[0].Message)
-	}
-	return qr, body, nil
-}
-
-func runWithRetriesForResp(method, contentType, url string, body string) (
-	*x.QueryResWithData, []byte, *http.Response, error) {
-
-	req, err := createRequest(method, contentType, url, body)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	qr, respBody, resp, err := runRequestForResp(req)
-	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		token, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/admin",
-			RefreshJwt: token.RefreshToken,
-		})
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, contentType, url, body)
-		if err != nil {
-			return nil, nil, resp, err
-		}
-
-		return runRequestForResp(retryReq)
-	}
-	return qr, respBody, resp, err
-}
-
-// attach the grootAccessJWT to the request and sends the http request
-func runRequestForResp(req *http.Request) (*x.QueryResWithData, []byte, *http.Response, error) {
-	client := &http.Client{}
-	req.Header.Set("X-Dgraph-AccessToken", token.AccessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", token.getAccessJWTToken())
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, resp, err
@@ -404,6 +296,32 @@ func runRequestForResp(req *http.Request) (*x.QueryResWithData, []byte, *http.Re
 	return qr, body, resp, nil
 }
 
+func runWithRetriesForResp(method, contentType, url string, body string) (
+	*x.QueryResWithData, []byte, *http.Response, error) {
+
+	req, err := createRequest(method, contentType, url, body)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	qr, respBody, resp, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Token is expired") {
+		err = token.refreshToken()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		// create a new request since the previous request would have been closed upon the err
+		retryReq, err := createRequest(method, contentType, url, body)
+		if err != nil {
+			return nil, nil, resp, err
+		}
+
+		return runRequest(retryReq)
+	}
+	return qr, respBody, resp, err
+}
+
 func commitWithTs(keys, preds []string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
@@ -421,7 +339,7 @@ func commitWithTs(keys, preds []string, ts uint64) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = runRequest(req)
+	_, _, _, err = runRequest(req)
 	return err
 }
 
@@ -439,7 +357,7 @@ func commitWithTsKeysOnly(keys []string, ts uint64) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = runRequest(req)
+	_, _, _, err = runRequest(req)
 	return err
 }
 
@@ -633,7 +551,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	url := fmt.Sprintf("%s/commit?startTs=%d&abort=true", addr, ts)
 	req, err := http.NewRequest("POST", url, nil)
 	require.NoError(t, err)
-	_, _, err = runRequest(req)
+	_, _, _, err = runRequest(req)
 	require.NoError(t, err)
 }
 

@@ -22,15 +22,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -92,7 +92,7 @@ type logFile struct {
 }
 
 func logFname(dir string, id int64) string {
-	return path.Join(dir, fmt.Sprintf("%05d%s", id, logSuffix))
+	return filepath.Join(dir, fmt.Sprintf("%05d%s", id, logSuffix))
 }
 
 // openLogFile opens a logFile in the given directory. The filename is
@@ -275,7 +275,7 @@ func getLogFiles(dir string) ([]*logFile, error) {
 	seen := make(map[int64]struct{})
 
 	for _, fpath := range entryFiles {
-		_, fname := path.Split(fpath)
+		_, fname := filepath.Split(fpath)
 		fname = strings.TrimSuffix(fname, logSuffix)
 
 		fid, err := strconv.ParseInt(fname, 10, 64)
