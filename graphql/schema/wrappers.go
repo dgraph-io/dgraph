@@ -18,10 +18,10 @@ package schema
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,7 +53,7 @@ type FieldHTTPConfig struct {
 	URL    string
 	Method string
 	// would be nil if there is no body
-	Template       *interface{}
+	Template       interface{}
 	Mode           string
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
@@ -132,7 +132,9 @@ type Field interface {
 	//  * seenField: used for skipping when the field has already been seen at the current level
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
-	HasCustomDirective() (bool, map[string]FieldDefinition)
+	CustomRequiredFields() map[string]FieldDefinition
+	HasCustomDirective() bool
+	HasCustomHTTPChild() bool
 	HasLambdaDirective() bool
 	Type() Type
 	SelectionSet() []Field
@@ -145,7 +147,7 @@ type Field interface {
 	TypeName(dgraphTypes []string) string
 	GetObjectName() string
 	IsAuthQuery() bool
-	CustomHTTPConfig() (FieldHTTPConfig, error)
+	CustomHTTPConfig() (*FieldHTTPConfig, error)
 	EnumValues() []string
 	ConstructedFor() Type
 	ConstructedForDgraphPredicate() string
@@ -293,6 +295,11 @@ type field struct {
 	// arguments contains the computed values for arguments taking into account the values
 	// for the GraphQL variables supplied in the query.
 	arguments map[string]interface{}
+	// hasCustomHTTPChild is used to cache whether any of the descendents of this field have a
+	// @custom(http: {...}) on them. Its type is purposefully set to interface{} to find out whether
+	// this flag has already been calculated or not. If not calculated, it would be nil.
+	// Otherwise, it would always contain a boolean value.
+	hasCustomHTTPChild interface{}
 }
 
 type fieldDefinition struct {
@@ -1007,10 +1014,10 @@ func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map
 	return res
 }
 
-func (f *field) HasCustomDirective() (bool, map[string]FieldDefinition) {
+func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
-		return false, nil
+		return nil
 	}
 
 	var rf map[string]bool
@@ -1045,7 +1052,7 @@ func (f *field) HasCustomDirective() (bool, map[string]FieldDefinition) {
 	}
 
 	if graphqlArg == nil {
-		return true, toRequiredFieldDefs(rf, f)
+		return toRequiredFieldDefs(rf, f)
 	}
 	modeVal := ""
 	modeArg := httpArg.Value.Children.ForName(mode)
@@ -1060,10 +1067,45 @@ func (f *field) HasCustomDirective() (bool, map[string]FieldDefinition) {
 		// This should not be returning an error since we should have validated this during schema
 		// update.
 		if err != nil {
-			return true, nil
+			return nil
 		}
 	}
-	return true, toRequiredFieldDefs(rf, f)
+	return toRequiredFieldDefs(rf, f)
+}
+
+func (f *field) HasCustomDirective() bool {
+	return f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()] != nil
+}
+
+func (f *field) HasCustomHTTPChild() bool {
+	// let's see if we have already calculated whether this field has any custom http children
+	if f.hasCustomHTTPChild != nil {
+		return f.hasCustomHTTPChild.(bool)
+	}
+	// otherwise, we need to find out whether any descendents of this field have custom http
+	selSet := f.SelectionSet()
+	// this is a scalar field, so it can't even have a child => return false
+	if len(selSet) == 0 {
+		return false
+	}
+	// lets find if any direct child of this field has a @custom on it
+	for _, fld := range selSet {
+		if f.op.inSchema.customDirectives[fld.GetObjectName()][fld.Name()] != nil {
+			f.hasCustomHTTPChild = true
+			return true
+		}
+	}
+	// if none of the direct child of this field have a @custom,
+	// then lets see if any further descendents have @custom.
+	for _, fld := range selSet {
+		if fld.HasCustomHTTPChild() {
+			f.hasCustomHTTPChild = true
+			return true
+		}
+	}
+	// if none of the descendents of this field have a @custom, return false
+	f.hasCustomHTTPChild = false
+	return false
 }
 
 func (f *field) HasLambdaDirective() bool {
@@ -1156,6 +1198,9 @@ func (f *field) Type() Type {
 		// This can happen in case if the incoming request contains a query/mutation that isn't
 		// defined in the schema being served. Resolving such a query would report that no
 		// suitable resolver was found.
+		// TODO: Ideally, this case shouldn't happen as the query isn't defined in the schema,
+		// so it should be rejected by query validation itself. But, somehow that is not happening.
+
 		// In this case we are returning a nullable type named "__Undefined__" from here, instead
 		// of returning nil, so that the rest of the code can continue to work. The type is
 		// nullable so that if the request contained other valid queries, they should still get a
@@ -1187,10 +1232,10 @@ func (t *astType) IsInbuiltOrEnumType() bool {
 	return ok || (t.inSchema.schema.Types[t.Name()].Kind == ast.Enum)
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, error) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName("http")
-	fconf := FieldHTTPConfig{
+	fconf := &FieldHTTPConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
@@ -1214,7 +1259,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	if bodyTemplate != "" {
 		bt, rf, err := parseBodyTemplate(bodyTemplate, true)
 		if err != nil {
-			return fconf, err
+			return nil, err
 		}
 		fconf.Template = bt
 		fconf.RequiredArgs = rf
@@ -1259,7 +1304,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	if graphqlArg != nil {
 		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
 		if gqlErr != nil {
-			return fconf, gqlErr
+			return nil, gqlErr
 		}
 		// queryDoc will always have only one operation with only one field
 		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
@@ -1284,7 +1329,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		if graphqlArg == nil {
 			fconf.URL, err = SubstituteVarsInURL(fconf.URL, argMap)
 			if err != nil {
-				return fconf, errors.Wrapf(err, "while substituting vars in URL")
+				return nil, errors.Wrapf(err, "while substituting vars in URL")
 			}
 			bodyVars = argMap
 		} else {
@@ -1292,12 +1337,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			bodyVars["query"] = fconf.RemoteGqlQuery
 			bodyVars["variables"] = argMap
 		}
-		SubstituteVarsInBody(fconf.Template, bodyVars)
+		fconf.Template = SubstituteVarsInBody(fconf.Template, bodyVars)
 	}
 	return fconf, nil
 }
 
-func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
+func (f *field) CustomHTTPConfig() (*FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
 }
 
@@ -1469,8 +1514,16 @@ func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
-func (q *query) HasCustomDirective() (bool, map[string]FieldDefinition) {
+func (q *query) CustomRequiredFields() map[string]FieldDefinition {
+	return (*field)(q).CustomRequiredFields()
+}
+
+func (q *query) HasCustomDirective() bool {
 	return (*field)(q).HasCustomDirective()
+}
+
+func (q *query) HasCustomHTTPChild() bool {
+	return (*field)(q).HasCustomHTTPChild()
 }
 
 func (q *query) HasLambdaDirective() bool {
@@ -1505,7 +1558,7 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
+func (q *query) CustomHTTPConfig() (*FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(q), true)
 }
 
@@ -1712,8 +1765,16 @@ func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
 }
 
-func (m *mutation) HasCustomDirective() (bool, map[string]FieldDefinition) {
+func (m *mutation) CustomRequiredFields() map[string]FieldDefinition {
+	return (*field)(m).CustomRequiredFields()
+}
+
+func (m *mutation) HasCustomDirective() bool {
 	return (*field)(m).HasCustomDirective()
+}
+
+func (m *mutation) HasCustomHTTPChild() bool {
+	return (*field)(m).HasCustomHTTPChild()
 }
 
 func (m *mutation) HasLambdaDirective() bool {
@@ -1783,7 +1844,7 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
+func (m *mutation) CustomHTTPConfig() (*FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(m), true)
 }
 
@@ -2287,27 +2348,14 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 	return nil
 }
 
-// convertSliceToStringSlice converts any slice passed as argument to a slice of string
-// Ensure that the argument is actually a slice, otherwise it will result in panic.
-func convertSliceToStringSlice(slice interface{}) []string {
-	val := reflect.ValueOf(slice)
-	size := val.Len()
-	list := make([]string, size)
-	for i := 0; i < size; i++ {
-		list[i] = fmt.Sprintf("%v", val.Index(i))
-	}
-	return list
-}
-
 func getAsPathParamValue(val interface{}) string {
 	switch v := val.(type) {
+	case json.RawMessage:
+		var temp interface{}
+		_ = Unmarshal(v, &temp) // this can't error, as it was marshalled earlier
+		return getAsPathParamValue(temp)
 	case string:
 		return v
-	case []string:
-		return strings.Join(v, ",")
-	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
-		[]uint32, []uint64, []float32, []float64:
-		return strings.Join(convertSliceToStringSlice(v), ",")
 	case []interface{}:
 		return getAsInterfaceSliceInPath(v)
 	case map[string]interface{}:
@@ -2355,11 +2403,12 @@ func getAsMapInPath(object map[string]interface{}) string {
 
 func setQueryParamValue(queryParams url.Values, key string, val interface{}) {
 	switch v := val.(type) {
-	case []string:
-		queryParams[key] = v
-	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
-		[]uint32, []uint64, []float32, []float64:
-		queryParams[key] = convertSliceToStringSlice(v)
+	case json.RawMessage:
+		var temp interface{}
+		_ = Unmarshal(v, &temp) // this can't error, as it was marshalled earlier
+		setQueryParamValue(queryParams, key, temp)
+	case string:
+		queryParams.Add(key, v)
 	case []interface{}:
 		setInterfaceSliceInQuery(queryParams, key, v)
 	case map[string]interface{}:
@@ -2498,7 +2547,7 @@ func parseAsJSONTemplate(value *ast.Value, vars map[string]bool, strictJSON bool
 // In strictJSON mode block strings and enums are invalid and throw an error.
 // strictJSON should be false when the body template is being used for custom graphql arg parsing,
 // otherwise it should be true.
-func parseBodyTemplate(body string, strictJSON bool) (*interface{}, map[string]bool, error) {
+func parseBodyTemplate(body string, strictJSON bool) (interface{}, map[string]bool, error) {
 	if strings.TrimSpace(body) == "" {
 		return nil, nil, nil
 	}
@@ -2514,46 +2563,55 @@ func parseBodyTemplate(body string, strictJSON bool) (*interface{}, map[string]b
 		return nil, nil, err
 	}
 
-	return &jsonTemplate, requiredVariables, nil
+	return jsonTemplate, requiredVariables, nil
 }
 
 func isVar(key string) bool {
 	return strings.HasPrefix(key, "$")
 }
 
-func substituteVarInMapInBody(object, variables map[string]interface{}) {
+func substituteVarInMapInBody(object, variables map[string]interface{}) map[string]interface{} {
+	objCopy := make(map[string]interface{}, len(object))
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
 			if isVar(val) {
-				vval, ok := variables[val[1:]]
-				if ok {
-					object[k] = vval
-				} else {
-					delete(object, k)
+				if vval, ok := variables[val[1:]]; ok {
+					objCopy[k] = vval
 				}
+			} else {
+				objCopy[k] = val
 			}
 		case map[string]interface{}:
-			substituteVarInMapInBody(val, variables)
+			objCopy[k] = substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			substituteVarInSliceInBody(val, variables)
+			objCopy[k] = substituteVarInSliceInBody(val, variables)
+		default:
+			objCopy[k] = val
 		}
 	}
+	return objCopy
 }
 
-func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) {
+func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) []interface{} {
+	sliceCopy := make([]interface{}, len(slice))
 	for k, v := range slice {
 		switch val := v.(type) {
 		case string:
 			if isVar(val) {
-				slice[k] = variables[val[1:]]
+				sliceCopy[k] = variables[val[1:]]
+			} else {
+				sliceCopy[k] = val
 			}
 		case map[string]interface{}:
-			substituteVarInMapInBody(val, variables)
+			sliceCopy[k] = substituteVarInMapInBody(val, variables)
 		case []interface{}:
-			substituteVarInSliceInBody(val, variables)
+			sliceCopy[k] = substituteVarInSliceInBody(val, variables)
+		default:
+			sliceCopy[k] = val
 		}
 	}
+	return sliceCopy
 }
 
 // Given a JSON representation for a body with variables defined, this function substitutes
@@ -2577,21 +2635,24 @@ func substituteVarInSliceInBody(slice []interface{}, variables map[string]interf
 //			"id": "0x9"
 //		}
 // }
-func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) {
+func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interface{}) interface{} {
 	if jsonTemplate == nil {
-		return
+		return nil
 	}
 
-	switch val := (*jsonTemplate).(type) {
+	switch val := jsonTemplate.(type) {
 	case string:
 		if isVar(val) {
-			*jsonTemplate = variables[val[1:]]
+			return variables[val[1:]]
 		}
 	case map[string]interface{}:
-		substituteVarInMapInBody(val, variables)
+		return substituteVarInMapInBody(val, variables)
 	case []interface{}:
-		substituteVarInSliceInBody(val, variables)
+		return substituteVarInSliceInBody(val, variables)
 	}
+
+	// this must be a hard-coded scalar, so just return as it is
+	return jsonTemplate
 }
 
 // FieldOriginatedFrom returns the name of the interface from which given field was inherited.

@@ -1177,7 +1177,7 @@ func addSelectionSetFrom(
 	selSet := field.SelectionSet()
 	if len(selSet) > 0 {
 		// Only add dgraph.type as a child if this field is an abstract type and has some children.
-		// dgraph.type would later be used in completeObject as different objects in the resulting
+		// dgraph.type would later be used in CompleteObject as different objects in the resulting
 		// JSON would return different fields based on their concrete type.
 		if field.AbstractType() {
 			q.Children = append(q.Children, &gql.GraphQuery{
@@ -1205,9 +1205,8 @@ func addSelectionSetFrom(
 	fieldAdded := make(map[string]bool)
 
 	for _, f := range field.SelectionSet() {
-		hasCustom, rf := f.HasCustomDirective()
-		if hasCustom {
-			for dgAlias, fieldDef := range rf {
+		if f.HasCustomDirective() {
+			for dgAlias, fieldDef := range f.CustomRequiredFields() {
 				requiredFields[dgAlias] = fieldDef
 			}
 			// This field is resolved through a custom directive so its selection set doesn't need

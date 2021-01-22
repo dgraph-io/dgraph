@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -47,7 +48,8 @@ import (
 )
 
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
-func ToJson(l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte, error) {
+func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte,
+	error) {
 	sgr := &SubGraph{}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
@@ -58,7 +60,7 @@ func ToJson(l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte, error) 
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	data, err := sgr.toFastJSON(l, field)
+	data, err := sgr.toFastJSON(ctx, l, field)
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
 	}
@@ -106,17 +108,19 @@ type node struct {
 	// Bytes 7-6 contains attr.
 	// Bit MSB(first bit in Byte-8) contains list field value.
 	// Bit SecondMSB(second bit in Byte-8) contains facetsParent field value.
-	// Bit ThirdMSB(third bit in Byte-8) stores if the order of node's children has been fixed.
+	// Bit ThirdMSB(third bit in Byte-8) stores if the node contains uid value
+	// Bit FourthMSB(fourth bit in Byte-8) stores if the order of node's children has been fixed.
+	// Bit FifthMSB(fifth bit in Byte-8) stores if node contains value for a @custom GraphQL field.
 	// Byte-5 is not getting used as of now.
-	// |--------------------------------------------------------------|
-	// |    8        |    7   |    6   |    5   |  4  |  3  |  2 |  1 |
-	// |--------------------------------------------------------------|
-	// | MSB - list  |                 | Unused |                     |
-	// | SecondMSB - |     Attr ID     | For    | Offset inside Arena |
-	// | facetsParent|                 | Now    |                     |
-	// | ThirdMSB -  |                 |        |                     |
-	// | Order Info  |                 |        |                     |
-	// |--------------------------------------------------------------|
+	// |-----------------------------------------------------------------------------|
+	// |             8              |    7   |    6   |    5   |  4  |  3  |  2 |  1 |
+	// |-----------------------------------------------------------------------------|
+	// | MSB - list                 |                 | Unused |                     |
+	// | SecondMSB - facetsParent   |     Attr ID     | For    | Offset inside Arena |
+	// | ThirdMSB - uid             |                 | Now    |                     |
+	// | FourthMSB - Order Info     |                 |        |                     |
+	// | FifthMSB - @custom GraphQL |                 |        |                     |
+	// |-----------------------------------------------------------------------------|
 	meta uint64
 
 	next  *node
@@ -187,6 +191,17 @@ func (enc *encoder) makeUidNode(attr uint16, uid uint64) (*node, error) {
 	return fj, nil
 }
 
+// makeCustomNode returns a fastJsonNode that stores the given val for a @custom GraphQL field.
+func (enc *encoder) makeCustomNode(attr uint16, val []byte) (fastJsonNode, error) {
+	fj := enc.newNode(attr)
+	if err := enc.setScalarVal(fj, val); err != nil {
+		return nil, err
+	}
+	enc.setCustom(fj)
+
+	return fj, nil
+}
+
 const (
 	// Value with most significant bit set to 1.
 	listBit = 1 << 63
@@ -196,6 +211,9 @@ const (
 	uidNodeBit = 1 << 61
 	// Node has been visited for fixing the children order.
 	visitedBit = 1 << 60
+	// customBit is a value with fifth most significant bit set to 1. If a node has customBit set
+	// in its meta, it means that node stores the value for a @custom GraphQL field.
+	customBit = 1 << 59
 
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
@@ -280,6 +298,10 @@ func (enc *encoder) setVisited(fj fastJsonNode, visited bool) {
 
 func (enc *encoder) setFacetsParent(fj fastJsonNode) {
 	fj.meta |= facetsBit
+}
+
+func (enc *encoder) setCustom(fj fastJsonNode) {
+	fj.meta |= customBit
 }
 
 func (enc *encoder) appendAttrs(fj, child fastJsonNode) {
@@ -382,6 +404,10 @@ func (enc *encoder) getList(fj fastJsonNode) bool {
 
 func (enc *encoder) getFacetsParent(fj fastJsonNode) bool {
 	return (fj.meta & facetsBit) > 0
+}
+
+func (enc *encoder) getCustom(fj fastJsonNode) bool {
+	return (fj.meta & customBit) > 0
 }
 
 func (enc *encoder) children(fj fastJsonNode) fastJsonNode {
@@ -1051,7 +1077,8 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error) {
+func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.Field) ([]byte,
+	error) {
 	encodingStart := time.Now()
 	defer func() {
 		l.Json = time.Since(encodingStart)
@@ -1098,9 +1125,48 @@ func (sg *SubGraph) toFastJSON(l *Latency, field gqlSchema.Field) ([]byte, error
 			buf:              &bufw,
 			dgraphTypeAttrId: enc.idForAttr("dgraph.type"),
 		}
-		if !enc.encodeGraphQL(gqlEncCtx, n, true, []gqlSchema.Field{field}, nil,
+		// if this field has any @custom(http: {...}) children,
+		// then need to resolve them first before encoding the final GraphQL result.
+		if field.HasCustomHTTPChild() {
+			// TODO: benchmark and find a default buffer capacity for these channels
+			gqlEncCtx.errChan = make(chan x.GqlErrorList, 100)
+			gqlEncCtx.customFieldResultChan = make(chan customFieldResult, 100)
+			// keep collecting errors arising from custom field resolution until channel is closed
+			go func() {
+				for gqlErrs := range gqlEncCtx.errChan {
+					gqlEncCtx.gqlErrs = append(gqlEncCtx.gqlErrs, gqlErrs...)
+				}
+			}()
+			// keep updating the fastJson tree as long as we get updates from the channel.
+			// This is the step-7 of *graphQLEncodingCtx.resolveCustomField()
+			go func() {
+				// this would add the custom fastJson nodes in an arbitrary order. So, they may not
+				// be linked in the order the custom fields are present in selection set.
+				// i.e., while encoding the GraphQL response, either we will have to do a linear
+				// search to find the correct fastJson node for a custom field or first fix the
+				// order of custom fastJson nodes and then continue the encoding.
+				// The second option seems better.
+				for customFieldRes := range gqlEncCtx.customFieldResultChan {
+					customFieldRes.child.next = customFieldRes.parent.child
+					// below line may lead to a race condition between this write and multiple
+					// simultaneous reads during custom field resolution. But, the way reads are
+					// done, it doesn't matter whether they get the previous value or the new value
+					// after the write as they just keep iterating as long as they don't find what
+					// they are looking for. So, it seems fine to ignore this race condition.
+					customFieldRes.parent.child = customFieldRes.child
+				}
+			}()
+			// start resolving the custom fields
+			gqlEncCtx.resolveCustomFields(ctx, enc, []fastJsonNode{enc.children(n)},
+				field.SelectionSet())
+			// close the error and result channels, to terminate the goroutines started above
+			close(gqlEncCtx.errChan)
+			close(gqlEncCtx.customFieldResultChan)
+		}
+		// now encode the GraphQL results.
+		if !gqlEncCtx.encode(enc, n, true, []gqlSchema.Field{field}, nil,
 			make([]interface{}, 0, field.MaxPathLength())) {
-			// if enc.encodeGraphQL() didn't finish successfully here, that means we need to send
+			// if gqlEncCtx.encode() didn't finish successfully here, that means we need to send
 			// data as null in the GraphQL response like this:
 			// 		{
 			// 			"errors": [...],

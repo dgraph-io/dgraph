@@ -1219,7 +1219,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
-		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs, qc.gqlField)
+		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
 		// TODO: if err is just some error from GraphQL encoding,
 		//  then we need to continue the normal execution ignoring the error as we still need to
 		//  assign metrics and latency info to resp.
