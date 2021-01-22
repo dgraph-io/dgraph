@@ -1224,7 +1224,7 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badg
 			glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
 			continue
 		}
-		if maxKv.GetVersion() > kv.GetVersion() {
+		if maxKv.GetVersion() <= kv.GetVersion() {
 			maxKv = *kv
 		}
 	}
