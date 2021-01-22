@@ -1216,7 +1216,7 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badg
 	}
 	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
 	// KV contain the latest value.
-	var maxKv badgerpb.KV
+	var maxKv *badgerpb.KV
 	for _, kv := range kvs.GetKv() {
 		if !hasAnyPrefix(kv.GetKey()) {
 			// Verify that we got the key which was subscribed. This shouldn't happen, but added for
@@ -1225,8 +1225,8 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badg
 			continue
 		}
 		if maxKv.GetVersion() <= kv.GetVersion() {
-			maxKv = *kv
+			maxKv = kv
 		}
 	}
-	return &maxKv
+	return maxKv
 }
