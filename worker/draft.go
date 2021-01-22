@@ -1743,6 +1743,7 @@ func (n *node) AmLeader() bool {
 
 func (n *node) monitorRaftMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
+
 	defer ticker.Stop()
 	for range ticker.C {
 		curPendingSize := atomic.LoadInt64(&n.pendingSize)

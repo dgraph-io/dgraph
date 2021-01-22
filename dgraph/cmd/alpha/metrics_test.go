@@ -28,7 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetricTxnAborts(t *testing.T) {
+func TestMetricTxnCommits(t *testing.T) {
+	name := "dgraph_txn_commits_total"
 	mt := `
     {
 	  set {
@@ -46,7 +47,7 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
 
 	// Fetch Metrics
-	txnAbort1 := fetchMetric(t)
+	txnMetric := fetchMetric(t, name)
 
 	// Create second 'dgraph_txn_aborts_total' metric
 	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
@@ -57,24 +58,92 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
 
 	// Fetch and check updated metrics
-	require.NoError(t, retryableFetchMetrics(t, txnAbort1+1))
+	require.NoError(t, retryableFetchMetrics(t, name, txnMetric+1))
 }
 
-func retryableFetchMetrics(t *testing.T, expected int) error {
+/*
+func TestMetricTxnDiscards(t *testing.T) {
+	name := "dgraph_txn_discards_total"
+	mt := `
+    {
+	  set {
+		<0x71>  <name> "Bob" .
+	  }
+	}
+	`
+
+	// Create initial 'dgraph_txn_aborts_total' metric
+	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+	// Fetch Metrics
+	txnMetric := fetchMetric(t, name)
+
+	// Create second 'dgraph_txn_aborts_total' metric
+	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+	// Fetch and check updated metrics
+	require.NoError(t, retryableFetchMetrics(t, name, txnMetric+1))
+}
+*/
+
+func TestMetricTxnAborts(t *testing.T) {
+	name := "dgraph_txn_aborts_total"
+	mt := `
+    {
+	  set {
+		<0x71>  <name> "Bob" .
+	  }
+	}
+	`
+
+	// Create initial 'dgraph_txn_aborts_total' metric
+	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+	// Fetch Metrics
+	txnMetric := fetchMetric(t, name)
+
+	// Create second 'dgraph_txn_aborts_total' metric
+	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+
+	// Fetch and check updated metrics
+	require.NoError(t, retryableFetchMetrics(t, name, txnMetric+1))
+}
+
+func retryableFetchMetrics(t *testing.T, name string, expected int) error {
 	var txnMetric int
 	for i := 0; i < 10; i++ {
-		txnMetric = fetchMetric(t)
+		txnMetric = fetchMetric(t, name)
 		if expected == txnMetric {
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
 
-	return fmt.Errorf("txnAbort was not incremented. wanted %d, Got %d", expected,
-		txnMetric)
+	return fmt.Errorf("metric '%s' was not incremented. wanted %d, got %d",
+		name, expected, txnMetric)
 }
 
-func fetchMetrics(t *testing.T, metrics ...string) map[string]int {
+func fetchMetric(t *testing.T, name string) int {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
 	_, body, _, err := runRequest(req)
@@ -82,13 +151,10 @@ func fetchMetrics(t *testing.T, metrics ...string) map[string]int {
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err)
 
-	counts := make(map[string]int, 0)
-	for _, metric := range metrics {
-		txnMetric, ok := metricsMap[metric]
-		require.True(t, ok, "the required metric '%s' is not found", metric)
-		counts[metric], _ = strconv.Atoi(txnMetric.(string))
-	}
-	return counts
+	txnMetric, ok := metricsMap[name]
+	require.True(t, ok, "the required metric '%s' is not found", name)
+	m, _ := strconv.Atoi(txnMetric.(string))
+	return m
 }
 
 func TestMetrics(t *testing.T) {
@@ -109,6 +175,9 @@ func TestMetrics(t *testing.T) {
 		"badger_v3_disk_reads_total", "badger_v3_disk_writes_total", "badger_v3_gets_total",
 		"badger_v3_memtable_gets_total", "badger_v3_puts_total", "badger_v3_read_bytes",
 		"badger_v3_written_bytes",
+
+		// Transaction Metrics
+		"dgraph_txn_aborts_total", "dgraph_txn_commits_total", "dgraph_txn_discards_total",
 
 		// Dgraph Memory Metrics
 		"dgraph_memory_idle_bytes", "dgraph_memory_inuse_bytes", "dgraph_memory_proc_bytes",
