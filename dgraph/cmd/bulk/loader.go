@@ -199,7 +199,9 @@ func (ld *loader) mapStage() {
 	}
 	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
-	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	localOrRemoteFiles := NewLocalOrRemoteFiles(ld.opt.DataFiles)
+
+	files := localOrRemoteFiles.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
 		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
 		os.Exit(1)
@@ -237,7 +239,7 @@ func (ld *loader) mapStage() {
 			if !ld.opt.Encrypted {
 				key = nil
 			}
-			r, cleanup := chunker.FileReader(file, key)
+			r, cleanup := localOrRemoteFiles.ChunkReader(file, key)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)

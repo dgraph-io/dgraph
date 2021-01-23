@@ -123,7 +123,10 @@ func NewMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
 
 // ParseBucketAndPrefix returns the bucket and prefix given a path string
 func ParseBucketAndPrefix(path string) (string, string) {
-	parts := strings.Split(path[1:], "/")
+	if path[0] == '/' {
+		path = path[1:]
+	}
+	parts := strings.Split(path, "/")
 	bucketName := parts[0] // bucket
 	objectPrefix := ""
 	if len(parts) > 1 {
