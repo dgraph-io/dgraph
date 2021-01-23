@@ -39,6 +39,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -164,7 +165,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 }
 
 func readSchema(opt *options) *schema.ParsedSchema {
-	f, err := OpenLocalOrRemoteFile(opt.SchemaFile)
+	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
 
@@ -199,9 +200,9 @@ func (ld *loader) mapStage() {
 	}
 	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
-	localOrRemoteFiles := NewLocalOrRemoteFiles(ld.opt.DataFiles)
+	fs := filestore.NewFileStore(ld.opt.DataFiles)
 
-	files := localOrRemoteFiles.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	files := fs.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
 		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
 		os.Exit(1)
@@ -239,7 +240,7 @@ func (ld *loader) mapStage() {
 			if !ld.opt.Encrypted {
 				key = nil
 			}
-			r, cleanup := localOrRemoteFiles.ChunkReader(file, key)
+			r, cleanup := fs.ChunkReader(file, key)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)
@@ -280,7 +281,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		return
 	}
 
-	f, err := OpenLocalOrRemoteFile(ld.opt.GqlSchemaFile)
+	f, err := filestore.Open(ld.opt.GqlSchemaFile)
 	x.Check(err)
 	defer f.Close()
 

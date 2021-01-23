@@ -1,4 +1,4 @@
-package bulk
+package filestore
 
 import (
 	"bufio"
@@ -13,9 +13,9 @@ import (
 	"github.com/minio/minio-go/v6"
 )
 
-// LocalOrRemoteFiles represents a file or directory of files that are either stored
+// FileStore represents a file or directory of files that are either stored
 // locally or on minio/s3
-type LocalOrRemoteFiles interface {
+type FileStore interface {
 	// Similar to os.Open
 	Open(path string) (io.ReadCloser, error)
 	Exists(path string) bool
@@ -23,7 +23,8 @@ type LocalOrRemoteFiles interface {
 	ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func())
 }
 
-func NewLocalOrRemoteFiles(path string) LocalOrRemoteFiles {
+// NewFileStore returns a new file storage. If remote, it's backed by an x.MinioClient
+func NewFileStore(path string) FileStore {
 	url, err := url.Parse(path)
 	x.Check(err)
 
@@ -116,11 +117,13 @@ func (rf *remoteFiles) ChunkReader(file string, key x.SensitiveByteSlice) (*bufi
 	return chunker.StreamReader(url.Path, key, obj)
 }
 
-// OpenLocalOrRemoteFile takes a single path and returns a io.ReadCloser, similar to os.Open
-func OpenLocalOrRemoteFile(path string) (io.ReadCloser, error) {
-	return NewLocalOrRemoteFiles(path).Open(path)
+// Open takes a single path and returns a io.ReadCloser, similar to os.Open
+func Open(path string) (io.ReadCloser, error) {
+	return NewFileStore(path).Open(path)
 }
 
-func ExistsLocalOrRemoteFile(path string) bool {
-	return NewLocalOrRemoteFiles(path).Exists(path)
+// Exists returns false if the file doesn't exist. For remote storage, true does
+// not guarantee existence
+func Exists(path string) bool {
+	return NewFileStore(path).Exists(path)
 }
