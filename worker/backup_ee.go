@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -215,7 +214,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	return bp.CompleteBackup(ctx, &m)
 }
 
-func ProcessListBackups(ctx context.Context, location string, creds *minioclient.Credentials) (
+func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) (
 	[]*Manifest, error) {
 
 	manifests, err := ListBackupManifests(location, creds)

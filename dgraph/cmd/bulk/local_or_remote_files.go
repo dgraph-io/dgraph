@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/minio/minio-go/v6"
 )
@@ -29,7 +28,7 @@ func NewLocalOrRemoteFiles(path string) LocalOrRemoteFiles {
 	x.Check(err)
 
 	if url.Scheme == "minio" || url.Scheme == "s3" {
-		mc, err := minioclient.NewMinioClient(url, nil)
+		mc, err := x.NewMinioClient(url, nil)
 		x.Check(err)
 
 		return &remoteFiles{mc}
@@ -61,14 +60,14 @@ func (*localFiles) ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Re
 }
 
 type remoteFiles struct {
-	mc *minio.Client
+	mc *x.MinioClient
 }
 
 func (rf *remoteFiles) Open(path string) (io.ReadCloser, error) {
 	url, err := url.Parse(path)
 	x.Check(err)
 
-	bucket, prefix := minioclient.ParseBucketAndPrefix(url.Path)
+	bucket, prefix := rf.mc.ParseBucketAndPrefix(url.Path)
 	obj, err := rf.mc.GetObject(bucket, prefix, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
@@ -95,7 +94,7 @@ func (rf *remoteFiles) FindDataFiles(str string, ext []string) (paths []string) 
 		url, err := url.Parse(dirPath)
 		x.Check(err)
 
-		bucket, prefix := minioclient.ParseBucketAndPrefix(url.Path)
+		bucket, prefix := rf.mc.ParseBucketAndPrefix(url.Path)
 		for obj := range rf.mc.ListObjectsV2(bucket, prefix, true, context.TODO().Done()) {
 			if hasAnySuffix(obj.Key, ext) {
 				paths = append(paths, bucket+"/"+obj.Key)
@@ -109,7 +108,7 @@ func (rf *remoteFiles) ChunkReader(file string, key x.SensitiveByteSlice) (*bufi
 	url, err := url.Parse(file)
 	x.Check(err)
 
-	bucket, prefix := minioclient.ParseBucketAndPrefix(url.Path)
+	bucket, prefix := rf.mc.ParseBucketAndPrefix(url.Path)
 
 	obj, err := rf.mc.GetObject(bucket, prefix, minio.GetObjectOptions{})
 	x.Check(err)

@@ -25,10 +25,10 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -56,7 +56,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		currentGroups = append(currentGroups, gid)
 	}
 
-	creds := minioclient.Credentials{
+	creds := x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -210,7 +210,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// backup could be in a different group. The tablets need to be moved.
 
 	// Reset tablets and set correct tablets to match the restored backup.
-	creds := &minioclient.Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -302,8 +302,8 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
-func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *minioclient.Credentials {
-	return &minioclient.Credentials{
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,

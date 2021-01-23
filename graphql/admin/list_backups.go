@@ -22,7 +22,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/minioclient"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -58,7 +57,7 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 
-	creds := &minioclient.Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
