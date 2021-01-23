@@ -83,6 +83,9 @@ var (
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
 	race = pflag.Bool("race", false, "Set true to build with race")
+	skip = pflag.String("skip", "",
+		"comma separated list of packages that needs to be skipped. "+
+			"Package Check uses string.Contains(). Please check the flag carefully")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -428,6 +431,8 @@ func getPackages() []task {
 	}
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	skipPkgs := strings.Split(*skip, ",")
+
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
 		left := 0
@@ -474,7 +479,12 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			continue
+		}
+
+		if has(skipPkgs, pkg.ID) {
+			fmt.Printf("Skipping package %s as its available in skip list \n", pkg.ID)
 			continue
 		}
 
