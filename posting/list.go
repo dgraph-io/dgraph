@@ -24,6 +24,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
 
@@ -96,16 +97,12 @@ func (l *List) maxVersion() uint64 {
 	return l.maxTs
 }
 
+// pIterator only iterates over Postings. Not UIDs.
 type pIterator struct {
-	l          *List
-	plist      *pb.PostingList
-	uidPosting *pb.Posting
-	pidx       int // index of postings
-	plen       int
-
-	dec  *codec.Decoder
-	uids []uint64
-	uidx int // Offset into the uids slice
+	l     *List
+	plist *pb.PostingList
+	pidx  int // index of postings
+	plen  int
 
 	afterUid uint64
 	splitIdx int
@@ -140,11 +137,6 @@ func (it *pIterator) seek(l *List, afterUid, deleteBelowTs uint64) error {
 		// mean it.uids is empty and valid() would return false.
 		return nil
 	}
-
-	it.uidPosting = &pb.Posting{}
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
-	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
@@ -186,12 +178,6 @@ func (it *pIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.uidPosting = &pb.Posting{}
-	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
-	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
-	it.uidx = 0
-
 	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := it.plist.Postings[idx]
@@ -210,7 +196,7 @@ func (it *pIterator) moveToNextValidPart() error {
 	}
 
 	// Iterate while there are no UIDs, and while we have more splits to iterate over.
-	for len(it.uids) == 0 && it.splitIdx < len(it.l.plist.Splits)-1 {
+	for len(it.plist.Postings) == 0 && it.splitIdx < len(it.l.plist.Splits)-1 {
 		// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
 		// continue until len(splits)-1.
 		if err := it.moveToNextPart(); err != nil {
@@ -224,18 +210,15 @@ func (it *pIterator) moveToNextValidPart() error {
 // next advances pIterator to the next valid part.
 func (it *pIterator) next() error {
 	if it.deleteBelowTs > 0 {
-		it.uids = nil
+		return nil
+	}
+	it.pidx++
+	if it.pidx < it.plen {
 		return nil
 	}
 
-	it.uidx++
-	if it.uidx < len(it.uids) {
-		return nil
-	}
-	it.uidx = 0
-	it.uids = it.dec.Next()
-
-	return errors.Wrapf(it.moveToNextValidPart(), "cannot advance iterator for list with key %s",
+	err := it.moveToNextValidPart()
+	return errors.Wrapf(err, "cannot advance iterator for list with key %s",
 		hex.EncodeToString(it.l.key))
 }
 
@@ -243,19 +226,14 @@ func (it *pIterator) next() error {
 // It returns false if there are no more valid parts.
 func (it *pIterator) valid() (bool, error) {
 	if it.deleteBelowTs > 0 {
-		it.uids = nil
 		return false, nil
-	}
-
-	if len(it.uids) > 0 {
-		return true, nil
 	}
 
 	err := it.moveToNextValidPart()
 	switch {
 	case err != nil:
 		return false, errors.Wrapf(err, "cannot advance iterator when calling pIterator.valid")
-	case len(it.uids) > 0:
+	case it.pidx < it.plen:
 		return true, nil
 	default:
 		return false, nil
@@ -263,20 +241,7 @@ func (it *pIterator) valid() (bool, error) {
 }
 
 func (it *pIterator) posting() *pb.Posting {
-	uid := it.uids[it.uidx]
-
-	for it.pidx < it.plen {
-		p := it.plist.Postings[it.pidx]
-		if p.Uid > uid {
-			break
-		}
-		if p.Uid == uid {
-			return p
-		}
-		it.pidx++
-	}
-	it.uidPosting.Uid = uid
-	return it.uidPosting
+	return it.plist.Postings[it.pidx]
 }
 
 // ListOptions is used in List.Uids (in posting) to customize our output list of
@@ -560,6 +525,24 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	}
 	l.mutationMap[startTs] = pl
 	l.Unlock()
+}
+
+func (l *List) Bitmap(readTs uint64) (*roaring64.Bitmap, error) {
+	deleteBelow, posts := l.pickPostings(readTs)
+	r := roaring64.New()
+	if deleteBelow == 0 {
+		if err := r.UnmarshalBinary(l.plist.Bitmap); err != nil {
+			return nil, errors.Wrapf(err, "unmarshal bitmap")
+		}
+	}
+	for _, p := range posts {
+		if p.Op == Set {
+			r.Add(p.Uid)
+		} else if p.Op == Del {
+			r.Remove(p.Uid)
+		}
+	}
+	return r, nil
 }
 
 // Iterate will allow you to iterate over the mutable and immutable layers of
@@ -1110,6 +1093,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
+
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
