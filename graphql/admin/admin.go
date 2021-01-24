@@ -560,13 +560,15 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"backup":   resolveBackup,
-		"config":   resolveUpdateConfig,
-		"draining": resolveDraining,
-		"export":   resolveExport,
-		"login":    resolveLogin,
-		"restore":  resolveRestore,
-		"shutdown": resolveShutdown,
+		"backup":          resolveBackup,
+		"config":          resolveUpdateConfig,
+		"createNamespace": resolveCreateNamespace,
+		"deleteNamespace": resolveDeleteNamespace,
+		"draining":        resolveDraining,
+		"export":          resolveExport,
+		"login":           resolveLogin,
+		"restore":         resolveRestore,
+		"shutdown":        resolveShutdown,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).

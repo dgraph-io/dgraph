@@ -431,7 +431,6 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/state", stateHandler)
 	http.HandleFunc("/jemalloc", x.JemallocHandler)
-	http.HandleFunc("/namespace", namespaceHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)

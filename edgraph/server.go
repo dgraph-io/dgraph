@@ -109,11 +109,17 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+// TODO(Ahsan): Complete the below two functions.
 func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
+	glog.Info("created namespace", namespace)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(namespace)
 	_, err := query.ApplyMutations(ctx, m)
 	return err
+}
+
+func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) {
+	glog.Info("deleted namespace", namespace)
 }
 
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
