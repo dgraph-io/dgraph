@@ -30,6 +30,7 @@ import (
 )
 
 func TestZeroAudit(t *testing.T) {
+	defer os.RemoveAll("audit_dir/za/dgraph_audit.log")
 	zeroCmd := map[string][]string{
 		"/removeNode": []string{`--location`, "--request", "GET",
 			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
@@ -39,18 +40,22 @@ func TestZeroAudit(t *testing.T) {
 			fmt.Sprintf("%s/moveTablet?tablet=name&group=2", testutil.SockAddrZeroHttp)}}
 
 	msgs := make([]string, 0)
-	for req, c := range zeroCmd {
-		msgs = append(msgs, req)
-		cmd := exec.Command("curl", c...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Println(string(out))
-			t.Fatal(err)
+	// logger is buffered. make calls in bunch so that dont want to wait for flush
+	for i := 0; i < 500; i++ {
+		for req, c := range zeroCmd {
+			msgs = append(msgs, req)
+			cmd := exec.Command("curl", c...)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Println(string(out))
+				t.Fatal(err)
+			}
 		}
 	}
 
 	verifyLogs(t, "./audit_dir/za/dgraph_audit.log", msgs)
 }
 func TestAlphaAudit(t *testing.T) {
+	defer os.Remove("audit_dir/aa/dgraph_audit.log")
 	testCommand := map[string][]string{
 		"/admin": []string{"--location", "--request", "POST",
 			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
@@ -90,12 +95,15 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 	}
 
 	msgs := make([]string, 0)
-	for req, c := range testCommand {
-		msgs = append(msgs, req)
-		cmd := exec.Command("curl", c...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Println(string(out))
-			t.Fatal(err)
+	// logger is buffered. make calls in bunch so that dont want to wait for flush
+	for i := 0; i < 200; i++ {
+		for req, c := range testCommand {
+			msgs = append(msgs, req)
+			cmd := exec.Command("curl", c...)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Println(string(out))
+				t.Fatal(err)
+			}
 		}
 	}
 	verifyLogs(t, "./audit_dir/aa/dgraph_audit.log", msgs)

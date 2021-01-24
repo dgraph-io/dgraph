@@ -198,7 +198,7 @@ they form a Raft group and provide synchronous replication.
 	dir=/path/to/audits to define the path where to store the audit logs.
 	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
 	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
-	flag. 
+	flag.
 	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
 	// TLS configurations

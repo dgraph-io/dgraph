@@ -49,11 +49,13 @@ func InitLogger(dir string, filename string, key []byte, compress bool) (*Logger
 	return &Logger{
 		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 			zapcore.AddSync(w), zap.DebugLevel)),
+		writer: w,
 	}, nil
 }
 
 type Logger struct {
 	logger *zap.Logger
+	writer *LogWriter
 }
 
 // AuditI logs audit message as info. args are key value pairs with key as string value
@@ -84,4 +86,5 @@ func (l *Logger) Sync() {
 		return
 	}
 	_ = l.logger.Sync()
+	_ = l.writer.Close()
 }

@@ -39,6 +39,7 @@ const (
 	flushInterval    = 30 * time.Second
 )
 
+// This is done to ensure LogWriter always implement io.WriterCloser
 var _ io.WriteCloser = (*LogWriter)(nil)
 
 type LogWriter struct {

@@ -145,8 +145,8 @@ func trackIfEEValid(conf *AuditConf, eeEnabledFunc func() bool) {
 			}
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
-				if auditor.log, err = x.InitLogger(conf.Dir, defaultAuditFilename, conf.EncryptBytes,
-					conf.Compress); err != nil {
+				if auditor.log, err = x.InitLogger(conf.Dir, defaultAuditFilename,
+					conf.EncryptBytes, conf.Compress); err != nil {
 					continue
 				}
 				atomic.StoreUint32(&auditEnabled, 1)

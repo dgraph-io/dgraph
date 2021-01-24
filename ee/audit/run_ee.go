@@ -43,7 +43,8 @@ func init() {
 			glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
 		}
 		if err := sc.Conf.BindPFlags(CmdAudit.Cmd.PersistentFlags()); err != nil {
-			glog.Fatalf("Unable to bind persistent flags from audit for command %v: %v", sc, err)
+			glog.Fatalf(
+				"Unable to bind persistent flags from audit for command %v: %v", sc, err)
 		}
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 	}
@@ -82,8 +83,8 @@ func run() error {
 	x.Check(err)
 	defer file.Close()
 
-	outfile, err := os.OpenFile(decryptCmd.Conf.GetString("out"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
-		os.ModePerm)
+	outfile, err := os.OpenFile(decryptCmd.Conf.GetString("out"),
+		os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	x.Check(err)
 	defer outfile.Close()
 

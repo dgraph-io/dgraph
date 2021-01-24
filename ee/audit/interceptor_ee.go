@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	maxReqLength = 512 << 10 // 512 KB
+	maxReqLength = 4 << 10 // 4 KB
 )
 
 var skipApis = map[string]bool{
@@ -46,6 +46,7 @@ var skipApis = map[string]bool{
 	"Oracle":           true,
 	"Timestamps":       true,
 	"ShouldServe":      true,
+	"Connect":          true,
 	// health server
 	"Check": true,
 	"Watch": true,
