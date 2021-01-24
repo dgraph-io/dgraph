@@ -446,8 +446,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{
 		{
 			Message: "Evaluation of custom field failed because external request returned an " +
-				"error: unexpected error with: 404 for field: myFavoriteMovies within" +
-				" type: Query.",
+				"error: unexpected error with: 404 for field: myFavoriteMovies within type: Query.",
 			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
 	}, result.Errors)
@@ -528,12 +527,18 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	require.Equal(t, 2, len(result.Errors))
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
+		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
+			" Evaluation of custom field failed because external request " +
 			"returned an error: unexpected error with: 404 for field: cars within type: Person.",
-			Locations: []x.Location{{Line: 6, Column: 4}}},
-		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
+			Locations: []x.Location{{Line: 6, Column: 4}},
+			Path:      []interface{}{"queryPerson"},
+		},
+		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
+			" Evaluation of custom field failed because external request returned" +
 			" an error: unexpected error with: 404 for field: bikes within type: Person.",
-			Locations: []x.Location{{Line: 9, Column: 4}}},
+			Locations: []x.Location{{Line: 9, Column: 4}},
+			Path:      []interface{}{"queryPerson"},
+		},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
 	require.Contains(t, result.Errors, expectedErrors[1])
@@ -1223,7 +1228,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 	sort.Slice(result.Errors, func(i, j int) bool {
 		return result.Errors[i].Message < result.Errors[j].Message
 	})
-	require.Equal(t, x.GqlErrorList{
+	expectedErrs := x.GqlErrorList{
 		{
 			Message: "error-1 from cars",
 		},
@@ -1248,7 +1253,12 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 		{
 			Message: "error-2 from username",
 		},
-	}, result.Errors)
+	}
+	for _, err := range expectedErrs {
+		err.Message = "Dgraph query failed because Dgraph execution failed because " + err.Message
+		err.Path = []interface{}{"queryUser"}
+	}
+	require.Equal(t, expectedErrs, result.Errors)
 
 	expected := `{
 		"queryUser": [
@@ -1543,7 +1553,15 @@ func TestCustomLogicWithErrorResponse(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, common.GraphqlURL)
 	require.Equal(t, `{"getCountriesErr":[]}`, string(result.Data))
-	require.Equal(t, "dummy error", result.Errors.Error())
+	require.Equal(t, x.GqlErrorList{
+		&x.GqlError{Message: "dummy error"},
+		&x.GqlError{
+			Message: "Evaluation of custom field failed because key: country could not be found " +
+				"in the JSON response returned by external request for field: getCountriesErr" +
+				" within type: Query.",
+			Locations: []x.Location{{Line: 3, Column: 3}},
+		},
+	}, result.Errors)
 }
 
 type episode struct {
@@ -2575,8 +2593,8 @@ func TestCustomDQL(t *testing.T) {
 	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
 		query getFirstUserByFollowerCount($count: int) {
 			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
-				screen_name: User.screen_name
-				followers: User.followers
+				User.screen_name
+				User.followers
 			}
 		}
 		""")
@@ -2590,9 +2608,9 @@ func TestCustomDQL(t *testing.T) {
 				userFollowerCount as sum(val(followers))
 			}
 			dqlTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
-				id: uid
-				text: Tweets.text
-				timestamp: Tweets.timestamp
+				Tweets.id: uid
+				Tweets.text
+				Tweets.timestamp
 			}
 		}
 		""")
@@ -2606,9 +2624,9 @@ func TestCustomDQL(t *testing.T) {
 				userFollowerCount as sum(val(followers))
 			}
 			filteredTweetsByAuthorFollowers(func: uid(userFollowerCount), orderdesc: val(userFollowerCount)) {
-				id: uid
-				text: Tweets.text
-				timestamp: Tweets.timestamp
+				Tweets.id: uid
+				Tweets.text
+				Tweets.timestamp
 			}
 		}
 		""")
@@ -2619,8 +2637,8 @@ func TestCustomDQL(t *testing.T) {
 				tc as count(User.tweets)
 			}
 			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
-				screen_name: User.screen_name
-				tweetCount: val(tc)
+				UserTweetCount.screen_name: User.screen_name
+				UserTweetCount.tweetCount: val(tc)
 			}
 		}
 		""")
@@ -2846,7 +2864,8 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 
 	require.Equal(t, x.GqlErrorList{
 		{
-			Message: "Rest API returns Error for field name",
+			Message: "Dgraph query failed because Dgraph execution failed because Rest API returns Error for field name",
+			Path:    []interface{}{"queryUser"},
 		},
 	}, result.Errors)
 

@@ -26,7 +26,6 @@ import (
 )
 
 func lambdaOnTypeField(t *testing.T) {
-	t.Skipf("enable after porting JSON for @custom")
 	query := `
 		query {
 			queryAuthor {
@@ -62,7 +61,6 @@ func lambdaOnTypeField(t *testing.T) {
 }
 
 func lambdaOnInterfaceField(t *testing.T) {
-	t.Skipf("enable after porting JSON for @custom")
 	starship := addStarship(t)
 	humanID := addHuman(t, starship.ID)
 	droidID := addDroid(t)

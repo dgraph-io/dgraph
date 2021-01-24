@@ -493,7 +493,7 @@ func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 // validateCustomFieldsRecursively will return err if the given field is custom or any of its
 // children is type of a custom field.
 func validateCustomFieldsRecursively(field schema.Field) error {
-	if field.HasCustomDirective() {
+	if field.IsCustomHTTP() {
 		return x.GqlErrorf("Custom field `%s` is not supported in graphql subscription",
 			field.Name()).WithLocations(field.Location())
 	}
@@ -569,7 +569,13 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	fieldData, errs, hardErrs := hrc.MakeAndDecodeHTTPRequest(hr.Client, hrc.URL, hrc.Template,
 		field)
 	if hardErrs != nil {
-		return EmptyResult(field, hardErrs)
+		// Not using EmptyResult() here as we don't want to wrap the errors returned from remote
+		// endpoints
+		return &Resolved{
+			Data:  field.NullResponse(),
+			Field: field,
+			Err:   hardErrs,
+		}
 	}
 
 	return DataResult(field, map[string]interface{}{field.Name(): fieldData}, errs)

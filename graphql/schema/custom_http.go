@@ -80,14 +80,18 @@ func makeHttpRequest(client *http.Client, method, url string, header http.Header
 // Hard error means there will be no response returned and one must stop the normal execution flow.
 func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url string,
 	body interface{}, field Field) (interface{}, x.GqlErrorList, x.GqlErrorList) {
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, nil, x.GqlErrorList{jsonMarshalError(err, field, body)}
+	var b []byte
+	var err error
+	// need this check to make sure that we don't send body as []byte(`null`)
+	if body != nil {
+		b, err = json.Marshal(body)
+		if err != nil {
+			return nil, nil, x.GqlErrorList{jsonMarshalError(err, field, body)}
+		}
 	}
 
 	// Make the request to external HTTP endpoint using the URL and body
-	bodyBytes, statusCode, err := makeHttpRequest(client, fconf.Method, url, fconf.ForwardHeaders,
-		bodyBytes)
+	b, statusCode, err := makeHttpRequest(client, fconf.Method, url, fconf.ForwardHeaders, b)
 	if err != nil {
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}
@@ -97,9 +101,8 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 	var softErrs x.GqlErrorList
 	graphqlResp := graphqlResp{}
 	if fconf.RemoteGqlQueryName != "" {
-		// if it was a GraphQL request we need to decode the response as a GraphQL
-		// response
-		if err = Unmarshal(bodyBytes, &graphqlResp); err != nil {
+		// if it was a GraphQL request we need to decode the response as a GraphQL response
+		if err = Unmarshal(b, &graphqlResp); err != nil {
 			return nil, nil, x.GqlErrorList{jsonUnmarshalError(err, field)}
 		}
 		// if the GraphQL response has any errors, save them to be reported later
@@ -114,14 +117,14 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 		// this was a REST request
 		if statusCode >= 200 && statusCode < 300 {
 			// if this was a successful request, lets try to unmarshal the response
-			if err = Unmarshal(bodyBytes, &response); err != nil {
+			if err = Unmarshal(b, &response); err != nil {
 				return nil, nil, x.GqlErrorList{jsonUnmarshalError(err, field)}
 
 			}
 		} else {
 			// if we get unsuccessful response from the REST api, lets try to see if
 			// it sent any errors in the form expected for GraphQL errors.
-			if err = Unmarshal(bodyBytes, &graphqlResp); err != nil {
+			if err = Unmarshal(b, &graphqlResp); err != nil {
 				err = fmt.Errorf("unexpected error with: %v", statusCode)
 				return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 			} else {

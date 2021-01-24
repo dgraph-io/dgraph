@@ -52,8 +52,11 @@ type graphQLEncodingCtx struct {
 type customFieldResult struct {
 	// parent is the parent of the custom field
 	parent fastJsonNode
-	// child stores the results for the custom field. It is attached as a child to the parent.
-	child fastJsonNode
+	// childField is the custom field which has been resolved
+	childField gqlSchema.Field
+	// childVal is the result of resolving the custom childField from remote HTTP endpoint.
+	// A child node is attached to the parent with this value.
+	childVal []byte
 }
 
 func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
@@ -105,10 +108,9 @@ func toString(val []byte) string {
 }
 
 // TODO:
-//  * handle custom field encoding
-//  * (cleanup) Cleanup code from resolve pkg
+//  * discuss custom DQL encoding
+//  * (cleanup) Cleanup resolver_tests from resolve pkg
 //  * (cleanup) make const args like *bytes.Buffer the first arg in funcs as a best practice.
-//  * (cleanup) refactor this func as `func (ctx *graphQLEncodingCtx) encode(enc *encoder, ...)`.
 func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot bool,
 	childSelectionSet []gqlSchema.Field, parentField gqlSchema.Field,
 	parentPath []interface{}) bool {
@@ -177,33 +179,23 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 	// If the parent field had any immediate @custom(http: {...}) children, then we need to
 	// find the custom fastJson nodes which will should be used for encoding those custom fields.
 	customNodes := make(map[uint16]fastJsonNode)
-	for child != nil && enc.getCustom(child) {
+	for ; child != nil && enc.getCustom(child); child = child.next {
 		customNodes[enc.getAttr(child)] = child
-		child = child.next
 	}
 
 	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
 	// the response as it is always written first in DQL query. So, if we get data for dgraph.type
 	// predicate then just save it in dgraphTypes slice, no need to write it to JSON yet.
 	var dgraphTypes []string
-	for enc.getAttr(child) == gqlCtx.dgraphTypeAttrId {
+	for ; child != nil && enc.getAttr(child) == gqlCtx.dgraphTypeAttrId; child = child.next {
 		val, err := enc.getScalarVal(child) // val is a quoted string like: "Human"
 		if err != nil {
 			// TODO: correctly format error, it should be on __typename field if present?
 			gqlCtx.gqlErrs = append(gqlCtx.gqlErrs, x.GqlErrorf(err.Error()).WithPath(parentPath))
-			child = child.next
-			if child == nil {
-				break
-			}
 			continue
 		}
 
 		dgraphTypes = append(dgraphTypes, toString(val))
-
-		child = child.next
-		if child == nil {
-			break
-		}
 	}
 
 	// This is an internal node. Write the opening { for the JSON object
@@ -273,7 +265,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 			writeKeyGraphQL(curSelection, gqlCtx.buf)
 			keyEndPos = gqlCtx.buf.Len()
 			curSelectionIsDgList = (curSelection.Type().ListType() != nil) && !curSelection.
-				HasCustomDirective()
+				IsCustomHTTP()
 			if curSelectionIsDgList {
 				x.Check2(gqlCtx.buf.WriteRune('['))
 			}
@@ -286,7 +278,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 			x.Check2(gqlCtx.buf.Write(getTypename(curSelection, dgraphTypes)))
 			// We don't need to iterate to next fastJson node in this case,
 			// as the current node will have data for the next field in the selection set.
-		} else if curSelection.HasCustomDirective() {
+		} else if curSelection.IsCustomHTTP() {
 			// if the current field had @custom(http: {...}), then need to write it using
 			// the customNodes mapping stored earlier.
 			if !gqlCtx.writeCustomField(enc, curSelection, customNodes, parentPath) {
@@ -511,7 +503,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 		// Step-2: Write JSON value
 		if curSelection.Name() == gqlSchema.Typename {
 			x.Check2(gqlCtx.buf.Write(getTypename(curSelection, dgraphTypes)))
-		} else if curSelection.HasCustomDirective() && gqlCtx.writeCustomField(enc, curSelection,
+		} else if curSelection.IsCustomHTTP() && gqlCtx.writeCustomField(enc, curSelection,
 			customNodes, parentPath) {
 			// do nothing, value for field has already been written.
 			// If the value weren't written, the next else would write null.
@@ -592,8 +584,11 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomFields(ctx context.Context, enc *
 	parentNodeHeads []fastJsonNode, childFields []gqlSchema.Field) {
 	wg := &sync.WaitGroup{}
 	for _, childField := range childFields {
-		// TODO: add skip field logic
-		if childField.HasCustomDirective() {
+		if childField.Skip() || !childField.Include() {
+			continue
+		}
+
+		if childField.IsCustomHTTP() {
 			wg.Add(1)
 			go gqlCtx.resolveCustomField(ctx, enc, parentNodeHeads, childField, wg)
 		} else if childField.HasCustomHTTPChild() {
@@ -653,10 +648,11 @@ func extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
 // TODO:
 //  - check de-duplication
 //  - worry about path in errors and how to deal with them, specially during completion step
-//  - benchmark concurrency for the worker goroutines:
+//  - benchmark concurrency for the worker goroutines: channels vs mutexes?
 //    https://medium.com/@_orcaman/when-too-much-concurrency-slows-you-down-golang-9c144ca305a
 func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *encoder,
 	parentNodeHeads []fastJsonNode, childField gqlSchema.Field, wg *sync.WaitGroup) {
+	defer wg.Done() // signal when this goroutine finishes execution
 
 	fconf, err := childField.CustomHTTPConfig()
 	if err != nil {
@@ -676,7 +672,6 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 	if len(parentNodeHeads) > 0 {
 		parentNodeHeadAttr = enc.getAttr(parentNodeHeads[0])
 	}
-	childFieldAttr := enc.idForAttr(childField.DgraphAlias())
 	isGraphqlReq := fconf.RemoteGqlQueryName != ""
 	requiredFields := childField.CustomRequiredFields()
 	switch fconf.Mode {
@@ -693,6 +688,7 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 				parentNode) == parentNodeHeadAttr; parentNode = parentNode.next {
 				parentNodeWg.Add(1)
 				go func(parentNode fastJsonNode) {
+					defer parentNodeWg.Done() // signal when this goroutine finishes execution
 					// Step-1: Find the data for requiredFields from parentNodes
 					rfData := extractRequiredFieldsData(enc, parentNode, requiredFields)
 
@@ -736,15 +732,11 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 					// Step-6. Create a fastJson node which contains the completion results for
 					// this custom field
 					if b != nil {
-						childFieldNode, err := enc.makeCustomNode(childFieldAttr, b)
-						if err != nil {
-							gqlCtx.errChan <- append(errs, childField.GqlErrorf(nil, err.Error()))
-							return
-						}
 						// send the fastJson tree update over the channel
 						gqlCtx.customFieldResultChan <- customFieldResult{
-							parent: parentNode,
-							child:  childFieldNode,
+							parent:     parentNode,
+							childField: childField,
+							childVal:   b,
 						}
 					}
 
@@ -753,8 +745,6 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 
 					// now, send all the collected errors together
 					gqlCtx.errChan <- errs
-					// signal that this goroutine has finished execution
-					parentNodeWg.Done()
 				}(parentNode)
 			}
 		}
@@ -832,28 +822,23 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 		for i := range batchedResult {
 			batchedResultWg.Add(1)
 			go func(idx int) {
+				defer batchedResultWg.Done() // signal when this goroutine finishes execution
 				// Step-5. Run GraphQL completion on the decoded HTTP response
 				b, gqlErrs := gqlSchema.CompleteValue(nil, childField, batchedResult[idx])
 
 				// Step-6. Create a fastJson node which contains the completion results for
 				// this custom field
 				if b != nil {
-					childFieldNode, err := enc.makeCustomNode(childFieldAttr, b)
-					if err != nil {
-						batchedErrs[idx] = append(gqlErrs, childField.GqlErrorf(nil, err.Error()))
-						return
-					}
 					// send the fastJson tree update over the channel
 					gqlCtx.customFieldResultChan <- customFieldResult{
-						parent: parentNodes[idx],
-						child:  childFieldNode,
+						parent:     parentNodes[idx],
+						childField: childField,
+						childVal:   b,
 					}
 				}
 
-				// send the results obtained from completion
+				// send the errors obtained from completion
 				batchedErrs[idx] = gqlErrs
-				// signal that this goroutine has finished execution
-				batchedResultWg.Done()
 			}(i)
 		}
 		batchedResultWg.Wait()
@@ -868,9 +853,6 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 		// now, send all the collected errors together
 		gqlCtx.errChan <- errs
 	}
-
-	// signify that this goroutine has finished
-	wg.Done()
 }
 
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their
@@ -886,6 +868,8 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 // list of all users.
 func (gqlCtx *graphQLEncodingCtx) resolveNestedFields(ctx context.Context, enc *encoder,
 	parentNodeHeads []fastJsonNode, childField gqlSchema.Field, wg *sync.WaitGroup) {
+	defer wg.Done() // signal when this goroutine finishes execution
+
 	var childNodeHeads []fastJsonNode
 	var parentNodeHeadAttr uint16
 	if len(parentNodeHeads) > 0 {
@@ -914,8 +898,6 @@ func (gqlCtx *graphQLEncodingCtx) resolveNestedFields(ctx context.Context, enc *
 	if len(childNodeHeads) > 0 {
 		gqlCtx.resolveCustomFields(ctx, enc, childNodeHeads, childField.SelectionSet())
 	}
-	// signify that this call to resolveNestedFields has finished
-	wg.Done()
 }
 
 func checkAndStripComma(buf *bytes.Buffer) {
@@ -1105,6 +1087,10 @@ func completePoint(field gqlSchema.Field, coordinate []interface{}, buf *bytes.B
 
 	x.Check2(buf.WriteRune('{'))
 	for _, f := range field.SelectionSet() {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+
 		x.Check2(buf.WriteString(comma))
 		writeKeyGraphQL(f, buf)
 
@@ -1129,6 +1115,10 @@ func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Bu
 
 	x.Check2(buf.WriteRune('{'))
 	for _, f1 := range field.SelectionSet() {
+		if f1.Skip() || !f1.Include() {
+			continue
+		}
+
 		x.Check2(buf.WriteString(comma1))
 		writeKeyGraphQL(f1, buf)
 
@@ -1143,6 +1133,10 @@ func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Bu
 				comma3 := ""
 
 				for _, f2 := range f1.SelectionSet() {
+					if f2.Skip() || !f2.Include() {
+						continue
+					}
+
 					x.Check2(buf.WriteString(comma3))
 					writeKeyGraphQL(f2, buf)
 
@@ -1184,6 +1178,10 @@ func completeMultiPolygon(field gqlSchema.Field, multiPolygon []interface{}, buf
 
 	x.Check2(buf.WriteRune('{'))
 	for _, f := range field.SelectionSet() {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+
 		x.Check2(buf.WriteString(comma1))
 		writeKeyGraphQL(f, buf)
 

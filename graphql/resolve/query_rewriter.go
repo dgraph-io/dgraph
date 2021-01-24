@@ -1205,7 +1205,7 @@ func addSelectionSetFrom(
 	fieldAdded := make(map[string]bool)
 
 	for _, f := range field.SelectionSet() {
-		if f.HasCustomDirective() {
+		if f.IsCustomHTTP() {
 			for dgAlias, fieldDef := range f.CustomRequiredFields() {
 				requiredFields[dgAlias] = fieldDef
 			}

@@ -133,7 +133,7 @@ type Field interface {
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
 	CustomRequiredFields() map[string]FieldDefinition
-	HasCustomDirective() bool
+	IsCustomHTTP() bool
 	HasCustomHTTPChild() bool
 	HasLambdaDirective() bool
 	Type() Type
@@ -1020,11 +1020,14 @@ func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 		return nil
 	}
 
-	var rf map[string]bool
-	httpArg := custom.Arguments.ForName("http")
+	httpArg := custom.Arguments.ForName(httpArg)
+	if httpArg == nil {
+		return nil
+	}
 
-	bodyArg := httpArg.Value.Children.ForName("body")
-	graphqlArg := httpArg.Value.Children.ForName("graphql")
+	var rf map[string]bool
+	bodyArg := httpArg.Value.Children.ForName(httpBody)
+	graphqlArg := httpArg.Value.Children.ForName(httpGraphql)
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
 		_, rf, _ = parseBodyTemplate(bodyTemplate, graphqlArg == nil)
@@ -1033,7 +1036,7 @@ func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	if rf == nil {
 		rf = make(map[string]bool)
 	}
-	rawURL := httpArg.Value.Children.ForName("url").Raw
+	rawURL := httpArg.Value.Children.ForName(httpUrl).Raw
 	// Error here should be nil as we should have parsed and validated the URL
 	// already.
 	u, _ := url.Parse(rawURL)
@@ -1073,8 +1076,13 @@ func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	return toRequiredFieldDefs(rf, f)
 }
 
-func (f *field) HasCustomDirective() bool {
-	return f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()] != nil
+func (f *field) IsCustomHTTP() bool {
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
+	if custom == nil {
+		return false
+	}
+
+	return custom.Arguments.ForName(httpArg) != nil
 }
 
 func (f *field) HasCustomHTTPChild() bool {
@@ -1234,10 +1242,10 @@ func (t *astType) IsInbuiltOrEnumType() bool {
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, error) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
-	httpArg := custom.Arguments.ForName("http")
+	httpArg := custom.Arguments.ForName(httpArg)
 	fconf := &FieldHTTPConfig{
-		URL:    httpArg.Value.Children.ForName("url").Raw,
-		Method: httpArg.Value.Children.ForName("method").Raw,
+		URL:    httpArg.Value.Children.ForName(httpUrl).Raw,
+		Method: httpArg.Value.Children.ForName(httpMethod).Raw,
 	}
 
 	fconf.Mode = SINGLE
@@ -1247,8 +1255,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 	}
 
 	// both body and graphql can't be present together
-	bodyArg := httpArg.Value.Children.ForName("body")
-	graphqlArg := httpArg.Value.Children.ForName("graphql")
+	bodyArg := httpArg.Value.Children.ForName(httpBody)
+	graphqlArg := httpArg.Value.Children.ForName(httpGraphql)
 	var bodyTemplate string
 	if bodyArg != nil {
 		bodyTemplate = bodyArg.Raw
@@ -1518,8 +1526,8 @@ func (q *query) CustomRequiredFields() map[string]FieldDefinition {
 	return (*field)(q).CustomRequiredFields()
 }
 
-func (q *query) HasCustomDirective() bool {
-	return (*field)(q).HasCustomDirective()
+func (q *query) IsCustomHTTP() bool {
+	return (*field)(q).IsCustomHTTP()
 }
 
 func (q *query) HasCustomHTTPChild() bool {
@@ -1769,8 +1777,8 @@ func (m *mutation) CustomRequiredFields() map[string]FieldDefinition {
 	return (*field)(m).CustomRequiredFields()
 }
 
-func (m *mutation) HasCustomDirective() bool {
-	return (*field)(m).HasCustomDirective()
+func (m *mutation) IsCustomHTTP() bool {
+	return (*field)(m).IsCustomHTTP()
 }
 
 func (m *mutation) HasCustomHTTPChild() bool {
