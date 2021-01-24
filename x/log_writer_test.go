@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ func TestLogWriter(t *testing.T) {
 		Compress: false,
 	}
 
+	lw, _ = lw.Init()
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
@@ -56,13 +57,14 @@ func TestLogWriterWithCompression(t *testing.T) {
 		Compress: true,
 	}
 
+	lw, _ = lw.Init()
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
 // if this test failed and you changed anything, please check the dgraph audit decrypt command.
 // The dgraph audit decrypt command uses the same decryption method
 func TestLogWriterWithEncryption(t *testing.T) {
-	path, _ := filepath.Abs("./log_test/audit.log")
+	path, _ := filepath.Abs("./log_test/audit.log.enc")
 	defer os.RemoveAll(filepath.Dir(path))
 	lw := &LogWriter{
 		FilePath:      path,
@@ -72,10 +74,11 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		EncryptionKey: []byte("1234567890123456"),
 	}
 
+	lw, _ = lw.Init()
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10000; i++ {
 		n, err := lw.Write(msg)
 		require.Nil(t, err)
 		require.Equal(t, n, len(msg)+4, "write length is not equal")

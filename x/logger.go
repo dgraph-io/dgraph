@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,21 +36,19 @@ func InitLogger(dir string, filename string, key []byte, compress bool) (*Logger
 	if err != nil {
 		return nil, err
 	}
-	getWriterSyncer := func() zapcore.WriteSyncer {
-		w := &LogWriter{
-			FilePath:      path,
-			MaxSize:       100,
-			MaxAge:        30,
-			EncryptionKey: key,
-			Compress:      compress,
-		}
-		return zapcore.AddSync(w)
+	w := &LogWriter{
+		FilePath:      path,
+		MaxSize:       100,
+		MaxAge:        30,
+		EncryptionKey: key,
+		Compress:      compress,
 	}
-	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-		getWriterSyncer(), zap.DebugLevel)
-
+	if w, err = w.Init(); err != nil {
+		return nil, err
+	}
 	return &Logger{
-		logger: zap.New(core),
+		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+			zapcore.AddSync(w), zap.DebugLevel)),
 	}, nil
 }
 

@@ -113,14 +113,8 @@ func (sf *SuperFlag) MergeAndCheckDefault(flag string) *SuperFlag {
 	}
 	return sf
 }
-func (sf *SuperFlag) Get(opt string) string {
-	if sf == nil {
-		return ""
-	}
-	return sf.m[opt]
-}
 func (sf *SuperFlag) GetBool(opt string) bool {
-	val := sf.Get(opt)
+	val := sf.GetString(opt)
 	if val == "" {
 		return false
 	}
@@ -129,7 +123,7 @@ func (sf *SuperFlag) GetBool(opt string) bool {
 	return b
 }
 func (sf *SuperFlag) GetUint64(opt string) uint64 {
-	val := sf.Get(opt)
+	val := sf.GetString(opt)
 	if val == "" {
 		return 0
 	}
@@ -138,7 +132,7 @@ func (sf *SuperFlag) GetUint64(opt string) uint64 {
 	return u
 }
 func (sf *SuperFlag) GetUint32(opt string) uint32 {
-	val := sf.Get(opt)
+	val := sf.GetString(opt)
 	if val == "" {
 		return 0
 	}
@@ -147,5 +141,8 @@ func (sf *SuperFlag) GetUint32(opt string) uint32 {
 	return uint32(u)
 }
 func (sf *SuperFlag) GetString(opt string) string {
-	return sf.Get(opt)
+	if sf == nil {
+		return ""
+	}
+	return sf.m[opt]
 }

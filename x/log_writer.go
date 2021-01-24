@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package x
 
 import (
+	"bufio"
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
@@ -33,7 +34,9 @@ import (
 )
 
 const (
-	backupTimeFormat = "2021-01-19T15-04-05.000"
+	backupTimeFormat = "2006-01-02T15-04-05.000"
+	bufferSize       = 256 * 1024
+	flushInterval    = 30 * time.Second
 )
 
 var _ io.WriteCloser = (*LogWriter)(nil)
@@ -45,29 +48,40 @@ type LogWriter struct {
 	Compress      bool
 	EncryptionKey []byte
 
-	baseIv          [12]byte
-	mu              sync.Mutex
-	size            int64
-	file            *os.File
-	mch             chan bool
-	startDirManager sync.Once
+	baseIv      [12]byte
+	mu          sync.Mutex
+	size        int64
+	file        *os.File
+	writer      *bufio.Writer
+	flushTicker *time.Ticker
+	// To maintain order of manage old logs calls
+	manageChannel chan bool
+}
+
+func (l *LogWriter) Init() (*LogWriter, error) {
+	l.manageOldLogs()
+	if err := l.open(); err != nil {
+		return nil, fmt.Errorf("not able to create new file %v", err)
+	}
+
+	l.manageChannel = make(chan bool, 1)
+	go func() {
+		for range l.manageChannel {
+			l.manageOldLogs()
+		}
+	}()
+
+	l.flushTicker = time.NewTicker(flushInterval)
+	go l.flushPeriodic()
+	return l, nil
 }
 
 func (l *LogWriter) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	var err error
-	if l.file == nil {
-		l.manageLogDir()
-		// open file
-		if err = l.open(); err != nil {
-			return 0, fmt.Errorf("not able to create new file %v", err)
-		}
-	}
-
 	if l.size+int64(len(p)) >= l.MaxSize*1024*1024 {
-		if err = l.rotate(); err != nil {
+		if err := l.rotate(); err != nil {
 			return 0, err
 		}
 	}
@@ -78,12 +92,12 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		n, err := l.file.Write(bytes)
+		n, err := l.writer.Write(bytes)
 		l.size = l.size + int64(n)
 		return n, err
 	}
 
-	n, err := l.file.Write(p)
+	n, err := l.writer.Write(p)
 	l.size = l.size + int64(n)
 	return n, err
 }
@@ -94,8 +108,58 @@ func (l *LogWriter) Close() error {
 	if l.file == nil {
 		return nil
 	}
+	close(l.manageChannel)
+	l.flushTicker.Stop()
+	l.flush()
+	_ = l.file.Close()
+	l.writer = nil
 	l.file = nil
 	return nil
+}
+
+// flushPeriodic periodically flushes the log file buffers.
+func (l *LogWriter) flushPeriodic() {
+	for _ = range l.flushTicker.C {
+		l.mu.Lock()
+		l.flush()
+		l.mu.Unlock()
+	}
+}
+
+// LogWriter should be locked while calling this
+func (l *LogWriter) flush() {
+	_ = l.writer.Flush()
+	_ = l.file.Sync()
+}
+
+func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	allocate, err := y.XORBlockAllocate(src, key, iv)
+	if err != nil {
+		return nil, err
+	}
+	allocate = append(iv[12:], allocate...)
+	return allocate, nil
+}
+
+func (l *LogWriter) rotate() error {
+	l.flush()
+	if err := l.file.Close(); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(l.FilePath); err == nil {
+		// move the existing file
+		newname := backupName(l.FilePath)
+		if err := os.Rename(l.FilePath, newname); err != nil {
+			return fmt.Errorf("can't rename log file: %s", err)
+		}
+	}
+
+	l.manageChannel <- true
+	return l.open()
 }
 
 func (l *LogWriter) open() error {
@@ -116,23 +180,22 @@ func (l *LogWriter) open() error {
 		if err != nil {
 			return err
 		}
+		l.file = f
+		l.writer = bufio.NewWriterSize(f, bufferSize)
+
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
-			if _, err = f.Write(l.baseIv[:]); err != nil {
+			if _, err = l.writer.Write(l.baseIv[:]); err != nil {
 				return err
 			}
 		}
-		l.file = f
 		l.size = size()
 		return nil
 	}
 
 	info, err := os.Stat(l.FilePath)
-	if os.IsNotExist(err) {
+	if err != nil { // if any error try to open new log file itself
 		return openNew()
-	}
-	if err != nil {
-		return err
 	}
 
 	// encryption is enabled and file is corrupted as not able to read the IV
@@ -145,38 +208,19 @@ func (l *LogWriter) open() error {
 		return openNew()
 	}
 
-	// If not able to read the baseIv, then this file might be corrupted.
-	// open the new file in that case
-	if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
-		return openNew()
-	}
-	l.file = f
-	l.size = size()
-	return nil
-}
-
-func (l *LogWriter) rotate() error {
-	var err error
-	// file not open
-	if l.file == nil {
-		return l.open()
-	}
-
-	if err = l.file.Close(); err != nil {
-		return err
-	}
-
-	if _, err = os.Stat(l.FilePath); err != nil {
-		// move the existing file
-		newname := backupName(l.FilePath)
-		if err := os.Rename(l.FilePath, newname); err != nil {
-			return fmt.Errorf("can't rename log file: %s", err)
+	if l.EncryptionKey != nil {
+		// If not able to read the baseIv, then this file might be corrupted.
+		// open the new file in that case
+		if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
+			_ = f.Close()
+			return openNew()
 		}
 	}
 
-	err = l.open()
-	l.manageLogDir()
-	return err
+	l.file = f
+	l.writer = bufio.NewWriterSize(f, bufferSize)
+	l.size = size()
+	return nil
 }
 
 func backupName(name string) string {
@@ -184,18 +228,6 @@ func backupName(name string) string {
 	prefix, ext := prefixAndExt(name)
 	timestamp := time.Now().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
-}
-
-func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
-	iv := make([]byte, 16)
-	copy(iv, baseIv[:])
-	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
-	allocate, err := y.XORBlockAllocate(src, key, iv)
-	if err != nil {
-		return nil, err
-	}
-	allocate = append(iv[12:], allocate...)
-	return allocate, nil
 }
 
 func compress(src string) error {
@@ -225,22 +257,6 @@ func compress(src string) error {
 		return err
 	}
 	return nil
-}
-
-func (l *LogWriter) manageLogDir() {
-	l.startDirManager.Do(func() {
-		l.mch = make(chan bool, 1)
-		go func() {
-			for range l.mch {
-				l.manageOldLogs()
-			}
-		}()
-	})
-
-	select {
-	case l.mch <- true:
-	default:
-	}
 }
 
 // this should be called in a serial order
@@ -301,15 +317,14 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	cutoff := time.Now().Add(-1 * diff)
 
 	for _, f := range files {
-		if f.IsDir() ||
-			!strings.HasPrefix(f.Name(), defPrefix) ||
-			!strings.HasSuffix(f.Name(), defExt) ||
-			!strings.HasSuffix(f.Name(), defExt+".gz") {
+		if f.IsDir() || // f is directory
+			!strings.HasPrefix(f.Name(), defPrefix) || // f doesnt start with prefix
+			!(strings.HasSuffix(f.Name(), defExt) || strings.HasSuffix(f.Name(), defExt+".gz")) {
 			continue
 		}
 
-		p, e := prefixAndExt(fp)
-		ts, err := time.Parse(backupTimeFormat, f.Name()[len(p):len(f.Name())-len(e)])
+		_, e := prefixAndExt(fp)
+		ts, err := time.Parse(backupTimeFormat, f.Name()[len(defPrefix):len(f.Name())-len(e)])
 		if err != nil {
 			continue
 		}

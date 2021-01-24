@@ -34,25 +34,33 @@ const (
 	maxReqLength = 512 << 10 // 512 KB
 )
 
+var skipApis = map[string]bool{
+	// raft server
+	"Heartbeat":   true,
+	"RaftMessage": true,
+	"JoinCluster": true,
+	"IsPeer":      true,
+	// zero server
+	"StreamMembership": true,
+	"UpdateMembership": true,
+	"Oracle":           true,
+	"Timestamps":       true,
+	"ShouldServe":      true,
+	// health server
+	"Check": true,
+	"Watch": true,
+}
+
+var skipEPs = map[string]bool{
+	// list of endpoints that needs to be skipped
+	"/health":   true,
+	"/jemalloc": true,
+	"/state":    true,
+}
+
 func AuditRequestGRPC(ctx context.Context, req interface{},
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	skip := func(method string) bool {
-		skipApis := map[string]bool{
-			// raft server
-			"Heartbeat":   true,
-			"RaftMessage": true,
-			"JoinCluster": true,
-			"IsPeer":      true,
-			// zero server
-			"StreamMembership": true,
-			"UpdateMembership": true,
-			"Oracle":           true,
-			"Timestamps":       true,
-			"ShouldServe":      true,
-			// health server
-			"Check": true,
-			"Watch": true,
-		}
 		return skipApis[info.FullMethod[strings.LastIndex(info.FullMethod, "/")+1:]]
 	}
 
@@ -67,12 +75,6 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 func AuditRequestHttp(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		skip := func(method string) bool {
-			skipEPs := map[string]bool{
-				// list of endpoints that needs to be skipped
-				"/health":   true,
-				"/jemalloc": true,
-				"/state":    true,
-			}
 			return skipEPs[r.URL.Path]
 		}
 

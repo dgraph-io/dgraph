@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2121 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -73,14 +72,12 @@ func initSubcommands() []*x.SubCommand {
 }
 
 func run() error {
-	path, err := filepath.Abs(decryptCmd.Conf.GetString("encryption_key_file"))
+	key, err := ioutil.ReadFile(decryptCmd.Conf.GetString("encryption_key_file"))
 	x.Check(err)
-	key, err := ioutil.ReadFile(path)
-	x.Check(err)
-
 	if key == nil {
 		return errors.New("no encryption key provided")
 	}
+
 	file, err := os.Open(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
 	defer file.Close()

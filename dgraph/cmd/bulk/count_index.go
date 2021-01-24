@@ -153,7 +153,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		encoder = codec.Encoder{BlockSize: 256}
 		pl.Reset()
 
-		// Flush out the buffer.
+		// flush out the buffer.
 		if outBuf.LenNoPadding() > 4<<20 {
 			x.Check(c.writer.Write(outBuf))
 			outBuf.Reset()
