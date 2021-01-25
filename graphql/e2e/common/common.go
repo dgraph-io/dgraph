@@ -709,6 +709,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
+	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
