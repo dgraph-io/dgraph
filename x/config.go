@@ -78,7 +78,7 @@ type WorkerOptions struct {
 	// TLS server config which will be used to initiate server internal port
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
-	Raft string
+	Raft *SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// MaxRetries is the maximum number of times to retry a commit before giving up.
@@ -89,9 +89,6 @@ type WorkerOptions struct {
 	AclEnabled bool
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
-	// SnapshotAfter indicates the number of entries in the RAFT logs that are needed
-	// to allow a snapshot to be created.
-	SnapshotAfter int
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32

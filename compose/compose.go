@@ -309,6 +309,10 @@ func getAlpha(idx int, raft string) service {
 	if opts.LudicrousMode {
 		svc.Command += " --ludicrous_mode=true"
 	}
+
+	if opts.SnapshotAfter != "" {
+		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
+	}
 	svc.Command += fmt.Sprintf(` --raft='%s'`, raft)
 
 	// Don't assign idx, let it auto-assign.
@@ -327,9 +331,6 @@ func getAlpha(idx int, raft string) service {
 			Target:   "/secret/hmac",
 			ReadOnly: true,
 		})
-	}
-	if opts.SnapshotAfter != "" {
-		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
 	}
 	if opts.AclSecret != "" {
 		svc.Command += " --acl_secret_file=/secret/hmac"
