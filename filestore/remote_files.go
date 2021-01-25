@@ -1,8 +1,23 @@
+/*
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package filestore
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"net/url"
 	"strings"
@@ -18,7 +33,9 @@ type remoteFiles struct {
 
 func (rf *remoteFiles) Open(path string) (io.ReadCloser, error) {
 	url, err := url.Parse(path)
-	x.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	bucket, prefix := rf.mc.ParseBucketAndPrefix(url.Path)
 	obj, err := rf.mc.GetObject(bucket, prefix, minio.GetObjectOptions{})
@@ -47,8 +64,11 @@ func (rf *remoteFiles) FindDataFiles(str string, ext []string) (paths []string) 
 		url, err := url.Parse(dirPath)
 		x.Check(err)
 
+		c := make(chan struct{})
+		defer close(c)
+
 		bucket, prefix := rf.mc.ParseBucketAndPrefix(url.Path)
-		for obj := range rf.mc.ListObjectsV2(bucket, prefix, true, context.TODO().Done()) {
+		for obj := range rf.mc.ListObjectsV2(bucket, prefix, true, c) {
 			if hasAnySuffix(obj.Key, ext) {
 				paths = append(paths, bucket+"/"+obj.Key)
 			}

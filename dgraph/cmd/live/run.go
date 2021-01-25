@@ -404,7 +404,9 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string, key x.SensitiveByteSlice) error {
+func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
+	key x.SensitiveByteSlice) error {
+
 	fmt.Printf("Processing data file %q\n", filename)
 
 	rd, cleanup := fs.ChunkReader(filename, key)

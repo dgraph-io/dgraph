@@ -66,13 +66,17 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	var schemaPath, dataPath, gqlSchemaPath string = "schema.txt", "rdfs.rdf", "gql_schema.txt"
 
 	if opts.remote {
-		schemaPath = "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + schemaPath + "?secure=false"
-		dataPath = "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + dataPath + "?secure=false"
-		gqlSchemaPath = "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + gqlSchemaPath + "?secure=false"
+		schemaPath = minioPath(schemaPath)
+		dataPath = minioPath(dataPath)
+		gqlSchemaPath = minioPath(gqlSchemaPath)
 	}
 
 	s.setup(t, schemaPath, dataPath, gqlSchemaPath)
 	return s
+}
+
+func minioPath(path string) string {
+	return "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + path + "?secure=false"
 }
 
 func newLiveOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {

@@ -367,7 +367,8 @@ func FileReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func()) {
 }
 
 // StreamReader returns a bufio given a ReadCloser. The file is passed just to check for .gz files
-func StreamReader(file string, key x.SensitiveByteSlice, f io.ReadCloser) (rd *bufio.Reader, cleanup func()) {
+func StreamReader(file string, key x.SensitiveByteSlice, f io.ReadCloser) (
+	rd *bufio.Reader, cleanup func()) {
 	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
