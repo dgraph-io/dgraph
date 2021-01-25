@@ -290,7 +290,7 @@ var (
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
-    // Raft metrics
+		// Raft metrics
 		{
 			Name:        RaftAppliedIndex.Name(),
 			Measure:     RaftAppliedIndex,
