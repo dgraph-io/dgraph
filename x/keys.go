@@ -81,6 +81,14 @@ func ParseAttr(attr string) string {
 	return attr[8:]
 }
 
+func ParseAttrList(attrs []string) []string {
+	var resp []string
+	for _, attr := range attrs {
+		resp = append(resp, ParseAttr(attr))
+	}
+	return resp
+}
+
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))

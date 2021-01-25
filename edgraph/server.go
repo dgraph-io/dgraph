@@ -448,7 +448,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		nq := &api.NQuad{
 			Subject:     x.Star,
-			Predicate:   attr,
+			Predicate:   x.ParseAttr(attr),
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
 		wnq := &gql.NQuad{NQuad: nq}
@@ -1132,6 +1132,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return
 	}
 
+	// TODO(Ahsan): resp.Txn.Preds contain predicates of form gid-namespace|attr.
+	// Remove the namespace from the response.
+	// resp.Txn.Preds = x.ParseAttrList(resp.Txn.Preds)
+
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
 	// this separately since it involves modifying the API protos.
 	resp.Latency = &api.Latency{
@@ -1200,6 +1204,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
+
 	if err != nil {
 		return resp, errors.Wrap(err, "")
 	}
