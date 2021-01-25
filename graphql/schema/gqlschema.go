@@ -307,6 +307,7 @@ directive @cacheControl(maxAge: Int!) on QUERY
 	filterInputs = `
 input IntFilter {
 	eq: Int
+	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -316,6 +317,7 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
+	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -325,6 +327,7 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
+	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -334,6 +337,7 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
+	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
@@ -1863,7 +1867,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && !hasXIDField {
+	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1885,7 +1889,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField {
+	if hasXIDField && defn.Kind != "INTERFACE" {
 		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,

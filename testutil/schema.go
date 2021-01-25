@@ -67,6 +67,9 @@ const (
 },{
 	"fields": [{"name": "dgraph.graphql.p_query"},{"name": "dgraph.graphql.p_sha256hash"}],
 	"name": "dgraph.graphql.persisted_query"
+},{
+	"fields": [{"name": "dgraph.cors"}],
+	"name": "dgraph.type.cors"
 }
 `
 )

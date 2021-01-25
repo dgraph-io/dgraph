@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -77,14 +77,6 @@ const (
 	type SchemaHistory @dgraph(type: "dgraph.graphql.history") {
 		schema: String! @id @dgraph(pred: "dgraph.graphql.schema_history")
 		created_at: DateTime! @dgraph(pred: "dgraph.graphql.schema_created_at")
-	}
-
-	"""
-	PersistedQuery contains the query and sha256hash of the query.
-	"""
-	type PersistedQuery @dgraph(type: "dgraph.graphql.persisted_query") {
-		query: String! @dgraph(pred: "dgraph.graphql.p_query")
-		sha256Hash: String! @id @dgraph(pred: "dgraph.graphql.p_sha256hash")
 	}
 
 	"""
@@ -347,12 +339,11 @@ var (
 		resolve.LoggingMWMutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":         {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":        commonAdminQueryMWs,
-		"listBackups":   commonAdminQueryMWs,
-		"restoreStatus": commonAdminQueryMWs,
-		"getGQLSchema":  commonAdminQueryMWs,
+		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
+		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
+		"config":       commonAdminQueryMWs,
+		"listBackups":  commonAdminQueryMWs,
+		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
@@ -427,6 +418,7 @@ func (g *GraphQLHealthStore) updatingSchema() {
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
 	Schema          string `json:"schema,omitempty"`
+	Version         uint64
 	GeneratedSchema string
 }
 
@@ -531,12 +523,13 @@ func newAdminResolver(
 		}
 
 		newSchema := &gqlSchema{
-			ID:     query.UidToHex(pk.Uid),
-			Schema: string(pl.Postings[0].Value),
+			ID:      query.UidToHex(pk.Uid),
+			Version: kv.GetVersion(),
+			Schema:  string(pl.Postings[0].Value),
 		}
 		server.mux.RLock()
-		if newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.", newSchema.Version, server.schema.Version)
 			server.mux.RUnlock()
 			return
 		}
@@ -591,9 +584,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
-		}).
-		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveRestoreStatus)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

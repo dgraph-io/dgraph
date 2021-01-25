@@ -33,7 +33,7 @@ weight = 7
   </div>
   <div class="item">
     <div class="icon"><i class="lni lni-microsoft" aria-hidden="true"></i></div>
-    <a href="{{< relref "c-sharp.md">}}">
+    <a href="{{< relref "csharp.md">}}">
       <h2>C#</h2>
       <p>
         Dgraph C# client

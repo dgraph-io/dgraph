@@ -57,7 +57,7 @@ func RunBulkCases(t *testing.T) {
 
 	suite = indexedPredicateSetup(t, true)
 	testIndexedPredicate(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = loadTypesSetup(t, true)
 	testLoadTypes(t)
@@ -84,7 +84,7 @@ func RunLiveCases(t *testing.T) {
 
 	suite = indexedPredicateSetup(t, false)
 	testIndexedPredicate(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = countIndexSetup(t, false)
 	testCountIndex(t)

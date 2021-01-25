@@ -230,7 +230,7 @@ For example, you api might use custom logic to integrate with GitHub, using eith
 
 ```graphql
 # GitHub's repository type
-type Respository @remote { ... }
+type Repository @remote { ... }
 
 # Dgraph user type
 type User {
@@ -249,7 +249,7 @@ type User {
 }
 ```
 
-Just defining the connection is all it takes and then you can ask a single GraphQL query that performs a local query and joins with (potentialy many) remote data sources.
+Just defining the connection is all it takes and then you can ask a single GraphQL query that performs a local query and joins with (potentially many) remote data sources.
 
 ## How Dgraph processes custom results
 
@@ -308,6 +308,33 @@ then Dgraph expects a GraphQL call to `post` to return a valid GraphQL result li
 
 Similarly, Dgraph expects `postByAuthor` to return data like `{ "data": { "postByAuthor": [ {...}, ... ] } }` and will use the array value of `postByAuthor` to build its array of posts result.
 
+## How errors from custom endpoints are handled
+
+When a query returns an error while resolving from a custom HTTP endpoint, the error is added to the `errors` array and sent back to the user in the JSON response.
+
+When a field returns an error while resolving a custom HTTP endpoint, the field's value becomes `null` and the error is added to the `errors` JSON array. The rest of the fields are still resolved as required by the request.
+
+For example, a query from a custom HTTP endpoint will return an error in the following format:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Rest API returns Error for myFavoriteMovies query",
+      "locations": [
+        {
+          "line": 5,
+          "column": 4
+        }
+      ],
+      "path": [
+        "Movies",
+        "name"
+      ]
+    }
+  ]
+}
+```
 
 ## How custom fields are resolved
 
