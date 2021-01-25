@@ -190,9 +190,6 @@ func calculateFacet(facet *api.Facet) uint64 {
 		1*8 + // ValType consists of 1 word.
 		3*8 + // Tokens array consists of 3 words.
 		1*8 + // Alias consists of 1 word.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 word.
-		1*8 + // XXX_sizecache consists of 1 word.
 		3*8 // rounding to 16 so adding 3
 
 	// Adding size of each entry in Key array.
@@ -206,7 +203,5 @@ func calculateFacet(facet *api.Facet) uint64 {
 	}
 	// Adding size of each entry in Alias Array.
 	size += uint64(len(facet.Alias))
-	// Adding size of each entry in XXX_unrecognized array.
-	size += uint64(len(facet.XXX_unrecognized))
 	return size
 }
