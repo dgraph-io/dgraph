@@ -2309,7 +2309,7 @@ func queryWithCascade(t *testing.T) {
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
-	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+	deleteState(t, getXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
@@ -2695,7 +2695,7 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
-	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+	deleteState(t, getXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
@@ -3455,7 +3455,6 @@ func idDirectiveWithInt(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
 		  getChapter(chapterId: 1) {
-			bookId
 			chapterId
 			name
 		  }
@@ -3466,7 +3465,6 @@ func idDirectiveWithInt(t *testing.T) {
 	RequireNoGQLErrors(t, response)
 	var expected = `{
 	  	"getChapter": {
-			"bookId": 1234567890,
 			"chapterId": 1,
 			"name": "How Dgraph Works"
 		  }

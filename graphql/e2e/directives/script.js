@@ -2,7 +2,7 @@ const authorBio = ({parent: {name, dob}}) => `My name is ${name} and I was born 
 const characterBio = ({parent: {name}}) => `My name is ${name}.`
 const humanBio = ({parent: {name, totalCredits}}) => `My name is ${name}. I have ${totalCredits} credits.`
 const droidBio = ({parent: {name, primaryFunction}}) => `My name is ${name}. My primary function is ${primaryFunction}.`
-const peopleEmail = ({parent: {xid, name}}) => `${name}.${xid}@school.com`
+const summary = () => `hi`
 
 async function authorsByName({args, dql}) {
     const results = await dql.query(`query queryAuthor($name: string) {
@@ -33,9 +33,7 @@ self.addGraphQLResolvers({
     "Character.bio": characterBio,
     "Human.bio": humanBio,
     "Droid.bio": droidBio,
-    "People.email": peopleEmail,
-    "Teacher.email": peopleEmail,
-    "Student.email": peopleEmail,
+    "Book.summary": summary,
     "Query.authorsByName": authorsByName,
     "Mutation.newAuthor": newAuthor
 })

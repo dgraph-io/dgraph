@@ -200,18 +200,20 @@ func lambdaOnMutationUsingGraphQL(t *testing.T) {
 func lambdaInMutationWithIdDirective(t *testing.T) {
 	addStudentParams := &GraphQLParams{Query: `
 	mutation {
-		addStudent(input: [
-			{xid: "S1", name: "Alice", taughtBy: [{xid: "T1", name: "Judy"}]},
-			{xid: "S2", name: "Bob", taughtBy: [{xid: "T1", name: "Judy"}]},
-			{xid: "S3", name: "Charlie", taughtBy: [{xid: "T2", name: "Walter"}]},
+		addChapter(input: [
+			{chapterId: 1, name: "Alice", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 2, name: "Bob", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 3, name: "Charlie", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 4, name: "Uttarakhand", book: {bookId: 2, name: "Indian States"}}
 		]) {
 			numUids
-			student {
-				xid
-				email
-				taughtBy {
-					xid
-					email
+			chapter {
+				chapterId
+				name
+				book {
+					bookId
+					name
+					summary
 				}
 			}
 		}
@@ -220,27 +222,50 @@ func lambdaInMutationWithIdDirective(t *testing.T) {
 	RequireNoGQLErrors(t, resp)
 
 	testutil.CompareJSON(t, `{
-		"addStudent": {
-			"numUids": 3,
-			"student": [
-				{
-					"xid": "S1",
-					"email": "Alice.S1@school.com",
-					"taughtBy": [{"xid": "T1", "email": "Judy.T1@school.com"}]
-				},{
-					"xid": "S2",
-					"email": "Bob.S2@school.com",
-					"taughtBy": [{"xid": "T1", "email": "Judy.T1@school.com"}]
-				},{
-					"xid": "S3",
-					"email": "Charlie.S3@school.com",
-					"taughtBy": [{"xid": "T2", "email": "Walter.T2@school.com"}]
-				}
-			]
+		"addChapter": {
+		  "numUids": 4,
+		  "chapter": [
+			{
+			  "chapterId": 4,
+			  "name": "Uttarakhand",
+			  "book": {
+				"bookId": 2,
+				"name": "Indian States",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 1,
+			  "name": "Alice",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 2,
+			  "name": "Bob",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 3,
+			  "name": "Charlie",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			}
+		  ]
 		}
 	}`, string(resp.Data))
 
 	//cleanup
-	DeleteGqlType(t, "Student", getXidFilter("xid", []string{"S1", "S2", "S3"}), 3, nil)
-	DeleteGqlType(t, "Teacher", getXidFilter("xid", []string{"T1", "T2"}), 2, nil)
+	DeleteGqlType(t, "Chapter", getXidFilter("chapterId", []interface{}{1, 2, 3, 4}), 4, nil)
+	DeleteGqlType(t, "Book", getXidFilter("bookId", []interface{}{1, 2}), 2, nil)
 }
