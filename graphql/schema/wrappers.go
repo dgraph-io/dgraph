@@ -133,7 +133,9 @@ type Field interface {
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
 	CustomRequiredFields() map[string]FieldDefinition
+	// IsCustomHTTP tells whether this field has @custom(http: {...}) directive on it
 	IsCustomHTTP() bool
+	// HasCustomHTTPChild tells whether any descendent of this field has @custom(http: {...}) on it
 	HasCustomHTTPChild() bool
 	HasLambdaDirective() bool
 	Type() Type
@@ -296,10 +298,10 @@ type field struct {
 	// for the GraphQL variables supplied in the query.
 	arguments map[string]interface{}
 	// hasCustomHTTPChild is used to cache whether any of the descendents of this field have a
-	// @custom(http: {...}) on them. Its type is purposefully set to interface{} to find out whether
+	// @custom(http: {...}) on them. Its type is purposefully set to *bool to find out whether
 	// this flag has already been calculated or not. If not calculated, it would be nil.
 	// Otherwise, it would always contain a boolean value.
-	hasCustomHTTPChild interface{}
+	hasCustomHTTPChild *bool
 }
 
 type fieldDefinition struct {
@@ -1088,7 +1090,7 @@ func (f *field) IsCustomHTTP() bool {
 func (f *field) HasCustomHTTPChild() bool {
 	// let's see if we have already calculated whether this field has any custom http children
 	if f.hasCustomHTTPChild != nil {
-		return f.hasCustomHTTPChild.(bool)
+		return *(f.hasCustomHTTPChild)
 	}
 	// otherwise, we need to find out whether any descendents of this field have custom http
 	selSet := f.SelectionSet()
@@ -1099,7 +1101,7 @@ func (f *field) HasCustomHTTPChild() bool {
 	// lets find if any direct child of this field has a @custom on it
 	for _, fld := range selSet {
 		if f.op.inSchema.customDirectives[fld.GetObjectName()][fld.Name()] != nil {
-			f.hasCustomHTTPChild = true
+			*(f.hasCustomHTTPChild) = true
 			return true
 		}
 	}
@@ -1107,12 +1109,12 @@ func (f *field) HasCustomHTTPChild() bool {
 	// then lets see if any further descendents have @custom.
 	for _, fld := range selSet {
 		if fld.HasCustomHTTPChild() {
-			f.hasCustomHTTPChild = true
+			*(f.hasCustomHTTPChild) = true
 			return true
 		}
 	}
 	// if none of the descendents of this field have a @custom, return false
-	f.hasCustomHTTPChild = false
+	*(f.hasCustomHTTPChild) = false
 	return false
 }
 

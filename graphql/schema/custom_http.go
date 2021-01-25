@@ -75,9 +75,12 @@ func makeHttpRequest(client *http.Client, method, url string, header http.Header
 
 // MakeAndDecodeHTTPRequest sends an HTTP request using the given url and body and then decodes the
 // response correctly based on whether it was a GraphQL or REST request.
-// It returns the decoded response along with one of soft and hard errors.
+// It returns the decoded response along with either soft or hard errors.
 // Soft error means one can assume that the response is valid and continue the normal execution.
 // Hard error means there will be no response returned and one must stop the normal execution flow.
+// For GraphQL requests, the GraphQL errors returned from the remote endpoint are considered soft
+// errors. Any other kind of error is a hard error.
+// For REST requests, any error is a hard error, including those returned from the remote endpoint.
 func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url string,
 	body interface{}, field Field) (interface{}, x.GqlErrorList, x.GqlErrorList) {
 	var b []byte
