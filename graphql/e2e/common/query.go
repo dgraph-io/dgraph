@@ -631,7 +631,7 @@ func hasFilterWithListOfFields(t *testing.T) {
 	newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
 	getPostParams := &GraphQLParams{
 		Query: `query {
-			queryPost(filter: {has: [text, tags], numLikes: {eq: 0}}) {
+			queryPost(filter: {has: [text, tags], numLikes: {eq: 1000}}) {
 				title
 			}
 		}`,
