@@ -38,6 +38,7 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 var (
@@ -67,6 +68,14 @@ func Init(ps *badger.DB) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             x.GRPCKeepAliveMinTime,
+			PermitWithoutStream: false,
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    x.GRPCKeepAliveInterval,
+			Timeout: x.GrpcKeepAliveTimeout,
+		}),
 	}
 
 	if x.WorkerConfig.TLSServerConfig != nil {

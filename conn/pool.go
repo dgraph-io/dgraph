@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 var (
@@ -174,6 +175,11 @@ func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize),
 			grpc.UseCompressor((snappyCompressor{}).Name())),
 		grpc.WithBackoffMaxDelay(time.Second),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                x.GrpcKeepAliveTime,
+			Timeout:             x.GrpcKeepAliveTimeout,
+			PermitWithoutStream: true,
+		}),
 	}
 
 	if tlsClientConf != nil {

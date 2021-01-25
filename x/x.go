@@ -96,6 +96,26 @@ const (
 	// message sizes allowable on the client size when dialing.
 	GrpcMaxSize = math.MaxInt32
 
+	// GrpcKeepAliveTime after a duration of this time if client doesn't see any activity it pings the server to see if the transport is still live
+	GrpcKeepAliveTime = 10 * time.Second
+
+	// GrpcKeepAliveTimeout After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that
+	// the connection is closed. (This will eagerly fail inflight grpc requests even if they don't have timeouts.)
+	GrpcKeepAliveTimeout = 10 * time.Second
+
+	// GRPCKeepAliveMinTime is the minimum interval that a client should
+	// wait before pinging server. When client pings "too fast", server
+	// sends goaway and closes the connection (errors: too_many_pings,
+	// http2.ErrCodeEnhanceYourCalm). When too slow, nothing happens.
+	// Server expects client pings only when there is any active streams
+	// (PermitWithoutStream is set false).
+	GRPCKeepAliveMinTime  = 5 * time.Second
+
+	// GRPCKeepAliveInterval is the frequency of server-to-client ping
+	// to check if a connection is alive. Close a non-responsive connection
+	// after an additional duration of Timeout. 0 to disable.
+	GRPCKeepAliveInterval = 2 * time.Hour
+
 	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
 	// PortZeroHTTP is the default HTTP port for zero.
