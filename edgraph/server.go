@@ -111,15 +111,17 @@ type existingGQLSchemaQryResp struct {
 
 // TODO(Ahsan): Complete the below two functions.
 func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("created namespace", namespace)
+	glog.Info("Creating namespace", namespace)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(namespace)
 	_, err := query.ApplyMutations(ctx, m)
 	return err
 }
 
-func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) {
-	glog.Info("deleted namespace", namespace)
+func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
+	glog.Info("Deleting namespace", namespace)
+	ps := worker.State.Pstore
+	return ps.BanNamespace(namespace)
 }
 
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.

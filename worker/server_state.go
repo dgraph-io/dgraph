@@ -110,7 +110,8 @@ func (s *ServerState) initStorage() {
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
-			WithIndexCacheSize(Config.PIndexCacheSize)
+			WithIndexCacheSize(Config.PIndexCacheSize).
+			WithNamespaceOffset(3)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

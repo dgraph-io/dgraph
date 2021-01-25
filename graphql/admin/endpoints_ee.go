@@ -420,6 +420,7 @@ const adminTypes = `
 
 	type NamespacePayload {
 		namespaceId: Int
+		message: String
 	}
 	`
 

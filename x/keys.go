@@ -89,6 +89,14 @@ func ParseAttrList(attrs []string) []string {
 	return resp
 }
 
+func IsReverseAttr(attr string) bool {
+	AssertTrue(len(attr) >= 8)
+	if attr[8] == '~' {
+		return true
+	}
+	return false
+}
+
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))

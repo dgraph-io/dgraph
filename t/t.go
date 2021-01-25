@@ -436,7 +436,8 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	// slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	slowPkgs := []string{"systest", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
 
 	moveSlowToFront := func(list []task) []task {

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +39,7 @@ type QueryResult struct {
 
 func splitPreds(ps []string) []string {
 	for i, p := range ps {
-		ps[i] = strings.Split(p, "-")[1]
+		ps[i] = x.ParseAttr(strings.Split(p, "-")[1])
 	}
 
 	return ps
