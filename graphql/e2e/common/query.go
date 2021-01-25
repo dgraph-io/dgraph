@@ -449,58 +449,6 @@ func entitiesQuery(t *testing.T) {
 
 }
 
-func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
-	addAstronautParams := &GraphQLParams{
-		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
-			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
-				astronaut{
-					id
-					missions {
-						id
-						designation
-					}
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{
-			"id1":        "Astronaut1",
-			"missionId1": "Mission1",
-			"id2":        "Astronaut2",
-			"missionId2": "Mission2",
-		},
-	}
-
-	gqlResponse := addAstronautParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expectedJSON := `{
-		"addAstronaut": {
-		  "astronaut": [
-			{
-			  "id": "Astronaut1",
-			  "missions": [
-				{
-				  "id": "Mission1",
-				  "designation": "Apollo1"
-				}
-			  ]
-			},
-			{
-			  "id": "Astronaut2",
-			  "missions": [
-				{
-				  "id": "Mission2",
-				  "designation": "Apollo2"
-				}
-			  ]
-			}
-		  ]
-		}
-	  }`
-
-	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
-}
-
 func inFilter(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {

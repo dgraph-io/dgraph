@@ -4670,3 +4670,134 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
 }
+
+func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
+	varMap1 := map[string]interface{}{
+		"missionId":   "Mission1",
+		"astronautId": "Astronaut1",
+		"des":         "Apollo1",
+	}
+	addMissionParams := &GraphQLParams{
+		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $des: String!) {
+			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
+				mission{
+					id
+					crew {
+						id
+					}
+				}
+			}
+		}
+		`,
+		Variables: varMap1,
+	}
+	gqlResponse := addMissionParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON := `{
+		"addMission": {
+		  "mission": [
+			{
+			  "id": "Mission1",
+			  "crew": [
+				{
+				  "id": "Astronaut1",
+				  "missions": [
+					{
+					  "id": "Mission1"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
+
+	varMap2 := map[string]interface{}{
+		"missionId":   "Mission2",
+		"astronautId": "Astronaut1",
+		"des":         "Apollo2",
+	}
+	addMissionParams.Variables = varMap2
+
+	gqlResponse1 := addMissionParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON = `{
+		"addMission": {
+		  "mission": [
+			{
+			  "id": "Mission2",
+			  "crew": [
+				{
+				  "id": "Astronaut1",
+				  "missions": [
+					{
+					  "id": "Mission1"
+					},
+					{
+					  "id": "Mission2"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse1.Data))
+}
+
+func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
+	addAstronautParams := &GraphQLParams{
+		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+				astronaut{
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1":        "Astronaut1",
+			"missionId1": "Mission1",
+			"id2":        "Astronaut2",
+			"missionId2": "Mission2",
+		},
+	}
+
+	gqlResponse := addAstronautParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON := `{
+		"addAstronaut": {
+		  "astronaut": [
+			{
+			  "id": "Astronaut1",
+			  "missions": [
+				{
+				  "id": "Mission1",
+				  "designation": "Apollo1"
+				}
+			  ]
+			},
+			{
+			  "id": "Astronaut2",
+			  "missions": [
+				{
+				  "id": "Mission2",
+				  "designation": "Apollo2"
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
+}

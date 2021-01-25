@@ -260,8 +260,9 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	//		...
 	//	}
 
-	// If key field is of ID type but it is an external field,
-	// then it is stored in Dgraph as string type with Hash index
+	// If the key field is of ID type and is not an external field
+	// then we query it using the `uid` otherwise we treat it as string
+	// and query using `eq` function.
 	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
 		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
 	} else {
