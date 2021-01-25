@@ -1147,7 +1147,7 @@ func addPostWithNoTags(t *testing.T, authorID, countryID string,
 			"title": "No tags",
 			"text": "This Post doesn't contain any tags",
 			"isPublished": false,
-			"tags": null,
+			"tags": [],
 			"numLikes": 0,
 			"author": {
 				"id": "%s",
