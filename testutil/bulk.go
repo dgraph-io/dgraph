@@ -34,6 +34,7 @@ type LiveOpts struct {
 	SchemaFile string
 	Dir        string
 	Ludicrous  bool
+	Env        []string
 }
 
 func LiveLoad(opts LiveOpts) error {
@@ -51,6 +52,9 @@ func LiveLoad(opts LiveOpts) error {
 
 	if opts.Dir != "" {
 		liveCmd.Dir = opts.Dir
+	}
+	if opts.Env != nil {
+		liveCmd.Env = append(os.Environ(), opts.Env...)
 	}
 
 	out, err := liveCmd.Output()
@@ -72,6 +76,7 @@ type BulkOpts struct {
 	SchemaFile    string
 	GQLSchemaFile string
 	Dir           string
+	Env           []string
 }
 
 func BulkLoad(opts BulkOpts) error {
@@ -89,6 +94,11 @@ func BulkLoad(opts BulkOpts) error {
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
 	}
+
+	if opts.Env != nil {
+		bulkCmd.Env = append(os.Environ(), opts.Env...)
+	}
+
 	out, err := bulkCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Error %v\n", err)

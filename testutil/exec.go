@@ -127,6 +127,11 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) (string, error) {
 }
 
 func DgraphBinaryPath() string {
+	// Useful for OSX, as GOPATH/bin/dgraph is likely set to the linux compiled version of dgraph for docker
+	if dgraphBinary := os.Getenv("DGRAPH_BINARY"); dgraphBinary != "" {
+		return dgraphBinary
+	}
+
 	gopath := os.Getenv("GOPATH")
 
 	if gopath == "" {
