@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -111,7 +110,6 @@ func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	if s.opts.remote {
 		env = append(env, "MINIO_ACCESS_KEY=minioadmin", "MINIO_SECRET_KEY=minioadmin")
 	}
-	glog.Infoln(rdfFile, schemaFile)
 
 	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))
 	if s.opts.bulkSuite {
