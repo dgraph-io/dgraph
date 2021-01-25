@@ -113,6 +113,7 @@ type options struct {
 	AlphaEnvFile   []string
 	ZeroEnvFile    []string
 	Minio          bool
+	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
 
@@ -412,7 +413,7 @@ func getJaeger() service {
 	return svc
 }
 
-func getMinio() service {
+func getMinio(minioDataDir string) service {
 	svc := service{
 		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
 		ContainerName: containerName("minio1"),
@@ -422,6 +423,13 @@ func getMinio() service {
 		EnvFile: opts.MinioEnvFile,
 		Command: "minio server /data/minio --address :" +
 			strconv.FormatUint(uint64(opts.MinioPort), 10),
+	}
+	if minioDataDir != "" {
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:   "bind",
+			Source: minioDataDir,
+			Target: "/data/minio",
+		})
 	}
 	return svc
 }
@@ -604,6 +612,8 @@ func main() {
 		"env_file for zero")
 	cmd.PersistentFlags().BoolVar(&opts.Minio, "minio", false,
 		"include minio service")
+	cmd.PersistentFlags().StringVar(&opts.MinioDataDir, "minio_data_dir", "",
+		"default minio data directory")
 	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio_port", 9001,
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
@@ -691,7 +701,7 @@ func main() {
 	}
 
 	if opts.Minio {
-		services["minio1"] = getMinio()
+		services["minio1"] = getMinio(opts.MinioDataDir)
 	}
 
 	if opts.Acl {
