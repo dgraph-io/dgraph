@@ -19,7 +19,6 @@ package x
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strings"
 
@@ -59,8 +58,15 @@ const (
 func NamespaceAttr(ns uint64, attr string) string {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, ns)
-	namespace := fmt.Sprintf("%s", buf)
-	return namespace + attr
+	return string(buf) + attr
+}
+
+func NamespaceAttrList(ns uint64, preds []string) []string {
+	resp := make([]string, len(preds))
+	for _, pred := range preds {
+		resp = append(resp, NamespaceAttr(ns, pred))
+	}
+	return resp
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.

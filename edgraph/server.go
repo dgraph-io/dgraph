@@ -264,7 +264,8 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema.ParsedSchema, error) {
+func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema.ParsedSchema,
+	error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -547,7 +548,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// 2. For a uid variable that is part of an upsert query,
 	//    like uid(foo), the key would be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(qc.namespace, qc.gmuList, newUids)
+	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
 	if err != nil {
 		return err
 	}

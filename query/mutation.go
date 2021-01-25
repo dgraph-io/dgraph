@@ -37,6 +37,8 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	// In expandEdges, for non * type prredicates, we prepend the namespace directly and for
+	// * type predicates, we fetch the predicates and prepend the namespace.
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
@@ -59,12 +61,13 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
+	namespace := x.ExtractNamespace(ctx)
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
 
 		var preds []string
 		if edge.Attr != x.Star {
-			preds = []string{edge.Attr}
+			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
@@ -73,7 +76,6 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			namespace := x.ExtractNamespace(ctx)
 			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
 			preds = append(preds, x.StarAllPredicates(namespace)...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
@@ -191,7 +193,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(namespace uint64, gmuList []*gql.Mutation, newUids map[string]uint64) (
+func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
@@ -204,9 +206,6 @@ func ToDirectedEdges(namespace uint64, gmuList []*gql.Mutation, newUids map[stri
 		}
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
-		if wnq.Predicate != x.Star {
-			wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
-		}
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return errors.Wrap(err, "")

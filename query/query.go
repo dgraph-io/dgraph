@@ -204,8 +204,6 @@ type params struct {
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
 	// For OSS this should remain nil.
 	AllowedPreds []string
-	// Namespace of the given subgraph
-	Namespace uint64
 }
 
 type pathMetadata struct {
@@ -561,7 +559,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
-			Namespace:    sg.Params.Namespace,
 		}
 
 		// Inherit from the parent.
@@ -627,7 +624,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
-			dstf.Params.Namespace = sg.Params.Namespace
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
 				return err
 			}
@@ -777,7 +773,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 
-	namespace := x.ExtractNamespace(ctx)
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
@@ -798,7 +793,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
 		AllowedPreds:     gq.AllowedPreds,
-		Namespace:        namespace,
 	}
 
 	for argk := range gq.Args {
@@ -838,7 +832,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
-		sgf.Params.Namespace = namespace
 		if err := filterCopy(sgf, gq.Filter); err != nil {
 			return nil, errors.Wrapf(err, "while copying filter")
 		}
@@ -883,7 +876,8 @@ func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
+func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
+	namespace := x.ExtractNamespace(ctx)
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -914,7 +908,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         x.NamespaceAttr(sg.Params.Namespace, attr),
+		Attr:         x.NamespaceAttr(namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1890,6 +1884,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
 	defer stop()
 
+	namespace := x.ExtractNamespace(ctx)
 	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
@@ -1913,7 +1908,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 
-			preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
+			preds = getPredicatesFromTypes(namespace, typeNames)
 			// We check if enterprise is enabled and only
 			// restrict preds to allowed preds if ACL is turned on.
 			if worker.EnterpriseEnabled() && sg.Params.AllowedPreds != nil {
@@ -1937,11 +1932,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				// We already have the predicates populated from the var.
 				temp := getPredsFromVals(child.ExpandPreds)
 				for _, pred := range temp {
-					preds = append(preds, x.NamespaceAttr(sg.Params.Namespace, pred))
+					preds = append(preds, x.NamespaceAttr(namespace, pred))
 				}
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
-				preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
+				preds = getPredicatesFromTypes(namespace, typeNames)
 			}
 		}
 		preds = uniquePreds(preds)
@@ -1957,15 +1952,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
-			typeNamespace, attr := x.ParseNamespaceAttr(pred)
-			if typeNamespace != child.Params.Namespace {
-				return out, errors.Errorf(
-					"Expected namespace while expanding subgraph %d but got %d",
-					child.Params.Namespace, typeNamespace)
-			}
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
-				Attr:   attr,
+				Attr:   x.ParseAttr(pred),
 			}
 			temp.Params = child.Params
 			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
@@ -2103,7 +2092,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				sg.DestUIDs.Uids = nil
 			}
 		default:
-			taskQuery, err := createTaskQuery(sg)
+			taskQuery, err := createTaskQuery(ctx, sg)
 			if err != nil {
 				rch <- err
 				return
@@ -2371,7 +2360,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
 	sortMsg := &pb.SortMessage{
-		Order:     sg.createOrderForTask(),
+		Order:     sg.createOrderForTask(ctx),
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2406,11 +2395,12 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 }
 
 // createOrderForTask creates namespaced aware order for the task.
-func (sg *SubGraph) createOrderForTask() []*pb.Order {
+func (sg *SubGraph) createOrderForTask(ctx context.Context) []*pb.Order {
+	namespace := x.ExtractNamespace(ctx)
 	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
 		oc := &pb.Order{
-			Attr:  x.NamespaceAttr(sg.Params.Namespace, o.Attr),
+			Attr:  x.NamespaceAttr(namespace, o.Attr),
 			Desc:  o.Desc,
 			Langs: o.Langs,
 		}
@@ -2611,7 +2601,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 		SrcUIDs: sg.DestUIDs,
 		ReadTs:  sg.ReadTs,
 	}
-	taskQuery, err := createTaskQuery(temp)
+	taskQuery, err := createTaskQuery(ctx, temp)
 	if err != nil {
 		return nil, err
 	}
@@ -2858,18 +2848,12 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	namespace := x.ExtractNamespace(ctx)
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
-		preds := []string{}
-		for _, pred := range req.GqlQuery.Schema.Predicates {
-			preds = append(preds, x.NamespaceAttr(namespace, pred))
-		}
+		preds := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Predicates)
 		req.GqlQuery.Schema.Predicates = preds
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
 		}
-		typeNames := []string{}
-		for _, typeName := range req.GqlQuery.Schema.Types {
-			typeNames = append(typeNames, x.NamespaceAttr(namespace, typeName))
-		}
+		typeNames := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Types)
 		req.GqlQuery.Schema.Types = typeNames
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching types")
