@@ -1690,44 +1690,35 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case []interface{}:
+				// has: [comments, text] -> has(comments) AND has(text)
 				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
-				ids := convertIDs(dgFunc)
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: "uid",
-						UID:  ids,
-					},
-				})
-			case interface{}:
-				// has: comments -> has(Post.comments)
-				// OR
-				// isPublished: true -> eq(Post.isPublished, true)
-				// OR an enum case
-				// postType: Question -> eq(Post.postType, "Question")
 				switch field {
 				case "has":
-					fieldName := fmt.Sprintf("%v", dgFunc)
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: field,
-							Args: []gql.Arg{
-								{Value: typ.DgraphPredicate(fieldName)},
-							},
-						},
-					})
-
+					ands = append(ands, buildHasFilterList(typ, dgFunc)...)
 				default:
-					fn := "eq"
+					ids := convertIDs(dgFunc)
 					ands = append(ands, &gql.FilterTree{
 						Func: &gql.Function{
-							Name: fn,
-							Args: []gql.Arg{
-								{Value: typ.DgraphPredicate(field)},
-								{Value: fmt.Sprintf("%v", dgFunc)},
-							},
+							Name: "uid",
+							UID:  ids,
 						},
 					})
 				}
+			case interface{}:
+				// isPublished: true -> eq(Post.isPublished, true)
+				// OR an enum case
+				// postType: Question -> eq(Post.postType, "Question")
+
+				fn := "eq"
+				ands = append(ands, &gql.FilterTree{
+					Func: &gql.Function{
+						Name: fn,
+						Args: []gql.Arg{
+							{Value: typ.DgraphPredicate(field)},
+							{Value: fmt.Sprintf("%v", dgFunc)},
+						},
+					},
+				})
 			}
 		}
 	}
@@ -1752,6 +1743,22 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 		Op:    "or",
 		Child: []*gql.FilterTree{andFt, or},
 	}
+}
+
+func buildHasFilterList(typ schema.Type, fieldsSlice []interface{}) []*gql.FilterTree {
+	var ands []*gql.FilterTree
+	fn := "has"
+	for _, fieldName := range fieldsSlice {
+		ands = append(ands, &gql.FilterTree{
+			Func: &gql.Function{
+				Name: fn,
+				Args: []gql.Arg{
+					{Value: typ.DgraphPredicate(fieldName.(string))},
+				},
+			},
+		})
+	}
+	return ands
 }
 
 func buildPoint(point map[string]interface{}, buf *bytes.Buffer) {
