@@ -149,6 +149,7 @@ type MovieDirector {
 interface People {
 	id: ID!
 	xid: String! @id
+	email: String @lambda
 	name: String!
 }
 

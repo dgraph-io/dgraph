@@ -195,3 +195,52 @@ func lambdaOnMutationUsingGraphQL(t *testing.T) {
 	// cleanup
 	deleteAuthors(t, []string{addResp.AuthorID}, nil)
 }
+
+// See: https://discuss.dgraph.io/t/slash-graphql-lambda-bug/12233
+func lambdaInMutationWithIdDirective(t *testing.T) {
+	addStudentParams := &GraphQLParams{Query: `
+	mutation {
+		addStudent(input: [
+			{xid: "S1", name: "Alice", taughtBy: [{xid: "T1", name: "Judy"}]},
+			{xid: "S2", name: "Bob", taughtBy: [{xid: "T1", name: "Judy"}]},
+			{xid: "S3", name: "Charlie", taughtBy: [{xid: "T2", name: "Walter"}]},
+		]) {
+			numUids
+			student {
+				xid
+				email
+				taughtBy {
+					xid
+					email
+				}
+			}
+		}
+	}`}
+	resp := addStudentParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	testutil.CompareJSON(t, `{
+		"addStudent": {
+			"numUids": 3,
+			"student": [
+				{
+					"xid": "S1",
+					"email": "Alice.S1@school.com",
+					"taughtBy": [{"xid": "T1", "email": "Judy.T1@school.com"}]
+				},{
+					"xid": "S2",
+					"email": "Bob.S2@school.com",
+					"taughtBy": [{"xid": "T1", "email": "Judy.T1@school.com"}]
+				},{
+					"xid": "S3",
+					"email": "Charlie.S3@school.com",
+					"taughtBy": [{"xid": "T2", "email": "Walter.T2@school.com"}]
+				}
+			]
+		}
+	}`, string(resp.Data))
+
+	//cleanup
+	DeleteGqlType(t, "Student", getXidFilter("xid", []string{"S1", "S2", "S3"}), 3, nil)
+	DeleteGqlType(t, "Teacher", getXidFilter("xid", []string{"T1", "T2"}), 2, nil)
+}
