@@ -115,6 +115,9 @@ func TestMetrics(t *testing.T) {
 		"dgraph_active_mutations_total", "dgraph_pending_proposals_total",
 		"dgraph_pending_queries_total",
 		"dgraph_num_queries_total", "dgraph_alpha_health_status",
+
+		// Raft metrics
+		"dgraph_raft_has_leader", "dgraph_raft_is_leader", "dgraph_raft_leader_changes_total",
 	}
 	for _, requiredM := range requiredMetrics {
 		_, ok := metricsMap[requiredM]

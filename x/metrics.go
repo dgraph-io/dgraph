@@ -111,12 +111,24 @@ var (
 	// PLCacheHitRatio records the hit ratio of posting list cache.
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
+	// RaftHasLeader records whether this instance has a leader
+	RaftHasLeader = stats.Int64("raft_has_leader",
+		"Whether or not a leader exists for the group", stats.UnitDimensionless)
+	// RaftIsLeader records whether this instance is the leader
+	RaftIsLeader = stats.Int64("raft_is_leader",
+		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
+	// RaftLeaderChanges records the total number of leader changes seen.
+	RaftLeaderChanges = stats.Int64("raft_leader_changes_total",
+		"Total number of leader changes seen", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
 
 	// Tag keys.
+
+	// KeyGroup is the tag key used to record the group for Raft metrics.
+	KeyGroup, _ = tag.NewKey("group")
 
 	// KeyStatus is the tag key used to record the status of the server.
 	KeyStatus, _ = tag.NewKey("status")
@@ -141,6 +153,8 @@ var (
 		KeyStatus, KeyMethod,
 	}
 
+	allRaftKeys = []tag.Key{KeyGroup}
+
 	allViews = []*view.View{
 		{
 			Name:        LatencyMs.Name(),
@@ -161,34 +175,6 @@ var (
 			Measure:     NumEdges,
 			Description: NumEdges.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        RaftAppliedIndex.Name(),
-			Measure:     RaftAppliedIndex,
-			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        RaftApplyCh.Name(),
-			Measure:     RaftApplyCh,
-			Description: RaftApplyCh.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        RaftPendingSize.Name(),
-			Measure:     RaftPendingSize,
-			Description: RaftPendingSize.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MaxAssignedTs.Name(),
-			Measure:     MaxAssignedTs,
-			Description: MaxAssignedTs.Description(),
-			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
@@ -274,6 +260,55 @@ var (
 			Name:        PLCacheHitRatio.Name(),
 			Measure:     PLCacheHitRatio,
 			Description: PLCacheHitRatio.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftAppliedIndex.Name(),
+			Measure:     RaftAppliedIndex,
+			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftApplyCh.Name(),
+			Measure:     RaftApplyCh,
+			Description: RaftApplyCh.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftPendingSize.Name(),
+			Measure:     RaftPendingSize,
+			Description: RaftPendingSize.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftHasLeader.Name(),
+			Measure:     RaftHasLeader,
+			Description: RaftHasLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftIsLeader.Name(),
+			Measure:     RaftIsLeader,
+			Description: RaftIsLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftLeaderChanges.Name(),
+			Measure:     RaftLeaderChanges,
+			Description: RaftLeaderChanges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
