@@ -99,6 +99,12 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
+	// TxnCommits records count of committed transactions.
+	TxnCommits = stats.Int64("txn_commits_total",
+		"Number of transaction commits", stats.UnitDimensionless)
+	// TxnDiscards records count of discarded transactions.
+	TxnDiscards = stats.Int64("txn_discards_total",
+		"Number of transaction discards", stats.UnitDimensionless)
 	// TxnAborts records count of aborted transactions.
 	TxnAborts = stats.Int64("txn_aborts_total",
 		"Number of transaction aborts", stats.UnitDimensionless)
@@ -178,11 +184,32 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
+			Name:        TxnCommits.Name(),
+			Measure:     TxnCommits,
+			Description: TxnCommits.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
+			Name:        TxnDiscards.Name(),
+			Measure:     TxnDiscards,
+			Description: TxnDiscards.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
 			Name:        TxnAborts.Name(),
 			Measure:     TxnAborts,
 			Description: TxnAborts.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
+		},
+		{
+			Name:        ActiveMutations.Name(),
+			Measure:     ActiveMutations,
+			Description: ActiveMutations.Description(),
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 
 		// Last value aggregations
@@ -229,13 +256,6 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        ActiveMutations.Name(),
-			Measure:     ActiveMutations,
-			Description: ActiveMutations.Description(),
-			Aggregation: view.Sum(),
-			TagKeys:     nil,
-		},
-		{
 			Name:        AlphaHealth.Name(),
 			Measure:     AlphaHealth,
 			Description: AlphaHealth.Description(),
@@ -263,6 +283,14 @@ var (
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		// Raft metrics
 		{
 			Name:        RaftAppliedIndex.Name(),
 			Measure:     RaftAppliedIndex,
@@ -304,13 +332,6 @@ var (
 			Description: RaftLeaderChanges.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allRaftKeys,
-		},
-		{
-			Name:        MaxAssignedTs.Name(),
-			Measure:     MaxAssignedTs,
-			Description: MaxAssignedTs.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
 		},
 	}
 )
