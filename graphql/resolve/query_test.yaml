@@ -17,6 +17,57 @@
     }
 
 -
+  name: "in filter on float type"
+  gqlquery: |
+    query {
+      queryAuthor(filter: {reputation: {in: [10.3, 12.6, 13.6]}}) {
+        name
+        dob
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.reputation, "10.3", "12.6", "13.6")) {
+        name : Author.name
+        dob : Author.dob
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "in filter on datetime type"
+  gqlquery: |
+    query {
+      queryAuthor(filter: {dob: {in: ["2001-01-01", "2002-02-01"]}}) {
+        name
+        reputation
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.dob, "2001-01-01", "2002-02-01")) {
+        name : Author.name
+        reputation : Author.reputation
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "in filter on int type"
+  gqlquery: |
+    query {
+      queryPost(filter: {numLikes: {in: [10, 15, 100]}}) {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter(eq(Post.numLikes, 10, 15, 100)) {
+        title : Post.title
+        dgraph.uid : uid
+      }
+    }
+-
   name: "in filter on field which is of enum type"
   gqlquery: |
     query{

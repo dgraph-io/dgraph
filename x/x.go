@@ -42,6 +42,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -1201,4 +1202,31 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+// KvWithMaxVersion returns a KV with the max version from the list of KVs.
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badgerpb.KV {
+	hasAnyPrefix := func(key []byte) bool {
+		for _, prefix := range prefixes {
+			if bytes.HasPrefix(key, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+	// KV contain the latest value.
+	var maxKv *badgerpb.KV
+	for _, kv := range kvs.GetKv() {
+		if !hasAnyPrefix(kv.GetKey()) {
+			// Verify that we got the key which was subscribed. This shouldn't happen, but added for
+			// robustness.
+			glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
+			continue
+		}
+		if maxKv.GetVersion() <= kv.GetVersion() {
+			maxKv = kv
+		}
+	}
+	return maxKv
 }

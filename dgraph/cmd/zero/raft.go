@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,7 +37,12 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
+
+var raftDefault = "idx=1; learner=false"
 
 type node struct {
 	*conn.Node
@@ -215,7 +218,16 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
-	if !has && len(group.Members) >= n.server.NumReplicas {
+	var numReplicas int
+	for _, gm := range group.Members {
+		if !gm.Learner {
+			numReplicas++
+		}
+	}
+	switch {
+	case has || member.GetLearner():
+		// pass
+	case numReplicas >= n.server.NumReplicas:
 		// We shouldn't allow more members than the number of replicas.
 		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
@@ -225,8 +237,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
-	if member.GroupId == n.server.nextGroup &&
-		len(group.Members) >= n.server.NumReplicas {
+	if member.GroupId == n.server.nextGroup && numReplicas >= n.server.NumReplicas {
 		n.server.nextGroup++
 	}
 	if member.Leader {
@@ -436,7 +447,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
@@ -794,6 +810,12 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -846,6 +868,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
