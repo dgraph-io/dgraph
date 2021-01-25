@@ -422,7 +422,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		case string:
 			s := stripSpaces(uidVal)
-			if len(uidVal) == 0 {
+			if uidVal == "" {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
@@ -439,7 +439,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	if len(mr.uid) == 0 {
+	if mr.uid == "" {
 		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
