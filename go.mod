@@ -22,6 +22,7 @@ require (
 	github.com/dgraph-io/gqlparser/v2 v2.1.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
 	github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2
+	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
@@ -44,7 +45,6 @@ require (
 	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/minio/minio-go/v6 v6.0.55
-	github.com/minio/simdjson-go v0.1.5
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/pkg/errors v0.9.1

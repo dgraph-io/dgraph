@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	simdjson "github.com/minio/simdjson-go"
+	simdjson "github.com/dgraph-io/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -637,6 +637,7 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 	if err != nil {
 		return err
 	}
+
 	// we only need the iter to get the first element, either an array or object
 	iter := tape.Iter()
 
