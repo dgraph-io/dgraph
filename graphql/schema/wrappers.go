@@ -41,6 +41,11 @@ import (
 // field arguments requires the variable map from the operation - so we'd need to carry vars
 // through all the resolver functions.  Much nicer if they are resolved by magic here.
 
+var (
+	trueVal  = true
+	falseVal = false
+)
+
 // QueryType is currently supported queries
 type QueryType string
 
@@ -1101,7 +1106,7 @@ func (f *field) HasCustomHTTPChild() bool {
 	// lets find if any direct child of this field has a @custom on it
 	for _, fld := range selSet {
 		if f.op.inSchema.customDirectives[fld.GetObjectName()][fld.Name()] != nil {
-			*(f.hasCustomHTTPChild) = true
+			f.hasCustomHTTPChild = &trueVal
 			return true
 		}
 	}
@@ -1109,12 +1114,12 @@ func (f *field) HasCustomHTTPChild() bool {
 	// then lets see if any further descendents have @custom.
 	for _, fld := range selSet {
 		if fld.HasCustomHTTPChild() {
-			*(f.hasCustomHTTPChild) = true
+			f.hasCustomHTTPChild = &trueVal
 			return true
 		}
 	}
 	// if none of the descendents of this field have a @custom, return false
-	*(f.hasCustomHTTPChild) = false
+	f.hasCustomHTTPChild = &falseVal
 	return false
 }
 
