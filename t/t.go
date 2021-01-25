@@ -111,13 +111,13 @@ func startCluster(composeFile, prefix string) error {
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
-	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
 			strings.Join(cmd.Args, " "), err)
 		return err
 	}
-	fmt.Printf("CLUSTER UP: %s\n", prefix)
+	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
 
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {
@@ -485,12 +485,12 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
 			continue
 		}
 
 		if has(skipPkgs, pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its available in skip list \n", pkg.ID)
+			fmt.Printf("Skipping package %s as its available in skip list \n", pkg.ID)
 			continue
 		}
 

@@ -404,7 +404,7 @@ type localExportStorage struct {
 
 // remoteExportStorage uses localExportStorage to write files, then uploads to minio
 type remoteExportStorage struct {
-	mc     *minio.Client
+	mc     *x.MinioClient
 	bucket string
 	prefix string // stores the path within the bucket.
 	les    *localExportStorage
@@ -469,7 +469,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	mc, err := newMinioClient(uri, &Credentials{
+	mc, err := x.NewMinioClient(uri, &x.MinioCredentials{
 		AccessKey:    in.AccessKey,
 		SecretKey:    in.SecretKey,
 		SessionToken: in.SessionToken,
@@ -479,7 +479,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	bucket, prefix, err := validateBucket(mc, uri)
+	bucket, prefix, err := mc.ValidateBucket(uri)
 	if err != nil {
 		return nil, err
 	}

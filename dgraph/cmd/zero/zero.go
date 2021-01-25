@@ -531,6 +531,12 @@ func (s *Server) Connect(ctx context.Context,
 				return proposal
 			}
 
+			if m.Learner {
+				// Give it the group it wants.
+				proposal.Member = m
+				return proposal
+			}
+
 			// We don't have this server in the list.
 			if len(group.Members) < s.NumReplicas {
 				// We need more servers here, so let's add it.

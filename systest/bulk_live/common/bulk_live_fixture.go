@@ -42,6 +42,7 @@ type suiteOpts struct {
 	gqlSchema string
 	rdfs      string
 	bulkSuite bool
+	remote    bool
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
@@ -61,8 +62,21 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	require.NoError(s.t, ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
 	require.NoError(s.t, ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
-	s.setup(t, "schema.txt", "rdfs.rdf", "gql_schema.txt")
+
+	var schemaPath, dataPath, gqlSchemaPath string = "schema.txt", "rdfs.rdf", "gql_schema.txt"
+
+	if opts.remote {
+		schemaPath = minioPath(schemaPath)
+		dataPath = minioPath(dataPath)
+		gqlSchemaPath = minioPath(gqlSchemaPath)
+	}
+
+	s.setup(t, schemaPath, dataPath, gqlSchemaPath)
 	return s
+}
+
+func minioPath(path string) string {
+	return "minio://" + testutil.ContainerAddr("minio1", 9001) + "/data/" + path + "?secure=false"
 }
 
 func newLiveOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {
@@ -96,15 +110,21 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 }
 
 func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
+	var env []string
+	if s.opts.remote {
+		env = append(env, "MINIO_ACCESS_KEY=minioadmin", "MINIO_SECRET_KEY=minioadmin")
+	}
+
 	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))
 	if s.opts.bulkSuite {
 		err := testutil.BulkLoad(testutil.BulkOpts{
-			Zero:          testutil.SockAddrZero,
+			Zero:          testutil.ContainerAddr("zero1", 5080),
 			Shards:        1,
 			RdfFile:       rdfFile,
 			SchemaFile:    schemaFile,
 			GQLSchemaFile: gqlSchemaFile,
 			Dir:           rootDir,
+			Env:           env,
 		})
 
 		require.NoError(t, err)
@@ -114,11 +134,12 @@ func (s *suite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	}
 
 	err := testutil.LiveLoad(testutil.LiveOpts{
-		Zero:       testutil.SockAddrZero,
+		Zero:       testutil.ContainerAddr("zero1", 5080),
 		Alpha:      testutil.ContainerAddr("alpha1", 9080),
 		RdfFile:    rdfFile,
 		SchemaFile: schemaFile,
 		Dir:        rootDir,
+		Env:        env,
 	})
 
 	require.NoError(t, err)
