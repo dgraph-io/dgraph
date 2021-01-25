@@ -102,12 +102,12 @@ var (
 	// TxnCommits records count of committed transactions.
 	TxnCommits = stats.Int64("txn_commits_total",
 		"Number of transaction commits", stats.UnitDimensionless)
-	// TxnDiscards records count of discarded transactions.
+	// TxnDiscards records count of discarded transactions by the client.
 	TxnDiscards = stats.Int64("txn_discards_total",
-		"Number of transaction discards", stats.UnitDimensionless)
-	// TxnAborts records count of aborted transactions.
+		"Number of transaction discards by the client", stats.UnitDimensionless)
+	// TxnAborts records count of aborted transactions by the server.
 	TxnAborts = stats.Int64("txn_aborts_total",
-		"Number of transaction aborts", stats.UnitDimensionless)
+		"Number of transaction aborts by the server", stats.UnitDimensionless)
 	// PBlockHitRatio records the hit ratio of posting store block cache.
 	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
 		"Hit ratio of p store block cache", stats.UnitDimensionless)
