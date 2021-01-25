@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,6 +37,9 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
 
 var raftDefault = "idx=1; learner=false"
@@ -809,6 +810,12 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -861,6 +868,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()

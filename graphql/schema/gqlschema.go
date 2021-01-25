@@ -284,6 +284,7 @@ directive @generate(
 
 input IntFilter {
 	eq: Int
+	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -293,6 +294,7 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
+	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -302,6 +304,7 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
+	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -311,6 +314,7 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
+	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
