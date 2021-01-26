@@ -113,15 +113,17 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 }
 
 func (l *LogWriter) Close() error {
+	// close all go routines first before acquiring the lock to avoid contention
+	l.closer.SignalAndWait()
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.file == nil {
 		return nil
 	}
-	close(l.manageChannel)
-	l.flushTicker.Stop()
 	l.flush()
-	l.closer.SignalAndWait()
+	l.flushTicker.Stop()
+	close(l.manageChannel)
 	_ = l.file.Close()
 	l.writer = nil
 	l.file = nil
