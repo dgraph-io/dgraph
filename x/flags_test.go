@@ -39,6 +39,6 @@ func TestFlag(t *testing.T) {
 	require.Panics(t, c)
 	require.Equal(t, true, sf.GetBool("bool-key"))
 	require.Equal(t, uint64(5), sf.GetUint64("int-key"))
-	require.Equal(t, "value", sf.Get("string-key"))
+	require.Equal(t, "value", sf.GetString("string-key"))
 	require.Equal(t, uint64(5), sf.GetUint64("other-key"))
 }

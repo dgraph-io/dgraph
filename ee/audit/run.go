@@ -1,7 +1,7 @@
-// +build !oss
+// +build oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,29 +16,18 @@
  * limitations under the License.
  */
 
-package ee
+package audit
 
 import (
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cobra"
 )
 
-// GetEEFeaturesList returns a list of Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	if !worker.EnterpriseEnabled() {
-		return nil
+var CmdAudit x.SubCommand
+
+func init() {
+	CmdAudit.Cmd = &cobra.Command{
+		Use:   "audit",
+		Short: "Enterprise feature. Not supported in oss version",
 	}
-	var ee []string
-	if len(worker.Config.HmacSecret) > 0 {
-		ee = append(ee, "acl")
-	}
-	if x.WorkerConfig.EncryptionKey != nil {
-		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
-	} else {
-		ee = append(ee, "backup_restore")
-	}
-	if x.WorkerConfig.Audit {
-		ee = append(ee, "audit")
-	}
-	return ee
 }

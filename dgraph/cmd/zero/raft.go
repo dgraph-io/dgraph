@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -404,6 +405,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
+			}
+		}
 	}
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {

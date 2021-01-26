@@ -68,6 +68,8 @@ var (
 	ErrNoJwt        = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
+	// ErrConflict is returned when commit couldn't succeed due to conflicts.
+	ErrConflict = errors.New("Transaction conflict")
 )
 
 const (
