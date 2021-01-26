@@ -22,8 +22,8 @@ type AuditConf struct {
 	Dir string
 }
 
-func GetAuditConf(conf string) (*AuditConf, error) {
-	return nil, nil
+func GetAuditConf(conf string) *AuditConf {
+	return nil
 }
 
 func InitAuditorIfNecessary(conf *AuditConf, eeEnabled func() bool) error {
