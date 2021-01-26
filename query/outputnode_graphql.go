@@ -43,19 +43,23 @@ type graphQLEncodingCtx struct {
 	// 		enc.getAttr(child) == dgraphTypeAttrId
 	// Meaning, instead of looking up an int in a map and then comparing strings,
 	// we can just compare ints directly.
-	dgraphTypeAttrId      uint16
-	errChan               chan x.GqlErrorList
+	dgraphTypeAttrId uint16
+	// errChan is used to process the errors resulting from custom field resolution.
+	// It simply appends all those errors to gqlErrs.
+	errChan chan x.GqlErrorList
+	// customFieldResultChan is used to process the fastJson tree updates resulting from custom
+	// field resolution
 	customFieldResultChan chan customFieldResult
 }
 
 // customFieldResult represents the fastJson tree updates for custom fields.
 type customFieldResult struct {
-	// parent is the parent of the custom field
-	parent fastJsonNode
+	// parents are all the parents which have the same resolved value for the custom childField
+	parents []fastJsonNode
 	// childField is the custom field which has been resolved
 	childField gqlSchema.Field
 	// childVal is the result of resolving the custom childField from remote HTTP endpoint.
-	// A child node is attached to the parent with this value.
+	// A child node is attached to all the parents with this value.
 	childVal []byte
 }
 
@@ -559,19 +563,19 @@ func (gqlCtx *graphQLEncodingCtx) writeCustomField(enc *encoder, curSelection gq
 // resolveCustomFields resolves fields with custom directive. Here is the rough algorithm that it
 // follows.
 // queryUser {
-//	name @custom
-//	age
-//	school {
-//		name
-//		children
-//		class { @custom
-//			name
-//			numChildren
-//		}
-//	}
-//	cars { @custom
-//		name
-//	}
+// 	name @custom
+// 	age
+// 	school {
+// 		name
+// 		children
+// 		class @custom {
+// 			name
+// 			numChildren
+// 		}
+// 	}
+// 	cars @custom {
+// 		name
+// 	}
 // }
 // For fields with @custom directive
 // 1. There would be one query sent to the remote endpoint.
@@ -638,18 +642,16 @@ func extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
 // resolveCustomField resolves the @custom childField by making an external HTTP request and then
 // updates the fastJson tree with results of that HTTP request.
 // It accepts the following arguments:
+//  - ctx: context to use for finding auth info and propagating that to lambda server
 //  - enc: the encoder which stores all the data
 //  - parentNodeHeads: a list of head pointers to the parent nodes of childField
 //  - childField: the @custom field which needs to be resolved
-//  - requiredFields: a map from DgraphAlias to the field definition of the fields which are
-//    required to resolve the childField
 //  - wg: a wait group to signal the calling goroutine when the execution of this goroutine is
 //    finished
 // TODO:
-//  - check de-duplication
-//  - worry about path in errors and how to deal with them, specially during completion step
 //  - benchmark concurrency for the worker goroutines: channels vs mutexes?
 //    https://medium.com/@_orcaman/when-too-much-concurrency-slows-you-down-golang-9c144ca305a
+//  - worry about path in errors and how to deal with them, specially during completion step
 func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *encoder,
 	parentNodeHeads []fastJsonNode, childField gqlSchema.Field, wg *sync.WaitGroup) {
 	defer wg.Done() // signal when this goroutine finishes execution
@@ -660,13 +662,14 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 		return
 	}
 	// for resolving a custom field, we need to carry out following steps:
-	// 1. Find the data for requiredFields from parentNodes
+	// 1: Find the requiredFields data for uniqueParents from all the parentNodes
 	// 2. Construct correct URL and body using that data
 	// 3. Make the request to external HTTP endpoint using the URL and body
 	// 4. Decode the HTTP response
 	// 5. Run GraphQL completion on the decoded HTTP response
-	// 6. Create a fastJson node which contains the completion results for this custom field
-	// 7. Update the fastJson tree with that fastJson node
+	// 6. Create fastJson nodes which contain the completion result for this custom field for
+	//    all the duplicate parents and
+	// 7. Update the fastJson tree with those fastJson nodes
 
 	var parentNodeHeadAttr uint16
 	if len(parentNodeHeads) > 0 {
@@ -674,124 +677,156 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 	}
 	isGraphqlReq := fconf.RemoteGqlQueryName != ""
 	requiredFields := childField.CustomRequiredFields()
+
+	// we need to find the ID or @id field from requiredFields as we want to make HTTP requests
+	// only for unique parent nodes. That means, we send/receive less data over the network,
+	// and thus minimize the network latency as much as possible.
+	idFieldName := ""
+	idFieldValue := ""
+	for _, fieldDef := range requiredFields {
+		if fieldDef.IsID() || fieldDef.HasIDDirective() {
+			idFieldName = fieldDef.Name()
+			break
+		}
+	}
+	if idFieldName == "" {
+		// This should not happen as we only allow custom fields which either use ID field or a
+		// field with @id directive.
+		gqlCtx.errChan <- nil
+		return
+	}
+
+	// we don't know the number of unique parents in advance,
+	// so can't allocate this list with a pre-defined size
+	var uniqueParents []interface{}
+	// uniqueParentIdxToIdFieldVal stores the idFieldValue for each unique rfData
+	var uniqueParentIdxToIdFieldVal []string
+	// parentNodes is a map from idFieldValue to all the parentNodes for that idFieldValue.
+	parentNodes := make(map[string][]fastJsonNode)
+
+	// Step-1: Find the requiredFields data for uniqueParents from all the parentNodes
+	for _, parentNodeHead := range parentNodeHeads {
+		// iterate over all the siblings of this parentNodeHead which have the same attr as this
+		for parentNode := parentNodeHead; parentNode != nil && enc.getAttr(
+			parentNode) == parentNodeHeadAttr; parentNode = parentNode.next {
+			// find the data for requiredFields from parentNode
+			rfData := extractRequiredFieldsData(enc, parentNode, requiredFields)
+
+			if val, _ := rfData[idFieldName].(json.RawMessage); val != nil {
+				idFieldValue = string(val)
+			} else {
+				// this case can't happen as ID or @id fields are not list values
+				continue
+			}
+			// add rfData to uniqueParents only if we haven't encountered any parentNode before
+			// with this idFieldValue
+			if len(parentNodes[idFieldValue]) == 0 {
+				uniqueParents = append(uniqueParents, rfData)
+				uniqueParentIdxToIdFieldVal = append(uniqueParentIdxToIdFieldVal, idFieldValue)
+			}
+			// always add the parent node to the slice for this idFieldValue, so that we can
+			// build the response for all the duplicate parents
+			parentNodes[idFieldValue] = append(parentNodes[idFieldValue], parentNode)
+		}
+	}
+
 	switch fconf.Mode {
 	case gqlSchema.SINGLE:
-		// In SINGLE mode, we can consider steps 1-6 as a single isolated unit of computation,
-		// which can be executed in parallel for each parentNode.
-		// Step 7 can be executed in parallel to Step 1-6 in a separate goroutine to minimize
+		// In SINGLE mode, we can consider steps 2-5 as a single isolated unit of computation,
+		// which can be executed in parallel for each uniqueParent.
+		// Step 6-7 can be executed in parallel to Step 2-5 in a separate goroutine to minimize
 		// contention.
 
-		parentNodeWg := &sync.WaitGroup{} // used to wait on goroutines started for each parentNode
-		for _, parentNodeHead := range parentNodeHeads {
-			// iterate over all the siblings of this parentNodeHead which have the same attr as this
-			for parentNode := parentNodeHead; parentNode != nil && enc.getAttr(
-				parentNode) == parentNodeHeadAttr; parentNode = parentNode.next {
-				parentNodeWg.Add(1)
-				go func(parentNode fastJsonNode) {
-					defer parentNodeWg.Done() // signal when this goroutine finishes execution
-					// Step-1: Find the data for requiredFields from parentNodes
-					rfData := extractRequiredFieldsData(enc, parentNode, requiredFields)
+		// used to wait on goroutines started for each uniqueParent
+		uniqueParentWg := &sync.WaitGroup{}
+		// iterate over all the uniqueParents to make HTTP requests
+		for i := range uniqueParents {
+			uniqueParentWg.Add(1)
+			go func(idx int) {
+				defer uniqueParentWg.Done() // signal when this goroutine finishes execution
 
-					// Step-2: Construct correct URL and body using the data of requiredFields
-					url := fconf.URL
-					var body interface{}
-					if isGraphqlReq {
-						// If it is a remote GraphQL request, then URL can't have variables.
-						// So, we only need to construct the body.
-						body = map[string]interface{}{
-							"query":     fconf.RemoteGqlQuery,
-							"variables": rfData,
-						}
-					} else {
-						// for REST requests, we need to correctly construct both URL & body
-						url, err = gqlSchema.SubstituteVarsInURL(url, rfData)
-						if err != nil {
-							gqlCtx.errChan <- x.GqlErrorList{childField.GqlErrorf(nil,
-								"Evaluation of custom field failed while substituting variables "+
-									"into URL for remote endpoint with an error: %s for field: %s "+
-									"within type: %s.", err, childField.Name(),
-								childField.GetObjectName())}
-							return
-						}
-						body = gqlSchema.SubstituteVarsInBody(fconf.Template, rfData)
+				// Step-2: Construct correct URL and body using the data of requiredFields
+				url := fconf.URL
+				var body interface{}
+				if isGraphqlReq {
+					// If it is a remote GraphQL request, then URL can't have variables.
+					// So, we only need to construct the body.
+					body = map[string]interface{}{
+						"query":     fconf.RemoteGqlQuery,
+						"variables": uniqueParents[idx],
 					}
-
-					// Step-3 & 4: Make the request to external HTTP endpoint using the URL and
-					// body. Then, Decode the HTTP response.
-					response, errs, hardErrs := fconf.MakeAndDecodeHTTPRequest(nil, url, body,
-						childField)
-					if hardErrs != nil {
-						gqlCtx.errChan <- hardErrs
+				} else {
+					// for REST requests, we need to correctly construct both URL & body
+					url, err = gqlSchema.SubstituteVarsInURL(url,
+						uniqueParents[idx].(map[string]interface{}))
+					if err != nil {
+						gqlCtx.errChan <- x.GqlErrorList{childField.GqlErrorf(nil,
+							"Evaluation of custom field failed while substituting variables "+
+								"into URL for remote endpoint with an error: %s for field: %s "+
+								"within type: %s.", err, childField.Name(),
+							childField.GetObjectName())}
 						return
 					}
+					body = gqlSchema.SubstituteVarsInBody(fconf.Template,
+						uniqueParents[idx].(map[string]interface{}))
+				}
 
-					// Step-5. Run GraphQL completion on the decoded HTTP response
-					b, gqlErrs := gqlSchema.CompleteValue(nil, childField, response)
-					errs = append(errs, gqlErrs...)
+				// Step-3 & 4: Make the request to external HTTP endpoint using the URL and
+				// body. Then, Decode the HTTP response.
+				response, errs, hardErrs := fconf.MakeAndDecodeHTTPRequest(nil, url, body,
+					childField)
+				if hardErrs != nil {
+					gqlCtx.errChan <- hardErrs
+					return
+				}
 
-					// Step-6. Create a fastJson node which contains the completion results for
-					// this custom field
-					if b != nil {
-						// send the fastJson tree update over the channel
-						gqlCtx.customFieldResultChan <- customFieldResult{
-							parent:     parentNode,
-							childField: childField,
-							childVal:   b,
-						}
+				// Step-5. Run GraphQL completion on the decoded HTTP response
+				b, gqlErrs := gqlSchema.CompleteValue(nil, childField, response)
+				errs = append(errs, gqlErrs...)
+
+				// finally, send the fastJson tree update over the channel
+				if b != nil {
+					gqlCtx.customFieldResultChan <- customFieldResult{
+						parents:    parentNodes[uniqueParentIdxToIdFieldVal[idx]],
+						childField: childField,
+						childVal:   b,
 					}
+				}
 
-					// if we are here, it means the fastJson tree update was successfully sent.
-					// i.e., this custom childField was successfully resolved for given parentNode.
+				// if we are here, it means the fastJson tree update was successfully sent.
+				// i.e., this custom childField was successfully resolved for given parentNode.
 
-					// now, send all the collected errors together
-					gqlCtx.errChan <- errs
-				}(parentNode)
-			}
+				// now, send all the collected errors together
+				gqlCtx.errChan <- errs
+			}(i)
 		}
-		parentNodeWg.Wait()
+		uniqueParentWg.Wait()
 	case gqlSchema.BATCH:
 		// In BATCH mode, we can break the above steps into following isolated units of computation:
-		// a. Step 1-4
-		// b. Step 5-6
-		// c. Step 7
+		// a. Step 2-4
+		// b. Step 5
+		// c. Step 6-7
 		// i.e., step-a has to be executed only once irrespective of the number of parentNodes.
 		// Then, step-b can be executed in parallel for each parentNode.
 		// step-c can run in parallel to step-b in a separate goroutine to minimize contention.
 
-		// we don't know the number of parents in advance,
-		// so can't allocate these lists with a pre-defined size
-		var parents []interface{}
-		var parentNodes []fastJsonNode
-		for _, parentNodeHead := range parentNodeHeads {
-			// iterate over all the siblings of this parentNodeHead which have the same attr as this
-			for parentNode := parentNodeHead; parentNode != nil && enc.getAttr(
-				parentNode) == parentNodeHeadAttr; parentNode = parentNode.next {
-				// Step-1: Find the data for requiredFields from parentNodes
-				rfData := extractRequiredFieldsData(enc, parentNode, requiredFields)
-
-				// Step-2.1: Construct correct requestInput for this parentNode using the
-				// data of requiredFields
-				if isGraphqlReq {
-					parents = append(parents, rfData)
-				} else {
-					parents = append(parents, gqlSchema.SubstituteVarsInBody(fconf.Template,
-						rfData))
-				}
-				parentNodes = append(parentNodes, parentNode)
-			}
-		}
-
-		// Step-2.2: Construct correct body for the batch request
+		// Step-2: Construct correct body for the batch request
 		var body interface{}
 		if isGraphqlReq {
 			body = map[string]interface{}{
 				"query":     fconf.RemoteGqlQuery,
-				"variables": map[string]interface{}{fconf.GraphqlBatchModeArgument: parents},
+				"variables": map[string]interface{}{fconf.GraphqlBatchModeArgument: uniqueParents},
 			}
-		} else if childField.HasLambdaDirective() {
-			body = gqlSchema.GetBodyForLambda(ctx, childField, parents, nil)
 		} else {
-			body = parents
+			for i := range uniqueParents {
+				uniqueParents[i] = gqlSchema.SubstituteVarsInBody(fconf.Template,
+					uniqueParents[i].(map[string]interface{}))
+			}
+			if childField.HasLambdaDirective() {
+				body = gqlSchema.GetBodyForLambda(ctx, childField, uniqueParents, nil)
+			} else {
+				body = uniqueParents
+			}
 		}
 
 		// Step-3 & 4: Make the request to external HTTP endpoint using the URL and
@@ -809,11 +844,11 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 				reflect.TypeOf(response).Name(), childField.Name(), childField.GetObjectName()))
 			return
 		}
-		if len(batchedResult) != len(parents) {
+		if len(batchedResult) != len(uniqueParents) {
 			gqlCtx.errChan <- append(errs, childField.GqlErrorf(nil,
 				"Evaluation of custom field failed because expected result of "+
 					"external request to be of size %v, got: %v for field: %s within type: %s.",
-				len(parents), len(batchedResult), childField.Name(), childField.GetObjectName()))
+				len(uniqueParents), len(batchedResult), childField.Name(), childField.GetObjectName()))
 			return
 		}
 
@@ -826,18 +861,16 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 				// Step-5. Run GraphQL completion on the decoded HTTP response
 				b, gqlErrs := gqlSchema.CompleteValue(nil, childField, batchedResult[idx])
 
-				// Step-6. Create a fastJson node which contains the completion results for
-				// this custom field
+				// finally, send the fastJson tree update over the channel
 				if b != nil {
-					// send the fastJson tree update over the channel
 					gqlCtx.customFieldResultChan <- customFieldResult{
-						parent:     parentNodes[idx],
+						parents:    parentNodes[uniqueParentIdxToIdFieldVal[idx]],
 						childField: childField,
 						childVal:   b,
 					}
 				}
 
-				// send the errors obtained from completion
+				// set the errors obtained from completion
 				batchedErrs[idx] = gqlErrs
 			}(i)
 		}
@@ -856,16 +889,16 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 }
 
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their
-// children might
+// children might.
 //
 // queryUser {
-//	 id
-//	 classes {
-//	   name @custom...
-//   }
+// 	id
+// 	classes {
+// 		name @custom...
+// 	}
 // }
-// In the example above, resolveNestedFields would be called on classes field and vals would be the
-// list of all users.
+// In the example above, resolveNestedFields would be called on classes field and parentNodeHeads
+// would be the list of head pointers for all the user fastJson nodes.
 func (gqlCtx *graphQLEncodingCtx) resolveNestedFields(ctx context.Context, enc *encoder,
 	parentNodeHeads []fastJsonNode, childField gqlSchema.Field, wg *sync.WaitGroup) {
 	defer wg.Done() // signal when this goroutine finishes execution

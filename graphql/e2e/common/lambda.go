@@ -197,7 +197,7 @@ func lambdaOnMutationUsingGraphQL(t *testing.T) {
 }
 
 // See: https://discuss.dgraph.io/t/slash-graphql-lambda-bug/12233
-func lambdaInMutationWithIdDirective(t *testing.T) {
+func lambdaInMutationWithDuplicateId(t *testing.T) {
 	addStudentParams := &GraphQLParams{Query: `
 	mutation {
 		addChapter(input: [

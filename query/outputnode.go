@@ -1131,6 +1131,7 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 			// TODO: benchmark and find a default buffer capacity for these channels
 			gqlEncCtx.errChan = make(chan x.GqlErrorList, 100)
 			gqlEncCtx.customFieldResultChan = make(chan customFieldResult, 100)
+			// initialize WaitGroup for the error and result channel goroutines
 			wg := &sync.WaitGroup{}
 			wg.Add(2)
 			// keep collecting errors arising from custom field resolution until channel is closed
@@ -1145,23 +1146,31 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 			go func() {
 				// this would add the custom fastJson nodes in an arbitrary order. So, they may not
 				// be linked in the order the custom fields are present in selection set.
-				// i.e., while encoding the GraphQL response, either we will have to do a linear
-				// search to find the correct fastJson node for a custom field or first fix the
-				// order of custom fastJson nodes and then continue the encoding.
-				// The second option seems better.
-				for customFieldRes := range gqlEncCtx.customFieldResultChan {
-					if childFieldNode, err := enc.makeCustomNode(enc.idForAttr(customFieldRes.
-						childField.DgraphAlias()), customFieldRes.childVal); err == nil {
-						childFieldNode.next = customFieldRes.parent.child
-						// below line may lead to a race condition between this write and multiple
-						// simultaneous reads during custom field resolution. But, the way reads are
-						// done, it doesn't matter whether they get the previous value or the new value
-						// after the write as they just keep iterating as long as they don't find what
-						// they are looking for. So, it seems fine to ignore this race condition.
-						customFieldRes.parent.child = childFieldNode
-					} else {
-						gqlEncCtx.errChan <- x.GqlErrorList{customFieldRes.childField.GqlErrorf(
-							nil, err.Error())}
+				// i.e., while encoding the GraphQL response, we will have to do one of these:
+				// * a linear search to find the correct fastJson node for a custom field, or
+				// * first fix the order of custom fastJson nodes and then continue the encoding, or
+				// * create a map from custom fastJson node attr to the custom fastJson node,
+				//   so that whenever a custom field in encountered in the selection set,
+				//   just use the map to find out the fastJson node for that field.
+				// The last option seems better.
+				for result := range gqlEncCtx.customFieldResultChan {
+					childFieldAttr := enc.idForAttr(result.childField.DgraphAlias())
+					for _, parent := range result.parents {
+						if childFieldNode, err := enc.makeCustomNode(childFieldAttr,
+							result.childVal); err == nil {
+							childFieldNode.next = parent.child
+							// below line may lead to a race condition between this write and
+							// multiple simultaneous reads during custom field resolution.
+							// But, the way reads are done, it doesn't matter whether they get
+							// the previous value or the new value after the write as they just
+							// keep iterating as long as they don't find a fastJson node returned
+							// for a required field from Dgraph.
+							// So, it seems fine to ignore this race condition.
+							parent.child = childFieldNode
+						} else {
+							gqlEncCtx.errChan <- x.GqlErrorList{result.childField.GqlErrorf(nil,
+								err.Error())}
+						}
 					}
 				}
 				wg.Done()
@@ -1172,6 +1181,7 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 			// close the error and result channels, to terminate the goroutines started above
 			close(gqlEncCtx.errChan)
 			close(gqlEncCtx.customFieldResultChan)
+			// wait for the above goroutines to finish
 			wg.Wait()
 		}
 		// now encode the GraphQL results.

@@ -766,7 +766,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
-	t.Run("querying lambda field in a mutation with @id field", lambdaInMutationWithIdDirective)
+	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 }
 
 // RunCorsTest test all cors related tests.

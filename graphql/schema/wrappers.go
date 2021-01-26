@@ -119,7 +119,7 @@ type Operation interface {
 type Field interface {
 	Name() string
 	Alias() string
-	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field
+	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field.
 	DgraphAlias() string
 	ResponseName() string
 	Arguments() map[string]interface{}
@@ -137,10 +137,12 @@ type Field interface {
 	//  * seenField: used for skipping when the field has already been seen at the current level
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
+	// CustomRequiredFields returns a map from DgraphAlias to the field definition of the fields
+	// which are required to resolve this custom field.
 	CustomRequiredFields() map[string]FieldDefinition
-	// IsCustomHTTP tells whether this field has @custom(http: {...}) directive on it
+	// IsCustomHTTP tells whether this field has @custom(http: {...}) directive on it.
 	IsCustomHTTP() bool
-	// HasCustomHTTPChild tells whether any descendent of this field has @custom(http: {...}) on it
+	// HasCustomHTTPChild tells whether any descendent of this field has @custom(http: {...}) on it.
 	HasCustomHTTPChild() bool
 	HasLambdaDirective() bool
 	Type() Type
