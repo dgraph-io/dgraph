@@ -368,7 +368,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 	if x.IsInternalPredicate(s.Predicate) {
 		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {

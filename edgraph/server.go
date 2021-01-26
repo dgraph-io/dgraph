@@ -369,6 +369,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	empty := &api.Payload{}
+	namespace := x.ExtractNamespace(ctx)
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -441,7 +442,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		} else {
 			attr = op.DropValue
 		}
-		attr = x.NamespaceAttr(x.ExtractNamespace(ctx), attr)
+		attr = x.NamespaceAttr(namespace, attr)
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
@@ -476,17 +477,17 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// Pre-defined types cannot be dropped.
-		if x.IsPreDefinedType(op.DropValue) {
+		dropPred := x.NamespaceAttr(namespace, op.DropValue)
+		if x.IsPreDefinedType(dropPred) {
 			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
 				op.DropValue)
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
+		m.DropValue = dropPred
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-	namespace := x.ExtractNamespace(ctx)
 	result, err := parseSchemaFromAlterOperation(namespace, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
@@ -558,6 +559,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
+			pred = x.NamespaceAttr(x.ExtractNamespace(ctx), pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}

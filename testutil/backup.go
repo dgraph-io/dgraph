@@ -117,6 +117,7 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 	}
 	defer db.Close()
 
+	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
 	values := make(map[string]string)
 
 	txn := db.NewTransactionAt(readTs, false)
@@ -197,7 +198,7 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 			continue
 		}
 
-		values = append(values, pk.Attr)
+		values = append(values, x.ParseAttr(pk.Attr))
 	}
 	return values, nil
 }
