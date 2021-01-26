@@ -30,13 +30,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/dgraph-io/badger/v3/y"
 )
 
 const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
-	flushInterval    = 30 * time.Second
+	flushInterval    = 10 * time.Second
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -55,7 +57,8 @@ type LogWriter struct {
 	file        *os.File
 	writer      *bufio.Writer
 	flushTicker *time.Ticker
-	// To maintain order of manage old logs calls
+	closer      *z.Closer
+	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
 
@@ -64,11 +67,17 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 	if err := l.open(); err != nil {
 		return nil, fmt.Errorf("not able to create new file %v", err)
 	}
-
+	l.closer = z.NewCloser(2)
 	l.manageChannel = make(chan bool, 1)
 	go func() {
-		for range l.manageChannel {
-			l.manageOldLogs()
+		defer l.closer.Done()
+		for {
+			select {
+			case <-l.manageChannel:
+				l.manageOldLogs()
+			case <-l.closer.HasBeenClosed():
+				return
+			}
 		}
 	}()
 
@@ -112,6 +121,7 @@ func (l *LogWriter) Close() error {
 	close(l.manageChannel)
 	l.flushTicker.Stop()
 	l.flush()
+	l.closer.SignalAndWait()
 	_ = l.file.Close()
 	l.writer = nil
 	l.file = nil
@@ -120,10 +130,16 @@ func (l *LogWriter) Close() error {
 
 // flushPeriodic periodically flushes the log file buffers.
 func (l *LogWriter) flushPeriodic() {
-	for _ = range l.flushTicker.C {
-		l.mu.Lock()
-		l.flush()
-		l.mu.Unlock()
+	defer l.closer.Done()
+	for {
+		select {
+		case <-l.flushTicker.C:
+			l.mu.Lock()
+			l.flush()
+			l.mu.Unlock()
+		case <-l.closer.HasBeenClosed():
+			return
+		}
 	}
 }
 

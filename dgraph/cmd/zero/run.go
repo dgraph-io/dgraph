@@ -200,8 +200,7 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
-	conf, err := audit.GetAuditConf(Zero.Conf.GetString("audit"))
-	x.Check(err)
+	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -237,7 +236,8 @@ func run() {
 		x.Check(err)
 		ad, err := filepath.Abs(opts.audit.Dir)
 		x.Check(err)
-		x.AssertTruef(ad != wd, "WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
+		x.AssertTruef(ad != wd,
+			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
 	}
 
 	if opts.rebalanceInterval <= 0 {
@@ -348,8 +348,9 @@ func run() {
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+
+	audit.Close()
+
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
-	audit.Close()
-	glog.Infoln("audit logs if enabled are closed.")
 }

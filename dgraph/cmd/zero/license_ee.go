@@ -94,7 +94,6 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 			if !active {
 				n.server.expireLicense()
 				audit.Close()
-				glog.Infoln("audit logs if enabled are closed.")
 				glog.Warningf("Your enterprise license has expired and enterprise features are " +
 					"disabled. To continue using enterprise features, apply a valid license. To receive " +
 					"a new license, contact us at https://dgraph.io/contact.")

@@ -13,18 +13,19 @@
 package audit
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
 const (
-	defaultAuditConf     = "dir=;compress=false;encrypt-file="
+	defaultAuditConf     = "dir=; compress=false; encrypt-file="
 	defaultAuditFilename = "dgraph_audit.log"
 )
 
@@ -58,28 +59,25 @@ const (
 var auditor *auditLogger = &auditLogger{}
 
 type auditLogger struct {
-	log  *x.Logger
-	tick *time.Ticker
+	log    *x.Logger
+	tick   *time.Ticker
+	closer *z.Closer
 }
 
-func GetAuditConf(conf string) (*AuditConf, error) {
+func GetAuditConf(conf string) *AuditConf {
 	if conf == "" {
-		return nil, nil
+		return nil
 	}
 	auditFlag := x.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
 	dir := auditFlag.GetString("dir")
-	if dir == "" {
-		return nil, fmt.Errorf("dir flag is not provided for the audit logs")
-	}
+	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
-	if err != nil {
-		return nil, err
-	}
+	x.Check(err)
 	return &AuditConf{
 		Compress:     auditFlag.GetBool("compress"),
 		Dir:          dir,
 		EncryptBytes: encBytes,
-	}, nil
+	}
 }
 
 func readAuditEncKey(conf *x.SuperFlag) ([]byte, error) {
@@ -111,6 +109,7 @@ func InitAuditorIfNecessary(conf *AuditConf, eeEnabled func() bool) error {
 		}
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
+	auditor.closer = z.NewCloser(1)
 	go trackIfEEValid(conf, eeEnabled)
 	return nil
 }
@@ -133,6 +132,7 @@ func InitAuditor(conf *AuditConf) error {
 // Right now alpha doesn't know about the enterprise/licence.
 // That's why we needed to track if the current node is part of enterprise edition cluster
 func trackIfEEValid(conf *AuditConf, eeEnabledFunc func() bool) {
+	defer auditor.closer.Done()
 	var err error
 	for {
 		select {
@@ -152,6 +152,8 @@ func trackIfEEValid(conf *AuditConf, eeEnabledFunc func() bool) {
 				atomic.StoreUint32(&auditEnabled, 1)
 				glog.Infof("audit logs are enabled")
 			}
+		case <-auditor.closer.HasBeenClosed():
+			return
 		}
 	}
 }
@@ -160,11 +162,18 @@ func trackIfEEValid(conf *AuditConf, eeEnabledFunc func() bool) {
 // It also sets the log to nil, because its being called by zero when license expires.
 // If license added, InitLogger will take care of the file.
 func Close() {
+	if atomic.LoadUint32(&auditEnabled) == 0 {
+		return
+	}
 	if auditor.tick != nil {
 		auditor.tick.Stop()
 	}
+	if auditor.closer != nil {
+		auditor.closer.SignalAndWait()
+	}
 	auditor.log.Sync()
 	auditor.log = nil
+	glog.Infoln("audit logs are closed.")
 }
 
 func (a *auditLogger) Audit(event *AuditEvent) {

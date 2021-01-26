@@ -39,7 +39,7 @@ func InitLogger(dir string, filename string, key []byte, compress bool) (*Logger
 	w := &LogWriter{
 		FilePath:      path,
 		MaxSize:       100,
-		MaxAge:        30,
+		MaxAge:        10,
 		EncryptionKey: key,
 		Compress:      compress,
 	}

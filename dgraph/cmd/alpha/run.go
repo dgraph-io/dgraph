@@ -604,8 +604,7 @@ func run() {
 
 	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
 
-	conf, err := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
-	x.Check(err)
+	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
@@ -820,7 +819,7 @@ func run() {
 	glog.Infoln("adminCloser closed.")
 
 	audit.Close()
-	glog.Infoln("audit logs if enabled are closed.")
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")
