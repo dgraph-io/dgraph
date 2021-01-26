@@ -17,12 +17,13 @@
 package codec
 
 import (
-	"bytes"
-	"io"
+	"encoding/binary"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/pkg/errors"
 )
 
 type seekPos int
@@ -38,27 +39,31 @@ var (
 	bitMask uint64 = 0xffffffff00000000
 )
 
-// Encoder is used to convert a list of UIDs into a pb.UidPack object.
-type Encoder struct {
-	roar  *roaring64.Bitmap
-	uids  []uint64
-	Alloc *z.Allocator
-	buf   *bytes.Buffer
-}
+// // Encoder is used to convert a list of UIDs into a pb.UidPack object.
+// type Encoder struct {
+// 	roar  *roaring64.Bitmap
+// 	uids  []uint64
+// 	Alloc *z.Allocator
+// 	buf   *bytes.Buffer
+// }
 
-// Add takes an uid and adds it to the list of UIDs to be encoded.
-func (e *Encoder) Add(uid uint64) {
-	if e.roar == nil {
-		e.roar = roaring64.NewBitmap()
-	}
-	e.roar.Add(uid)
-}
+// // Add takes an uid and adds it to the list of UIDs to be encoded.
+// func (e *Encoder) Add(uid uint64) {
+// 	if e.roar == nil {
+// 		e.roar = roaring64.NewBitmap()
+// 	}
+// 	e.roar.Add(uid)
+// }
 
-// Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
-func (e *Encoder) Done(w io.Writer) int64 {
-	n, err := e.roar.WriteTo(w)
-	x.Check(err)
-	return n
+// // Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
+// func (e *Encoder) Done(w io.Writer) int64 {
+// 	n, err := e.roar.WriteTo(w)
+// 	x.Check(err)
+// 	return n
+// }
+
+func ApproxLen(pack *pb.UidPack) int {
+	return 0
 }
 
 // Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
@@ -74,6 +79,36 @@ func Encode(uids []uint64) []byte {
 	b, err := r.ToBytes()
 	x.Check(err)
 	return b
+}
+
+func ToBytes(bm *roaring64.Bitmap) []byte {
+	b, err := bm.ToBytes()
+	x.Check(err)
+	return b
+}
+
+func FromPostingList(r *roaring64.Bitmap, pl *pb.PostingList) error {
+	if len(pl.Bitmap) == 0 {
+		return nil
+	}
+	if err := r.UnmarshalBinary(pl.Bitmap); err != nil {
+		return errors.Wrapf(err, "codec.FromPostingList")
+	}
+	return nil
+}
+
+func FromList(l *pb.List) *roaring64.Bitmap {
+	iw := roaring64.New()
+	if l == nil {
+		return iw
+	}
+	if len(l.Bitmap) > 0 {
+		// Only one of Uids or Bitmap should be defined.
+		x.Check(iw.UnmarshalBinary(l.Bitmap))
+	} else if len(l.Uids) > 0 {
+		iw.AddMany(l.Uids)
+	}
+	return iw
 }
 
 // // EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
@@ -103,22 +138,27 @@ func Encode(uids []uint64) []byte {
 // 	return out
 // }
 
-// // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
-// // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
-// func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
-// 	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
-// 	x.Check(err)
-// 	buf.AutoMmapAfter(1 << 30)
+// DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
+// calloc'ed and can be SHOULD be freed up by calling buffer.Release().
+func DecodeToBuffer(bm *roaring64.Bitmap) *z.Buffer {
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
+	x.Check(err)
+	buf.AutoMmapAfter(1 << 30)
 
-// 	var last uint64
-// 	tmp := make([]byte, 16)
-// 	dec := Decoder{Pack: pack}
-// 	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
-// 		for _, u := range uids {
-// 			n := binary.PutUvarint(tmp, u-last)
-// 			x.Check2(buf.Write(tmp[:n]))
-// 			last = u
-// 		}
-// 	}
-// 	return buf
-// }
+	var last uint64
+	tmp := make([]byte, 16)
+	itr := bm.ManyIterator()
+	uids := make([]uint64, 64)
+	for {
+		got := itr.NextMany(uids)
+		if got == 0 {
+			break
+		}
+		for _, u := range uids[:got] {
+			n := binary.PutUvarint(tmp, u-last)
+			x.Check2(buf.Write(tmp[:n]))
+			last = u
+		}
+	}
+	return buf
+}

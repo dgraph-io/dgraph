@@ -30,7 +30,6 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -147,25 +146,7 @@ func (it *pIterator) seek(l *List, afterUid, deleteBelowTs uint64) error {
 }
 
 func (it *pIterator) selectInitialSplit(afterUid uint64) int {
-	if afterUid == 0 {
-		return 0
-	}
-
-	for i, startUid := range it.l.plist.Splits {
-		// If startUid == afterUid, the current block should be selected.
-		if startUid == afterUid {
-			return i
-		}
-		// If this split starts at an UID greater than afterUid, there might be
-		// elements in the previous split that need to be checked.
-		if startUid > afterUid {
-			return i - 1
-		}
-	}
-
-	// In case no split's startUid is greater or equal than afterUid, start the
-	// iteration at the start of the last split.
-	return len(it.l.plist.Splits) - 1
+	return it.l.splitIdx(afterUid)
 }
 
 // moveToNextPart re-initializes the iterator at the start of the next list part.
@@ -527,14 +508,60 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	l.Unlock()
 }
 
-func (l *List) Bitmap(readTs uint64) (*roaring64.Bitmap, error) {
-	deleteBelow, posts := l.pickPostings(readTs)
-	r := roaring64.New()
-	if deleteBelow == 0 {
-		if err := r.UnmarshalBinary(l.plist.Bitmap); err != nil {
-			return nil, errors.Wrapf(err, "unmarshal bitmap")
+func (l *List) splitIdx(afterUid uint64) int {
+	if afterUid == 0 || len(l.plist.Splits) == 0 {
+		return 0
+	}
+	for i, startUid := range l.plist.Splits {
+		// If startUid == afterUid, the current block should be selected.
+		if startUid == afterUid {
+			return i
+		}
+		// If this split starts at an UID greater than afterUid, there might be
+		// elements in the previous split that need to be checked.
+		if startUid > afterUid {
+			return i - 1
 		}
 	}
+	// In case no split's startUid is greater or equal than afterUid, start the
+	// iteration at the start of the last split.
+	return len(l.plist.Splits) - 1
+}
+
+func (l *List) Bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
+	deleteBelow, posts := l.pickPostings(opt.ReadTs)
+
+	iw := codec.FromList(opt.Intersect)
+
+	r := roaring64.New()
+	if deleteBelow == 0 {
+		if err := codec.FromPostingList(r, l.plist); err != nil {
+			return nil, errors.Wrapf(err, "Bitmap: l.plist")
+		}
+		r.And(iw)
+		r.RemoveRange(0, opt.AfterUid)
+
+		si := l.splitIdx(opt.AfterUid)
+		for _, startUid := range l.plist.Splits[si:] {
+			// We could skip over some splits, if they won't have the Uid range we care about.
+			split, err := l.readListPart(startUid)
+			if err != nil {
+				return nil, errors.Wrapf(err, "while reading a split with startUid: %d", startUid)
+			}
+			s := roaring64.New()
+			if err := codec.FromPostingList(s, split); err != nil {
+				return nil, errors.Wrapf(err, "Bitmap: split")
+			}
+			// Intersect with opt.Intersect.
+			s.And(iw)
+			if startUid < opt.AfterUid {
+				// Only keep the Uids after opt.AfterUid.
+				s.RemoveRange(0, opt.AfterUid)
+			}
+			r.Or(s)
+		}
+	}
+
 	for _, p := range posts {
 		if p.Op == Set {
 			r.Add(p.Uid)
@@ -808,7 +835,7 @@ func (l *List) Rollup(alloc *z.Allocator) ([]*bpb.KV, error) {
 	if out == nil {
 		return nil, nil
 	}
-	defer out.free()
+	// defer out.free()
 
 	var kvs []*bpb.KV
 	kv := MarshalPostingList(out.plist, alloc)
@@ -850,18 +877,24 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
-	defer out.free()
+	// defer out.free()
 
 	ol := out.plist
+	bm := roaring64.New()
+	if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
+		return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+	}
+
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
 	// uids. We do this to improve the memory usage.
-	if codec.ApproxLen(ol.Pack) > 1024 {
-		buf := codec.DecodeToBuffer(ol.Pack, 0)
+	if bm.GetCardinality() > 1024 {
+		buf := codec.DecodeToBuffer(bm)
 		defer buf.Release()
 		bl.UidBytes = buf.Bytes()
 	} else {
-		bl.Uids = codec.Decode(ol.Pack, 0)
+		bl.Uids = bm.ToArray()
 	}
+
 	bl.Postings = ol.Postings
 	bl.CommitTs = ol.CommitTs
 	bl.Splits = ol.Splits
@@ -933,12 +966,12 @@ type rollupOutput struct {
 	newMinTs uint64
 }
 
-func (out *rollupOutput) free() {
-	codec.FreePack(out.plist.Pack)
-	for _, part := range out.parts {
-		codec.FreePack(part.Pack)
-	}
-}
+// func (out *rollupOutput) free() {
+// 	codec.FreePack(out.plist.Pack)
+// 	for _, part := range out.parts {
+// 		codec.FreePack(part.Pack)
+// 	}
+// }
 
 /*
 // sanityCheck can be kept around for debugging, and can be called when deallocating Pack.
@@ -974,12 +1007,13 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	var plist *pb.PostingList
 	var startUid, endUid uint64
 	var splitIdx int
-	enc := codec.Encoder{BlockSize: blockSize}
+
+	bm := roaring64.New()
 
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
 	initializeSplit := func() {
-		enc = codec.Encoder{BlockSize: blockSize}
+		bm = roaring64.New()
 
 		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
@@ -1002,7 +1036,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid && split {
-			plist.Pack = enc.Done()
+			plist.Bitmap = codec.ToBytes(bm)
 			out.parts[startUid] = plist
 
 			splitIdx++
@@ -1097,55 +1131,61 @@ func (l *List) ApproxLen() int {
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
+func abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
-	if opt.First == 0 {
-		opt.First = math.MaxInt32
-	}
-	// Pre-assign length to make it faster.
+	// TODO: We need to iterate over the splits.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
+	bm, err := l.Bitmap(opt)
+	l.RLock()
+
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
-		if opt.ReadTs < l.minTs {
-			l.RUnlock()
-			return out, ErrTsTooOld
+	if err != nil {
+		return out, err
+	}
+
+	bm.RemoveRange(0, opt.AfterUid)
+	if opt.Intersect != nil {
+		for _, u := range opt.Intersect.Uids {
+			bm.Remove(u)
 		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
-		l.RUnlock()
+		if len(opt.Intersect.Bitmap) > 0 {
+			rem := roaring64.New()
+			rem.UnmarshalBinary(opt.Intersect.Bitmap)
+			bm.And(rem)
+		}
+	}
+
+	// TODO: Need to fix this. We shouldn't pick up too many uids.
+	// Before this, we were only picking math.Int32 number of uids.
+	// Now we're picking everything.
+	if opt.First == 0 {
+		out.Bitmap = codec.ToBytes(bm)
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
-		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
-			if opt.First < 0 {
-				// We need the last N.
-				// TODO: This could be optimized by only considering some of the last UidBlocks.
-				if len(res) > -opt.First {
-					res = res[1:]
-				}
-			} else if len(res) > opt.First {
-				return ErrStopIteration
-			}
-		}
-		return nil
-	})
-	l.RUnlock()
-	if err != nil {
-		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
-			hex.EncodeToString(l.key))
+	var itr roaring64.IntIterable64
+	if opt.First > 0 {
+		itr = bm.Iterator()
+	} else {
+		itr = bm.ReverseIterator()
 	}
-
-	// Do The intersection here as it's optimized.
-	out.Uids = res
-	if opt.Intersect != nil {
-		algo.IntersectWith(out, opt.Intersect, out)
+	num := abs(opt.First)
+	for len(out.Uids) < num && itr.HasNext() {
+		out.Uids = append(out.Uids, itr.Next())
 	}
 	return out, nil
+
+	// errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
+	//		hex.EncodeToString(l.key))
 }
 
 // Postings calls postFn with the postings that are common with
