@@ -181,10 +181,15 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 	}
 
 	// If the parent field had any immediate @custom(http: {...}) children, then we need to
-	// find the custom fastJson nodes which will should be used for encoding those custom fields.
-	customNodes := make(map[uint16]fastJsonNode)
-	for ; child != nil && enc.getCustom(child); child = child.next {
-		customNodes[enc.getAttr(child)] = child
+	// find the custom fastJson nodes which should be used for encoding those custom fields.
+	// The custom fastJson nodes will always be at the start of the list.
+	var customNodes map[uint16]fastJsonNode
+	if enc.getCustom(child) {
+		// allocate memory for the map only when there are custom nodes
+		customNodes = make(map[uint16]fastJsonNode)
+		for ; child != nil && enc.getCustom(child); child = child.next {
+			customNodes[enc.getAttr(child)] = child
+		}
 	}
 
 	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
