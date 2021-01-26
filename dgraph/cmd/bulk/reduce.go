@@ -569,6 +569,12 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
+	alloc := z.NewAllocator(16 << 20)
+	defer func() {
+		// We put alloc.Release in defer because we reassign alloc for split posting lists.
+		alloc.Release()
+	}()
+
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
@@ -595,7 +601,8 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		enc := codec.Encoder{BlockSize: 256}
+		alloc.Reset()
+		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -629,7 +636,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		if numUids == 0 {
-			codec.FreePack(pl.Pack)
+			// No need to FrePack here because we are reusing alloc.
 			return
 		}
 
@@ -657,6 +664,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
+			// Assign a new allocator, so we don't reset the one we were using during Rollup.
+			alloc = z.NewAllocator(16 << 20)
+
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
@@ -666,7 +676,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		} else {
 			kv := posting.MarshalPostingList(pl, nil)
-			codec.FreePack(pl.Pack)
+			// No need to FreePack here, because we are reusing alloc.
 
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs

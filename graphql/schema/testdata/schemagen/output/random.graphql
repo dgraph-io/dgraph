@@ -2,12 +2,27 @@
 # Input Schema
 #######################
 
-type Message {
+type Mission {
 	id: ID!
-	content: String!
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+	crew: [Astronaut]
+	designation: String!
+	startDate: String
+	endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+	id: ID! @external
+	missions: [Mission]
+}
+
+type User @remote {
+	id: ID!
+	name: String!
+}
+
+type Car {
+	id: ID!
+	name: String!
 }
 
 #######################
@@ -185,25 +200,13 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
-directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
-	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -213,7 +216,6 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
-	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -223,7 +225,6 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
-	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -233,7 +234,6 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
-	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
@@ -274,98 +274,77 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
-	numUids: Int
-}
-
-type DeleteMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
-	msg: String
-	numUids: Int
-}
-
-type MessageAggregateResult {
+type CarAggregateResult {
 	count: Int
-	contentMin: String
-	contentMax: String
-	authorMin: String
-	authorMax: String
-	uniqueIdMin: Int64
-	uniqueIdMax: Int64
-	uniqueIdSum: Int64
-	uniqueIdAvg: Float
-	datePostedMin: DateTime
-	datePostedMax: DateTime
+	nameMin: String
+	nameMax: String
 }
 
-type UpdateMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
-	numUids: Int
+type MissionAggregateResult {
+	count: Int
+	designationMin: String
+	designationMax: String
+	startDateMin: String
+	startDateMax: String
+	endDateMin: String
+	endDateMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum MessageHasFilter {
-	content
-	author
-	uniqueId
-	datePosted
+enum CarHasFilter {
+	name
 }
 
-enum MessageOrderable {
-	content
-	author
-	uniqueId
-	datePosted
+enum CarOrderable {
+	name
+}
+
+enum MissionHasFilter {
+	crew
+	designation
+	startDate
+	endDate
+}
+
+enum MissionOrderable {
+	designation
+	startDate
+	endDate
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddMessageInput {
-	content: String!
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
-}
-
-input MessageFilter {
+input CarFilter {
 	id: [ID!]
-	has: MessageHasFilter
-	and: [MessageFilter]
-	or: [MessageFilter]
-	not: MessageFilter
+	has: CarHasFilter
+	and: [CarFilter]
+	or: [CarFilter]
+	not: CarFilter
 }
 
-input MessageOrder {
-	asc: MessageOrderable
-	desc: MessageOrderable
-	then: MessageOrder
+input CarOrder {
+	asc: CarOrderable
+	desc: CarOrderable
+	then: CarOrder
 }
 
-input MessagePatch {
-	content: String
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
+input MissionFilter {
+	id: [ID!]
+	has: MissionHasFilter
+	and: [MissionFilter]
+	or: [MissionFilter]
+	not: MissionFilter
 }
 
-input MessageRef {
-	id: ID
-	content: String
-	author: String
-	uniqueId: Int64
-	datePosted: DateTime
-}
-
-input UpdateMessageInput {
-	filter: MessageFilter!
-	set: MessagePatch
-	remove: MessagePatch
+input MissionOrder {
+	asc: MissionOrderable
+	desc: MissionOrderable
+	then: MissionOrder
 }
 
 #######################
@@ -373,18 +352,12 @@ input UpdateMessageInput {
 #######################
 
 type Query {
-	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
-	aggregateMessage(filter: MessageFilter): MessageAggregateResult
-}
-
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addMessage(input: [AddMessageInput!]!): AddMessagePayload
-	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
-	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
+	getMyFavoriteUsers(id: ID!): [User]
+	getMission(id: ID!): Mission
+	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	aggregateMission(filter: MissionFilter): MissionAggregateResult
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
 }
 
