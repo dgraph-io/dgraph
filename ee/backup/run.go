@@ -246,7 +246,7 @@ func runRestoreCmd() error {
 		if result.MaxLeaseUid > 0 {
 			ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
 			defer cancelUid()
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid}); err != nil {
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: result.MaxLeaseUid, Type: pb.Num_UID}); err != nil {
 				fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
 				return err
 			}

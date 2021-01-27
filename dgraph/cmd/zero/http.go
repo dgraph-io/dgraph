@@ -73,12 +73,17 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	what := r.URL.Query().Get("what")
 	switch what {
 	case "uids":
-		ids, err = st.zero.AssignUids(ctx, num)
+		num.Type = pb.Num_UID
+		ids, err = st.zero.AssignIds(ctx, num)
 	case "timestamps":
+		num.Type = pb.Num_TXN_TS
 		if num.Val == 0 {
 			num.ReadOnly = true
 		}
 		ids, err = st.zero.Timestamps(ctx, num)
+	case "nsids":
+		num.Type = pb.Num_NS_ID
+		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
 			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))

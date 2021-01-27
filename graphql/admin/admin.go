@@ -140,7 +140,8 @@ const (
 		counter: Int
 		groups: [ClusterGroup]
 		zeros: [Member]
-		maxLeaseId: Int
+		maxUID: Int
+		maxNsID: Int
 		maxTxnTs: Int
 		maxRaftId: Int
 		removed: [Member]
