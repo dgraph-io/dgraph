@@ -4752,6 +4752,12 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 		}
 	  }`
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse1.Data))
+
+	astronautDeleteFilter := map[string]interface{}{"id": []string{"Astronaut1"}}
+	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 2, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
 }
 
 func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
@@ -4804,4 +4810,10 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
+
+	astronautDeleteFilter := map[string]interface{}{"id": []string{"Astronaut1", "Astronaut2"}}
+	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 2, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
 }
