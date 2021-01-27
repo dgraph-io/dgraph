@@ -1015,6 +1015,13 @@ func (gqlCtx *graphQLEncodingCtx) completeRootAggregateQuery(enc *encoder, fj fa
 
 	x.Check2(gqlCtx.buf.WriteString("{"))
 	for _, f := range query.SelectionSet() {
+		if f.Skip() || !f.Include() {
+			if f.Name() != gqlSchema.Typename {
+				fj = fj.next // need to skip data as well for this field
+			}
+			continue
+		}
+
 		x.Check2(gqlCtx.buf.WriteString(comma))
 		f.CompleteAlias(gqlCtx.buf)
 
@@ -1079,6 +1086,14 @@ func (gqlCtx *graphQLEncodingCtx) completeAggregateChildren(enc *encoder, fj fas
 	var err error
 	x.Check2(gqlCtx.buf.WriteString("{"))
 	for _, f := range field.SelectionSet() {
+		if f.Skip() || !f.Include() {
+			if f.Name() != gqlSchema.Typename && fj != nil && f.DgraphAlias()+suffix == enc.
+				attrForID(enc.getAttr(fj)) {
+				fj = fj.next // if data was there, need to skip that as well for this field
+			}
+			continue
+		}
+
 		x.Check2(gqlCtx.buf.WriteString(comma))
 		f.CompleteAlias(gqlCtx.buf)
 

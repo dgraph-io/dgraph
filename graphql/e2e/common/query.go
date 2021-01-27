@@ -1210,6 +1210,18 @@ func includeAndSkipDirective(t *testing.T) {
 				title
 				tags
 			  }
+			  postsAggregate {
+				__typename @include(if: $includeFalse) @skip(if: $skipFalse)
+				count @include(if: $includeFalse) @skip(if: $skipTrue)
+				titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+				numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
+			  }
+			}
+			aggregatePost {
+			  __typename @include(if: $includeFalse) @skip(if: $skipFalse)
+			  count @include(if: $includeFalse) @skip(if: $skipTrue)
+			  titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+			  numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
 			}
 		  }`,
 		Variables: map[string]interface{}{
@@ -1223,7 +1235,19 @@ func includeAndSkipDirective(t *testing.T) {
 	gqlResponse := getAuthorParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	expected := `{
+	  "queryAuthor": [
+		{
+		  "name": "Ann Other Author",
+		  "postsAggregate": {
+			"titleMin": "Learning GraphQL in Dgraph"
+		  }
+		}
+	  ],
+	  "aggregatePost": {
+		"titleMin": "GraphQL doco"
+	  }
+	}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
