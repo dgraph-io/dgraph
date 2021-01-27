@@ -2486,10 +2486,10 @@
   dgquery: |-
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
-        id : uid
         author : Comment.author
         title : Comment.title
         ups : Comment.ups
+        id : uid
         url : Comment.url
       }
     }
@@ -3212,7 +3212,7 @@
     query {
       _entities(func: eq(Astronaut.id, "0x1", "0x2")) @filter(type(Astronaut)) {
         dgraph.type
-        Astronaut.missions : Astronaut.missions {
+        missions : Astronaut.missions {
           designation : Mission.designation
           dgraph.uid : uid
         }
@@ -3236,7 +3236,7 @@
     query {
       _entities(func: eq(SpaceShip.id, "0x1", "0x2")) @filter(type(SpaceShip)) {
         dgraph.type
-        SpaceShip.missions : SpaceShip.missions {
+        missions : SpaceShip.missions {
           designation : Mission.designation
           dgraph.uid : uid
         }
