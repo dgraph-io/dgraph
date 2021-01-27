@@ -2474,7 +2474,6 @@
   gqlquery: |
     query {
       getComment(id: "0x1") {
-        id
         author
         title
         content
@@ -3211,7 +3210,7 @@
     }
   dgquery:  |-
     query {
-      _entities(func: uid(0x1, 0x2)) @filter(type(Astronaut)) {
+      _entities(func: eq(Astronaut.id, "0x1", "0x2")) @filter(type(Astronaut)) {
         dgraph.type
         Astronaut.missions : Astronaut.missions {
           designation : Mission.designation
