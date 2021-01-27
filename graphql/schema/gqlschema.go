@@ -937,68 +937,52 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 			continue
 		}
 		defn := sch.Types[key]
-		if apolloServiceQuery && hasExtends(defn) {
+		if defn.Kind == ast.Union {
+			// TODO: properly check the case of reverse predicates (~) with union members and clean
+			// them from unionRef or unionFilter as required.
+			addUnionReferenceType(sch, defn)
+			addUnionFilterType(sch, defn)
+			addUnionMemberTypeEnum(sch, defn)
 			continue
 		}
 
-		params := &GenerateDirectiveParams{
-			generateGetQuery:       true,
-			generateFilterQuery:    true,
-			generatePasswordQuery:  true,
-			generateAggregateQuery: true,
-			generateAddMutation:    true,
-			generateUpdateMutation: true,
-			generateDeleteMutation: true,
-			generateSubscription:   false,
+		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
+			continue
 		}
-		if !apolloServiceQuery {
-			if defn.Kind == ast.Union {
-				// TODO: properly check the case of reverse predicates (~) with union members and clean
-				// them from unionRef or unionFilter as required.
-				addUnionReferenceType(sch, defn)
-				addUnionFilterType(sch, defn)
-				addUnionMemberTypeEnum(sch, defn)
-				continue
-			}
 
-			if defn.Kind != ast.Interface && defn.Kind != ast.Object {
-				continue
-			}
+		params := parseGenerateDirectiveParams(defn)
 
-			params = parseGenerateDirectiveParams(defn)
+		// Common types to both Interface and Object.
+		addReferenceType(sch, defn)
 
-			// Common types to both Interface and Object.
-			addReferenceType(sch, defn)
+		if params.generateUpdateMutation {
+			addPatchType(sch, defn)
+			addUpdateType(sch, defn)
+			addUpdatePayloadType(sch, defn)
+		}
 
+		if params.generateDeleteMutation {
+			addDeletePayloadType(sch, defn)
+		}
+
+		switch defn.Kind {
+		case ast.Interface:
+			// addInputType doesn't make sense as interface is like an abstract class and we can't
+			// create objects of its type.
 			if params.generateUpdateMutation {
-				addPatchType(sch, defn)
-				addUpdateType(sch, defn)
-				addUpdatePayloadType(sch, defn)
+				addUpdateMutation(sch, defn)
 			}
-
 			if params.generateDeleteMutation {
-				addDeletePayloadType(sch, defn)
+				addDeleteMutation(sch, defn)
 			}
 
-			switch defn.Kind {
-			case ast.Interface:
-				// addInputType doesn't make sense as interface is like an abstract class and we can't
-				// create objects of its type.
-				if params.generateUpdateMutation {
-					addUpdateMutation(sch, defn)
-				}
-				if params.generateDeleteMutation {
-					addDeleteMutation(sch, defn)
-				}
-
-			case ast.Object:
-				// types and inputs needed for mutations
-				if params.generateAddMutation {
-					addInputType(sch, defn)
-					addAddPayloadType(sch, defn)
-				}
-				addMutations(sch, defn, params)
+		case ast.Object:
+			// types and inputs needed for mutations
+			if params.generateAddMutation {
+				addInputType(sch, defn)
+				addAddPayloadType(sch, defn)
 			}
+			addMutations(sch, defn, params)
 		}
 
 		// types and inputs needed for query and search
@@ -1006,7 +990,11 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn, apolloServiceQuery)
 		addAggregationResultType(sch, defn)
-		addQueries(sch, defn, params)
+		// Don't expose queries for the @extends type to the gateway
+		// as it is resolved through `_entities` resolver.
+		if !(apolloServiceQuery && hasExtends(defn)) {
+			addQueries(sch, defn, params)
+		}
 		addTypeHasFilter(sch, defn)
 		// We need to call this at last as aggregateFields
 		// should not be part of HasFilter or UpdatePayloadType etc.

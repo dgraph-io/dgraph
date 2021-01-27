@@ -19,7 +19,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/cast"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +27,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cast"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -449,6 +450,7 @@ func entitiesQuery(t *testing.T) {
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
 
 }
+
 func inFilterOnString(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {

@@ -269,6 +269,28 @@ input StringHashFilter {
 # Generated Types
 #######################
 
+type AddTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
 type TodoAggregateResult {
 	count: Int
 	titleMin: String
@@ -279,6 +301,16 @@ type TodoAggregateResult {
 	dateCompletedMax: String
 	somethingPrivateMin: String
 	somethingPrivateMax: String
+}
+
+type UpdateTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type UserAggregateResult {
@@ -321,6 +353,22 @@ enum UserOrderable {
 # Generated Inputs
 #######################
 
+input AddTodoInput {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String!
+}
+
+input AddUserInput {
+	username: String!
+	todos: [TodoRef]
+}
+
 input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
@@ -337,6 +385,41 @@ input TodoOrder {
 	then: TodoOrder
 }
 
+input TodoPatch {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
+}
+
+input TodoRef {
+	id: ID
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
+}
+
+input UpdateTodoInput {
+	filter: TodoFilter!
+	set: TodoPatch
+	remove: TodoPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
 input UserFilter {
 	username: StringHashFilter
 	has: UserHasFilter
@@ -351,6 +434,15 @@ input UserOrder {
 	then: UserOrder
 }
 
+input UserPatch {
+	todos: [TodoRef]
+}
+
+input UserRef {
+	username: String
+	todos: [TodoRef]
+}
+
 #######################
 # Generated Query
 #######################
@@ -363,5 +455,18 @@ type Query {
 	getUser(username: String!): User
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	aggregateUser(filter: UserFilter): UserAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addTodo(input: [AddTodoInput!]!): AddTodoPayload
+	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
+	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
