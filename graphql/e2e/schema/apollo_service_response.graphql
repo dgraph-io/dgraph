@@ -12,7 +12,8 @@ type Mission {
 
 type Astronaut @key(fields: "id") @extends {
 	id: ID! @external
-	missions: [Mission]
+	missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	missionsAggregate(filter: MissionFilter): MissionAggregateResult
 }
 
 type User @remote {
@@ -207,6 +208,7 @@ directive @cacheControl(maxAge: Int!) on QUERY
 
 input IntFilter {
 	eq: Int
+	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -216,6 +218,7 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
+	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -225,6 +228,7 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
+	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -234,6 +238,7 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
+	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
@@ -274,10 +279,49 @@ input StringHashFilter {
 # Generated Types
 #######################
 
+type AddAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+	numUids: Int
+}
+
+type AddCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
+}
+
+type AddMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	numUids: Int
+}
+
+type AstronautAggregateResult {
+	count: Int
+	idMin: ID
+	idMax: ID
+}
+
 type CarAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+}
+
+type DeleteAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+	msg: String
+	numUids: Int
+}
+
+type DeleteCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	msg: String
+	numUids: Int
+}
+
+type DeleteMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	msg: String
+	numUids: Int
 }
 
 type MissionAggregateResult {
@@ -290,9 +334,32 @@ type MissionAggregateResult {
 	endDateMax: String
 }
 
+type UpdateAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+	numUids: Int
+}
+
+type UpdateCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
+}
+
+type UpdateMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	numUids: Int
+}
+
 #######################
 # Generated Enums
 #######################
+
+enum AstronautHasFilter {
+	missions
+}
+
+enum AstronautOrderable {
+	id
+}
 
 enum CarHasFilter {
 	name
@@ -319,6 +386,45 @@ enum MissionOrderable {
 # Generated Inputs
 #######################
 
+input AddAstronautInput {
+	id: ID!
+	missions: [MissionRef]
+}
+
+input AddCarInput {
+	name: String!
+}
+
+input AddMissionInput {
+	crew: [AstronautRef]
+	designation: String!
+	startDate: String
+	endDate: String
+}
+
+input AstronautFilter {
+	id: [ID!]
+	has: AstronautHasFilter
+	and: [AstronautFilter]
+	or: [AstronautFilter]
+	not: AstronautFilter
+}
+
+input AstronautOrder {
+	asc: AstronautOrderable
+	desc: AstronautOrderable
+	then: AstronautOrder
+}
+
+input AstronautPatch {
+	missions: [MissionRef]
+}
+
+input AstronautRef {
+	id: ID
+	missions: [MissionRef]
+}
+
 input CarFilter {
 	id: [ID!]
 	has: CarHasFilter
@@ -331,6 +437,15 @@ input CarOrder {
 	asc: CarOrderable
 	desc: CarOrderable
 	then: CarOrder
+}
+
+input CarPatch {
+	name: String
+}
+
+input CarRef {
+	id: ID
+	name: String
 }
 
 input MissionFilter {
@@ -347,6 +462,39 @@ input MissionOrder {
 	then: MissionOrder
 }
 
+input MissionPatch {
+	crew: [AstronautRef]
+	designation: String
+	startDate: String
+	endDate: String
+}
+
+input MissionRef {
+	id: ID
+	crew: [AstronautRef]
+	designation: String
+	startDate: String
+	endDate: String
+}
+
+input UpdateAstronautInput {
+	filter: AstronautFilter!
+	set: AstronautPatch
+	remove: AstronautPatch
+}
+
+input UpdateCarInput {
+	filter: CarFilter!
+	set: CarPatch
+	remove: CarPatch
+}
+
+input UpdateMissionInput {
+	filter: MissionFilter!
+	set: MissionPatch
+	remove: MissionPatch
+}
+
 #######################
 # Generated Query
 #######################
@@ -359,5 +507,21 @@ type Query {
 	getCar(id: ID!): Car
 	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	aggregateCar(filter: CarFilter): CarAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addMission(input: [AddMissionInput!]!): AddMissionPayload
+	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
+	deleteMission(filter: MissionFilter!): DeleteMissionPayload
+	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
+	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
+	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
+	addCar(input: [AddCarInput!]!): AddCarPayload
+	updateCar(input: UpdateCarInput!): UpdateCarPayload
+	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
 
