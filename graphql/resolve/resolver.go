@@ -600,8 +600,7 @@ func EmptyResult(f schema.Field, err error) *Resolved {
 }
 
 func DataResult(f schema.Field, data map[string]interface{}, err error) *Resolved {
-	b, errs := schema.CompleteObject(make([]interface{}, 0, f.MaxPathLength()),
-		[]schema.Field{f}, data)
+	b, errs := schema.CompleteObject(f.PreAllocatePathSlice(), []schema.Field{f}, data)
 
 	return &Resolved{
 		Data:  b,

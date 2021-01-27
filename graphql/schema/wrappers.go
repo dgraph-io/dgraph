@@ -164,10 +164,11 @@ type Field interface {
 	IsAggregateField() bool
 	GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError
 	// MaxPathLength finds the max length (including list indexes) of any path in the 'query' f.
-	// Used to pre-allocate a path buffer of the correct size before running completeObject on
-	// the top level query - means that we aren't reallocating slices multiple times
-	// during the complete* functions.
 	MaxPathLength() int
+	// PreAllocatePathSlice is used to pre-allocate a path buffer of the correct size before running
+	// CompleteObject on the top level query - means that we aren't reallocating slices multiple
+	// times during the complete* functions.
+	PreAllocatePathSlice() []interface{}
 	// NullValue returns the appropriate null bytes to be written as value in the JSON response for
 	// this field.
 	//  * If this field is a list field then it returns []byte("[]").
@@ -879,6 +880,10 @@ func (f *field) MaxPathLength() int {
 	return 1 + childMax
 }
 
+func (f *field) PreAllocatePathSlice() []interface{} {
+	return make([]interface{}, 0, f.MaxPathLength())
+}
+
 func (f *field) NullValue() []byte {
 	typ := f.Type()
 	if typ.ListType() != nil {
@@ -1475,6 +1480,10 @@ func (q *query) MaxPathLength() int {
 	return (*field)(q).MaxPathLength()
 }
 
+func (q *query) PreAllocatePathSlice() []interface{} {
+	return (*field)(q).PreAllocatePathSlice()
+}
+
 func (q *query) NullValue() []byte {
 	return (*field)(q).NullValue()
 }
@@ -1939,6 +1948,10 @@ func (m *mutation) GqlErrorf(path []interface{}, message string, args ...interfa
 
 func (m *mutation) MaxPathLength() int {
 	return (*field)(m).MaxPathLength()
+}
+
+func (m *mutation) PreAllocatePathSlice() []interface{} {
+	return (*field)(m).PreAllocatePathSlice()
 }
 
 func (m *mutation) NullValue() []byte {

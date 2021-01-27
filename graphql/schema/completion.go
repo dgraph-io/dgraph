@@ -166,7 +166,7 @@ func CompleteObject(
 			completed = JsonNull
 		}
 		x.Check2(buf.Write(completed))
-		comma = ", "
+		comma = ","
 	}
 	x.Check2(buf.WriteRune('}'))
 
@@ -260,6 +260,10 @@ func completeList(
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
 	if field.Type().ListType() == nil {
+		// lets coerce a one item list to a single value in case the type of this field wasn't list.
+		if len(values) == 1 {
+			return CompleteValue(path, field, values[0])
+		}
 		// This means either a bug on our part - in admin server.
 		// or @custom query/mutation returned something unexpected.
 		//
@@ -299,7 +303,7 @@ func completeList(
 		} else {
 			x.Check2(buf.Write(r))
 		}
-		comma = ", "
+		comma = ","
 	}
 	x.Check2(buf.WriteRune(']'))
 
