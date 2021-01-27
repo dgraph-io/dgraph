@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 
@@ -209,7 +210,8 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+	}
+	if !filestore.Exists(opt.SchemaFile) {
 		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
 		os.Exit(1)
 	}
@@ -219,7 +221,7 @@ func run() {
 	} else {
 		fileList := strings.Split(opt.DataFiles, ",")
 		for _, file := range fileList {
-			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+			if !filestore.Exists(file) {
 				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
 				os.Exit(1)
 			}

@@ -25,8 +25,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -54,6 +57,7 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
+	audit             *audit.AuditConf
 }
 
 var opts options
@@ -95,6 +99,15 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+
+	flag.String("audit", "",
+		`Various audit options.
+	dir=/path/to/audits to define the path where to store the audit logs.
+	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
+	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	flag.
+	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -118,6 +131,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
 	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
@@ -186,6 +200,7 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
+	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -195,6 +210,7 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
+		audit:             conf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
@@ -213,6 +229,15 @@ func run() {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
+	}
+
+	if opts.audit != nil {
+		wd, err := filepath.Abs(opts.w)
+		x.Check(err)
+		ad, err := filepath.Abs(opts.audit.Dir)
+		x.Check(err)
+		x.AssertTruef(ad != wd,
+			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
 	}
 
 	if opts.rebalanceInterval <= 0 {
@@ -255,14 +280,17 @@ func run() {
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
-	http.HandleFunc("/health", st.pingResponse)
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
-	zpages.Handle(http.DefaultServeMux, "/z")
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.HandleFunc("/health", st.pingResponse)
+	baseMux.HandleFunc("/state", st.getState)
+	baseMux.HandleFunc("/removeNode", st.removeNode)
+	baseMux.HandleFunc("/moveTablet", st.moveTablet)
+	baseMux.HandleFunc("/assign", st.assign)
+	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
@@ -320,6 +348,9 @@ func run() {
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+
+	audit.Close()
+
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }

@@ -322,10 +322,17 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 	return qr, respBody, resp, err
 }
 
-func commitWithTs(keys, preds []string, ts uint64) error {
+func commitWithTs(keys, preds []string, ts uint64, abort bool) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
+	}
+	if abort {
+		if ts != 0 {
+			url += "&abort=true"
+		} else {
+			url += "?abort=true"
+		}
 	}
 
 	m := make(map[string]interface{})
@@ -410,7 +417,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -456,7 +463,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, ts, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
