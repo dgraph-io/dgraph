@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -1473,7 +1474,7 @@ func TestAggregateRoot5(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":null}]}}`, js)
 }
 
 func TestAggregateRoot6(t *testing.T) {
@@ -1517,6 +1518,66 @@ func TestAggregateRootError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmptyData(t *testing.T) {
+
+	query := `
+		{
+			var(func: anyofterms(name, "Non-Existent-Data")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":null},{"min(val(a))":null},{"max(val(a))":null}]}}`, js)
+}
+
+func TestCountEmptyData(t *testing.T) {
+
+	query := `
+		{
+			me(func: anyofterms(name, "Non-Existent-Data")) {
+				a: count(uid)
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"a":0}]}}`, js)
+}
+
+func TestCountEmptyData2(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend) @filter(eq(name, "non-existent"))
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"c":0}]}}`, js)
+}
+
+func TestCountEmptyData3(t *testing.T) {
+
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		me(func: uid(a)) {
+			c: count(friend2)
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestAggregateEmpty1(t *testing.T) {
@@ -1913,6 +1974,158 @@ func TestMultiSort7Paginate(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
+}
+
+func TestSortWithNulls(t *testing.T) {
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		desc   bool
+		result string
+	}{
+		{0, -1, -1, false, `{"data": {"me":[
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{1, -1, -1, true, `{"data": {"me":[
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{2, -1, 2, false, `{"data": {"me":[
+			{"pname":"nameA", "pred": "A"},
+			{"pname":"nameB","pred":"B"}]}}`,
+		},
+		{4, -1, 2, true, `{"data": {"me":[
+			{"pname":"nameE", "pred":"E"},
+			{"pname":"nameD", "pred": "D"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
+		},
+		{6, -1, 7, true, `{"data": {"me":[
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"}]}}`,
+		},
+		{7, 2, 7, false, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
+		},
+		{8, 2, 7, true, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"}]}}`,
+		},
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameD","pred":"D"},
+			{"pname":"nameE","pred":"E"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{10, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred":"C"},
+			{"pname":"nameB","pred":"B"},
+			{"pname":"nameA","pred":"A"},
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{12, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF"},
+			{"pname":"nameG"},
+			{"pname":"nameH"},
+			{"pname":"nameI"},
+			{"pname":"nameJ"}]}}`,
+		},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{14, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ"}]}}`,
+		},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
+		{16, 12, 5, true, `{"data": {"me":[]}}`},
+	}
+
+	makeQuery := func(offset, first int32, desc, index bool) string {
+		pred := "pred"
+		if index {
+			pred = "indexpred"
+		}
+		order := "orderasc: " + pred
+		if desc {
+			order = "orderdesc: " + pred
+		}
+		qfunc := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), "
+		qfunc += order
+		if offset != -1 {
+			qfunc += fmt.Sprintf(", offset: %d", offset)
+		}
+		if first != -1 {
+			qfunc += fmt.Sprintf(", first: %d", first)
+		}
+		query := "{" + qfunc + ") { pname pred:" + pred + " } }"
+		return processQueryNoErr(t, query)
+	}
+
+	for _, tc := range tests {
+		// Case of sort with Index.
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
+	}
 }
 
 func TestMultiSortPaginateWithOffset(t *testing.T) {

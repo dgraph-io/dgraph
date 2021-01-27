@@ -413,12 +413,11 @@ A common use case for the `between` keyword is to search within a
 dataset indexed by `dateTime`. The following example query demonstrates this
 use case.
 
-Query Example: Movies released between the start of 1976 and the end of 1983,
-listed by genre.
+Query Example: Movies initially released in 1977, listed by genre.
 
 {{< runnable >}}
 {
-  me(func: between(initial_release_date, "1976-01-01", "1983-12-31")) {
+  me(func: between(initial_release_date, "1977-01-01", "1977-12-31")) {
     name@en
     genre {
       name@en
@@ -443,8 +442,11 @@ For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For 
 
 `uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
-Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+{{% notice "tip" %}}
+If the UID of a node is known, values for the node can be read directly.
+{{% /notice %}}
 
+Query Example: The films of Priyanka Chopra by known UID.
 {{< runnable >}}
 {
   films(func: uid(0x2c964)) {
@@ -457,8 +459,6 @@ Query Example: If the UID of a node is known, values for the node can be read di
   }
 }
 {{< /runnable >}}
-
-
 
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}

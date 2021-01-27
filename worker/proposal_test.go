@@ -79,12 +79,14 @@ func TestLimiterDeadlock(t *testing.T) {
 	go func() {
 		now := time.Now()
 		for range ticker.C {
+			l.c.L.Lock()
 			fmt.Println("Seconds elapsed :", int64(time.Since(now).Seconds()),
 				"Total proposals: ", atomic.LoadInt64(&currentCount),
 				"Pending proposal: ", atomic.LoadInt64(&pending),
 				"Completed Proposals: ", atomic.LoadInt64(&completed),
 				"Aborted Proposals: ", atomic.LoadInt64(&aborted),
 				"IOU: ", l.iou)
+			l.c.L.Unlock()
 		}
 	}()
 

@@ -24,7 +24,7 @@ import (
 
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
@@ -154,7 +154,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	getNewPlistNil := func() (*List, error){
+	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {

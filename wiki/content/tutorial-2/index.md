@@ -261,7 +261,7 @@ That's when we say that the query is deep!
 
 {{% load-img "/images/tutorials/2/f-level-3-traverse.png" "level-3-query" %}}
 
-Here is one more example from the extention of the last query.
+Here is one more example from the extension of the last query.
 
 ```graphql
 {
@@ -375,5 +375,4 @@ Check out our next tutorial of the getting started series [here]({{< relref "tut
 
 ## Need Help
 
-* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
-* Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
+* Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests, bugs, and discussions.

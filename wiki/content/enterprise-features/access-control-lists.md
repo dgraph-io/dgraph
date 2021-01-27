@@ -262,7 +262,7 @@ The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission 
 `friend` predicate. Permissions are represented by a number following the UNIX file
 permission convention. That is, 4 (binary 100) represents `READ`, 2 (binary 010)
 represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to change a
-predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to represent
+predicate's schema). Similarly, permission numbers can be bitwise OR-ed to represent
 multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for

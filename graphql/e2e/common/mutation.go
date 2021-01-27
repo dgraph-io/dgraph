@@ -3483,9 +3483,11 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 	return filter
 }
 
-func queryTypenameInMutationPayload(t *testing.T) {
+func queryTypenameInMutation(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
+            __typename
+			a:__typename
 			addState(input: [{xcode: "S1", name: "State1"}]) {
 				state {
 					__typename
@@ -3501,6 +3503,8 @@ func queryTypenameInMutationPayload(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
+		"__typename":"Mutation",
+		"a":"Mutation",
 		"addState": {
 			"state": [{
 				"__typename": "State",

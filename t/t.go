@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -84,6 +83,9 @@ var (
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
 	race = pflag.Bool("race", false, "Set true to build with race")
+	skip = pflag.String("skip", "",
+		"comma separated list of packages that needs to be skipped. "+
+			"Package Check uses string.Contains(). Please check the flag carefully")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -102,21 +104,20 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
-func runFatal(cmd *exec.Cmd) {
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("While running command: %q Error: %v\n",
-			strings.Join(cmd.Args, " "), err)
-	}
-}
-func startCluster(composeFile, prefix string) {
+
+func startCluster(composeFile, prefix string) error {
 	cmd := command(
 		"docker-compose", "-f", composeFile, "-p", prefix,
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
-	fmt.Printf("Bringing up cluster %s...\n", prefix)
-	runFatal(cmd)
-	fmt.Printf("CLUSTER UP: %s\n", prefix)
+	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("While running command: %q Error: %v\n",
+			strings.Join(cmd.Args, " "), err)
+		return err
+	}
+	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
 
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {
@@ -132,6 +133,7 @@ func startCluster(composeFile, prefix string) {
 			fmt.Printf("Error while checking alpha health %s. Error %v", in.Name, err)
 		}
 	}
+	return nil
 }
 
 func detectRace(prefix string) bool {
@@ -158,7 +160,15 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v"}
+	if *race {
+		args = append(args, "-timeout", "180m")
+		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+		// args = append(args, "-race")
+	} else {
+		args = append(args, "-timeout", "30m")
+	}
+
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -168,10 +178,6 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	if isTeamcity {
 		args = append(args, "-json")
 	}
-	// Todo: There are few race errors in tests itself. Enable this once that is fixed.
-	//if *race {
-	//	args = append(args, "-race")
-	//}
 	args = append(args, pkg)
 	cmd := commandWithContext(ctx, args...)
 	cmd.Env = append(cmd.Env, "TEST_DOCKER_PREFIX="+prefix)
@@ -199,7 +205,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
 	if detectRace(prefix) {
-		return fmt.Errorf("race condition detected for test package %s and cluster with prefix" +
+		return fmt.Errorf("race condition detected for test package %s and cluster with prefix"+
 			" %s. check logs for more details", pkg, prefix)
 	}
 	return nil
@@ -207,7 +213,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 
 func hasTestFiles(pkg string) bool {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	dir = path.Join(*baseDir, dir)
+	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -241,7 +247,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		closer.Done()
 	}()
 
-	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
+	defaultCompose := filepath.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getClusterPrefix()
 
 	var started, stopped bool
@@ -249,7 +255,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if len(*useExisting) > 0 || started {
 			return
 		}
-		startCluster(defaultCompose, prefix)
+		err := startCluster(defaultCompose, prefix)
+		if err != nil {
+			closer.Signal()
+		}
 		started = true
 	}
 
@@ -313,7 +322,10 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-	startCluster(compose, prefix)
+	err := startCluster(compose, prefix)
+	if err != nil {
+		return err
+	}
 	if !*keepCluster {
 		wg.Add(1)
 		defer stopCluster(compose, prefix, wg)
@@ -340,7 +352,7 @@ func findPackagesFor(testName string) []string {
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
 		}
 	}
@@ -411,13 +423,13 @@ type task struct {
 
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	return path.Join(*baseDir, dir, "docker-compose.yml")
+	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
 func getPackages() []task {
 	has := func(list []string, in string) bool {
 		for _, l := range list {
-			if strings.Contains(in, l) {
+			if len(l) > 0 && strings.Contains(in, l) {
 				return true
 			}
 		}
@@ -425,6 +437,8 @@ func getPackages() []task {
 	}
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	skipPkgs := strings.Split(*skip, ",")
+
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
 		left := 0
@@ -472,6 +486,11 @@ func getPackages() []task {
 
 		if !isValidPackageForSuite(pkg.ID) {
 			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			continue
+		}
+
+		if has(skipPkgs, pkg.ID) {
+			fmt.Printf("Skipping pacakge %s as its available in skip list \n", pkg.ID)
 			continue
 		}
 
@@ -602,7 +621,7 @@ func downloadDataFiles() {
 }
 
 func executePreRunSteps() error {
-	testutil.GeneratePlugins()
+	testutil.GeneratePlugins(*race)
 	return nil
 }
 

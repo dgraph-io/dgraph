@@ -22,7 +22,7 @@ import (
 	"context"
 	"flag"
 	"io/ioutil"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,7 +43,7 @@ var quiet = flag.Bool("quiet", false,
 
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Join(path.Dir(thisFile), "queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
@@ -63,7 +63,7 @@ func TestQueries(t *testing.T) {
 			continue
 		}
 		t.Run(file.Name(), func(t *testing.T) {
-			filename := path.Join(queryDir, file.Name())
+			filename := filepath.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename, nil)
 			bytes, err := ioutil.ReadAll(reader)
 			if err != nil {
@@ -87,7 +87,7 @@ func TestQueries(t *testing.T) {
 
 			t.Logf("running %s", file.Name())
 			if *savedir != "" {
-				savepath = path.Join(*savedir, file.Name())
+				savepath = filepath.Join(*savedir, file.Name())
 			}
 
 			if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {

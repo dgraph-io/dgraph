@@ -219,12 +219,13 @@ func TestDateRDF(t *testing.T) {
 	`
 	rdf, err := processQueryRDF(context.Background(), t, query)
 	require.NoError(t, err)
-	require.Equal(t, rdf, `<0x1> <name> "Michonne" .
+	expected := `<0x1> <name> "Michonne" .
 <0x1> <gender> "female" .
 <0x1> <friend> <0x19> .
 <0x1> <friend> <0x18> .
 <0x1> <friend> <0x17> .
 <0x1> <friend> <0x1f> .
+<0x1> <friend> <0x65> .
 <0x17> <name> "Rick Grimes" .
 <0x18> <name> "Glenn Rhee" .
 <0x19> <name> "Daryl Dixon" .
@@ -233,5 +234,6 @@ func TestDateRDF(t *testing.T) {
 <0x18> <film.film.initial_release_date> "1909-05-05T00:00:00Z" .
 <0x19> <film.film.initial_release_date> "1929-01-10T00:00:00Z" .
 <0x1f> <film.film.initial_release_date> "1801-01-15T00:00:00Z" .
-`)
+`
+	require.Equal(t, expected, rdf)
 }

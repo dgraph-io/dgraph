@@ -26,15 +26,20 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+func setMaxListSize(newMaxListSize int) {
+	maxListSize = newMaxListSize
+}
 
 func (l *List) PostingList() *pb.PostingList {
 	l.RLock()
@@ -451,6 +456,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
+	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
 	key := x.DataKey("bal", 1331)
@@ -907,10 +913,8 @@ func verifySplits(t *testing.T, splits []uint64) {
 
 func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -938,10 +942,10 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 
 	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
-	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
@@ -955,10 +959,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
+	defer setMaxListSize(maxListSize)
+	maxListSize = 10000
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -1007,6 +1009,41 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	return ol, commits
 }
 
+func TestDeleteStarMultiPartList(t *testing.T) {
+	numEdges := 10000
+
+	list, _ := createMultiPartList(t, numEdges, false)
+	parsedKey, err := x.Parse(list.key)
+	require.NoError(t, err)
+
+	validateCount := func(expected int) {
+		count := 0
+		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
+			count++
+			return nil
+		})
+		require.Equal(t, expected, count)
+	}
+	validateCount(numEdges)
+
+	readTs := list.maxTs + 1
+	commitTs := readTs + 1
+
+	txn := NewTxn(readTs)
+	edge := &pb.DirectedEdge{
+		ValueId: parsedKey.Uid,
+		Attr:    parsedKey.Attr,
+		Value:   []byte(x.Star),
+		Op:      pb.DirectedEdge_DEL,
+	}
+	err = list.addMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	err = list.commitMutation(readTs, commitTs)
+	require.NoError(t, err)
+	validateCount(0)
+}
+
 func writePostingListToDisk(kvs []*bpb.KV) error {
 	writer := NewTxnWriter(pstore)
 	for _, kv := range kvs {
@@ -1028,6 +1065,75 @@ func TestMultiPartListBasic(t *testing.T) {
 	for i, uid := range l.Uids {
 		require.Equal(t, uint64(i+1), uid)
 	}
+}
+
+// Checks if the binSplit works correctly.
+func TestBinSplit(t *testing.T) {
+	createList := func(t *testing.T, size int) *List {
+		// This is a package level constant, so reset it after use.
+		originalListSize := maxListSize
+		maxListSize = math.MaxInt32
+		defer func() {
+			maxListSize = originalListSize
+		}()
+		key := x.DataKey(uuid.New().String(), 1331)
+		ol, err := getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		for i := 1; i <= size; i++ {
+			edge := &pb.DirectedEdge{
+				ValueId: uint64(i),
+				Label:   strconv.Itoa(i),
+			}
+			txn := Txn{StartTs: uint64(i)}
+			addMutationHelper(t, ol, edge, Set, &txn)
+			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		}
+
+		kvs, err := ol.Rollup(nil)
+		require.NoError(t, err)
+		for _, kv := range kvs {
+			require.Equal(t, uint64(size+1), kv.Version)
+		}
+		require.NoError(t, writePostingListToDisk(kvs))
+		ol, err = getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(ol.plist.Splits))
+		require.Equal(t, size, len(ol.plist.Postings))
+		return ol
+	}
+	verifyBinSplit := func(t *testing.T, ol *List, startUids []uint64, pls []*pb.PostingList) {
+		require.Equal(t, 2, len(startUids))
+		require.Equal(t, 2, len(pls))
+		uids := codec.Decode(ol.plist.Pack, 0)
+		lowUids := codec.Decode(pls[0].Pack, startUids[0])
+		highUids := codec.Decode(pls[1].Pack, startUids[1])
+		// Check if no data is lost in splitting.
+		require.Equal(t, uids, append(lowUids, highUids...))
+		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+		// Check if the postings belong to the correct half.
+		midUid := pls[1].Pack.Blocks[0].GetBase()
+		require.Equal(t, startUids[1], midUid)
+		for _, p := range pls[0].Postings {
+			require.Less(t, p.Uid, midUid)
+		}
+		for _, p := range pls[1].Postings {
+			require.GreaterOrEqual(t, p.Uid, midUid)
+		}
+	}
+	size := int(1e5)
+	ol := createList(t, size)
+	postings := ol.plist.Postings
+	startUids, pls := binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+
+	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
+	ol.plist.Postings = postings[:size/3]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+
+	ol.plist.Postings = postings[:0]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
 }
 
 // Verify that iteration works with an afterUid value greater than zero.
@@ -1147,10 +1253,8 @@ func TestMultiPartListDelete(t *testing.T) {
 func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	size := int(1e5)
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Add entries to the maps.
 	key := x.DataKey(uuid.New().String(), 1331)
@@ -1285,10 +1389,8 @@ func TestSingleListRollup(t *testing.T) {
 
 func TestRecursiveSplits(t *testing.T) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = mb / 2
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Create a list that should be split recursively.
 	size := int(1e5)

@@ -1,9 +1,9 @@
 +++
 title = "GraphQL on Existing Dgraph"
-weight = 13
+weight = 1
 [menu.main]
   identifier = "dgraph"
-  parent = "graphql"
+  parent = "migration"
 +++
 
 <!-- <h1>{props.pageContext.frontmatter.title}</h1> -->
