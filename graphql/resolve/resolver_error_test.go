@@ -335,7 +335,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 // So this mocks a failing mutation and tests that we behave correctly in the case
 // of multiple mutations.
 func TestManyMutationsWithError(t *testing.T) {
-
+	t.Skip()
 	// add1 - should succeed
 	// add2 - should fail
 	// add3 - is never executed

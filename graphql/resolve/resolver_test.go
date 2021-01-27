@@ -354,7 +354,6 @@ func TestQueryAlias(t *testing.T) {
 
 func TestMutationAlias(t *testing.T) {
 	t.Skipf("TODO(abhimanyu): port it to e2e")
-
 	tests := map[string]struct {
 		gqlQuery      string
 		mutResponse   map[string]string

@@ -51,9 +51,12 @@ type testCase struct {
 	DGMutations     []*dgraphMutation
 	DGMutationsSec  []*dgraphMutation
 	DGQuery         string
+	DeleteQuery     string
 	DGQuerySec      string
 	Error           *x.GqlError
+	Error2          *x.GqlError
 	ValidationError *x.GqlError
+	QNameToUID      string
 }
 
 type dgraphMutation struct {
@@ -67,7 +70,7 @@ func TestMutationRewriting(t *testing.T) {
 		mutationValidation(t, "validate_mutation_test.yaml", NewAddRewriter)
 	})
 	t.Run("Add Mutation Rewriting", func(t *testing.T) {
-		mutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter)
+		newMutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter)
 	})
 	t.Run("Update Mutation Rewriting", func(t *testing.T) {
 		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter)
@@ -221,6 +224,91 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 				require.Equal(t, tcase.DGQuerySec, dgraph.AsString(upsert[1].Query))
 				compareMutations(t, tcase.DGMutationsSec, upsert[1].Mutations)
 			}
+		})
+	}
+}
+
+func newMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
+	b, err := ioutil.ReadFile(file)
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []testCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
+		require.Len(t, generated, len(test))
+		for i, expected := range test {
+			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
+				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
+			}
+
+			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+				require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
+			}
+		}
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query:     tcase.GQLMutation,
+					Variables: vars,
+				})
+			if tcase.ValidationError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tcase.ValidationError.Error(), err.Error())
+				return
+			} else {
+				require.NoError(t, err)
+			}
+			mut := test.GetMutation(t, op)
+
+			// -- Query --
+			varGen := NewVariableGenerator()
+			xidMd := newXidMetadata()
+			queries, err := NewRewrite(context.Background(), mut, varGen, xidMd)
+			// -- Assert --
+			if tcase.Error != nil || err != nil {
+				require.NotNil(t, err)
+				require.NotNil(t, tcase.Error)
+				require.Equal(t, tcase.Error.Error(), err.Error())
+				return
+			}
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(queries))
+
+			// -- Parse qNameToUID map
+			qNameToUID := make(map[string]string)
+			if tcase.QNameToUID != "" {
+				err = json.Unmarshal([]byte(tcase.QNameToUID), &qNameToUID)
+				require.NoError(t, err)
+			}
+
+			// Mutate
+			upsert, _, err := NewCreateMutations(context.Background(), mut, varGen, xidMd, qNameToUID)
+			if tcase.Error2 != nil || err != nil {
+				require.NotNil(t, err)
+				require.NotNil(t, tcase.Error2)
+				require.Equal(t, tcase.Error2.Error(), err.Error())
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, 1, len(upsert))
+			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
+
+			// Compare Query generated for deleting existing edges
+			deleteQuery := dgraph.AsString(upsert[0].Query)
+			require.Equal(t, tcase.DeleteQuery, deleteQuery)
 		})
 	}
 }
