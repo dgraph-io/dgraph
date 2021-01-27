@@ -24,12 +24,14 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
+var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
+	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter"}
+
 func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
 		if value.Definition == nil || value.ExpectedType == nil {
 			return
 		}
-
 		if value.Kind == ast.Variable {
 			return
 		}
@@ -48,6 +50,18 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 		child := &ast.ChildValue{Value: &val}
 		valueNew := ast.Value{Children: []*ast.ChildValue{child}, Kind: ast.ListValue, Position: val.Position, Definition: val.Definition}
 		*value = valueNew
+	})
+}
+
+func filterCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition == nil || value.ExpectedType == nil {
+			return
+		}
+
+		if contains(allowedFilters, value.Definition.Name) && len(value.Children) > 1 {
+			addError(validator.Message("Multiple filter functions for %s not allowed", value.Definition.Name), validator.At(value.Position))
+		}
 	})
 }
 
@@ -161,4 +175,14 @@ func valueKindToString(valKind ast.ValueKind) string {
 		return "Object"
 	}
 	return ""
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
 }
