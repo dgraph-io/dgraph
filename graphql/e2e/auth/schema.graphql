@@ -802,3 +802,4 @@ type Astronaut @key(fields: "id") @extends @auth(
     id: ID! @external
     missions: [Mission]
 }
+
