@@ -1889,7 +1889,7 @@
         dgraph.uid : uid
       }
       _EntityRoot as var(func: uid(Astronaut4))
-      Astronaut4 as var(func: uid(0x1, 0x2, 0x3)) @filter(type(Astronaut))
+      Astronaut4 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
       var(func: uid(_EntityRoot)) {
         Mission2 as Astronaut.missions
       }
@@ -1937,6 +1937,6 @@
         dgraph.uid : uid
       }
       _EntityRoot as var(func: uid(Astronaut3))
-      Astronaut3 as var(func: uid(0x1, 0x2, 0x3)) @filter(type(Astronaut))
+      Astronaut3 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
     }
 
