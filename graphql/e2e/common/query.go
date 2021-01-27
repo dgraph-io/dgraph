@@ -403,7 +403,7 @@ func entitiesQuery(t *testing.T) {
 		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!){
 			_entities(representations: [{__typename: $typeName, id: $id1}, {__typename: $typeName, id: $id2 }]) {
 				... on SpaceShip {
-					missions {
+					missions(order: {asc: id}){
 						id
 						designation
 					}
