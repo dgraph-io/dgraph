@@ -394,10 +394,12 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, 2, len(mr.preds))
 	var parsedPreds []string
 	for _, pred := range mr.preds {
-		parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
+		p := strings.Split(pred, "-")[1]
+		parsedPreds = append(parsedPreds, x.ParseAttr(p))
+		// parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
-	require.Equal(t, "balance", parsedPreds[0])
+	require.Equal(t, "balance", parsedPreds[0], mr.preds)
 	require.Equal(t, "name", parsedPreds[1])
 
 	data, _, err := queryWithTs(q1, "application/dql", "", 0)

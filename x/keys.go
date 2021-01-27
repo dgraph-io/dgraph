@@ -50,7 +50,52 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
+	// DefaultNamespace is the default namespace name.
+	DefaultNamespace = uint64(0)
 )
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(ns uint64, attr string) string {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, ns)
+	return string(buf) + attr
+}
+
+func NamespaceAttrList(ns uint64, preds []string) []string {
+	var resp []string
+	for _, pred := range preds {
+		resp = append(resp, NamespaceAttr(ns, pred))
+	}
+	return resp
+}
+
+// ParseNamespaceAttr returns the namespace and attr from the given value.
+func ParseNamespaceAttr(attr string) (uint64, string) {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
+}
+
+// ParseAttr returns the attr from the given value.
+func ParseAttr(attr string) string {
+	AssertTrue(len(attr) >= 8)
+	return attr[8:]
+}
+
+func ParseAttrList(attrs []string) []string {
+	var resp []string
+	for _, attr := range attrs {
+		resp = append(resp, ParseAttr(attr))
+	}
+	return resp
+}
+
+func IsReverseAttr(attr string) bool {
+	AssertTrue(len(attr) >= 8)
+	if attr[8] == '~' {
+		return true
+	}
+	return false
+}
 
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
@@ -610,7 +655,7 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // 	2. dgraph.blah (reserved = true,  pre_defined = false)
 // 	3. person.name (reserved = false, pre_defined = false)
 func IsReservedPredicate(pred string) bool {
-	return isReservedName(pred)
+	return isReservedName(ParseAttr(pred))
 }
 
 // IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally
@@ -625,6 +670,7 @@ func IsReservedPredicate(pred string) bool {
 //
 // Pre-defined predicates are subset of reserved predicates.
 func IsPreDefinedPredicate(pred string) bool {
+	pred = ParseAttr(pred)
 	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
@@ -638,10 +684,10 @@ func IsAclPredicate(pred string) bool {
 
 // StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func StarAllPredicates() []string {
+func StarAllPredicates(namespace uint64) []string {
 	preds := make([]string, 0, len(starAllPredicateMap))
 	for pred := range starAllPredicateMap {
-		preds = append(preds, pred)
+		preds = append(preds, NamespaceAttr(namespace, pred))
 	}
 	return preds
 }
@@ -657,7 +703,7 @@ func AllACLPredicates() []string {
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
 // Currently, `uid` is the only such candidate.
 func IsInternalPredicate(pred string) bool {
-	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	_, ok := internalPredicateMap[strings.ToLower(ParseAttr(pred))]
 	return ok
 }
 
@@ -673,7 +719,7 @@ func IsInternalPredicate(pred string) bool {
 // When critical, use IsPreDefinedType(typ string) to find out whether the typ was
 // actually defined internally or not.
 func IsReservedType(typ string) bool {
-	return isReservedName(typ)
+	return isReservedName(ParseAttr(typ))
 }
 
 // IsPreDefinedType returns true only if the typ has been defined by dgraph internally.
@@ -685,7 +731,7 @@ func IsReservedType(typ string) bool {
 //
 // Pre-defined types are subset of reserved types.
 func IsPreDefinedType(typ string) bool {
-	_, ok := preDefinedTypeMap[typ]
+	_, ok := preDefinedTypeMap[ParseAttr(typ)]
 	return ok
 }
 

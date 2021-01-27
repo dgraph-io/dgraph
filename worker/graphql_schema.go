@@ -18,14 +18,16 @@ package worker
 
 import (
 	"context"
-	"github.com/golang/glog"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -76,9 +78,10 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	schemaLock.Lock()
 	defer schemaLock.Unlock()
 
+	namespace := x.ExtractNamespace(ctx)
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
-		Attr:    GqlSchemaPred,
+		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),
 		SrcFunc: &pb.SrcFunction{Name: "has"},
 		ReadTs:  req.StartTs,
 		// there can only be one GraphQL schema node,
@@ -121,7 +124,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		Edges: []*pb.DirectedEdge{
 			{
 				Entity:    schemaNodeUid,
-				Attr:      GqlSchemaPred,
+				Attr:      x.NamespaceAttr(namespace, GqlSchemaPred),
 				Value:     []byte(req.GraphqlSchema),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
@@ -134,7 +137,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 				// directive on xid. So, this way we make sure that even in this rare case there can
 				// only be one server which is able to successfully update the GraphQL schema.
 				Entity:    schemaNodeUid,
-				Attr:      gqlSchemaXidPred,
+				Attr:      x.NamespaceAttr(namespace, gqlSchemaXidPred),
 				Value:     []byte(gqlSchemaXidVal),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
@@ -144,7 +147,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	if creatingNode {
 		m.Edges = append(m.Edges, &pb.DirectedEdge{
 			Entity:    schemaNodeUid,
-			Attr:      "dgraph.type",
+			Attr:      x.NamespaceAttr(namespace, "dgraph.type"),
 			Value:     []byte("dgraph.graphql"),
 			ValueType: pb.Posting_STRING,
 			Op:        pb.DirectedEdge_SET,

@@ -489,7 +489,8 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	prefix := x.DataKey(worker.GqlSchemaPred, 0)
+	// TODO(Ahsan): The namespace shouldn't be default always"
+	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
@@ -559,13 +560,15 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"backup":   resolveBackup,
-		"config":   resolveUpdateConfig,
-		"draining": resolveDraining,
-		"export":   resolveExport,
-		"login":    resolveLogin,
-		"restore":  resolveRestore,
-		"shutdown": resolveShutdown,
+		"backup":          resolveBackup,
+		"config":          resolveUpdateConfig,
+		"createNamespace": resolveCreateNamespace,
+		"deleteNamespace": resolveDeleteNamespace,
+		"draining":        resolveDraining,
+		"export":          resolveExport,
+		"login":           resolveLogin,
+		"restore":         resolveRestore,
+		"shutdown":        resolveShutdown,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).

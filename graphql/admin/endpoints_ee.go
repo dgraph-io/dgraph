@@ -412,7 +412,17 @@ const adminTypes = `
 	type DeleteGroupPayload {
 		msg: String
 		numUids: Int
-	}`
+	}
+
+	input NamespaceInput {
+		namespaceId: Int!
+	}
+
+	type NamespacePayload {
+		namespaceId: Int
+		message: String
+	}
+	`
 
 const adminMutations = `
 
@@ -462,7 +472,14 @@ const adminMutations = `
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload`
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+
+	"""
+	Create or Delete a namespace.
+	"""
+	createNamespace(input: NamespaceInput!): NamespacePayload
+	deleteNamespace(input: NamespaceInput!): NamespacePayload
+	`
 
 const adminQueries = `
 	getUser(name: String!): User

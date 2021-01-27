@@ -536,8 +536,8 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the type updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
-func InitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(false)
+func InitialTypes(namespace uint64) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, false)
 }
 
 // CompleteInitialTypes returns all the type updates regardless of the worker
@@ -546,12 +546,12 @@ func InitialTypes() []*pb.TypeUpdate {
 // example of such situation is while allowing type updates to go through during
 // alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
-func CompleteInitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(true)
+func CompleteInitialTypes(namespace uint64) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, true)
 }
 
 // NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
-func initialTypesInternal(all bool) []*pb.TypeUpdate {
+func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
@@ -646,14 +646,20 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 			})
 	}
 
+	for _, typ := range initialTypes {
+		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		for _, fields := range typ.Fields {
+			fields.Predicate = x.NamespaceAttr(namespace, fields.Predicate)
+		}
+	}
 	return initialTypes
 }
 
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(false)
+func InitialSchema(namespace uint64) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, false)
 }
 
 // CompleteInitialSchema returns all the schema updates regardless of the worker
@@ -661,11 +667,11 @@ func InitialSchema() []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(true)
+func CompleteInitialSchema(namespace uint64) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema,
@@ -748,20 +754,22 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			},
 		}...)
 	}
-
+	for _, sch := range initialSchema {
+		sch.Predicate = x.NamespaceAttr(namespace, sch.Predicate)
+	}
 	return initialSchema
 }
 
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
 // If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
+func IsPreDefPredChanged(namespace uint64, update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema()
+	initialSchema := CompleteInitialSchema(namespace)
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
@@ -774,13 +782,13 @@ func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 // IsPreDefTypeChanged returns true if the initial update for the pre-defined
 // type is different than the passed update.
 // If the passed update is not a pre-defined type than it just returns false.
-func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
+func IsPreDefTypeChanged(namespace uint64, update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
 	if !x.IsPreDefinedType(update.TypeName) {
 		return false
 	}
 
-	initialTypes := CompleteInitialTypes()
+	initialTypes := CompleteInitialTypes(namespace)
 	for _, original := range initialTypes {
 		if original.TypeName != update.TypeName {
 			continue

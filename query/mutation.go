@@ -37,6 +37,8 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	// In expandEdges, for non * type prredicates, we prepend the namespace directly and for
+	// * type predicates, we fetch the predicates and prepend the namespace.
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
@@ -59,12 +61,13 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
+	namespace := x.ExtractNamespace(ctx)
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
 
 		var preds []string
 		if edge.Attr != x.Star {
-			preds = []string{edge.Attr}
+			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
@@ -73,8 +76,8 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.StarAllPredicates()...)
+			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
+			preds = append(preds, x.StarAllPredicates(namespace)...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
 			// delete predicates to which the mutation has access
 			if edge.AllowedPreds != nil {

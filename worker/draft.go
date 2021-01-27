@@ -335,7 +335,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		posting.ResetCache()
 
 		if groups().groupId() == 1 {
-			initialSchema := schema.InitialSchema()
+			initialSchema := schema.InitialSchema(x.DefaultNamespace)
 			for _, s := range initialSchema {
 				if err := updateSchema(s); err != nil {
 					return err
@@ -352,7 +352,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.
-		initialTypes := schema.InitialTypes()
+		initialTypes := schema.InitialTypes(x.DefaultNamespace)
 		for _, t := range initialTypes {
 			if err := updateType(t.GetTypeName(), *t); err != nil {
 				return err

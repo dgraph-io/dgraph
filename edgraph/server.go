@@ -109,6 +109,21 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+// TODO(Ahsan): Complete the below two functions.
+func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
+	glog.Info("Creating namespace", namespace)
+	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+	m.Schema = schema.InitialSchema(namespace)
+	_, err := query.ApplyMutations(ctx, m)
+	return err
+}
+
+func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
+	glog.Info("Deleting namespace", namespace)
+	ps := worker.State.Pstore
+	return ps.BanNamespace(namespace)
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -203,7 +218,8 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		if err = validateAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
-		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+		namespace := x.ExtractNamespace(ctx)
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(namespace, op); err != nil {
 			return nil, err
 		}
 	}
@@ -250,7 +266,8 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
+func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema.ParsedSchema,
+	error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -267,7 +284,9 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		//
 		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
 		// example?
-		if schema.IsPreDefPredChanged(update) {
+
+		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
+		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
 		}
@@ -290,7 +309,11 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefTypeChanged(typ) {
+		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		for _, field := range typ.Fields {
+			field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
+		}
+		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
 		}
@@ -346,6 +369,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	empty := &api.Payload{}
+	namespace := x.ExtractNamespace(ctx)
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -418,7 +442,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		} else {
 			attr = op.DropValue
 		}
-
+		attr = x.NamespaceAttr(namespace, attr)
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
@@ -427,7 +451,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		nq := &api.NQuad{
 			Subject:     x.Star,
-			Predicate:   attr,
+			Predicate:   x.ParseAttr(attr),
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
 		wnq := &gql.NQuad{NQuad: nq}
@@ -453,18 +477,18 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// Pre-defined types cannot be dropped.
-		if x.IsPreDefinedType(op.DropValue) {
+		dropPred := x.NamespaceAttr(namespace, op.DropValue)
+		if x.IsPreDefinedType(dropPred) {
 			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
 				op.DropValue)
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
+		m.DropValue = dropPred
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-
-	result, err := parseSchemaFromAlterOperation(op)
+	result, err := parseSchemaFromAlterOperation(namespace, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
 		time.Sleep(time.Second)
@@ -535,6 +559,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
+			pred = x.NamespaceAttr(x.ExtractNamespace(ctx), pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}
@@ -931,6 +956,8 @@ type queryContext struct {
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
+	// namespace of the given query.
+	namespace uint64
 }
 
 // Health handles /health and /health?all requests.
@@ -1071,7 +1098,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
+	qc := &queryContext{
+		req:       req,
+		latency:   l,
+		span:      span,
+		graphql:   isGraphQL,
+		namespace: x.ExtractNamespace(ctx),
+	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -1102,6 +1135,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
 	}
+
+	// TODO(Ahsan): resp.Txn.Preds contain predicates of form gid-namespace|attr.
+	// Remove the namespace from the response.
+	// resp.Txn.Preds = x.ParseAttrList(resp.Txn.Preds)
 
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
 	// this separately since it involves modifying the API protos.
@@ -1171,6 +1208,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
+
 	if err != nil {
 		return resp, errors.Wrap(err, "")
 	}
