@@ -56,7 +56,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 	var resultState map[string]interface{}
-	err = resolve.Unmarshal(b, &resultState)
+	err = schema.Unmarshal(b, &resultState)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}

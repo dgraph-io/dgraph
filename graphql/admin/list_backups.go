@@ -76,7 +76,7 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 			return resolve.EmptyResult(q, err)
 		}
 		var result map[string]interface{}
-		err = resolve.Unmarshal(b, &result)
+		err = schema.Unmarshal(b, &result)
 		if err != nil {
 			return resolve.EmptyResult(q, err)
 		}

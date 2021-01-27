@@ -31,36 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	ErrExpectedScalar = "An object type was returned, but GraphQL was expecting a scalar. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	ErrExpectedSingleItem = "A list was returned, but GraphQL was expecting just one item. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	ErrExpectedList = "An item was returned, but GraphQL was expecting a list of items. " +
-		"This indicates an internal error - " +
-		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
-		"The value was resolved as null (which may trigger GraphQL error propagation) " +
-		"and as much other data as possible returned."
-
-	ErrExpectedNonNull = "Non-nullable field '%s' (type %s) was not present in result from Dgraph.  " +
-		"GraphQL error propagation triggered."
-)
-
-var (
-	// JsonNull are the bytes to represent null in JSON.
-	JsonNull = []byte("null")
-	// JsonEmptyList are the bytes to represent an empty list in JSON.
-	JsonEmptyList = []byte("[]")
-)
-
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 

@@ -3287,7 +3287,7 @@ func testNumUids(t *testing.T) {
 }
 
 func deleteUser(t *testing.T, userObj user) {
-	DeleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
+	DeleteGqlType(t, "User", GetXidFilter("name", []interface{}{userObj.Name}), 1, nil)
 }
 
 func threeLevelDeepMutation(t *testing.T) {
@@ -3355,9 +3355,9 @@ func threeLevelDeepMutation(t *testing.T) {
 	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].TaughtBy[0].Xid, "HT0")
 
 	// cleanup
-	filter := getXidFilter("xid", []string{"HS1", "HS2"})
+	filter := GetXidFilter("xid", []interface{}{"HS1", "HS2"})
 	DeleteGqlType(t, "Student", filter, 2, nil)
-	filter = getXidFilter("xid", []string{"HT0"})
+	filter = GetXidFilter("xid", []interface{}{"HT0"})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
 }
@@ -3437,9 +3437,9 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 		actualResult.AddStudent.Student[1].TaughtBy[0].ID)
 
 	// cleanup
-	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
+	filter := GetXidFilter("xid", []interface{}{newStudents[0].Xid, newStudents[1].Xid})
 	DeleteGqlType(t, "Student", filter, 2, nil)
-	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
+	filter = GetXidFilter("xid", []interface{}{newStudents[0].TaughtBy[0].Xid})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 }
 
@@ -3463,7 +3463,7 @@ func sliceSorter() cmp.Option {
 	})
 }
 
-func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
+func GetXidFilter(xidKey string, xidVals []interface{}) map[string]interface{} {
 	if len(xidVals) == 0 || xidKey == "" {
 		return nil
 	}
@@ -4619,7 +4619,6 @@ func idDirectiveWithIntMutation(t *testing.T) {
 		  addChapter(input:[{
 			chapterId: 2
 			name: "Graphql and more"
-			bookId: 1234567890123
 		  }]) {
 			numUids
 		  }

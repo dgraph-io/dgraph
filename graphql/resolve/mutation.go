@@ -359,7 +359,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 	comma := ""
 	var buf bytes.Buffer
 	x.Check2(buf.WriteRune('{'))
-	completeAlias(mutation, &buf)
+	schema.CompleteAlias(mutation, &buf)
 	x.Check2(buf.WriteRune('{'))
 
 	// Our standard MutationPayloads consist of only the following fields:
@@ -370,7 +370,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 	// Note that all these fields are nullable, so no need to raise non-null errors.
 	for _, f := range mutation.SelectionSet() {
 		x.Check2(buf.WriteString(comma))
-		completeAlias(f, &buf)
+		schema.CompleteAlias(f, &buf)
 
 		switch f.Name() {
 		case schema.Typename:
