@@ -273,7 +273,6 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 				require.NoError(t, err)
 			}
 			mut := test.GetMutation(t, op)
-			// rewriterToTest := rewriterFactory()
 
 			// -- Query --
 			varGen := NewVariableGenerator()

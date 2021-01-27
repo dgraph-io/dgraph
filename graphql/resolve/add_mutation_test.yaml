@@ -981,15 +981,15 @@
         uid
       }
     }
+  qnametouid: |-
+    {
+      "Post1":"0x123"
+    }
   deletequery: |-
     query {
       var(func: uid(0x123)) {
         Author4 as Post.author
       }
-    }
-  qnametouid: |-
-    {
-      "Post1":"0x123"
     }
   dgmutations:
     - setjson: |
