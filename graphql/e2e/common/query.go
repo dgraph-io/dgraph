@@ -420,28 +420,33 @@ func entitiesQuery(t *testing.T) {
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{
-		"_entities": [
-		  {
-			"missions": [
-			  {
-				"id": "Mission1",
-				"designation": "Apollo1"
-			  }
-			]
-		  },
-		  {
-			"missions": [
-			  {
-				"id": "Mission2",
-				"designation": "Apollo2"
-			  }
-			]
-		  }
-		]
-	  }`
+	var result struct {
+		QueryMission []*mission
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryMission))
+	queriedResult := map[string]*mission{}
+	queriedResult[result.QueryMission[0].ID] = result.QueryMission[0]
+	queriedResult[result.QueryMission[1].ID] = result.QueryMission[1]
 
-	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+	mission1 := &mission{
+		ID:          "Mission1",
+		Designation: "Apollo1",
+	}
+
+	mission2 := &mission{
+		ID:          "Mission1",
+		Designation: "Apollo1",
+	}
+
+	if diff := cmp.Diff(mission1, queriedResult[mission1.ID]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(mission2, queriedResult[mission2.ID]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
 	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2"}}}
 	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 2, nil)

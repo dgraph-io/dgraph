@@ -137,6 +137,11 @@ type country struct {
 	States []*state `json:"states,omitempty"`
 }
 
+type mission struct {
+	ID          string `json:"id,omitempty"`
+	Designation string `json:"designation,omitempty"`
+}
+
 type author struct {
 	ID            string     `json:"id,omitempty"`
 	Name          string     `json:"name,omitempty"`
