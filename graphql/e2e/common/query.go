@@ -436,8 +436,8 @@ func entitiesQuery(t *testing.T) {
 	}
 
 	mission2 := &mission{
-		ID:          "Mission1",
-		Designation: "Apollo1",
+		ID:          "Mission2",
+		Designation: "Apollo2",
 	}
 
 	if diff := cmp.Diff(mission1, queriedResult[mission1.ID]); diff != "" {
