@@ -4,6 +4,107 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.11.1] - 2020-01-27
+[20.11.1]: https://github.com/dgraph-io/dgraph/compare/v20.11.1...v20.11.0
+
+### Fixed
+- GraphQL
+  - Fix(subscriptions): fix subscription to use the kv with the max version ([#7349][]) ([#7355][])
+  - Fix(GraphQl): fix a panic when we pass a single ID as a integer and expected type is [ID].We
+   now coerce that to type array of string.  ([#7325][]) ([#7353][])
+  - Fix(GRAPHQL): update gqlparser release to v2.1.4 ([#7347][]) ([#7352][])
+  - Fix(GraphQL): Fix graphql flaky tests which were caused by receiving extra schema updates
+    ([#7329][]) ([#7348][])
+  - Fix(GraphQL): This PR addd input coercion from single object to list and fix panic when we
+   pass single ID in filter as a string. ([#7133][]) ([#7306][])
+  - Fix(GRAPHQL): Don't generate get query on interface if it doesn't have field of type ID and
+   also disallow get query on field of type @id in inerface. ([#7158][]) ([#7305][])
+  - Fix(GraphQL): This PR fix multi cors and multi schema nodes issue by selecting one of the
+   latest added nodes, and add dgraph type to cors. ([#7270][]) ([#7302][])
+  - Fix(GraphQL): This PR allow to use __typename in mutation. ([#7285][]) ([#7303][])
+  - Fix(GraphQL): Fix auth-token propagation for HTTP endpoints resolved through GraphQL (GRAPHQL
+  -946) ([#7245][]) ([#7251][])
+
+- Core Dgraph
+  - Fix(bulk): save schemaMap after map phase ([#7188][]) ([#7351][])
+  - Fix(Dgraph): check for deleteBelowTs in pIterator.valid ([#7288][]) ([#7350][])
+  - Fix(indexing): use encrypted tmpDBs for index building if encryption is enabled ([#6828][]) ([#7343][])
+  - Fix(bulk): Fix memory held by b+ tree in reduce phase ([#7161][]) ([#7333][])
+  - Feat(bulk): Add /jemalloc HTTP endpoint. ([#7165][]) ([#7331][])
+  - Fix(sort): Make sort consistent for indexed and without indexed predicates ([#7241][]) ([#7323][])
+  - Fix(dgraph): Add X-Dgraph-AuthToken to list of access control allowed headers ([#7311][])
+  - Fix(ludicrous): Fix logical race in concurrent execution of mutations ([#7269][]) ([#7309][])
+  - Fix(ludicrous): Fix data race in executor ([#7203][]) ([#7307][])
+  - Opt(rollup): change the way rollups are done ([#7253][]) ([#7277][])
+  - Fix(indexing): use --tmp directory for building indexes ([#7289][]) ([#7300][])
+  - Fix(dgraph): Fix dgraph crash on windows ([#7261][]) ([#7299][])
+  - Fix(dgraph): making jemalloc to work with dgraph on macos ([#7247][]) ([#7282][])
+  - Fix(dgraph): Fixing multiple race conditions ([#7278][])
+  - Fixing unique proposal key error ([#7218][]) ([#7281][])
+  - Fix(raft): Unmarshal zero snapshot into pb.ZeroSnaphot ([#7244][])
+  - Fix(bulk): fixing bulk loader when encryption + mtls is enabled ([#7154][]) ([#7155][])
+
+- Enterprise Features
+  - Fix(restore): reset acl accounts once restore is done if necessary ([#7202][]) ([#7280][])
+  - Fix(restore): multiple restore requests should be rejected and proposals should not be submitted ([#7118][]) ([#7276][])
+  - Fix(restore): Handle MaxUid=0 appropriately ([#7258][]) ([#7265][])
+
+[#7349]: https://github.com/dgraph-io/dgraph/issues/7349
+[#7355]: https://github.com/dgraph-io/dgraph/issues/7355
+[#7188]: https://github.com/dgraph-io/dgraph/issues/7188
+[#7351]: https://github.com/dgraph-io/dgraph/issues/7351
+[#7288]: https://github.com/dgraph-io/dgraph/issues/7288
+[#7350]: https://github.com/dgraph-io/dgraph/issues/7350
+[#7325]: https://github.com/dgraph-io/dgraph/issues/7325
+[#7353]: https://github.com/dgraph-io/dgraph/issues/7353
+[#7347]: https://github.com/dgraph-io/dgraph/issues/7347
+[#7352]: https://github.com/dgraph-io/dgraph/issues/7352
+[#6828]: https://github.com/dgraph-io/dgraph/issues/6828
+[#7343]: https://github.com/dgraph-io/dgraph/issues/7343
+[#7329]: https://github.com/dgraph-io/dgraph/issues/7329
+[#7348]: https://github.com/dgraph-io/dgraph/issues/7348
+[#7161]: https://github.com/dgraph-io/dgraph/issues/7161
+[#7333]: https://github.com/dgraph-io/dgraph/issues/7333
+[#7165]: https://github.com/dgraph-io/dgraph/issues/7165
+[#7331]: https://github.com/dgraph-io/dgraph/issues/7331
+[#7241]: https://github.com/dgraph-io/dgraph/issues/7241
+[#7323]: https://github.com/dgraph-io/dgraph/issues/7323
+[#7311]: https://github.com/dgraph-io/dgraph/issues/7311
+[#7269]: https://github.com/dgraph-io/dgraph/issues/7269
+[#7309]: https://github.com/dgraph-io/dgraph/issues/7309
+[#7133]: https://github.com/dgraph-io/dgraph/issues/7133
+[#7306]: https://github.com/dgraph-io/dgraph/issues/7306
+[#7158]: https://github.com/dgraph-io/dgraph/issues/7158
+[#7305]: https://github.com/dgraph-io/dgraph/issues/7305
+[#7270]: https://github.com/dgraph-io/dgraph/issues/7270
+[#7302]: https://github.com/dgraph-io/dgraph/issues/7302
+[#7285]: https://github.com/dgraph-io/dgraph/issues/7285
+[#7303]: https://github.com/dgraph-io/dgraph/issues/7303
+[#7203]: https://github.com/dgraph-io/dgraph/issues/7203
+[#7307]: https://github.com/dgraph-io/dgraph/issues/7307
+[#7253]: https://github.com/dgraph-io/dgraph/issues/7253
+[#7277]: https://github.com/dgraph-io/dgraph/issues/7277
+[#7289]: https://github.com/dgraph-io/dgraph/issues/7289
+[#7300]: https://github.com/dgraph-io/dgraph/issues/7300
+[#7261]: https://github.com/dgraph-io/dgraph/issues/7261
+[#7299]: https://github.com/dgraph-io/dgraph/issues/7299
+[#7247]: https://github.com/dgraph-io/dgraph/issues/7247
+[#7282]: https://github.com/dgraph-io/dgraph/issues/7282
+[#7278]: https://github.com/dgraph-io/dgraph/issues/7278
+[#7202]: https://github.com/dgraph-io/dgraph/issues/7202
+[#7280]: https://github.com/dgraph-io/dgraph/issues/7280
+[#7218]: https://github.com/dgraph-io/dgraph/issues/7218
+[#7281]: https://github.com/dgraph-io/dgraph/issues/7281
+[#7118]: https://github.com/dgraph-io/dgraph/issues/7118
+[#7276]: https://github.com/dgraph-io/dgraph/issues/7276
+[#7258]: https://github.com/dgraph-io/dgraph/issues/7258
+[#7265]: https://github.com/dgraph-io/dgraph/issues/7265
+[#7245]: https://github.com/dgraph-io/dgraph/issues/7245
+[#7251]: https://github.com/dgraph-io/dgraph/issues/7251
+[#7244]: https://github.com/dgraph-io/dgraph/issues/7244
+[#7154]: https://github.com/dgraph-io/dgraph/issues/7154
+[#7155]: https://github.com/dgraph-io/dgraph/issues/7155
+
 ## [20.11.0] - 2020-12-16
 [20.11.0]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.11.0
 
