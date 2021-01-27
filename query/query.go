@@ -2875,7 +2875,7 @@ func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.Typ
 		// Type name doesn't have reverse.
 		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
-			continue
+			panic("This should not happen")
 		}
 		update.TypeName = typeName
 		fields := []*pb.SchemaUpdate{}
@@ -2898,7 +2898,7 @@ func filterSchemaNodeForNamespace(namespace uint64, nodes []*pb.SchemaNode) []*p
 	for _, node := range nodes {
 		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
-			continue
+			panic("This should not happen")
 		}
 		node.Predicate = attrName
 		out = append(out, node)
