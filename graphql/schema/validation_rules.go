@@ -32,6 +32,7 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 		if value.Definition == nil || value.ExpectedType == nil {
 			return
 		}
+
 		if value.Kind == ast.Variable {
 			return
 		}
