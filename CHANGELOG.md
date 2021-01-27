@@ -5,12 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
 ## [20.11.1] - 2021-01-27
-[20.11.1]: https://github.com/dgraph-io/dgraph/compare/v20.11.1...v20.11.0
+[20.11.1]: https://github.com/dgraph-io/dgraph/compare/v20.11.0...v20.11.1
 
 ### Fixed
 - GraphQL
   - Fix(subscriptions): fix subscription to use the kv with the max version ([#7349][]) ([#7355][])
-  - Fix(GraphQl): fix a panic when we pass a single ID as a integer and expected type is [ID].We
+  - Fix(GraphQl): fix a panic when we pass a single ID as a integer and expected type is `[ID]`.We
    now coerce that to type array of string.  ([#7325][]) ([#7353][])
   - Fix(GRAPHQL): update gqlparser release to v2.1.4 ([#7347][]) ([#7352][])
   - Fix(GraphQL): Fix graphql flaky tests which were caused by receiving extra schema updates
@@ -18,7 +18,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GraphQL): This PR addd input coercion from single object to list and fix panic when we
    pass single ID in filter as a string. ([#7133][]) ([#7306][])
   - Fix(GRAPHQL): Don't generate get query on interface if it doesn't have field of type ID and
-   also disallow get query on field of type @id in inerface. ([#7158][]) ([#7305][])
+   also disallow get query on field of type `@id` in inerface. ([#7158][]) ([#7305][])
   - Fix(GraphQL): This PR fix multi cors and multi schema nodes issue by selecting one of the
    latest added nodes, and add dgraph type to cors. ([#7270][]) ([#7302][])
   - Fix(GraphQL): This PR allow to use __typename in mutation. ([#7285][]) ([#7303][])
@@ -144,7 +144,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Feat(GraphQL): This PR adds parameterised cascade in graphql. ([#6251][])
   - Feat(GraphQL): add has filter support ([#6258][])
   - Feat(GraphQL): GraphQL now has Int64 as scalar type ([#6200][])
-  - Feat(GraphQL): @custom HTTP body now supports hardcoded scalars ([#6157][])
+  - Feat(GraphQL): `@custom` HTTP body now supports hardcoded scalars ([#6157][])
   - Feat(GraphQL): Custom logic now supports DQL queries ([#6115][])
   - Feat(GraphQL): This PR allows to return errors from custom REST endpoint. ([#6604][])
 
