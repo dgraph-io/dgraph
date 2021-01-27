@@ -61,12 +61,13 @@ func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Fi
 		sgr.Children = append(sgr.Children, sg)
 	}
 	data, err := sgr.toFastJSON(ctx, l, field)
+
+	// don't log or wrap GraphQL errors
+	if x.IsGqlErrorList(err) {
+		return data, err
+	}
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
-	}
-	// don't wrap GraphQL errors
-	if field != nil {
-		return data, err
 	}
 	return data, errors.Wrapf(err, "while running ToJson")
 }

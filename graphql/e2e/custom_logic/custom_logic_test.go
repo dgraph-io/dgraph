@@ -527,14 +527,12 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	require.Equal(t, 2, len(result.Errors))
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
-			" Evaluation of custom field failed because external request " +
+		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
 			"returned an error: unexpected error with: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{Line: 6, Column: 4}},
 			Path:      []interface{}{"queryPerson"},
 		},
-		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
-			" Evaluation of custom field failed because external request returned" +
+		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
 			" an error: unexpected error with: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{Line: 9, Column: 4}},
 			Path:      []interface{}{"queryPerson"},
@@ -1255,7 +1253,6 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 		},
 	}
 	for _, err := range expectedErrs {
-		err.Message = "Dgraph query failed because Dgraph execution failed because " + err.Message
 		err.Path = []interface{}{"queryUser"}
 	}
 	require.Equal(t, expectedErrs, result.Errors)
@@ -2870,7 +2867,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 
 	require.Equal(t, x.GqlErrorList{
 		{
-			Message: "Dgraph query failed because Dgraph execution failed because Rest API returns Error for field name",
+			Message: "Rest API returns Error for field name",
 			Path:    []interface{}{"queryUser"},
 		},
 	}, result.Errors)
