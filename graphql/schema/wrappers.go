@@ -181,6 +181,8 @@ type Field interface {
 	//  * Otherwise, this field is non-nullable and so it will return a nil slice to indicate that.
 	// This is useful only for top-level fields like a query or mutation.
 	NullResponse() []byte
+	// CompleteAlias applies GraphQL alias completion for field to the input buffer buf.
+	CompleteAlias(buf *bytes.Buffer)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -922,6 +924,12 @@ func (f *field) NullResponse() []byte {
 	return buf
 }
 
+func (f *field) CompleteAlias(buf *bytes.Buffer) {
+	x.Check2(buf.WriteRune('"'))
+	x.Check2(buf.WriteString(f.ResponseName()))
+	x.Check2(buf.WriteString(`":`))
+}
+
 func (f *field) Arguments() map[string]interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -1475,6 +1483,10 @@ func (q *query) NullResponse() []byte {
 	return (*field)(q).NullResponse()
 }
 
+func (q *query) CompleteAlias(buf *bytes.Buffer) {
+	(*field)(q).CompleteAlias(buf)
+}
+
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
@@ -1935,6 +1947,10 @@ func (m *mutation) NullValue() []byte {
 
 func (m *mutation) NullResponse() []byte {
 	return (*field)(m).NullResponse()
+}
+
+func (m *mutation) CompleteAlias(buf *bytes.Buffer) {
+	(*field)(m).CompleteAlias(buf)
 }
 
 func (t *astType) AuthRules() *TypeAuth {

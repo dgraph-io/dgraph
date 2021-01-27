@@ -67,13 +67,6 @@ func Unmarshal(data []byte, v interface{}) error {
 	return decoder.Decode(v)
 }
 
-// CompleteAlias applies GraphQL alias completion for field to the input buffer buf.
-func CompleteAlias(field Field, buf *bytes.Buffer) {
-	x.Check2(buf.WriteRune('"'))
-	x.Check2(buf.WriteString(field.ResponseName()))
-	x.Check2(buf.WriteString(`":`))
-}
-
 // CompleteObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 // At present, it is only used for building custom results by:
@@ -138,7 +131,7 @@ func CompleteObject(
 		}
 
 		x.Check2(buf.WriteString(comma))
-		CompleteAlias(f, &buf)
+		f.CompleteAlias(&buf)
 
 		val := res[f.Name()]
 		if f.Name() == Typename {

@@ -63,12 +63,6 @@ type customFieldResult struct {
 	childVal []byte
 }
 
-func writeKeyGraphQL(field gqlSchema.Field, out *bytes.Buffer) {
-	x.Check2(out.WriteRune('"'))
-	x.Check2(out.WriteString(field.ResponseName()))
-	x.Check2(out.WriteString(`":`))
-}
-
 func cantCoerceScalar(val []byte, field gqlSchema.Field) bool {
 	switch field.Type().Name() {
 	case "Int":
@@ -260,7 +254,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 			}
 
 			// Write JSON key and opening [ for JSON arrays
-			writeKeyGraphQL(curSelection, gqlCtx.buf)
+			curSelection.CompleteAlias(gqlCtx.buf)
 			keyEndPos = gqlCtx.buf.Len()
 			curSelectionIsDgList = (curSelection.Type().ListType() != nil) && !curSelection.
 				IsCustomHTTP()
@@ -497,7 +491,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 		}
 
 		// Step-1: Write JSON key
-		writeKeyGraphQL(curSelection, gqlCtx.buf)
+		curSelection.CompleteAlias(gqlCtx.buf)
 
 		// Step-2: Write JSON value
 		if curSelection.Name() == gqlSchema.Typename {
@@ -1022,7 +1016,7 @@ func (gqlCtx *graphQLEncodingCtx) completeRootAggregateQuery(enc *encoder, fj fa
 	x.Check2(gqlCtx.buf.WriteString("{"))
 	for _, f := range query.SelectionSet() {
 		x.Check2(gqlCtx.buf.WriteString(comma))
-		writeKeyGraphQL(f, gqlCtx.buf)
+		f.CompleteAlias(gqlCtx.buf)
 
 		if f.Name() == gqlSchema.Typename {
 			val = getTypename(f, nil)
@@ -1086,7 +1080,7 @@ func (gqlCtx *graphQLEncodingCtx) completeAggregateChildren(enc *encoder, fj fas
 	x.Check2(gqlCtx.buf.WriteString("{"))
 	for _, f := range field.SelectionSet() {
 		x.Check2(gqlCtx.buf.WriteString(comma))
-		writeKeyGraphQL(f, gqlCtx.buf)
+		f.CompleteAlias(gqlCtx.buf)
 
 		if f.Name() == gqlSchema.Typename {
 			val = getTypename(f, nil)
@@ -1146,7 +1140,7 @@ func completePoint(field gqlSchema.Field, coordinate []interface{}, buf *bytes.B
 		}
 
 		x.Check2(buf.WriteString(comma))
-		writeKeyGraphQL(f, buf)
+		f.CompleteAlias(buf)
 
 		switch f.Name() {
 		case gqlSchema.Longitude:
@@ -1174,7 +1168,7 @@ func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Bu
 		}
 
 		x.Check2(buf.WriteString(comma1))
-		writeKeyGraphQL(f1, buf)
+		f1.CompleteAlias(buf)
 
 		switch f1.Name() {
 		case gqlSchema.Coordinates:
@@ -1192,7 +1186,7 @@ func completePolygon(field gqlSchema.Field, polygon []interface{}, buf *bytes.Bu
 					}
 
 					x.Check2(buf.WriteString(comma3))
-					writeKeyGraphQL(f2, buf)
+					f2.CompleteAlias(buf)
 
 					switch f2.Name() {
 					case gqlSchema.Points:
@@ -1237,7 +1231,7 @@ func completeMultiPolygon(field gqlSchema.Field, multiPolygon []interface{}, buf
 		}
 
 		x.Check2(buf.WriteString(comma1))
-		writeKeyGraphQL(f, buf)
+		f.CompleteAlias(buf)
 
 		switch f.Name() {
 		case gqlSchema.Polygons:
