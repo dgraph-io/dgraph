@@ -436,6 +436,32 @@ func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestNquadsFromJsonArray(t *testing.T) {
+	json := `[
+		  {
+			  "uid": "uid(x)"
+		  },
+		  {
+			  "Project.columns": [
+				  {
+					  "uid": "uid(x)"
+				  }
+			  ],
+			  "uid": "uid(Project3)"
+		  },
+		  {
+			  "Ticket.onColumn": {
+				  "uid": "uid(x)"
+			  },
+			  "uid": "uid(Ticket4)"
+		  }
+	  ]`
+
+	nqs, err := FastParse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nqs))
+}
+
 func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
