@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -41,7 +42,6 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -480,7 +480,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return zero.ErrConflict
+		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
@@ -1052,6 +1052,12 @@ const tickDur = 100 * time.Millisecond
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
@@ -1106,6 +1112,23 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
+				// create context with group id
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, fmt.Sprintf("%d", n.gid)))
+				// detect leadership changes
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.

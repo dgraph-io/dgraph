@@ -88,10 +88,7 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 	var size uint64 = 1*8 + // Pack consists of 1 word.
 		3*8 + // Postings array consists of 3 words.
 		1*8 + // CommitTs consists of 1 word.
-		3*8 + // Splits array consists of 3 words.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 words. because it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 words.
-		1*8 // XXX_sizecache consists of 1 word.
+		3*8 // Splits array consists of 3 words.
 
 	// add pack size.
 	size += calculatePackSize(list.Pack)
@@ -107,10 +104,6 @@ func calculatePostingListSize(list *pb.PostingList) uint64 {
 	// Each entry take one word.
 	// Adding each entry size.
 	size += uint64(cap(list.Splits)) * 8
-
-	// XXX_unrecognized take one byte.
-	// Adding size of each entry.
-	size += uint64(cap(list.XXX_unrecognized))
 
 	return size
 }
@@ -130,11 +123,7 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 		3*8 + // Facets array consists of 3 word.
 		1*8 + // Op consists of 1 word.
 		1*8 + // StartTs consists of 1 word.
-		1*8 + // CommitTs consists of 1 word.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because, it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 words.
-		1*8 // XXX_sizecache consists of 1 word.
-	// Adding the size of each entry in Value array.
+		1*8 // CommitTs consists of 1 word..
 	size += uint64(cap(posting.Value))
 
 	// Adding the size of each entry in LangTag array.
@@ -148,9 +137,6 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 		size += calculateFacet(f)
 	}
 
-	// Add the size of each entry in XXX_unrecognized array.
-	size += uint64(cap(posting.XXX_unrecognized))
-
 	return size
 }
 
@@ -162,9 +148,8 @@ func calculatePackSize(pack *pb.UidPack) uint64 {
 
 	var size uint64 = 1*8 + // BlockSize consists of 1 word.
 		3*8 + // Blocks array consists of 3 words.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because, it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 words.
-		1*8 // XXX_sizecache consists of 1 word.
+		1*8 + // AllocRef consists of 1 word.
+		8 // Rounding it to 6 words by adding 1.
 
 	// Adding size of each entry in Blocks array.
 	// Each entry consumes 1 word.
@@ -173,9 +158,6 @@ func calculatePackSize(pack *pb.UidPack) uint64 {
 		// Adding the size of UIDBlock.
 		size += calculateUIDBlock(block)
 	}
-	// Adding the size each entry in XXX_unrecognized array.
-	// Each entry consumes 1 word.
-	size += uint64(cap(pack.XXX_unrecognized))
 
 	return size
 }
@@ -189,16 +171,10 @@ func calculateUIDBlock(block *pb.UidBlock) uint64 {
 	var size uint64 = 1*8 + // Base consists of 1 word.
 		3*8 + // Delta array consists of 3 words.
 		1*8 + // NumUids consists of 1 word.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because, It is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 words.
-		1*8 + // XXX_sizecache consistss of 1 word.
-		1*8 // Rounding it to 10 words by adding 1.
+		1*8 // Rounding it to 6 words by adding 1.
 
 	// Adding the size of each entry in Deltas array.
 	size += uint64(cap(block.Deltas))
-
-	// Adding the size of each entry in XXX_unrecognized array.
-	size += uint64(cap(block.XXX_unrecognized))
 
 	return size
 }
@@ -214,9 +190,6 @@ func calculateFacet(facet *api.Facet) uint64 {
 		1*8 + // ValType consists of 1 word.
 		3*8 + // Tokens array consists of 3 words.
 		1*8 + // Alias consists of 1 word.
-		0*8 + // XXX_NoUnkeyedLiteral consists of 0 word. Because it is empty struct.
-		3*8 + // XXX_unrecognized array consists of 3 word.
-		1*8 + // XXX_sizecache consists of 1 word.
 		3*8 // rounding to 16 so adding 3
 
 	// Adding size of each entry in Key array.
@@ -230,7 +203,5 @@ func calculateFacet(facet *api.Facet) uint64 {
 	}
 	// Adding size of each entry in Alias Array.
 	size += uint64(len(facet.Alias))
-	// Adding size of each entry in XXX_unrecognized array.
-	size += uint64(len(facet.XXX_unrecognized))
 	return size
 }
