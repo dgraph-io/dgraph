@@ -361,5 +361,5 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Multiple filter functions for Int64Filter not allowed",
+    [ { "message": "Int64Filter filter expects only one filter function, got: 2",
         "locations": [ { "line": 2, "column": 29 } ] } ]

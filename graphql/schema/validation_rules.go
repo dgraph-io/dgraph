@@ -18,6 +18,7 @@ package schema
 
 import (
 	"errors"
+	"github.com/dgraph-io/dgraph/x"
 	"strconv"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
@@ -25,7 +26,8 @@ import (
 )
 
 var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
-	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter"}
+	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter", "PointGeoFilter",
+	"ContainsFilter", "IntersectsFilter", "PolygonGeoFilter"}
 
 func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
@@ -56,12 +58,12 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 
 func filterCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
-		if value.Definition == nil || value.ExpectedType == nil {
+		if value.Definition == nil {
 			return
 		}
 
-		if contains(allowedFilters, value.Definition.Name) && len(value.Children) > 1 {
-			addError(validator.Message("Multiple filter functions for %s not allowed", value.Definition.Name), validator.At(value.Position))
+		if x.HasString(allowedFilters, value.Definition.Name) && len(value.Children) > 1 {
+			addError(validator.Message("%s filter expects only one filter function, got: %d", value.Definition.Name, len(value.Children)), validator.At(value.Position))
 		}
 	})
 }
@@ -176,14 +178,4 @@ func valueKindToString(valKind ast.ValueKind) string {
 		return "Object"
 	}
 	return ""
-}
-
-func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
 }
