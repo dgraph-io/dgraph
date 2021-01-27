@@ -92,12 +92,9 @@ func lambdaOnInterfaceField(t *testing.T) {
 	}`
 	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 
-	// TODO: this should work. At present there is a bug with @custom on interface field resolved
-	// through a fragment on one of its types. We need to fix that first, then uncomment this test.
-
 	// when querying bio on Human & Droid (type) we should get the bio constructed by the lambda
 	// registered on Human.bio and Droid.bio respectively
-	/*query = `
+	query = `
 		query {
 			queryCharacter {
 				name
@@ -125,7 +122,7 @@ func lambdaOnInterfaceField(t *testing.T) {
 			}
 		]
 	}`
-	testutil.CompareJSON(t, expectedResponse, string(resp.Data))*/
+	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 
 	// cleanup
 	cleanupStarwars(t, starship.ID, humanID, droidID)
@@ -266,6 +263,6 @@ func lambdaInMutationWithDuplicateId(t *testing.T) {
 	}`, string(resp.Data))
 
 	//cleanup
-	DeleteGqlType(t, "Chapter", getXidFilter("chapterId", []interface{}{1, 2, 3, 4}), 4, nil)
-	DeleteGqlType(t, "Book", getXidFilter("bookId", []interface{}{1, 2}), 2, nil)
+	DeleteGqlType(t, "Chapter", GetXidFilter("chapterId", []interface{}{1, 2, 3, 4}), 4, nil)
+	DeleteGqlType(t, "Book", GetXidFilter("bookId", []interface{}{1, 2}), 2, nil)
 }

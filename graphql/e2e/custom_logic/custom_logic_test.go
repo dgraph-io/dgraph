@@ -1766,6 +1766,11 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 	testutil.CompareJSON(t, expected, string(result.Data))
 
+	// cleanup
+	common.DeleteGqlType(t, "Episode", common.GetXidFilter("name", []interface{}{"episode-1",
+		"episode-2", "episode-3"}), 3, nil)
+	common.DeleteGqlType(t, "Character", common.GetXidFilter("name", []interface{}{"character-1",
+		"character-2", "character-3"}), 3, nil)
 }
 
 func TestCustomPostMutation(t *testing.T) {
@@ -2940,29 +2945,24 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 			method: "POST",
 			body: "{name: $name, totalCredits: $totalCredits}"
 		})
+	}
+	type Droid implements Character {
+		primaryFunction: String
 	}`
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schema)
 
 	addCharacterParams := &common.GraphQLParams{
 		Query: `mutation {
 			addHuman(input: [{name: "Han", totalCredits: 10}]) {
-				human {
-					id
-			  	}
+				numUids
+			}
+			addDroid(input: [{name: "R2-D2", primaryFunction: "Robot"}]) {
+				numUids
 			}
 		}`,
 	}
 	resp := addCharacterParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, resp)
-
-	var addResp struct {
-		AddHuman struct {
-			Human []struct {
-				ID string
-			}
-		}
-	}
-	require.NoError(t, json.Unmarshal(resp.Data, &addResp))
 
 	queryCharacterParams := &common.GraphQLParams{
 		Query: `query {
@@ -2970,6 +2970,9 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 				name
 				... on Human {
 					bio
+				}
+				... on Droid {
+					primaryFunction
 				}
 			}
 		}`,
@@ -2982,14 +2985,16 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 		{
 		  "name": "Han",
 		  "bio": "My name is Han and I have 10 credits."
+		}, {
+		  "name": "R2-D2",
+		  "primaryFunction": "Robot"
 		}
 	  ]
 	}`, string(resp.Data))
 
 	// cleanup
-	common.DeleteGqlType(t, "Character", map[string]interface{}{"id": []interface{}{addResp.
-		AddHuman.Human[0].ID}},
-		1, nil)
+	common.DeleteGqlType(t, "Character", common.GetXidFilter("name", []interface{}{"Han",
+		"R2-D2"}), 2, nil)
 }
 
 func TestMain(m *testing.M) {

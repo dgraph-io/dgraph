@@ -973,7 +973,7 @@ func (f *field) SkipField(dgraphTypes []string, seenField map[string]bool) bool 
 	// If typ is an abstract type, and typename is a concrete type, then we ignore fields which
 	// aren't part of that concrete type. This would happen when multiple fragments (belonging
 	// to different concrete types) are requested within a query for an abstract type.
-	if len(dgraphTypes) > 0 && !f.IncludeAbstractField(dgraphTypes) {
+	if !f.IncludeAbstractField(dgraphTypes) {
 		return true
 	}
 	// if the field has already been seen at the current level, then we need to skip it.
@@ -1414,6 +1414,11 @@ func (f *field) TypeName(dgraphTypes []string) string {
 }
 
 func (f *field) IncludeAbstractField(dgraphTypes []string) bool {
+	if len(dgraphTypes) == 0 {
+		// dgraph.type is returned only for fields on abstract types, so if there is no dgraph.type
+		// information, then it means this ia a field on a concrete object type
+		return true
+	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {

@@ -194,17 +194,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 	// if GraphQL layer requested dgraph.type predicate, then it would always be the first child in
 	// the response as it is always written first in DQL query. So, if we get data for dgraph.type
 	// predicate then just save it in dgraphTypes slice, no need to write it to JSON yet.
-	var dgraphTypes []string
-	for ; child != nil && enc.getAttr(child) == gqlCtx.dgraphTypeAttrId; child = child.next {
-		val, err := enc.getScalarVal(child) // val is a quoted string like: "Human"
-		if err != nil {
-			// TODO: correctly format error, it should be on __typename field if present?
-			gqlCtx.gqlErrs = append(gqlCtx.gqlErrs, x.GqlErrorf(err.Error()).WithPath(parentPath))
-			continue
-		}
-
-		dgraphTypes = append(dgraphTypes, toString(val))
-	}
+	child, dgraphTypes := gqlCtx.extractDgraphTypes(enc, child)
 
 	// This is an internal node. Write the opening { for the JSON object
 	x.Check2(gqlCtx.buf.WriteRune('{'))
@@ -609,12 +599,33 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomFields(ctx context.Context, enc *
 	wg.Wait()
 }
 
-func extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
-	rfDefs map[string]gqlSchema.FieldDefinition) map[string]interface{} {
+func (gqlCtx *graphQLEncodingCtx) extractDgraphTypes(enc *encoder,
+	child fastJsonNode) (fastJsonNode, []string) {
+	var dgraphTypes []string
+	for ; child != nil && enc.getAttr(child) == gqlCtx.dgraphTypeAttrId; child = child.next {
+		if val, err := enc.getScalarVal(child); err == nil {
+			// val is a quoted string like: "Human"
+			dgraphTypes = append(dgraphTypes, toString(val))
+		}
+
+	}
+	return child, dgraphTypes
+}
+
+func (gqlCtx *graphQLEncodingCtx) extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
+	rfDefs map[string]gqlSchema.FieldDefinition) (map[string]interface{}, []string) {
+	child := enc.children(parentNode)
+	// first, just skip all the custom nodes
+	for ; child != nil && enc.getCustom(child); child = child.next {
+		// do nothing
+	}
+	// then, extract data for dgraph.type
+	child, dgraphTypes := gqlCtx.extractDgraphTypes(enc, child)
+
+	// now, iterate over rest of the children of the parentNode and find out the data for
+	// requiredFields. We can stop iterating as soon as we have the data for all the requiredFields.
 	rfData := make(map[string]interface{})
-	// iterate over all the children of the parentNode and find out the data for requiredFields.
-	// We can stop iterating as soon as we have the data for all the requiredFields.
-	for fj := enc.children(parentNode); fj != nil && len(rfData) < len(rfDefs); fj = fj.next {
+	for fj := child; fj != nil && len(rfData) < len(rfDefs); fj = fj.next {
 		// check if this node has the data for a requiredField. If yes, we need to
 		// extract that in the rfData map to be used later in substitution.
 		if rfDef := rfDefs[enc.attrForID(enc.getAttr(fj))]; rfDef != nil {
@@ -641,7 +652,7 @@ func extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
 			}
 		}
 	}
-	return rfData
+	return rfData, dgraphTypes
 }
 
 // resolveCustomField resolves the @custom childField by making an external HTTP request and then
@@ -715,7 +726,12 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 		for parentNode := parentNodeHead; parentNode != nil && enc.getAttr(
 			parentNode) == parentNodeHeadAttr; parentNode = parentNode.next {
 			// find the data for requiredFields from parentNode
-			rfData := extractRequiredFieldsData(enc, parentNode, requiredFields)
+			rfData, dgraphTypes := gqlCtx.extractRequiredFieldsData(enc, parentNode, requiredFields)
+
+			// check if this childField needs to be included for this parent node
+			if !childField.IncludeAbstractField(dgraphTypes) {
+				continue
+			}
 
 			if val, _ := rfData[idFieldName].(json.RawMessage); val != nil {
 				idFieldValue = string(val)
