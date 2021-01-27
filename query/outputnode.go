@@ -1128,7 +1128,10 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 		// if this field has any @custom(http: {...}) children,
 		// then need to resolve them first before encoding the final GraphQL result.
 		if field.HasCustomHTTPChild() {
-			// TODO: benchmark and find a default buffer capacity for these channels
+			// TODO(abhimanyu):
+			//  * benchmark the approach of using channels vs mutex to update the fastJson tree.
+			//  * benchmark and find how much load should be put on HttpClient concurrently.
+			//  * benchmark and find a default buffer capacity for these channels
 			gqlEncCtx.errChan = make(chan x.GqlErrorList, 100)
 			gqlEncCtx.customFieldResultChan = make(chan customFieldResult, 100)
 			// initialize WaitGroup for the error and result channel goroutines

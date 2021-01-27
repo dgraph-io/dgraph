@@ -112,7 +112,6 @@ func toString(val []byte) string {
 }
 
 // TODO:
-//  * discuss custom DQL encoding
 //  * (cleanup) Cleanup resolver_tests from resolve pkg
 //  * (cleanup) make const args like *bytes.Buffer the first arg in funcs as a best practice.
 func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot bool,
@@ -322,7 +321,8 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 			//    and the end case would either be ignored by this for loop or handled as case 1.
 			// So, we don't have a need to handle case 3, and need to always write null with
 			// appropriate errors.
-			// TODO: check if case 3 can happen for @custom(dql: "")
+			// TODO: once @custom(dql: "") is fixed, check if case 3 can happen for it with the new
+			//  way of rewriting.
 
 			if !fjIsRoot && curSelection.IsAggregateField() {
 				// handles null writing for case 2
