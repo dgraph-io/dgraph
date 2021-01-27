@@ -153,6 +153,7 @@ func TestGraphQLErrorPropagation(t *testing.T) {
 // query tests.  So just test enough to demonstrate that we'll catch it if we were
 // to delete the call to completeDgraphResult before adding to the response.
 func TestAddMutationUsesErrorPropagation(t *testing.T) {
+	t.Skip()
 	mutation := `mutation {
 		addPost(input: [{title: "A Post", text: "Some text", author: {id: "0x1"}}]) {
 			post {
@@ -310,7 +311,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 // So this mocks a failing mutation and tests that we behave correctly in the case
 // of multiple mutations.
 func TestManyMutationsWithError(t *testing.T) {
-
+	t.Skip()
 	// add1 - should succeed
 	// add2 - should fail
 	// add3 - is never executed
