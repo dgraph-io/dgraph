@@ -4688,6 +4688,9 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 					id
 					crew {
 						id
+						missions(order: {asc: id}){
+							id
+						}
 					}
 				}
 			}
@@ -4754,7 +4757,7 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse1.Data))
 
 	astronautDeleteFilter := map[string]interface{}{"id": []string{"Astronaut1"}}
-	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 2, nil)
+	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 1, nil)
 
 	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
@@ -4764,7 +4767,7 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	addAstronautParams := &GraphQLParams{
 		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
 			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
-				astronaut{
+				astronaut(order: {asc: id}){
 					id
 					missions {
 						id
