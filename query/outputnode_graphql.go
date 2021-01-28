@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// graphQLEncodingCtx is used to encode JSON for GraphQl queries.
 type graphQLEncodingCtx struct {
 	// buf is the buffer which stores the encoded GraphQL response.
 	buf *bytes.Buffer
@@ -63,6 +64,7 @@ type customFieldResult struct {
 	childVal []byte
 }
 
+// cantCoerceScalar tells whether a scalar value can be coerced to its corresponding GraphQL scalar.
 func cantCoerceScalar(val []byte, field gqlSchema.Field) bool {
 	switch field.Type().Name() {
 	case "Int":
@@ -105,9 +107,7 @@ func toString(val []byte) string {
 	return strVal
 }
 
-// TODO:
-//  * (cleanup) Cleanup resolver_tests from resolve pkg
-//  * (cleanup) make const args like *bytes.Buffer the first arg in funcs as a best practice.
+// encode creates a JSON encoded GraphQL response.
 func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot bool,
 	childSelectionSet []gqlSchema.Field, parentField gqlSchema.Field,
 	parentPath []interface{}) bool {
@@ -593,6 +593,9 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomFields(ctx context.Context, enc *
 	wg.Wait()
 }
 
+// extractDgraphTypes extracts the all values for dgraph.type predicate from the given child
+// fastJson node. It returns the next fastJson node which doesn't store value for dgraph.type
+// predicate along with the extracted values for dgraph.type.
 func (gqlCtx *graphQLEncodingCtx) extractDgraphTypes(enc *encoder,
 	child fastJsonNode) (fastJsonNode, []string) {
 	var dgraphTypes []string
@@ -606,6 +609,11 @@ func (gqlCtx *graphQLEncodingCtx) extractDgraphTypes(enc *encoder,
 	return child, dgraphTypes
 }
 
+// extractRequiredFieldsData is used to extract the data of fields which are required to resolve
+// a custom field from a given parentNode.
+// It returns a map containing the extracted data along with the dgraph.type values for parentNode.
+// The keys in the returned map correspond to the name of a required field.
+// Values in the map correspond to the extracted data for a required field.
 func (gqlCtx *graphQLEncodingCtx) extractRequiredFieldsData(enc *encoder, parentNode fastJsonNode,
 	rfDefs map[string]gqlSchema.FieldDefinition) (map[string]interface{}, []string) {
 	child := enc.children(parentNode)
@@ -624,7 +632,8 @@ func (gqlCtx *graphQLEncodingCtx) extractRequiredFieldsData(enc *encoder, parent
 		// extract that in the rfData map to be used later in substitution.
 		if rfDef := rfDefs[enc.attrForID(enc.getAttr(fj))]; rfDef != nil {
 			// if the requiredField is of list type, then need to extract all the data for the list.
-			// TODO: Should we use rfDef.Type().ListType() != nil instead of enc.getList(fj)?
+			// using enc.getList() instead of `rfDef.Type().ListType() != nil` as for custom fields
+			// both have the same behaviour and enc.getList() is fast.
 			if enc.getList(fj) {
 				var vals []interface{}
 				for ; fj.next != nil && enc.getAttr(fj.next) == enc.getAttr(fj); fj = fj.next {
@@ -950,6 +959,8 @@ func (gqlCtx *graphQLEncodingCtx) resolveNestedFields(ctx context.Context, enc *
 	}
 }
 
+// checkAndStripComma checks whether there is a comma at the end of the given buffer. If yes,
+// it removes that comma from the buffer.
 func checkAndStripComma(buf *bytes.Buffer) {
 	b := buf.Bytes()
 	if len(b) > 0 && b[len(b)-1] == ',' {
@@ -957,10 +968,14 @@ func checkAndStripComma(buf *bytes.Buffer) {
 	}
 }
 
+// getTypename returns the JSON bytes for the __typename field, given the dgraph.type values
+// extracted from dgraph response.
 func getTypename(f gqlSchema.Field, dgraphTypes []string) []byte {
 	return []byte(`"` + f.TypeName(dgraphTypes) + `"`)
 }
 
+// writeGraphQLNull writes null value for the given field to the buffer.
+// If the field is non-nullable, it returns false, otherwise it returns true.
 func writeGraphQLNull(f gqlSchema.Field, buf *bytes.Buffer, keyEndPos int) bool {
 	if b := f.NullValue(); b != nil {
 		buf.Truncate(keyEndPos) // truncate to make sure we write null correctly
