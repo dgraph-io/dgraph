@@ -110,15 +110,24 @@ type existingGQLSchemaQryResp struct {
 
 // TODO(Ahsan): Complete the below two functions.
 func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("Creating namespace", namespace)
+	glog.V(2).Info("[NAMESPACE] Create namespace request : ", namespace)
+
+	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
+	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
+
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	m.Schema = schema.InitialSchema(namespace)
-	_, err := query.ApplyMutations(ctx, m)
-	return err
+	m.Schema = schema.InitialSchema(ids.StartId)
+
+	_, err = query.ApplyMutations(ctx, m)
+	if err != nil {
+		return err
+	}
+	glog.V(2).Info("[NAMESPACE] Created namespace", ids.StartId)
+	return nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("Deleting namespace", namespace)
+	glog.Info("[NAMESPACE] Deleting namespace", namespace)
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
 }

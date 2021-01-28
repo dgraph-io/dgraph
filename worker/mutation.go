@@ -498,6 +498,19 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 }
 
 // AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
+func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_NS_ID
+	return c.AssignIds(ctx, num)
+}
+
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
