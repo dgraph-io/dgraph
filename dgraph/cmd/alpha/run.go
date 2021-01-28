@@ -475,9 +475,9 @@ func setupServer(closer *z.Closer) {
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
-		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
+		w.WriteHeader(httpStatusCode)
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
