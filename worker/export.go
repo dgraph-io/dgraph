@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -72,10 +73,11 @@ var exportFormats = map[string]exportFormat{
 }
 
 type exporter struct {
-	pl     *posting.List
-	uid    uint64
-	attr   string
-	readTs uint64
+	pl        *posting.List
+	uid       uint64
+	attr      string
+	namespace uint64
+	readTs    uint64
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -142,7 +144,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	// Leaving it simple for now.
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -239,6 +241,8 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 			}
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
+		// Use label for storing namespace.
+		fmt.Fprintf(bp, " "+uidFmtStrRdf+" ", e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
@@ -536,7 +540,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
-	glog.Infof("Export requested at %d.", in.ReadTs)
+	glog.Infof("Export requested at %d for namespace %d.", in.ReadTs, in.Namespace)
 
 	// Let's wait for this server to catch up to all the updates until this ts.
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
@@ -597,11 +601,12 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
-		// _predicate_ is deprecated but leaving this here so that users with a
-		// binary with version >= 1.1 can export data from a version < 1.1 without
-		// this internal data showing up.
-		if pk.Attr == "_predicate_" {
-			return false
+		// Skip the keys which don't belong to the required namespace.
+		if in.Namespace != math.MaxUint64 {
+			ns, _ := x.ParseNamespaceAttr(pk.Attr)
+			if ns != in.Namespace {
+				return false
+			}
 		}
 
 		if !pk.IsType() && !skipZero {
@@ -626,7 +631,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			readTs: in.ReadTs,
 		}
 		e.uid = pk.Uid
-		e.attr = pk.Attr
+		e.namespace, e.attr = x.ParseNamespaceAttr(pk.Attr)
 
 		// Schema and type keys should be handled first because schema keys are also
 		// considered data keys.
@@ -655,21 +660,21 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			return toType(pk.Attr, update)
 
-		case pk.Attr == "dgraph.graphql.xid":
+		case e.attr == "dgraph.graphql.xid":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.cors":
+		case e.attr == "dgraph.cors":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.drop.op":
+		case e.attr == "dgraph.drop.op":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.schema_created_at":
+		case e.attr == "dgraph.graphql.schema_created_at":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.schema_history":
+		case e.attr == "dgraph.graphql.schema_history":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.p_query":
+		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.p_sha256hash":
+		case e.attr == "dgraph.graphql.p_sha256hash":
 			// Ignore this predicate.
-		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
+		case pk.IsData() && e.attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
@@ -707,7 +712,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 
 			// The GraphQL layer will create a node of type "dgraph.graphql". That entry
 			// should not be exported.
-			if pk.Attr == "dgraph.type" {
+			if e.attr == "dgraph.type" {
 				vals, err := e.pl.AllValues(in.ReadTs)
 				if err != nil {
 					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
@@ -872,10 +877,11 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 	for _, gid := range gids {
 		go func(group uint32) {
 			req := &pb.ExportRequest{
-				GroupId: group,
-				ReadTs:  readTs,
-				UnixTs:  time.Now().Unix(),
-				Format:  input.Format,
+				GroupId:   group,
+				ReadTs:    readTs,
+				UnixTs:    time.Now().Unix(),
+				Format:    input.Format,
+				Namespace: input.Namespace,
 
 				Destination:  input.Destination,
 				AccessKey:    input.AccessKey,

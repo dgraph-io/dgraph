@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"math"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -29,7 +30,8 @@ import (
 )
 
 type exportInput struct {
-	Format string
+	Format    string
+	Namespace uint64
 	DestinationFields
 }
 
@@ -50,8 +52,11 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
+	// TODO: Check if that namespace exist and the relevant permissions.
+
 	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
 		Format:       format,
+		Namespace:    input.Namespace,
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
@@ -88,5 +93,13 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 
 	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
+
+	// Export everything if namespace is not specified.
+	v, ok := inputArg.(map[string]interface{})
+	if ok {
+		if _, ok := v["namespace"]; !ok {
+			input.Namespace = math.MaxUint64
+		}
+	}
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }
