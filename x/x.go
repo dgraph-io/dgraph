@@ -40,8 +40,9 @@ import (
 
 	"google.golang.org/grpc/peer"
 
-	"github.com/dgraph-io/badger/v2"
-	bo "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -67,6 +68,8 @@ var (
 	ErrNoJwt        = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
+	// ErrConflict is returned when commit couldn't succeed due to conflicts.
+	ErrConflict = errors.New("Transaction conflict")
 )
 
 const (
@@ -123,7 +126,7 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
-	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
+	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
@@ -1260,3 +1263,30 @@ Flags:
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
+
+// KvWithMaxVersion returns a KV with the max version from the list of KVs.
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badgerpb.KV {
+	hasAnyPrefix := func(key []byte) bool {
+		for _, prefix := range prefixes {
+			if bytes.HasPrefix(key, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+	// KV contain the latest value.
+	var maxKv *badgerpb.KV
+	for _, kv := range kvs.GetKv() {
+		if !hasAnyPrefix(kv.GetKey()) {
+			// Verify that we got the key which was subscribed. This shouldn't happen, but added for
+			// robustness.
+			glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
+			continue
+		}
+		if maxKv.GetVersion() <= kv.GetVersion() {
+			maxKv = kv
+		}
+	}
+	return maxKv
+}

@@ -35,7 +35,7 @@ import (
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
@@ -99,9 +99,15 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
-	// TxnAborts records count of aborted transactions.
+	// TxnCommits records count of committed transactions.
+	TxnCommits = stats.Int64("txn_commits_total",
+		"Number of transaction commits", stats.UnitDimensionless)
+	// TxnDiscards records count of discarded transactions by the client.
+	TxnDiscards = stats.Int64("txn_discards_total",
+		"Number of transaction discards by the client", stats.UnitDimensionless)
+	// TxnAborts records count of aborted transactions by the server.
 	TxnAborts = stats.Int64("txn_aborts_total",
-		"Number of transaction aborts", stats.UnitDimensionless)
+		"Number of transaction aborts by the server", stats.UnitDimensionless)
 	// PBlockHitRatio records the hit ratio of posting store block cache.
 	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
 		"Hit ratio of p store block cache", stats.UnitDimensionless)
@@ -111,12 +117,24 @@ var (
 	// PLCacheHitRatio records the hit ratio of posting list cache.
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
+	// RaftHasLeader records whether this instance has a leader
+	RaftHasLeader = stats.Int64("raft_has_leader",
+		"Whether or not a leader exists for the group", stats.UnitDimensionless)
+	// RaftIsLeader records whether this instance is the leader
+	RaftIsLeader = stats.Int64("raft_is_leader",
+		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
+	// RaftLeaderChanges records the total number of leader changes seen.
+	RaftLeaderChanges = stats.Int64("raft_leader_changes_total",
+		"Total number of leader changes seen", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
 
 	// Tag keys.
+
+	// KeyGroup is the tag key used to record the group for Raft metrics.
+	KeyGroup, _ = tag.NewKey("group")
 
 	// KeyStatus is the tag key used to record the status of the server.
 	KeyStatus, _ = tag.NewKey("status")
@@ -141,6 +159,8 @@ var (
 		KeyStatus, KeyMethod,
 	}
 
+	allRaftKeys = []tag.Key{KeyGroup}
+
 	allViews = []*view.View{
 		{
 			Name:        LatencyMs.Name(),
@@ -164,39 +184,32 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        RaftAppliedIndex.Name(),
-			Measure:     RaftAppliedIndex,
-			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        TxnCommits.Name(),
+			Measure:     TxnCommits,
+			Description: TxnCommits.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
-			Name:        RaftApplyCh.Name(),
-			Measure:     RaftApplyCh,
-			Description: RaftApplyCh.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        RaftPendingSize.Name(),
-			Measure:     RaftPendingSize,
-			Description: RaftPendingSize.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        MaxAssignedTs.Name(),
-			Measure:     MaxAssignedTs,
-			Description: MaxAssignedTs.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        TxnDiscards.Name(),
+			Measure:     TxnDiscards,
+			Description: TxnDiscards.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        TxnAborts.Name(),
 			Measure:     TxnAborts,
 			Description: TxnAborts.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
+		},
+		{
+			Name:        ActiveMutations.Name(),
+			Measure:     ActiveMutations,
+			Description: ActiveMutations.Description(),
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 
 		// Last value aggregations
@@ -243,13 +256,6 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        ActiveMutations.Name(),
-			Measure:     ActiveMutations,
-			Description: ActiveMutations.Description(),
-			Aggregation: view.Sum(),
-			TagKeys:     nil,
-		},
-		{
 			Name:        AlphaHealth.Name(),
 			Measure:     AlphaHealth,
 			Description: AlphaHealth.Description(),
@@ -276,6 +282,56 @@ var (
 			Description: PLCacheHitRatio.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		// Raft metrics
+		{
+			Name:        RaftAppliedIndex.Name(),
+			Measure:     RaftAppliedIndex,
+			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftApplyCh.Name(),
+			Measure:     RaftApplyCh,
+			Description: RaftApplyCh.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftPendingSize.Name(),
+			Measure:     RaftPendingSize,
+			Description: RaftPendingSize.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftHasLeader.Name(),
+			Measure:     RaftHasLeader,
+			Description: RaftHasLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftIsLeader.Name(),
+			Measure:     RaftIsLeader,
+			Description: RaftIsLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftLeaderChanges.Name(),
+			Measure:     RaftLeaderChanges,
+			Description: RaftLeaderChanges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allRaftKeys,
 		},
 	}
 )
@@ -320,58 +376,58 @@ func init() {
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func NewBadgerCollector() prometheus.Collector {
 	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
-		"badger_v2_disk_reads_total": prometheus.NewDesc(
-			"badger_v2_disk_reads_total",
+		"badger_v3_disk_reads_total": prometheus.NewDesc(
+			"badger_v3_disk_reads_total",
 			"Number of cumulative reads by Badger",
 			nil, nil,
 		),
-		"badger_v2_disk_writes_total": prometheus.NewDesc(
-			"badger_v2_disk_writes_total",
+		"badger_v3_disk_writes_total": prometheus.NewDesc(
+			"badger_v3_disk_writes_total",
 			"Number of cumulative writes by Badger",
 			nil, nil,
 		),
-		"badger_v2_read_bytes": prometheus.NewDesc(
-			"badger_v2_read_bytes",
+		"badger_v3_read_bytes": prometheus.NewDesc(
+			"badger_v3_read_bytes",
 			"Number of cumulative bytes read by Badger",
 			nil, nil,
 		),
-		"badger_v2_written_bytes": prometheus.NewDesc(
-			"badger_v2_written_bytes",
+		"badger_v3_written_bytes": prometheus.NewDesc(
+			"badger_v3_written_bytes",
 			"Number of cumulative bytes written by Badger",
 			nil, nil,
 		),
-		"badger_v2_lsm_level_gets_total": prometheus.NewDesc(
-			"badger_v2_lsm_level_gets_total",
+		"badger_v3_lsm_level_gets_total": prometheus.NewDesc(
+			"badger_v3_lsm_level_gets_total",
 			"Total number of LSM gets",
 			[]string{"level"}, nil,
 		),
-		"badger_v2_lsm_bloom_hits_total": prometheus.NewDesc(
-			"badger_v2_lsm_bloom_hits_total",
+		"badger_v3_lsm_bloom_hits_total": prometheus.NewDesc(
+			"badger_v3_lsm_bloom_hits_total",
 			"Total number of LSM bloom hits",
 			[]string{"level"}, nil,
 		),
-		"badger_v2_gets_total": prometheus.NewDesc(
-			"badger_v2_gets_total",
+		"badger_v3_gets_total": prometheus.NewDesc(
+			"badger_v3_gets_total",
 			"Total number of gets",
 			nil, nil,
 		),
-		"badger_v2_puts_total": prometheus.NewDesc(
-			"badger_v2_puts_total",
+		"badger_v3_puts_total": prometheus.NewDesc(
+			"badger_v3_puts_total",
 			"Total number of puts",
 			nil, nil,
 		),
-		"badger_v2_memtable_gets_total": prometheus.NewDesc(
-			"badger_v2_memtable_gets_total",
+		"badger_v3_memtable_gets_total": prometheus.NewDesc(
+			"badger_v3_memtable_gets_total",
 			"Total number of memtable gets",
 			nil, nil,
 		),
-		"badger_v2_lsm_size": prometheus.NewDesc(
-			"badger_v2_lsm_size",
+		"badger_v3_lsm_size": prometheus.NewDesc(
+			"badger_v3_lsm_size",
 			"Size of the LSM in bytes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v2_vlog_size": prometheus.NewDesc(
-			"badger_v2_vlog_size",
+		"badger_v3_vlog_size": prometheus.NewDesc(
+			"badger_v3_vlog_size",
 			"Size of the value log in bytes",
 			[]string{"dir"}, nil,
 		),

@@ -775,3 +775,31 @@ type Book @auth(
     name: String!
     desc: String!
 }
+
+
+type Mission @key(fields: "id") @auth(
+    query:{ rule: """
+            query($USER: String!) { 
+              queryMission(filter: { supervisorName: {eq: $USER} } ) { 
+                id 
+              } 
+            }""" }
+){
+    id: String! @id
+    crew: [Astronaut]
+    supervisorName: String @search(by: [exact])
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends @auth(
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: ID! @external
+    missions: [Mission]
+}
+

@@ -39,8 +39,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v2"
-	bopt "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -48,6 +48,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -200,7 +201,7 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	f, err := os.Open(file)
+	f, err := filestore.Open(file)
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
@@ -405,10 +406,12 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, filename string, key x.SensitiveByteSlice) error {
+func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
+	key x.SensitiveByteSlice) error {
+
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename, key)
+	rd, cleanup := fs.ChunkReader(filename, key)
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
@@ -660,7 +663,9 @@ func run() error {
 		return errors.New("RDF or JSON file(s) location must be specified")
 	}
 
-	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	fs := filestore.NewFileStore(opt.dataFiles)
+
+	filesList := fs.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return errors.Errorf("No data files found in %s", opt.dataFiles)
@@ -672,7 +677,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
+			errCh <- errors.Wrapf(l.processFile(ctx, fs, file, opt.key), file)
 		}(file)
 	}
 

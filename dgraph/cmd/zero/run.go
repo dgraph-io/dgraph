@@ -25,8 +25,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -48,12 +51,13 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	nodeId            uint64
+	Raft              *x.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
+	audit             *audit.AuditConf
 }
 
 var opts options
@@ -84,13 +88,28 @@ instances to achieve high-availability.
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.Uint64("idx", 1, "Unique node index for this server. idx cannot be 0.")
-	flag.Int("replicas", 1, "How many replicas to run per data shard."+
+	flag.String("raft", raftDefault,
+		`Raft options for group zero.
+		idx=N provides the Raft ID that this server would use to join the Zero group.
+			N cannot be 0.
+		learner=true would make this Zero a "learner" node. In learner node, the Zero would not
+			participate in Raft elections. This can be used to achieve a read-only replica.
+		`)
+	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+
+	flag.String("audit", "",
+		`Various audit options.
+	dir=/path/to/audits to define the path where to store the audit logs.
+	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
+	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	flag.
+	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -114,6 +133,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
 	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
@@ -123,7 +143,13 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	rc := pb.RaftContext{Id: opts.nodeId, Addr: x.WorkerConfig.MyAddr, Group: 0}
+	nodeId := opts.Raft.GetUint64("idx")
+	rc := pb.RaftContext{
+		Id:        nodeId,
+		Addr:      x.WorkerConfig.MyAddr,
+		Group:     0,
+		IsLearner: opts.Raft.GetBool("learner"),
+	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
@@ -174,21 +200,21 @@ func run() {
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
+
+	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
+	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		nodeId:            uint64(Zero.Conf.GetInt("idx")),
+		Raft:              raft,
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
+		audit:             conf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
-
-	if opts.nodeId == 0 {
-		log.Fatalf("ERROR: idx flag cannot be 0. Please try again with idx as a positive integer")
-	}
 	x.WorkerConfig.Parse(Zero.Conf)
 
 	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
@@ -205,6 +231,15 @@ func run() {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
+	}
+
+	if opts.audit != nil {
+		wd, err := filepath.Abs(opts.w)
+		x.Check(err)
+		ad, err := filepath.Abs(opts.audit.Dir)
+		x.Check(err)
+		x.AssertTruef(ad != wd,
+			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
 	}
 
 	if opts.rebalanceInterval <= 0 {
@@ -224,6 +259,10 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
+	nodeId := opts.Raft.GetUint64("idx")
+	if nodeId == 0 {
+		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
+	}
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
@@ -232,7 +271,7 @@ func run() {
 	// Create and initialize write-ahead log.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	store := raftwal.Init(opts.w)
-	store.SetUint(raftwal.RaftId, opts.nodeId)
+	store.SetUint(raftwal.RaftId, nodeId)
 	store.SetUint(raftwal.GroupId, 0) // All zeros have group zero.
 
 	// Initialize the servers.
@@ -243,14 +282,17 @@ func run() {
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
-	http.HandleFunc("/health", st.pingResponse)
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
-	zpages.Handle(http.DefaultServeMux, "/z")
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.HandleFunc("/health", st.pingResponse)
+	baseMux.HandleFunc("/state", st.getState)
+	baseMux.HandleFunc("/removeNode", st.removeNode)
+	baseMux.HandleFunc("/moveTablet", st.moveTablet)
+	baseMux.HandleFunc("/assign", st.assign)
+	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
@@ -308,6 +350,9 @@ func run() {
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+
+	audit.Close()
+
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }

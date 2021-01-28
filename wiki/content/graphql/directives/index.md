@@ -9,18 +9,23 @@ weight = 11
 
 The list of all directives supported by Dgraph.
 
-### @hasInverse
+### @auth
 
-`@hasInverse` is used to setup up two way edges such that adding a edge in
-one direction automically adds the one in the inverse direction.
+`@auth` allows you to define how to apply authorization rules on the queries/mutation for a type.
 
-Reference: [Linking nodes in the graph](/graphql/schema/graph-links)
+Reference: [Auth directive](/graphql/authorization/directive)
 
-### @search
+### @cascade
 
-`@search` allows you to perform filtering on a field while querying for nodes.
+`@cascade` allows you to filter out certain nodes within a query.
 
-Reference: [Search](/graphql/schema/search)
+Reference: [Cascade](/graphql/queries/cascade)
+
+### @custom
+
+`@custom` directive is used to define custom queries, mutations and fields.
+
+Reference: [Custom directive](/graphql/custom/directive)
 
 ### @dgraph
 
@@ -28,6 +33,18 @@ Reference: [Search](/graphql/schema/search)
 
 Reference: [GraphQL on Existing Dgraph](/graphql/dgraph/)
 
+### @generate
+
+The `@generate` directive is used to specify which GraphQL APIs are generated for a type.
+
+Reference: [Generate directive](/graphql/schema/generate)
+
+### @hasInverse
+
+`@hasInverse` is used to setup up two way edges such that adding a edge in
+one direction automically adds the one in the inverse direction.
+
+Reference: [Linking nodes in the graph](/graphql/schema/graph-links)
 
 ### @id
 
@@ -36,41 +53,17 @@ Reference: [GraphQL on Existing Dgraph](/graphql/dgraph/)
 
 Reference: [Identity](/graphql/schema/ids)
 
-### @withSubscription
+### @include
 
-`@withSubscription` directive when applied on a type, generates subsciption queries for it.
+The `@include` directive can be used to include a field based on the value of an `if` argument.
 
-Reference: [Subscriptions](/graphql/subscriptions)
-
-### @secret
-
-`@secret` directive is used to store secret information, it gets encrypted and then stored in Dgraph.
-
-Reference: [Password Type](/graphql/schema/types/#password-type)
-
-### @auth
-
-`@auth` allows you to define how to apply authorization rules on the queries/mutation for a type.
-
-Reference: [Auth directive](/graphql/authorization/directive)
-
-### @generate
-
-The `@generate` directive is used to specify which GraphQL APIs are generated for a type.
-
-Reference: [Generate directive](/graphql/schema/generate)
+Reference: [Include directive](/graphql/queries/skip-include)
 
 ### @lambda
 
 The `@lambda` directive allows you to call custom JavaScript resolvers. The `@lambda` queries, mutations, and fields are resolved through the lambda functions implemented on a given lambda server.
 
 Reference: [Lambda directive](/graphql/lambda/overview)
-
-### @custom
-
-`@custom` directive is used to define custom queries, mutations and fields.
-
-Reference: [Custom directive](/graphql/custom/directive)
 
 ### @remote
 
@@ -79,8 +72,26 @@ are typically used with custom queries and mutations.
 
 Reference: [Remote directive](/graphql/custom/directive)
 
-### @cascade
+### @search
 
-`@cascade` allows you to filter out certain nodes within a query.
+`@search` allows you to perform filtering on a field while querying for nodes.
 
-Reference: [Cascade](/graphql/queries/cascade)
+Reference: [Search](/graphql/schema/search)
+
+### @secret
+
+`@secret` directive is used to store secret information, it gets encrypted and then stored in Dgraph.
+
+Reference: [Password Type](/graphql/schema/types/#password-type)
+
+### @skip
+
+The `@skip` directive can be used to fetch a field based on the value of a user-defined GraphQL variable.
+
+Reference: [Skip directive](/graphql/queries/skip-include)
+
+### @withSubscription
+
+`@withSubscription` directive when applied on a type, generates subsciption queries for it.
+
+Reference: [Subscriptions](/graphql/subscriptions)

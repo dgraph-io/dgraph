@@ -257,6 +257,17 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		WithQueryResolver("__typename",
 			func(q schema.Query) QueryResolver {
 				return QueryResolverFunc(resolveIntrospection)
+			}).
+		WithMutationResolver("__typename",
+			func(m schema.Mutation) MutationResolver {
+				return MutationResolverFunc(func(ctx context.Context, m schema.Mutation) (*Resolved, bool) {
+					return &Resolved{
+						Data:       map[string]interface{}{"__typename": "Mutation"},
+						Field:      m,
+						Err:        nil,
+						Extensions: nil,
+					}, resolverSucceeded
+				})
 			})
 }
 
@@ -266,6 +277,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	queries = append(queries, s.Queries(schema.AggregateQuery)...)
+	queries = append(queries, s.Queries(schema.EntitiesQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
@@ -375,7 +387,6 @@ func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
 		return mws.Then(resolver(query))
 	}
-
 	return rf.queryError
 }
 
@@ -386,7 +397,6 @@ func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) Mutatio
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
 		return mws.Then(resolver(mutation))
 	}
-
 	return rf.mutationError
 }
 
