@@ -138,6 +138,7 @@ func writeUIDFunc(b *strings.Builder, uids []uint64, args []gql.Arg) {
 // specified in q.
 //
 // Only uid(0x123, 0x124), type(...) and eq(Type.Predicate, ...) functions are supported at root.
+// Multiple arguments for `eq` filter will be required in case of resolving `entities` query.
 func writeRoot(b *strings.Builder, q *gql.GraphQuery) {
 	if q.Func == nil {
 		return

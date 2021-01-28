@@ -857,7 +857,10 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 					as.mux.RLock()
 					defer as.mux.RUnlock()
 					sch := as.schema.Schema
-					handler, _ := schema.NewHandler(sch, false, true)
+					handler, err := schema.NewHandler(sch, false, true)
+					if err != nil {
+						return resolve.EmptyResult(query, err)
+					}
 					data := handler.GQLSchemaWithoutApolloExtras()
 					return &resolve.Resolved{
 						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
