@@ -2994,6 +2994,137 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 		"R2-D2"}), 2, nil)
 }
 
+// See: https://discuss.dgraph.io/t/custom-field-resolvers-are-not-always-called/12489
+func TestCustomFieldIsResolvedWhenNoModeGiven(t *testing.T) {
+	sch := `
+	type ItemType {
+	  typeId: String! @id
+	  name: String
+
+	  marketStats: MarketStatsR @custom(http: {
+		url: "http://localhost:8080/graphql", # We are using the same alpha to serve MarketStats.
+		method: POST,
+		graphql: "query($typeId:String!) { getMarketStats(typeId: $typeId) }",
+		skipIntrospection: true,
+	  })
+	}
+	
+	type Blueprint {
+	  blueprintId: String! @id
+	  shallowProducts: [ItemType]
+	  deepProducts: [BlueprintProduct]
+	}
+	
+	type BlueprintProduct {
+	  itemType: ItemType
+	  amount: Int
+	}
+	
+	type MarketStats  {
+	  typeId: String! @id
+	  price: Float 
+	}
+	
+	type MarketStatsR @remote {
+	  typeId: String
+	  price: Float
+	}`
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, sch)
+
+	mutation := &common.GraphQLParams{
+		Query: `mutation AddExampleData {
+		  addItemType(input: {
+			typeId: "1"
+			name: "Test"
+		  }) { numUids }
+		  addMarketStats(input: {
+			typeId: "1"
+			price: 9.99
+		  }) { numUids }
+		  addBlueprint(input: {
+			blueprintId: "bp1"
+			shallowProducts: [{ typeId: "1" }]
+			deepProducts: [{
+			  amount: 1
+			  itemType: { typeId: "1" }
+			}]
+		  }) { numUids }
+		}`,
+	}
+	resp := mutation.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	query := &common.GraphQLParams{
+		Query: `query {
+		  works: getItemType(typeId:"1") {
+			typeId
+			marketStats { price }
+		  }
+		  doesntWork: getItemType(typeId: "1") {
+			marketStats { price }
+		  }
+		  shallowWorks: getBlueprint(blueprintId:"bp1") {
+			shallowProducts {
+			  typeId
+			  marketStats { price }
+			}
+		  }
+		  deepDoesntWork: getBlueprint(blueprintId:"bp1") {
+			deepProducts {
+			  itemType {
+				typeId
+				marketStats { price }
+			  }
+			}
+		  }
+		}`,
+	}
+	resp = query.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	testutil.CompareJSON(t, `{
+	  "works": {
+		"marketStats": {
+		  "price": 9.99
+		},
+		"typeId": "1"
+	  },
+	  "doesntWork": {
+		"marketStats": {
+		  "price": 9.99
+		}
+	  },
+	  "shallowWorks": {
+		"shallowProducts": [
+		  {
+			"marketStats": {
+			  "price": 9.99
+			},
+			"typeId": "1"
+		  }
+		]
+	  },
+	  "deepDoesntWork": {
+		"deepProducts": [
+		  {
+			"itemType": {
+			  "marketStats": {
+			    "price": 9.99
+			  },
+			  "typeId": "1"
+			}
+		  }
+		]
+	  }
+	}`, string(resp.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "ItemType", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Blueprint", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "BlueprintProduct", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "MarketStats", map[string]interface{}{}, 1, nil)
+}
+
 func TestMain(m *testing.M) {
 	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
 	if err != nil {

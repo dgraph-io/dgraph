@@ -1075,7 +1075,7 @@ func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	if graphqlArg == nil {
 		return toRequiredFieldDefs(rf, f)
 	}
-	modeVal := ""
+	modeVal := SINGLE
 	modeArg := httpArg.Value.Children.ForName(mode)
 	if modeArg != nil {
 		modeVal = modeArg.Raw
