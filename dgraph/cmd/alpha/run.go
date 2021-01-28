@@ -127,7 +127,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
+		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
 	flag.String("raft", worker.RaftDefaults,
 		`Various raft options.
