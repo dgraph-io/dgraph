@@ -249,11 +249,14 @@
       { "uid": "0x2", "name": "A.N. Other Author" } 
     ] }
   expected: |
-    { "getAuthor": { "name": "A.N. Author" } }
+    { "getAuthor": null }
   errors:
-    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one 
-          item.  The first item in the list was used to produce the result.",
-        "locations": [ { "column":3, "line":2 } ] } ]
+    [ { "message": "A list was returned, but GraphQL was expecting just one item. This indicates
+          an internal error - probably a mismatch between the GraphQL and Dgraph/remote schemas. The value
+          was resolved as null (which may trigger GraphQL error propagation) and as much other data as
+          possible returned.",
+        "locations": [ { "column":3, "line":2 } ],
+        "path": ["getAuthor"] } ]
 
 -
   name: "Sensible error when un-processable Dgraph result"
@@ -269,8 +272,7 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { "message": "couldn't unmarshal Dgraph result 
-          because invalid character 's' looking for beginning of object key string" ,
+    [ { "message": "invalid character 's' looking for beginning of object key string" ,
         "locations": [ { "column":3, "line":2 } ] } ]
 
 -

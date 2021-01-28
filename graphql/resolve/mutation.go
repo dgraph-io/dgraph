@@ -255,6 +255,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	// For delete mutation, if query field is requested, there will be two upserts, the second one
 	// isn't needed for mutation, it only has the query to fetch the query field.
 	// We need to execute this query before the mutation to find out the query field.
+	var queryErrs error
 	if mutation.MutationType() == schema.DeleteMutation {
 		if qryField := mutation.QueryField(); qryField != nil {
 			dgQuery := upserts[1].Query
@@ -266,9 +267,11 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 				ReadOnly: true}, qryField)
 			queryTimer.Stop()
 
-			if err != nil {
+			if err != nil && !x.IsGqlErrorList(err) {
 				return emptyResult(schema.GQLWrapf(err, "couldn't execute query for mutation %s",
 					mutation.Name())), resolverFailed
+			} else {
+				queryErrs = err
 			}
 			ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
 		}
@@ -310,18 +313,17 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
 
-	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
-	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 	if dgQuery == nil && err != nil {
-		return emptyResult(errs), resolverFailed
+		return emptyResult(queryErrs), resolverFailed
 	}
 
 	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 	if err != nil {
 		return emptyResult(
-				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
+				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
 			resolverFailed
 	}
 	commit = true
@@ -334,8 +336,10 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 			ReadOnly: true}, mutation.QueryField())
 		queryTimer.Stop()
 
-		errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-			"couldn't execute query for mutation %s", mutation.Name()))
+		if !x.IsGqlErrorList(err) {
+			err = schema.GQLWrapf(err, "couldn't execute query for mutation %s", mutation.Name())
+		}
+		queryErrs = schema.AppendGQLErrs(queryErrs, err)
 		ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	}
 	numUids := getNumUids(mutation, mutResp.Uids, result)
@@ -344,7 +348,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		Data:  completeMutationResult(mutation, qryResp.GetJson(), numUids),
 		Field: mutation,
 		// the error path only contains the query field, so we prepend the mutation response name
-		Err:        schema.PrependPath(errs, mutation.ResponseName()),
+		Err:        schema.PrependPath(queryErrs, mutation.ResponseName()),
 		Extensions: ext,
 	}, resolverSucceeded
 }
@@ -359,7 +363,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 	comma := ""
 	var buf bytes.Buffer
 	x.Check2(buf.WriteRune('{'))
-	schema.CompleteAlias(mutation, &buf)
+	mutation.CompleteAlias(&buf)
 	x.Check2(buf.WriteRune('{'))
 
 	// Our standard MutationPayloads consist of only the following fields:
@@ -370,7 +374,7 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 	// Note that all these fields are nullable, so no need to raise non-null errors.
 	for _, f := range mutation.SelectionSet() {
 		x.Check2(buf.WriteString(comma))
-		schema.CompleteAlias(f, &buf)
+		f.CompleteAlias(&buf)
 
 		switch f.Name() {
 		case schema.Typename:

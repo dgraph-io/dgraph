@@ -145,16 +145,16 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		ReadOnly: true}, query)
 	queryTimer.Stop()
 
-	if err != nil {
+	if err != nil && !x.IsGqlErrorList(err) {
+		err = schema.GQLWrapf(err, "Dgraph query failed")
 		glog.Infof("Dgraph query execution failed : %s", err)
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
 	resolved := &Resolved{
-		Data:  resp.GetJson(),
-		Field: query,
-		Err: schema.SetPathIfEmpty(schema.GQLWrapf(err, "Dgraph query failed"),
-			query.ResponseName()),
+		Data:       resp.GetJson(),
+		Field:      query,
+		Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
 		Extensions: ext,
 	}
 

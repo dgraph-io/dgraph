@@ -56,8 +56,11 @@ func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request,
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).QueryGraphQL(ctx, req, field)
+	if !x.IsGqlErrorList(err) {
+		err = schema.GQLWrapf(err, "Dgraph execution failed")
+	}
 
-	return resp, schema.GQLWrapf(err, "Dgraph execution failed")
+	return resp, err
 }
 
 // CommitOrAbort is the underlying dgraph implementation for committing a Dgraph transaction

@@ -1118,9 +1118,21 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 		}
 	}
 
+	var gqlErrs error
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
-		return
+		// if rerr is just some error from GraphQL encoding, then we need to continue the normal
+		// execution ignoring the error as we still need to assign latency info to resp. If we can
+		// change the api.Response proto to have a field to contain GraphQL errors, that would be
+		// great. Otherwise, we will have to do such checks a lot and that would make code ugly.
+		if qc.gqlField != nil && x.IsGqlErrorList(rerr) {
+			gqlErrs = rerr
+		} else {
+			return
+		}
 	}
+	// if it were a mutation, simple or upsert, in any case gqlErrs would be empty as GraphQL JSON
+	// is formed only for queries. So, gqlErrs can have something only in the case of a pure query.
+	// So, safe to ignore gqlErrs and not return that here.
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
 	}
@@ -1136,7 +1148,7 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
-	return resp, nil
+	return resp, gqlErrs
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
@@ -1220,16 +1232,10 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
 		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
-		// TODO: if err is just some error from GraphQL encoding,
-		//  then we need to continue the normal execution ignoring the error as we still need to
-		//  assign metrics and latency info to resp.
-		//  If we can change the api.Response proto to have a field to contain GraphQL errors,
-		//  that would be great. Otherwise, we will have to do type switches over error at a lot of
-		//  places. And that would make code ugly.
-		//  Also add a test where if there are GraphQL errors, the extensions should still report
-		//  touched_uids.
 	}
-	if err != nil {
+	// if err is just some error from GraphQL encoding, then we need to continue the normal
+	// execution ignoring the error as we still need to assign metrics and latency info to resp.
+	if err != nil && (qc.gqlField == nil || !x.IsGqlErrorList(err)) {
 		return resp, err
 	}
 	qc.span.Annotatef(nil, "Response = %s", resp.Json)

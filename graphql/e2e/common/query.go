@@ -17,6 +17,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"google.golang.org/grpc"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -1210,6 +1215,18 @@ func includeAndSkipDirective(t *testing.T) {
 				title
 				tags
 			  }
+			  postsAggregate {
+				__typename @include(if: $includeFalse) @skip(if: $skipFalse)
+				count @include(if: $includeFalse) @skip(if: $skipTrue)
+				titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+				numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
+			  }
+			}
+			aggregatePost {
+			  __typename @include(if: $includeFalse) @skip(if: $skipFalse)
+			  count @include(if: $includeFalse) @skip(if: $skipTrue)
+			  titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+			  numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
 			}
 		  }`,
 		Variables: map[string]interface{}{
@@ -1223,7 +1240,19 @@ func includeAndSkipDirective(t *testing.T) {
 	gqlResponse := getAuthorParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	expected := `{
+	  "queryAuthor": [
+		{
+		  "name": "Ann Other Author",
+		  "postsAggregate": {
+			"titleMin": "Learning GraphQL in Dgraph"
+		  }
+		}
+	  ],
+	  "aggregatePost": {
+		"titleMin": "GraphQL doco"
+	  }
+	}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
@@ -1869,6 +1898,64 @@ func queriesHaveExtensions(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
 	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+}
+
+func erroredQueriesHaveTouchedUids(t *testing.T) {
+	country1 := addCountry(t, postExecutor)
+	country2 := addCountry(t, postExecutor)
+
+	// delete the first country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", country1.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	// query country's name with some other things, that should give us error for missing name.
+	query := &GraphQLParams{
+		Query: `query ($ids: [ID!]) {
+			queryCountry(filter: {id: $ids}) {
+				id
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"ids": []interface{}{country1.ID, country2.ID}},
+	}
+	gqlResponse := query.ExecuteAsPost(t, GraphqlURL)
+
+	// the data should have first country as null
+	expectedResponse := fmt.Sprintf(`{
+		"queryCountry": [
+			null,
+			{"id": "%s", "name": "Testland"}
+		]
+	}`, country2.ID)
+	testutil.CompareJSON(t, expectedResponse, string(gqlResponse.Data))
+
+	// we should also get error for the missing name field
+	require.Equal(t, x.GqlErrorList{{
+		Message: "Non-nullable field 'name' (type String!) was not present " +
+			"in result from Dgraph.  GraphQL error propagation triggered.",
+		Locations: []x.Location{{Line: 4, Column: 5}},
+		Path:      []interface{}{"queryCountry", float64(0), "name"},
+	}}, gqlResponse.Errors)
+
+	// response should have extensions
+	require.NotNil(t, gqlResponse.Extensions)
+	// it should have touched_uids filled in from Dgraph response's metrics
+	touchedUidskey := "touched_uids"
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+
+	// cleanup
+	deleteCountry(t, map[string]interface{}{"id": []interface{}{country1.ID, country2.ID}}, 2, nil)
 }
 
 func queryWithAlias(t *testing.T) {

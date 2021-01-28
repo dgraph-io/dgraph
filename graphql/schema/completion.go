@@ -67,13 +67,6 @@ func Unmarshal(data []byte, v interface{}) error {
 	return decoder.Decode(v)
 }
 
-// CompleteAlias applies GraphQL alias completion for field to the input buffer buf.
-func CompleteAlias(field Field, buf *bytes.Buffer) {
-	x.Check2(buf.WriteRune('"'))
-	x.Check2(buf.WriteString(field.ResponseName()))
-	x.Check2(buf.WriteString(`":`))
-}
-
 // CompleteObject builds a json GraphQL result object for the current query level.
 // It returns a bracketed json object like { f1:..., f2:..., ... }.
 // At present, it is only used for building custom results by:
@@ -138,7 +131,7 @@ func CompleteObject(
 		}
 
 		x.Check2(buf.WriteString(comma))
-		CompleteAlias(f, &buf)
+		f.CompleteAlias(&buf)
 
 		val := res[f.Name()]
 		if f.Name() == Typename {
@@ -173,7 +166,7 @@ func CompleteObject(
 			completed = JsonNull
 		}
 		x.Check2(buf.Write(completed))
-		comma = ", "
+		comma = ","
 	}
 	x.Check2(buf.WriteRune('}'))
 
@@ -267,6 +260,10 @@ func completeList(
 	values []interface{}) ([]byte, x.GqlErrorList) {
 
 	if field.Type().ListType() == nil {
+		// lets coerce a one item list to a single value in case the type of this field wasn't list.
+		if len(values) == 1 {
+			return CompleteValue(path, field, values[0])
+		}
 		// This means either a bug on our part - in admin server.
 		// or @custom query/mutation returned something unexpected.
 		//
@@ -306,7 +303,7 @@ func completeList(
 		} else {
 			x.Check2(buf.Write(r))
 		}
-		comma = ", "
+		comma = ","
 	}
 	x.Check2(buf.WriteRune(']'))
 

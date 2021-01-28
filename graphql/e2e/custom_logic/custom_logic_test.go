@@ -527,14 +527,12 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	require.Equal(t, 2, len(result.Errors))
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
-			" Evaluation of custom field failed because external request " +
+		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
 			"returned an error: unexpected error with: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{Line: 6, Column: 4}},
 			Path:      []interface{}{"queryPerson"},
 		},
-		&x.GqlError{Message: "Dgraph query failed because Dgraph execution failed because" +
-			" Evaluation of custom field failed because external request returned" +
+		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
 			" an error: unexpected error with: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{Line: 9, Column: 4}},
 			Path:      []interface{}{"queryPerson"},
@@ -1255,7 +1253,6 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 		},
 	}
 	for _, err := range expectedErrs {
-		err.Message = "Dgraph query failed because Dgraph execution failed because " + err.Message
 		err.Path = []interface{}{"queryUser"}
 	}
 	require.Equal(t, expectedErrs, result.Errors)
@@ -2870,7 +2867,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 
 	require.Equal(t, x.GqlErrorList{
 		{
-			Message: "Dgraph query failed because Dgraph execution failed because Rest API returns Error for field name",
+			Message: "Rest API returns Error for field name",
 			Path:    []interface{}{"queryUser"},
 		},
 	}, result.Errors)
@@ -2995,6 +2992,137 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 	// cleanup
 	common.DeleteGqlType(t, "Character", common.GetXidFilter("name", []interface{}{"Han",
 		"R2-D2"}), 2, nil)
+}
+
+// See: https://discuss.dgraph.io/t/custom-field-resolvers-are-not-always-called/12489
+func TestCustomFieldIsResolvedWhenNoModeGiven(t *testing.T) {
+	sch := `
+	type ItemType {
+	  typeId: String! @id
+	  name: String
+
+	  marketStats: MarketStatsR @custom(http: {
+		url: "http://localhost:8080/graphql", # We are using the same alpha to serve MarketStats.
+		method: POST,
+		graphql: "query($typeId:String!) { getMarketStats(typeId: $typeId) }",
+		skipIntrospection: true,
+	  })
+	}
+	
+	type Blueprint {
+	  blueprintId: String! @id
+	  shallowProducts: [ItemType]
+	  deepProducts: [BlueprintProduct]
+	}
+	
+	type BlueprintProduct {
+	  itemType: ItemType
+	  amount: Int
+	}
+	
+	type MarketStats  {
+	  typeId: String! @id
+	  price: Float 
+	}
+	
+	type MarketStatsR @remote {
+	  typeId: String
+	  price: Float
+	}`
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, sch)
+
+	mutation := &common.GraphQLParams{
+		Query: `mutation AddExampleData {
+		  addItemType(input: {
+			typeId: "1"
+			name: "Test"
+		  }) { numUids }
+		  addMarketStats(input: {
+			typeId: "1"
+			price: 9.99
+		  }) { numUids }
+		  addBlueprint(input: {
+			blueprintId: "bp1"
+			shallowProducts: [{ typeId: "1" }]
+			deepProducts: [{
+			  amount: 1
+			  itemType: { typeId: "1" }
+			}]
+		  }) { numUids }
+		}`,
+	}
+	resp := mutation.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	query := &common.GraphQLParams{
+		Query: `query {
+		  works: getItemType(typeId:"1") {
+			typeId
+			marketStats { price }
+		  }
+		  doesntWork: getItemType(typeId: "1") {
+			marketStats { price }
+		  }
+		  shallowWorks: getBlueprint(blueprintId:"bp1") {
+			shallowProducts {
+			  typeId
+			  marketStats { price }
+			}
+		  }
+		  deepDoesntWork: getBlueprint(blueprintId:"bp1") {
+			deepProducts {
+			  itemType {
+				typeId
+				marketStats { price }
+			  }
+			}
+		  }
+		}`,
+	}
+	resp = query.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+
+	testutil.CompareJSON(t, `{
+	  "works": {
+		"marketStats": {
+		  "price": 9.99
+		},
+		"typeId": "1"
+	  },
+	  "doesntWork": {
+		"marketStats": {
+		  "price": 9.99
+		}
+	  },
+	  "shallowWorks": {
+		"shallowProducts": [
+		  {
+			"marketStats": {
+			  "price": 9.99
+			},
+			"typeId": "1"
+		  }
+		]
+	  },
+	  "deepDoesntWork": {
+		"deepProducts": [
+		  {
+			"itemType": {
+			  "marketStats": {
+			    "price": 9.99
+			  },
+			  "typeId": "1"
+			}
+		  }
+		]
+	  }
+	}`, string(resp.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "ItemType", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Blueprint", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "BlueprintProduct", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "MarketStats", map[string]interface{}{}, 1, nil)
 }
 
 func TestMain(m *testing.M) {

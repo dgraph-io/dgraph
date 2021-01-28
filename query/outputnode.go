@@ -61,12 +61,13 @@ func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Fi
 		sgr.Children = append(sgr.Children, sg)
 	}
 	data, err := sgr.toFastJSON(ctx, l, field)
+
+	// don't log or wrap GraphQL errors
+	if x.IsGqlErrorList(err) {
+		return data, err
+	}
 	if err != nil {
 		glog.Errorf("while running ToJson: %v\n", err)
-	}
-	// don't wrap GraphQL errors
-	if field != nil {
-		return data, err
 	}
 	return data, errors.Wrapf(err, "while running ToJson")
 }
@@ -1189,7 +1190,7 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 		}
 		// now encode the GraphQL results.
 		if !gqlEncCtx.encode(enc, n, true, []gqlSchema.Field{field}, nil,
-			make([]interface{}, 0, field.MaxPathLength())) {
+			field.PreAllocatePathSlice()) {
 			// if gqlEncCtx.encode() didn't finish successfully here, that means we need to send
 			// data as null in the GraphQL response like this:
 			// 		{

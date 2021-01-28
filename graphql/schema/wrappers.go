@@ -65,10 +65,6 @@ type FieldHTTPConfig struct {
 	RemoteGqlQueryName string
 	RemoteGqlQuery     string
 
-	// args required by the HTTP/GraphQL request. These should be present in the parent type
-	// in the case of resolving a field or in the parent field in case of a query/mutation
-	RequiredArgs map[string]bool
-
 	// For the following request
 	// graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }"
 	// the GraphqlBatchModeArgument would be sinput, we use it to know the GraphQL variable that
@@ -164,10 +160,11 @@ type Field interface {
 	IsAggregateField() bool
 	GqlErrorf(path []interface{}, message string, args ...interface{}) *x.GqlError
 	// MaxPathLength finds the max length (including list indexes) of any path in the 'query' f.
-	// Used to pre-allocate a path buffer of the correct size before running completeObject on
-	// the top level query - means that we aren't reallocating slices multiple times
-	// during the complete* functions.
 	MaxPathLength() int
+	// PreAllocatePathSlice is used to pre-allocate a path buffer of the correct size before running
+	// CompleteObject on the top level query - means that we aren't reallocating slices multiple
+	// times during the complete* functions.
+	PreAllocatePathSlice() []interface{}
 	// NullValue returns the appropriate null bytes to be written as value in the JSON response for
 	// this field.
 	//  * If this field is a list field then it returns []byte("[]").
@@ -181,6 +178,8 @@ type Field interface {
 	//  * Otherwise, this field is non-nullable and so it will return a nil slice to indicate that.
 	// This is useful only for top-level fields like a query or mutation.
 	NullResponse() []byte
+	// CompleteAlias applies GraphQL alias completion for field to the input buffer buf.
+	CompleteAlias(buf *bytes.Buffer)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -877,6 +876,10 @@ func (f *field) MaxPathLength() int {
 	return 1 + childMax
 }
 
+func (f *field) PreAllocatePathSlice() []interface{} {
+	return make([]interface{}, 0, f.MaxPathLength())
+}
+
 func (f *field) NullValue() []byte {
 	typ := f.Type()
 	if typ.ListType() != nil {
@@ -920,6 +923,12 @@ func (f *field) NullResponse() []byte {
 
 	// finally return a JSON like: {"fieldAlias":null}
 	return buf
+}
+
+func (f *field) CompleteAlias(buf *bytes.Buffer) {
+	x.Check2(buf.WriteRune('"'))
+	x.Check2(buf.WriteString(f.ResponseName()))
+	x.Check2(buf.WriteString(`":`))
 }
 
 func (f *field) Arguments() map[string]interface{} {
@@ -1066,7 +1075,7 @@ func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	if graphqlArg == nil {
 		return toRequiredFieldDefs(rf, f)
 	}
-	modeVal := ""
+	modeVal := SINGLE
 	modeArg := httpArg.Value.Children.ForName(mode)
 	if modeArg != nil {
 		modeVal = modeArg.Raw
@@ -1274,19 +1283,11 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
-		bt, rf, err := parseBodyTemplate(bodyTemplate, true)
+		bt, _, err := parseBodyTemplate(bodyTemplate, true)
 		if err != nil {
 			return nil, err
 		}
 		fconf.Template = bt
-		fconf.RequiredArgs = rf
-	}
-
-	if !isQueryOrMutation && graphqlArg != nil && fconf.Mode == SINGLE {
-		// For BATCH mode, required args would have been parsed from the body above.
-		// Safe to ignore the error here since we should already have validated that we can parse
-		// the required args from the GraphQL request during schema update.
-		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
 	fconf.ForwardHeaders = http.Header{}
@@ -1467,12 +1468,20 @@ func (q *query) MaxPathLength() int {
 	return (*field)(q).MaxPathLength()
 }
 
+func (q *query) PreAllocatePathSlice() []interface{} {
+	return (*field)(q).PreAllocatePathSlice()
+}
+
 func (q *query) NullValue() []byte {
 	return (*field)(q).NullValue()
 }
 
 func (q *query) NullResponse() []byte {
 	return (*field)(q).NullResponse()
+}
+
+func (q *query) CompleteAlias(buf *bytes.Buffer) {
+	(*field)(q).CompleteAlias(buf)
 }
 
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
@@ -1929,12 +1938,20 @@ func (m *mutation) MaxPathLength() int {
 	return (*field)(m).MaxPathLength()
 }
 
+func (m *mutation) PreAllocatePathSlice() []interface{} {
+	return (*field)(m).PreAllocatePathSlice()
+}
+
 func (m *mutation) NullValue() []byte {
 	return (*field)(m).NullValue()
 }
 
 func (m *mutation) NullResponse() []byte {
 	return (*field)(m).NullResponse()
+}
+
+func (m *mutation) CompleteAlias(buf *bytes.Buffer) {
+	(*field)(m).CompleteAlias(buf)
 }
 
 func (t *astType) AuthRules() *TypeAuth {
