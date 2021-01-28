@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,5 +37,7 @@ func init() {
 			fmt.Print(x.BuildDetails())
 			os.Exit(0)
 		},
+		Annotations: map[string]string{"group": "default"},
 	}
+	Version.Cmd.SetHelpTemplate(x.NonRootTemplate)
 }

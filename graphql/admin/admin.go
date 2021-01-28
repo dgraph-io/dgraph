@@ -140,7 +140,8 @@ const (
 		counter: Int
 		groups: [ClusterGroup]
 		zeros: [Member]
-		maxLeaseId: Int
+		maxUID: Int
+		maxNsID: Int
 		maxTxnTs: Int
 		maxRaftId: Int
 		removed: [Member]
@@ -378,7 +379,7 @@ var (
 )
 
 func SchemaValidate(sch string) error {
-	schHandler, err := schema.NewHandler(sch, true)
+	schHandler, err := schema.NewHandler(sch, true, false)
 	if err != nil {
 		return err
 	}
@@ -495,10 +496,8 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
 
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -640,7 +639,7 @@ func getCurrentGraphQLSchema() (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema, false)
+	schHandler, err := schema.NewHandler(sch.Schema, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -838,6 +837,7 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
+// Todo(Minhaj): Fetch NewHandler for service query only once
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
@@ -851,6 +851,26 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	} else {
 		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
 			WithConventionResolvers(gqlSchema, as.fns)
+		// If the schema is a Federated Schema then attach "_service" resolver
+		if gqlSchema.IsFederated() {
+			resolverFactory.WithQueryResolver("_service", func(s schema.Query) resolve.QueryResolver {
+				return resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					as.mux.RLock()
+					defer as.mux.RUnlock()
+					sch := as.schema.Schema
+					handler, err := schema.NewHandler(sch, false, true)
+					if err != nil {
+						return resolve.EmptyResult(query, err)
+					}
+					data := handler.GQLSchemaWithoutApolloExtras()
+					return &resolve.Resolved{
+						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
+						Field: query,
+					}
+				})
+			})
+		}
+
 		if as.withIntrospection {
 			resolverFactory.WithSchemaIntrospection()
 		}

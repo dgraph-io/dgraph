@@ -43,7 +43,7 @@ check:
 	@./depcheck.sh && \
 		(echo "Installing proto libraries to versions in go.mod." ; \
 		go install github.com/golang/protobuf/protoc-gen-go ; \
-		go install github.com/gogo/protobuf/protoc-gen-gofast)
+		go install github.com/gogo/protobuf/protoc-gen-gogofaster)
 
 .PHONY: copy-protos
 copy-protos:
@@ -63,7 +63,7 @@ regenerate: tidy-deps copy-protos check clean
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
+		--gogofaster_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
 		pb.proto
 	@rm -rf ${TMPDIR}
 	@echo Done.

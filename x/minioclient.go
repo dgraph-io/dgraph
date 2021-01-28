@@ -1,4 +1,4 @@
-package worker
+package x
 
 import (
 	"net/http"
@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
@@ -27,23 +26,27 @@ const (
 	s3AccelerateSubstr = "s3-accelerate"
 )
 
-// Credentials holds the credentials needed to perform a backup/export operation.
+// MinioCredentials holds the credentials needed to perform a backup/export operation.
 // If these credentials are missing the default credentials will be used.
-type Credentials struct {
+type MinioCredentials struct {
 	AccessKey    string
 	SecretKey    string
 	SessionToken string
 	Anonymous    bool
 }
 
-func (creds *Credentials) isAnonymous() bool {
+type MinioClient struct {
+	*minio.Client
+}
+
+func (creds *MinioCredentials) isAnonymous() bool {
 	if creds == nil {
 		return false
 	}
 	return creds.Anonymous
 }
 
-func credentialsProvider(scheme string, requestCreds credentials.Value) credentials.Provider {
+func MinioCredentialsProvider(scheme string, requestCreds credentials.Value) credentials.Provider {
 	providers := []credentials.Provider{&credentials.Static{Value: requestCreds}}
 
 	switch scheme {
@@ -56,7 +59,7 @@ func credentialsProvider(scheme string, requestCreds credentials.Value) credenti
 	return &credentials.Chain{Providers: providers}
 }
 
-func requestCreds(creds *Credentials) credentials.Value {
+func requestCreds(creds *MinioCredentials) credentials.Value {
 	if creds == nil {
 		return credentials.Value{}
 	}
@@ -68,7 +71,7 @@ func requestCreds(creds *Credentials) credentials.Value {
 	}
 }
 
-func newMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
+func NewMinioClient(uri *url.URL, creds *MinioCredentials) (*MinioClient, error) {
 	if len(uri.Path) < 1 {
 		return nil, errors.Errorf("Invalid bucket: %q", uri.Path)
 	}
@@ -94,10 +97,14 @@ func newMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
 	secure := uri.Query().Get("secure") != "false" // secure by default
 
 	if creds.isAnonymous() {
-		return minio.New(uri.Host, "", "", secure)
+		mc, err := minio.New(uri.Host, "", "", secure)
+		if err != nil {
+			return nil, err
+		}
+		return &MinioClient{mc}, nil
 	}
 
-	credsProvider := credentials.New(credentialsProvider(uri.Scheme, requestCreds(creds)))
+	credsProvider := credentials.New(MinioCredentialsProvider(uri.Scheme, requestCreds(creds)))
 
 	mc, err := minio.NewWithCredentials(uri.Host, credsProvider, secure, "")
 
@@ -106,7 +113,7 @@ func newMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
 	}
 
 	// Set client app name "Dgraph/v1.0.x"
-	mc.SetAppInfo(appName, x.Version())
+	mc.SetAppInfo(appName, Version())
 
 	// S3 transfer acceleration support.
 	if uri.Scheme == "s3" && strings.Contains(uri.Host, s3AccelerateSubstr) {
@@ -118,14 +125,25 @@ func newMinioClient(uri *url.URL, creds *Credentials) (*minio.Client, error) {
 		mc.TraceOn(os.Stderr)
 	}
 
-	return mc, nil
+	return &MinioClient{mc}, nil
 }
 
-func validateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
-	// split path into bucketName and blobPrefix
-	parts := strings.Split(uri.Path[1:], "/")
+// ParseBucketAndPrefix returns the bucket and prefix given a path string
+func (*MinioClient) ParseBucketAndPrefix(path string) (string, string) {
+	if path[0] == '/' {
+		path = path[1:]
+	}
+	parts := strings.Split(path, "/")
 	bucketName := parts[0] // bucket
 	objectPrefix := ""
+	if len(parts) > 1 {
+		objectPrefix = filepath.Join(parts[1:]...)
+	}
+	return bucketName, objectPrefix
+}
+
+func (mc *MinioClient) ValidateBucket(uri *url.URL) (string, string, error) {
+	bucketName, objectPrefix := mc.ParseBucketAndPrefix(uri.Path)
 
 	glog.Info("Verifying Bucket Exists: ", bucketName)
 	// verify the requested bucket exists.
@@ -135,9 +153,6 @@ func validateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
 	}
 	if !found {
 		return "", "", errors.Errorf("Bucket was not found: %s", bucketName)
-	}
-	if len(parts) > 1 {
-		objectPrefix = filepath.Join(parts[1:]...)
 	}
 
 	return bucketName, objectPrefix, nil

@@ -155,9 +155,132 @@ func (qr *queryRewriter) Rewrite(
 		return passwordQuery(gqlQuery, authRw)
 	case schema.AggregateQuery:
 		return aggregateQuery(gqlQuery, authRw), nil
+	case schema.EntitiesQuery:
+		return entitiesQuery(gqlQuery, authRw)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+// entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
+// This query is sent to the Dgraph service to resolve types `extended` and defined by this service.
+func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+
+	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
+	// For this type Extension:-
+	// 	extend type Product @key(fields: "upc") {
+	// 		upc: String @external
+	// 		reviews: [Review]
+	// 	}
+	// Input to the Query will be
+	// "_representations": [
+	// 		{
+	// 		  "__typename": "Product",
+	// 	 	 "upc": "B00005N5PF"
+	// 		},
+	// 		...
+	//   ]
+
+	representations, ok := field.ArgValue("representations").([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Error parsing `representations` argument")
+	}
+	typeNames := make(map[string]bool)
+	keyFieldValueList := make([]interface{}, 0)
+	keyFieldIsID := false
+	keyFieldName := ""
+	var err error
+	for i, rep := range representations {
+		representation, ok := rep.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
+		}
+
+		typename, ok := representation["__typename"].(string)
+		if !ok {
+			return nil, fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
+		}
+
+		// Store all the typeNames into an map to perfrom validation at last.
+		typeNames[typename] = true
+		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
+		if err != nil {
+			return nil, err
+		}
+		keyFieldValue, ok := representation[keyFieldName]
+		if !ok {
+			return nil, fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
+		}
+		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
+	}
+
+	// Return error if there was no typename extracted from the `_representations` argument.
+	if len(typeNames) == 0 {
+		return nil, fmt.Errorf("Expect one typename in `_representations` argument, got none")
+	}
+
+	// Since we have restricted that all the typeNames for the inputs in the
+	// representation list should be same, we need to validate it and throw error
+	// if represenation of more than one type exists.
+	if len(typeNames) > 1 {
+		keys := make([]string, len(typeNames))
+		i := 0
+		for k := range typeNames {
+			keys[i] = k
+			i++
+		}
+		return nil, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
+	}
+
+	var typeName string
+	for k := range typeNames {
+		typeName = k
+	}
+
+	typeDefn := field.BuildType(typeName)
+	rbac := authRw.evaluateStaticRules(typeDefn)
+
+	dgQuery := &gql.GraphQuery{
+		Attr: field.Name(),
+	}
+
+	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
+		return []*gql.GraphQuery{dgQuery}, nil
+	}
+
+	// Construct Filter at Root Func.
+	// if keyFieldsIsID = true and keyFieldValueList = {"0x1", "0x2"}
+	// then query will be formed as:-
+	// 	_entities(func: uid("0x1", "0x2") {
+	//		...
+	//	}
+	// if keyFieldsIsID = false then query will be like:-
+	// 	_entities(func: eq(keyFieldName,"0x1", "0x2") {
+	//		...
+	//	}
+
+	// If the key field is of ID type and is not an external field
+	// then we query it using the `uid` otherwise we treat it as string
+	// and query using `eq` function.
+	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
+		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
+	} else {
+		addEqFunc(dgQuery, typeDefn.DgraphPredicate(keyFieldName), keyFieldValueList)
+	}
+	// AddTypeFilter in as the Filter to the Root the Query.
+	// Query will be like :-
+	// 	_entities(func: ...) @filter(type(typeName)) {
+	//		...
+	// 	}
+	addTypeFilter(dgQuery, typeDefn)
+
+	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
+	addUID(dgQuery)
+
+	dgQueries := authRw.addAuthQueries(typeDefn, []*gql.GraphQuery{dgQuery}, rbac)
+	return append(dgQueries, selectionAuth...), nil
+
 }
 
 func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery {
@@ -948,6 +1071,17 @@ func addUIDFunc(q *gql.GraphQuery, uids []uint64) {
 	}
 }
 
+func addEqFunc(q *gql.GraphQuery, dgPred string, values []interface{}) {
+	args := []gql.Arg{{Value: dgPred}}
+	for _, v := range values {
+		args = append(args, gql.Arg{Value: maybeQuoteArg("eq", v)})
+	}
+	q.Func = &gql.Function{
+		Name: "eq",
+		Args: args,
+	}
+}
+
 func addTypeFunc(q *gql.GraphQuery, typ string) {
 	q.Func = buildTypeFunc(typ)
 }
@@ -1254,7 +1388,9 @@ func addSelectionSetFrom(
 			Alias: generateUniqueDgraphAlias(f, fieldSeenCount),
 		}
 
-		if f.Type().Name() == schema.IDType {
+		// if field of IDType has @external directive then it means that
+		// it stored as String with Hash index internally in the dgraph.
+		if f.Type().Name() == schema.IDType && !f.IsExternal() {
 			child.Attr = "uid"
 		} else {
 			child.Attr = f.DgraphPredicate()
@@ -1690,14 +1826,33 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case []interface{}:
-				// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
-				ids := convertIDs(dgFunc)
-				ands = append(ands, &gql.FilterTree{
-					Func: &gql.Function{
-						Name: "uid",
-						UID:  ids,
-					},
-				})
+				// ids: [ 0x123, 0x124]
+
+				// If ids is an @external field then it gets rewritten just like `in` filter
+				//  ids: [0x123, 0x124] -> eq(typeName.ids, "0x123", 0x124)
+				if typ.Field(field).IsExternal() {
+					fn := "eq"
+					args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
+					for _, v := range dgFunc {
+						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+					}
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: fn,
+							Args: args,
+						},
+					})
+				} else {
+					// if it is not an @external field then it is rewritten as uid filter.
+					// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
+					ids := convertIDs(dgFunc)
+					ands = append(ands, &gql.FilterTree{
+						Func: &gql.Function{
+							Name: "uid",
+							UID:  ids,
+						},
+					})
+				}
 			case interface{}:
 				// has: comments -> has(Post.comments)
 				// OR

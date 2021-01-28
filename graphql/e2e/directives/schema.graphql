@@ -302,3 +302,24 @@ type Section {
     name: String!
     chapterId: Int! @search
 }
+
+# test for entities resolver
+
+type Mission @key(fields: "id") {
+    id: String! @id
+    crew: [Astronaut] @hasInverse(field: missions)
+    spaceShip: [SpaceShip]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    missions: [Mission]
+}
+
+type SpaceShip @key(fields: "id") @extends {
+    id: String! @id @external
+    missions: [Mission]
+}

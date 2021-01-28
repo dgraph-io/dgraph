@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -55,7 +56,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		currentGroups = append(currentGroups, gid)
 	}
 
-	creds := Credentials{
+	creds := x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -209,7 +210,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// backup could be in a different group. The tablets need to be moved.
 
 	// Reset tablets and set correct tablets to match the restored backup.
-	creds := &Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -301,8 +302,8 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
-func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
-	return &Credentials{
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -354,7 +355,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 					"cannot update uid lease due to no connection to zero leader")
 			}
 			zc := pb.NewZeroClient(pl.Get())
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid}); err != nil {
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: maxUid, Type: pb.Num_UID}); err != nil {
 				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
 

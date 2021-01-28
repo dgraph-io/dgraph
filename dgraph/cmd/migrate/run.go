@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,14 +39,16 @@ var (
 func init() {
 	Migrate.Cmd = &cobra.Command{
 		Use:   "migrate",
-		Short: "Run the Dgraph migrate tool",
+		Short: "Run the Dgraph migration tool from a MySQL database to Dgraph",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(Migrate.Conf); err != nil {
 				logger.Fatalf("%v\n", err)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
+	Migrate.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Migrate.Cmd.Flags()
 	flag.StringP("user", "", "", "The user for logging in")
