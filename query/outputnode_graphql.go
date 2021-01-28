@@ -133,10 +133,7 @@ func (gqlCtx *graphQLEncodingCtx) encode(enc *encoder, fj fastJsonNode, fjIsRoot
 			// We will return false for single valued cases so that the caller can correctly write
 			// null or raise an error.
 			// Note that we don't need to add any errors to the gqlErrs here.
-			if parentField.Type().ListType() != nil {
-				return true
-			}
-			return false
+			return parentField.Type().ListType() != nil
 		}
 
 		// here we have a valid value, lets write it to buffer appropriately.
