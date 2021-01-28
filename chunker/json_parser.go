@@ -689,13 +689,13 @@ func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
 					if _, ok := o.(map[string]interface{}); !ok {
 						return errors.Errorf("only array of map allowed at root")
 					}
+					// pass to next parsing stage
+					mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+					if err != nil {
+						return err
+					}
+					buf.checkForDeletion(mr, o.(map[string]interface{}), op)
 				}
-				// pass to next parsing stage
-				mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
-				if err != nil {
-					return err
-				}
-				buf.checkForDeletion(mr, o.(map[string]interface{}), op)
 			}
 		}
 	default:

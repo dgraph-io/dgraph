@@ -72,5 +72,3 @@ require (
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.4
 )
-
-replace github.com/dgraph-io/simdjson-go v0.3.0 => github.com/minio/simdjson-go v0.2.0
