@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -234,6 +235,14 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
+	if lastManifest.Version == "" {
+		tmp := make([]string, 0, len(preds))
+		for _, pred := range preds {
+			tmp = append(tmp, x.NamespaceAttr(x.DefaultNamespace, pred))
+		}
+		preds = tmp
+	}
+
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
@@ -312,8 +321,9 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
-			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
+		getCredentialsFromRestoreRequest(req),
+		func(r io.Reader, groupId uint32, preds predicateSet, version string,
+			dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -337,7 +347,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, dropOperations)
+			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, version, dropOperations)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot write backup")
 			}

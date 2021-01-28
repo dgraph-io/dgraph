@@ -198,7 +198,8 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
-	m := Manifest{Since: req.ReadTs, Groups: predMap, DropOperations: dropOperations}
+	m := Manifest{Since: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
+		DropOperations: dropOperations}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)

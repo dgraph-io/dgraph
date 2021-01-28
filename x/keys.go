@@ -408,27 +408,33 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 }
 
 // FromBackupKey takes a key in the format used for backups and converts it to a key.
-func FromBackupKey(backupKey *pb.BackupKey) []byte {
+func FromBackupKey(backupKey *pb.BackupKey, isOld bool) []byte {
 	if backupKey == nil {
 		return nil
+	}
+
+	// TODO: Fix this hacky solution. Maybe pass an option if the backup is from older version.
+	attr := backupKey.Attr
+	if isOld {
+		attr = NamespaceAttr(DefaultNamespace, attr)
 	}
 
 	var key []byte
 	switch backupKey.Type {
 	case pb.BackupKey_DATA:
-		key = DataKey(backupKey.Attr, backupKey.Uid)
+		key = DataKey(attr, backupKey.Uid)
 	case pb.BackupKey_INDEX:
-		key = IndexKey(backupKey.Attr, backupKey.Term)
+		key = IndexKey(attr, backupKey.Term)
 	case pb.BackupKey_REVERSE:
-		key = ReverseKey(backupKey.Attr, backupKey.Uid)
+		key = ReverseKey(attr, backupKey.Uid)
 	case pb.BackupKey_COUNT:
-		key = CountKey(backupKey.Attr, backupKey.Count, false)
+		key = CountKey(attr, backupKey.Count, false)
 	case pb.BackupKey_COUNT_REV:
-		key = CountKey(backupKey.Attr, backupKey.Count, true)
+		key = CountKey(attr, backupKey.Count, true)
 	case pb.BackupKey_SCHEMA:
-		key = SchemaKey(backupKey.Attr)
+		key = SchemaKey(attr)
 	case pb.BackupKey_TYPE:
-		key = TypeKey(backupKey.Attr)
+		key = TypeKey(attr)
 	}
 
 	if backupKey.StartUid > 0 {
@@ -578,7 +584,7 @@ func IsDropOpKey(key []byte) (bool, error) {
 		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 	}
 
-	if pk.IsData() && pk.Attr == "dgraph.drop.op" {
+	if pk.IsData() && ParseAttr(pk.Attr) == "dgraph.drop.op" {
 		return true, nil
 	}
 	return false, nil

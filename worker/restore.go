@@ -45,7 +45,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
-		func(r io.Reader, groupId uint32, preds predicateSet,
+		func(r io.Reader, groupId uint32, preds predicateSet, version string,
 			dropOperations []*pb.DropOperation) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -80,7 +80,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-			maxUid, err := loadFromBackup(db, gzReader, 0, preds, dropOperations)
+			maxUid, err := loadFromBackup(db, gzReader, 0, preds, version, dropOperations)
 			if err != nil {
 				return 0, err
 			}
@@ -94,7 +94,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet,
+func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet, version string,
 	dropOperations []*pb.DropOperation) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
@@ -143,7 +143,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 			}
 
-			restoreKey, err := fromBackupKey(kv.Key)
+			restoreKey, err := fromNewBackupKey(kv.Key)
 			if err != nil {
 				return 0, err
 			}
@@ -170,6 +170,12 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				kv.Version = restoreTs
 			}
 
+			if version == "" {
+				restoreKey, err = fromOldBackupKey(kv.Key)
+				if err != nil {
+					return 0, err
+				}
+			}
 			switch kv.GetUserMeta()[0] {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 				backupPl := &pb.BackupPostingList{}
@@ -249,10 +255,17 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 	return nil
 }
 
-func fromBackupKey(key []byte) ([]byte, error) {
+func fromBackupKey(key []byte, isOld bool) ([]byte, error) {
 	backupKey := &pb.BackupKey{}
 	if err := backupKey.Unmarshal(key); err != nil {
 		return nil, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
 	}
-	return x.FromBackupKey(backupKey), nil
+	return x.FromBackupKey(backupKey, isOld), nil
+}
+
+func fromOldBackupKey(key []byte) ([]byte, error) {
+	return fromBackupKey(key, true)
+}
+func fromNewBackupKey(key []byte) ([]byte, error) {
+	return fromBackupKey(key, false)
 }
