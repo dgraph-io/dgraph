@@ -2,159 +2,178 @@
 #
 version: "3.5"
 services:
-  alpha1:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha1
-    labels:
-      cluster: test
+#  alpha1:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha1
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha1:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  alpha2:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha2
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha2:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  alpha3:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha3
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha3:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  alpha4:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha4
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha4:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  alpha5:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha5
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha5:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  alpha6:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/alpha6
+#    labels:
+#      cluster: test
+#    ports:
+#    - "8080"
+#    - "9080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha6:7080
+#      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#      --raft="snapshot-after=100"
+#  jaeger:
+#    image: jaegertracing/all-in-one:1.18
+#    working_dir: /working/jaeger
+#    environment:
+#    - SPAN_STORAGE_TYPE=badger
+#    ports:
+#    - "14268"
+#    - "16686"
+#    command: --badger.ephemeral=false --badger.directory-key /working/jaeger --badger.directory-value
+#      /working/jaeger
+#  zero1:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/zero1
+#    labels:
+#      cluster: test
+#    ports:
+#    - "5080"
+#    - "6080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=1" --my=zero1:5080
+#      --replicas=3 --logtostderr -v=2 --bindall
+#  zero2:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/zero2
+#    depends_on:
+#    - zero1
+#    labels:
+#      cluster: test
+#    ports:
+#    - "5080"
+#    - "6080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=2" --my=zero2:5080
+#      --replicas=3 --logtostderr -v=2 --peer=zero1:5080
+#  zero3:
+#    image: dgraph/dgraph:latest
+#    working_dir: /data/zero3
+#    depends_on:
+#    - zero2
+#    labels:
+#      cluster: test
+#    ports:
+#    - "5080"
+#    - "6080"
+#    volumes:
+#    - type: bind
+#      source: $GOPATH/bin
+#      target: /gobin
+#      read_only: true
+#    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=3" --my=zero3:5080
+#      --replicas=3 --logtostderr -v=2 --peer=zero1:5080
+  zookeeper:
+    hostname: zookeeper
+    image: wurstmeister/zookeeper:3.4.6
+    expose:
+    - 2181
     ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha1:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  alpha2:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha2
-    labels:
-      cluster: test
-    ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha2:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  alpha3:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha3
-    labels:
-      cluster: test
-    ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha3:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  alpha4:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha4
-    labels:
-      cluster: test
-    ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha4:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  alpha5:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha5
-    labels:
-      cluster: test
-    ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha5:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  alpha6:
-    image: dgraph/dgraph:latest
-    working_dir: /data/alpha6
-    labels:
-      cluster: test
-    ports:
-    - "8080"
-    - "9080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha --jaeger.collector=http://jaeger:14268 --my=alpha6:7080
-      --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --raft="snapshot-after=100"
-  jaeger:
-    image: jaegertracing/all-in-one:1.18
-    working_dir: /working/jaeger
-    environment:
-    - SPAN_STORAGE_TYPE=badger
-    ports:
-    - "14268"
-    - "16686"
-    command: --badger.ephemeral=false --badger.directory-key /working/jaeger --badger.directory-value
-      /working/jaeger
-  zero1:
-    image: dgraph/dgraph:latest
-    working_dir: /data/zero1
-    labels:
-      cluster: test
-    ports:
-    - "5080"
-    - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=1" --my=zero1:5080
-      --replicas=3 --logtostderr -v=2 --bindall
-  zero2:
-    image: dgraph/dgraph:latest
-    working_dir: /data/zero2
+    - "2181"
+  kafka:
+    image: wurstmeister/kafka
+    env_file:
+      - kafka-variables.env
     depends_on:
-    - zero1
-    labels:
-      cluster: test
+      - zookeeper
+    expose:
+      - 9092
     ports:
-    - "5080"
-    - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=2" --my=zero2:5080
-      --replicas=3 --logtostderr -v=2 --peer=zero1:5080
-  zero3:
-    image: dgraph/dgraph:latest
-    working_dir: /data/zero3
-    depends_on:
-    - zero2
-    labels:
-      cluster: test
-    ports:
-    - "5080"
-    - "6080"
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --jaeger.collector=http://jaeger:14268 --raft="idx=3" --my=zero3:5080
-      --replicas=3 --logtostderr -v=2 --peer=zero1:5080
+    - '9092:9092'
+    - '8082:8082'
+    - '8083:8083'
 volumes: {}

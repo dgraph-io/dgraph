@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -119,6 +120,7 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
+	fmt.Printf("proposing %+v\n", proposal)
 	startTime := time.Now()
 	ctx = x.WithMethod(ctx, "n.proposeAndWait")
 	defer func() {

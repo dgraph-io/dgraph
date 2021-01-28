@@ -544,6 +544,11 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 
 		span.Annotate(nil, "Done")
+		if n.AmLeader() {
+			// best effort policy with N retries
+			// send events and dont expect error
+
+		}
 		return nil
 	}
 
@@ -697,6 +702,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
+				// if this applyCommited fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
@@ -1105,6 +1111,7 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			fmt.Printf("got reaft message %+v\n", rd.Entries)
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
