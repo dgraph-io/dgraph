@@ -2,19 +2,18 @@
 # Input Schema
 #######################
 
-interface LibraryItem {
-	refID: String! @id
+type Mission @key(fields: "id") {
+	id: ID!
+	crew: [Astronaut]
+	designation: String!
+	startDate: String
+	endDate: String
 }
 
-type Book implements LibraryItem {
-	refID: String! @id
-	title: String
-	author: String
-}
-
-type Library {
-	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
+type Astronaut @key(fields: "id") @extends {
+	id: ID! @external
+	missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	missionsAggregate(filter: MissionFilter): MissionAggregateResult
 }
 
 #######################
@@ -192,21 +191,10 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
-directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -281,61 +269,51 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type AddAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	numUids: Int
 }
 
-type AddLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+type AddMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
 	numUids: Int
 }
 
-type BookAggregateResult {
+type AstronautAggregateResult {
 	count: Int
-	refIDMin: String
-	refIDMax: String
-	titleMin: String
-	titleMax: String
-	authorMin: String
-	authorMax: String
+	idMin: ID
+	idMax: ID
 }
 
-type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type DeleteAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	msg: String
 	numUids: Int
 }
 
-type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+type DeleteMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
 	msg: String
 	numUids: Int
 }
 
-type DeleteLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	msg: String
+type MissionAggregateResult {
+	count: Int
+	designationMin: String
+	designationMax: String
+	startDateMin: String
+	startDateMax: String
+	endDateMin: String
+	endDateMax: String
+}
+
+type UpdateAstronautPayload {
+	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
 	numUids: Int
 }
 
-type LibraryAggregateResult {
-	count: Int
-}
-
-type LibraryItemAggregateResult {
-	count: Int
-	refIDMin: String
-	refIDMax: String
-}
-
-type UpdateBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	numUids: Int
-}
-
-type UpdateLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+type UpdateMissionPayload {
+	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
 	numUids: Int
 }
 
@@ -343,112 +321,105 @@ type UpdateLibraryPayload {
 # Generated Enums
 #######################
 
-enum BookHasFilter {
-	refID
-	title
-	author
+enum AstronautHasFilter {
+	missions
 }
 
-enum BookOrderable {
-	refID
-	title
-	author
+enum AstronautOrderable {
+	id
 }
 
-enum LibraryHasFilter {
-	items
+enum MissionHasFilter {
+	crew
+	designation
+	startDate
+	endDate
 }
 
-enum LibraryItemHasFilter {
-	refID
-}
-
-enum LibraryItemOrderable {
-	refID
+enum MissionOrderable {
+	designation
+	startDate
+	endDate
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddBookInput {
-	refID: String!
-	title: String
-	author: String
+input AddAstronautInput {
+	id: ID!
+	missions: [MissionRef]
 }
 
-input AddLibraryInput {
-	items: [LibraryItemRef]
+input AddMissionInput {
+	crew: [AstronautRef]
+	designation: String!
+	startDate: String
+	endDate: String
 }
 
-input BookFilter {
-	refID: StringHashFilter
-	has: BookHasFilter
-	and: [BookFilter]
-	or: [BookFilter]
-	not: BookFilter
+input AstronautFilter {
+	id: [ID!]
+	has: AstronautHasFilter
+	and: [AstronautFilter]
+	or: [AstronautFilter]
+	not: AstronautFilter
 }
 
-input BookOrder {
-	asc: BookOrderable
-	desc: BookOrderable
-	then: BookOrder
+input AstronautOrder {
+	asc: AstronautOrderable
+	desc: AstronautOrderable
+	then: AstronautOrder
 }
 
-input BookPatch {
-	title: String
-	author: String
+input AstronautPatch {
+	missions: [MissionRef]
 }
 
-input BookRef {
-	refID: String
-	title: String
-	author: String
+input AstronautRef {
+	id: ID
+	missions: [MissionRef]
 }
 
-input LibraryFilter {
-	has: LibraryHasFilter
-	and: [LibraryFilter]
-	or: [LibraryFilter]
-	not: LibraryFilter
+input MissionFilter {
+	id: [ID!]
+	has: MissionHasFilter
+	and: [MissionFilter]
+	or: [MissionFilter]
+	not: MissionFilter
 }
 
-input LibraryItemFilter {
-	refID: StringHashFilter
-	has: LibraryItemHasFilter
-	and: [LibraryItemFilter]
-	or: [LibraryItemFilter]
-	not: LibraryItemFilter
+input MissionOrder {
+	asc: MissionOrderable
+	desc: MissionOrderable
+	then: MissionOrder
 }
 
-input LibraryItemOrder {
-	asc: LibraryItemOrderable
-	desc: LibraryItemOrderable
-	then: LibraryItemOrder
+input MissionPatch {
+	crew: [AstronautRef]
+	designation: String
+	startDate: String
+	endDate: String
 }
 
-input LibraryItemRef {
-	refID: String!
+input MissionRef {
+	id: ID
+	crew: [AstronautRef]
+	designation: String
+	startDate: String
+	endDate: String
 }
 
-input LibraryPatch {
-	items: [LibraryItemRef]
+input UpdateAstronautInput {
+	filter: AstronautFilter!
+	set: AstronautPatch
+	remove: AstronautPatch
 }
 
-input LibraryRef {
-	items: [LibraryItemRef]
-}
-
-input UpdateBookInput {
-	filter: BookFilter!
-	set: BookPatch
-	remove: BookPatch
-}
-
-input UpdateLibraryInput {
-	filter: LibraryFilter!
-	set: LibraryPatch
-	remove: LibraryPatch
+input UpdateMissionInput {
+	filter: MissionFilter!
+	set: MissionPatch
+	remove: MissionPatch
 }
 
 #######################
@@ -456,13 +427,9 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
+	getMission(id: ID!): Mission
+	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+	aggregateMission(filter: MissionFilter): MissionAggregateResult
 }
 
 #######################
@@ -470,12 +437,11 @@ type Query {
 #######################
 
 type Mutation {
-	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
-	updateBook(input: UpdateBookInput!): UpdateBookPayload
-	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
-	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
-	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
+	addMission(input: [AddMissionInput!]!): AddMissionPayload
+	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
+	deleteMission(filter: MissionFilter!): DeleteMissionPayload
+	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
+	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
+	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
 }
 

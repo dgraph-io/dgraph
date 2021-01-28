@@ -137,6 +137,11 @@ type country struct {
 	States []*state `json:"states,omitempty"`
 }
 
+type mission struct {
+	ID          string `json:"id,omitempty"`
+	Designation string `json:"designation,omitempty"`
+}
+
 type author struct {
 	ID            string     `json:"id,omitempty"`
 	Name          string     `json:"name,omitempty"`
@@ -630,6 +635,7 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
+	t.Run("entitites Query on extended type", entitiesQuery)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -713,6 +719,8 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
+	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
+	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

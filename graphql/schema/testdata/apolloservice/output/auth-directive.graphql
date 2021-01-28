@@ -2,19 +2,22 @@
 # Input Schema
 #######################
 
-interface LibraryItem {
-	refID: String! @id
-}
-
-type Book implements LibraryItem {
-	refID: String! @id
+type Todo @secret(field: "pwd") {
+	id: ID!
 	title: String
-	author: String
+	text: String
+	isPublic: Boolean @search
+	dateCompleted: String @search
+	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	owner(filter: UserFilter): User @hasInverse(field: "todos")
+	somethingPrivate: String
+	sharedWithAggregate(filter: UserFilter): UserAggregateResult
 }
 
-type Library {
-	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
+type User @key(fields: "username") {
+	username: String! @id
+	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+	todosAggregate(filter: TodoFilter): TodoAggregateResult
 }
 
 #######################
@@ -192,21 +195,10 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
-directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -281,174 +273,178 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type AddTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	numUids: Int
 }
 
-type AddLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type BookAggregateResult {
+type DeleteTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
+type TodoAggregateResult {
 	count: Int
-	refIDMin: String
-	refIDMax: String
 	titleMin: String
 	titleMax: String
-	authorMin: String
-	authorMax: String
+	textMin: String
+	textMax: String
+	dateCompletedMin: String
+	dateCompletedMax: String
+	somethingPrivateMin: String
+	somethingPrivateMax: String
 }
 
-type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	msg: String
+type UpdateTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	numUids: Int
 }
 
-type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	msg: String
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeleteLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	msg: String
-	numUids: Int
-}
-
-type LibraryAggregateResult {
+type UserAggregateResult {
 	count: Int
-}
-
-type LibraryItemAggregateResult {
-	count: Int
-	refIDMin: String
-	refIDMax: String
-}
-
-type UpdateBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	numUids: Int
-}
-
-type UpdateLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	numUids: Int
+	usernameMin: String
+	usernameMax: String
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum BookHasFilter {
-	refID
+enum TodoHasFilter {
 	title
-	author
+	text
+	isPublic
+	dateCompleted
+	sharedWith
+	owner
+	somethingPrivate
 }
 
-enum BookOrderable {
-	refID
+enum TodoOrderable {
 	title
-	author
+	text
+	dateCompleted
+	somethingPrivate
 }
 
-enum LibraryHasFilter {
-	items
+enum UserHasFilter {
+	username
+	todos
 }
 
-enum LibraryItemHasFilter {
-	refID
-}
-
-enum LibraryItemOrderable {
-	refID
+enum UserOrderable {
+	username
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddBookInput {
-	refID: String!
+input AddTodoInput {
 	title: String
-	author: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String!
 }
 
-input AddLibraryInput {
-	items: [LibraryItemRef]
+input AddUserInput {
+	username: String!
+	todos: [TodoRef]
 }
 
-input BookFilter {
-	refID: StringHashFilter
-	has: BookHasFilter
-	and: [BookFilter]
-	or: [BookFilter]
-	not: BookFilter
+input TodoFilter {
+	id: [ID!]
+	isPublic: Boolean
+	dateCompleted: StringTermFilter
+	has: TodoHasFilter
+	and: [TodoFilter]
+	or: [TodoFilter]
+	not: TodoFilter
 }
 
-input BookOrder {
-	asc: BookOrderable
-	desc: BookOrderable
-	then: BookOrder
+input TodoOrder {
+	asc: TodoOrderable
+	desc: TodoOrderable
+	then: TodoOrder
 }
 
-input BookPatch {
+input TodoPatch {
 	title: String
-	author: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
 }
 
-input BookRef {
-	refID: String
+input TodoRef {
+	id: ID
 	title: String
-	author: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
 }
 
-input LibraryFilter {
-	has: LibraryHasFilter
-	and: [LibraryFilter]
-	or: [LibraryFilter]
-	not: LibraryFilter
+input UpdateTodoInput {
+	filter: TodoFilter!
+	set: TodoPatch
+	remove: TodoPatch
 }
 
-input LibraryItemFilter {
-	refID: StringHashFilter
-	has: LibraryItemHasFilter
-	and: [LibraryItemFilter]
-	or: [LibraryItemFilter]
-	not: LibraryItemFilter
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
-input LibraryItemOrder {
-	asc: LibraryItemOrderable
-	desc: LibraryItemOrderable
-	then: LibraryItemOrder
+input UserFilter {
+	username: StringHashFilter
+	has: UserHasFilter
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
 }
 
-input LibraryItemRef {
-	refID: String!
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input LibraryPatch {
-	items: [LibraryItemRef]
+input UserPatch {
+	todos: [TodoRef]
 }
 
-input LibraryRef {
-	items: [LibraryItemRef]
-}
-
-input UpdateBookInput {
-	filter: BookFilter!
-	set: BookPatch
-	remove: BookPatch
-}
-
-input UpdateLibraryInput {
-	filter: LibraryFilter!
-	set: LibraryPatch
-	remove: LibraryPatch
+input UserRef {
+	username: String
+	todos: [TodoRef]
 }
 
 #######################
@@ -456,13 +452,13 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
+	getTodo(id: ID!): Todo
+	checkTodoPassword(id: ID!, pwd: String!): Todo
+	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
+	getUser(username: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -470,12 +466,11 @@ type Query {
 #######################
 
 type Mutation {
-	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
-	updateBook(input: UpdateBookInput!): UpdateBookPayload
-	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
-	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
-	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
+	addTodo(input: [AddTodoInput!]!): AddTodoPayload
+	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
+	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 

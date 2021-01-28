@@ -19,7 +19,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/cast"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +27,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cast"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -372,6 +373,71 @@ func allPosts(t *testing.T) []*post {
 	require.Equal(t, 4, len(result.QueryPost))
 
 	return result.QueryPost
+}
+
+func entitiesQuery(t *testing.T) {
+	addSpaceShipParams := &GraphQLParams{
+		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
+				spaceShip {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1":        "SpaceShip1",
+			"missionId1": "Mission1",
+		},
+	}
+
+	gqlResponse := addSpaceShipParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: String!){
+			_entities(representations: [{__typename: $typeName, id: $id1}]) {
+				... on SpaceShip {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "SpaceShip",
+			"id1":      "SpaceShip1",
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{
+		"_entities": [
+		  {
+			"missions": [
+			  {
+				"id": "Mission1",
+				"designation": "Apollo1"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
+
 }
 
 func inFilterOnString(t *testing.T) {

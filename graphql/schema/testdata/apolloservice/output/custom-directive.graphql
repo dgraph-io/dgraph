@@ -2,19 +2,14 @@
 # Input Schema
 #######################
 
-interface LibraryItem {
-	refID: String! @id
+type User @remote {
+	id: ID!
+	name: String!
 }
 
-type Book implements LibraryItem {
-	refID: String! @id
-	title: String
-	author: String
-}
-
-type Library {
-	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
+type Car @key(fields: "id") {
+	id: ID!
+	name: String!
 }
 
 #######################
@@ -192,21 +187,10 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
-directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -281,61 +265,25 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type AddCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	numUids: Int
 }
 
-type AddLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	numUids: Int
-}
-
-type BookAggregateResult {
+type CarAggregateResult {
 	count: Int
-	refIDMin: String
-	refIDMax: String
-	titleMin: String
-	titleMax: String
-	authorMin: String
-	authorMax: String
+	nameMin: String
+	nameMax: String
 }
 
-type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+type DeleteCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	msg: String
 	numUids: Int
 }
 
-type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	msg: String
-	numUids: Int
-}
-
-type DeleteLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	msg: String
-	numUids: Int
-}
-
-type LibraryAggregateResult {
-	count: Int
-}
-
-type LibraryItemAggregateResult {
-	count: Int
-	refIDMin: String
-	refIDMax: String
-}
-
-type UpdateBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	numUids: Int
-}
-
-type UpdateLibraryPayload {
-	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+type UpdateCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	numUids: Int
 }
 
@@ -343,112 +291,49 @@ type UpdateLibraryPayload {
 # Generated Enums
 #######################
 
-enum BookHasFilter {
-	refID
-	title
-	author
+enum CarHasFilter {
+	name
 }
 
-enum BookOrderable {
-	refID
-	title
-	author
-}
-
-enum LibraryHasFilter {
-	items
-}
-
-enum LibraryItemHasFilter {
-	refID
-}
-
-enum LibraryItemOrderable {
-	refID
+enum CarOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddBookInput {
-	refID: String!
-	title: String
-	author: String
+input AddCarInput {
+	name: String!
 }
 
-input AddLibraryInput {
-	items: [LibraryItemRef]
+input CarFilter {
+	id: [ID!]
+	has: CarHasFilter
+	and: [CarFilter]
+	or: [CarFilter]
+	not: CarFilter
 }
 
-input BookFilter {
-	refID: StringHashFilter
-	has: BookHasFilter
-	and: [BookFilter]
-	or: [BookFilter]
-	not: BookFilter
+input CarOrder {
+	asc: CarOrderable
+	desc: CarOrderable
+	then: CarOrder
 }
 
-input BookOrder {
-	asc: BookOrderable
-	desc: BookOrderable
-	then: BookOrder
+input CarPatch {
+	name: String
 }
 
-input BookPatch {
-	title: String
-	author: String
+input CarRef {
+	id: ID
+	name: String
 }
 
-input BookRef {
-	refID: String
-	title: String
-	author: String
-}
-
-input LibraryFilter {
-	has: LibraryHasFilter
-	and: [LibraryFilter]
-	or: [LibraryFilter]
-	not: LibraryFilter
-}
-
-input LibraryItemFilter {
-	refID: StringHashFilter
-	has: LibraryItemHasFilter
-	and: [LibraryItemFilter]
-	or: [LibraryItemFilter]
-	not: LibraryItemFilter
-}
-
-input LibraryItemOrder {
-	asc: LibraryItemOrderable
-	desc: LibraryItemOrderable
-	then: LibraryItemOrder
-}
-
-input LibraryItemRef {
-	refID: String!
-}
-
-input LibraryPatch {
-	items: [LibraryItemRef]
-}
-
-input LibraryRef {
-	items: [LibraryItemRef]
-}
-
-input UpdateBookInput {
-	filter: BookFilter!
-	set: BookPatch
-	remove: BookPatch
-}
-
-input UpdateLibraryInput {
-	filter: LibraryFilter!
-	set: LibraryPatch
-	remove: LibraryPatch
+input UpdateCarInput {
+	filter: CarFilter!
+	set: CarPatch
+	remove: CarPatch
 }
 
 #######################
@@ -456,13 +341,10 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
-	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-	getBook(refID: String!): Book
-	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-	aggregateBook(filter: BookFilter): BookAggregateResult
-	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
-	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
+	getMyFavoriteUsers(id: ID!): [User]
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
 }
 
 #######################
@@ -470,12 +352,8 @@ type Query {
 #######################
 
 type Mutation {
-	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
-	updateBook(input: UpdateBookInput!): UpdateBookPayload
-	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
-	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
-	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
+	addCar(input: [AddCarInput!]!): AddCarPayload
+	updateCar(input: UpdateCarInput!): UpdateCarPayload
+	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
 

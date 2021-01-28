@@ -1,0 +1,37 @@
+interface Character @secret(field: "password") @generate(
+    query: {
+        get: false,
+        password: false
+    },
+    subscription: false
+) {
+    id: ID!
+    name: String! @search(by: [exact])
+    friends: [Character]
+}
+
+type Human implements Character @generate(
+    query: {
+        aggregate: true
+    },
+    subscription: true
+) {
+    totalCredits: Int
+}
+
+type Person @withSubscription @generate(
+    query: {
+        get: false,
+        query: true,
+        password: true,
+        aggregate: false
+    },
+    mutation: {
+        add: false,
+        delete: false
+    },
+    subscription: false
+) {
+    id: ID!
+    name: String!
+}
