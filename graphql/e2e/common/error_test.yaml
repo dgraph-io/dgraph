@@ -349,3 +349,17 @@
   errors:
     [ { "message": "Out of range value '2147483648', for type `Int`",
         "locations": [ { "line": 2, "column": 53 } ] } ]
+
+- name: "Error when multiple filter functions are used"
+  gqlrequest: |
+    query {
+      queryBook(filter:{bookId: {eq:2 le:2}})
+         {
+          bookId
+        }
+      }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Int64Filter filter expects only one filter function, got: 2",
+        "locations": [ { "line": 2, "column": 29 } ] } ]

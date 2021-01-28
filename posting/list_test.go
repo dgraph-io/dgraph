@@ -37,6 +37,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func setMaxListSize(newMaxListSize int) {
+	maxListSize = newMaxListSize
+}
+
 func (l *List) PostingList() *pb.PostingList {
 	l.RLock()
 	defer l.RUnlock()
@@ -452,6 +456,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
+	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
 	key := x.DataKey("bal", 1331)
@@ -908,10 +913,8 @@ func verifySplits(t *testing.T, splits []uint64) {
 
 func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -956,10 +959,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
+	defer setMaxListSize(maxListSize)
+	maxListSize = 10000
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -1006,6 +1007,41 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	require.Equal(t, 0, len(ol.plist.Splits))
 
 	return ol, commits
+}
+
+func TestDeleteStarMultiPartList(t *testing.T) {
+	numEdges := 10000
+
+	list, _ := createMultiPartList(t, numEdges, false)
+	parsedKey, err := x.Parse(list.key)
+	require.NoError(t, err)
+
+	validateCount := func(expected int) {
+		count := 0
+		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
+			count++
+			return nil
+		})
+		require.Equal(t, expected, count)
+	}
+	validateCount(numEdges)
+
+	readTs := list.maxTs + 1
+	commitTs := readTs + 1
+
+	txn := NewTxn(readTs)
+	edge := &pb.DirectedEdge{
+		ValueId: parsedKey.Uid,
+		Attr:    parsedKey.Attr,
+		Value:   []byte(x.Star),
+		Op:      pb.DirectedEdge_DEL,
+	}
+	err = list.addMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	err = list.commitMutation(readTs, commitTs)
+	require.NoError(t, err)
+	validateCount(0)
 }
 
 func writePostingListToDisk(kvs []*bpb.KV) error {
@@ -1217,10 +1253,8 @@ func TestMultiPartListDelete(t *testing.T) {
 func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	size := int(1e5)
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Add entries to the maps.
 	key := x.DataKey(uuid.New().String(), 1331)
@@ -1355,10 +1389,8 @@ func TestSingleListRollup(t *testing.T) {
 
 func TestRecursiveSplits(t *testing.T) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = mb / 2
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Create a list that should be split recursively.
 	size := int(1e5)

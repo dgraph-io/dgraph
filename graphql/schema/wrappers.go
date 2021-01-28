@@ -78,6 +78,7 @@ const (
 	FilterQuery          QueryType    = "query"
 	AggregateQuery       QueryType    = "aggregate"
 	SchemaQuery          QueryType    = "schema"
+	EntitiesQuery        QueryType    = "entities"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
 	DQLQuery             QueryType    = "dql"
@@ -97,6 +98,7 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
+	IsFederated() bool
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -142,6 +144,7 @@ type Field interface {
 	HasCustomHTTPChild() bool
 	HasLambdaDirective() bool
 	Type() Type
+	IsExternal() bool
 	SelectionSet() []Field
 	Location() x.Location
 	DgraphPredicate() string
@@ -197,6 +200,8 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
+	KeyField(typeName string) (string, bool, error)
+	BuildType(typeName string) Type
 	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
@@ -241,6 +246,7 @@ type FieldDefinition interface {
 	Type() Type
 	ParentType() Type
 	IsID() bool
+	IsExternal() bool
 	HasIDDirective() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
@@ -344,6 +350,10 @@ func (s *schema) Mutations(t MutationType) []string {
 		}
 	}
 	return result
+}
+
+func (s *schema) IsFederated() bool {
+	return s.schema.Types["_Entity"] != nil
 }
 
 func (o *operation) IsQuery() bool {
@@ -534,7 +544,10 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		}
 
 		for _, fld := range fields {
-			if isID(fld) {
+			// If key field is of ID type but it is an external field,
+			// then it is stored in Dgraph as string type with Hash index.
+			// So we need the predicate mapping in this case.
+			if isID(fld) && !hasExternal(fld) {
 				// We don't need a mapping for the field, as we the dgraph predicate for them is
 				// fixed i.e. uid.
 				continue
@@ -693,6 +706,34 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func hasExtends(def *ast.Definition) bool {
+	return def.Directives.ForName(apolloExtendsDirective) != nil
+}
+
+func hasExternal(f *ast.FieldDefinition) bool {
+	return f.Directives.ForName(apolloExternalDirective) != nil
+}
+
+func isEntityUnion(typ *ast.Definition) bool {
+	return typ.Kind == ast.Union && typ.Name == "_Entity"
+}
+
+func (f *field) IsExternal() bool {
+	return hasExternal(f.field.Definition)
+}
+
+func (q *query) IsExternal() bool {
+	return (*field)(q).IsExternal()
+}
+
+func (m *mutation) IsExternal() bool {
+	return (*field)(m).IsExternal()
+}
+
+func (f *fieldDefinition) IsExternal() bool {
+	return hasExternal(f.fieldDef)
+}
+
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 	for _, dir := range f.Directives {
 		if dir.Name == customDirective || dir.Name == lambdaDirective {
@@ -700,6 +741,27 @@ func hasCustomOrLambda(f *ast.FieldDefinition) bool {
 		}
 	}
 	return false
+}
+
+func isKeyField(f *ast.FieldDefinition, typ *ast.Definition) bool {
+	keyDirective := typ.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return false
+	}
+	return f.Name == keyDirective.Arguments[0].Value.Raw
+}
+
+// Filter out those fields which have @external directive and are not @key fields
+// in a definition.
+func nonExternalAndKeyFields(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if hasExternal(fld) && !isKeyField(fld, defn) {
+			continue
+		}
+		fldList = append(fldList, fld)
+	}
+	return fldList
 }
 
 // buildCustomDirectiveForLambda returns custom directive for the given field to be used for @lambda
@@ -1215,6 +1277,16 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 	return
 }
 
+func (q *query) BuildType(typeName string) Type {
+	t := &ast.Type{}
+	t.NamedType = typeName
+	return &astType{
+		typ:             t,
+		inSchema:        q.op.inSchema,
+		dgraphPredicate: q.op.inSchema.dgraphPredicate,
+	}
+}
+
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
@@ -1597,6 +1669,20 @@ func (q *query) EnumValues() []string {
 	return nil
 }
 
+func (q *query) KeyField(typeName string) (string, bool, error) {
+	typ := q.op.inSchema.schema.Types[typeName]
+	if typ == nil {
+		return "", false, fmt.Errorf("Type %s not found in the schema", typeName)
+	}
+	keyDir := typ.Directives.ForName(apolloKeyDirective)
+	if keyDir == nil {
+		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
+	}
+	fldName := keyDir.Arguments[0].Value.Raw
+	fldType := typ.Fields.ForName(fldName).Type
+	return fldName, fldType.Name() == IDType, nil
+}
+
 func (m *mutation) ConstructedFor() Type {
 	return (*field)(m).ConstructedFor()
 }
@@ -1717,6 +1803,8 @@ func queryType(name string, custom *ast.Directive) QueryType {
 			return DQLQuery
 		}
 		return HTTPQuery
+	case name == "_entities":
+		return EntitiesQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
 	case name == "__schema" || name == "__type" || name == "__typename":
@@ -2228,7 +2316,10 @@ func (t *astType) String() string {
 
 func (t *astType) IDField() FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
-	if def.Kind != ast.Object && def.Kind != ast.Interface {
+	// If the field is of ID type but it is an external field,
+	// then it is stored in Dgraph as string type with Hash index.
+	// So the this field is actually not stored as ID type.
+	if (def.Kind != ast.Object && def.Kind != ast.Interface) || hasExtends(def) {
 		return nil
 	}
 
@@ -2269,8 +2360,11 @@ func (t *astType) XIDField() FieldDefinition {
 		return nil
 	}
 
+	// If field is of ID type but it is an external field,
+	// then it is stored in Dgraph as string type with Hash index.
+	// So it should be returned as an XID Field.
 	for _, fd := range def.Fields {
-		if hasIDDirective(fd) {
+		if hasIDDirective(fd) || (hasExternal(fd) && isID(fd)) {
 			return &fieldDefinition{
 				fieldDef:   fd,
 				inSchema:   t.inSchema,

@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/errors"
 )
@@ -98,7 +99,7 @@ type UriHandler interface {
 }
 
 // getHandler returns a UriHandler for the URI scheme.
-func getHandler(scheme string, creds *Credentials) UriHandler {
+func getHandler(scheme string, creds *x.MinioCredentials) UriHandler {
 	switch scheme {
 	case "file", "":
 		return &fileHandler{}
@@ -135,7 +136,7 @@ func getHandler(scheme string, creds *Credentials) UriHandler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
+func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
 	h := getHandler(uri.Scheme, creds)
 	if h == nil {
 		return nil, errors.Errorf("Unable to handle url: %s", uri)
@@ -152,7 +153,7 @@ type loadFn func(reader io.Reader, groupId uint32, preds predicateSet,
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func LoadBackup(location, backupId string, backupNum uint64, creds *Credentials,
+func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCredentials,
 	fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
@@ -169,7 +170,7 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *Credentials,
 
 // VerifyBackup will access the backup location and verify that the specified backup can
 // be restored to the cluster.
-func VerifyBackup(req *pb.RestoreRequest, creds *Credentials, currentGroups []uint32) error {
+func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGroups []uint32) error {
 	uri, err := url.Parse(req.GetLocation())
 	if err != nil {
 		return err
@@ -184,7 +185,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *Credentials, currentGroups []ui
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, error) {
+func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err

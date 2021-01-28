@@ -17,6 +17,57 @@
     }
 
 -
+  name: "in filter on float type"
+  gqlquery: |
+    query {
+      queryAuthor(filter: {reputation: {in: [10.3, 12.6, 13.6]}}) {
+        name
+        dob
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.reputation, "10.3", "12.6", "13.6")) {
+        Author.name : Author.name
+        Author.dob : Author.dob
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "in filter on datetime type"
+  gqlquery: |
+    query {
+      queryAuthor(filter: {dob: {in: ["2001-01-01", "2002-02-01"]}}) {
+        name
+        reputation
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @filter(eq(Author.dob, "2001-01-01", "2002-02-01")) {
+        Author.name : Author.name
+        Author.reputation : Author.reputation
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "in filter on int type"
+  gqlquery: |
+    query {
+      queryPost(filter: {numLikes: {in: [10, 15, 100]}}) {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryPost(func: type(Post)) @filter(eq(Post.numLikes, 10, 15, 100)) {
+        Post.title : Post.title
+        dgraph.uid : uid
+      }
+    }
+-
   name: "in filter on field which is of enum type"
   gqlquery: |
     query{
@@ -2402,7 +2453,6 @@
   gqlquery: |
     query {
       getComment(id: "0x1") {
-        id
         author
         title
         content
@@ -2415,10 +2465,10 @@
   dgquery: |-
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
-        Comment.id : uid
         Comment.author : Comment.author
         Comment.title : Comment.title
         Comment.ups : Comment.ups
+        Comment.id : uid
         Comment.url : Comment.url
       }
     }
@@ -3089,6 +3139,54 @@
     query {
       queryAuthor(func: uid(0x1)) @filter(type(Author)) {
         Author.name : Author.name
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "entities query for extended type having @key field of ID type"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1" },{__typename: "Astronaut", id: "0x2" }]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  dgquery:  |-
+    query {
+      _entities(func: eq(Astronaut.id, "0x1", "0x2")) @filter(type(Astronaut)) {
+        dgraph.type
+        Astronaut.missions : Astronaut.missions {
+          Mission.designation : Mission.designation
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "entities query for extended type having @key field of string type with @id directive"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "SpaceShip", id: "0x1" },{__typename: "SpaceShip", id: "0x2" }]) {
+        ... on SpaceShip {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  dgquery:  |-
+    query {
+      _entities(func: eq(SpaceShip.id, "0x1", "0x2")) @filter(type(SpaceShip)) {
+        dgraph.type
+        SpaceShip.missions : SpaceShip.missions {
+          Mission.designation : Mission.designation
+          dgraph.uid : uid
+        }
         dgraph.uid : uid
       }
     }
