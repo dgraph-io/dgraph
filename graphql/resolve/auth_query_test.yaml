@@ -1852,15 +1852,15 @@
     query {
       _entities(func: uid(_EntityRoot)) {
         dgraph.type
-        id : Mission.id
-        designation : Mission.designation
-        startDate : Mission.startDate
+        Mission.id : Mission.id
+        Mission.designation : Mission.designation
+        Mission.startDate : Mission.startDate
         dgraph.uid : uid
       }
       _EntityRoot as var(func: uid(Mission1)) @filter(uid(MissionAuth2))
       Mission1 as var(func: eq(Mission.id, "0x1", "0x2", "0x3")) @filter(type(Mission))
       MissionAuth2 as var(func: uid(Mission1)) @filter(eq(Mission.supervisorName, "user")) @cascade {
-        id : Mission.id
+        Mission.id : Mission.id
       }
     }
 - name: "Entities query with top level RBAC rule true and level 1 query auth rule"
@@ -1881,8 +1881,8 @@
     query {
       _entities(func: uid(_EntityRoot)) {
         dgraph.type
-        missions : Astronaut.missions @filter(uid(Mission1)) {
-          designation : Mission.designation
+        Astronaut.missions : Astronaut.missions @filter(uid(Mission1)) {
+          Mission.designation : Mission.designation
           dgraph.uid : uid
         }
         dgraph.uid : uid
@@ -1894,7 +1894,7 @@
       }
       Mission1 as var(func: uid(Mission2)) @filter(uid(MissionAuth3))
       MissionAuth3 as var(func: uid(Mission2)) @filter(eq(Mission.supervisorName, "user")) @cascade {
-        id : Mission.id
+        Mission.id : Mission.id
       }
     }
 

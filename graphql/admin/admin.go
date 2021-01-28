@@ -814,10 +814,9 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 						return resolve.EmptyResult(query, err)
 					}
 					data := handler.GQLSchemaWithoutApolloExtras()
-					return &resolve.Resolved{
-						Data:  map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
-						Field: query,
-					}
+					return resolve.DataResult(query,
+						map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
+						nil)
 				})
 			})
 		}
