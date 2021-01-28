@@ -377,8 +377,8 @@ func allPosts(t *testing.T) []*post {
 
 func entitiesQuery(t *testing.T) {
 	addSpaceShipParams := &GraphQLParams{
-		Query: `mutation addSpaceShip($id1: String!, $missionId1: String!, $id2: String!, $missionId2: String! ) {
-			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
 				spaceShip {
 					id
 					missions {
@@ -391,8 +391,6 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"id1":        "SpaceShip1",
 			"missionId1": "Mission1",
-			"id2":        "SpaceShip2",
-			"missionId2": "Mission2",
 		},
 	}
 
@@ -400,8 +398,8 @@ func entitiesQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	entitiesQueryParams := &GraphQLParams{
-		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!){
-			_entities(representations: [{__typename: $typeName, id: $id1}, {__typename: $typeName, id: $id2 }]) {
+		Query: `query _entities($typeName: String!, $id1: String!){
+			_entities(representations: [{__typename: $typeName, id: $id1}]) {
 				... on SpaceShip {
 					missions(order: {asc: id}){
 						id
@@ -413,7 +411,6 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"typeName": "SpaceShip",
 			"id1":      "SpaceShip1",
-			"id2":      "SpaceShip2",
 		},
 	}
 
@@ -429,25 +426,17 @@ func entitiesQuery(t *testing.T) {
 				"designation": "Apollo1"
 			  }
 			]
-		  },
-		  {
-			"missions": [
-			  {
-				"id": "Mission2",
-				"designation": "Apollo2"
-			  }
-			]
 		  }
 		]
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
 
-	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2"}}}
-	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 2, nil)
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
-	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
 
 }
 

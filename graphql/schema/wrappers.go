@@ -596,7 +596,7 @@ func repeatedFieldMappings(s *ast.Schema, dgPreds map[string]map[string]string) 
 	repeatedFieldNames := make(map[string]bool)
 
 	for _, typ := range s.Types {
-		if !isAbstractKind(typ.Kind) {
+		if !isAbstractKind(typ.Kind) || isEntityUnion(typ) {
 			continue
 		}
 
@@ -722,6 +722,10 @@ func hasExtends(def *ast.Definition) bool {
 
 func hasExternal(f *ast.FieldDefinition) bool {
 	return f.Directives.ForName(apolloExternalDirective) != nil
+}
+
+func isEntityUnion(typ *ast.Definition) bool {
+	return typ.Kind == ast.Union && typ.Name == "_Entity"
 }
 
 func (f *field) IsExternal() bool {
