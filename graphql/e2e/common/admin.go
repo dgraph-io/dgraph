@@ -415,8 +415,9 @@ func adminState(t *testing.T) {
 					clusterInfoOnly
 					forceGroupId
 				}
-				maxLeaseId
+				maxUID
 				maxTxnTs
+				maxNsID
 				maxRaftId
 				removed {
 					id
@@ -448,13 +449,14 @@ func adminState(t *testing.T) {
 				Tablets    []*pb.Tablet
 				SnapshotTs uint64
 			}
-			Zeros      []*pb.Member
-			MaxLeaseId uint64
-			MaxTxnTs   uint64
-			MaxRaftId  uint64
-			Removed    []*pb.Member
-			Cid        string
-			License    struct {
+			Zeros     []*pb.Member
+			MaxUID    uint64
+			MaxTxnTs  uint64
+			MaxNsID   uint64
+			MaxRaftId uint64
+			Removed   []*pb.Member
+			Cid       string
+			License   struct {
 				User     string
 				ExpiryTs int64
 				Enabled  bool
@@ -499,8 +501,9 @@ func adminState(t *testing.T) {
 
 		require.Equal(t, expectedZero, zero)
 	}
-	require.Equal(t, state.MaxLeaseId, result.State.MaxLeaseId)
+	require.Equal(t, state.MaxUID, result.State.MaxUID)
 	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)
+	require.Equal(t, state.MaxNsID, result.State.MaxNsID)
 	require.Equal(t, state.MaxRaftId, result.State.MaxRaftId)
 	require.True(t, len(state.Removed) == len(result.State.Removed))
 	if len(state.Removed) != 0 {

@@ -1,0 +1,32 @@
+extend type Product @key(fields: "id") {
+    id: ID! @external
+    name: String! @external
+    reviews: [Reviews]
+}
+
+type Reviews @key(fields: "id") {
+    id: ID!
+    review: String!
+}
+
+type Student @key(fields: "id"){
+    id: ID!
+    name: String!
+    age: Int!
+}
+
+type School @key(fields: "id"){
+    id: ID!
+    students: [Student]
+}
+
+extend type User @key(fields: "name") {
+    id: ID! @external
+    name: String! @id @external
+    reviews: [Reviews]
+}
+
+type Country {
+    code: String! @id
+    name: String!
+}

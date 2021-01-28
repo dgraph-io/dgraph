@@ -39,7 +39,7 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation, generateDirectiveValidation)
+		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
@@ -47,6 +47,7 @@ func init() {
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
 	validator.AddRule("Check range for Int type", intRangeCheck)
 	validator.AddRule("Input Coercion to List", listInputCoercion)
+	validator.AddRule("Check filter functions", filterCheck)
 
 }
 
@@ -2001,6 +2002,100 @@ func idValidation(sch *ast.Schema,
 		dir.Position,
 		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
 		typ.Name, field.Name, field.Type.String())}
+}
+
+func apolloKeyValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dirList := typ.Directives.ForNames(apolloKeyDirective)
+	if len(dirList) == 0 {
+		return nil
+	}
+
+	if len(dirList) > 1 {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dirList[1].Position,
+			"Type %s; @key directive should not be defined more than once.", typ.Name)}
+	}
+	dir := dirList[0]
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s inside @key directive must be defined.", typ.Name, apolloKeyArg)}
+	}
+
+	fld := typ.Fields.ForName(arg.Value.Raw)
+	if fld == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			arg.Position,
+			"Type %s; @key directive uses a field %s which is not defined inside the type.", typ.Name, arg.Value.Raw)}
+	}
+
+	if !(isID(fld) || hasIDDirective(fld)) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			arg.Position,
+			"Type %s: Field %s: used inside @key directive should be of type ID or have @id directive.", typ.Name, fld.Name)}
+	}
+
+	remoteDirective := typ.Directives.ForName(remoteDirective)
+	if remoteDirective != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			remoteDirective.Definition.Position,
+			"Type %s; @remote directive cannot be defined with @key directive", typ.Name)}
+	}
+	return nil
+}
+
+func apolloExtendsValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
+	if extendsDirective == nil {
+		return nil
+	}
+	keyDirective := typ.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			extendsDirective.Definition.Position,
+			"Type %s; Type Extension cannot be defined without @key directive", typ.Name)}
+	}
+	remoteDirective := typ.Directives.ForName(remoteDirective)
+	if remoteDirective != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			remoteDirective.Definition.Position,
+			"Type %s; @remote directive cannot be defined with @extends directive", typ.Name)}
+	}
+	return nil
+}
+
+func apolloExternalValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+
+	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
+	if extendsDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+	}
+
+	if hasCustomOrLambda(field) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @external directive can not be defined on  fields with @custom or @lambda directive.", typ.Name, field.Name)}
+	}
+
+	if !isKeyField(field, typ) {
+		directiveList := []string{inverseDirective, searchDirective, dgraphDirective, idDirective}
+		for _, directive := range directiveList {
+			dirDefn := field.Directives.ForName(directive)
+			if dirDefn != nil {
+				return []*gqlerror.Error{gqlerror.ErrorPosf(
+					dirDefn.Position,
+					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
+			}
+		}
+	}
+	return nil
 }
 
 func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
