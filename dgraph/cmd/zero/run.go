@@ -93,7 +93,7 @@ instances to achieve high-availability.
 		learner=true would make this Zero a "learner" node. In learner node, the Zero would not
 			participate in Raft elections. This can be used to achieve a read-only replica.
 		`)
-	flag.Int("replicas", 1, "How many replicas to run per data shard."+
+	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
