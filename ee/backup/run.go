@@ -58,7 +58,7 @@ func init() {
 func initRestore() {
 	Restore.Cmd = &cobra.Command{
 		Use:   "restore",
-		Short: "Run Dgraph (EE) Restore backup",
+		Short: "Restore backup from Dgraph Enterprise Edition",
 		Long: `
 Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
 
@@ -109,8 +109,9 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
-
+	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
 	flag.StringVar(&opt.compression, "badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
@@ -136,7 +137,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 func initBackupLs() {
 	LsBackup.Cmd = &cobra.Command{
 		Use:   "lsbackup",
-		Short: "List info on backups in given location",
+		Short: "List information on backups in a given location",
 		Long: `
 lsbackup looks at a location where backups are stored and prints information about them.
 
@@ -174,8 +175,9 @@ $ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
-
+	LsBackup.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := LsBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
@@ -275,7 +277,7 @@ func runLsbackupCmd() error {
 func initExportBackup() {
 	ExportBackup.Cmd = &cobra.Command{
 		Use:   "export_backup",
-		Short: "Export data inside single full or incremental backup.",
+		Short: "Export data inside single full or incremental backup",
 		Long:  ``,
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -285,6 +287,7 @@ func initExportBackup() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 
 	flag := ExportBackup.Cmd.Flags()

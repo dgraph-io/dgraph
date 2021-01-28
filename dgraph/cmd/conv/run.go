@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,9 @@ func init() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
+	Conv.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Conv.Cmd.Flags()
 	flag.StringVar(&opt.geo, "geo", "", "Location of geo file to convert")
