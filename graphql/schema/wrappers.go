@@ -65,10 +65,6 @@ type FieldHTTPConfig struct {
 	RemoteGqlQueryName string
 	RemoteGqlQuery     string
 
-	// args required by the HTTP/GraphQL request. These should be present in the parent type
-	// in the case of resolving a field or in the parent field in case of a query/mutation
-	RequiredArgs map[string]bool
-
 	// For the following request
 	// graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }"
 	// the GraphqlBatchModeArgument would be sinput, we use it to know the GraphQL variable that
@@ -1287,19 +1283,11 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
-		bt, rf, err := parseBodyTemplate(bodyTemplate, true)
+		bt, _, err := parseBodyTemplate(bodyTemplate, true)
 		if err != nil {
 			return nil, err
 		}
 		fconf.Template = bt
-		fconf.RequiredArgs = rf
-	}
-
-	if !isQueryOrMutation && graphqlArg != nil && fconf.Mode == SINGLE {
-		// For BATCH mode, required args would have been parsed from the body above.
-		// Safe to ignore the error here since we should already have validated that we can parse
-		// the required args from the GraphQL request during schema update.
-		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
 	fconf.ForwardHeaders = http.Header{}

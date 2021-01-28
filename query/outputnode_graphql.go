@@ -702,7 +702,9 @@ func (gqlCtx *graphQLEncodingCtx) resolveCustomField(ctx context.Context, enc *e
 	if idFieldName == "" {
 		// This should not happen as we only allow custom fields which either use ID field or a
 		// field with @id directive.
-		gqlCtx.errChan <- nil
+		gqlCtx.errChan <- x.GqlErrorList{childField.GqlErrorf(nil,
+			"@custom field %s doesn't use a field with type ID! or a field with @id directive.",
+			childField.Name())}
 		return
 	}
 
