@@ -18,10 +18,12 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -495,6 +497,7 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+
 		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]
@@ -521,11 +524,14 @@ func newAdminResolver(
 			glog.Errorf("Unable to find uid of updated schema %s", err)
 			return
 		}
+		spew.Dump("NS Attr")
+		spew.Dump(x.ParseNamespaceAttr(pk.Attr))
 
 		newSchema := &gqlSchema{
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
+		fmt.Printf("Schema %s\n", newSchema.Schema)
 		server.mux.RLock()
 		if newSchema.Schema == server.schema.Schema {
 			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")

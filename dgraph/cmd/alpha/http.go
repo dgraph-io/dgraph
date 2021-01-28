@@ -643,6 +643,9 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
+	ns := r.Header.Get("namespace")
+	ctx = x.AttachNamespace(ctx, ns)
+	fmt.Println("IN resolveWithAdminServer, ns: ", x.ExtractNamespace(ctx))
 
 	return adminServer.Resolve(ctx, gqlReq)
 }

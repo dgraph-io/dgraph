@@ -408,6 +408,15 @@ func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 	}
 	return ctx
 }
+func AttachNamespace(ctx context.Context, namespace string) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	md.Append("namespace", namespace)
+	return metadata.NewIncomingContext(ctx, md)
+}
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
 func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
