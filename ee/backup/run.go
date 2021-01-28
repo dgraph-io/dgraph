@@ -14,6 +14,7 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -236,9 +237,27 @@ func runLsbackupCmd() error {
 	}
 
 	for path, manifest := range manifests {
-		fmt.Printf("%v%v\n%v%v\n%v\t%v\n%v%v\n%v%v\n", "Name:", path, "Since:", manifest.Since, "Groups:", manifest.Groups, "Encrypted:", manifest.Encrypted, "Type:", manifest.Type)
+		type BackupStructure struct {
+			Name      string
+			Since     uint64
+			Groups    map[uint32][]string
+			Encrypted bool
+			Type      string
+		}
+		output := BackupStructure{
+			Name:      path,
+			Since:     manifest.Since,
+			Groups:    manifest.Groups,
+			Encrypted: manifest.Encrypted,
+			Type:      manifest.Type,
+		}
+		b, err := json.MarshalIndent(output, "", "	")
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		os.Stdout.Write(b)
 	}
-
+	fmt.Println()
 	return nil
 }
 
