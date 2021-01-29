@@ -528,9 +528,15 @@ func (l *List) splitIdx(afterUid uint64) int {
 	return len(l.plist.Splits) - 1
 }
 
+func (l *List) Bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.bitmap(opt)
+}
+
 // Bitmap would generate a roaring64.Bitmap from the list.
 // It works on split posting lists as well.
-func (l *List) Bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
+func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 	deleteBelow, posts := l.pickPostings(opt.ReadTs)
 
 	iw := codec.FromList(opt.Intersect)
@@ -1049,7 +1055,7 @@ func sanityCheck(prefix string, out *rollupOutput) {
 */
 
 func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
-	bm, err := l.Bitmap(ListOptions{ReadTs: readTs})
+	bm, err := l.bitmap(ListOptions{ReadTs: readTs})
 	if err != nil {
 		return err
 	}
@@ -1197,26 +1203,11 @@ func abs(a int) int {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
-	// TODO: We need to iterate over the splits.
-	l.RLock()
 	bm, err := l.Bitmap(opt)
-	l.RLock()
 
 	out := &pb.List{}
 	if err != nil {
 		return out, err
-	}
-
-	bm.RemoveRange(0, opt.AfterUid)
-	if opt.Intersect != nil {
-		for _, u := range opt.Intersect.Uids {
-			bm.Remove(u)
-		}
-		if len(opt.Intersect.Bitmap) > 0 {
-			rem := roaring64.New()
-			rem.UnmarshalBinary(opt.Intersect.Bitmap)
-			bm.And(rem)
-		}
 	}
 
 	// TODO: Need to fix this. We shouldn't pick up too many uids.
@@ -1615,11 +1606,14 @@ func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
 		return &l
 	}
 
+	var r *roaring64.Bitmap
 	if len(bl.Uids) > 0 {
-		l.Pack = codec.Encode(bl.Uids, blockSize)
+		r = roaring64.New()
+		r.AddMany(bl.Uids)
 	} else if len(bl.UidBytes) > 0 {
-		l.Pack = codec.EncodeFromBuffer(bl.UidBytes, blockSize)
+		r = codec.FromBackup(bl.UidBytes)
 	}
+	l.Bitmap = codec.ToBytes(r)
 	l.Postings = bl.Postings
 	l.CommitTs = bl.CommitTs
 	l.Splits = bl.Splits

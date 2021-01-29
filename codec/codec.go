@@ -111,20 +111,19 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 	return iw
 }
 
-// // EncodeFromBuffer is the same as Encode but it accepts a byte slice instead of a uint64 slice.
-// func EncodeFromBuffer(buf []byte, blockSize int) *pb.UidPack {
-// 	enc := Encoder{BlockSize: blockSize}
-// 	var prev uint64
-// 	for len(buf) > 0 {
-// 		uid, n := binary.Uvarint(buf)
-// 		buf = buf[n:]
+func FromBackup(buf []byte) *roaring64.Bitmap {
+	r := roaring64.New()
+	var prev uint64
+	for len(buf) > 0 {
+		uid, n := binary.Uvarint(buf)
+		buf = buf[n:]
 
-// 		next := prev + uid
-// 		enc.Add(next)
-// 		prev = next
-// 	}
-// 	return enc.Done()
-// }
+		next := prev + uid
+		r.Add(next)
+		prev = next
+	}
+	return r
+}
 
 // // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // // need to do more specific things than just return the list back.
