@@ -247,30 +247,38 @@ func runLsbackupCmd() error {
 		return paths[i] < paths[j]
 	})
 
+	type backupEntry struct {
+		Path      string              `json:"path"`
+		Since     uint64              `json:"since"`
+		Groups    map[uint32][]string `json:"groups"`
+		BackupId  string              `json:"backup_id"`
+		BackupNum uint64              `json:"backup_num"`
+		Encrypted bool                `json:"encrypted"`
+		Type      string              `json:"type"`
+	}
+
+	type backupOutput []backupEntry
+
+	var output backupOutput
 	for i := 0; i < len(paths); i++ {
 		path := paths[i]
 		manifest := manifests[path]
 
-		type BackupStructure struct {
-			Name      string
-			Since     uint64
-			Groups    map[uint32][]string
-			Encrypted bool
-			Type      string
-		}
-		output := BackupStructure{
-			Name:      path,
+		output = append(output, backupEntry{
+			Path:      path,
 			Since:     manifest.Since,
 			Groups:    manifest.Groups,
+			BackupId:  manifest.BackupId,
+			BackupNum: manifest.BackupNum,
 			Encrypted: manifest.Encrypted,
 			Type:      manifest.Type,
-		}
-		b, err := json.MarshalIndent(output, "", "	")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		os.Stdout.Write(b)
+		})
 	}
+	b, err := json.MarshalIndent(output, "", "\t")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	os.Stdout.Write(b)
 	fmt.Println()
 	return nil
 }
