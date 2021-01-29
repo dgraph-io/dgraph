@@ -140,6 +140,10 @@ they form a Raft group and provide synchronous replication.
 	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
 		The lower this number, the more frequent snapshot creation would be.
 	`)
+	flag.String("backup", worker.BackupDefaults,
+		`Backup options:
+	goroutines=N number of goroutines to use during backups.	
+	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")

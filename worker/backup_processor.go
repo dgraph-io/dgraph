@@ -37,13 +37,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	// backupNumGo is the number of go routines used by the backup stream writer.
-	backupNumGo = 16
-)
-
-// BackupDefaults are the default options the Backup superflag in WorkerConfig.
-var BackupDefaults = ""
+// BackupDefaults are the default options for the Backup superflag in x.WorkerOptions.
+var BackupDefaults = "goroutines=16"
 
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
@@ -68,7 +63,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, backupNumGo),
+		threads: make([]*threadLocal, x.WorkerConfig.Backup.GetUint64("goroutines")),
 	}
 	for i := range bp.threads {
 		bp.threads[i] = &threadLocal{
@@ -131,7 +126,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	stream.NumGo = backupNumGo
+	stream.NumGo = int(x.WorkerConfig.Backup.GetUint64("goroutines"))
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]

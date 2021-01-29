@@ -139,6 +139,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if forceFull {
 		req.SinceTs = 0
 	} else {
+		// NOTE: we can use x.WorkerConfig to get the Backup superflag
 		if x.WorkerConfig.EncryptionKey != nil {
 			// If encryption key given, latest backup should be encrypted.
 			if latestManifest.Type != "" && !latestManifest.Encrypted {
