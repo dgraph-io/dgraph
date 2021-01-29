@@ -548,6 +548,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// 2. If not blocking, even if i know the index i.e raft index, in case f l change, crash,
 		// no way to replay that raft logs
 		// this is the problem we want to solve
+
 		//if n.AmLeader() {
 		//	b, _ := json.Marshal(proposal.Mutations)
 		//	if proposal.Mutations.Edges != nil {
@@ -912,6 +913,17 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	groups().triggerMembershipSync()
 	return nil
+}
+
+func (n *node) proposeCDCInfo() error {
+	proposal := &pb.Proposal{
+		Snapshot: snap,
+	}
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
+	x.Check(err)
+	return n.Raft().Propose(n.ctx)
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
@@ -1659,6 +1671,8 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 
 	// update snapshot index to cdcIndex if snapshot index is greater than cdcIndex
 	// if not done this way, we will lose raft logs and thus leading to loss of cdc events.
+	// TODO : aman bansal this is incorrect
+	// TODO : aman bansal use min(last entry, cdcentry)
 	if snapshotIdx > n.cdcTracker.getCDCIndex() {
 		snapshotIdx = n.cdcTracker.getCDCIndex()
 	}

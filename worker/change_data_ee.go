@@ -68,6 +68,14 @@ func (cd *ChangeData) UpdateCDCIndex(idx uint64) {
 	atomic.StoreUint64(&cd.cdcIndex, idx)
 }
 
+func (cd *ChangeData) proposeCDCIndex() {
+	if cd == nil {
+		return
+	}
+
+	groups().Node.proposeSnapshot()
+}
+
 // 1. Old cluster start (data already has ) -> // ask kafka gives you 0.
 // this is solved with snpshtIdx
 // 2. Live loader
@@ -76,7 +84,7 @@ func (cd *ChangeData) processCDCEvents() {
 		return
 	}
 
-	sendCDCEvents := func() {
+	sendCDCEvents := func() bool {
 		cdcIndex := cd.getCDCIndex() + 1
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
@@ -87,9 +95,12 @@ func (cd *ChangeData) processCDCEvents() {
 		}
 
 		last := groups().Node.Applied.DoneUntil()
+
+		// todo - aman bansal if last - cdcindex > say N then ignore
 		if cdcIndex == last {
-			return
+			return false
 		}
+		var prevEntry *raftpb.Entry
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			x.Check(err)
@@ -108,6 +119,7 @@ func (cd *ChangeData) processCDCEvents() {
 					x.Check(err)
 				}
 
+				// TODO: aman bansal make contracts for each kind of mutation
 				if proposal.Mutations != nil {
 					b, _ := json.Marshal(proposal.Mutations)
 					if proposal.Mutations.Edges != nil {
@@ -124,21 +136,36 @@ func (cd *ChangeData) processCDCEvents() {
 						}
 					}
 
-					err := cd.sink.SendMessage(nil, b)
-					x.Check(err)
+					if err := cd.sink.SendMessage(nil, b); err != nil {
+						glog.Errorf("error while sending cdc event to sink", err)
+						// if we found the error, return
+						if prevEntry != nil {
+							cd.UpdateCDCIndex(prevEntry.Index)
+							return true
+						}
+						return false
+					}
+					prevEntry = &entry
 				}
 				cd.UpdateCDCIndex(entry.Index)
 			}
-			if err := groups().Node.proposeSnapshot(0); err != nil {
-				glog.Errorf("not able to propose snapshot %v", err)
-			}
 		}
+
+		return true
 	}
 
 	for {
-		if groups().Node.AmLeader() {
-			sendCDCEvents()
+		for range time.NewTicker(time.Second).C {
+			if groups().Node.AmLeader() {
+				if sendCDCEvents() {
+					// todo aman bansal ->
+					// changing this to proposal.CDCEvent diff should be 100 or 1000
+					// final do it every 5 seconds
+					if err := groups().Node.proposeSnapshot(0); err != nil {
+						glog.Errorf("not able to propose snapshot %v", err)
+					}
+				}
+			}
 		}
-		time.Sleep(time.Second)
 	}
 }

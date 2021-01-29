@@ -22,7 +22,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"time"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -129,8 +129,14 @@ type fileSink struct {
 	fileWriter *x.LogWriter
 }
 
+var iter uint64
+
 func (f *fileSink) SendMessage(key []byte, message []byte) error {
-	time.Sleep(5 * time.Second)
+	if atomic.LoadUint64(&iter) < 1000 && atomic.LoadUint64(&iter) > 100 {
+		atomic.AddUint64(&iter, 10)
+		return errors.New("")
+	}
+	atomic.AddUint64(&iter, 1)
 	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": %s, \"value\": %s}\n",
 		string(key), string(message))))
 	return err

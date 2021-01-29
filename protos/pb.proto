@@ -318,6 +318,7 @@ message Proposal {
 	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
 	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
 	RestoreRequest restore 		= 12;
+	uint64 CDCIndex 					= 13;
 }
 
 message KVS {
