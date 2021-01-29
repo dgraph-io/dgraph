@@ -49,6 +49,7 @@ var opt struct {
 	forceZero   bool
 	destination string
 	format      string
+	verbose     bool
 }
 
 func init() {
@@ -154,6 +155,8 @@ func initBackupLs() {
 	flag := LsBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
+	flag.BoolVar(&opt.verbose, "verbose", false,
+		"Outputs additional info in backup list.")
 	_ = LsBackup.Cmd.MarkFlagRequired("location")
 }
 
@@ -247,13 +250,14 @@ func runLsbackupCmd() error {
 	})
 
 	type backupEntry struct {
-		Path      string              `json:"path"`
-		Since     uint64              `json:"since"`
-		Groups    map[uint32][]string `json:"groups"`
-		BackupId  string              `json:"backup_id"`
-		BackupNum uint64              `json:"backup_num"`
-		Encrypted bool                `json:"encrypted"`
-		Type      string              `json:"type"`
+		Path           string              `json:"path"`
+		Since          uint64              `json:"since"`
+		BackupId       string              `json:"backup_id"`
+		BackupNum      uint64              `json:"backup_num"`
+		Encrypted      bool                `json:"encrypted"`
+		Type           string              `json:"type"`
+		Groups         map[uint32][]string `json:"groups,omitempty"`
+		DropOperations []*pb.DropOperation `json:"drop_operations,omitempty"`
 	}
 
 	type backupOutput []backupEntry
@@ -263,15 +267,19 @@ func runLsbackupCmd() error {
 		path := paths[i]
 		manifest := manifests[path]
 
-		output = append(output, backupEntry{
+		be := backupEntry{
 			Path:      path,
 			Since:     manifest.Since,
-			Groups:    manifest.Groups,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
 			Encrypted: manifest.Encrypted,
 			Type:      manifest.Type,
-		})
+		}
+		if opt.verbose {
+			be.Groups = manifest.Groups
+			be.DropOperations = manifest.DropOperations
+		}
+		output = append(output, be)
 	}
 	b, err := json.MarshalIndent(output, "", "\t")
 	if err != nil {
