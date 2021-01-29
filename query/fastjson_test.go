@@ -77,6 +77,7 @@ func TestEncode(t *testing.T) {
 		enc.AddListChild(root, friendNode1)
 		enc.AddListChild(root, friendNode2)
 
+		enc.buf.Reset()
 		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
@@ -99,6 +100,7 @@ func TestEncode(t *testing.T) {
 		enc.AddValue(root, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "bob"})
 
+		enc.buf.Reset()
 		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
@@ -119,6 +121,7 @@ func TestEncode(t *testing.T) {
 
 		enc.AddListChild(root, person)
 
+		enc.buf.Reset()
 		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
