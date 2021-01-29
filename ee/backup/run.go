@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -238,7 +239,18 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	for path, manifest := range manifests {
+	var paths []string
+	for path, _ := range manifests {
+		paths = append(paths, path)
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		return paths[i] < paths[j]
+	})
+
+	for i := 0; i < len(paths); i++ {
+		path := paths[i]
+		manifest := manifests[path]
+
 		type BackupStructure struct {
 			Name      string
 			Since     uint64
