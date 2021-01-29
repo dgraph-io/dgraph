@@ -666,12 +666,14 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
+	backup := x.NewSuperFlag(Alpha.Conf.GetString("backup")).MergeAndCheckDefault(worker.BackupDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                 raft,
+		Backup:               backup,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,

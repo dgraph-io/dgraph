@@ -19,10 +19,6 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"runtime/pprof"
-	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -37,18 +33,6 @@ type backupInput struct {
 }
 
 func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	go func() {
-		for i := 0; ; i++ {
-			<-time.After(time.Second * 1)
-			f, err := os.OpenFile(fmt.Sprintf("/data/heap_%d", i), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Printf("-----------------------------------------: %d\n", i)
-			pprof.Lookup("heap").WriteTo(f, 0)
-		}
-	}()
-
 	glog.Info("Got backup request")
 
 	input, err := getBackupInput(m)

@@ -42,6 +42,9 @@ const (
 	backupNumGo = 16
 )
 
+// BackupDefaults are the default options the Backup superflag in WorkerConfig.
+var BackupDefaults = ""
+
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
