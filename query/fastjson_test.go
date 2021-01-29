@@ -1,7 +1,6 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"math"
 	"testing"
@@ -78,8 +77,7 @@ func TestEncode(t *testing.T) {
 		enc.AddListChild(root, friendNode1)
 		enc.AddListChild(root, friendNode2)
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"friend":[
@@ -91,7 +89,7 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 
 	t.Run("with value list predicate", func(t *testing.T) {
@@ -101,8 +99,7 @@ func TestEncode(t *testing.T) {
 		enc.AddValue(root, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "bob"})
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"name":[
@@ -110,7 +107,7 @@ func TestEncode(t *testing.T) {
 				"bob"
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 
 	t.Run("with uid predicate", func(t *testing.T) {
@@ -122,8 +119,7 @@ func TestEncode(t *testing.T) {
 
 		enc.AddListChild(root, person)
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"person":[
@@ -133,6 +129,6 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 }

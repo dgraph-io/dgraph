@@ -50,8 +50,7 @@ func TestEncodeMemory(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
-				var buf bytes.Buffer
-				enc.encode(n, &buf)
+				enc.encode(n)
 			}
 		}()
 	}
