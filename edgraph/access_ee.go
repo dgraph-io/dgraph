@@ -288,7 +288,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		"$userid":   userid,
 		"$password": password,
 	}
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Query: queryUser,
 			Vars:  queryVars,
@@ -296,7 +296,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		doAuth: NoAuthorize,
 	}
 
-	queryResp, err := (&Server{}).doQuery(ctx, reqCtx)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -329,7 +329,7 @@ func RefreshAcls(closer *z.Closer) {
 		maxRefreshTs = refreshTs
 
 		glog.V(3).Infof("Refreshing ACLs")
-		reqCtx := &RequestWithContext{
+		req := &Request{
 			req: &api.Request{
 				Query:    queryAcls,
 				ReadOnly: true,
@@ -338,7 +338,7 @@ func RefreshAcls(closer *z.Closer) {
 			doAuth: NoAuthorize,
 		}
 
-		queryResp, err := (&Server{}).doQuery(closer.Ctx(), reqCtx)
+		queryResp, err := (&Server{}).doQuery(closer.Ctx(), req)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -412,7 +412,7 @@ func ResetAcl(closer *z.Closer) {
 			}
 		`, x.GuardiansId)
 		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
-		reqCtx := &RequestWithContext{
+		req := &Request{
 			req: &api.Request{
 				CommitNow: true,
 				Query:     query,
@@ -426,7 +426,7 @@ func ResetAcl(closer *z.Closer) {
 			doAuth: NoAuthorize,
 		}
 
-		resp, err := (&Server{}).doQuery(ctx, reqCtx)
+		resp, err := (&Server{}).doQuery(ctx, req)
 
 		// Structs to parse guardians group uid from query response
 		type groupNode struct {
@@ -483,7 +483,7 @@ func ResetAcl(closer *z.Closer) {
 			Predicate: "dgraph.user.group",
 			ObjectId:  "uid(guid)",
 		})
-		reqCtx := &RequestWithContext{
+		req := &Request{
 			req: &api.Request{
 				CommitNow: true,
 				Query:     query,
@@ -498,7 +498,7 @@ func ResetAcl(closer *z.Closer) {
 			doAuth: NoAuthorize,
 		}
 
-		resp, err := (&Server{}).doQuery(ctx, reqCtx)
+		resp, err := (&Server{}).doQuery(ctx, req)
 		if err != nil {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}

@@ -101,6 +101,9 @@ type encoder struct {
 
 	// Cache uid attribute, which is very commonly used.
 	uidAttr uint16
+
+	// buf is the buffer which stores the JSON encoded response
+	buf *bytes.Buffer
 }
 
 type node struct {
@@ -141,6 +144,7 @@ func newEncoder() *encoder {
 		idSlice: idSlice,
 		arena:   a,
 		alloc:   z.NewAllocator(4 << 10),
+		buf:     &bytes.Buffer{},
 	}
 	e.uidAttr = e.idForAttr("uid")
 	return e
@@ -628,18 +632,18 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
-	if _, err := out.WriteRune('"'); err != nil {
+func (enc *encoder) writeKey(fj fastJsonNode) error {
+	if _, err := enc.buf.WriteRune('"'); err != nil {
 		return err
 	}
 	attrID := enc.getAttr(fj)
-	if _, err := out.WriteString(enc.attrForID(attrID)); err != nil {
+	if _, err := enc.buf.WriteString(enc.attrForID(attrID)); err != nil {
 		return err
 	}
-	if _, err := out.WriteRune('"'); err != nil {
+	if _, err := enc.buf.WriteRune('"'); err != nil {
 		return err
 	}
-	if _, err := out.WriteRune(':'); err != nil {
+	if _, err := enc.buf.WriteRune(':'); err != nil {
 		return err
 	}
 	return nil
@@ -675,7 +679,7 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 	return nil
 }
 
-func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
+func (enc *encoder) encode(fj fastJsonNode) error {
 	child := enc.children(fj)
 	// This is a scalar value.
 	if child == nil {
@@ -683,12 +687,12 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 		if err != nil {
 			return err
 		}
-		_, err = out.Write(val)
+		_, err = enc.buf.Write(val)
 		return err
 	}
 
 	// This is an internal node.
-	if _, err := out.WriteRune('{'); err != nil {
+	if _, err := enc.buf.WriteRune('{'); err != nil {
 		return err
 	}
 	cnt := 0
@@ -704,32 +708,32 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 
 		if validNext && enc.getAttr(cur) == enc.getAttr(next) {
 			if cnt == 1 {
-				if err := enc.writeKey(cur, out); err != nil {
+				if err := enc.writeKey(cur); err != nil {
 					return err
 				}
-				if _, err := out.WriteRune('['); err != nil {
+				if _, err := enc.buf.WriteRune('['); err != nil {
 					return err
 				}
 			}
-			if err := enc.encode(cur, out); err != nil {
+			if err := enc.encode(cur); err != nil {
 				return err
 			}
 		} else {
 			if cnt == 1 {
-				if err := enc.writeKey(cur, out); err != nil {
+				if err := enc.writeKey(cur); err != nil {
 					return err
 				}
 				if enc.getList(cur) {
-					if _, err := out.WriteRune('['); err != nil {
+					if _, err := enc.buf.WriteRune('['); err != nil {
 						return err
 					}
 				}
 			}
-			if err := enc.encode(cur, out); err != nil {
+			if err := enc.encode(cur); err != nil {
 				return err
 			}
 			if cnt > 1 || enc.getList(cur) {
-				if _, err := out.WriteRune(']'); err != nil {
+				if _, err := enc.buf.WriteRune(']'); err != nil {
 					return err
 				}
 			}
@@ -737,14 +741,14 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 		}
 		// We need to print comma except for the last attribute.
 		if child.next != nil {
-			if _, err := out.WriteRune(','); err != nil {
+			if _, err := enc.buf.WriteRune(','); err != nil {
 				return err
 			}
 		}
 
 		child = child.next
 	}
-	if _, err := out.WriteRune('}'); err != nil {
+	if _, err := enc.buf.WriteRune('}'); err != nil {
 		return err
 	}
 
@@ -1106,117 +1110,66 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 	// level keys. Hence we send server_latency under extensions key.
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
-	var bufw bytes.Buffer
-	if field == nil {
-		// if there is no GraphQL field that means we need to encode the response in DQL form.
-		if enc.children(n) == nil {
-			if _, err = bufw.WriteString(`{}`); err != nil {
-				return nil, err
-			}
-		} else {
-			if err = enc.encode(n, &bufw); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		// GraphQL queries will always have at least one query whose results are visible to users,
-		// implying that the root fastJson node will always have at least one child. So, no need
-		// to check for the case where there are no children for the root fastJson node.
-		gqlEncCtx := &graphQLEncodingCtx{
-			buf:              &bufw,
-			dgraphTypeAttrId: enc.idForAttr("dgraph.type"),
-		}
-		// if this field has any @custom(http: {...}) children,
-		// then need to resolve them first before encoding the final GraphQL result.
-		if field.HasCustomHTTPChild() {
-			// TODO(abhimanyu):
-			//  * benchmark the approach of using channels vs mutex to update the fastJson tree.
-			//  * benchmark and find how much load should be put on HttpClient concurrently.
-			//  * benchmark and find a default buffer capacity for these channels
-			gqlEncCtx.errChan = make(chan x.GqlErrorList, 100)
-			gqlEncCtx.customFieldResultChan = make(chan customFieldResult, 100)
-			// initialize WaitGroup for the error and result channel goroutines
-			wg := &sync.WaitGroup{}
-			wg.Add(2)
-			// keep collecting errors arising from custom field resolution until channel is closed
-			go func() {
-				for gqlErrs := range gqlEncCtx.errChan {
-					gqlEncCtx.gqlErrs = append(gqlEncCtx.gqlErrs, gqlErrs...)
-				}
-				wg.Done()
-			}()
-			// keep updating the fastJson tree as long as we get updates from the channel.
-			// This is the step-7 of *graphQLEncodingCtx.resolveCustomField()
-			go func() {
-				// this would add the custom fastJson nodes in an arbitrary order. So, they may not
-				// be linked in the order the custom fields are present in selection set.
-				// i.e., while encoding the GraphQL response, we will have to do one of these:
-				// * a linear search to find the correct fastJson node for a custom field, or
-				// * first fix the order of custom fastJson nodes and then continue the encoding, or
-				// * create a map from custom fastJson node attr to the custom fastJson node,
-				//   so that whenever a custom field in encountered in the selection set,
-				//   just use the map to find out the fastJson node for that field.
-				// The last option seems better.
-				for result := range gqlEncCtx.customFieldResultChan {
-					childFieldAttr := enc.idForAttr(result.childField.DgraphAlias())
-					for _, parent := range result.parents {
-						if childFieldNode, err := enc.makeCustomNode(childFieldAttr,
-							result.childVal); err == nil {
-							childFieldNode.next = parent.child
-							// below line may lead to a race condition between this write and
-							// multiple simultaneous reads during custom field resolution.
-							// But, the way reads are done, it doesn't matter whether they get
-							// the previous value or the new value after the write as they just
-							// keep iterating as long as they don't find a fastJson node returned
-							// for a required field from Dgraph.
-							// So, it seems fine to ignore this race condition.
-							parent.child = childFieldNode
-						} else {
-							gqlEncCtx.errChan <- x.GqlErrorList{result.childField.GqlErrorf(nil,
-								err.Error())}
-						}
-					}
-				}
-				wg.Done()
-			}()
-			// start resolving the custom fields
-			gqlEncCtx.resolveCustomFields(ctx, enc, []fastJsonNode{enc.children(n)},
-				field.SelectionSet())
-			// close the error and result channels, to terminate the goroutines started above
-			close(gqlEncCtx.errChan)
-			close(gqlEncCtx.customFieldResultChan)
-			// wait for the above goroutines to finish
-			wg.Wait()
-		}
-		// now encode the GraphQL results.
-		if !gqlEncCtx.encode(enc, n, true, []gqlSchema.Field{field}, nil,
-			field.PreAllocatePathSlice()) {
-			// if gqlEncCtx.encode() didn't finish successfully here, that means we need to send
-			// data as null in the GraphQL response like this:
-			// 		{
-			// 			"errors": [...],
-			// 			"data": null
-			// 		}
-			// and not just null for a single query in data.
-			// So, reset the buffer contents here, so that GraphQL layer may know that if it gets
-			// error of type x.GqlErrorList along with nil JSON response, then it needs to set whole
-			// data as null.
-			bufw.Reset()
-		}
-		// if there were any GraphQL errors,
-		// we need to propagate them back to GraphQL layer along with the data.
-		if len(gqlEncCtx.gqlErrs) > 0 {
-			err = gqlEncCtx.gqlErrs
-		}
+	// if there is a GraphQL field that means we need to encode the response in GraphQL form,
+	// otherwise encode it in DQL form.
+	if field != nil {
+		// if there were any GraphQL errors, we need to propagate them back to GraphQL layer along
+		// with the data. So, don't return here if we get an error.
+		err = sg.toGraphqlJSON(newGraphQLEncoder(ctx, enc), n, field)
+	} else if err = sg.toDqlJSON(enc, n); err != nil {
+		return nil, err
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
-	if uint64(bufw.Len()) > maxEncodedSize {
+	if uint64(enc.buf.Len()) > maxEncodedSize {
 		return nil, fmt.Errorf("while writing to buffer. Encoded response size: %d"+
-			" is bigger than threshold: %d", bufw.Len(), maxEncodedSize)
+			" is bigger than threshold: %d", enc.buf.Len(), maxEncodedSize)
 	}
 
-	return bufw.Bytes(), err
+	return enc.buf.Bytes(), err
+}
+
+func (sg *SubGraph) toDqlJSON(enc *encoder, n fastJsonNode) error {
+	if enc.children(n) == nil {
+		x.Check2(enc.buf.WriteString(`{}`))
+		return nil
+	}
+	return enc.encode(n)
+}
+
+func (sg *SubGraph) toGraphqlJSON(genc *graphQLEncoder, n fastJsonNode, f gqlSchema.Field) error {
+	// GraphQL queries will always have at least one query whose results are visible to users,
+	// implying that the root fastJson node will always have at least one child. So, no need
+	// to check for the case where there are no children for the root fastJson node.
+
+	// if this field has any @custom(http: {...}) children,
+	// then need to resolve them first before encoding the final GraphQL result.
+	genc.processCustomFields(f, n)
+	// now encode the GraphQL results.
+	if !genc.encode(encodeInput{
+		parentField: nil,
+		parentPath:  f.PreAllocatePathSlice(),
+		fj:          n,
+		fjIsRoot:    true,
+		childSelSet: []gqlSchema.Field{f},
+	}) {
+		// if genc.encode() didn't finish successfully here, that means we need to send
+		// data as null in the GraphQL response like this:
+		// 		{
+		// 			"errors": [...],
+		// 			"data": null
+		// 		}
+		// and not just null for a single query in data.
+		// So, reset the buffer contents here, so that GraphQL layer may know that if it gets
+		// error of type x.GqlErrorList along with nil JSON response, then it needs to set whole
+		// data as null.
+		genc.buf.Reset()
+	}
+
+	if len(genc.errs) > 0 {
+		return genc.errs
+	}
+	return nil
 }
 
 func (sg *SubGraph) fieldName() string {

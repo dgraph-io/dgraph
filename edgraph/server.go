@@ -315,7 +315,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 // then restoring from the incremental backup of such a DB would restore even the dropped
 // data back.
 func insertDropRecord(ctx context.Context, dropOp string) error {
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &RequestWithContext{
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &Request{
 		req: &api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
@@ -938,10 +938,15 @@ type queryContext struct {
 	nquadsCount int
 }
 
-type RequestWithContext struct {
-	req      *api.Request
+// Request represents a query request sent to the doQuery() method on the Server.
+// It contains all the metadata required to execute a query.
+type Request struct {
+	// req is the incoming gRPC request
+	req *api.Request
+	// gqlField is the GraphQL field for which the request is being sent
 	gqlField gqlSchema.Field
-	doAuth   AuthMode
+	// doAuth tells whether this request needs ACL authorization or not
+	doAuth AuthMode
 }
 
 // Health handles /health and /health?all requests.
@@ -1021,18 +1026,18 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
-	return s.doQuery(ctx, &RequestWithContext{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(ctx, &RequestWithContext{req: req, doAuth: getAuthMode(ctx)})
+	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
-func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
+func (s *Server) doQuery(ctx context.Context, req *Request) (
 	resp *api.Response, rerr error) {
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", reqCtx.req)
+		glog.Infof("Got a query: %+v", req.req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
@@ -1048,7 +1053,7 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	isMutation := len(reqCtx.req.Mutations) > 0
+	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
 		methodRequest = methodMutate
@@ -1073,14 +1078,14 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 		return
 	}
 
-	reqCtx.req.Query = strings.TrimSpace(reqCtx.req.Query)
-	isQuery := len(reqCtx.req.Query) != 0
+	req.req.Query = strings.TrimSpace(req.req.Query)
+	isQuery := len(req.req.Query) != 0
 	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.Annotatef(nil, "Request received: %v", reqCtx.req)
+	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
@@ -1091,13 +1096,13 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: reqCtx.req, latency: l, span: span, graphql: isGraphQL,
-		gqlField: reqCtx.gqlField}
+	qc := &queryContext{req: req.req, latency: l, span: span, graphql: isGraphQL,
+		gqlField: req.gqlField}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
 
-	if reqCtx.doAuth == NeedAuthorize {
+	if req.doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}
@@ -1107,12 +1112,12 @@ func (s *Server) doQuery(ctx context.Context, reqCtx *RequestWithContext) (
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && reqCtx.req.StartTs == 0 {
+	if isMutation && req.req.StartTs == 0 {
 		if x.WorkerConfig.LudicrousMode {
-			reqCtx.req.StartTs = posting.Oracle().MaxAssigned()
+			req.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			start := time.Now()
-			reqCtx.req.StartTs = worker.State.GetTimestamp(false)
+			req.req.StartTs = worker.State.GetTimestamp(false)
 			qc.latency.AssignTimestamp = time.Since(start)
 		}
 	}

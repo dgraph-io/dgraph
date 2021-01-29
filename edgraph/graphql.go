@@ -43,7 +43,7 @@ func ResetCors(closer *z.Closer) {
 		closer.Done()
 	}()
 
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Query: `query{
 			cors as var(func: has(dgraph.cors))
@@ -75,7 +75,7 @@ func ResetCors(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
-		if _, err := (&Server{}).doQuery(ctx, reqCtx); err != nil {
+		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -97,7 +97,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 	if err != nil {
 		return err
 	}
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Query: `query{
 			cors as var(func: has(dgraph.cors))
@@ -113,13 +113,13 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	_, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), reqCtx)
+	_, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
 	return err
 }
 
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Query: `query{
 			me(func: has(dgraph.cors)){
@@ -131,7 +131,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 		},
 		doAuth: NoAuthorize,
 	}
-	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), reqCtx)
+	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
 	if err != nil {
 		return "", nil, err
 	}
@@ -170,7 +170,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 
 // UpdateSchemaHistory updates graphql schema history.
 func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Mutations: []*api.Mutation{
 				{
@@ -195,7 +195,7 @@ func UpdateSchemaHistory(ctx context.Context, schema string) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), reqCtx)
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
 	return err
 }
 
@@ -226,7 +226,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	variables := map[string]string{
 		"$sha": sha256Hash,
 	}
-	reqCtx := &RequestWithContext{
+	req := &Request{
 		req: &api.Request{
 			Query:    queryForSHA,
 			Vars:     variables,
@@ -235,7 +235,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		doAuth: NoAuthorize,
 	}
 
-	storedQuery, err := (&Server{}).doQuery(ctx, reqCtx)
+	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
 		glog.Errorf("Error while querying sha %s", sha256Hash)
@@ -265,7 +265,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			return errors.New("provided sha does not match query")
 		}
 
-		reqCtx := &RequestWithContext{
+		req = &Request{
 			req: &api.Request{
 				Mutations: []*api.Mutation{
 					{
@@ -294,7 +294,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			doAuth: NoAuthorize,
 		}
 
-		_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), reqCtx)
+		_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
 		return err
 
 	}
