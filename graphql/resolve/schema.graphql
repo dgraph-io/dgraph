@@ -379,3 +379,24 @@ type Workflow {
 type Node {
     name: String!
 }
+
+# test for entities resolver
+
+type Mission @key(fields: "id") {
+    id: String! @id
+    crew: [Astronaut]
+    spaceShip: [SpaceShip]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    missions: [Mission]
+}
+
+type SpaceShip @key(fields: "id") @extends {
+    id: String! @id @external
+    missions: [Mission]
+}

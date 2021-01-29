@@ -27,7 +27,9 @@ var CmdAcl x.SubCommand
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Enterprise feature. Not supported in oss version",
-	}
+		Use:         "acl",
+		Short:       "Enterprise feature. Not supported in oss version",
+		Annotations: map[string]string{"group": "security"},
+	},
+		Acl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 }

@@ -330,7 +330,7 @@ input StudentPatch {
 
 input StudentRef {
 	regNo: ID
-	rollNo: String @id
+	rollNo: String
 }
 
 input UpdateStudentInput {

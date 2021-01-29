@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -78,8 +79,8 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 }
 
 // GetCredentialsFromRequest extracts the credentials from a backup request.
-func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
-	return &Credentials{
+func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.GetAccessKey(),
 		SecretKey:    req.GetSecretKey(),
 		SessionToken: req.GetSessionToken(),

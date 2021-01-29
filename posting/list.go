@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -501,7 +500,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	l.AssertLock()
 
 	if txn.ShouldAbort() {
-		return zero.ErrConflict
+		return x.ErrConflict
 	}
 
 	mpost := NewPosting(t)

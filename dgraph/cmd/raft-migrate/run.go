@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,14 +40,16 @@ var (
 func init() {
 	RaftMigrate.Cmd = &cobra.Command{
 		Use:   "raftmigrate",
-		Short: "Run the raft migrate tool",
+		Short: "Run the Raft migration tool",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := run(RaftMigrate.Conf); err != nil {
 				log.Fatalf("%v\n", err)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	RaftMigrate.EnvPrefix = "DGRAPH_RAFT_MIGRATE"
+	RaftMigrate.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := RaftMigrate.Cmd.Flags()
 	flag.StringP("old-dir", "", "", "Path to the old (z)w directory.")

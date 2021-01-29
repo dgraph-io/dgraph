@@ -2673,6 +2673,93 @@ invalid_schemas:
     errlist: [
           { "message": "Field I3.name can only be defined once.", "locations": [ { "line": 2, "column": 5 } ] },
           ]
+  - name: "@external directive can only be used on fields of Type Extension"
+    input: |
+      type Product @key(fields: "id") {
+          id: ID! @external
+          reviews: String
+      }
+    errlist: [
+        { "message": "Type Product: Field id: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 2, "column": 14 } ] },
+      ]
+  - name: "@key directive defined more than once"
+    input: |
+      type Product @key(fields: "id") @key(fields: "name") {
+          id: ID!
+          name: String! @id
+          reviews: String
+      }
+    errlist: [
+        { "message": "Type Product; @key directive should not be defined more than once.", "locations": [ { "line": 1, "column": 34 } ] },
+      ]
+  - name: "Argument inside @key directive uses field not defined in the type"
+    input: |
+      type Product @key(fields: "username") {
+          id: ID!
+          name: String! @id
+          reviews: String
+      }
+    errlist: [
+        { "message": "Type Product; @key directive uses a field username which is not defined inside the type.", "locations": [ { "line": 1, "column":19 } ] },
+      ]
+  - name: "Argument inside @key directive must have ID field or field with @id directive"
+    input: |
+      extend type Product @key(fields: "name") {
+          id: ID! @external
+          name: String! @external
+          reviews: String
+      }
+    errlist: [
+        { "message": "Type Product: Field name: used inside @key directive should be of type ID or have @id directive.", "locations": [ { "line": 1, "column": 26 } ] },
+      ]
+  - name: "@extends directive without @key directive"
+    input: |
+      type Product  @extends{
+      id: ID! @external
+      name: String! @external
+      reviews: [Reviews]
+      }
+
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 11, "column": 12} ] },
+    ]
+  - name: "@remote directive with @key"
+    input: |
+      type Product  @remote @key(fields: "id"){
+      id: ID! 
+      name: String!
+      reviews: [Reviews]
+      }
+
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
+    ]
+  - name: "directives defined on @external fields that are not @key."
+    input: |
+      extend type Product @key(fields: "id"){
+        id: ID! @external
+        name: String! @search @external
+        reviews: [Reviews]
+      }
+
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
+    ]
+
+
+    
 
 
 valid_schemas:

@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cast"
+
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -371,6 +373,71 @@ func allPosts(t *testing.T) []*post {
 	require.Equal(t, 4, len(result.QueryPost))
 
 	return result.QueryPost
+}
+
+func entitiesQuery(t *testing.T) {
+	addSpaceShipParams := &GraphQLParams{
+		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
+				spaceShip {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1":        "SpaceShip1",
+			"missionId1": "Mission1",
+		},
+	}
+
+	gqlResponse := addSpaceShipParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: String!){
+			_entities(representations: [{__typename: $typeName, id: $id1}]) {
+				... on SpaceShip {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "SpaceShip",
+			"id1":      "SpaceShip1",
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{
+		"_entities": [
+		  {
+			"missions": [
+			  {
+				"id": "Mission1",
+				"designation": "Apollo1"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
+
 }
 
 func inFilterOnString(t *testing.T) {
@@ -3435,7 +3502,7 @@ func passwordTest(t *testing.T) {
 	deleteUser(t, *newUser)
 }
 
-func queryFilterSingleIDListCoercion(t *testing.T) {
+func queryFilterWithIDInputCoercion(t *testing.T) {
 	authors := addMultipleAuthorFromRef(t, []*author{
 		{
 			Name:          "George",
@@ -3452,25 +3519,27 @@ func queryFilterSingleIDListCoercion(t *testing.T) {
 	authorIds := []string{authors[0].ID, authors[1].ID}
 	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
 	countryIds := []string{authors[1].Country.ID}
-	tcase := struct {
+	authorIdsDecimal := []string{cast.ToString(cast.ToInt(authorIds[0])), cast.ToString(cast.ToInt(authorIds[1]))}
+	tcases := []struct {
 		name      string
 		query     string
 		variables map[string]interface{}
 		respData  string
 	}{
+		{
 
-		name: "Query using single ID in a filter",
-		query: `query($filter:AuthorFilter){
+			name: "Query using single ID in a filter",
+			query: `query($filter:AuthorFilter){
                       queryAuthor(filter:$filter){
                         name
-						reputation
+                        reputation
                         posts {
                           text
                         }
                       }
 				    }`,
-		variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
-		respData: `{
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+			respData: `{
 						  "queryAuthor": [
 							{
 							  "name": "George",
@@ -3483,17 +3552,144 @@ func queryFilterSingleIDListCoercion(t *testing.T) {
 							}
 						  ]
 						}`,
+		},
+		{
+
+			name: "Query using single ID given in variable of type integer coerced to string ",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": cast.ToInt(authors[0].ID)}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID given in variable of type integer coerced to string",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          title
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using single ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
+			           name
+					   reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:[` + authorIdsDecimal[0] + `,` + authorIdsDecimal[1] + `]}){
+			           name
+                       reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
 	}
 
-	t.Run(tcase.name, func(t *testing.T) {
-		params := &GraphQLParams{
-			Query:     tcase.query,
-			Variables: tcase.variables,
-		}
-		resp := params.ExecuteAsPost(t, GraphqlURL)
-		RequireNoGQLErrors(t, resp)
-		testutil.CompareJSON(t, tcase.respData, string(resp.Data))
-	})
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
 
 	// cleanup
 	deleteAuthors(t, authorIds, nil)

@@ -1,4 +1,4 @@
-# Auto-generated with: [../../compose/compose -z=1 -a=1]
+# Auto-generated with: [../../../compose/compose -z=1 -a=1 -o=0 --minio --minio_data_dir=. --expose_ports=false --names=false]
 #
 version: "3.5"
 services:
@@ -8,29 +8,44 @@ services:
     labels:
       cluster: test
     ports:
-      - "8080"
-      - "9080"
+    - "8080"
+    - "9080"
     volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --whitelist=0.0.0.0/0
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
+      -v=2 --raft='idx=1; group=1' --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+  minio1:
+    image: minio/minio:RELEASE.2020-11-13T20-10-18Z
+    ports:
+    - "9001"
+    volumes:
+    - type: bind
+      source: .
+      target: /data/minio
+      read_only: false
+    command: minio server /data/minio --address :9001
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-    - 5080
-    - 6080
+    - "5080"
+    - "6080"
     volumes:
     - type: bind
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --raft="idx=1" --my=zero1:5080 --logtostderr
-      -v=2 --bindall
+    command: /gobin/dgraph zero --raft='idx=1' --my=zero1:5080 --logtostderr -v=2
+      --bindall
     deploy:
       resources:
         limits:
