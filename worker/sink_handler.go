@@ -21,6 +21,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 	"github.com/segmentio/kafka-go"
@@ -51,12 +55,12 @@ type KafkaConfig struct {
 }
 
 // Kafka client is not concurrency safe.
-// Its the responsibility of called to manage the concurrency.
-type KafkaSinkClient struct {
+// Its the responsibility of callee to manage the concurrency.
+type kafkaSinkClient struct {
 	writer *kafka.Writer
 }
 
-func NewKafkaSinkClient(config *KafkaConfig) (*KafkaSinkClient, error) {
+func NewKafkaSinkClient(config *KafkaConfig) (SinkHandler, error) {
 	if config == nil {
 		return nil, nil
 	}
@@ -104,19 +108,51 @@ func NewKafkaSinkClient(config *KafkaConfig) (*KafkaSinkClient, error) {
 			glog.Error("error writing to kafka", err)
 		},
 	}
-	return &KafkaSinkClient{
+	return &kafkaSinkClient{
 		writer: w,
 	}, nil
 }
 
 // send message send it async.
-func (k *KafkaSinkClient) SendMessage(key []byte, message []byte) error {
+func (k *kafkaSinkClient) SendMessage(key []byte, message []byte) error {
 	return k.writer.WriteMessages(context.Background(), kafka.Message{
 		Key:   key,
 		Value: message,
 	})
 }
 
-func (k *KafkaSinkClient) Close() error {
+func (k *kafkaSinkClient) Close() error {
 	return k.writer.Close()
+}
+
+type fileSink struct {
+	fileWriter *x.LogWriter
+}
+
+func (f *fileSink) SendMessage(key []byte, message []byte) error {
+	time.Sleep(5 * time.Second)
+	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": %s, \"value\": %s}\n",
+		string(key), string(message))))
+	return err
+}
+
+func (f *fileSink) Close() error {
+	return f.fileWriter.Close()
+}
+
+func NewFileBasedSink(path string) (SinkHandler, error) {
+	var err error
+	w := &x.LogWriter{
+		FilePath:      path,
+		MaxSize:       100,
+		MaxAge:        10,
+		EncryptionKey: nil,
+		Compress:      false,
+	}
+	if w, err = w.Init(); err != nil {
+		return nil, err
+	}
+	return &fileSink{
+		fileWriter: w,
+	}, nil
 }

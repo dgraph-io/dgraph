@@ -1,3 +1,5 @@
+// +build oss
+
 /*
  * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
@@ -16,4 +18,51 @@
 
 package worker
 
-var logger
+import (
+	"fmt"
+	"sync/atomic"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+)
+
+var logger *x.Logger
+var lis chan msg
+var CdcIndex uint64 = 1
+
+func init() {
+	var err error
+	logger, err = x.InitLogger("cdc", "cdc.log", nil, false)
+	x.Check(err)
+	lis = make(chan msg, 2000)
+	go listenAndDo()
+}
+
+type msg struct {
+	m   string
+	idx uint64
+}
+
+func WriteCDC(m string, idx uint64) {
+	fmt.Println("writing CDC")
+	time.Sleep(time.Second * 3)
+	logger.AuditI(m)
+	logger.Sync()
+	atomic.StoreUint64(&CdcIndex, idx)
+	//lis <- msg{
+	//	m:   m,
+	//	idx: idx,
+	//}
+}
+
+func listenAndDo() {
+	for {
+		select {
+		case m := <-lis:
+			time.Sleep(time.Second * 10)
+			logger.AuditI(m.m)
+			logger.Sync()
+			atomic.StoreUint64(&CdcIndex, m.idx)
+		}
+	}
+}

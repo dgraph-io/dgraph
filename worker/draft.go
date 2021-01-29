@@ -68,9 +68,9 @@ type node struct {
 	streaming    int32  // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[op]*z.Closer
-	opsLock sync.Mutex
-
+	ops         map[op]*z.Closer
+	opsLock     sync.Mutex
+	cdcTracker  *ChangeData
 	canCampaign bool
 	elog        trace.EventLog
 
@@ -544,11 +544,29 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 
 		span.Annotate(nil, "Done")
-		if n.AmLeader() {
-			// best effort policy with N retries
-			// send events and dont expect error
-
-		}
+		// 1. If this is blocking. your txn will block. This cant be blocking
+		// 2. If not blocking, even if i know the index i.e raft index, in case f l change, crash,
+		// no way to replay that raft logs
+		// this is the problem we want to solve
+		//if n.AmLeader() {
+		//	b, _ := json.Marshal(proposal.Mutations)
+		//	if proposal.Mutations.Edges != nil {
+		//		for _, r := range proposal.Mutations.Edges {
+		//			if r.ValueType == 2 {
+		//				u := binary.LittleEndian.Uint64(r.Value)
+		//				b, _ = json.Marshal(u)
+		//			}
+		//			//p := types.Val{Tid: types.BinaryID, Value: r.Value}
+		//			//p1 := types.ValueForType(types.TypeID(r.ValueType))
+		//			//err := types.Marshal(p, &p1)
+		//			//fmt.Println("type marshal", err)
+		//		}
+		//	}
+		//	// async collector
+		//	WriteCDC(string(b))
+		//	// best effort policy with N retries
+		//	// send events and dont expect error
+		//}
 		return nil
 	}
 
@@ -615,6 +633,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
+		n.cdcTracker.UpdateCDCIndex(snap.Index)
 		return nil
 
 	case proposal.Restore != nil:
@@ -1111,7 +1130,6 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			fmt.Printf("got reaft message %+v\n", rd.Entries)
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
@@ -1639,6 +1657,12 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 		return nil, nil
 	}
 
+	// update snapshot index to cdcIndex if snapshot index is greater than cdcIndex
+	// if not done this way, we will lose raft logs and thus leading to loss of cdc events.
+	if snapshotIdx > n.cdcTracker.getCDCIndex() {
+		snapshotIdx = n.cdcTracker.getCDCIndex()
+	}
+
 	result := &pb.Snapshot{
 		Context: n.RaftContext,
 		Index:   snapshotIdx,
@@ -1732,6 +1756,7 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		n.cdcTracker = initChangeDataCapture(sp.Metadata.Index)
 		glog.V(2).Infoln("Restart node complete")
 
 	} else {
@@ -1751,11 +1776,14 @@ func (n *node) InitAndStartNode() {
 			// Trigger election, so this node can become the leader of this single-node cluster.
 			n.canCampaign = true
 		}
+		// initate cdc with raft index 1
+		n.cdcTracker = initChangeDataCapture(1)
 	}
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
 	go n.monitorRaftMetrics()
+	go n.cdcTracker.processCDCEvents()
 	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)
