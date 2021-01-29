@@ -300,7 +300,7 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 			// }
 			continue
 		case interface{}:
-			standardClaimsMap[k] = v
+			allClaimsMap[k] = v
 		}
 	}
 
