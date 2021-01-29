@@ -1747,6 +1747,10 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 				fn, val := first(dgFunc)
 				if val == nil {
+					if fn == "eq" {
+						hasFilterMap := map[string]interface{}{"not": map[string]interface{}{"has": field}}
+						ands = append(ands, buildFilter(typ, hasFilterMap))
+					}
 					continue
 				}
 				args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
