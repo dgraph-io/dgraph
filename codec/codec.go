@@ -81,6 +81,12 @@ func Encode(uids []uint64) []byte {
 	return b
 }
 
+func ToList(rm *roaring64.Bitmap) *pb.List {
+	return &pb.List{
+		Bitmap: ToBytes(rm),
+	}
+}
+
 func ToBytes(bm *roaring64.Bitmap) []byte {
 	b, err := bm.ToBytes()
 	x.Check(err)
