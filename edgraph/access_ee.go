@@ -82,13 +82,14 @@ func (s *Server) Login(ctx context.Context,
 	glog.Infof("%s logged in successfully", user.UserID)
 
 	resp := &api.Response{}
-	accessJwt, err := getAccessJwt(user.UserID, user.Groups)
+	accessJwt, err := getAccessJwt(user.UserID, user.Groups, 56)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
 		return nil, errors.Errorf(errMsg)
 	}
+
 	refreshJwt, err := getRefreshJwt(user.UserID)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
@@ -121,16 +122,17 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	if err := validateLoginRequest(request); err != nil {
 		return nil, errors.Wrapf(err, "invalid login request")
 	}
-
+	ctx = x.AttachNamespace(ctx, request.Namespace)
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
-		userData, err := validateToken(request.RefreshToken)
+		userData, _, err := validateToken(request.RefreshToken)
 		if err != nil {
 			return nil, errors.Wrapf(err, "unable to authenticate the refresh token %v",
 				request.RefreshToken)
 		}
 
 		userId := userData[0]
+
 		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
 			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
@@ -166,7 +168,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 // validateToken verifies the signature and expiration of the jwt, and if validation passes,
 // returns a slice of strings, where the first element is the extracted userId
 // and the rest are groupIds encoded in the jwt.
-func validateToken(jwtStr string) ([]string, error) {
+func validateToken(jwtStr string) ([]string, uint64, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -175,25 +177,31 @@ func validateToken(jwtStr string) ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, errors.Errorf("unable to parse jwt token:%v", err)
+		return nil, 0, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
 	// TODO(arijit): Upgrade the jwt library to v4.0
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return nil, errors.Errorf("claims in jwt token is not map claims")
+		return nil, 0, errors.Errorf("claims in jwt token is not map claims")
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
+		return nil, 0, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
 	userId, ok := claims["userid"].(string)
 	if !ok {
-		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
+		return nil, 0, errors.Errorf("userid in claims is not a string:%v", userId)
+	}
+
+	// TODO(Ahsan): Can the claims have uint64 type?
+	namespace, ok := claims["namespace"].(float64)
+	if !ok {
+		return nil, 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
 	}
 
 	groups, ok := claims["groups"].([]interface{})
@@ -204,13 +212,13 @@ func validateToken(jwtStr string) ([]string, error) {
 			groupId, ok := group.(string)
 			if !ok {
 				// This shouldn't happen. So, no need to make the client try to refresh the tokens.
-				return nil, errors.Errorf("unable to convert group to string:%v", group)
+				return nil, 0, errors.Errorf("unable to convert group to string:%v", group)
 			}
 
 			groupIds = append(groupIds, groupId)
 		}
 	}
-	return append([]string{userId}, groupIds...), nil
+	return append([]string{userId}, groupIds...), uint64(namespace), nil
 }
 
 // validateLoginRequest validates that the login request has either the refresh token or the
@@ -236,10 +244,11 @@ func validateLoginRequest(request *api.LoginRequest) error {
 
 // getAccessJwt constructs an access jwt with the given user id, groupIds,
 // and expiration TTL specified by worker.Config.AccessJwtTtl
-func getAccessJwt(userId string, groups []acl.Group) (string, error) {
+func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userid": userId,
-		"groups": acl.GetGroupIDs(groups),
+		"userid":    userId,
+		"groups":    acl.GetGroupIDs(groups),
+		"namespace": namespace,
 		// set the jwt exp according to the ttl
 		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
@@ -529,6 +538,8 @@ func ResetAcl(closer *z.Closer) {
 
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		x.AssertTrue(x.DefaultNamespace == x.ExtractNamespace(ctx))
 		defer cancel()
 		if err := upsertGuardians(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -540,6 +551,8 @@ func ResetAcl(closer *z.Closer) {
 
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		x.AssertTrue(x.DefaultNamespace == x.ExtractNamespace(ctx))
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
@@ -556,7 +569,8 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return validateToken(accessJwt[0])
+	userInfo, _, err := validateToken(accessJwt[0])
+	return userInfo, err
 }
 
 func authorizePreds(userId string, groupIds, preds []string,

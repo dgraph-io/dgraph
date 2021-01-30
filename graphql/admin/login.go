@@ -29,6 +29,7 @@ import (
 type loginInput struct {
 	UserId       string
 	Password     string
+	Namespace    uint64
 	RefreshToken string
 }
 
@@ -67,11 +68,13 @@ func getLoginInput(m schema.Mutation) *loginInput {
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
 	userID, _ := m.ArgValue("userId").(string)
 	password, _ := m.ArgValue("password").(string)
+	namespace, _ := m.ArgValue("namespace").(uint64)
 	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
 	return &loginInput{
 		userID,
 		password,
+		namespace,
 		refreshToken,
 	}
 }

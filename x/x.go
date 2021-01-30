@@ -256,7 +256,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return DefaultNamespace
+		panic("No namespace in context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
@@ -396,6 +396,19 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	ns := strconv.FormatUint(namespace, 10)
+	md.Append("namespace", ns)
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
 }
 
 // AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata

@@ -441,7 +441,7 @@ const adminMutations = `
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
 	If login is not successful an error is returned.
 	"""
-	login(userId: String, password: String, refreshToken: String): LoginPayload
+	login(userId: String, password: String, namespace: Int, refreshToken: String): LoginPayload
 
 	"""
 	Add a user.  When linking to groups: if the group doesn't exist it is created; if the group

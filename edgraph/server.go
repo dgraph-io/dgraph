@@ -166,7 +166,11 @@ func PeriodicallyPostTelemetry() {
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema() (uid, graphQLSchema string, err error) {
-	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+	//TODO(Ahsan): There should be a way to getGQLSchema for all the namespaces and reinsert them
+	// after dropAll. Need to think about what should be the behaviour of drop operations.
+	ctx := context.WithValue(context.Background(), Authorize, false)
+	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
 			query {

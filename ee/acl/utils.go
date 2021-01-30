@@ -74,6 +74,7 @@ type User struct {
 	Password      string  `json:"dgraph.password"`
 	PasswordMatch bool    `json:"password_match"`
 	Groups        []Group `json:"dgraph.user.group"`
+	Namespace     uint64  `json:"namespace"`
 }
 
 // GetUid returns the UID of the user.
