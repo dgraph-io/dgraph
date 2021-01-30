@@ -57,7 +57,7 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 
-	creds := &worker.Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,

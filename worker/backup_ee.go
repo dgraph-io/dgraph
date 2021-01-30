@@ -214,7 +214,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	return bp.CompleteBackup(ctx, &m)
 }
 
-func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) (
 	[]*Manifest, error) {
 
 	manifests, err := ListBackupManifests(location, creds)

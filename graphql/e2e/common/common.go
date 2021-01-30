@@ -137,6 +137,11 @@ type country struct {
 	States []*state `json:"states,omitempty"`
 }
 
+type mission struct {
+	ID          string `json:"id,omitempty"`
+	Designation string `json:"designation,omitempty"`
+}
+
 type author struct {
 	ID            string     `json:"id,omitempty"`
 	Name          string     `json:"name,omitempty"`
@@ -596,7 +601,10 @@ func RunAll(t *testing.T) {
 	t.Run("multiple search indexes", multipleSearchIndexes)
 	t.Run("multiple search indexes wrong field", multipleSearchIndexesWrongField)
 	t.Run("hash search", hashSearch)
-	t.Run("in filter", inFilter)
+	t.Run("in filter", inFilterOnString)
+	t.Run("in filter on Int", inFilterOnInt)
+	t.Run("in filter on Float", inFilterOnFloat)
+	t.Run("in filter on DateTime", inFilterOnDateTime)
 	t.Run("between filter", betweenFilter)
 	t.Run("deep between filter", deepBetweenFilter)
 	t.Run("deep filter", deepFilter)
@@ -627,6 +635,7 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
+	t.Run("entitites Query on extended type", entitiesQuery)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -660,7 +669,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query id directive with float", idDirectiveWithFloat)
-	t.Run("query using single ID in a filter that will be coerced to list", queryFilterSingleIDListCoercion)
+	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -710,6 +719,8 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
+	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
+	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

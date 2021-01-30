@@ -82,7 +82,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 
 func (in ContainerInstance) publicPort(privatePort uint16) string {
 	c := in.GetContainer()
-	if c == nil { return "" }
+	if c == nil {
+		return ""
+	}
 	for _, p := range c.Ports {
 		if p.PrivatePort == privatePort {
 			return strconv.Itoa(int(p.PublicPort))
