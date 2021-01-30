@@ -68,12 +68,12 @@ func (cd *ChangeData) UpdateCDCIndex(idx uint64) {
 	atomic.StoreUint64(&cd.cdcIndex, idx)
 }
 
-func (cd *ChangeData) proposeCDCIndex() {
+func (cd *ChangeData) proposeCDCIndex() error {
 	if cd == nil {
-		return
+		return nil
 	}
 
-	groups().Node.proposeSnapshot()
+	return groups().Node.proposeCDCInfo(cd.getCDCIndex())
 }
 
 // 1. Old cluster start (data already has ) -> // ask kafka gives you 0.
@@ -84,7 +84,7 @@ func (cd *ChangeData) processCDCEvents() {
 		return
 	}
 
-	sendCDCEvents := func() bool {
+	sendCDCEvents := func() {
 		cdcIndex := cd.getCDCIndex() + 1
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
@@ -98,9 +98,10 @@ func (cd *ChangeData) processCDCEvents() {
 
 		// todo - aman bansal if last - cdcindex > say N then ignore
 		if cdcIndex == last {
-			return false
+			return
 		}
 		var prevEntry *raftpb.Entry
+		var lastEntry raftpb.Entry
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			x.Check(err)
@@ -109,7 +110,8 @@ func (cd *ChangeData) processCDCEvents() {
 				break
 			}
 
-			batchFirst = entries[len(entries)-1].Index + 1
+			lastEntry = entries[len(entries)-1]
+			batchFirst = lastEntry.Index + 1
 			for _, entry := range entries {
 				if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 					continue
@@ -141,9 +143,9 @@ func (cd *ChangeData) processCDCEvents() {
 						// if we found the error, return
 						if prevEntry != nil {
 							cd.UpdateCDCIndex(prevEntry.Index)
-							return true
+							return
 						}
-						return false
+						return
 					}
 					prevEntry = &entry
 				}
@@ -151,20 +153,20 @@ func (cd *ChangeData) processCDCEvents() {
 			}
 		}
 
-		return true
+		return
 	}
 
 	for {
 		for range time.NewTicker(time.Second).C {
 			if groups().Node.AmLeader() {
-				if sendCDCEvents() {
-					// todo aman bansal ->
-					// changing this to proposal.CDCEvent diff should be 100 or 1000
-					// final do it every 5 seconds
-					if err := groups().Node.proposeSnapshot(0); err != nil {
-						glog.Errorf("not able to propose snapshot %v", err)
-					}
+				sendCDCEvents()
+				// todo aman bansal ->
+				// changing this to proposal.CDCEvent diff should be 100 or 1000
+				// final do it every 5 seconds
+				if err := cd.proposeCDCIndex(); err != nil {
+					glog.Errorf("not able to propose snapshot %v", err)
 				}
+
 			}
 		}
 	}

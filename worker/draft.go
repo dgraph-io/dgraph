@@ -634,9 +634,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
-		n.cdcTracker.UpdateCDCIndex(snap.Index)
 		return nil
-
+	case proposal.CDCIndex > 0:
+		n.cdcTracker.UpdateCDCIndex(proposal.CDCIndex)
+		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
@@ -915,15 +916,15 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeCDCInfo() error {
+func (n *node) proposeCDCInfo(cdcIndex uint64) error {
 	proposal := &pb.Proposal{
-		Snapshot: snap,
+		CDCIndex: cdcIndex,
 	}
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
 	data = data[:8+sz]
 	x.Check(err)
-	return n.Raft().Propose(n.ctx)
+	return n.Raft().Propose(n.ctx, data)
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
@@ -1572,6 +1573,9 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
 	last := n.Applied.DoneUntil()
+	if last > n.cdcTracker.getCDCIndex() {
+		last = n.cdcTracker.getCDCIndex()
+	}
 	if int(last-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
@@ -1673,9 +1677,9 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// if not done this way, we will lose raft logs and thus leading to loss of cdc events.
 	// TODO : aman bansal this is incorrect
 	// TODO : aman bansal use min(last entry, cdcentry)
-	if snapshotIdx > n.cdcTracker.getCDCIndex() {
-		snapshotIdx = n.cdcTracker.getCDCIndex()
-	}
+	//if snapshotIdx > n.cdcTracker.getCDCIndex() {
+	//	snapshotIdx = n.cdcTracker.getCDCIndex()
+	//}
 
 	result := &pb.Snapshot{
 		Context: n.RaftContext,
