@@ -87,6 +87,15 @@ func ToList(rm *roaring64.Bitmap) *pb.List {
 	}
 }
 
+func MatrixToBitmap(matrix []*pb.List) *roaring64.Bitmap {
+	res := roaring64.New()
+	for _, l := range matrix {
+		r := FromList(l)
+		res.Or(r)
+	}
+	return res
+}
+
 func ToBytes(bm *roaring64.Bitmap) []byte {
 	b, err := bm.ToBytes()
 	x.Check(err)

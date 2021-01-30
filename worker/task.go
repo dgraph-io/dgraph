@@ -1467,18 +1467,37 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	defer stop()
 
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	numGo, width := x.DivideAndRule(len(uids.Uids))
+
+	uids := roaring64.New()
+	var matrix []*roaring64.Bitmap
+	for _, l := range arg.out.UidMatrix {
+		bm := codec.FromList(l)
+		matrix = append(matrix, bm)
+		uids.Or(bm)
+	}
+	numUids := int(uids.GetCardinality())
+
+	numGo, width := x.DivideAndRule(numUids)
 	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
-			len(uids.Uids), numGo, width)
+			uids.GetCardinality(), numGo, width)
 	}
 
-	filtered := make([]*pb.List, numGo)
+	filtered := make([]*roaring64.Bitmap, numGo)
 	filter := func(idx, start, end int) error {
-		filtered[idx] = &pb.List{}
+
+		filtered[idx] = roaring64.New()
 		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
+
+		startUid, err := uids.Select(uint64(start))
+		if err != nil {
+			return err
+		}
+		itr := uids.Iterator()
+		itr.AdvanceIfNeeded(startUid)
+
+		for uidx := start; uidx < end; uidx++ {
+			uid := itr.Next()
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1488,7 +1507,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
-					out.Uids = append(out.Uids, uid)
+					out.Add(uid)
 					return posting.ErrStopIteration
 				}
 				return nil
@@ -1504,8 +1523,8 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
-		if end > len(uids.Uids) {
-			end = len(uids.Uids)
+		if end > numUids {
+			end = numUids
 		}
 		go func(idx, start, end int) {
 			errCh <- filter(idx, start, end)
@@ -1516,15 +1535,19 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			return err
 		}
 	}
-	final := &pb.List{}
+
+	final := roaring64.New()
 	for _, out := range filtered {
-		final.Uids = append(final.Uids, out.Uids...)
+		final.Or(out)
 	}
+
 	if span != nil && numGo > 1 {
-		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+		span.Annotatef(nil, "Total uids after filtering geo: %d", final.GetCardinality())
 	}
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
+	for i := 0; i < len(matrix); i++ {
+		matrix[i].And(final)
+		// TODO: This could be a conversion to Bitmap instead of ToArray.
+		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
 	}
 	return nil
 }
@@ -1538,16 +1561,51 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		defer glog.Infof("Done filterStringFunction")
 	}
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	var values [][]types.Val
-	filteredUids := make([]uint64, 0, len(uids.Uids))
+
+	uids := roaring64.New()
+	var matrix []*roaring64.Bitmap
+	for _, l := range arg.out.UidMatrix {
+		bm := codec.FromList(l)
+		matrix = append(matrix, bm)
+		uids.Or(bm)
+	}
+
 	lang := langForFunc(arg.q.Langs)
+	filter := &stringFilter{
+		funcName: arg.srcFn.fname,
+		funcType: arg.srcFn.fnType,
+		lang:     lang,
+	}
+	switch arg.srcFn.fnType {
+	case hasFn:
+		// Dont do anything, as filtering based on lang is already
+		// done above.
+		filter = nil
+	case fullTextSearchFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "fulltext"
+	case standardFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "term"
+	case customIndexFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = arg.q.SrcFunc.Args[0]
+	case compareAttrFn:
+		// filter.ineqValue = arg.srcFn.ineqValue
+		filter.eqVals = arg.srcFn.eqTokens
+		filter.match = ineqMatch
+	}
 
 	// This iteration must be done in a serial order, because we're also storing the values in a
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	for _, uid := range uids.Uids {
+	itr := uids.Iterator()
+	for itr.HasNext() {
+		uid := itr.Next()
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
 		switch {
 		case err == posting.ErrNoValue:
@@ -1565,47 +1623,15 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 			}
 			strVals = append(strVals, strVal)
 		}
-		if len(strVals) > 0 {
-			values = append(values, strVals)
-			filteredUids = append(filteredUids, uid)
+		if !matchStrings(filter, strVals) {
+			uids.Remove(uid)
 		}
 	}
 
-	filtered := &pb.List{Uids: filteredUids}
-	filter := stringFilter{
-		funcName: arg.srcFn.fname,
-		funcType: arg.srcFn.fnType,
-		lang:     lang,
-	}
-
-	switch arg.srcFn.fnType {
-	case hasFn:
-		// Dont do anything, as filtering based on lang is already
-		// done above.
-	case fullTextSearchFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "fulltext"
-		filtered = matchStrings(filtered, values, &filter)
-	case standardFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "term"
-		filtered = matchStrings(filtered, values, &filter)
-	case customIndexFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = arg.q.SrcFunc.Args[0]
-		filtered = matchStrings(filtered, values, &filter)
-	case compareAttrFn:
-		// filter.ineqValue = arg.srcFn.ineqValue
-		filter.eqVals = arg.srcFn.eqTokens
-		filter.match = ineqMatch
-		filtered = matchStrings(filtered, values, &filter)
-	}
-
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	for i := 0; i < len(matrix); i++ {
+		matrix[i].And(uids)
+		// TODO: This could be a conversion to Bitmap instead of ToArray.
+		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
 	}
 	return nil
 }
