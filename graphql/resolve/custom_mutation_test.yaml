@@ -59,7 +59,8 @@
         },
         {
           "id": "0x3",
-          "name": "Mov2"
+          "name": "Mov2",
+          "director": []
         }
       ]
     }

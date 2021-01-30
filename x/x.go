@@ -212,6 +212,14 @@ type queryRes struct {
 	Errors GqlErrorList `json:"errors"`
 }
 
+// IsGqlErrorList tells whether the given err is a list of GraphQL errors.
+func IsGqlErrorList(err error) bool {
+	if _, ok := err.(GqlErrorList); ok {
+		return true
+	}
+	return false
+}
+
 func (gqlErr *GqlError) Error() string {
 	var buf bytes.Buffer
 	if gqlErr == nil {

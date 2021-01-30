@@ -17,6 +17,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"google.golang.org/grpc"
 
 	"github.com/spf13/cast"
 
@@ -88,6 +93,7 @@ func touchedUidsHeader(t *testing.T) {
 	// confirm that the header value is a non-negative integer
 	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
 	require.NoError(t, err)
+	require.Greater(t, touchedUidsInHeader, uint64(0))
 
 	// confirm that the value in header is same as the value in body
 	var gqlResp GraphQLResponse
@@ -1340,6 +1346,18 @@ func includeAndSkipDirective(t *testing.T) {
 				title
 				tags
 			  }
+			  postsAggregate {
+				__typename @include(if: $includeFalse) @skip(if: $skipFalse)
+				count @include(if: $includeFalse) @skip(if: $skipTrue)
+				titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+				numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
+			  }
+			}
+			aggregatePost {
+			  __typename @include(if: $includeFalse) @skip(if: $skipFalse)
+			  count @include(if: $includeFalse) @skip(if: $skipTrue)
+			  titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+			  numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
 			}
 		  }`,
 		Variables: map[string]interface{}{
@@ -1353,7 +1371,19 @@ func includeAndSkipDirective(t *testing.T) {
 	gqlResponse := getAuthorParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	expected := `{
+	  "queryAuthor": [
+		{
+		  "name": "Ann Other Author",
+		  "postsAggregate": {
+			"titleMin": "Learning GraphQL in Dgraph"
+		  }
+		}
+	  ],
+	  "aggregatePost": {
+		"titleMin": "GraphQL doco"
+	  }
+	}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
@@ -2001,6 +2031,64 @@ func queriesHaveExtensions(t *testing.T) {
 	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 }
 
+func erroredQueriesHaveTouchedUids(t *testing.T) {
+	country1 := addCountry(t, postExecutor)
+	country2 := addCountry(t, postExecutor)
+
+	// delete the first country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", country1.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	// query country's name with some other things, that should give us error for missing name.
+	query := &GraphQLParams{
+		Query: `query ($ids: [ID!]) {
+			queryCountry(filter: {id: $ids}) {
+				id
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"ids": []interface{}{country1.ID, country2.ID}},
+	}
+	gqlResponse := query.ExecuteAsPost(t, GraphqlURL)
+
+	// the data should have first country as null
+	expectedResponse := fmt.Sprintf(`{
+		"queryCountry": [
+			null,
+			{"id": "%s", "name": "Testland"}
+		]
+	}`, country2.ID)
+	testutil.CompareJSON(t, expectedResponse, string(gqlResponse.Data))
+
+	// we should also get error for the missing name field
+	require.Equal(t, x.GqlErrorList{{
+		Message: "Non-nullable field 'name' (type String!) was not present " +
+			"in result from Dgraph.  GraphQL error propagation triggered.",
+		Locations: []x.Location{{Line: 4, Column: 5}},
+		Path:      []interface{}{"queryCountry", float64(0), "name"},
+	}}, gqlResponse.Errors)
+
+	// response should have extensions
+	require.NotNil(t, gqlResponse.Extensions)
+	// it should have touched_uids filled in from Dgraph response's metrics
+	touchedUidskey := "touched_uids"
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+
+	// cleanup
+	deleteCountry(t, map[string]interface{}{"id": []interface{}{country1.ID, country2.ID}}, 2, nil)
+}
+
 func queryWithAlias(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
@@ -2439,7 +2527,7 @@ func queryWithCascade(t *testing.T) {
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
-	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+	deleteState(t, GetXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
@@ -2825,7 +2913,7 @@ func filterInQueriesWithArrayForAndOr(t *testing.T) {
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
 	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
-	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+	deleteState(t, GetXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
@@ -2972,6 +3060,7 @@ func queryAggregateOnEmptyData(t *testing.T) {
 			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
 				count
 				numLikesMax
+				type: __typename
 				titleMin
 			}
 		}`,
@@ -2979,10 +3068,15 @@ func queryAggregateOnEmptyData(t *testing.T) {
 
 	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	testutil.CompareJSON(t,
+	require.JSONEq(t,
 		`{
-					"aggregatePost": null
-				}`,
+			"aggregatePost": {
+				"count": 0,
+				"numLikesMax": null,
+				"type": "PostAggregateResult",
+				"titleMin": null
+			}
+		}`,
 		string(gqlResponse.Data))
 }
 
@@ -3151,6 +3245,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				name
 				ag : statesAggregate {
 					count
+					__typename
 					nameMin
 				}
 			}
@@ -3165,6 +3260,7 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				"name": "India",
 				"ag": { 
 					"count" : 3,
+					"__typename": "StateAggregateResult",
 					"nameMin": "Gujarat"
 				}
 			}]
@@ -3209,8 +3305,10 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 				name
 				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
                 	count
+					__typename
 					nameMin
                 }
+				n: name
 			}
 		}`,
 	}
@@ -3221,7 +3319,12 @@ func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
 		{
 			"queryCountry": [{
 				"name": "India",
-				"ag": null
+				"ag": {
+					"count": 0,
+					"__typename": "StateAggregateResult",
+					"nameMin": null
+				},
+				"n": "India"
 			}]
 		}`,
 		string(gqlResponse.Data))
@@ -3699,7 +3802,6 @@ func idDirectiveWithInt(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `query {
 		  getChapter(chapterId: 1) {
-			bookId
 			chapterId
 			name
 		  }
@@ -3710,7 +3812,6 @@ func idDirectiveWithInt(t *testing.T) {
 	RequireNoGQLErrors(t, response)
 	var expected = `{
 	  	"getChapter": {
-			"bookId": 1234567890,
 			"chapterId": 1,
 			"name": "How Dgraph Works"
 		  }
