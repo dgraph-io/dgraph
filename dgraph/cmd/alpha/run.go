@@ -606,7 +606,8 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+	badger := x.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
@@ -667,7 +668,6 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
-	badger := x.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
