@@ -156,13 +156,15 @@ message ZeroProposal {
 	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
 	Tablet tablet = 3;
-	uint64 maxLeaseId = 4;
+	uint64 maxUID = 4;
 	uint64 maxTxnTs = 5;
+	uint64 maxNsID = 12;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
+	// 12 has already been used.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -172,12 +174,14 @@ message MembershipState {
 	uint64 counter = 1;  // used to find latest membershipState in case of race.
 	map<uint32, Group> groups = 2;
 	map<uint64, Member> zeros = 3;
-	uint64 maxLeaseId = 4;
+	uint64 maxUID = 4;
 	uint64 maxTxnTs = 5;
+	uint64 maxNsID = 10;
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 	License license = 9;
+	// 10 has already been used.
 }
 
 message ConnectionState {
@@ -536,7 +540,7 @@ service Zero {
 
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
-	rpc AssignUids (Num)               returns (AssignedIds) {}
+	rpc AssignIds (Num)               returns (AssignedIds) {}
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
@@ -570,6 +574,12 @@ message Num {
 	uint64 val = 1;
 	bool read_only = 2;
 	bool forwarded = 3; // True if this request was forwarded by a peer.
+	enum leaseType {
+		NS_ID = 0;
+		UID = 1;
+		TXN_TS = 2;
+	}
+	leaseType type = 4;
 }
 
 message AssignedIds {

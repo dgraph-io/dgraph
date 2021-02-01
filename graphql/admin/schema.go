@@ -57,7 +57,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 
 	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
 	// is returned from badger.
-	schHandler, err := schema.NewHandler(input.Set.Schema, true)
+	schHandler, err := schema.NewHandler(input.Set.Schema, true, false)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

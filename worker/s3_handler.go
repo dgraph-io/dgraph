@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go/v6"
@@ -43,7 +44,7 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 		SecretAccessKey: req.SecretKey,
 		SessionToken:    req.SessionToken,
 	}
-	provider := credentialsProvider(uri.Scheme, defaultCreds)
+	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
 
 	creds, _ := provider.Retrieve() // Error is always nil.
 
@@ -60,25 +61,25 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
-	creds                    *Credentials
+	creds                    *x.MinioCredentials
 	uri                      *url.URL
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
-func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
-	mc, err := newMinioClient(uri, h.creds)
+func (h *s3Handler) setup(uri *url.URL) (*x.MinioClient, error) {
+	mc, err := x.NewMinioClient(uri, h.creds)
 	if err != nil {
 		return nil, err
 	}
 
-	h.bucketName, h.objectPrefix, err = validateBucket(mc, uri)
+	h.bucketName, h.objectPrefix, err = mc.ValidateBucket(uri)
 
 	return mc, err
 }
 
-func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.Client,
+func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *x.MinioClient,
 	objectName string) {
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
@@ -157,7 +158,7 @@ func (h *s3Handler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
 
 // readManifest reads a manifest file at path using the handler.
 // Returns nil on success, otherwise an error.
-func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) error {
+func (h *s3Handler) readManifest(mc *x.MinioClient, object string, m *Manifest) error {
 	reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 	if err != nil {
 		return err
@@ -310,7 +311,7 @@ func (h *s3Handler) ReadManifest(path string, m *Manifest) error {
 }
 
 // upload will block until it's done or an error occurs.
-func (h *s3Handler) upload(mc *minio.Client, object string) error {
+func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 	start := time.Now()
 
 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would

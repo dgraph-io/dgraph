@@ -174,6 +174,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 	}
 
 	num.Val = uint64(len(newUids))
+	num.Type = pb.Num_UID
 	if int(num.Val) > 0 {
 		var res *pb.AssignedIds
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single

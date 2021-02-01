@@ -362,7 +362,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		return errors.Errorf("Nil schema")
 	}
 
-	if len(s.Predicate) == 0 {
+	if s.Predicate == "" {
 		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
@@ -506,7 +506,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.AssignUids(ctx, num)
+	num.Type = pb.Num_UID
+	return c.AssignIds(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
@@ -687,7 +688,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates already present in the schema.
 	var fields []string
 	for _, t := range m.Types {
-		if len(t.TypeName) == 0 {
+		if t.TypeName == "" {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
@@ -744,11 +745,11 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 // typeSanityCheck performs basic sanity checks on the given type update.
 func typeSanityCheck(t *pb.TypeUpdate) error {
 	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
+		if field.Predicate == "" {
 			return errors.Errorf("Field in type definition must have a name")
 		}
 
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+		if field.ValueType == pb.Posting_OBJECT && field.ObjectTypeName == "" {
 			return errors.Errorf(
 				"Field with value type OBJECT must specify the name of the object type")
 		}
@@ -770,6 +771,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
 	defer span.End()
 
+	clientDiscard := false
+	if tc.Aborted {
+		// The client called Discard
+		ostats.Record(ctx, x.TxnDiscards.M(1))
+		clientDiscard = true
+	}
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return 0, conn.ErrNoConnection
@@ -787,9 +795,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
-		ostats.Record(context.Background(), x.TxnAborts.M(1))
+		if !clientDiscard {
+			// The server aborted the txn (not the client)
+			ostats.Record(ctx, x.TxnAborts.M(1))
+		}
 		return 0, dgo.ErrAborted
 	}
+	ostats.Record(ctx, x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 

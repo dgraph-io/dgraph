@@ -83,7 +83,7 @@ type Starship {
         length: Float
 }`
 
-	schHandler, errs := NewHandler(schemaStr, false)
+	schHandler, errs := NewHandler(schemaStr, false, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			length: Float
 	}`
 
-	schHandler, errs := NewHandler(schemaStr, false)
+	schHandler, errs := NewHandler(schemaStr, false, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -921,7 +921,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			schHandler, errs := NewHandler(tcase.GQLSchema, false)
+			schHandler, errs := NewHandler(tcase.GQLSchema, false, false)
 			require.NoError(t, errs)
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -961,7 +961,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
-			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false, false)
 			require.NoError(t, errs)
 			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
 			require.NoError(t, err)
@@ -1021,7 +1021,7 @@ func TestAllowedHeadersList(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			schHandler, errs := NewHandler(test.schemaStr, false)
+			schHandler, errs := NewHandler(test.schemaStr, false, false)
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -1104,7 +1104,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewHandler(test.schemaStr, false)
+			_, err := NewHandler(test.schemaStr, false, false)
 			require.EqualError(t, err, test.err.Error())
 		})
 	}

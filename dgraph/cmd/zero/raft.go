@@ -27,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -39,7 +38,12 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
+
+var raftDefault = "idx=1; learner=false"
 
 type node struct {
 	*conn.Node
@@ -401,6 +405,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
+			}
+		}
 	}
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {
@@ -409,15 +418,18 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 	}
 
 	switch {
-	case p.MaxLeaseId > state.MaxLeaseId:
-		state.MaxLeaseId = p.MaxLeaseId
+	case p.MaxUID > state.MaxUID:
+		state.MaxUID = p.MaxUID
 	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	case p.MaxLeaseId != 0 || p.MaxTxnTs != 0:
+	case p.MaxNsID > state.MaxNsID:
+		state.MaxNsID = p.MaxNsID
+	case p.MaxUID != 0 || p.MaxTxnTs != 0 || p.MaxNsID != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
-		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
-			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
+		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID=%d\n",
+			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
@@ -807,6 +819,12 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -859,6 +877,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()

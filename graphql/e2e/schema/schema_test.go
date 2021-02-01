@@ -595,6 +595,62 @@ func TestIntrospection(t *testing.T) {
 	// introspection response or the JSON comparison. Needs deeper looking.
 }
 
+func TestApolloServiceResolver(t *testing.T) {
+	schema := `
+	type Mission {
+		id: ID!
+		crew: [Astronaut]
+		designation: String!
+		startDate: String
+		endDate: String
+	}
+	
+	type Astronaut @key(fields: "id") @extends {
+		id: ID! @external
+		missions: [Mission]
+	}
+	
+	type User @remote {
+		id: ID!
+		name: String!
+	}
+	
+	type Car @auth(
+		password: { rule: "{$ROLE: { eq: \"Admin\" } }"}
+	){
+		id: ID!
+		name: String!
+	}
+	
+	type Query {
+		getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+			url: "http://my-api.com",
+			method: "GET"
+		})
+	}
+	`
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
+	serviceQueryParams := &common.GraphQLParams{Query: `
+	query {
+		_service {
+			s: sdl
+		}
+	}`}
+	resp := serviceQueryParams.ExecuteAsPost(t, groupOneGraphQLServer)
+	common.RequireNoGQLErrors(t, resp)
+	var gqlRes struct {
+		Service struct {
+			S string
+		} `json:"_service"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &gqlRes))
+
+	sdl, err := ioutil.ReadFile("apollo_service_response.graphql")
+	require.NoError(t, err)
+
+	require.Equal(t, string(sdl), gqlRes.Service.S)
+}
+
 func TestDeleteSchemaAndExport(t *testing.T) {
 	// first apply a schema
 	schema := `
