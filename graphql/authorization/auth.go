@@ -278,30 +278,19 @@ type CustomClaims struct {
 	jwt.StandardClaims
 }
 
-// UnmarshalJSON Unmarshalls the custom claims. It first Unmarshalls standard claims and auth variables for
-// the provided namespace separately. It then creates an unified map for `AuthVariables` in which standard claims
-// are also present. But if there is a variable with same name in auth variables and standard claims then the
-// value extracted from auth variables take precedence.
+// UnmarshalJSON unmarshalls the claims present in the JWT.
+// It also adds standard claims to the `AuthVariables`. If
+// there is an auth variable with name same as one of auth
+// variable then the auth variable supersedes the standard claim.
 func (c *CustomClaims) UnmarshalJSON(data []byte) error {
-	// Unmarshal all the metadata first.
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
+	// Unmarshal the standard claims first
+	if err := json.Unmarshal(data, &c.StandardClaims); err != nil {
 		return err
 	}
 
-	// store the standard claims in the allClaimsMap.
-	allClaimsMap := make(map[string]interface{})
-	for k, v := range result {
-		switch v.(type) {
-		case map[string]interface{}:
-			// Ignore if is a custom claims map.
-			// "https://dgraph.io/jwt/claims" {
-			//		...
-			// }
-			continue
-		case interface{}:
-			allClaimsMap[k] = v
-		}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
 	}
 
 	// Unmarshal the auth variables for a particular namespace.
@@ -315,14 +304,17 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// add auth variables into the allClaimsMap so that it overrides
-	// the value of the existing variable with the same name.
+	// `result` contains all the cliams, delete the claim of the namespace mentioned
+	// in the Authorization Header.
+	delete(result, authMeta.namespace())
+	// add AuthVariables into the `result` map, Now it contains all the AuthVariables
+	// and other claims present in the token.
 	for k, v := range c.AuthVariables {
-		allClaimsMap[k] = v
+		result[k] = v
 	}
 
-	// update `AuthVariables` map to the newly calculated allClaimsMap
-	c.AuthVariables = allClaimsMap
+	// update `AuthVariables` with `result` map
+	c.AuthVariables = result
 	return nil
 }
 
