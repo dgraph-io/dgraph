@@ -373,9 +373,22 @@ func TestJWTExpiry(t *testing.T) {
 
 			authVar := customClaims.AuthVariables
 			result := map[string]interface{}{
-				"ROLE": "ADMIN",
-				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
+				"sub":              "50950b40-262f-4b26-88a7-cbbb780b2176",
+				"ROLE":             "ADMIN",
+				"email_verified":   true,
+				"iss":              "https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_GfmeHdFz4",
+				"USER":             "50950b40-262f-4b26-88a7-cbbb780b2176",
+				"cognito:username": "50950b40-262f-4b26-88a7-cbbb780b2176",
+				"cognito:groups":   []interface{}{"ADMIN"},
+				"event_id":         "31c9d684-1d45-46f7-8c2b-cc27b1f6f01b",
+				"token_use":        "id",
+				"name":             "David Peek",
+				"email":            "david@typejoin.com",
 			}
+			delete(authVar, "exp")
+			delete(authVar, "iat")
+			delete(authVar, "auth_time")
+			delete(authVar, "aud")
 			require.Equal(t, authVar, result)
 		})
 	}
