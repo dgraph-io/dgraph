@@ -54,19 +54,19 @@ const (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: "Person",
+	TypeName: x.NamespaceAttr(x.DefaultNamespace, "Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: "name",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
 		},
 		{
-			Predicate: "friend",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend"),
 		},
 		{
-			Predicate: "~friend",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "~friend"),
 		},
 		{
-			Predicate: "friend_not_served",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend_not_served"),
 		},
 	},
 }
@@ -197,14 +197,12 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
 
-	fmt.Println(buf.String(), buf.Bytes())
-
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+	require.Equal(t, x.NamespaceAttr(x.DefaultNamespace, "http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
@@ -330,10 +328,6 @@ func TestExportRdf(t *testing.T) {
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	// TODO(Naman): Should we create a separate directory for each namespace in export? This will
-	// help avoid changes in lexer.
-	// schemaStr := fmt.Sprintf("%s: string @index(exact) .\n",
-	// 	x.NamespaceAttr(x.DefaultNamespace, "name"))
 	schemaStr := `name: string @index(exact) .`
 	initTestExport(t, schemaStr)
 

@@ -35,6 +35,7 @@ const (
 	itemLeftSquare
 	itemRightSquare
 	itemExclamationMark
+	itemNumber // number
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -81,6 +82,9 @@ Loop:
 		case r == '_':
 			// Predicates can start with _.
 			return lexWord
+		case isNumber(r):
+			l.Backup()
+			return lexNumber
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
@@ -101,6 +105,20 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		l.Emit(itemText)
+		break
+	}
+	return lexText
+}
+
+func lexNumber(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNumber(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemNumber)
 		break
 	}
 	return lexText
@@ -131,6 +149,16 @@ func isNameBegin(r rune) bool {
 	case r >= 'a' && r <= 'z':
 		return true
 	case r >= 'A' && r <= 'Z':
+		return true
+	default:
+		return false
+	}
+}
+
+// isNumberBegin returns true if the rune is an number.
+func isNumber(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
 		return true
 	default:
 		return false

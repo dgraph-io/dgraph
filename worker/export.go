@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -286,7 +287,12 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 
 func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
+	ns, attr := x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
+	x.Check2(buf.WriteRune('['))
+	x.Check2(buf.WriteString(strconv.Itoa(int(ns))))
+	x.Check2(buf.WriteRune(']'))
+	x.Check2(buf.WriteRune(' '))
 	x.Check2(buf.WriteRune('<'))
 	x.Check2(buf.WriteString(attr))
 	x.Check2(buf.WriteRune('>'))
@@ -325,7 +331,8 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
+	ns, attr := x.ParseNamespaceAttr(attr)
+	x.Check2(buf.WriteString(fmt.Sprintf("[%d] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -341,15 +348,17 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
+	predicate := x.ParseAttr(update.Predicate)
 	x.Check2(builder.WriteString("\t"))
-	// While exporting type definitions, "<" and ">" brackets must be written around
-	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
-	if strings.HasPrefix(update.Predicate, "~") {
+	// We don't need the namespace information with the fields. We already have that with type.
+	if strings.HasPrefix(predicate, "~") {
+		// While exporting type definitions, "<" and ">" brackets must be written around
+		// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
 		x.Check2(builder.WriteString("<"))
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(predicate))
 		x.Check2(builder.WriteString(">"))
 	} else {
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(predicate))
 	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
