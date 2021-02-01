@@ -265,6 +265,7 @@ type SubGraph struct {
 
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
+	// TODO: Would make sense to move these to a map.
 	facetsMatrix []*pb.FacetsList
 	ExpandPreds  []*pb.ValueList
 	GroupbyRes   []*groupResults // one result for each uid list.

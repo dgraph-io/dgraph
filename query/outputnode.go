@@ -1206,6 +1206,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
+		// TODO: If we move GroupbyRes to a map, then this won't be needed.
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
