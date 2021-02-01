@@ -62,6 +62,7 @@ func InitServerState() {
 	x.WorkerConfig.ProposedGroupId = groupId
 }
 
+// NOTE: this might be a good spot to hook into badger
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).
 		WithLogger(&x.ToGlog{}).

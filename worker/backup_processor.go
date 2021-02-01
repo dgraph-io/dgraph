@@ -37,8 +37,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// BackupDefaults are the default options for the Backup superflag in x.WorkerOptions.
-var BackupDefaults = "goroutines=16"
+const (
+	BadgerDefaults = "goroutines=8; compression=snappy"
+)
 
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
@@ -63,7 +64,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, x.WorkerConfig.Backup.GetUint64("goroutines")),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
 	}
 	for i := range bp.threads {
 		bp.threads[i] = &threadLocal{
@@ -110,7 +111,6 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
-	glog.Infof("Backup goroutines: %d", x.WorkerConfig.Backup.GetUint64("goroutines"))
 
 	predMap := make(map[string]struct{})
 	for _, pred := range pr.Request.Predicates {
@@ -127,7 +127,6 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	stream.NumGo = int(x.WorkerConfig.Backup.GetUint64("goroutines"))
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]

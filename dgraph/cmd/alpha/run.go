@@ -108,11 +108,12 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
-	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
+	flag.String("badger", worker.BadgerDefaults,
+		`Various badger options:
+	goroutines=N provides the number of goroutines to use in badger.Stream.
+	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression 
+		level (if applicable) for the postings directory. "none" would disable compression, while 
+		"zstd:1" would set zstd compression at level 1.`)
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -132,17 +133,13 @@ they form a Raft group and provide synchronous replication.
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
 	flag.String("raft", worker.RaftDefaults,
-		`Various raft options.
+		`Various raft options:
 	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
 	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
 	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would
 		not participate in Raft elections. This can be used to achieve a read-only replica.
 	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
 		The lower this number, the more frequent snapshot creation would be.
-	`)
-	flag.String("backup", worker.BackupDefaults,
-		`Backup options:
-	goroutines=N number of goroutines to use during backups.	
 	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
@@ -670,14 +667,14 @@ func run() {
 	x.Check(err)
 
 	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
-	backup := x.NewSuperFlag(Alpha.Conf.GetString("backup")).MergeAndCheckDefault(worker.BackupDefaults)
+	badger := x.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                 raft,
-		Backup:               backup,
+		Badger:               badger,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
