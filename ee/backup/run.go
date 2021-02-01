@@ -113,6 +113,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
+
 	flag.StringVar(&opt.compression, "badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
 			"level (if applicable) for the postings directory. none would disable compression,"+
