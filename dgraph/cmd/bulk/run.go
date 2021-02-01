@@ -115,14 +115,15 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
-	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "70,30",
-		"Cache percentages summing up to 100 for various caches"+
-			" (FORMAT: BlockCacheSize, IndexCacheSize).")
+	flag.String("badger", worker.BadgerDefaults,
+		`Various badger options.
+	goroutines=N provides the number of goroutines to use in badger.Stream.
+	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression
+		level (if applicable) for the postings directory. "none" would disable compression, while
+		"zstd:1" would set zstd compression at level 1.
+	cache_mb=N total size of cache (in MB) per shard in the reducer.
+	cache_percentage=N cache percentages summing up to 100 for various caches.
+		(FORMAT: BlockCacheSize, IndexCacheSize)`)
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)

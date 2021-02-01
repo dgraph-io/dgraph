@@ -109,7 +109,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
 	flag.String("badger", worker.BadgerDefaults,
-		`Various badger options:
+		`Various badger options.
 	goroutines=N provides the number of goroutines to use in badger.Stream.
 	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression 
 		level (if applicable) for the postings directory. "none" would disable compression, while 
@@ -133,7 +133,7 @@ they form a Raft group and provide synchronous replication.
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
 	flag.String("raft", worker.RaftDefaults,
-		`Various raft options:
+		`Various raft options.
 	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
 	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
 	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would

@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	BadgerDefaults = "goroutines=8; compression=snappy"
+	BadgerDefaults = "goroutines=8; compression=snappy; cache_mb=64; cache_percentage=70,30;"
 )
 
 // BackupProcessor handles the different stages of the backup process.
