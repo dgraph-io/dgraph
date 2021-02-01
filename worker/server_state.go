@@ -110,6 +110,7 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
+			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize)
 		opt = setBadgerOptions(opt)
