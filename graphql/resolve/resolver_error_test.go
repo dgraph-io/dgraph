@@ -42,9 +42,16 @@ import (
 // to see what the test is actually doing.
 
 type executor struct {
-	resp     string
-	assigned map[string]string
-	result   map[string]interface{}
+	// isNew is set to true if the executor is used to mock new mutation rewriter.
+	// In that case, existenceQueriesResp stores JSON response of the existence queries
+	// and is returned for every third Execute call.
+	// counter is used to count how many times Execute function has been called.
+	isNew                bool
+	existenceQueriesResp string
+	counter              int
+	resp                 string
+	assigned             map[string]string
+	result               map[string]interface{}
 
 	queryTouched    uint64
 	mutationTouched uint64
@@ -83,6 +90,14 @@ type Post {
 }`
 
 func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	// In case ex.isNew is set to true, the new mutation rewriter is used. In this case, every call to Execute
+	// query is an existence query and existenceQueriesResp is returned.
+	ex.counter++
+	if ex.isNew && ex.counter%3 == 1 {
+		return &dgoapi.Response{
+			Json: []byte(ex.existenceQueriesResp),
+		}, nil
+	}
 	if len(req.Mutations) == 0 {
 		ex.failQuery--
 		if ex.failQuery == 0 {
@@ -153,7 +168,6 @@ func TestGraphQLErrorPropagation(t *testing.T) {
 // query tests.  So just test enough to demonstrate that we'll catch it if we were
 // to delete the call to completeDgraphResult before adding to the response.
 func TestAddMutationUsesErrorPropagation(t *testing.T) {
-	t.Skip()
 	mutation := `mutation {
 		addPost(input: [{title: "A Post", text: "Some text", author: {id: "0x1"}}]) {
 			post {
@@ -216,9 +230,11 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
 				&executor{
-					resp:     tcase.queryResponse,
-					assigned: tcase.mutResponse,
-					result:   tcase.mutQryResp,
+					isNew:                true,
+					existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+					resp:                 tcase.queryResponse,
+					assigned:             tcase.mutResponse,
+					result:               tcase.mutQryResp,
 				})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
@@ -311,7 +327,6 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 // So this mocks a failing mutation and tests that we behave correctly in the case
 // of multiple mutations.
 func TestManyMutationsWithError(t *testing.T) {
-	t.Skip()
 	// add1 - should succeed
 	// add2 - should fail
 	// add3 - is never executed
@@ -388,9 +403,11 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
-					resp:         tcase.queryResponse,
-					assigned:     tcase.mutResponse,
-					failMutation: 2})
+					isNew:                true,
+					existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+					resp:                 tcase.queryResponse,
+					assigned:             tcase.mutResponse,
+					failMutation:         2})
 
 			if diff := cmp.Diff(tcase.errors, resp.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)

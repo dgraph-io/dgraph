@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -61,8 +60,10 @@ type AuthQueryRewritingCase struct {
 	Length string
 
 	// UIDS and json from the Dgraph result
-	Uids string
-	Json string
+	Uids        string
+	Json        string
+	QueryJSON   string
+	DeleteQuery string
 
 	// Post-mutation auth query and result Dgraph returns from that query
 	AuthQuery string
@@ -76,12 +77,15 @@ type AuthQueryRewritingCase struct {
 }
 
 type authExecutor struct {
-	t      *testing.T
-	state  int
-	length int
+	t     *testing.T
+	state int
+
+	// existence query and its result in JSON
+	existenceQuery  string
+	queryResultJSON string
 
 	// initial mutation
-	upsertQuery []string
+	deleteQuery string
 	json        string
 	uids        string
 
@@ -94,32 +98,39 @@ type authExecutor struct {
 
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
 	ex.state++
+	// Existence Query is not executed if it is empty. Increment the state value.
+	if ex.existenceQuery == "" && ex.state == 1 {
+		ex.state++
+	}
 	switch ex.state {
 	case 1:
-		// initial mutation
-		ex.length -= 1
+		// existence query.
+		require.Equal(ex.t, ex.existenceQuery, req.Query)
 
-		// check that the upsert has built in auth, if required
-		require.Equal(ex.t, ex.upsertQuery[ex.length], req.Query)
+		// Return mocked result of existence query.
+		return &dgoapi.Response{
+			Json: []byte(ex.queryResultJSON),
+		}, nil
 
+	case 2:
+		// mutation to create new nodes
 		var assigned map[string]string
 		if ex.uids != "" {
 			err := json.Unmarshal([]byte(ex.uids), &assigned)
 			require.NoError(ex.t, err)
 		}
 
+		// Check delete query.
+		require.Equal(ex.t, ex.deleteQuery, req.Query)
+
 		if len(assigned) == 0 {
-			// skip state 2, there's no new nodes to apply auth to
+			// skip state 3, there's no new nodes to apply auth to
 			ex.state++
 		}
 
-		// For rules that don't require auth, it should directly go to step 3.
+		// For rules that don't require auth, it should directly go to step 4.
 		if ex.skipAuth {
 			ex.state++
-		}
-
-		if ex.length != 0 {
-			ex.state = 0
 		}
 
 		return &dgoapi.Response{
@@ -128,7 +139,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
 		}, nil
 
-	case 2:
+	case 3:
 		// auth
 
 		// check that we got the expected auth query
@@ -140,7 +151,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
 		}, nil
 
-	case 3:
+	case 4:
 		// final result
 
 		return &dgoapi.Response{
@@ -646,7 +657,6 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 // as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
-	t.Skip()
 	var tests []AuthQueryRewritingCase
 	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
@@ -668,6 +678,7 @@ func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte
 // as in update_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
+	t.Skip()
 	var tests []AuthQueryRewritingCase
 	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
@@ -713,26 +724,16 @@ func checkAddUpdateCase(
 		require.NoError(t, err)
 	}
 
-	length := 1
-	upsertQuery := []string{tcase.DGQuery}
-
-	if tcase.Length != "" {
-		length, _ = strconv.Atoi(tcase.Length)
-	}
-
-	if length == 2 {
-		upsertQuery = []string{tcase.DGQuerySec, tcase.DGQuery}
-	}
-
 	ex := &authExecutor{
-		t:           t,
-		upsertQuery: upsertQuery,
-		json:        tcase.Json,
-		uids:        tcase.Uids,
-		authQuery:   tcase.AuthQuery,
-		authJson:    tcase.AuthJson,
-		skipAuth:    tcase.SkipAuth,
-		length:      length,
+		t:               t,
+		json:            tcase.Json,
+		queryResultJSON: tcase.QueryJSON,
+		deleteQuery:     tcase.DeleteQuery,
+		uids:            tcase.Uids,
+		existenceQuery:  tcase.DGQuery,
+		authQuery:       tcase.AuthQuery,
+		authJson:        tcase.AuthJson,
+		skipAuth:        tcase.SkipAuth,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
 
@@ -777,12 +778,10 @@ func TestAuthQueryRewriting(t *testing.T) {
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
-
 		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
 			mutationAdd(t, strSchema, metaInfo, b)
 		})
-
 		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
 			mutationUpdate(t, strSchema, metaInfo, b)

@@ -1761,6 +1761,11 @@ func newRewriteObject(
 		copyTypeMap(childFragment.newNodes, parentFragment.newNodes)
 		frag.queries = append(parentFragment.queries, childFragment.queries...)
 		frag.deletes = append(parentFragment.deletes, childFragment.deletes...)
+		frag.check = func(lcheck, rcheck resultChecker) resultChecker {
+			return func(m map[string]interface{}) error {
+				return schema.AppendGQLErrs(lcheck(m), rcheck(m))
+			}
+		}(parentFragment.check, childFragment.check)
 	}
 
 	// Iterate on fields and call the same function recursively.

@@ -351,7 +351,6 @@ func TestQueryAlias(t *testing.T) {
 }
 
 func TestMutationAlias(t *testing.T) {
-	t.Skip()
 	tests := map[string]struct {
 		gqlQuery      string
 		mutResponse   map[string]string
@@ -408,9 +407,11 @@ func TestMutationAlias(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, tcase.gqlQuery, nil,
 				&executor{
-					resp:     tcase.queryResponse,
-					assigned: tcase.mutResponse,
-					result:   tcase.mutQryResp,
+					isNew:                true,
+					existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+					resp:                 tcase.queryResponse,
+					assigned:             tcase.mutResponse,
+					result:               tcase.mutQryResp,
 				})
 
 			require.Nil(t, resp.Errors)
