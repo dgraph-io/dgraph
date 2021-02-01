@@ -55,11 +55,15 @@ const (
 	DefaultNamespace = uint64(0)
 )
 
-// NamespaceAttr is used to generate attr from namespace.
-func NamespaceAttr(ns uint64, attr string) string {
+func NamespaceToBytes(ns uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, ns)
-	return string(buf) + attr
+	return buf
+}
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(ns uint64, attr string) string {
+	return string(NamespaceToBytes(ns)) + attr
 }
 
 func NamespaceAttrList(ns uint64, preds []string) []string {
@@ -246,6 +250,36 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	rest = rest[1:]
 	binary.BigEndian.PutUint32(rest, count)
 	return buf
+}
+
+func DefaultSchemaKey(attr string) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return SchemaKey(attr)
+}
+
+func DefaultTypeKey(attr string) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return TypeKey(attr)
+}
+
+func DefaultDataKey(attr string, uid uint64) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return DataKey(attr, uid)
+}
+
+func DefaultReverseKey(attr string, uid uint64) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return ReverseKey(attr, uid)
+}
+
+func DefaultIndexKey(attr, term string) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return IndexKey(attr, term)
+}
+
+func DefaultCountKey(attr string, count uint32, reverse bool) []byte {
+	attr = NamespaceAttr(DefaultNamespace, attr)
+	return CountKey(attr, count, reverse)
 }
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.

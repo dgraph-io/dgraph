@@ -366,16 +366,20 @@ func TestMain(m *testing.M) {
 	gr = new(groupi)
 	gr.gid = 1
 	gr.tablets = make(map[string]*pb.Tablet)
-	gr.tablets["name"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["name2"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["age"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["friend"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
-	gr.tablets[""] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
+	addTablet := func(attr string, gid uint32) {
+		gr.tablets[x.NamespaceAttr(x.DefaultNamespace, attr)] = &pb.Tablet{GroupId: gid}
+	}
+
+	addTablet("name", 1)
+	addTablet("name2", 1)
+	addTablet("age", 1)
+	addTablet("friend", 1)
+	addTablet("http://www.w3.org/2000/01/rdf-schema#range", 1)
+	addTablet("friend_not_served", 2)
+	addTablet("", 1)
+	addTablet("dgraph.type", 1)
+	addTablet("dgraph.graphql.xid", 1)
+	addTablet("dgraph.graphql.schema", 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

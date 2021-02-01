@@ -242,7 +242,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 		// Use label for storing namespace.
-		fmt.Fprintf(bp, " "+uidFmtStrRdf+" ", e.namespace)
+		fmt.Fprintf(bp, " "+uidFmtStrRdf, e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
@@ -582,6 +582,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	stream := db.NewStreamAt(in.ReadTs)
+	if in.Namespace != math.MaxUint64 {
+		// Export a specific namespace.
+		stream.Prefix = x.NamespaceToBytes(in.Namespace)
+	}
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		// Skip exporting delete data including Schema and Types.
@@ -599,14 +603,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		// from the main key.
 		if pk.HasStartUid {
 			return false
-		}
-
-		// Skip the keys which don't belong to the required namespace.
-		if in.Namespace != math.MaxUint64 {
-			ns, _ := x.ParseNamespaceAttr(pk.Attr)
-			if ns != in.Namespace {
-				return false
-			}
 		}
 
 		if !pk.IsType() && !skipZero {
