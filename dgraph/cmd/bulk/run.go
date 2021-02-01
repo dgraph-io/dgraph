@@ -129,7 +129,7 @@ func init() {
 }
 
 func run() {
-	ctype, clevel := x.ParseCompression(x.WorkerConfig.Badger.GetString("compression"))
+	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
