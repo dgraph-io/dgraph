@@ -187,7 +187,7 @@ func TestStringCustomClaim(t *testing.T) {
 		"event_id":         "31c9d684-1d45-46f7-8c2b-cc27b1f6f01b",
 		"token_use":        "id",
 		"name":             "David Peek",
-		"email":            "abcd@xyz.com",
+		"email":            "david@typejoin.com",
 	}
 	delete(authVar, "exp")
 	delete(authVar, "iat")
