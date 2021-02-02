@@ -843,6 +843,23 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 
 	for _, key := range definitions {
+		defn := sch.Types[key]
+		if key == "Query" && defn.Directives.ForName(subscriptionDirective) != nil {
+			for _, q := range defn.Fields {
+				if !(q.Name == "__schema" || q.Name == "__schema") {
+					custom := q.Directives.ForName(customDirective)
+					if custom != nil {
+						if custom.Arguments.ForName("dql") != nil {
+							sch.Subscription.Fields = append(sch.Subscription.Fields, q)
+						}
+					}
+
+				}
+			}
+		}
+	}
+
+	for _, key := range definitions {
 		if isQueryOrMutation(key) {
 			continue
 		}

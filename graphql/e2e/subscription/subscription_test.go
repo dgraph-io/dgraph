@@ -72,6 +72,52 @@ const (
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `
+	schCustomDQL = `type Tweets {
+	id: ID!
+	text: String! @search(by: [fulltext])
+	author: User
+	timestamp: DateTime @search
+}
+type User {
+	screen_name: String! @id
+	followers: Int @search
+	tweets: [Tweets] @hasInverse(field: author)
+}
+type UserTweetCount @remote {
+	screen_name: String
+	tweetCount: Int
+}
+
+type Query @withSubscription{
+  queryTweetsSortedByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+	query q($search: string) {
+		var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+			Tweets.author {
+				followers as User.followers
+			}
+			authorFollowerCount as sum(val(followers))
+		}
+		queryTweetsSortedByAuthorFollowers(func: uid(authorFollowerCount), orderdesc: val(authorFollowerCount)) {
+			id: uid
+			text: Tweets.text
+			author: Tweets.author {
+			    screen_name: User.screen_name
+			    followers: User.followers
+			}
+			timestamp: Tweets.timestamp
+		}
+	}
+	""")
+
+  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+	query {
+		queryUserTweetCounts(func: type(User)) {
+			screen_name: User.screen_name
+			tweetCount: count(User.tweets)
+		}
+	}
+	""")
+}`
 	subExp       = 3 * time.Second
 	pollInterval = time.Second
 )
@@ -959,6 +1005,92 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	require.Nil(t, res)
 	// Terminate Subscription
 	subscriptionClient1.Terminate()
+}
+
+func TestSubscriptionWithCustomDQL(t *testing.T) {
+	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	var subscriptionResp common.GraphQLResponse
+
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schCustomDQL)
+
+	add := &common.GraphQLParams{
+		Query: `mutation  {
+				addTweets(input: [
+					{text: "Graphql is best",author:{screen_name:"001"}},
+				]) {
+				    numUids
+				    tweets {
+				    	text
+					}
+				}
+			}`,
+	}
+	addResult := add.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, addResult)
+	time.Sleep(pollInterval)
+
+	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription {
+					queryUserTweetCounts{
+						screen_name
+						tweetCount
+					}
+				}`,
+	}, `{}`)
+	require.Nil(t, err)
+	res, err := subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	touchedUidskey := "touched_uids"
+	err = json.Unmarshal(res, &subscriptionResp)
+	require.NoError(t, err)
+	common.RequireNoGQLErrors(t, &subscriptionResp)
+
+	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
+	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
+
+	// add new tweets to get the latest update.
+	add = &common.GraphQLParams{
+		Query: `mutation  {
+				addTweets(input: [
+					{text: "Dgraph is best",author:{screen_name:"002"}}
+                    {text: "Badger is best",author:{screen_name:"001"}},
+				]) {
+				    numUids
+				    tweets {
+				    	text
+					}
+				}
+			}`,
+	}
+	addResult = add.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, addResult)
+	time.Sleep(pollInterval)
+
+	res, err = subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
+	// from the previous unmarshal
+	subscriptionResp = common.GraphQLResponse{}
+	err = json.Unmarshal(res, &subscriptionResp)
+	require.NoError(t, err)
+	common.RequireNoGQLErrors(t, &subscriptionResp)
+
+	// Check the latest update.
+	require.JSONEq(t, `{"queryUserTweetCounts":[{"screen_name":"001","tweetCount": 2},{"screen_name":"002","tweetCount": 1}]}`, string(subscriptionResp.Data))
+	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
+	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
+
+	// Change schema to terminate subscription..
+	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
+	time.Sleep(pollInterval)
+	res, err = subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+	require.Nil(t, res)
 }
 
 func TestMain(m *testing.M) {
