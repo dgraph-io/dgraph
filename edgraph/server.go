@@ -237,23 +237,51 @@ func upsertGroot(ctx context.Context) error {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 	}
 	x.GrootUserUid.Store(x.ExtractNamespace(ctx), grootUserUidUint)
-
 	glog.Infof("Successfully upserted groot account")
 	return nil
 }
 
-func CreateGuardianAndGroot(ctx context.Context) error {
-	ns, err := getJWTNamespace(ctx)
+func CreateGuardianAndGroot(ctx context.Context, namespace uint64) error {
+	ctx = x.AttachNamespace(ctx, namespace)
+
+	// TODO(Ahsan): We don't need to upsert, we can directly set.
+	for {
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+	for {
+		if err := upsertGroot(ctx); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
+	queryVars := map[string]string{
+		"$userid":   "groot",
+		"$password": "password",
+	}
+	queryRequest := api.Request{
+		Query: queryUser,
+		Vars:  queryVars,
+	}
+
+	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+	if err != nil {
+		glog.Errorf("Error while query user with id %s: %v", "groot", err)
+		return err
+	}
+	user, err := acl.UnmarshalUser(queryResp, "user")
 	if err != nil {
 		return err
 	}
-	ctx = x.AttachNamespace(ctx, ns)
-
-	// TODO(Ahsan): We don't need to upsert, we can directly set.
-	if err = upsertGuardian(ctx); err != nil {
-		return err
-	}
-	return upsertGroot(ctx)
+	spew.Dump("Created user", user)
+	return nil
 }
 
 // TODO(Ahsan): Complete the below two functions.
@@ -271,7 +299,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	if err := CreateGuardianAndGroot(ctx); err != nil {
+	if err := CreateGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
 	glog.V(2).Info("[NAMESPACE] Created namespace", ids.StartId)

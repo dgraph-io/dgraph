@@ -582,15 +582,13 @@ func ResetAcl(closer *z.Closer) {
 		if err != nil {
 			return err
 		}
-		spew.Dump(user)
+		spew.Dump("Created user", user)
 		return nil
 	}
 
-	fmt.Println("Here")
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
-		fmt.Println("Adding Guradian group============")
 		defer cancel()
 		if err := upsertGuardians(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -603,7 +601,6 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
-		fmt.Println("Adding Guradian GROOT============")
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)

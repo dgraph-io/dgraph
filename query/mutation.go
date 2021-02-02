@@ -23,6 +23,7 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -48,7 +49,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	if err != nil {
 		return nil, err
 	}
-
+	spew.Dump("Setting mutation ", m)
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -251,11 +252,11 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 	namespace := x.ExtractNamespace(ctx)
 	guardianGroupUid, ok := x.GuardiansGroupUid.Load(namespace)
 	if !ok {
-		return errors.New("Could not find Guardians group UID")
+		guardianGroupUid = 0
 	}
 	grootUserUid, ok := x.GrootUserUid.Load(namespace)
 	if !ok {
-		return errors.New("Could not find groots UID")
+		grootUserUid = 0
 	}
 
 	isDeleteAclOperation := false
