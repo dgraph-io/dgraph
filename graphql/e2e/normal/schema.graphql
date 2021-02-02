@@ -290,16 +290,39 @@ type Book {
         bookId: Int64! @id
         name: String!
         desc: String
+        summary: String @lambda
+        chapters: [Chapter] @hasInverse(field: book)
 }
 
 type Chapter {
         chapterId: Int! @id
         name: String!
-        bookId: Int64! @search
+        book: Book
 }
 
 type Section {
         sectionId: Float! @id
         name: String!
         chapterId: Int! @search
+}
+
+# test for entities resolver
+
+type Mission @key(fields: "id") {
+    id: String! @id
+    crew: [Astronaut] @hasInverse(field: missions)
+    spaceShip: [SpaceShip]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    missions: [Mission]
+}
+
+type SpaceShip @key(fields: "id") @extends {
+    id: String! @id @external
+    missions: [Mission]
 }

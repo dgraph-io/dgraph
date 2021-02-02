@@ -92,12 +92,9 @@ func lambdaOnInterfaceField(t *testing.T) {
 	}`
 	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 
-	// TODO: this should work. At present there is a bug with @custom on interface field resolved
-	// through a fragment on one of its types. We need to fix that first, then uncomment this test.
-
 	// when querying bio on Human & Droid (type) we should get the bio constructed by the lambda
 	// registered on Human.bio and Droid.bio respectively
-	/*query = `
+	query = `
 		query {
 			queryCharacter {
 				name
@@ -125,7 +122,7 @@ func lambdaOnInterfaceField(t *testing.T) {
 			}
 		]
 	}`
-	testutil.CompareJSON(t, expectedResponse, string(resp.Data))*/
+	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 
 	// cleanup
 	cleanupStarwars(t, starship.ID, humanID, droidID)
@@ -194,4 +191,78 @@ func lambdaOnMutationUsingGraphQL(t *testing.T) {
 
 	// cleanup
 	deleteAuthors(t, []string{addResp.AuthorID}, nil)
+}
+
+// See: https://discuss.dgraph.io/t/slash-graphql-lambda-bug/12233
+func lambdaInMutationWithDuplicateId(t *testing.T) {
+	addStudentParams := &GraphQLParams{Query: `
+	mutation {
+		addChapter(input: [
+			{chapterId: 1, name: "Alice", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 2, name: "Bob", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 3, name: "Charlie", book: {bookId: 1, name: "Fictional Characters"}},
+			{chapterId: 4, name: "Uttarakhand", book: {bookId: 2, name: "Indian States"}}
+		]) {
+			numUids
+			chapter {
+				chapterId
+				name
+				book {
+					bookId
+					name
+					summary
+				}
+			}
+		}
+	}`}
+	resp := addStudentParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	testutil.CompareJSON(t, `{
+		"addChapter": {
+		  "numUids": 4,
+		  "chapter": [
+			{
+			  "chapterId": 4,
+			  "name": "Uttarakhand",
+			  "book": {
+				"bookId": 2,
+				"name": "Indian States",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 1,
+			  "name": "Alice",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 2,
+			  "name": "Bob",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			},
+			{
+			  "chapterId": 3,
+			  "name": "Charlie",
+			  "book": {
+				"bookId": 1,
+				"name": "Fictional Characters",
+				"summary": "hi"
+			  }
+			}
+		  ]
+		}
+	}`, string(resp.Data))
+
+	//cleanup
+	DeleteGqlType(t, "Chapter", GetXidFilter("chapterId", []interface{}{1, 2, 3, 4}), 4, nil)
+	DeleteGqlType(t, "Book", GetXidFilter("bookId", []interface{}{1, 2}), 2, nil)
 }

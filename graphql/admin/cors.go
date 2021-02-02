@@ -47,23 +47,23 @@ func resolveReplaceAllowedCORSOrigins(ctx context.Context, m schema.Mutation) (*
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	// Aleast one origin is required to add allowlist. Since, no origin is provided, so we'll
-	// all origin to access dgraph.
+	// At-least one origin is required to add allowList. Since, no origin is provided, so we'll
+	// allow all origin to access dgraph.
 	if len(origins) == 0 {
 		origins = append(origins, "*")
 	}
 	if err = edgraph.AddCorsOrigins(ctx, origins); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{
 			m.Name(): map[string]interface{}{
-				"acceptedOrigins": arrayToInterface(origins),
+				"acceptedOrigins": toInterfaceSlice(origins),
 			},
 		},
-		Field: m,
-		Err:   nil,
-	}, true
+		nil,
+	), true
 }
 
 // resolveGetCors retrieves cors details from the database.
@@ -72,21 +72,12 @@ func resolveGetCors(ctx context.Context, q schema.Query) *resolve.Resolved {
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{
 			q.Name(): map[string]interface{}{
-				"acceptedOrigins": arrayToInterface(origins),
+				"acceptedOrigins": toInterfaceSlice(origins),
 			},
 		},
-		Field: q,
-	}
-}
-
-// arrayToInterface convers array string to array interface
-func arrayToInterface(in []string) []interface{} {
-	out := make([]interface{}, len(in))
-	for i, v := range in {
-		out[i] = v
-	}
-	return out
+		nil)
 }

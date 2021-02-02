@@ -92,7 +92,8 @@ type authExecutor struct {
 	skipAuth bool
 }
 
-func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	ex.state++
 	switch ex.state {
 	case 1:
@@ -254,7 +255,7 @@ func TestInvalidAuthInfo(t *testing.T) {
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
 	require.NoError(t, err)
-	_, err = schema.NewHandler(string(authSchema), false)
+	_, err = schema.NewHandler(string(authSchema), false, false)
 	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
 }
 
@@ -263,7 +264,7 @@ func TestMissingAudienceWithJWKUrl(t *testing.T) {
 	require.NoError(t, err, "Unable to read schema file")
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrlAndWithoutAudience(sch)
 	require.NoError(t, err)
-	_, err = schema.NewHandler(string(authSchema), false)
+	_, err = schema.NewHandler(string(authSchema), false, false)
 	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
 }
 
@@ -432,21 +433,21 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			rewriter: NewAddRewriter,
 			assigned: map[string]string{"Ticket1": "0x4"},
 			dgQuery: `query {
-  ticket(func: uid(TicketRoot)) {
-    id : uid
-    title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column1)) {
-      colID : uid
-      name : Column.name
+  AddTicketPayload.ticket(func: uid(TicketRoot)) {
+    Ticket.id : uid
+    Ticket.title : Ticket.title
+    Ticket.onColumn : Ticket.onColumn @filter(uid(Column1)) {
+      Column.colID : uid
+      Column.name : Column.name
     }
   }
   TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
   Ticket4 as var(func: uid(0x4))
   TicketAuth5 as var(func: uid(Ticket4)) @cascade {
-    onColumn : Ticket.onColumn {
-      inProject : Column.inProject {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+    Ticket.onColumn : Ticket.onColumn {
+      Column.inProject : Column.inProject {
+        Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -456,9 +457,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
   }
   Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
   ColumnAuth3 as var(func: uid(Column2)) @cascade {
-    inProject : Column.inProject {
-      roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-        assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+    Column.inProject : Column.inProject {
+      Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
       }
     }
   }
@@ -481,21 +482,21 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			result: map[string]interface{}{
 				"updateTicket": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 			dgQuery: `query {
-  ticket(func: uid(TicketRoot)) {
-    id : uid
-    title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column1)) {
-      colID : uid
-      name : Column.name
+  UpdateTicketPayload.ticket(func: uid(TicketRoot)) {
+    Ticket.id : uid
+    Ticket.title : Ticket.title
+    Ticket.onColumn : Ticket.onColumn @filter(uid(Column1)) {
+      Column.colID : uid
+      Column.name : Column.name
     }
   }
   TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
   Ticket4 as var(func: uid(0x4))
   TicketAuth5 as var(func: uid(Ticket4)) @cascade {
-    onColumn : Ticket.onColumn {
-      inProject : Column.inProject {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+    Ticket.onColumn : Ticket.onColumn {
+      Column.inProject : Column.inProject {
+        Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -505,9 +506,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
   }
   Column1 as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
   ColumnAuth3 as var(func: uid(Column2)) @cascade {
-    inProject : Column.inProject {
-      roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-        assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+    Column.inProject : Column.inProject {
+      Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
       }
     }
   }
@@ -733,7 +734,7 @@ func checkAddUpdateCase(
 		skipAuth:    tcase.SkipAuth,
 		length:      length,
 	}
-	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
+	resolver := NewDgraphResolver(rewriter(), ex)
 
 	// -- Act --
 	resolved, _ := resolver.Resolve(ctx, mut)

@@ -37,6 +37,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	GQLSchemaWithoutApolloExtras() string
 }
 
 type handler struct {
@@ -65,11 +66,106 @@ func FromString(schema string) (Schema, error) {
 }
 
 func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.originalDefs)
+	return Stringify(s.completeSchema, s.originalDefs, false)
 }
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+// GQLSchemaWithoutApolloExtras return GraphQL schema string
+// excluding Apollo extras definitions and Apollo Queries and
+// some directives which are not exposed to the Apollo Gateway
+// as they are failing in the schema validation which is a bug
+// in their library. See here:
+// https://github.com/apollographql/apollo-server/issues/3655
+func (s *handler) GQLSchemaWithoutApolloExtras() string {
+	typeMapCopy := make(map[string]*ast.Definition)
+	for typ, defn := range s.completeSchema.Types {
+		// Exclude "union _Entity = ..." definition from types
+		if typ == "_Entity" {
+			continue
+		}
+		fldListCopy := make(ast.FieldList, 0)
+		for _, fld := range defn.Fields {
+			fldDirectiveListCopy := make(ast.DirectiveList, 0)
+			for _, dir := range fld.Directives {
+				// Drop "@custom" directive from the field's definition.
+				if dir.Name == "custom" {
+					continue
+				}
+				fldDirectiveListCopy = append(fldDirectiveListCopy, dir)
+			}
+			newFld := &ast.FieldDefinition{
+				Name:         fld.Name,
+				Arguments:    fld.Arguments,
+				DefaultValue: fld.DefaultValue,
+				Type:         fld.Type,
+				Directives:   fldDirectiveListCopy,
+				Position:     fld.Position,
+			}
+			fldListCopy = append(fldListCopy, newFld)
+		}
+
+		directiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range defn.Directives {
+			// Drop @generate and @auth directive from the Type Definition.
+			if dir.Name == "generate" || dir.Name == "auth" {
+				continue
+			}
+			directiveListCopy = append(directiveListCopy, dir)
+		}
+		typeMapCopy[typ] = &ast.Definition{
+			Kind:       defn.Kind,
+			Name:       defn.Name,
+			Directives: directiveListCopy,
+			Fields:     fldListCopy,
+			BuiltIn:    defn.BuiltIn,
+			EnumValues: defn.EnumValues,
+		}
+	}
+	queryList := make(ast.FieldList, 0)
+	for _, qry := range s.completeSchema.Query.Fields {
+		// Drop Apollo Queries from the List of Queries.
+		if qry.Name == "_entities" || qry.Name == "_service" {
+			continue
+		}
+		qryDirectiveListCopy := make(ast.DirectiveList, 0)
+		for _, dir := range qry.Directives {
+			// Drop @custom directive from the Queries.
+			if dir.Name == "custom" {
+				continue
+			}
+			qryDirectiveListCopy = append(qryDirectiveListCopy, dir)
+		}
+		queryList = append(queryList, &ast.FieldDefinition{
+			Name:       qry.Name,
+			Arguments:  qry.Arguments,
+			Type:       qry.Type,
+			Directives: qryDirectiveListCopy,
+			Position:   qry.Position,
+		})
+	}
+
+	if typeMapCopy["Query"] != nil {
+		typeMapCopy["Query"].Fields = queryList
+	}
+
+	queryDefn := &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Query",
+		Fields: queryList,
+	}
+	astSchemaCopy := &ast.Schema{
+		Query:         queryDefn,
+		Mutation:      s.completeSchema.Mutation,
+		Subscription:  s.completeSchema.Subscription,
+		Types:         typeMapCopy,
+		Directives:    s.completeSchema.Directives,
+		PossibleTypes: s.completeSchema.PossibleTypes,
+		Implements:    s.completeSchema.Implements,
+	}
+	return Stringify(astSchemaCopy, s.originalDefs, true)
 }
 
 func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
@@ -125,7 +221,7 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string, validateOnly bool) (Handler, error) {
+func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
@@ -173,6 +269,14 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
+	// Convert All the Type Extensions into the Type Definitions with @external directive
+	// to maintain uniformity in the output schema
+	for _, ext := range doc.Extensions {
+		ext.Directives = append(ext.Directives, &ast.Directive{Name: "extends"})
+	}
+	doc.Definitions = append(doc.Definitions, doc.Extensions...)
+	doc.Extensions = nil
+
 	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		return nil, gqlErrList
@@ -215,7 +319,7 @@ func NewHandler(input string, validateOnly bool) (Handler, error) {
 
 	headers := getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
@@ -427,7 +531,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" || hasCustomOrLambda(f) {
+				if hasCustomOrLambda(f) {
+					continue
+				}
+
+				// Ignore @external fields which are not @key
+				if hasExternal(f) && !isKeyField(f, def) {
+					continue
+				}
+
+				// If a field of type ID has @external directive and is a @key field then
+				// it should be translated into a dgraph field with string type having hash index.
+				if f.Type.Name() == "ID" && !(hasExternal(f) && isKeyField(f, def)) {
 					continue
 				}
 
@@ -477,23 +592,29 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Scalar:
+					fldType := inbuiltTypeToDgraph[f.Type.Name()]
+					// fldType can be "uid" only in case if it is @external and @key
+					// in this case it needs to be stored as string in dgraph.
+					if fldType == "uid" {
+						fldType = "string"
+					}
 					typStr = fmt.Sprintf(
 						"%s%s%s",
-						prefix, inbuiltTypeToDgraph[f.Type.Name()], suffix,
+						prefix, fldType, suffix,
 					)
 
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
-					if id != nil {
+					if id != nil || f.Type.Name() == "ID" {
 						upsertStr = "@upsert "
 						switch f.Type.Name() {
 						case "Int", "Int64":
 							indexes = append(indexes, "int")
 						case "Float":
 							indexes = append(indexes, "float")
-						case "String":
+						case "String", "ID":
 							indexes = append(indexes, "hash")
 						}
 					}

@@ -57,7 +57,7 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 
-	creds := &worker.Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
@@ -76,17 +76,18 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 			return resolve.EmptyResult(q, err)
 		}
 		var result map[string]interface{}
-		err = json.Unmarshal(b, &result)
+		err = schema.Unmarshal(b, &result)
 		if err != nil {
 			return resolve.EmptyResult(q, err)
 		}
 		results = append(results, result)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): results},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): results},
+		nil,
+	)
 }
 
 func getLsBackupInput(q schema.Query) (*lsBackupInput, error) {

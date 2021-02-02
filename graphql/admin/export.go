@@ -63,20 +63,22 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	}
 
 	responseData := response("Success", "Export completed.")
-	responseData["exportedFiles"] = toGraphQLArray(files)
+	responseData["exportedFiles"] = toInterfaceSlice(files)
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): responseData},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): responseData},
+		nil,
+	), true
 }
 
-func toGraphQLArray(s []string) []interface{} {
-	outputFiles := make([]interface{}, 0, len(s))
-	for _, f := range s {
-		outputFiles = append(outputFiles, f)
+// toInterfaceSlice converts []string to []interface{}
+func toInterfaceSlice(in []string) []interface{} {
+	out := make([]interface{}, 0, len(in))
+	for _, s := range in {
+		out = append(out, s)
 	}
-	return outputFiles
+	return out
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {

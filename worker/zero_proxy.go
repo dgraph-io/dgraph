@@ -14,7 +14,7 @@ func forwardAssignUidsToZero(ctx context.Context, in *pb.Num) (*pb.AssignedIds, 
 		return nil, conn.ErrNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
-	return zc.AssignUids(ctx, in)
+	return zc.AssignIds(ctx, in)
 }
 
 // RegisterZeroProxyServer forwards select GRPC calls over to Zero
@@ -24,9 +24,10 @@ func RegisterZeroProxyServer(s *grpc.Server) {
 		HandlerType: (*interface{})(nil), // Don't really need complex type checking here
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: "AssignUids",
+				MethodName: "AssignIds",
 				Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
 					in := new(pb.Num)
+					in.Type = pb.Num_UID
 					if err := dec(in); err != nil {
 						return nil, err
 					}
