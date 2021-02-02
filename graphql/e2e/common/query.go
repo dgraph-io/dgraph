@@ -19,6 +19,7 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/cast"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -3282,4 +3283,199 @@ func passwordTest(t *testing.T) {
 	})
 
 	deleteUser(t, *newUser)
+}
+
+func queryFilterWithIDInputCoercion(t *testing.T) {
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		},
+	}, postExecutor)
+	authorIds := []string{authors[0].ID, authors[1].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID}
+	authorIdsDecimal := []string{cast.ToString(cast.ToInt(authorIds[0])), cast.ToString(cast.ToInt(authorIds[1]))}
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{
+		{
+
+			name: "Query using single ID in a filter",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using single ID given in variable of type integer coerced to string ",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": cast.ToInt(authors[0].ID)}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID given in variable of type integer coerced to string",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          title
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using single ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
+			           name
+					   reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:[` + authorIdsDecimal[0] + `,` + authorIdsDecimal[1] + `]}){
+			           name
+                       reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
 }

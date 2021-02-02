@@ -39,8 +39,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v2"
-	bopt "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"

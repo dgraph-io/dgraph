@@ -27,7 +27,7 @@ type Post {
 }
 ```
 
-### **Example**: Deep Deep mutation using variables
+### **Example**: Deep mutation using variables
 ```graphql
 mutation DeepAuthor($author: DeepAuthorInput!) {
   DeepAuthor(input: [$author]) {

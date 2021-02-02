@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -427,6 +427,7 @@ func (g *GraphQLHealthStore) updatingSchema() {
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
 	Schema          string `json:"schema,omitempty"`
+	Version         uint64
 	GeneratedSchema string
 }
 
@@ -503,10 +504,8 @@ func newAdminResolver(
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
 
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -531,12 +530,13 @@ func newAdminResolver(
 		}
 
 		newSchema := &gqlSchema{
-			ID:     query.UidToHex(pk.Uid),
-			Schema: string(pl.Postings[0].Value),
+			ID:      query.UidToHex(pk.Uid),
+			Version: kv.GetVersion(),
+			Schema:  string(pl.Postings[0].Value),
 		}
 		server.mux.Lock()
-		if newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.", newSchema.Version, server.schema.Version)
 			server.mux.Unlock()
 			return
 		}

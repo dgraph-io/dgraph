@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -83,6 +82,7 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
+	race = pflag.Bool("race", false, "Set true to build with race")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -132,6 +132,16 @@ func startCluster(composeFile, prefix string) {
 		}
 	}
 }
+
+func detectRace(prefix string) bool {
+	if !*race {
+		return false
+	}
+	zeroRaceDetected := testutil.DetectRaceInZeros(prefix)
+	alphaRaceDetected := testutil.DetectRaceInAlphas(prefix)
+	return zeroRaceDetected || alphaRaceDetected
+}
+
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 	go func() {
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
@@ -147,7 +157,15 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
 }
 
 func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-timeout", "30m", "-failfast", "-v"}
+	var args = []string{"go", "test", "-failfast", "-v"}
+	if *race {
+		args = append(args, "-timeout", "180m")
+		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
+		// args = append(args, "-race")
+	} else {
+		args = append(args, "-timeout", "30m")
+	}
+
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
 	}
@@ -183,12 +201,16 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 	tid, _ := ctx.Value("threadId").(int32)
 	oc.Took(tid, pkg, dur)
 	fmt.Printf("Ran tests for package: %s in %s\n", pkg, dur)
+	if detectRace(prefix) {
+		return fmt.Errorf("race condition detected for test package %s and cluster with prefix"+
+			" %s. check logs for more details", pkg, prefix)
+	}
 	return nil
 }
 
 func hasTestFiles(pkg string) bool {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	dir = path.Join(*baseDir, dir)
+	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -222,7 +244,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		closer.Done()
 	}()
 
-	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
+	defaultCompose := filepath.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getClusterPrefix()
 
 	var started, stopped bool
@@ -321,7 +343,7 @@ func findPackagesFor(testName string) []string {
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
 		}
 	}
@@ -392,7 +414,7 @@ type task struct {
 
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	return path.Join(*baseDir, dir, "docker-compose.yml")
+	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
 func getPackages() []task {
@@ -583,7 +605,7 @@ func downloadDataFiles() {
 }
 
 func executePreRunSteps() error {
-	testutil.GeneratePlugins()
+	testutil.GeneratePlugins(*race)
 	return nil
 }
 
@@ -605,8 +627,12 @@ func run() error {
 	oc.Took(0, "START", time.Millisecond)
 
 	if *rebuildBinary {
-		// cmd := command("make", "BUILD_RACE=y", "install")
-		cmd := command("make", "install")
+		var cmd *exec.Cmd
+		if *race {
+			cmd = command("make", "BUILD_RACE=y", "install")
+		} else {
+			cmd = command("make", "install")
+		}
 		cmd.Dir = *baseDir
 		if err := cmd.Run(); err != nil {
 			return err

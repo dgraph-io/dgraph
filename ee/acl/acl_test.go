@@ -196,7 +196,7 @@ func TestPasswordReturn(t *testing.T) {
 
 func TestGetCurrentUser(t *testing.T) {
 	token := testutil.GrootHttpLogin(adminEndpoint)
-	
+
 	currentUser := getCurrentUser(t, token)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
@@ -2299,6 +2299,14 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.cors"
+        }
+      ],
+      "name": "dgraph.type.cors"
     }
   ]
 }`
@@ -2337,6 +2345,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.cors"
     }
   ]
 }`

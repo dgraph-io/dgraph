@@ -45,7 +45,7 @@ import (
 func RunBulkCases(t *testing.T) {
 	suite := helloWorldSetup(t, true)
 	testHelloWorld(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	// remote hello world only differs from hello world in setup
 	suite = remoteHelloWorldSetup(t, true)
@@ -54,34 +54,34 @@ func RunBulkCases(t *testing.T) {
 
 	suite = facetsSetup(t, true)
 	testFacets(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = countIndexSetup(t, true)
 	testCountIndex(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = indexedPredicateSetup(t, true)
 	testIndexedPredicate(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = loadTypesSetup(t, true)
 	testLoadTypes(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = bulkSingleUidSetup(t, true)
 	testBulkSingleUid(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = deleteEdgeWithStarSetup(t, true)
 	testDeleteEdgeWithStar(t)
-	suite.cleanup()
+	suite.cleanup(t)
 }
 
 // run this in sequential order. cleanup is necessary for live loader to work
 func RunLiveCases(t *testing.T) {
 	suite := helloWorldSetup(t, false)
 	testHelloWorld(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	// remote hello world only differs from hello world in setup
 	suite = remoteHelloWorldSetup(t, false)
@@ -90,19 +90,19 @@ func RunLiveCases(t *testing.T) {
 
 	suite = facetsSetup(t, false)
 	testFacets(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = indexedPredicateSetup(t, false)
 	testIndexedPredicate(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = countIndexSetup(t, false)
 	testCountIndex(t)
-	suite.cleanup()
+	suite.cleanup(t)
 
 	suite = loadTypesSetup(t, false)
 	testLoadTypes(t)
-	suite.cleanup()
+	suite.cleanup(t)
 }
 
 const helloWorldSchema string = `
@@ -681,9 +681,9 @@ func testDeleteEdgeWithStar(t *testing.T) {
 }
 
 func testGqlSchema(t *testing.T) {
-	t.Skipf("This is failing")
+	t.Skipf("Skipping: This is failing for some reason. Please fix this.")
 	s := newBulkOnlySuite(t, "", "", "abc")
-	defer s.cleanup()
+	defer s.cleanup(t)
 
 	t.Run("Get GraphQL schema", testCase(`
 	{
@@ -714,7 +714,7 @@ func DONOTRUNTestGoldenData(t *testing.T) {
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz"),
 		"",
 	)
-	defer s.cleanup()
+	defer s.cleanup(t)
 
 	err := matchExportCount(matchExport{
 		expectedRDF:    1120879,

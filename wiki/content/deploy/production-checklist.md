@@ -25,13 +25,13 @@ There can be multiple Dgraph Zeros and Dgraph Alphas running in a single cluster
 
 ### Machine Requirements
 
-To ensure predictable performance characteristics, Dgraph instances should NOT run on "burstable" or throttled machines that limit resources. That includes t2 class machines on AWS.
+To ensure predictable performance characteristics, Dgraph instances should **not** run on "burstable" or throttled machines that limit resources. That includes t2 class machines on AWS.
 
-We recommend each Dgraph instance to be deployed to a single dedicated machine to ensure that Dgraph can take full advantage of machine resources. That is, for a 6-node Dgraph cluster with 3 Dgraph Zeros and 3 Dgraph Alphas, each process runs in its own machine (e.g., EC2 instance). In the event of a machine failure, only one instance is affected, instead of multiple if they were running on that same machine.
+To ensure that Dgraph can take full advantage of machine resources, we recommend each Dgraph instance to be deployed to a single dedicated machine to ensure that Dgraph can take full advantage of machine resources. That is, for a 6-node Dgraph cluster with 3 Dgraph Zeros and 3 Dgraph Alphas, each process runs in its own machine (e.g., EC2 instance). In the event of a machine failure, only one instance is affected, instead of multiple if they were running on that same machine.
 
 If you'd like to run Dgraph with fewer machines, then the recommended configuration is to run a single Dgraph Zero and a single Dgraph Alpha per machine. In a high availability setup, that allows the cluster to lose a single machine (simultaneously losing a Dgraph Zero and a Dgraph Alpha) with continued availability of the database.
 
-Do not run multiple Dgraph Zeros or Dgraph Alpha processes on a single machine. This can affect performance due to shared resources and reduce high availability in the event of machine failures.
+Do not run multiple Dgraph Zeros or Dgraph Alpha processes on a single machine. This can affect performance due to shared resource issues and reduce availability in the event of machine failures.
 
 ### Operating System
 
@@ -40,17 +40,21 @@ The recommended operating system is Linux for production workloads. Dgraph provi
 
 ### CPU and Memory
 
-At the bare minimum, we recommend machines with at least 2 CPUs and 2 GiB of memory for testing.
+At a the bare minimum, we recommend machines with at least 8 CPUs and 16 GiB of memory for testing.
 
-You'll want a sufficient CPU and memory according to your production workload. A common setup for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
+You'll want a ensure that your CPU and memory resources are sufficient for your production workload. A common configuration for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
 
 You may find you'll need more CPU cores and memory for your specific use case.
 
 ### Disk
 
-Dgraph instances make heavy usage of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
+Dgraph instances make heavy use of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
 
-Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes.
+Regarding disk IOPS, we recommend:
+* 1000 IOPS minimum
+* 3000 IOPS for medium and large datasets
+
+Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes. AWS introduced the new [gp3](https://aws.amazon.com/about-aws/whats-new/2020/12/introducing-new-amazon-ebs-general-purpose-volumes-gp3/?nc1=h_ls) disks that gives 3000 IOPS at any disk size.
 
 Recommended disk sizes for Dgraph Zero and Dgraph Alpha:
 

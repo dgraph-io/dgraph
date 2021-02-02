@@ -35,7 +35,7 @@ import (
 	"syscall"
 	"time"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -527,7 +527,7 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initialize the servers.
-	admin.ServerCloser = z.NewCloser(3)
+	admin.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
 
@@ -731,11 +731,6 @@ func run() {
 		var numShutDownSig int
 		for range sdCh {
 			closer := admin.ServerCloser
-			if closer == nil {
-				glog.Infoln("Caught Ctrl-C. Terminating now.")
-				os.Exit(1)
-			}
-
 			select {
 			case <-closer.HasBeenClosed():
 			default:
@@ -768,7 +763,7 @@ func run() {
 		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
-			origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
+			_, origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
 				time.Sleep(time.Second)
@@ -814,9 +809,8 @@ func listenForCorsUpdate(closer *z.Closer) {
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
+
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}

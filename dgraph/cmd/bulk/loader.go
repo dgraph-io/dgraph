@@ -33,9 +33,9 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger/v2"
-	bo "github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v3/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"

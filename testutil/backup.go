@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
@@ -78,7 +78,7 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 
 	restoreDone := false
 	client := GetHttpsClient(t)
-	for i := 0; i < 15; i++ {
+	for {
 		resp, err := client.Post(AdminUrlHttps(), "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
@@ -112,7 +112,9 @@ func WaitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 			numSuccess = 0
 		}
 
-		if numSuccess == 3 {
+		// Apply restore works differently with race enabled.
+		// We are seeing delays in apply proposals hence failure of queries.
+		if numSuccess == 10 {
 			// The server has been responsive three times in a row.
 			break
 		}

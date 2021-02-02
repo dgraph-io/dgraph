@@ -655,7 +655,7 @@ func RunAll(t *testing.T) {
 	t.Run("query aggregate and other fields at child level", queryAggregateAndOtherFieldsAtChildLevel)
 	t.Run("query at child level with multiple alias on scalar field", queryChildLevelWithMultipleAliasOnScalarField)
 	t.Run("checkUserPassword query", passwordTest)
-
+	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -688,7 +688,7 @@ func RunAll(t *testing.T) {
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
-	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
+	t.Run("query typename in mutation", queryTypenameInMutation)
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)

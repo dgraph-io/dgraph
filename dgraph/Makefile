@@ -17,7 +17,7 @@
 USER_ID         = $(shell id -u)
 BIN             = dgraph
 BUILD          ?= $(shell git rev-parse --short HEAD)
-BUILD_CODENAME  = tchalla
+BUILD_CODENAME  = tchalla-1
 BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 
@@ -31,8 +31,8 @@ BUILD_VERSION ?= $(shell git describe --always --tags)
 endif
 
 GOOS          ?= $(shell go env GOOS)
-# Only build with jemalloc on Linux
-ifeq ($(GOOS),linux)
+# Only build with jemalloc on Linux, mac
+ifeq ($(GOOS),$(filter $(GOOS),linux darwin))
 	BUILD_TAGS ?= jemalloc
 endif
 GOPATH        ?= $(shell go env GOPATH)
