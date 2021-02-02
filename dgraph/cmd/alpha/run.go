@@ -810,10 +810,11 @@ func run() {
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
 func listenForCorsUpdate(closer *z.Closer) {
+	//TODO(Ahsan): Fix subscription here.
 	prefix := x.DataKey("dgraph.cors", 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
-	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+	worker.SubscribeForUpdates([][]byte{prefix}, "", func(kvs *badgerpb.KVList) {
 		// Last update contains the latest value. So, taking the last update.
 		lastIdx := len(kvs.GetKv()) - 1
 		kv := kvs.GetKv()[lastIdx]

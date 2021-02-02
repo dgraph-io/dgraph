@@ -1108,7 +1108,7 @@ func (g *groupi) askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
+func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb.KVList),
 	group uint32, closer *z.Closer) {
 
 	var prefix []byte
@@ -1131,7 +1131,8 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.
-		stream, err := client.Subscribe(closer.Ctx(), &pb.SubscriptionRequest{Prefixes: prefixes})
+		stream, err := client.Subscribe(closer.Ctx(), &pb.SubscriptionRequest{Prefixes: prefixes,
+			Ignore: ignore})
 		if err != nil {
 			return errors.Wrapf(err, "error from client.subscribe")
 		}

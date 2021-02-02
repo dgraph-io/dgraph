@@ -347,7 +347,7 @@ func RefreshAcls(closer *z.Closer) {
 	}
 
 	closer.AddRunning(1)
-	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+	go worker.SubscribeForUpdates(aclPrefixes, "", func(kvs *bpb.KVList) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
