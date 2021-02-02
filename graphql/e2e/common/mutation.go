@@ -1061,7 +1061,7 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 		Variables: map[string]interface{}{"post": map[string]interface{}{
 			"title":       "No text",
 			"isPublished": false,
-			"numLikes":    1000,
+			"numLikes":    0,
 			"tags":        []string{"no text", "null"},
 			"author":      map[string]interface{}{"id": authorID},
 		}},
@@ -1074,80 +1074,6 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 			"text": null,
 			"isPublished": false,
 			"tags": ["null","no text"],
-			"numLikes": 0,
-			"author": {
-				"id": "%s",
-				"name": "Test Author",
-				"country": {
-					"id": "%s",
-					"name": "Testland"
-				}
-			}
-		}]
-	} }`, authorID, countryID)
-
-	gqlResponse := executeRequest(t, GraphqlURL, addPostParams)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	var expected, result struct {
-		AddPost struct {
-			Post []*post
-		}
-	}
-	err := json.Unmarshal([]byte(addPostExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	requireUID(t, result.AddPost.Post[0].PostID)
-
-	opt := cmpopts.IgnoreFields(post{}, "PostID")
-	if diff := cmp.Diff(expected, result, opt); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
-	}
-
-	return result.AddPost.Post[0]
-}
-
-func addPostWithNoTags(t *testing.T, authorID, countryID string,
-	executeRequest requestExecutor) *post {
-
-	addPostParams := &GraphQLParams{
-		Query: `mutation addPost($post: AddPostInput!) {
-			addPost(input: [$post]) {
-			  post( filter : {not :{has : tags} }){
-				postID
-				title
-				text
-				isPublished
-				tags
-				author(filter: {has:country}) {
-					id
-					name
-					country {
-						id
-						name
-					}
-				}
-			  }
-			}
-		}`,
-		Variables: map[string]interface{}{"post": map[string]interface{}{
-			"title":       "No tags",
-			"isPublished": false,
-			"numLikes":    1000,
-			"text":        "This Post doesn't contain any tags",
-			"author":      map[string]interface{}{"id": authorID},
-		}},
-	}
-
-	addPostExpected := fmt.Sprintf(`{ "addPost": {
-		"post": [{
-			"postID": "_UID_",
-			"title": "No tags",
-			"text": "This Post doesn't contain any tags",
-			"isPublished": false,
-			"tags": [],
 			"numLikes": 0,
 			"author": {
 				"id": "%s",

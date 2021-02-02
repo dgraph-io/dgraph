@@ -609,7 +609,6 @@ func RunAll(t *testing.T) {
 	t.Run("deep between filter", deepBetweenFilter)
 	t.Run("deep filter", deepFilter)
 	t.Run("deep has filter", deepHasFilter)
-	t.Run("has filter with list of fields", hasFilterWithListOfFields)
 	t.Run("many queries", manyQueries)
 	t.Run("query order at root", queryOrderAtRoot)
 	t.Run("queries with error", queriesWithError)

@@ -690,31 +690,6 @@ func deepFilter(t *testing.T) {
 	}
 }
 
-func hasFilterWithListOfFields(t *testing.T) {
-	newCountry := addCountry(t, postExecutor)
-	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
-	newPost1 := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
-	newPost2 := addPostWithNoTags(t, newAuthor.ID, newCountry.ID, postExecutor)
-	newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-	getPostParams := &GraphQLParams{
-		Query: `query {
-			queryPost(filter: {has: [text, tags], numLikes: {eq: 1000}}) {
-				title
-			}
-		}`,
-	}
-	gqlResponse := getPostParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	var result struct {
-		QueryPost []*post
-	}
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(result.QueryPost))
-	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2, newPost3})
-}
-
 func deepHasFilter(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
