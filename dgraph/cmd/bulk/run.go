@@ -130,7 +130,8 @@ func init() {
 }
 
 func run() {
-	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
+	badger := x.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -167,9 +168,9 @@ func run() {
 		os.Exit(0)
 	}
 
-	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
+	totalCache := int64(badger.GetUint64("cache_mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache_percentage"), 2)
+	cachePercent, err := x.GetCachePercentages(badger.GetString("cache_percentage"), 2)
 	x.Check(err)
 	totalCache <<= 20 // Convert to MB.
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
