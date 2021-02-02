@@ -1,0 +1,46 @@
+type Tweets {
+    id: ID!
+    text: String! @search(by: [fulltext])
+    author: User
+    timestamp: DateTime! @search
+}
+type User {
+    screen_name: String! @id
+    followers: Int @search
+    tweets: [Tweets] @hasInverse(field: author)
+}
+type UserTweetCount @remote {
+    screen_name: String
+    tweetCount: Int
+}
+
+type Query {
+    queryTweetsSortedByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
+    query q($search: string) {
+    var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
+    Tweets.author {
+    followers as User.followers
+    }
+    authorFollowerCount as sum(val(followers))
+    }
+    queryTweetsSortedByAuthorFollowers(func: uid(authorFollowerCount), orderdesc: val(authorFollowerCount)) {
+    id: uid
+    text: Tweets.text
+    author: Tweets.author {
+    screen_name: User.screen_name
+    followers: User.followers
+    }
+    timestamp: Tweets.timestamp
+    }
+    }
+    """)
+
+    queryUserTweetCounts : [UserTweetCount] @withSubscription @custom(dql: """
+    query {
+    queryUserTweetCounts(func: type(User)) {
+    screen_name: User.screen_name
+    tweetCount: count(User.tweets)
+    }
+    }
+    """)
+}

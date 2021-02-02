@@ -2,17 +2,23 @@
 # Input Schema
 #######################
 
-type Post {
+type Tweets {
 	id: ID!
-	title: String!
-	text: String
-	postType: PostType!
+	text: String! @search(by: [fulltext])
+	author(filter: UserFilter): User @hasInverse(field: tweets)
+	timestamp: DateTime! @search
 }
 
-enum PostType {
-	Statement
-	Question
-	Answer
+type User {
+	screen_name: String! @id
+	followers: Int @search
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets] @hasInverse(field: author)
+	tweetsAggregate(filter: TweetsFilter): TweetsAggregateResult
+}
+
+type UserTweetCount @remote {
+	screen_name: String
+	tweetCount: Int
 }
 
 #######################
@@ -279,86 +285,163 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddTweetsPayload {
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
 	numUids: Int
 }
 
-type DeletePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteTweetsPayload {
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
 	msg: String
 	numUids: Int
 }
 
-type PostAggregateResult {
-	count: Int
-	titleMin: String
-	titleMax: String
-	textMin: String
-	textMax: String
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
 }
 
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type TweetsAggregateResult {
+	count: Int
+	textMin: String
+	textMax: String
+	timestampMin: DateTime
+	timestampMax: DateTime
+}
+
+type UpdateTweetsPayload {
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
 	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
+	screen_nameMin: String
+	screen_nameMax: String
+	followersMin: Int
+	followersMax: Int
+	followersSum: Int
+	followersAvg: Float
 }
 
 #######################
 # Generated Enums
 #######################
 
-enum PostHasFilter {
-	title
+enum TweetsHasFilter {
 	text
-	postType
+	author
+	timestamp
 }
 
-enum PostOrderable {
-	title
+enum TweetsOrderable {
 	text
+	timestamp
+}
+
+enum UserHasFilter {
+	screen_name
+	followers
+	tweets
+}
+
+enum UserOrderable {
+	screen_name
+	followers
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddPostInput {
-	title: String!
-	text: String
-	postType: PostType!
+input AddTweetsInput {
+	text: String!
+	author: UserRef
+	timestamp: DateTime!
 }
 
-input PostFilter {
+input AddUserInput {
+	screen_name: String!
+	followers: Int
+	tweets: [TweetsRef]
+}
+
+input TweetsFilter {
 	id: [ID!]
-	has: PostHasFilter
-	and: [PostFilter]
-	or: [PostFilter]
-	not: PostFilter
+	text: StringFullTextFilter
+	timestamp: DateTimeFilter
+	has: TweetsHasFilter
+	and: [TweetsFilter]
+	or: [TweetsFilter]
+	not: TweetsFilter
 }
 
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
+input TweetsOrder {
+	asc: TweetsOrderable
+	desc: TweetsOrderable
+	then: TweetsOrder
 }
 
-input PostPatch {
-	title: String
+input TweetsPatch {
 	text: String
-	postType: PostType
+	author: UserRef
+	timestamp: DateTime
 }
 
-input PostRef {
+input TweetsRef {
 	id: ID
-	title: String
 	text: String
-	postType: PostType
+	author: UserRef
+	timestamp: DateTime
 }
 
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PostPatch
-	remove: PostPatch
+input UpdateTweetsInput {
+	filter: TweetsFilter!
+	set: TweetsPatch
+	remove: TweetsPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	screen_name: StringHashFilter
+	followers: IntFilter
+	has: UserHasFilter
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	followers: Int
+	tweets: [TweetsRef]
+}
+
+input UserRef {
+	screen_name: String
+	followers: Int
+	tweets: [TweetsRef]
 }
 
 #######################
@@ -366,9 +449,14 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	aggregatePost(filter: PostFilter): PostAggregateResult
+	queryTweetsSortedByAuthorFollowers(search: String!): [Tweets] @custom(dql: "query q($search: string) {\nvar(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {\nTweets.author {\nfollowers as User.followers\n}\nauthorFollowerCount as sum(val(followers))\n}\nqueryTweetsSortedByAuthorFollowers(func: uid(authorFollowerCount), orderdesc: val(authorFollowerCount)) {\nid: uid\ntext: Tweets.text\nauthor: Tweets.author {\nscreen_name: User.screen_name\nfollowers: User.followers\n}\ntimestamp: Tweets.timestamp\n}\n}")
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\nqueryUserTweetCounts(func: type(User)) {\nscreen_name: User.screen_name\ntweetCount: count(User.tweets)\n}\n}")
+	getTweets(id: ID!): Tweets
+	queryTweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
+	aggregateTweets(filter: TweetsFilter): TweetsAggregateResult
+	getUser(screen_name: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -376,8 +464,18 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
+	addTweets(input: [AddTweetsInput!]!): AddTweetsPayload
+	updateTweets(input: UpdateTweetsInput!): UpdateTweetsPayload
+	deleteTweets(filter: TweetsFilter!): DeleteTweetsPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\nqueryUserTweetCounts(func: type(User)) {\nscreen_name: User.screen_name\ntweetCount: count(User.tweets)\n}\n}")
+}

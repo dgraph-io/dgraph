@@ -264,7 +264,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -844,26 +844,22 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 	for _, key := range definitions {
 		defn := sch.Types[key]
-		if key == "Query" && defn.Directives.ForName(subscriptionDirective) != nil {
+		if key == "Query" {
 			for _, q := range defn.Fields {
-				if !(q.Name == "__schema" || q.Name == "__schema") {
-					custom := q.Directives.ForName(customDirective)
-					if custom != nil {
-						if custom.Arguments.ForName("dql") != nil {
-							sch.Subscription.Fields = append(sch.Subscription.Fields, q)
-						}
+				customDir := q.Directives.ForName(customDirective)
+				subsDir := q.Directives.ForName(subscriptionDirective)
+				if customDir != nil {
+					if !(customDir.Arguments.ForName("dql") == nil || subsDir == nil) {
+						sch.Subscription.Fields = append(sch.Subscription.Fields, q)
 					}
-
 				}
 			}
+			continue
 		}
-	}
-
-	for _, key := range definitions {
 		if isQueryOrMutation(key) {
 			continue
 		}
-		defn := sch.Types[key]
+
 		if defn.Kind == ast.Union {
 			// TODO: properly check the case of reverse predicates (~) with union members and clean
 			// them from unionRef or unionFilter as required.
