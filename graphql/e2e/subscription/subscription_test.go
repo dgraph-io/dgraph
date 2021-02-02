@@ -88,28 +88,8 @@ type UserTweetCount @remote {
 	tweetCount: Int
 }
 
-type Query @withSubscription{
-  queryTweetsSortedByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
-	query q($search: string) {
-		var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
-			Tweets.author {
-				followers as User.followers
-			}
-			authorFollowerCount as sum(val(followers))
-		}
-		queryTweetsSortedByAuthorFollowers(func: uid(authorFollowerCount), orderdesc: val(authorFollowerCount)) {
-			id: uid
-			text: Tweets.text
-			author: Tweets.author {
-			    screen_name: User.screen_name
-			    followers: User.followers
-			}
-			timestamp: Tweets.timestamp
-		}
-	}
-	""")
-
-  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+type Query {
+  queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: """
 	query {
 		queryUserTweetCounts(func: type(User)) {
 			screen_name: User.screen_name
