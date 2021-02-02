@@ -38,7 +38,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		reset()
 	}
 	pstate.DeleteAll()
-	result, err := Parse(string(s))
+	result, err := Parse(string(s), -1)
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,13 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) (*ParsedSchema, error) {
+// If namespace == -1, then it preserves the namespace and sets default for the rest. Else, this
+// function forces the passed namespace.
+func Parse(s string, namespace int64) (*ParsedSchema, error) {
+	defaultNs := x.DefaultNamespace
+	if namespace != -1 {
+		defaultNs = uint64(namespace)
+	}
 	var result ParsedSchema
 
 	var l lex.Lexer
@@ -494,7 +500,7 @@ func Parse(s string) (*ParsedSchema, error) {
 			return &result, nil
 
 		case itemText:
-			if err := parseTypeOrSchema(item, it, x.DefaultNamespace); err != nil {
+			if err := parseTypeOrSchema(item, it, defaultNs); err != nil {
 				return nil, err
 			}
 
@@ -503,6 +509,9 @@ func Parse(s string) (*ParsedSchema, error) {
 			ns, err := parseNamespace(it)
 			if err != nil {
 				return nil, errors.Errorf("While converting namespace")
+			}
+			if namespace != -1 {
+				ns = uint64(namespace)
 			}
 			// parseNamespace has already called next.
 			item := it.Item()

@@ -272,7 +272,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		return nil, errIndexingInProgress
 	}
 
-	result, err := schema.Parse(op.Schema)
+	result, err := schema.Parse(op.Schema, int64(namespace))
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
 		// example?
 
-		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
+		// update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
 		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", update.Predicate)
@@ -301,17 +301,17 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
-				update.Predicate)
+				x.ParseAttr(update.Predicate))
 		}
 	}
 
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
-		for _, field := range typ.Fields {
-			field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
-		}
+		// typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		// for _, field := range typ.Fields {
+		// 	field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
+		// }
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				typ.TypeName)
@@ -322,7 +322,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 	}
 

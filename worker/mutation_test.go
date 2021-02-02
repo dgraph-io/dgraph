@@ -196,7 +196,7 @@ func TestCheckSchema(t *testing.T) {
 	require.Error(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
-	result, err := schema.Parse(s)
+	result, err := schema.Parse(s, -1)
 	require.NoError(t, err)
 	err = checkSchema(result.Preds[0])
 	require.Error(t, err)
@@ -207,7 +207,7 @@ func TestCheckSchema(t *testing.T) {
 		jobs : string @index(exact) @upsert .
 		age  : int @index(int) @upsert .
 	`
-	result, err = schema.Parse(s)
+	result, err = schema.Parse(s, -1)
 	require.NoError(t, err)
 	err = checkSchema(result.Preds[0])
 	require.NoError(t, err)

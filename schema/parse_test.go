@@ -199,27 +199,27 @@ func TestSchemaIndexCustom(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	reset()
-	_, err := Parse("age:int @index . name:string")
+	_, err := Parse("age:int @index . name:string", -1)
 	require.Error(t, err)
 }
 
 func TestParse2(t *testing.T) {
 	reset()
-	result, err := Parse("")
+	result, err := Parse("", -1)
 	require.NoError(t, err)
 	require.Nil(t, result.Preds)
 }
 
 func TestParse3_Error(t *testing.T) {
 	reset()
-	result, err := Parse("age:uid @index .")
+	result, err := Parse("age:uid @index .", -1)
 	require.Error(t, err)
 	require.Nil(t, result)
 }
 
 func TestParse4_Error(t *testing.T) {
 	reset()
-	result, err := Parse("alive:bool @index(geo) .")
+	result, err := Parse("alive:bool @index(geo) .", -1)
 	require.Contains(t, err.Error(),
 		"Tokenizer: geo isn't valid for predicate: alive of type: bool")
 	require.Nil(t, result)
@@ -227,42 +227,42 @@ func TestParse4_Error(t *testing.T) {
 
 func TestParse4_NoError(t *testing.T) {
 	reset()
-	result, err := Parse("name:string @index(fulltext) .")
+	result, err := Parse("name:string @index(fulltext) .", -1)
 	require.NotNil(t, result)
 	require.Nil(t, err)
 }
 
 func TestParse5_Error(t *testing.T) {
 	reset()
-	result, err := Parse("value:default @index .")
+	result, err := Parse("value:default @index .", -1)
 	require.Error(t, err)
 	require.Nil(t, result)
 }
 
 func TestParse6_Error(t *testing.T) {
 	reset()
-	result, err := Parse("pass:password @index .")
+	result, err := Parse("pass:password @index .", -1)
 	require.Error(t, err)
 	require.Nil(t, result)
 }
 
 func TestParse7_Error(t *testing.T) {
 	reset()
-	result, err := Parse("name:string @index .")
+	result, err := Parse("name:string @index .", -1)
 	require.Error(t, err)
 	require.Nil(t, result)
 }
 
 func TestParse8_Error(t *testing.T) {
 	reset()
-	result, err := Parse("dob:dateTime @index .")
+	result, err := Parse("dob:dateTime @index .", -1)
 	require.Error(t, err)
 	require.Nil(t, result)
 }
 
 func TestParse9_Error(t *testing.T) {
 	reset()
-	result, err := Parse("age:uid @noconflict .")
+	result, err := Parse("age:uid @noconflict .", -1)
 	require.NotNil(t, result)
 	require.NoError(t, err)
 }
@@ -273,7 +273,7 @@ func TestParseScalarList(t *testing.T) {
 		jobs: [string] @index(term) .
 		occupations: [string] .
 		graduation: [dateTime] .
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
@@ -301,7 +301,7 @@ func TestParseScalarListError1(t *testing.T) {
 	reset()
 	result, err := Parse(`
 		friend: [string .
-	`)
+	`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unclosed [ while parsing schema for: friend")
 	require.Nil(t, result)
@@ -311,7 +311,7 @@ func TestParseScalarListError2(t *testing.T) {
 	reset()
 	result, err := Parse(`
 		friend: string] .
-	`)
+	`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Invalid ending")
 	require.Nil(t, result)
@@ -321,7 +321,7 @@ func TestParseScalarListError3(t *testing.T) {
 	reset()
 	_, err := Parse(`
 		friend: [bool] .
-	`)
+	`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unsupported type for list: [bool]")
 }
@@ -330,7 +330,7 @@ func TestParseUidList(t *testing.T) {
 	reset()
 	result, err := Parse(`
 		friend: [uid] .
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
@@ -344,7 +344,7 @@ func TestParseUidSingleValue(t *testing.T) {
 	reset()
 	result, err := Parse(`
 		friend: uid .
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
@@ -355,7 +355,7 @@ func TestParseUidSingleValue(t *testing.T) {
 }
 func TestParseUnderscore(t *testing.T) {
 	reset()
-	_, err := Parse("_share_:string @index(term) .")
+	_, err := Parse("_share_:string @index(term) .", -1)
 	require.NoError(t, err)
 }
 
@@ -364,7 +364,7 @@ func TestParseUpsert(t *testing.T) {
 	_, err := Parse(`
 		jobs : string @index(exact) @upsert .
 		age  : int @index(int) @upsert .
-	`)
+	`, -1)
 	require.NoError(t, err)
 }
 
@@ -374,7 +374,7 @@ func TestParseEmptyType(t *testing.T) {
 		type Person {
 
 		}
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -387,7 +387,7 @@ func TestParseTypeEOF(t *testing.T) {
 	reset()
 	result, err := Parse(`
 		type Person {
-		}`)
+		}`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -402,7 +402,7 @@ func TestParseSingleType(t *testing.T) {
 		type Person {
 			name
 		}
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -422,7 +422,7 @@ func TestParseCombinedSchemasAndTypes(t *testing.T) {
 			name
 		}
         name: string .
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Preds))
 	require.Equal(t, &pb.SchemaUpdate{
@@ -449,7 +449,7 @@ func TestParseMultipleTypes(t *testing.T) {
 		type Animal {
 			name
 		}
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -477,7 +477,7 @@ func TestParseTypeDuplicateFields(t *testing.T) {
 			name
 			name
 		}
-	`)
+	`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Duplicate fields with name: name")
 }
@@ -490,7 +490,7 @@ func TestOldTypeFormat(t *testing.T) {
 			address: string!
 			children: [Person]
 		}
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -516,7 +516,7 @@ func TestOldAndNewTypeFormat(t *testing.T) {
 			name: [string!]!
 			address
 		}
-	`)
+	`, -1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
@@ -536,7 +536,7 @@ func TestParseTypeErrMissingNewLine(t *testing.T) {
 	reset()
 	_, err := Parse(`
 		type Person {
-		}type Animal {}`)
+		}type Animal {}`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expected new line or EOF after type declaration")
 }
@@ -560,7 +560,7 @@ func TestParseComments(t *testing.T) {
 		#
 		# End of test
 		#
-	`)
+	`, -1)
 	require.NoError(t, err)
 }
 
@@ -571,7 +571,7 @@ func TestParseCommentsNoop(t *testing.T) {
 # Leberkas alcatra kielbasa chicken pastrami swine bresaola. Spare ribs landjaeger meatloaf.
 # Chicken biltong boudin porchetta jowl swine burgdoggen cow kevin ground round landjaeger ham.
 # Tongue buffalo cow filet mignon boudin sirloin pancetta pork belly beef ribs. Cow landjaeger.
-	`)
+	`, -1)
 	require.NoError(t, err)
 }
 
@@ -581,7 +581,7 @@ func TestParseCommentsErrMissingType(t *testing.T) {
 		# The definition below should trigger an error
 		# because we commented out its type.
 		node: # bool .
-	`)
+	`, -1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Missing Type")
 }
@@ -597,7 +597,7 @@ func TestParseTypeComments(t *testing.T) {
 									 # embedded # comments # here
 		}
 		# /User
-	`)
+	`, -1)
 	require.NoError(t, err)
 }
 
