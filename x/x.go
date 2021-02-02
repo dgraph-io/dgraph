@@ -141,19 +141,13 @@ var (
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
 	// GuardiansGroupUid is Uid of guardians group node.
-	// GuardiansGroupUid uint64
-
 	GuardiansGroupUid sync.Map
-	GrootUserUid      sync.Map
-
 	// GrootUser Uid is Uid of groot user node.
-	// GrootUserUid uint64
+	GrootUserUid sync.Map
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
-	// atomic.StoreUint64(&GuardiansGroupUid, 0)
-	// atomic.StoreUint64(&GrootUserUid, 0)
 	GuardiansGroupUid.Store(DefaultNamespace, 0)
 	GrootUserUid.Store(DefaultNamespace, 0)
 
@@ -264,11 +258,11 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		panic("No namespace in context")
+		panic("No metadata in context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		return DefaultNamespace
+		panic("No namespace in context")
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
@@ -406,7 +400,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
-// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+// AttachNamespace adds given namespace to the metadata of the context.
 func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {

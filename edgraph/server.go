@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,7 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -49,7 +47,6 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -111,203 +108,59 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-func upsertGuardian(ctx context.Context) error {
-	query := fmt.Sprintf(`
-			{
-				guid as guardians(func: eq(dgraph.xid, "%s")){
-					uid
-				}
-			}
-		`, x.GuardiansId)
-	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
-	req := &api.Request{
-		CommitNow: true,
-		Query:     query,
-		Mutations: []*api.Mutation{
-			{
-				Set:  groupNQuads,
-				Cond: "@if(eq(len(guid), 0))",
-			},
-		},
-	}
-
-	resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
-
-	// Structs to parse guardians group uid from query response
-	type groupNode struct {
-		Uid string `json:"uid"`
-	}
-
-	type groupQryResp struct {
-		GuardiansGroup []groupNode `json:"guardians"`
-	}
-
-	if err != nil {
-		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
-	}
-	var groupResp groupQryResp
-	var guardiansGroupUid string
-	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
-		return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
-	}
-	if len(groupResp.GuardiansGroup) == 0 {
-		// no guardians group found
-		// Extract guardians group uid from mutation
-		newGroupUidMap := resp.GetUids()
-		guardiansGroupUid = newGroupUidMap["newgroup"]
-	} else if len(groupResp.GuardiansGroup) == 1 {
-		// we found a guardians group
-		guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
-	} else {
-		return errors.Wrap(err, "Multiple guardians group found")
-	}
-
-	guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
-	if err != nil {
-		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
-	}
-	// atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
-	x.GuardiansGroupUid.Store(x.ExtractNamespace(ctx), guardiansGroupUidUint)
-
-	glog.Infof("Successfully upserted the guardians group")
-	return nil
-}
-
-func upsertGroot(ctx context.Context) error {
-	// groot is the default user of guardians group.
-	query := fmt.Sprintf(`
-			{
-				grootid as grootUser(func: eq(dgraph.xid, "%s")){
-					uid
-				}
-				guid as var(func: eq(dgraph.xid, "%s"))
-			}
-		`, x.GrootId, x.GuardiansId)
-	userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
-	userNQuads = append(userNQuads, &api.NQuad{
-		Subject:   "_:newuser",
-		Predicate: "dgraph.user.group",
-		ObjectId:  "uid(guid)",
-	})
-	req := &api.Request{
-		CommitNow: true,
-		Query:     query,
-		Mutations: []*api.Mutation{
-			{
-				Set: userNQuads,
-				// Assuming that if groot exists, it is in guardian group
-				Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
-			},
-		},
-	}
-
-	resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
-	if err != nil {
-		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
-	}
-
-	// Structs to parse groot user uid from query response
-	type userNode struct {
-		Uid string `json:"uid"`
-	}
-
-	type userQryResp struct {
-		GrootUser []userNode `json:"grootUser"`
-	}
-
-	var grootUserUid string
-	var userResp userQryResp
-	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
-		return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
-	}
-	if len(userResp.GrootUser) == 0 {
-		// no groot user found from query
-		// Extract uid of created groot user from mutation
-		newUserUidMap := resp.GetUids()
-		grootUserUid = newUserUidMap["newuser"]
-	} else if len(userResp.GrootUser) == 1 {
-		// we found a groot user
-		grootUserUid = userResp.GrootUser[0].Uid
-	} else {
-		return errors.Wrap(err, "Multiple groot users found")
-	}
-
-	grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
-	if err != nil {
-		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
-	}
-	x.GrootUserUid.Store(x.ExtractNamespace(ctx), grootUserUidUint)
-	glog.Infof("Successfully upserted groot account")
-	return nil
-}
-
-func CreateGuardianAndGroot(ctx context.Context, namespace uint64) error {
+func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 	ctx = x.AttachNamespace(ctx, namespace)
-
-	// TODO(Ahsan): We don't need to upsert, we can directly set.
-	for {
-		if err := upsertGuardian(ctx); err != nil {
-			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
-	}
-	for {
-		if err := upsertGroot(ctx); err != nil {
-			glog.Infof("Unable to upsert the groot account. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
-	}
-
-	queryVars := map[string]string{
-		"$userid":   "groot",
-		"$password": "password",
-	}
-	queryRequest := api.Request{
-		Query: queryUser,
-		Vars:  queryVars,
-	}
-
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
-	if err != nil {
-		glog.Errorf("Error while query user with id %s: %v", "groot", err)
+	if err := upsertGuardian(ctx); err != nil {
 		return err
 	}
-	user, err := acl.UnmarshalUser(queryResp, "user")
-	if err != nil {
+	if err := upsertGroot(ctx); err != nil {
 		return err
 	}
-	spew.Dump("Created user", user)
 	return nil
 }
 
-// TODO(Ahsan): Complete the below two functions.
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
-	glog.V(2).Info("[NAMESPACE] Create namespace request")
+	glog.V(2).Info("Got create namespace request")
+	if err := AuthorizeGalaxyGuardians(ctx); err != nil {
+		return 0, errors.Wrapf(err, "While creating namespace got error: %s")
+	}
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
 
+	// Apply initial schema for the new namespace.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(ids.StartId)
-
 	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		return 0, err
 	}
 
-	if err := CreateGuardianAndGroot(ctx, ids.StartId); err != nil {
+	// Apply initial types for the new namespace.
+	for {
+		m = &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
+		m.Types = schema.InitialTypes(ids.StartId)
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			glog.Errorf("While creating types for namespace: %s", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
+	// Create the guardian group and groot user for the new namespace.
+	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
-	glog.V(2).Info("[NAMESPACE] Created namespace", ids.StartId)
 	return ids.StartId, nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("[NAMESPACE] Deleting namespace", namespace)
+	glog.Info("Deleting namespace", namespace)
+	if err := AuthorizeGalaxyGuardians(ctx); err != nil {
+		return errors.Wrapf(err, "While deleting namespace got error: %s")
+	}
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
 }
@@ -1226,8 +1079,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 		ns, err := getJWTNamespace(ctx)
 		if err != nil {
 			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-			debug.PrintStack()
-			spew.Dump("req is", req)
 		}
 		ctx = x.AttachNamespace(ctx, ns)
 		return s.doQuery(ctx, req, NeedAuthorize)
