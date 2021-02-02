@@ -235,6 +235,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
+
+	// Version is empty string if the backup was taken on an old version (v20.11).
 	if lastManifest.Version == "" {
 		tmp := make([]string, 0, len(preds))
 		for _, pred := range preds {

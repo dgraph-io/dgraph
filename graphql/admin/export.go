@@ -97,8 +97,7 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 	err = json.Unmarshal(inputByts, &input)
 
 	// Export everything if namespace is not specified.
-	v, ok := inputArg.(map[string]interface{})
-	if ok {
+	if v, ok := inputArg.(map[string]interface{}); ok {
 		if _, ok := v["namespace"]; !ok {
 			input.Namespace = math.MaxUint64
 		}

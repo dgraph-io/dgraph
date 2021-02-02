@@ -23,6 +23,7 @@ import (
 // Constants representing type of different graphql lexed items.
 const (
 	itemText       lex.ItemType = 5 + iota // plain text
+	itemNumber                             // number
 	itemLeftCurl                           // left curly bracket
 	itemRightCurl                          // right curly bracket
 	itemColon                              // colon
@@ -35,7 +36,6 @@ const (
 	itemLeftSquare
 	itemRightSquare
 	itemExclamationMark
-	itemNumber // number
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -112,7 +112,7 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 
 func lexNumber(l *lex.Lexer) lex.StateFn {
 	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
+		// The caller already checked isNumber, and absorbed one rune.
 		r := l.Next()
 		if isNumber(r) {
 			continue

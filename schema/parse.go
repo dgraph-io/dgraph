@@ -411,10 +411,10 @@ func parseTypeField(it *lex.ItemIterator, typeName string, ns uint64) (*pb.Schem
 func parseNamespace(it *lex.ItemIterator) (uint64, error) {
 	nextItems, err := it.Peek(2)
 	if err != nil {
-		return 0, errors.Errorf("while peeking items at namespace parsing: %v", err)
+		return 0, errors.Errorf("Unable to peek: %v", err)
 	}
 	if nextItems[0].Typ != itemNumber || nextItems[1].Typ != itemRightSquare {
-		return 0, errors.Errorf("Type does not match the expected")
+		return 0, errors.Errorf("Typed oes not match the expected")
 	}
 	ns, err := strconv.Atoi(nextItems[0].Val)
 	if err != nil {
@@ -422,8 +422,9 @@ func parseNamespace(it *lex.ItemIterator) (uint64, error) {
 	}
 	it.Next()
 	it.Next()
+	// We have parsed the namespace. Now move to the next item.
 	if !it.Next() {
-		return 0, err
+		return 0, errors.Errorf("No schema found after namespace. Got: %v", nextItems[0])
 	}
 	return uint64(ns), nil
 }
@@ -508,12 +509,12 @@ func Parse(s string, namespace int64) (*ParsedSchema, error) {
 			// We expect a namespace.
 			ns, err := parseNamespace(it)
 			if err != nil {
-				return nil, errors.Errorf("While converting namespace")
+				return nil, errors.Wrapf(err, "While parsing namespace:")
 			}
 			if namespace != -1 {
 				ns = uint64(namespace)
 			}
-			// parseNamespace has already called next.
+			// We have already called next in parseNamespace.
 			item := it.Item()
 			if err := parseTypeOrSchema(item, it, ns); err != nil {
 				return nil, err

@@ -749,9 +749,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			var writer *fileWriter
 			switch kv.Version {
-			case 1:
+			case 1: // data
 				writer = dataWriter
-			case 3:
+			case 3: // graphQL schema
 				writer = gqlSchemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
@@ -853,6 +853,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
 		return nil, err
 	}
+	// Write the schema and types.
 	if err := writeSchema(x.ByteSchema); err != nil {
 		return nil, err
 	}
