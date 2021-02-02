@@ -172,7 +172,7 @@ func TestCountKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsCountOrCountRev())
-		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, count, pk.Count)
 	}
 }

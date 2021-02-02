@@ -24,7 +24,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
@@ -124,11 +123,10 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 	AssertTrue(totalLen >= 1+2+len(attr))
 
 	buf := make([]byte, totalLen)
-
+	buf[0] = typeByte
 	// Separate namespace and attribute from attr and write namespace in the first 8 bytes of key.
 	namespace, attr := ParseNamespaceBytes(attr)
-	x.AssertTrue(copy(buf, namespace) == 8)
-	buf[8] = typeByte
+	AssertTrue(copy(buf[1:], namespace) == 8)
 	rest := buf[9:]
 
 	writeAttr(rest, attr)
@@ -354,9 +352,9 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 // of this key. Useful when iterating in the reverse order.
 func (p ParsedKey) SkipPredicate() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = p.bytePrefix
 	ns, attr := ParseNamespaceBytes(p.Attr)
-	copy(buf, ns)
-	buf[8] = p.bytePrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	rest := buf[9:]
 	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
@@ -367,9 +365,9 @@ func (p ParsedKey) SkipPredicate() []byte {
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = p.bytePrefix
 	ns, attr := ParseNamespaceBytes(p.Attr)
-	copy(buf, ns)
-	buf[8] = p.bytePrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	rest := buf[9:]
 	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
@@ -380,9 +378,9 @@ func (p ParsedKey) DataPrefix() []byte {
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	ns, attr := ParseNamespaceBytes(p.Attr)
-	copy(buf, ns)
-	buf[8] = DefaultPrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	rest := buf[9:]
 	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
@@ -393,9 +391,9 @@ func (p ParsedKey) IndexPrefix() []byte {
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	ns, attr := ParseNamespaceBytes(p.Attr)
-	copy(buf, ns)
-	buf[8] = DefaultPrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	rest := buf[9:]
 	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
@@ -406,9 +404,9 @@ func (p ParsedKey) ReversePrefix() []byte {
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = p.bytePrefix
 	ns, attr := ParseNamespaceBytes(p.Attr)
-	copy(buf, ns)
-	buf[8] = p.bytePrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	rest := buf[9:]
 	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
@@ -454,7 +452,7 @@ func FromBackupKey(backupKey *pb.BackupKey, isOld bool) []byte {
 	if backupKey == nil {
 		return nil
 	}
-	// TODO: Fix this hacky solution. Maybe pass an option if the backup is from older version.
+
 	attr := backupKey.Attr
 	if isOld {
 		attr = NamespaceAttr(DefaultNamespace, attr)
@@ -503,9 +501,9 @@ func TypePrefix() []byte {
 // PredicatePrefix returns the prefix for all keys belonging to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
+	buf[0] = DefaultPrefix
 	ns, predicate := ParseNamespaceBytes(predicate)
-	AssertTrue(copy(buf, ns) == 8)
-	buf[8] = DefaultPrefix
+	AssertTrue(copy(buf[1:], ns) == 8)
 	k := writeAttr(buf[9:], predicate)
 	AssertTrue(len(k) == 0)
 	return buf
@@ -516,12 +514,12 @@ func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
-	if keyCopy[8] != DefaultPrefix {
+	if keyCopy[0] != DefaultPrefix {
 		return nil, errors.Errorf("only keys with default prefix can have a split key")
 	}
 	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
 	// individual part of a single list key.
-	keyCopy[8] = ByteSplit
+	keyCopy[0] = ByteSplit
 
 	// Append the start uid at the end of the key.
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
@@ -533,23 +531,23 @@ func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
-	if len(key) == 0 {
-		return p, errors.New("0 length key")
+	if len(key) < 9 {
+		return p, errors.New("Key length less than 9")
 	}
-	namespace := key[:8]
-	key = key[8:]
 	p.bytePrefix = key[0]
+	namespace := key[1:9]
+	key = key[9:]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
-	p.HasStartUid = key[0] == ByteSplit
+	p.HasStartUid = p.bytePrefix == ByteSplit
 
 	if len(key) < 3 {
 		return p, errors.Errorf("Invalid format for key %v", key)
 	}
-	sz := int(binary.BigEndian.Uint16(key[1:3]))
-	k := key[3:]
+	sz := int(binary.BigEndian.Uint16(key[:2]))
+	k := key[2:]
 
 	if len(k) < sz {
 		return p, errors.Errorf("Invalid size %v for key %v", sz, key)

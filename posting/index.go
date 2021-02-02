@@ -576,7 +576,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithCompression(options.None).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
 		WithLoggingLevel(badger.WARNING).
-		WithNamespaceOffset(0)
+		WithNamespaceOffset(1)
 
 	// Set cache if we have encryption.
 	if len(x.WorkerConfig.EncryptionKey) > 0 {
