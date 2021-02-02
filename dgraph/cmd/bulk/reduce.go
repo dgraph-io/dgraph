@@ -35,6 +35,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -602,7 +603,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		}
 
 		alloc.Reset()
-		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
+		bm := roaring64.New()
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -615,7 +616,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			enc.Add(uid)
+			bm.Add(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
@@ -625,8 +626,8 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
-		pl.Pack = enc.Done()
-		numUids := codec.ExactLen(pl.Pack)
+		pl.Bitmap = codec.ToBytes(bm)
+		numUids := bm.GetCardinality()
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 

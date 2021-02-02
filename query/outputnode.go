@@ -36,6 +36,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -985,10 +986,11 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias)
 	}
 
+	r := codec.FromList(sg.DestUIDs)
 	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+		if !r.Contains(uid) {
 			// This UID was filtered. So Ignore it.
 			continue
 		}

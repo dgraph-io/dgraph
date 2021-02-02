@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
@@ -136,15 +137,16 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	defer alloc.Release()
 
 	var pl pb.PostingList
-	encoder := codec.Encoder{BlockSize: 256, Alloc: alloc}
+	bm := roaring64.New()
 
 	outBuf := z.NewBuffer(5 << 20)
 	defer outBuf.Release()
 	encode := func() {
-		pl.Pack = encoder.Done()
-		if codec.ExactLen(pl.Pack) == 0 {
+		if bm.GetCardinality() == 0 {
 			return
 		}
+
+		pl.Bitmap = codec.ToBytes(bm)
 
 		kv := posting.MarshalPostingList(&pl, nil)
 		kv.Key = append([]byte{}, lastCe.Key()...)
@@ -153,7 +155,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		badger.KVToBuffer(kv, outBuf)
 
 		alloc.Reset()
-		encoder = codec.Encoder{BlockSize: 256, Alloc: alloc}
+		bm = roaring64.New()
 		pl.Reset()
 
 		// Flush out the buffer.
@@ -168,7 +170,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
-		encoder.Add(ce.Uid())
+		bm.Add(ce.Uid())
 		lastCe = ce
 		return nil
 	})
