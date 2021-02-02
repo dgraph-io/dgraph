@@ -521,7 +521,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 			}
 			`,
 			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1", "issues":[]}]}`,
+			result: `{"queryUser":[{"username":"user1","issues":[]}]}`,
 		},
 	}
 
