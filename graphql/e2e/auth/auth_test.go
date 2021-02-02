@@ -159,7 +159,6 @@ type TestCase struct {
 	ans           bool
 	result        string
 	name          string
-	jwt           string
 	filter        map[string]interface{}
 	variables     map[string]interface{}
 	query         string
@@ -505,27 +504,25 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 				queryProject {
 					name
 				}
-			}`,
-			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjM2MTIyMDcwNjAuMjAzNTgxLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVIiOm51bGx9LCJpc3MiOiJ0ZXN0In0.vq07OOZkEgpstw5o1_gC-Di95S8M0mkf5LaBGO-4Fdg",
+			}
+			`,
 			result: `{"queryProject":[]}`,
 		},
 	}
 
 	for _, tcase := range testCases {
 		queryParams := &common.GraphQLParams{
+			Headers: common.GetJWTWithNullClaims(t, tcase.user, tcase.role, metaInfo)
 			Query: tcase.query,
 		}
-		queryParams.Headers.Set(metaInfo.Header, tcase.jwt)
-
 		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
 		common.RequireNoGQLErrors(t, gqlResponse)
-
+		
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
-	}
+	}	
 }
-
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
