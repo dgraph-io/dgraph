@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"runtime/debug"
@@ -1204,7 +1203,6 @@ func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthM
 	require.NotNil(t, metaInfo.PrivateKeyPath)
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
-	fmt.Println(jwtToken)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
