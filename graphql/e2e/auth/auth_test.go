@@ -159,6 +159,7 @@ type TestCase struct {
 	ans           bool
 	result        string
 	name          string
+	jwt           string
 	filter        map[string]interface{}
 	variables     map[string]interface{}
 	query         string
@@ -494,6 +495,56 @@ func TestAuthOnInterfaces(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryWithStandardClaims(t *testing.T) {
+	testCases := []TestCase{
+		{
+			query: `
+            query {
+                queryProject (order: {asc: name}) {
+					name
+				}
+			}`,
+			jwt: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6ImFkbWluIn0.GwPPSnCWyT54EuL7_WkkMRWBvMRs_Yhkd03_JLQ5WSU",
+			result: `{
+								"queryProject": [
+								  {
+									"name": "Project1"
+								  },
+								  {
+									"name": "Project2"
+								  }
+								]
+							}`,
+		},
+		{
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.wabcAkINZ6ycbEuziTQTSpv8T875Ky7JQu68ynoyDQE",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: make(http.Header),
+			Query:   tcase.query,
+		}
+		queryParams.Headers.Set(metaInfo.Header, tcase.jwt)
+
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
