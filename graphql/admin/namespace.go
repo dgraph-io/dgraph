@@ -21,13 +21,14 @@ func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err = (&edgraph.Server{}).CreateNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): map[string]interface{}{
 			"namespaceId": req.NamespaceId,
 			"message":     "Created namespace successfully",
 		}},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -38,13 +39,14 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): map[string]interface{}{
 			"namespaceId": req.NamespaceId,
 			"message":     "Deleted namespace successfully",
 		}},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func getNamespaceInput(m schema.Mutation) (*namespaceInput, error) {

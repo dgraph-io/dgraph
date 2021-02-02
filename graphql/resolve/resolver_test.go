@@ -19,6 +19,8 @@ package resolve
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
@@ -32,7 +34,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": {"id": "0x1"} }}`,
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedScalar,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
@@ -42,7 +44,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "dob": [{"id": "0x1"}] }}`,
 			Expected: `{ "getAuthor": { "dob": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedObject,
+				Message:   schema.ErrExpectedScalar,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "dob"},
 			}}},
@@ -58,10 +60,10 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			}}},
 		{Name: "return error when array is returned instead of object value",
 			GQLQuery: `query { getAuthor(id: "0x1") { country { name } } }`,
-			Response: `{ "getAuthor": { "country": [{"name": "Rwanda"}] }}`,
+			Response: `{ "getAuthor": { "country": [{"name": "Rwanda"},{"name": "Rwanda"}] }}`,
 			Expected: `{ "getAuthor": { "country": null }}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedObject,
+				Message:   schema.ErrExpectedSingleItem,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "country"},
 			}}},
@@ -71,7 +73,7 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "posts": "Rwanda" }}`,
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedList,
+				Message:   schema.ErrExpectedList,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},
@@ -80,21 +82,21 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 			Response: `{ "getAuthor": { "posts": {"text": "Random post"} }}`,
 			Expected: `{ "getAuthor": null}`,
 			Errors: x.GqlErrorList{{
-				Message:   errExpectedList,
+				Message:   schema.ErrExpectedList,
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor"},
 			}}},
 	}
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
-			if diff := cmp.Diff(test.Errors, resp.Errors); diff != "" {
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			resp := complete(t, gqlSchema, tcase.GQLQuery, tcase.Response)
+			if diff := cmp.Diff(tcase.Errors, resp.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
 
-			require.JSONEq(t, test.Expected, resp.Data.String())
+			require.JSONEq(t, tcase.Expected, resp.Data.String())
 		})
 	}
 }
@@ -295,20 +297,20 @@ func TestValueCoercion(t *testing.T) {
 			Expected: `{ "getAuthor": { "dob": "1970-01-01T00:00:02Z"}}`},
 		{Name: "val string value should be coerced to datetime",
 			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
-			Response: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+00:00" }}`,
-			Expected: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+00:00" }}`},
+			Response: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+05:30" }}`,
+			Expected: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+05:30" }}`},
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
-			if diff := cmp.Diff(test.Errors, resp.Errors); diff != "" {
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			resp := complete(t, gqlSchema, tcase.GQLQuery, tcase.Response)
+			if diff := cmp.Diff(tcase.Errors, resp.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
 
-			require.JSONEq(t, test.Expected, resp.Data.String())
+			require.JSONEq(t, tcase.Expected, resp.Data.String())
 		})
 	}
 }
@@ -340,17 +342,18 @@ func TestQueryAlias(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			resp := complete(t, gqlSchema, tcase.GQLQuery, tcase.Response)
 
 			require.Nil(t, resp.Errors)
-			require.JSONEq(t, test.Expected, resp.Data.String())
+			require.JSONEq(t, tcase.Expected, resp.Data.String())
 		})
 	}
 }
 
 func TestMutationAlias(t *testing.T) {
+	t.Skipf("TODO(abhimanyu): port it to e2e")
 
 	tests := map[string]struct {
 		gqlQuery      string
@@ -440,48 +443,49 @@ func TestResponseOrder(t *testing.T) {
 				`"postsNullable": [ ` +
 				`{ "title": "A Title", "text": "Some Text" }, ` +
 				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
+			Expected: `{"getAuthor":{"name":"A.N. Author","dob":"2000-01-01T00:00:00Z",` +
+				`"postsNullable":[` +
+				`{"title":"A Title","text":"Some Text"},` +
+				`{"title":"Another Title","text":"More Text"}]}}`},
 		{Name: "Response is in same order as GQL query no matter Dgraph order",
 			GQLQuery: query,
 			Response: `{ "getAuthor": [ { "dob": "2000-01-01", "name": "A.N. Author", ` +
 				`"postsNullable": [ ` +
 				`{ "text": "Some Text", "title": "A Title" }, ` +
 				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
+			Expected: `{"getAuthor":{"name":"A.N. Author","dob":"2000-01-01T00:00:00Z",` +
+				`"postsNullable":[` +
+				`{"title":"A Title","text":"Some Text"},` +
+				`{"title":"Another Title","text":"More Text"}]}}`},
 		{Name: "Inserted null is in GQL query order",
 			GQLQuery: query,
 			Response: `{ "getAuthor": [ { "name": "A.N. Author", ` +
 				`"postsNullable": [ ` +
 				`{ "title": "A Title" }, ` +
 				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": null, ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": null}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
+			Expected: `{"getAuthor":{"name":"A.N. Author","dob":null,` +
+				`"postsNullable":[` +
+				`{"title":"A Title","text":null},` +
+				`{"title":"Another Title","text":"More Text"}]}}`},
+		// TODO(abhimanyu): add e2e for following test
 		{Name: "Whole operation GQL query order",
 			GQLQuery: `query { ` +
 				`getAuthor(id: "0x1") { name }` +
 				`getPost(id: "0x2") { title } }`,
 			Response: `{ "getAuthor": [ { "name": "A.N. Author" } ],` +
 				`"getPost": [ { "title": "A Post" } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author"},` +
-				`"getPost": {"title": "A Post"}}`},
+			Expected: `{"getAuthor":{"name":"A.N. Author"},` +
+				`"getPost":{"title":"A Post"}}`},
 	}
 
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			resp := complete(t, gqlSchema, tcase.GQLQuery, tcase.Response)
 
 			require.Nil(t, resp.Errors)
-			require.Equal(t, test.Expected, resp.Data.String())
+			require.Equal(t, tcase.Expected, resp.Data.String())
 		})
 	}
 }

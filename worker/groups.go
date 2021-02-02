@@ -203,6 +203,7 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) applyInitialTypes() {
+	// TODO(Ahsan): Figure out how to pass the correct namespaces.
 	initialTypes := schema.InitialTypes(x.DefaultNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {

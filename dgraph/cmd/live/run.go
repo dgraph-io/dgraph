@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ var (
 func init() {
 	Live.Cmd = &cobra.Command{
 		Use:   "live",
-		Short: "Run Dgraph live loader",
+		Short: "Run Dgraph Live Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
 			if err := run(); err != nil {
@@ -130,8 +130,10 @@ func init() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
+	Live.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")

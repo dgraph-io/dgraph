@@ -159,9 +159,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -170,10 +170,10 @@
       }
       Ticket3 as var(func: uid(0x789))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -221,9 +221,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -232,10 +232,10 @@
       }
       Ticket3 as var(func: uid(0x789))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -292,9 +292,9 @@
       }
       Column1 as var(func: uid(0x456, 0x459))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -303,10 +303,10 @@
       }
       Ticket3 as var(func: uid(0x789, 0x799))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -364,9 +364,9 @@
       }
       Column1 as var(func: uid(0x456, 0x459))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -375,10 +375,10 @@
       }
       Ticket3 as var(func: uid(0x789, 0x799))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -433,9 +433,9 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -456,9 +456,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -504,9 +504,9 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -526,9 +526,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -577,9 +577,9 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -602,9 +602,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -613,8 +613,8 @@
       }
       Project3 as var(func: uid(0x123))
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -661,9 +661,9 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -685,9 +685,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -696,8 +696,8 @@
       }
       Project3 as var(func: uid(0x123))
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -813,8 +813,8 @@
       }
       Project1 as var(func: uid(0x123))
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -868,7 +868,7 @@
       }
       Issue1 as var(func: uid(0x789))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
   authjson: |
@@ -919,7 +919,7 @@
       }
       Issue1 as var(func: uid(0x789))
       Issue2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
   error:
@@ -1006,12 +1006,12 @@
       }
       Question1 as var(func: uid(0x123))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -1053,12 +1053,12 @@
       }
       Question1 as var(func: uid(0x123))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -1102,8 +1102,8 @@
       FbPost1 as var(func: uid(0x123))
       FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }

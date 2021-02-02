@@ -289,12 +289,14 @@ type Book {
     bookId: Int64! @id
     name: String!
     desc: String
+	summary: String @lambda
+	chapters: [Chapter] @hasInverse(field: book)
 }
 
 type Chapter {
     chapterId: Int! @id
     name: String!
-    bookId: Int64! @search
+	book: Book
 }
 
 type Section {

@@ -32,11 +32,13 @@ func resolveDraining(ctx context.Context, m schema.Mutation) (*resolve.Resolved,
 	enable := getDrainingInput(m)
 	x.UpdateDrainingMode(enable)
 
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
-			m.Name(): response("Success", fmt.Sprintf("draining mode has been set to %v", enable))},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{
+			m.Name(): response("Success", fmt.Sprintf("draining mode has been set to %v", enable)),
+		},
+		nil,
+	), true
 }
 
 func getDrainingInput(m schema.Mutation) bool {

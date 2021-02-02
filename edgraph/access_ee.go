@@ -288,12 +288,15 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		"$userid":   userid,
 		"$password": password,
 	}
-	queryRequest := api.Request{
-		Query: queryUser,
-		Vars:  queryVars,
+	req := &Request{
+		req: &api.Request{
+			Query: queryUser,
+			Vars:  queryVars,
+		},
+		doAuth: NoAuthorize,
 	}
 
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -326,13 +329,16 @@ func RefreshAcls(closer *z.Closer) {
 		maxRefreshTs = refreshTs
 
 		glog.V(3).Infof("Refreshing ACLs")
-		queryRequest := api.Request{
-			Query:    queryAcls,
-			ReadOnly: true,
-			StartTs:  refreshTs,
+		req := &Request{
+			req: &api.Request{
+				Query:    queryAcls,
+				ReadOnly: true,
+				StartTs:  refreshTs,
+			},
+			doAuth: NoAuthorize,
 		}
 
-		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
+		queryResp, err := (&Server{}).doQuery(closer.Ctx(), req)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -406,18 +412,21 @@ func ResetAcl(closer *z.Closer) {
 			}
 		`, x.GuardiansId)
 		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
-		req := &api.Request{
-			CommitNow: true,
-			Query:     query,
-			Mutations: []*api.Mutation{
-				{
-					Set:  groupNQuads,
-					Cond: "@if(eq(len(guid), 0))",
+		req := &Request{
+			req: &api.Request{
+				CommitNow: true,
+				Query:     query,
+				Mutations: []*api.Mutation{
+					{
+						Set:  groupNQuads,
+						Cond: "@if(eq(len(guid), 0))",
+					},
 				},
 			},
+			doAuth: NoAuthorize,
 		}
 
-		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+		resp, err := (&Server{}).doQuery(ctx, req)
 
 		// Structs to parse guardians group uid from query response
 		type groupNode struct {
@@ -474,19 +483,22 @@ func ResetAcl(closer *z.Closer) {
 			Predicate: "dgraph.user.group",
 			ObjectId:  "uid(guid)",
 		})
-		req := &api.Request{
-			CommitNow: true,
-			Query:     query,
-			Mutations: []*api.Mutation{
-				{
-					Set: userNQuads,
-					// Assuming that if groot exists, it is in guardian group
-					Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+		req := &Request{
+			req: &api.Request{
+				CommitNow: true,
+				Query:     query,
+				Mutations: []*api.Mutation{
+					{
+						Set: userNQuads,
+						// Assuming that if groot exists, it is in guardian group
+						Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+					},
 				},
 			},
+			doAuth: NoAuthorize,
 		}
 
-		resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+		resp, err := (&Server{}).doQuery(ctx, req)
 		if err != nil {
 			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 		}
