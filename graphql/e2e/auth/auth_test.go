@@ -512,16 +512,16 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 
 	for _, tcase := range testCases {
 		queryParams := &common.GraphQLParams{
-			Headers: common.GetJWTWithNullClaims(t, tcase.user, tcase.role, metaInfo)
-			Query: tcase.query,
+			Headers: common.GetJWTWithNullUser(t, tcase.role, metaInfo),
+			Query:   tcase.query,
 		}
 		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
 		common.RequireNoGQLErrors(t, gqlResponse)
-		
+
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
-	}	
+	}
 }
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{

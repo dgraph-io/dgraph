@@ -1197,9 +1197,9 @@ func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) h
 	return h
 }
 
-func GetJWTWithNullClaims(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
+func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
-	metaInfo.AuthVars["USER"] = user
+	metaInfo.AuthVars["USER"] = nil
 	metaInfo.AuthVars["ROLE"] = role
 	require.NotNil(t, metaInfo.PrivateKeyPath)
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
