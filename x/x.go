@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -140,15 +141,22 @@ var (
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
 	// GuardiansGroupUid is Uid of guardians group node.
-	GuardiansGroupUid uint64
+	// GuardiansGroupUid uint64
+
+	GuardiansGroupUid sync.Map
+	GrootUserUid      sync.Map
+
 	// GrootUser Uid is Uid of groot user node.
-	GrootUserUid uint64
+	// GrootUserUid uint64
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
-	atomic.StoreUint64(&GuardiansGroupUid, 0)
-	atomic.StoreUint64(&GrootUserUid, 0)
+	// atomic.StoreUint64(&GuardiansGroupUid, 0)
+	// atomic.StoreUint64(&GrootUserUid, 0)
+	GuardiansGroupUid.Store(DefaultNamespace, 0)
+	GrootUserUid.Store(DefaultNamespace, 0)
+
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.

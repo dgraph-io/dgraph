@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -47,6 +49,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -108,9 +111,154 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+func upsertGuardian(ctx context.Context) error {
+	query := fmt.Sprintf(`
+			{
+				guid as guardians(func: eq(dgraph.xid, "%s")){
+					uid
+				}
+			}
+		`, x.GuardiansId)
+	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
+	req := &api.Request{
+		CommitNow: true,
+		Query:     query,
+		Mutations: []*api.Mutation{
+			{
+				Set:  groupNQuads,
+				Cond: "@if(eq(len(guid), 0))",
+			},
+		},
+	}
+
+	resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+
+	// Structs to parse guardians group uid from query response
+	type groupNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type groupQryResp struct {
+		GuardiansGroup []groupNode `json:"guardians"`
+	}
+
+	if err != nil {
+		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+	}
+	var groupResp groupQryResp
+	var guardiansGroupUid string
+	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
+		return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
+	}
+	if len(groupResp.GuardiansGroup) == 0 {
+		// no guardians group found
+		// Extract guardians group uid from mutation
+		newGroupUidMap := resp.GetUids()
+		guardiansGroupUid = newGroupUidMap["newgroup"]
+	} else if len(groupResp.GuardiansGroup) == 1 {
+		// we found a guardians group
+		guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
+	} else {
+		return errors.Wrap(err, "Multiple guardians group found")
+	}
+
+	guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
+	if err != nil {
+		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
+	}
+	// atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
+	x.GuardiansGroupUid.Store(x.ExtractNamespace(ctx), guardiansGroupUidUint)
+
+	glog.Infof("Successfully upserted the guardians group")
+	return nil
+}
+
+func upsertGroot(ctx context.Context) error {
+	// groot is the default user of guardians group.
+	query := fmt.Sprintf(`
+			{
+				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+					uid
+				}
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GrootId, x.GuardiansId)
+	userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+	userNQuads = append(userNQuads, &api.NQuad{
+		Subject:   "_:newuser",
+		Predicate: "dgraph.user.group",
+		ObjectId:  "uid(guid)",
+	})
+	req := &api.Request{
+		CommitNow: true,
+		Query:     query,
+		Mutations: []*api.Mutation{
+			{
+				Set: userNQuads,
+				// Assuming that if groot exists, it is in guardian group
+				Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+			},
+		},
+	}
+
+	resp, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+	if err != nil {
+		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
+	}
+
+	// Structs to parse groot user uid from query response
+	type userNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type userQryResp struct {
+		GrootUser []userNode `json:"grootUser"`
+	}
+
+	var grootUserUid string
+	var userResp userQryResp
+	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+		return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
+	}
+	if len(userResp.GrootUser) == 0 {
+		// no groot user found from query
+		// Extract uid of created groot user from mutation
+		newUserUidMap := resp.GetUids()
+		grootUserUid = newUserUidMap["newuser"]
+	} else if len(userResp.GrootUser) == 1 {
+		// we found a groot user
+		grootUserUid = userResp.GrootUser[0].Uid
+	} else {
+		return errors.Wrap(err, "Multiple groot users found")
+	}
+
+	grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
+	if err != nil {
+		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
+	}
+	x.GrootUserUid.Store(x.ExtractNamespace(ctx), grootUserUidUint)
+
+	glog.Infof("Successfully upserted groot account")
+	return nil
+}
+
+func CreateGuardianAndGroot(ctx context.Context) error {
+	ns, err := getJWTNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	ctx = x.AttachNamespace(ctx, ns)
+
+	// TODO(Ahsan): We don't need to upsert, we can directly set.
+	if err = upsertGuardian(ctx); err != nil {
+		return err
+	}
+	return upsertGroot(ctx)
+}
+
 // TODO(Ahsan): Complete the below two functions.
-func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
-	glog.V(2).Info("[NAMESPACE] Create namespace request : ", namespace)
+func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
+	glog.V(2).Info("[NAMESPACE] Create namespace request")
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
@@ -120,10 +268,14 @@ func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
 
 	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
-		return err
+		return 0, err
+	}
+
+	if err := CreateGuardianAndGroot(ctx); err != nil {
+		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
 	glog.V(2).Info("[NAMESPACE] Created namespace", ids.StartId)
-	return nil
+	return ids.StartId, nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
@@ -1043,8 +1195,18 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	auth := ctx.Value(Authorize)
 	if auth == nil || auth.(bool) {
+		ns, err := getJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+			debug.PrintStack()
+			spew.Dump("req is", req)
+		}
+		ctx = x.AttachNamespace(ctx, ns)
 		return s.doQuery(ctx, req, NeedAuthorize)
 	}
+
+	//TODO(Ahsan): We should only set the namespace to 0 when ACL+MultiTenancy is disabled.
+	ctx = x.AttachNamespace(ctx, 0)
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 

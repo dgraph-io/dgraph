@@ -40,6 +40,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
+		Namespace:    input.Namespace,
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
@@ -68,13 +69,13 @@ func getLoginInput(m schema.Mutation) *loginInput {
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
 	userID, _ := m.ArgValue("userId").(string)
 	password, _ := m.ArgValue("password").(string)
-	namespace, _ := m.ArgValue("namespace").(uint64)
+	namespace, _ := m.ArgValue("namespace").(int64)
 	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
 	return &loginInput{
 		userID,
 		password,
-		namespace,
+		uint64(namespace),
 		refreshToken,
 	}
 }

@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 
@@ -82,7 +82,8 @@ func (s *Server) Login(ctx context.Context,
 	glog.Infof("%s logged in successfully", user.UserID)
 
 	resp := &api.Response{}
-	accessJwt, err := getAccessJwt(user.UserID, user.Groups, 56)
+	accessJwt, err := getAccessJwt(user.UserID, user.Groups, request.Namespace)
+	fmt.Println("generatd jwt for ns", request.Namespace, accessJwt)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
@@ -122,7 +123,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	if err := validateLoginRequest(request); err != nil {
 		return nil, errors.Wrapf(err, "invalid login request")
 	}
-	ctx = x.AttachNamespace(ctx, request.Namespace)
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, _, err := validateToken(request.RefreshToken)
@@ -165,10 +165,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	return user, nil
 }
 
-// validateToken verifies the signature and expiration of the jwt, and if validation passes,
-// returns a slice of strings, where the first element is the extracted userId
-// and the rest are groupIds encoded in the jwt.
-func validateToken(jwtStr string) ([]string, uint64, error) {
+func parseJWT(jwtStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -177,15 +174,43 @@ func validateToken(jwtStr string) ([]string, uint64, error) {
 	})
 
 	if err != nil {
-		return nil, 0, errors.Errorf("unable to parse jwt token:%v", err)
+		return nil, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
 	// TODO(arijit): Upgrade the jwt library to v4.0
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return nil, 0, errors.Errorf("claims in jwt token is not map claims")
+		return nil, errors.Errorf("claims in jwt token is not map claims")
+	}
+	return claims, nil
+}
+
+func getJWTNamespace(ctx context.Context) (uint64, error) {
+	jwtString, err := x.ExtractJwt(ctx)
+	if err != nil {
+		return 0, err
+	}
+	claims, err := parseJWT(jwtString[0])
+	if err != nil {
+		return 0, err
 	}
 
+	// TODO(Ahsan): Can the claims have uint64 type?
+	namespace, ok := claims["namespace"].(float64)
+	if !ok {
+		return 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
+	}
+	return uint64(namespace), nil
+}
+
+// validateToken verifies the signature and expiration of the jwt, and if validation passes,
+// returns a slice of strings, where the first element is the extracted userId
+// and the rest are groupIds encoded in the jwt.
+func validateToken(jwtStr string) ([]string, uint64, error) {
+	claims, err := parseJWT(jwtStr)
+	if err != nil {
+		return nil, 0, err
+	}
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
@@ -341,7 +366,9 @@ func RefreshAcls(closer *z.Closer) {
 			StartTs:  refreshTs,
 		}
 
-		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
+		ctx := closer.Ctx()
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -461,7 +488,10 @@ func ResetAcl(closer *z.Closer) {
 		if err != nil {
 			return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
 		}
-		atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
+		x.GuardiansGroupUid.Store(x.ExtractNamespace(ctx), guardiansGroupUidUint)
+		v, ok := x.GuardiansGroupUid.Load(x.ExtractNamespace(ctx))
+		x.AssertTrue(ok == true)
+		x.AssertTrue(v == guardiansGroupUidUint)
 
 		glog.Infof("Successfully upserted the guardians group")
 		return nil
@@ -530,16 +560,37 @@ func ResetAcl(closer *z.Closer) {
 		if err != nil {
 			return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 		}
-		atomic.StoreUint64(&x.GrootUserUid, grootUserUidUint)
-
+		x.GrootUserUid.Store(x.ExtractNamespace(ctx), grootUserUidUint)
+		v, ok := x.GrootUserUid.Load(x.ExtractNamespace(ctx))
+		x.AssertTrue(ok == true && v == grootUserUidUint)
 		glog.Infof("Successfully upserted groot account")
+		queryVars := map[string]string{
+			"$userid":   "groot",
+			"$password": "password",
+		}
+		queryRequest := api.Request{
+			Query: queryUser,
+			Vars:  queryVars,
+		}
+
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+		if err != nil {
+			glog.Errorf("Error while query user with id %s: %v", "groot", err)
+			return err
+		}
+		user, err := acl.UnmarshalUser(queryResp, "user")
+		if err != nil {
+			return err
+		}
+		spew.Dump(user)
 		return nil
 	}
 
+	fmt.Println("Here")
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
-		x.AssertTrue(x.DefaultNamespace == x.ExtractNamespace(ctx))
+		fmt.Println("Adding Guradian group============")
 		defer cancel()
 		if err := upsertGuardians(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -552,7 +603,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
-		x.AssertTrue(x.DefaultNamespace == x.ExtractNamespace(ctx))
+		fmt.Println("Adding Guradian GROOT============")
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)

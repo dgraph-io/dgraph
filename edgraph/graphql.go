@@ -23,9 +23,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/gql"
 	"sort"
 	"time"
+
+	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -71,6 +73,7 @@ func ResetCors(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
 		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -125,7 +128,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-
 	type corsResponse struct {
 		Me []struct {
 			Uid        string `json:"uid"`

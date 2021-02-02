@@ -789,7 +789,9 @@ func run() {
 		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
-			_, origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
+			ctx := updaters.Ctx()
+			ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+			_, origins, err := edgraph.GetCorsOrigins(ctx)
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
 				time.Sleep(time.Second)

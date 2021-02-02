@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -45,7 +44,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	}
 	m.Edges = edges
 
-	err = checkIfDeletingAclOperation(m.Edges)
+	err = checkIfDeletingAclOperation(ctx, m.Edges)
 	if err != nil {
 		return nil, err
 	}
@@ -244,14 +243,20 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	return edges, nil
 }
 
-func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
+func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) error {
 	// Don't need to make any checks if ACL is not enabled
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-
-	guardianGroupUid := atomic.LoadUint64(&x.GuardiansGroupUid)
-	grootUserUid := atomic.LoadUint64(&x.GrootUserUid)
+	namespace := x.ExtractNamespace(ctx)
+	guardianGroupUid, ok := x.GuardiansGroupUid.Load(namespace)
+	if !ok {
+		return errors.New("Could not find Guardians group UID")
+	}
+	grootUserUid, ok := x.GrootUserUid.Load(namespace)
+	if !ok {
+		return errors.New("Could not find groots UID")
+	}
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
