@@ -83,8 +83,14 @@ func Encode(uids []uint64) []byte {
 
 func ToList(rm *roaring64.Bitmap) *pb.List {
 	return &pb.List{
-		Bitmap: ToBytes(rm),
+		Uids: rm.ToArray(),
+		// Bitmap: ToBytes(rm),
 	}
+}
+
+func And(rm *roaring64.Bitmap, l *pb.List) {
+	rl := FromList(l)
+	rm.And(rl)
 }
 
 func MatrixToBitmap(matrix []*pb.List) *roaring64.Bitmap {
@@ -94,6 +100,32 @@ func MatrixToBitmap(matrix []*pb.List) *roaring64.Bitmap {
 		res.Or(r)
 	}
 	return res
+}
+
+func Intersect(matrix []*pb.List) *roaring64.Bitmap {
+	out := roaring64.New()
+	if len(matrix) == 0 {
+		return out
+	}
+	out.Or(FromList(matrix[0]))
+	for _, l := range matrix[1:] {
+		r := FromList(l)
+		out.And(r)
+	}
+	return out
+}
+
+func Merge(matrix []*pb.List) *roaring64.Bitmap {
+	out := roaring64.New()
+	if len(matrix) == 0 {
+		return out
+	}
+	out.Or(FromList(matrix[0]))
+	for _, l := range matrix[1:] {
+		r := FromList(l)
+		out.Or(r)
+	}
+	return out
 }
 
 func ToBytes(bm *roaring64.Bitmap) []byte {
