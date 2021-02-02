@@ -353,13 +353,13 @@
 - name: "Error when multiple filter functions are used"
   gqlrequest: |
     query {
-      queryBook(filter:{bookId: {eq:2 le:2}})
+      querypost1(filter:{numLikes: {eq:2 le:2}})
          {
-          bookId
+          numLikes
         }
       }
   gqlvariables: |
     { }
   errors:
     [ { "message": "Int64Filter filter expects only one filter function, got: 2",
-        "locations": [ { "line": 2, "column": 29 } ] } ]
+        "locations": [ { "line": 2, "column": 32 } ] } ]
