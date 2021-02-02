@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -157,10 +158,10 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 	in := []uint64{sg.Params.From}
 	sg.SrcUIDs = &pb.List{Uids: in}
 	sg.uidMatrix = []*pb.List{{Uids: in}}
-	sg.DestUIDs = sg.SrcUIDs
+	sg.DestMap = codec.FromList(sg.SrcUIDs)
 
 	for _, child := range sg.Children {
-		child.SrcUIDs = sg.DestUIDs
+		child.SrcUIDs = sg.SrcUIDs
 		exec = append(exec, child)
 	}
 	dummy := &SubGraph{}

@@ -2271,7 +2271,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			child.Params.ParentVars[k] = v
 		}
 
-		child.SrcUIDs = sg.DestUIDs // Make the connection.
+		child.SrcUIDs = codec.ToList(sg.DestMap) // Make the connection.
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
@@ -2290,7 +2290,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestMap == nil || sg.DestMap.GetCardinality() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if span != nil {
 			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
@@ -2323,7 +2323,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 	}
 	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+	sg.DestMap = codec.Merge(sg.uidMatrix)
 	return nil
 }
 
@@ -2397,16 +2397,7 @@ func (sg *SubGraph) updateDestUids() {
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, len(sg.DestUIDs.Uids))
-	for _, ul := range sg.uidMatrix {
-		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-			if idx >= 0 {
-				included[idx] = true
-			}
-		}
-	}
-	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, idx int) bool { return included[idx] })
+	sg.DestMap = codec.Merge(sg.uidMatrix)
 }
 
 func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
@@ -2581,7 +2572,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
-		SrcUIDs: sg.DestUIDs,
+		SrcUIDs: codec.ToList(sg.DestMap),
 		ReadTs:  sg.ReadTs,
 	}
 	taskQuery, err := createTaskQuery(temp)
