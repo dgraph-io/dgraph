@@ -117,7 +117,6 @@ func init() {
 	// Options around how to set up Badger.
 	flag.String("badger", worker.BadgerDefaults,
 		`Various badger options.
-	goroutines=N provides the number of goroutines to use in badger.Stream.
 	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression
 		level (if applicable) for the postings directory. "none" would disable compression, while
 		"zstd:1" would set zstd compression at level 1.

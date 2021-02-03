@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	BadgerDefaults = "goroutines=8; compression=snappy;"
+	BadgerDefaults = "goroutines=8; compression=snappy; cache_mb=64; cache_percentage=70,30"
 )
 
 // ServerState holds the state of the Dgraph server.
