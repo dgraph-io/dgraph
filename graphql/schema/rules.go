@@ -787,19 +787,13 @@ func fieldDirectiveCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerr
 			typ.Name, field.Name)}
 	}
 
-	if subsDir != nil && typ.Name == "Query" {
-		if customDir == nil {
+	if subsDir != nil && typ.Name == "Query" && customDir != nil {
+		if customDir.Arguments.ForName("dql") == nil {
 			return []*gqlerror.Error{gqlerror.ErrorPosf(
-				field.Position, "Type %s; Field %s: @withSubscription directive without @custom directive"+
-					"not allowed inside Query type",
-				typ.Name, field.Name)}
-		} else if customDir.Arguments.ForName("dql") == nil {
-			return []*gqlerror.Error{gqlerror.ErrorPosf(
-				field.Position, "Type %s; Field %s: custom query should have dql argument if @withSubscription"+
+				field.Position, "Type %s; Field %s: custom query should have dql argument if @withSubscription "+
 					"directive is set",
 				typ.Name, field.Name)}
 		}
-
 	}
 
 	return nil
