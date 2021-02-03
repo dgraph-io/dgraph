@@ -611,12 +611,13 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
-	case proposal.CDCMaxTs > 0:
-		// current cdc index is larger than the proposal. Skip this
-		if n.cdcTracker.getCDCMaxTs() >= proposal.CDCMaxTs {
+	case proposal.CDCMinReadTs > 0:
+		// current cdc read ts is larger than the proposal. Skip this
+		ts := n.cdcTracker.getCDCMinReadTs()
+		if ts >= proposal.CDCMinReadTs {
 			return nil
 		}
-		n.cdcTracker.updateCDCMaxTs(proposal.CDCMaxTs)
+		n.cdcTracker.updateMinReadTs(ts, proposal.CDCMinReadTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
@@ -896,9 +897,9 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeCDCMaxCommitTs(maxTs uint64) error {
+func (n *node) proposeCDCMinReadTs(minTs uint64) error {
 	proposal := &pb.Proposal{
-		CDCMaxTs: maxTs,
+		CDCMinReadTs: minTs,
 	}
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
@@ -1574,7 +1575,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getCDCMaxTs())
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getCDCMinReadTs())
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 

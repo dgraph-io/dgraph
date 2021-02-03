@@ -49,20 +49,20 @@ type SinkHandler interface {
 	Close() error
 }
 
-func GetSinkHandler() (SinkHandler, error) {
-	if Config.KafkaConf != "" {
-		kafkaConf := x.NewSuperFlag(Config.KafkaConf).MergeAndCheckDefault(defaultKafkaConfig)
-		return newKafkaSinkHandler(kafkaConf)
-	}
+const defaultSinkConf = "destination=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 
-	if Config.FileSinkConf != "" {
-		fileConf := x.NewSuperFlag(Config.FileSinkConf).MergeAndCheckDefault(defaultFileSinkConf)
-		return newFileBasedSink(fileConf)
+func GetSinkHandler() (SinkHandler, error) {
+	if Config.SinkConfig != "" {
+		sinkConf := x.NewSuperFlag(Config.SinkConfig).MergeAndCheckDefault(defaultSinkConf)
+		if strings.HasPrefix(sinkConf.GetString("destination"), "file://") {
+			return newFileBasedSink(sinkConf)
+		} else if strings.HasPrefix(sinkConf.GetString("destination"), "kafka://") {
+			return newKafkaSinkHandler(sinkConf)
+		}
+		return nil, errors.New("wrong sink config is provided")
 	}
 	return nil, errors.New("sink config is not provided")
 }
-
-const defaultKafkaConfig = "brokers=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 
 // Kafka client is not concurrency safe.
 // Its the responsibility of callee to manage the concurrency.
@@ -72,7 +72,7 @@ type kafkaSinkClient struct {
 }
 
 func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
-	if config.GetString("brokers") == "" {
+	if config.GetString("destination") == "" {
 		return nil, errors.New("brokers are not provided for the kafka config")
 	}
 
@@ -115,8 +115,8 @@ func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 	}
-
-	client, err := sarama.NewClient(strings.Split(config.GetString("brokers"), ","), saramaConf)
+	brokers := strings.Split(strings.TrimLeft(config.GetString("destination"), "kafka://"), ",")
+	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +157,6 @@ func (k *kafkaSinkClient) Close() error {
 	return k.client.Close()
 }
 
-const defaultFileSinkConf = "path=sink/event.log"
-
 // this is only for testing purposes. Ideally client wouldn't want file based sink
 type fileSink struct {
 	// log writer is buffered. Do take care of that while testing
@@ -198,7 +196,7 @@ func (f *fileSink) Close() error {
 func newFileBasedSink(path *x.SuperFlag) (SinkHandler, error) {
 	var err error
 	w := &x.LogWriter{
-		FilePath: path.GetString("path"),
+		FilePath: strings.TrimLeft(path.GetString("destination"), "file://"),
 		MaxSize:  100,
 		MaxAge:   10,
 	}

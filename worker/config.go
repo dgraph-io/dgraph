@@ -75,8 +75,7 @@ type Options struct {
 
 	// Define different ChangeDataCapture configurations
 	ChangeDataConf string
-	KafkaConf      string
-	FileSinkConf   string
+	SinkConfig     string
 }
 
 // Config holds an instance of the server options..

@@ -210,9 +210,9 @@ they form a Raft group and provide synchronous replication.
 	current index in case of sink failure. Default is 10000 Raft entries.
 	`)
 
-	flag.String("kafka", "",
-		`Various kafka config options.
-	brokers=host1,host2 to define comma separated list of host.
+	flag.String("sink", "",
+		`Various sink config options.
+	destination=host1,host2 to define comma separated list of host.
 	sasl_user=username to define sasl username for kafka.
 	sasl_password=password to define sasl password for kafka.
 	ca_cert=/path/to/ca/crt/file to define ca cert for tls encryption.
@@ -638,7 +638,7 @@ func run() {
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		Audit:          conf,
 		ChangeDataConf: Alpha.Conf.GetString("change_data"),
-		KafkaConf:      Alpha.Conf.GetString("kafka"),
+		SinkConfig:     Alpha.Conf.GetString("sink"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

@@ -35,16 +35,14 @@ import (
 
 const defaultCDCConfig = "enabled=false; max_recovery=10000"
 
-// TODO: see if we need to send some monitoring events or not
 type ChangeData struct {
 	sink               SinkHandler
 	cdcIndex           uint64
 	maxRecoveryEntries uint64
 	closer             *z.Closer
 	pendingEvents      map[uint64][]CDCEvent
-	// maximum commit timestamp till which we have send the CDC event
-	maxCommitTs      uint64
-	lastProposeMaxTs uint64
+	//// minimum read timestamp till which we have pending txns for which we want to send events
+	minReadTs uint64
 }
 
 func initChangeDataCapture(idx uint64) *ChangeData {
@@ -68,33 +66,27 @@ func initChangeDataCapture(idx uint64) *ChangeData {
 	return cd
 }
 
-func (cd *ChangeData) getCDCMaxTs() uint64 {
+func (cd *ChangeData) getCDCMinReadTs() uint64 {
 	if cd == nil {
-		// return max value that will help callers to nullify cdc effect if not enabled.
 		return math.MaxUint64
 	}
-	return atomic.LoadUint64(&cd.maxCommitTs)
+	return atomic.LoadUint64(&cd.minReadTs)
 }
 
-func (cd *ChangeData) updateCDCMaxTs(ts uint64) {
+func (cd *ChangeData) updateMinReadTs(oldTs, newTs uint64) {
 	if cd == nil {
 		return
 	}
-	atomic.StoreUint64(&cd.maxCommitTs, ts)
+	atomic.CompareAndSwapUint64(&cd.minReadTs, oldTs, newTs)
 }
 
-func (cd *ChangeData) proposeCDCMaxCommitTs() error {
+func (cd *ChangeData) proposeCDCMinReadTs() error {
 	if cd == nil {
 		return nil
 	}
-
-	maxTs := atomic.LoadUint64(&cd.maxCommitTs)
-	if cd.lastProposeMaxTs < maxTs {
-		err := groups().Node.proposeCDCMaxCommitTs(maxTs)
-		if err != nil {
-			return err
-		}
-		cd.lastProposeMaxTs = maxTs
+	err := groups().Node.proposeCDCMinReadTs(cd.getCDCMinReadTs())
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -109,13 +101,38 @@ func (cd *ChangeData) Close() {
 	glog.Errorf("error while closing sink %v", err)
 }
 
-// todo: test cases old cluster restart, live loader, bulk loader, backup restore etc
 func (cd *ChangeData) processCDCEvents() {
 	if cd == nil {
 		return
 	}
 
-	sendCDCEvents := func() {
+	sendEvents := func(ts *pb.TxnStatus, pending []CDCEvent) error {
+		var commitTs uint64 = 0
+		if ts != nil {
+			commitTs = ts.CommitTs
+		}
+		msgs := make([]SinkMessage, len(pending))
+		for i, e := range pending {
+			// add commit timestamp here
+			e.Meta.Timestamp = commitTs
+			b, err := json.Marshal(e)
+			x.Check(err)
+			msgs[i] = SinkMessage{
+				Meta: SinkMeta{
+					Topic: "dgraph_cdc",
+				},
+				Key:   []byte("dgraph-cdc-event"),
+				Value: b,
+			}
+		}
+		if err := cd.sink.SendMessages(msgs); err != nil {
+			glog.Errorf("error while sending cdc event to sink %+v", err)
+			return err
+		}
+		return nil
+	}
+
+	checkAndSendCDCEvents := func() {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
 
@@ -124,12 +141,14 @@ func (cd *ChangeData) processCDCEvents() {
 		if cdcIndex == last {
 			return
 		}
-		// if cdc is lagging behind the current raft index,
+		// if cdc is lagging behind the current via maxRecoveryEntries,
 		// skip ahead the cdcIndex to prevent uncontrolled growth of raft logs.
-		//if last-cdcIndex > cd.maxRecoveryEntries {
-		//	cd.UpdateCDCIndex(last)
-		//	return
-		//}
+		if uint64(len(cd.pendingEvents)) > cd.maxRecoveryEntries {
+			glog.Info("too many pending cdc events. Skipping for now.")
+			cd.cdcIndex = last
+			cd.pendingEvents = make(map[uint64][]CDCEvent)
+			return
+		}
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			x.Check(err)
@@ -154,39 +173,31 @@ func (cd *ChangeData) processCDCEvents() {
 				// todo(aman bansal): use namespace for key.
 				if proposal.Mutations != nil {
 					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
+					// In ludicrous events send the events as soon as you get it.
+					// We wont wait for oracle delta in case of ludicrous mode
+					if x.WorkerConfig.LudicrousMode {
+						if err := sendEvents(nil, events); err != nil {
+							return
+						}
+						continue
+					}
 					if cd.pendingEvents[proposal.Mutations.StartTs] == nil {
 						cd.pendingEvents[proposal.Mutations.StartTs] = make([]CDCEvent, 0)
 					}
-					cd.pendingEvents[proposal.Mutations.StartTs] = append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
+					cd.pendingEvents[proposal.Mutations.StartTs] =
+						append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
 				}
 
-				if proposal.Delta != nil {
+				if proposal.Delta != nil && !x.WorkerConfig.LudicrousMode {
 					for _, ts := range proposal.Delta.Txns {
 						pending := cd.pendingEvents[ts.StartTs]
 						if ts.CommitTs > 0 && len(pending) > 0 {
-							msgs := make([]SinkMessage, len(pending))
-							for i, e := range pending {
-								// add commit timestamp here
-								e.Meta.Timestamp = ts.CommitTs
-								b, err := json.Marshal(e)
-								x.Check(err)
-								msgs[i] = SinkMessage{
-									Meta: SinkMeta{
-										Topic: "dgraph_cdc",
-									},
-									Key:   []byte("dgraph-cdc-event"),
-									Value: b,
-								}
-							}
-							if err := cd.sink.SendMessages(msgs); err != nil {
-								glog.Errorf("error while sending cdc event to sink %+v", err)
+							if err := sendEvents(ts, pending); err != nil {
 								return
 							}
 						}
 						// delete from pending events once events are sent
 						delete(cd.pendingEvents, ts.StartTs)
-						atomic.StoreUint64(&cd.maxCommitTs,
-							x.Max(ts.CommitTs, atomic.LoadUint64(&cd.maxCommitTs)))
 					}
 				}
 
@@ -206,17 +217,28 @@ func (cd *ChangeData) processCDCEvents() {
 			return
 		case <-tick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				sendCDCEvents()
+				checkAndSendCDCEvents()
 				iter = iter + 1
 				if iter == 5 {
 					iter = 0
-					if err := cd.proposeCDCMaxCommitTs(); err != nil {
+					atomic.StoreUint64(&cd.minReadTs, evaluateMinReadTs(cd.pendingEvents))
+					if err := cd.proposeCDCMinReadTs(); err != nil {
 						glog.Errorf("not able to propose snapshot %v", err)
 					}
 				}
 			}
 		}
 	}
+}
+
+func evaluateMinReadTs(pendingEvents map[uint64][]CDCEvent) uint64 {
+	min := uint64(math.MaxUint64)
+	for ts := range pendingEvents {
+		if ts < min {
+			min = ts
+		}
+	}
+	return min
 }
 
 type CDCEvent struct {
@@ -298,7 +320,6 @@ func transformMutationToCDCEvent(index uint64, mutation *pb.Mutations) []CDCEven
 				glog.Errorf("error while converting value %v", err)
 			}
 		}
-		// todo (aman bansal): send password fields encrypted
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
 				CDCIndex:  index,
