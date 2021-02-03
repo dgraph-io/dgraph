@@ -30,6 +30,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	BadgerDefaults = "goroutines=8; compression=snappy;"
+)
+
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.

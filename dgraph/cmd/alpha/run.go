@@ -113,10 +113,7 @@ they form a Raft group and provide synchronous replication.
 	goroutines=N provides the number of goroutines to use in badger.Stream.
 	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression 
 		level (if applicable) for the postings directory. "none" would disable compression, while 
-		"zstd:1" would set zstd compression at level 1.
-	cache_mb=N total size of cache (in MB) per shard in the reducer.
-	cache_percentage=N cache percentages summing up to 100 for various caches.
-		(FORMAT: BlockCacheSize, IndexCacheSize)`)
+		"zstd:1" would set zstd compression at level 1.`)
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.

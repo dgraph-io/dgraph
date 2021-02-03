@@ -37,10 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	BadgerDefaults = "goroutines=8; compression=snappy; cache_mb=64; cache_percentage=70,30;"
-)
-
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
