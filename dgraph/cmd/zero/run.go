@@ -51,7 +51,7 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	Raft              *x.SuperFlag
+	Raft              *z.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
@@ -201,7 +201,7 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
+	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
 	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),

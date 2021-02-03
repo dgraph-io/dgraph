@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
 )
 
@@ -78,7 +79,7 @@ type WorkerOptions struct {
 	// TLS server config which will be used to initiate server internal port
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
-	Raft *SuperFlag
+	Raft *z.SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// MaxRetries is the maximum number of times to retry a commit before giving up.
