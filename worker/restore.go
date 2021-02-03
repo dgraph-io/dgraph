@@ -143,7 +143,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 					"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 			}
 
-			restoreKey, err := fromNewBackupKey(kv.Key)
+			restoreKey, err := fromBackupKey(kv.Key, version)
 			if err != nil {
 				return 0, err
 			}
@@ -155,7 +155,13 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 			if err != nil {
 				return 0, errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
-			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+
+			attr := parsedKey.Attr
+			if version == 0 {
+				// For older versions, preds set will contain attribute without namespace.
+				attr = x.ParseAttr(attr)
+			}
+			if _, ok := preds[attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
 
@@ -170,12 +176,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				kv.Version = restoreTs
 			}
 
-			if version == 0 {
-				restoreKey, err = fromOldBackupKey(kv.Key)
-				if err != nil {
-					return 0, err
-				}
-			}
 			switch kv.GetUserMeta()[0] {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 				backupPl := &pb.BackupPostingList{}
@@ -255,17 +255,10 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 	return nil
 }
 
-func fromBackupKey(key []byte, isOld bool) ([]byte, error) {
+func fromBackupKey(key []byte, version int) ([]byte, error) {
 	backupKey := &pb.BackupKey{}
 	if err := backupKey.Unmarshal(key); err != nil {
 		return nil, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
 	}
-	return x.FromBackupKey(backupKey, isOld), nil
-}
-
-func fromOldBackupKey(key []byte) ([]byte, error) {
-	return fromBackupKey(key, true)
-}
-func fromNewBackupKey(key []byte) ([]byte, error) {
-	return fromBackupKey(key, false)
+	return x.FromBackupKey(backupKey, version == 0), nil
 }

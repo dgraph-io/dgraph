@@ -324,7 +324,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 	x.Check2(buf.WriteString(" . \n"))
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
-		Version: 2, // Schema value
+		Version: 3, // Schema value
 	}
 	return listWrap(kv), nil
 }
@@ -341,7 +341,7 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
-		Version: 2, // Type value
+		Version: 3, // Type value
 	}
 	return listWrap(kv), nil
 }
@@ -592,6 +592,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 
+	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
 	if in.Namespace != math.MaxUint64 {
@@ -614,6 +615,12 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		// Do not pick keys storing parts of a multi-part list. They will be read
 		// from the main key.
 		if pk.HasStartUid {
+			return false
+		}
+		// _predicate_ is deprecated but leaving this here so that users with a
+		// binary with version >= 1.1 can export data from a version < 1.1 without
+		// this internal data showing up.
+		if pk.Attr == "_predicate_" {
 			return false
 		}
 
@@ -680,7 +687,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			kv := &bpb.KV{
 				Value:   val,
-				Version: 3, // GraphQL schema value
+				Version: 2, // GraphQL schema value
 			}
 			return listWrap(kv), nil
 
@@ -751,7 +758,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
-			case 3: // graphQL schema
+			case 2: // graphQL schema
 				writer = gqlSchemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
@@ -772,11 +779,14 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		})
 	}
 
+	// This is used to export the schema and types.
 	writeSchema := func(prefix byte) error {
 		txn := db.NewTransactionAt(in.ReadTs, false)
 		defer txn.Discard()
+		// We don't need to iterate over all versions.
 		iopts := badger.DefaultIteratorOptions
 		iopts.Prefix = []byte{prefix}
+		// TODO(Naman): Remove this once we have ACL support. Get this from token.
 		if in.Namespace != math.MaxUint64 {
 			iopts.Prefix = append(iopts.Prefix, x.NamespaceToBytes(in.Namespace)...)
 		}

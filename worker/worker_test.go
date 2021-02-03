@@ -366,20 +366,15 @@ func TestMain(m *testing.M) {
 	gr = new(groupi)
 	gr.gid = 1
 	gr.tablets = make(map[string]*pb.Tablet)
-	addTablet := func(attr string, gid uint32) {
-		gr.tablets[x.NamespaceAttr(x.DefaultNamespace, attr)] = &pb.Tablet{GroupId: gid}
+	addTablets := func(attrs []string, gid uint32) {
+		for _, attr := range attrs {
+			gr.tablets[x.NamespaceAttr(x.DefaultNamespace, attr)] = &pb.Tablet{GroupId: gid}
+		}
 	}
 
-	addTablet("name", 1)
-	addTablet("name2", 1)
-	addTablet("age", 1)
-	addTablet("friend", 1)
-	addTablet("http://www.w3.org/2000/01/rdf-schema#range", 1)
-	addTablet("friend_not_served", 2)
-	addTablet("", 1)
-	addTablet("dgraph.type", 1)
-	addTablet("dgraph.graphql.xid", 1)
-	addTablet("dgraph.graphql.schema", 1)
+	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
+		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"}, 1)
+	addTablets([]string{"friend_not_served"}, 2)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

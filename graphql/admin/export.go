@@ -52,7 +52,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	// TODO: Check if that namespace exist and the relevant permissions.
+	// TODO(Naman): Check if that namespace exist and the relevant permissions.
 
 	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
 		Format:       format,
