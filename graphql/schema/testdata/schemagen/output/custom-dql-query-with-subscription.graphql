@@ -449,7 +449,6 @@ input UserRef {
 #######################
 
 type Query {
-	queryTweetsSortedByAuthorFollowers(search: String!): [Tweets] @custom(dql: "query q($search: string) {\n    var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {\n        Tweets.author {\n            followers as User.followers\n        }\n        authorFollowerCount as sum(val(followers))\n    }\n    queryTweetsSortedByAuthorFollowers(func: uid(authorFollowerCount), orderdesc: val(authorFollowerCount)) {\n        id: uid\n        text: Tweets.text\n        author: Tweets.author {\n            screen_name: User.screen_name\n            followers: User.followers\n        }\n        timestamp: Tweets.timestamp\n    }\n}")
 	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screen_name: User.screen_name\n        tweetCount: count(User.tweets)\n    }\n}")
 	getTweets(id: ID!): Tweets
 	queryTweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]

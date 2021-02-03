@@ -72,32 +72,33 @@ const (
    }
 # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `
-	schCustomDQL = `type Tweets {
-	id: ID!
-	text: String! @search(by: [fulltext])
-	author: User
-	timestamp: DateTime @search
-}
-type User {
-	screen_name: String! @id
-	followers: Int @search
-	tweets: [Tweets] @hasInverse(field: author)
-}
-type UserTweetCount @remote {
-	screen_name: String
-	tweetCount: Int
-}
+	schCustomDQL = `
+	type Tweets {
+		id: ID!
+		text: String! @search(by: [fulltext])
+		author: User
+		timestamp: DateTime @search
+   }
+   type User {
+    	screen_name: String! @id
+		followers: Int @search
+		tweets: [Tweets] @hasInverse(field: author)
+   }
+   type UserTweetCount @remote {
+		screen_name: String
+		tweetCount: Int
+   }
 
-type Query {
-  queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: """
-	query {
-		queryUserTweetCounts(func: type(User)) {
-			screen_name: User.screen_name
-			tweetCount: count(User.tweets)
+  type Query {
+  	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: """
+		query {
+			queryUserTweetCounts(func: type(User)) {
+				screen_name: User.screen_name
+				tweetCount: count(User.tweets)
+			}
 		}
-	}
-	""")
-}`
+		""")
+	}`
 	subExp       = 3 * time.Second
 	pollInterval = time.Second
 )

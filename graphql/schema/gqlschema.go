@@ -846,12 +846,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		defn := sch.Types[key]
 		if key == "Query" {
 			for _, q := range defn.Fields {
-				customDir := q.Directives.ForName(customDirective)
 				subsDir := q.Directives.ForName(subscriptionDirective)
-				if customDir != nil {
-					if !(customDir.Arguments.ForName("dql") == nil || subsDir == nil) {
-						sch.Subscription.Fields = append(sch.Subscription.Fields, q)
-					}
+				if subsDir != nil {
+					sch.Subscription.Fields = append(sch.Subscription.Fields, q)
 				}
 			}
 			continue
