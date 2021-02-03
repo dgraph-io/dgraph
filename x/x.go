@@ -262,7 +262,7 @@ func ExtractNamespace(ctx context.Context) uint64 {
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		panic("No namespace in context")
+		return DefaultNamespace
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
@@ -1024,7 +1024,8 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+	//TODO(Ahsan): What should be the namespace here?
+	if err := dg.Login(ctx, opt.UserID, password, 0); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")

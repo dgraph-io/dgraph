@@ -149,6 +149,8 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 		break
 	}
 
+	time.Sleep(2 * time.Second)
+
 	// Create the guardian group and groot user for the new namespace.
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
