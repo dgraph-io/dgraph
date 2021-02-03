@@ -285,7 +285,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	return listWrap(kv), err
 }
 
-func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
+func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	ns, attr := x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
@@ -322,14 +322,14 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 		x.Check2(buf.WriteString(" @upsert"))
 	}
 	x.Check2(buf.WriteString(" . \n"))
-	kv := &bpb.KV{
+	//TODO(Naman): We don't need the version anymore.
+	return &bpb.KV{
 		Value:   buf.Bytes(),
 		Version: 3, // Schema value
 	}
-	return listWrap(kv), nil
 }
 
-func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
+func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
 	ns, attr := x.ParseNamespaceAttr(attr)
 	x.Check2(buf.WriteString(fmt.Sprintf("[%d] type <%s> {\n", ns, attr)))
@@ -339,11 +339,10 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 
 	x.Check2(buf.WriteString("}\n"))
 
-	kv := &bpb.KV{
+	return &bpb.KV{
 		Value:   buf.Bytes(),
 		Version: 3, // Type value
 	}
-	return listWrap(kv), nil
 }
 
 func fieldToString(update *pb.SchemaUpdate) string {
@@ -595,6 +594,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
+	// TODO(Naman): Get this from token.
 	if in.Namespace != math.MaxUint64 {
 		// Export a specific namespace.
 		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(in.Namespace)...)
@@ -806,7 +806,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				return err
 			}
 
-			var kvs *bpb.KVList
+			var kv *bpb.KV
 			switch prefix {
 			case x.ByteSchema:
 				if !skipZero {
@@ -824,7 +824,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 					glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 					continue
 				}
-				kvs, err = toSchema(pk.Attr, &update)
+				kv = toSchema(pk.Attr, &update)
 
 			case x.ByteType:
 				var update pb.TypeUpdate
@@ -836,18 +836,15 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 					glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
 					return nil
 				}
-				kvs, err = toType(pk.Attr, update)
+				kv = toType(pk.Attr, update)
 
 			default:
 				glog.Fatalf("Unhandled byte prefix: %v", prefix)
 			}
 
 			// Write to the appropriate writer.
-			for _, kv := range kvs.GetKv() {
-				_, err = schemaWriter.gw.Write(kv.Value)
-				if err != nil {
-					return err
-				}
+			if _, err := schemaWriter.gw.Write(kv.Value); err != nil {
+				return err
 			}
 		}
 		return nil
