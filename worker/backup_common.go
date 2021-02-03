@@ -56,7 +56,7 @@ type Manifest struct {
 	// of the data during a restore.
 	BackupNum uint64 `json:"backup_num"`
 	// Version specifies the Dgraph version, the backup was taken on.
-	Version string `json:"version"`
+	Version int `json:"version"`
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
 	Path string `json:"-"`

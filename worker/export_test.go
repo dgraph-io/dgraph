@@ -197,7 +197,7 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
 
-	result, err := schema.Parse(buf.String(), -1)
+	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(result.Preds))

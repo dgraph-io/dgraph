@@ -183,7 +183,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	result, err := schema.Parse(string(buf), -1)
+	result, err := schema.Parse(string(buf))
 	x.Check(err)
 	return result
 }

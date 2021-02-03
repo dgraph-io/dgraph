@@ -45,7 +45,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
-		func(r io.Reader, groupId uint32, preds predicateSet, version string,
+		func(r io.Reader, groupId uint32, preds predicateSet, version int,
 			dropOperations []*pb.DropOperation) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -94,7 +94,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet, version string,
+func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet, version int,
 	dropOperations []*pb.DropOperation) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
@@ -170,7 +170,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				kv.Version = restoreTs
 			}
 
-			if version == "" {
+			if version == 0 {
 				restoreKey, err = fromOldBackupKey(kv.Key)
 				if err != nil {
 					return 0, err

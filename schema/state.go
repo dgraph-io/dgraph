@@ -155,14 +155,9 @@ func isNameBegin(r rune) bool {
 	}
 }
 
-// isNumberBegin returns true if the rune is an number.
+// isNumber returns true if the rune is an number.
 func isNumber(r rune) bool {
-	switch {
-	case r >= '0' && r <= '9':
-		return true
-	default:
-		return false
-	}
+	return r >= '0' && r <= '9'
 }
 
 func isNameSuffix(r rune) bool {

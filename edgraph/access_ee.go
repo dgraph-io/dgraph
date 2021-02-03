@@ -618,7 +618,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	case op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0:
 		preds = []string{op.DropValue}
 	default:
-		update, err := schema.Parse(op.Schema, -1)
+		update, err := schema.Parse(op.Schema)
 		if err != nil {
 			return err
 		}

@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -38,7 +39,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		reset()
 	}
 	pstate.DeleteAll()
-	result, err := Parse(string(s), -1)
+	result, err := Parse(string(s))
 	if err != nil {
 		return err
 	}
@@ -455,12 +456,10 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 	return true
 }
 
-// Parse parses a schema string and returns the schema representation for it.
-// If namespace == -1, then it preserves the namespace and sets default for the rest. Else, this
-// function forces the passed namespace.
-func Parse(s string, namespace int64) (*ParsedSchema, error) {
+// parse parses a schema string and returns the schema representation for it.
+func parse(s string, namespace uint64) (*ParsedSchema, error) {
 	defaultNs := x.DefaultNamespace
-	if namespace != -1 {
+	if namespace != math.MaxUint64 {
 		defaultNs = uint64(namespace)
 	}
 	var result ParsedSchema
@@ -511,7 +510,7 @@ func Parse(s string, namespace int64) (*ParsedSchema, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "While parsing namespace:")
 			}
-			if namespace != -1 {
+			if namespace != math.MaxUint64 {
 				ns = uint64(namespace)
 			}
 			// We have already called next in parseNamespace.
@@ -528,4 +527,16 @@ func Parse(s string, namespace int64) (*ParsedSchema, error) {
 		}
 	}
 	return nil, errors.Errorf("Shouldn't reach here")
+}
+
+// Parse parses the schema with namespace preserved. For the types/predicates for which the
+// namespace is not specified, it uses default.
+func Parse(s string) (*ParsedSchema, error) {
+	return parse(s, math.MaxUint64)
+}
+
+// ParseWithNamespace parses the schema and forces the given namespace on each of the
+// type/predicate.
+func ParseWithNamespace(s string, namespace uint64) (*ParsedSchema, error) {
+	return parse(s, namespace)
 }
