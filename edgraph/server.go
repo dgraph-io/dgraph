@@ -158,7 +158,9 @@ func PeriodicallyPostTelemetry() {
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema() (uid, graphQLSchema string, err error) {
-	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+	ctx := context.WithValue(context.Background(), Authorize, false)
+	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
 			query {

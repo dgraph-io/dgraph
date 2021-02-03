@@ -451,11 +451,13 @@ func setupServer(closer *z.Closer) {
 	// Implementation for server exit:
 	// The global epoch is set to maxUint64 while exiting the server.
 	// By using this information polling goroutine terminates the subscription.
-	globalEpoch := uint64(0)
+	globalEpoch := make(map[uint64]uint64)
+	e := globalEpoch[x.DefaultNamespace]
+	atomic.StoreUint64(&e, 0)
 	var mainServer web.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
-	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
+	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
@@ -465,8 +467,9 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
+		e = globalEpoch[x.DefaultNamespace]
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
-			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
+			healthStatus.StatusMsg, atomic.LoadUint64(&e)))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
@@ -543,7 +546,8 @@ func setupServer(closer *z.Closer) {
 		defer admin.ServerCloser.Done()
 
 		<-admin.ServerCloser.HasBeenClosed()
-		atomic.StoreUint64(&globalEpoch, math.MaxUint64)
+		e = globalEpoch[x.DefaultNamespace]
+		atomic.StoreUint64(&e, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {

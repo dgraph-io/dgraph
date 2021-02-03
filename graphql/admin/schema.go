@@ -66,8 +66,10 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
+	ns := x.ExtractNamespace(ctx)
+
 	usr.admin.mux.RLock()
-	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
+	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema[ns].Schema))
 	usr.admin.mux.RUnlock()
 
 	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
@@ -108,7 +110,8 @@ func (gsr *getSchemaResolver) Execute(
 	req *dgoapi.Request) (*dgoapi.Response, error) {
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
-	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
+	ns := x.ExtractNamespace(ctx)
+	b, err := doQuery(gsr.admin.schema[ns], gsr.gqlQuery)
 	return &dgoapi.Response{Json: b}, err
 }
 

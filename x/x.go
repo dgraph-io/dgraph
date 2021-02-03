@@ -408,13 +408,14 @@ func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 	}
 	return ctx
 }
-func AttachNamespace(ctx context.Context, namespace string) context.Context {
+func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
-
-	md.Append("namespace", namespace)
+	// ns, _ := strconv.ParseUint(namespace, 64, 10)
+	ns := strconv.FormatUint(namespace, 10)
+	md.Append("namespace", ns)
 	return metadata.NewIncomingContext(ctx, md)
 }
 
