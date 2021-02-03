@@ -272,9 +272,9 @@ func TestExportRdf(t *testing.T) {
 					nq.ObjectValue)
 			case "0x4":
 			case "0x5":
-				require.Equal(t, `<0x5> <name> "" <0x0> .`, scanner.Text())
+				require.Equal(t, `<0x5> <name> "" <0> .`, scanner.Text())
 			case "0x6":
-				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0x0> .`,
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0> .`,
 					scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
@@ -355,15 +355,15 @@ func TestExportJson(t *testing.T) {
 
 	wantJson := `
 	[
-		{"uid":"0x1","namespace":"0x0","name":"pho\ton"},
-		{"uid":"0x2","namespace":"0x0","name@en":"pho\ton"},
-		{"uid":"0x3","namespace":"0x0","name":"First Line\nSecondLine"},
-		{"uid":"0x5","namespace":"0x0","name":""},
-		{"uid":"0x6","namespace":"0x0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
-		{"uid":"0x1","namespace":"0x0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x2","namespace":"0x0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x3","namespace":"0x0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x4","namespace":"0x0","friend":[{"uid":"0x5"}],"friend|age":33,
+		{"uid":"0x1","namespace":"0","name":"pho\ton"},
+		{"uid":"0x2","namespace":"0","name@en":"pho\ton"},
+		{"uid":"0x3","namespace":"0","name":"First Line\nSecondLine"},
+		{"uid":"0x5","namespace":"0","name":""},
+		{"uid":"0x6","namespace":"0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
+		{"uid":"0x1","namespace":"0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x2","namespace":"0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x3","namespace":"0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x4","namespace":"0","friend":[{"uid":"0x5"}],"friend|age":33,
 			"friend|close":"true","friend|game":"football",
 			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
 	]

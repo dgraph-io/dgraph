@@ -145,7 +145,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	// Leaving it simple for now.
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"%d"`, e.uid, e.namespace)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -243,7 +243,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 		// Use label for storing namespace.
-		fmt.Fprintf(bp, " "+uidFmtStrRdf, e.namespace)
+		fmt.Fprintf(bp, " <%d>", e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
