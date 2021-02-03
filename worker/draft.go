@@ -612,12 +612,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
 	case proposal.CDCMinReadTs > 0:
-		// current cdc read ts is larger than the proposal. Skip this
-		ts := n.cdcTracker.getCDCMinReadTs()
-		if ts >= proposal.CDCMinReadTs {
-			return nil
-		}
-		n.cdcTracker.updateMinReadTs(ts, proposal.CDCMinReadTs)
+		n.cdcTracker.updateMinReadTs(proposal.CDCMinReadTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.

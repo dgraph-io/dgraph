@@ -43,6 +43,7 @@ type ChangeData struct {
 	pendingEvents      map[uint64][]CDCEvent
 	//// minimum read timestamp till which we have pending txns for which we want to send events
 	minReadTs uint64
+	maxReadTs uint64
 }
 
 func initChangeDataCapture(idx uint64) *ChangeData {
@@ -73,22 +74,16 @@ func (cd *ChangeData) getCDCMinReadTs() uint64 {
 	return atomic.LoadUint64(&cd.minReadTs)
 }
 
-func (cd *ChangeData) updateMinReadTs(oldTs, newTs uint64) {
+func (cd *ChangeData) updateMinReadTs(newTs uint64) {
 	if cd == nil {
 		return
 	}
-	atomic.CompareAndSwapUint64(&cd.minReadTs, oldTs, newTs)
-}
-
-func (cd *ChangeData) proposeCDCMinReadTs() error {
-	if cd == nil {
-		return nil
+	// current cdc read ts is larger than the proposal. Skip this
+	ts := cd.getCDCMinReadTs()
+	if ts >= newTs {
+		return
 	}
-	err := groups().Node.proposeCDCMinReadTs(cd.getCDCMinReadTs())
-	if err != nil {
-		return err
-	}
-	return nil
+	atomic.CompareAndSwapUint64(&cd.minReadTs, ts, newTs)
 }
 
 func (cd *ChangeData) Close() {
@@ -117,6 +112,7 @@ func (cd *ChangeData) processCDCEvents() {
 			e.Meta.Timestamp = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
+			// todo(aman bansal): use namespace for key.
 			msgs[i] = SinkMessage{
 				Meta: SinkMeta{
 					Topic: "dgraph_cdc",
@@ -132,6 +128,11 @@ func (cd *ChangeData) processCDCEvents() {
 		return nil
 	}
 
+	// This will always run on leader node only.
+	// Leader will check the Raft logs and keep in memory events that are pending.
+	// Once Txn is done, it will try to send events to sink.
+	// cdcIndex helps to define from which point we need to start reading from the raft logs
+	// clear map whenever we have send the events
 	checkAndSendCDCEvents := func() {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
@@ -145,6 +146,7 @@ func (cd *ChangeData) processCDCEvents() {
 		// skip ahead the cdcIndex to prevent uncontrolled growth of raft logs.
 		if uint64(len(cd.pendingEvents)) > cd.maxRecoveryEntries {
 			glog.Info("too many pending cdc events. Skipping for now.")
+			cd.updateMinReadTs(cd.maxReadTs)
 			cd.cdcIndex = last
 			cd.pendingEvents = make(map[uint64][]CDCEvent)
 			return
@@ -170,7 +172,7 @@ func (cd *ChangeData) processCDCEvents() {
 					cd.cdcIndex = entry.Index
 					continue
 				}
-				// todo(aman bansal): use namespace for key.
+
 				if proposal.Mutations != nil {
 					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
 					// In ludicrous events send the events as soon as you get it.
@@ -179,6 +181,7 @@ func (cd *ChangeData) processCDCEvents() {
 						if err := sendEvents(nil, events); err != nil {
 							return
 						}
+						cd.cdcIndex = entry.Index
 						continue
 					}
 					if cd.pendingEvents[proposal.Mutations.StartTs] == nil {
@@ -188,16 +191,19 @@ func (cd *ChangeData) processCDCEvents() {
 						append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
 				}
 
-				if proposal.Delta != nil && !x.WorkerConfig.LudicrousMode {
+				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						pending := cd.pendingEvents[ts.StartTs]
-						if ts.CommitTs > 0 && len(pending) > 0 {
-							if err := sendEvents(ts, pending); err != nil {
-								return
+						cd.maxReadTs = x.Max(cd.maxReadTs, ts.StartTs)
+						if !x.WorkerConfig.LudicrousMode {
+							pending := cd.pendingEvents[ts.StartTs]
+							if ts.CommitTs > 0 && len(pending) > 0 {
+								if err := sendEvents(ts, pending); err != nil {
+									return
+								}
 							}
+							// delete from pending events once events are sent
+							delete(cd.pendingEvents, ts.StartTs)
 						}
-						// delete from pending events once events are sent
-						delete(cd.pendingEvents, ts.StartTs)
 					}
 				}
 
@@ -221,8 +227,9 @@ func (cd *ChangeData) processCDCEvents() {
 				iter = iter + 1
 				if iter == 5 {
 					iter = 0
-					atomic.StoreUint64(&cd.minReadTs, evaluateMinReadTs(cd.pendingEvents))
-					if err := cd.proposeCDCMinReadTs(); err != nil {
+					minTs := evaluateMinReadTs(cd.pendingEvents, cd.maxReadTs)
+					cd.updateMinReadTs(minTs)
+					if err := groups().Node.proposeCDCMinReadTs(minTs); err != nil {
 						glog.Errorf("not able to propose snapshot %v", err)
 					}
 				}
@@ -231,12 +238,16 @@ func (cd *ChangeData) processCDCEvents() {
 	}
 }
 
-func evaluateMinReadTs(pendingEvents map[uint64][]CDCEvent) uint64 {
+func evaluateMinReadTs(pendingEvents map[uint64][]CDCEvent, maxReadTs uint64) uint64 {
 	min := uint64(math.MaxUint64)
 	for ts := range pendingEvents {
 		if ts < min {
 			min = ts
 		}
+	}
+	// if there is no pending events to send
+	if min == math.MaxUint64 {
+		return maxReadTs
 	}
 	return min
 }
