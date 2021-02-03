@@ -19,50 +19,33 @@
 package worker
 
 import (
-	"fmt"
-	"sync/atomic"
-	"time"
-
-	"github.com/dgraph-io/dgraph/x"
+	"math"
 )
 
-var logger *x.Logger
-var lis chan msg
-var CdcIndex uint64 = 1
-
-func init() {
-	var err error
-	logger, err = x.InitLogger("cdc", "cdc.log", nil, false)
-	x.Check(err)
-	lis = make(chan msg, 2000)
-	go listenAndDo()
+type ChangeData struct {
 }
 
-type msg struct {
-	m   string
-	idx uint64
+func initChangeDataCapture(idx uint64) *ChangeData {
+	return nil
 }
 
-func WriteCDC(m string, idx uint64) {
-	fmt.Println("writing CDC")
-	time.Sleep(time.Second * 3)
-	logger.AuditI(m)
-	logger.Sync()
-	atomic.StoreUint64(&CdcIndex, idx)
-	//lis <- msg{
-	//	m:   m,
-	//	idx: idx,
-	//}
+func (cd *ChangeData) getCDCMaxTs() uint64 {
+	return math.MaxUint64
 }
 
-func listenAndDo() {
-	for {
-		select {
-		case m := <-lis:
-			time.Sleep(time.Second * 10)
-			logger.AuditI(m.m)
-			logger.Sync()
-			atomic.StoreUint64(&CdcIndex, m.idx)
-		}
-	}
+func (cd *ChangeData) updateCDCMaxTs(ts uint64) {
+	return
+}
+
+func (cd *ChangeData) proposeCDCMaxCommitTs() error {
+	return nil
+}
+
+func (cd *ChangeData) Close() {
+	return
+}
+
+// todo: test cases old cluster restart, live loader, bulk loader, backup restore etc
+func (cd *ChangeData) processCDCEvents() {
+	return
 }

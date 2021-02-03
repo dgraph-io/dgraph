@@ -182,14 +182,11 @@ func (cd *ChangeData) processCDCEvents() {
 								glog.Errorf("error while sending cdc event to sink %+v", err)
 								return
 							}
-							// delete from pending events once events are sent
-							delete(cd.pendingEvents, ts.StartTs)
-							if cd.maxCommitTs < ts.CommitTs {
-								cd.maxCommitTs = ts.CommitTs
-							}
-						} else {
-							delete(cd.pendingEvents, ts.StartTs)
 						}
+						// delete from pending events once events are sent
+						delete(cd.pendingEvents, ts.StartTs)
+						atomic.StoreUint64(&cd.maxCommitTs,
+							x.Max(ts.CommitTs, atomic.LoadUint64(&cd.maxCommitTs)))
 					}
 				}
 

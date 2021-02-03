@@ -1574,7 +1574,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.maxCommitTs)
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getCDCMaxTs())
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
