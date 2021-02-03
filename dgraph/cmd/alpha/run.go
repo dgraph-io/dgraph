@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -458,7 +459,17 @@ func setupServer(closer *z.Closer) {
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, globalEpoch, closer)
-	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		namespace := r.Header.Get("namespace")
+		glog.Info("Namespace before parsing", namespace)
+		ns, _ := strconv.ParseUint(namespace, 10, 64)
+		glog.Info("Serving request on /graphql for namespace", ns)
+		if handler := mainServer.HTTPHandler(ns); handler != nil {
+			handler.ServeHTTP(w, r)
+		} else {
+			glog.Error("No graphQL handler for the given namespace")
+		}
+	})
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
@@ -475,7 +486,7 @@ func setupServer(closer *z.Closer) {
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler())))
+	}, adminAuthHandler(adminServer.HTTPHandler(x.DefaultNamespace))))
 
 	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {

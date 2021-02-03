@@ -645,7 +645,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAuthToken(ctx, r)
 	ns := r.Header.Get("namespace")
 
-	namespace, _ := strconv.ParseUint(ns, 64, 10)
+	namespace, _ := strconv.ParseUint(ns, 10, 64)
 	ctx = x.AttachNamespace(ctx, namespace)
 	fmt.Println("IN resolveWithAdminServer, ns: ", x.ExtractNamespace(ctx))
 

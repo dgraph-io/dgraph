@@ -872,7 +872,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// will match against global epoch to terminate the current subscriptions.
 	e := as.globalEpoch[ns]
 	atomic.AddUint64(&e, 1)
-	as.gqlServer[ns].ServeGQL(resolve.New(gqlSchema, resolverFactory))
+	as.gqlServer[ns].ServeGQL(ns, resolve.New(gqlSchema, resolverFactory))
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
