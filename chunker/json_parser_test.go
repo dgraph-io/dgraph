@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
@@ -60,14 +61,15 @@ type address struct {
 }
 
 type Person struct {
-	Uid     string     `json:"uid,omitempty"`
-	Name    string     `json:"name,omitempty"`
-	Age     int        `json:"age,omitempty"`
-	Married *bool      `json:"married,omitempty"`
-	Now     *time.Time `json:"now,omitempty"`
-	Address address    `json:"address,omitempty"` // geo value
-	Friends []Person   `json:"friend,omitempty"`
-	School  *School    `json:"school,omitempty"`
+	Uid       string     `json:"uid,omitempty"`
+	Namespace uint64     `json:"namespace,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	Age       int        `json:"age,omitempty"`
+	Married   *bool      `json:"married,omitempty"`
+	Now       *time.Time `json:"now,omitempty"`
+	Address   address    `json:"address,omitempty"` // geo value
+	Friends   []Person   `json:"friend,omitempty"`
+	School    *School    `json:"school,omitempty"`
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
@@ -116,10 +118,12 @@ func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
 	m := true
 	p := Person{
-		Name:    "Alice",
-		Age:     26,
-		Married: &m,
-		Now:     &tn,
+		Uid:       "1",
+		Namespace: 6,
+		Name:      "Alice",
+		Age:       26,
+		Married:   &m,
+		Now:       &tn,
 		Address: address{
 			Type:   "Point",
 			Coords: []float64{1.1, 2.0},
@@ -132,10 +136,13 @@ func TestNquadsFromJson1(t *testing.T) {
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
+	spew.Dump(nq)
 
 	fastNQ, err := FastParse(b, SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(fastNQ))
+	spew.Dump(fastNQ)
+	return
 
 	exp := &Experiment{
 		t:      t,

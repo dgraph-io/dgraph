@@ -84,7 +84,7 @@ type MapEntry []byte
 // }
 
 func mapEntrySize(key []byte, p *pb.Posting) int {
-	return 8 + 4 + 4 + len(key) + p.Size()
+	return 8 + 4 + 4 + len(key) + p.Size() // UID + keySz + postingSz + len(key) + size(p)
 }
 
 func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
@@ -290,14 +290,15 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
-	sid := m.uid(nq.GetSubject())
+	ns, _ := x.ParseNamespaceAttr(nq.Predicate)
+	sid := m.uid(nq.GetSubject(), ns)
 	if sid == 0 {
 		panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetSubject()))
 	}
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
-		oid = m.uid(nq.GetObjectId())
+		oid = m.uid(nq.GetObjectId(), ns)
 		if oid == 0 {
 			panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetObjectId()))
 		}
@@ -320,7 +321,7 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	m.addIndexMapEntries(nq, de)
 }
 
-func (m *mapper) uid(xid string) uint64 {
+func (m *mapper) uid(xid string, ns uint64) uint64 {
 	if !m.opt.NewUids {
 		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
 			m.xids.BumpTo(uid)
@@ -328,10 +329,10 @@ func (m *mapper) uid(xid string) uint64 {
 		}
 	}
 
-	return m.lookupUid(xid)
+	return m.lookupUid(xid, ns)
 }
 
-func (m *mapper) lookupUid(xid string) uint64 {
+func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	// We create a copy of xid string here because it is stored in
 	// the map in AssignUid and going to be around throughout the process.
 	// We don't want to keep the whole line that we read from file alive.
@@ -353,6 +354,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
+	// TODO(Naman): We need to pass in the namespace here.
 	nq := gql.NQuad{NQuad: &api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",

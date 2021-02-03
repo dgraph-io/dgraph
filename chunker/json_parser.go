@@ -263,6 +263,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
+	// TODO(Naman): Pass namespace here.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
 		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
@@ -439,6 +440,24 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
+	// TODO(Naman): Parse the namespace here.
+	// Check field in map.
+	namespace := x.DefaultNamespace
+	if ns, ok := m["namespace"]; ok {
+		switch ns := ns.(type) {
+		case json.Number:
+			nsi, err := ns.Int64()
+			if err != nil {
+				return mr, err
+			}
+			namespace = uint64(nsi)
+
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+		case int64:
+			namespace = uint64(ns)
+		}
+	}
+
 	if mr.uid == "" {
 		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
@@ -452,7 +471,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" {
+		if pred == "uid" || pred == "namespace" {
 			continue
 		}
 
@@ -461,7 +480,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				// This corresponds to edge deletion.
 				nq := &api.NQuad{
 					Subject:     mr.uid,
-					Predicate:   pred,
+					Predicate:   x.NamespaceAttr(namespace, pred),
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				}
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -477,7 +496,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		nq := api.NQuad{
 			Subject:   mr.uid,
-			Predicate: pred,
+			Predicate: x.NamespaceAttr(namespace, pred),
 		}
 
 		prefix := pred + x.FacetDelimeter
@@ -544,7 +563,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			for idx, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
-					Predicate: pred,
+					Predicate: x.NamespaceAttr(namespace, pred),
 				}
 
 				switch iv := item.(type) {
@@ -734,6 +753,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 			if err != nil {
 				return err
 			}
+			// TODO(Naman): Check the handling of checkForDeletion in multi-tenant.
 			buf.checkForDeletion(mr, obj.(map[string]interface{}), op)
 		}
 		return nil

@@ -76,6 +76,8 @@ type options struct {
 	MapShards    int
 	ReduceShards int
 
+	Namespace uint64
+
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
@@ -183,6 +185,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
+	// TODO(Naman): Handle namespace specific schema parsing.
 	result, err := schema.Parse(string(buf))
 	x.Check(err)
 	return result
@@ -195,7 +198,7 @@ func (ld *loader) mapStage() {
 		x.Check(os.MkdirAll(ld.opt.ClientDir, 0700))
 
 		var err error
-		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
+		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir).WithNamespaceOffset(1))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
@@ -262,6 +265,8 @@ func (ld *loader) mapStage() {
 	// Send the graphql triples
 	ld.processGqlSchema(loadType)
 
+	// By this time, we will know about all the namespaces encountered. Else, we depend on the schema
+	// to contain whole of the information about namespace.
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
@@ -276,6 +281,7 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
+// TODO(Naman): Fix this for multi-tenancy.
 func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	if ld.opt.GqlSchemaFile == "" {
 		return
@@ -299,6 +305,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
+	// TODO(Naman): We will nedd this for all the namespaces.
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
 	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
 	_:gqlschema <dgraph.graphql.schema> %s .
@@ -309,6 +316,8 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		"dgraph.graphql.xid": "dgraph.graphql.schema",
 		"dgraph.graphql.schema": %s
 	}`
+
+	// TODO(Naman): Process the GQL schema here.
 
 	gqlBuf := &bytes.Buffer{}
 	schema := strconv.Quote(string(buf))

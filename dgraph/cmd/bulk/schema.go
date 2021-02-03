@@ -52,10 +52,12 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// better to include them in case the input data contains triples with these
 	// predicates.
 	// TODO(Ahsan): Use the right namespace here.
+	// Naman - We will need schema for all the namespaces.
 	for _, update := range schema.CompleteInitialSchema(x.DefaultNamespace) {
 		s.schemaMap[update.Predicate] = update
 	}
 
+	// TODO(Naman): Do this for all namespaces.
 	if opt.StoreXids {
 		s.schemaMap["xid"] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
@@ -63,6 +65,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		}
 	}
 
+	// This is from the schema read from the schema file.
 	for _, sch := range initial.Preds {
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.

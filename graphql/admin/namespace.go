@@ -10,7 +10,7 @@ import (
 )
 
 type namespaceInput struct {
-	NamespaceId int
+	NamespaceId json.Number
 }
 
 func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -18,7 +18,11 @@ func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	if err = (&edgraph.Server{}).CreateNamespace(ctx, uint64(req.NamespaceId)); err != nil {
+	v, err := req.NamespaceId.Int64()
+	if err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
+	if err = (&edgraph.Server{}).CreateNamespace(ctx, uint64(v)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
@@ -36,7 +40,11 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
+	v, err := req.NamespaceId.Int64()
+	if err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
+	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(v)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
