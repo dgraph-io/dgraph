@@ -544,30 +544,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		}
 
 		span.Annotate(nil, "Done")
-		// 1. If this is blocking. your txn will block. This cant be blocking
-		// 2. If not blocking, even if i know the index i.e raft index, in case f l change, crash,
-		// no way to replay that raft logs
-		// this is the problem we want to solve
-
-		//if n.AmLeader() {
-		//	b, _ := json.Marshal(proposal.Mutations)
-		//	if proposal.Mutations.Edges != nil {
-		//		for _, r := range proposal.Mutations.Edges {
-		//			if r.ValueType == 2 {
-		//				u := binary.LittleEndian.Uint64(r.Value)
-		//				b, _ = json.Marshal(u)
-		//			}
-		//			//p := types.Val{Tid: types.BinaryID, Value: r.Value}
-		//			//p1 := types.ValueForType(types.TypeID(r.ValueType))
-		//			//err := types.Marshal(p, &p1)
-		//			//fmt.Println("type marshal", err)
-		//		}
-		//	}
-		//	// async collector
-		//	WriteCDC(string(b))
-		//	// best effort policy with N retries
-		//	// send events and dont expect error
-		//}
 		return nil
 	}
 
@@ -635,8 +611,12 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
-	case proposal.CDCIndex > 0:
-		n.cdcTracker.UpdateCDCIndex(proposal.CDCIndex)
+	case proposal.CDCMaxTs > 0:
+		// current cdc index is larger than the proposal. Skip this
+		if n.cdcTracker.getCDCMaxTs() >= proposal.CDCMaxTs {
+			return nil
+		}
+		n.cdcTracker.updateCDCMaxTs(proposal.CDCMaxTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
@@ -916,9 +896,9 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeCDCInfo(cdcIndex uint64) error {
+func (n *node) proposeCDCMaxCommitTs(maxTs uint64) error {
 	proposal := &pb.Proposal{
-		CDCIndex: cdcIndex,
+		CDCMaxTs: maxTs,
 	}
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
@@ -1573,9 +1553,6 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
 	last := n.Applied.DoneUntil()
-	if last > n.cdcTracker.getCDCIndex() {
-		last = n.cdcTracker.getCDCIndex()
-	}
 	if int(last-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
@@ -1597,7 +1574,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := posting.Oracle().MinPendingStartTs()
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.maxCommitTs)
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
@@ -1672,14 +1649,6 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingStart)
 		return nil, nil
 	}
-
-	// update snapshot index to cdcIndex if snapshot index is greater than cdcIndex
-	// if not done this way, we will lose raft logs and thus leading to loss of cdc events.
-	// TODO : aman bansal this is incorrect
-	// TODO : aman bansal use min(last entry, cdcentry)
-	//if snapshotIdx > n.cdcTracker.getCDCIndex() {
-	//	snapshotIdx = n.cdcTracker.getCDCIndex()
-	//}
 
 	result := &pb.Snapshot{
 		Context: n.RaftContext,

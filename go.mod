@@ -14,6 +14,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
+	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v3 v3.0.0-20210125092849-88bf5aab9f50
@@ -38,7 +39,7 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.2
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.5.0
+	github.com/google/go-cmp v0.5.2
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
@@ -54,7 +55,6 @@ require (
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
-	github.com/segmentio/kafka-go v0.4.9
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
@@ -65,7 +65,7 @@ require (
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.22.5
 	go.uber.org/zap v1.16.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210105210732-16f7687f5001

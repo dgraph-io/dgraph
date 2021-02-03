@@ -13,12 +13,17 @@
 package worker
 
 import (
-	"encoding/binary"
+	"bytes"
 	"encoding/json"
 	"math"
-	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/ristretto/z"
+
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/types"
 
 	"github.com/golang/glog"
 
@@ -28,80 +33,103 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// TODO: (aman bansal) verify things if cdc is not enabled
-// TODO: (aman bansal) see if we can send some monitoring events or not
+const defaultCDCConfig = "enabled=false; max_recovery=10000"
+
+// TODO: see if we need to send some monitoring events or not
 type ChangeData struct {
-	sink     SinkHandler
-	cdcIndex uint64
+	sink               SinkHandler
+	cdcIndex           uint64
+	maxRecoveryEntries uint64
+	closer             *z.Closer
+	pendingEvents      map[uint64][]CDCEvent
+	// maximum commit timestamp till which we have send the CDC event
+	maxCommitTs      uint64
+	lastProposeMaxTs uint64
 }
 
-// If Enterprise is not enabled return
-// Todo: (aman bansal) Make the Sink Configurable
 func initChangeDataCapture(idx uint64) *ChangeData {
-	if !EnterpriseEnabled() {
+	if Config.ChangeDataConf == "" {
 		return nil
 	}
-	path, err := filepath.Abs(filepath.Join("cdc", "cdc.event.log"))
-	x.Check(err)
-	sink, err := NewFileBasedSink(path)
+
+	cdcFlag := x.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
+	if !cdcFlag.GetBool("enabled") {
+		return nil
+	}
+	sink, err := GetSinkHandler()
 	x.Check(err)
 	cd := &ChangeData{
-		sink:     sink,
-		cdcIndex: idx,
+		sink:               sink,
+		cdcIndex:           idx,
+		maxRecoveryEntries: cdcFlag.GetUint64("max-recovery"),
+		closer:             z.NewCloser(1),
+		pendingEvents:      make(map[uint64][]CDCEvent),
 	}
 	return cd
 }
 
-// if cdc is not enabled return the max possible value
-// This is done so that it will not effect with the default behaviour
-func (cd *ChangeData) getCDCIndex() uint64 {
+func (cd *ChangeData) getCDCMaxTs() uint64 {
 	if cd == nil {
+		// return max value that will help callers to nullify cdc effect if not enabled.
 		return math.MaxUint64
 	}
-	return atomic.LoadUint64(&cd.cdcIndex)
+	return atomic.LoadUint64(&cd.maxCommitTs)
 }
 
-func (cd *ChangeData) UpdateCDCIndex(idx uint64) {
+func (cd *ChangeData) updateCDCMaxTs(ts uint64) {
 	if cd == nil {
 		return
 	}
-	atomic.StoreUint64(&cd.cdcIndex, idx)
+	atomic.StoreUint64(&cd.maxCommitTs, ts)
 }
 
-func (cd *ChangeData) proposeCDCIndex() error {
+func (cd *ChangeData) proposeCDCMaxCommitTs() error {
 	if cd == nil {
 		return nil
 	}
 
-	return groups().Node.proposeCDCInfo(cd.getCDCIndex())
+	maxTs := atomic.LoadUint64(&cd.maxCommitTs)
+	if cd.lastProposeMaxTs < maxTs {
+		err := groups().Node.proposeCDCMaxCommitTs(maxTs)
+		if err != nil {
+			return err
+		}
+		cd.lastProposeMaxTs = maxTs
+	}
+	return nil
 }
 
-// 1. Old cluster start (data already has ) -> // ask kafka gives you 0.
-// this is solved with snpshtIdx
-// 2. Live loader
+func (cd *ChangeData) Close() {
+	if cd == nil {
+		return
+	}
+	glog.Infof("closing CDC events...")
+	cd.closer.SignalAndWait()
+	err := cd.sink.Close()
+	glog.Errorf("error while closing sink %v", err)
+}
+
+// todo: test cases old cluster restart, live loader, bulk loader, backup restore etc
 func (cd *ChangeData) processCDCEvents() {
 	if cd == nil {
 		return
 	}
 
 	sendCDCEvents := func() {
-		cdcIndex := cd.getCDCIndex() + 1
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
-		if cdcIndex < first {
-			glog.Error("there is mismatch in cdc index and snapshot index, " +
-				"we might have missed some events.")
-			cdcIndex = first
-		}
 
+		cdcIndex := x.Max(cd.cdcIndex, first)
 		last := groups().Node.Applied.DoneUntil()
-
-		// todo - aman bansal if last - cdcindex > say N then ignore
 		if cdcIndex == last {
 			return
 		}
-		var prevEntry *raftpb.Entry
-		var lastEntry raftpb.Entry
+		// if cdc is lagging behind the current raft index,
+		// skip ahead the cdcIndex to prevent uncontrolled growth of raft logs.
+		//if last-cdcIndex > cd.maxRecoveryEntries {
+		//	cd.UpdateCDCIndex(last)
+		//	return
+		//}
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			x.Check(err)
@@ -110,64 +138,192 @@ func (cd *ChangeData) processCDCEvents() {
 				break
 			}
 
-			lastEntry = entries[len(entries)-1]
-			batchFirst = lastEntry.Index + 1
+			batchFirst = entries[len(entries)-1].Index + 1
 			for _, entry := range entries {
 				if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
+					cd.cdcIndex = entry.Index
 					continue
 				}
+
 				var proposal pb.Proposal
 				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-					x.Check(err)
+					glog.Errorf("CDC: not able to marshal the proposal %v", err)
+					cd.cdcIndex = entry.Index
+					continue
 				}
-
-				// TODO: aman bansal make contracts for each kind of mutation
+				// todo(aman bansal): use namespace for key.
 				if proposal.Mutations != nil {
-					b, _ := json.Marshal(proposal.Mutations)
-					if proposal.Mutations.Edges != nil {
-						for _, r := range proposal.Mutations.Edges {
-							if r.ValueType == 2 {
-								u := binary.LittleEndian.Uint64(r.Value)
-								b, _ = json.Marshal(u)
-							}
-
-							//p := types.Val{Tid: types.BinaryID, Value: r.Value}
-							//p1 := types.ValueForType(types.TypeID(r.ValueType))
-							//err := types.Marshal(p, &p1)
-							//fmt.Println("type marshal", err)
-						}
+					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
+					if cd.pendingEvents[proposal.Mutations.StartTs] == nil {
+						cd.pendingEvents[proposal.Mutations.StartTs] = make([]CDCEvent, 0)
 					}
-
-					if err := cd.sink.SendMessage(nil, b); err != nil {
-						glog.Errorf("error while sending cdc event to sink", err)
-						// if we found the error, return
-						if prevEntry != nil {
-							cd.UpdateCDCIndex(prevEntry.Index)
-							return
-						}
-						return
-					}
-					prevEntry = &entry
+					cd.pendingEvents[proposal.Mutations.StartTs] = append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
 				}
-				cd.UpdateCDCIndex(entry.Index)
+
+				if proposal.Delta != nil {
+					for _, ts := range proposal.Delta.Txns {
+						pending := cd.pendingEvents[ts.StartTs]
+						if ts.CommitTs > 0 && len(pending) > 0 {
+							msgs := make([]SinkMessage, len(pending))
+							for i, e := range pending {
+								// add commit timestamp here
+								e.Meta.Timestamp = ts.CommitTs
+								b, err := json.Marshal(e)
+								x.Check(err)
+								msgs[i] = SinkMessage{
+									Meta: SinkMeta{
+										Topic: "dgraph_cdc",
+									},
+									Key:   []byte("dgraph-cdc-event"),
+									Value: b,
+								}
+							}
+							if err := cd.sink.SendMessages(msgs); err != nil {
+								glog.Errorf("error while sending cdc event to sink %+v", err)
+								return
+							}
+							// delete from pending events once events are sent
+							delete(cd.pendingEvents, ts.StartTs)
+							if cd.maxCommitTs < ts.CommitTs {
+								cd.maxCommitTs = ts.CommitTs
+							}
+						} else {
+							delete(cd.pendingEvents, ts.StartTs)
+						}
+					}
+				}
+
+				cd.cdcIndex = entry.Index
 			}
 		}
-
 		return
 	}
 
+	tick := time.NewTicker(time.Second)
+	defer cd.closer.Done()
+	defer tick.Stop()
+	iter := 0
 	for {
-		for range time.NewTicker(time.Second).C {
-			if groups().Node.AmLeader() {
+		select {
+		case <-cd.closer.HasBeenClosed():
+			return
+		case <-tick.C:
+			if groups().Node.AmLeader() && EnterpriseEnabled() {
 				sendCDCEvents()
-				// todo aman bansal ->
-				// changing this to proposal.CDCEvent diff should be 100 or 1000
-				// final do it every 5 seconds
-				if err := cd.proposeCDCIndex(); err != nil {
-					glog.Errorf("not able to propose snapshot %v", err)
+				iter = iter + 1
+				if iter == 5 {
+					iter = 0
+					if err := cd.proposeCDCMaxCommitTs(); err != nil {
+						glog.Errorf("not able to propose snapshot %v", err)
+					}
 				}
-
 			}
 		}
 	}
+}
+
+type CDCEvent struct {
+	Meta      *EventMeta  `json:"meta"`
+	EventType string      `json:"event_type"`
+	Event     interface{} `json:"event"`
+}
+
+type EventMeta struct {
+	CDCIndex  uint64 `json:"cdc_index"`
+	Timestamp uint64 `json:"timestamp"`
+}
+
+type MutationEvent struct {
+	MutationType  string      `json:"mutation_type"`
+	Uid           uint64      `json:"uid"`
+	Attribute     string      `json:"attribute"`
+	Value         interface{} `json:"value"`
+	ValueDataType string      `json:"value_data_type"`
+}
+
+type DropEvent struct {
+	Operation string `json:"operation"`
+	Type      string `json:"type"`
+	Pred      string `json:"pred"`
+}
+
+func transformMutationToCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
+	// we are skipping schema updates for now.
+	if len(mutation.Schema) > 0 || len(mutation.Types) > 0 {
+		return nil
+	}
+
+	// if drop operation
+	if mutation.DropOp != pb.Mutations_NONE {
+		return []CDCEvent{
+			{
+				EventType: "DROP",
+				Event: &DropEvent{
+					Operation: mutation.DropOp.String(),
+					Type:      mutation.DropValue,
+				},
+				Meta: &EventMeta{
+					CDCIndex: index,
+				},
+			},
+		}
+	}
+
+	cdcEvents := make([]CDCEvent, 0)
+	for _, edge := range mutation.Edges {
+		if skipAttribute(edge.Attr) {
+			continue
+		}
+		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			return []CDCEvent{
+				{
+					EventType: "DROP",
+					Event: &DropEvent{
+						Operation: "PREDICATE",
+						Pred:      edge.Attr,
+					},
+					Meta: &EventMeta{
+						CDCIndex: index,
+					},
+				},
+			}
+		}
+
+		var val interface{}
+		if posting.TypeID(edge) == types.UidID {
+			val = edge.ValueId
+		} else {
+			// convert to correct type
+			src := types.Val{Tid: types.BinaryID, Value: edge.Value}
+			if v, err := types.Convert(src, posting.TypeID(edge)); err == nil {
+				val = v.Value
+			} else {
+				glog.Errorf("error while converting value %v", err)
+			}
+		}
+		// todo (aman bansal): send password fields encrypted
+		cdcEvents = append(cdcEvents, CDCEvent{
+			Meta: &EventMeta{
+				CDCIndex:  index,
+				Timestamp: mutation.StartTs,
+			},
+			EventType: "MUTATION",
+			Event: &MutationEvent{
+				MutationType:  edge.Op.String(),
+				Uid:           edge.Entity,
+				Attribute:     edge.Attr,
+				Value:         val,
+				ValueDataType: posting.TypeID(edge).Name(),
+			},
+		})
+	}
+
+	return cdcEvents
+}
+
+func skipAttribute(attr string) bool {
+	if strings.HasPrefix(attr, "dgraph") {
+		return true
+	}
+	return false
 }
