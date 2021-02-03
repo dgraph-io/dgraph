@@ -201,7 +201,8 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 	}
 }
 
-func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
+func (mr *dgraphResolver) rewriteAndExecute(
+	ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
 	var mutResp *dgoapi.Response
 	req := &dgoapi.Request{}
@@ -246,6 +247,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	var upserts []*UpsertMutation
 	var err error
 	var frags [][]*mutationFragment
+	var setFrags, delFrags []*mutationFragment
 	switch mr.mutationRewriter.(type) {
 	case *AddRewriter:
 		varGen := NewVariableGenerator()
@@ -322,6 +324,62 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 
 		// Create mutations and new nodes depending on result of queries.
 		upserts, frags, err = NewCreateMutations(ctx, mutation, varGen, xidMd, qNameToUID)
+	case *UpdateRewriter:
+		varGen := NewVariableGenerator()
+		xidMd := newXidMetadata()
+		var queries []*gql.GraphQuery
+		queries, err = NewRewriteUpdate(ctx, mutation, varGen, xidMd)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
+				resolverFailed
+		}
+		// Execute queries and parse its result into a map
+		qry := dgraph.AsString(queries)
+		req.Query = qry
+		var mutResp *dgoapi.Response
+
+		// The query will be empty in case there is no reference XID / UID in the mutation.
+		// Don't execute the query in those cases.
+		if req.Query != "" {
+			mutResp, err = mr.executor.Execute(ctx, req)
+		}
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+		queryResultMap := make(map[string][]map[string]string)
+		if mutResp != nil {
+			err = json.Unmarshal(mutResp.Json, &queryResultMap)
+		}
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+
+		// The above response is parsed into map[string]string as follows:
+		// {
+		// 		"Project1" : "0x123",
+		// 		"Column2" : "0x234"
+		// }
+		qNameToUID := make(map[string]string)
+		for key, result := range queryResultMap {
+			if len(result) == 1 {
+				// Found exactly one UID / XID corresponding to given condition
+				qNameToUID[key] = result[0]["uid"]
+			} else if len(result) > 1 {
+				// Found multiple UIDs for query. This should ideally not happen.
+				// This indicates that there are multiple nodes with same XIDs / UIDs. Throw an error.
+				err = errors.New(fmt.Sprintf("Found multiple nodes with ID: %s", result[0]["uid"]))
+				gqlErr := schema.GQLWrapLocationf(
+					err, mutation.Location(), "mutation %s failed", mutation.Name())
+				return emptyResult(gqlErr), resolverFailed
+			}
+		}
+
+		// Create mutations and new nodes depending on result of queries.
+		upserts, setFrags, delFrags, err = NewUpdateMutations(ctx, mutation, varGen, xidMd, qNameToUID)
 
 	default:
 		upserts, err = mr.mutationRewriter.Rewrite(ctx, mutation)
@@ -384,6 +442,8 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	switch mr.mutationRewriter.(type) {
 	case *AddRewriter:
 		dgQuery, err = NewFromMutationResult(ctx, mutation, mutResp.GetUids(), result, frags)
+	case *UpdateRewriter:
+		dgQuery, err = NewFromMutationResultUpdate(ctx, mutation, mutResp.GetUids(), result, setFrags, delFrags)
 	default:
 		dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 

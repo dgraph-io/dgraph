@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -2059,8 +2060,8 @@ func mutationEmptyDelete(t *testing.T) {
 
 	gqlResponse := updatePostParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, gqlResponse.Errors[0].Error(), "couldn't rewrite mutation updatePost"+
-		" because failed to rewrite mutation payload because id is not provided")
+	require.Equal(t, "couldn't rewrite mutation updatePost because failed to"+
+		" rewrite mutation payload because id is not provided", gqlResponse.Errors[0].Error())
 }
 
 // After a successful mutation, the following query is executed.  That query can
@@ -3383,6 +3384,49 @@ func threeLevelDeepMutation(t *testing.T) {
 	filter = getXidFilter("xid", []string{"HT0"})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
+}
+
+func parallelMutations(t *testing.T) {
+	// Add 100 mutations simultaneously using go routine. Only one should get added.
+
+	executeMutation := func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		addStateParams := &GraphQLParams{
+			Query: `mutation {
+            addState(input: [{xcode: "S2", name: "State2"}]) {
+                state {
+                    xcode
+                    name
+                }
+            }
+        }`,
+		}
+		// State1,
+		_ = addStateParams.ExecuteAsPost(t, GraphqlURL)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go executeMutation(&wg)
+	}
+	wg.Wait()
+
+	getStateParams := &GraphQLParams{
+		Query: `{
+			queryState(filter: { xcode: { eq: "S2"}}) {
+				name
+			}
+		}`,
+	}
+
+	// As we are using the same XID in all mutations. Only one should succeed.
+	gqlResponse := getStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	require.Equal(t, `{"queryState":[{"name":"State2"}]}`, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
+	deleteState(t, filter, 1, nil)
 }
 
 func cyclicMutation(t *testing.T) {
