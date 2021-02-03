@@ -29,16 +29,12 @@ func initChangeDataCapture(idx uint64) *ChangeData {
 	return nil
 }
 
-func (cd *ChangeData) getCDCMaxTs() uint64 {
+func (cd *ChangeData) getCDCMinReadTs() uint64 {
 	return math.MaxUint64
 }
 
-func (cd *ChangeData) updateCDCMaxTs(ts uint64) {
+func (cd *ChangeData) updateMinReadTs(ts uint64) {
 	return
-}
-
-func (cd *ChangeData) proposeCDCMaxCommitTs() error {
-	return nil
 }
 
 func (cd *ChangeData) Close() {

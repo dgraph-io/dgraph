@@ -78,7 +78,7 @@ func (cd *ChangeData) updateMinReadTs(newTs uint64) {
 	if cd == nil {
 		return
 	}
-	// current cdc read ts is larger than the proposal. Skip this
+	// current cdc read ts is larger than the proposed newts. Skip this
 	ts := cd.getCDCMinReadTs()
 	if ts >= newTs {
 		return
@@ -227,8 +227,7 @@ func (cd *ChangeData) processCDCEvents() {
 				iter = iter + 1
 				if iter == 5 {
 					iter = 0
-					minTs := evaluateMinReadTs(cd.pendingEvents, cd.maxReadTs)
-					cd.updateMinReadTs(minTs)
+					minTs := cd.evaluateAndSetMinReadTs()
 					if err := groups().Node.proposeCDCMinReadTs(minTs); err != nil {
 						glog.Errorf("not able to propose snapshot %v", err)
 					}
@@ -238,17 +237,18 @@ func (cd *ChangeData) processCDCEvents() {
 	}
 }
 
-func evaluateMinReadTs(pendingEvents map[uint64][]CDCEvent, maxReadTs uint64) uint64 {
+func (cd *ChangeData) evaluateAndSetMinReadTs() uint64 {
 	min := uint64(math.MaxUint64)
-	for ts := range pendingEvents {
+	for ts := range cd.pendingEvents {
 		if ts < min {
 			min = ts
 		}
 	}
 	// if there is no pending events to send
 	if min == math.MaxUint64 {
-		return maxReadTs
+		min = cd.maxReadTs
 	}
+	cd.updateMinReadTs(min)
 	return min
 }
 
