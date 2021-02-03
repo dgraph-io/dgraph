@@ -497,6 +497,9 @@ func TestAuthOnInterfaces(t *testing.T) {
 }
 
 func TestQueryWithStandardClaims(t *testing.T) {
+	if metaInfo.Algo == "RS256" {
+		t.Skip()
+	}
 	testCases := []TestCase{
 		{
 			query: `
