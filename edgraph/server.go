@@ -114,6 +114,7 @@ func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Creating namespace", namespace)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(namespace)
+	m.Types = schema.InitialTypes(namespace)
 	_, err := query.ApplyMutations(ctx, m)
 	return err
 }
