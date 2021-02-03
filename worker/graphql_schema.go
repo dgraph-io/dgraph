@@ -18,10 +18,11 @@ package worker
 
 import (
 	"context"
-	"github.com/golang/glog"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -95,7 +96,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	uidMtrxLen := len(res.GetUidMatrix())
 	if uidMtrxLen == 0 || (uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 0) {
 		// if there was no schema node earlier, then need to assign a new uid for the node
-		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1})
+		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1, Type: pb.Num_UID})
 		if err != nil {
 			return nil, err
 		}

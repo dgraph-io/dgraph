@@ -33,10 +33,11 @@ const defaultGroupList = "dgraph-unused-group"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Run the Dgraph acl tool",
+		Use:         "acl",
+		Short:       "Run the Dgraph Enterprise Edition ACL tool",
+		Annotations: map[string]string{"group": "security"},
 	}
-
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")

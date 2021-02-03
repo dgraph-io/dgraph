@@ -55,17 +55,15 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 
 // NewQueryResolver creates a new query resolver.  The resolver runs the pipeline:
 // 1) rewrite the query using qr (return error if failed)
-// 2) execute the rewritten query with qe (return error if failed)
-// 3) process the result with rc
-func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor, rc ResultCompleter) QueryResolver {
-	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: rc}
+// 2) execute the rewritten query with ex (return error if failed)
+func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor) QueryResolver {
+	return &queryResolver{queryRewriter: qr, executor: ex}
 }
 
 // a queryResolver can resolve a single GraphQL query field.
 type queryResolver struct {
-	queryRewriter   QueryRewriter
-	executor        DgraphExecutor
-	resultCompleter ResultCompleter
+	queryRewriter QueryRewriter
+	executor      DgraphExecutor
 }
 
 func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -84,11 +82,6 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer timer.Stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
-	if resolved.Data == nil {
-		resolved.Data = map[string]interface{}{query.Name(): nil}
-	}
-
-	qr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved
@@ -108,9 +101,13 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:       map[string]interface{}{query.DgraphAlias(): nil},
+			// all the auto-generated queries are nullable, but users may define queries with
+			// @custom(dql: ...) which may be non-nullable. So, we need to set the Data field
+			// only if the query was nullable and keep it nil if it was non-nullable.
+			// query.NullResponse() method handles that.
+			Data:       query.NullResponse(),
 			Field:      query,
-			Err:        err,
+			Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
 			Extensions: ext,
 		}
 	}
@@ -144,34 +141,32 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true})
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
+		ReadOnly: true}, query)
 	queryTimer.Stop()
 
-	if err != nil {
+	if err != nil && !x.IsGqlErrorList(err) {
+		err = schema.GQLWrapf(err, "Dgraph query failed")
 		glog.Infof("Dgraph query execution failed : %s", err)
-		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
-	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
-	resolved.Extensions = ext
+	resolved := &Resolved{
+		Data:       resp.GetJson(),
+		Field:      query,
+		Err:        schema.SetPathIfEmpty(err, query.ResponseName()),
+		Extensions: ext,
+	}
 
 	return resolved
 }
 
 func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
 	data, err := schema.Introspect(q)
-
-	var result map[string]interface{}
-	var err2 error
-	if len(data) > 0 {
-		err2 = json.Unmarshal(data, &result)
-	}
-
 	return &Resolved{
-		Data:  result,
+		Data:  data,
 		Field: q,
-		Err:   schema.AppendGQLErrs(err, err2),
+		Err:   err,
 	}
 }
 

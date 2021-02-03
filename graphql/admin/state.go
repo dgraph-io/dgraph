@@ -15,15 +15,16 @@ import (
 )
 
 type membershipState struct {
-	Counter    uint64         `json:"counter,omitempty"`
-	Groups     []clusterGroup `json:"groups,omitempty"`
-	Zeros      []*pb.Member   `json:"zeros,omitempty"`
-	MaxLeaseId uint64         `json:"maxLeaseId,omitempty"`
-	MaxTxnTs   uint64         `json:"maxTxnTs,omitempty"`
-	MaxRaftId  uint64         `json:"maxRaftId,omitempty"`
-	Removed    []*pb.Member   `json:"removed,omitempty"`
-	Cid        string         `json:"cid,omitempty"`
-	License    *pb.License    `json:"license,omitempty"`
+	Counter   uint64         `json:"counter,omitempty"`
+	Groups    []clusterGroup `json:"groups,omitempty"`
+	Zeros     []*pb.Member   `json:"zeros,omitempty"`
+	MaxUID    uint64         `json:"maxUID,omitempty"`
+	MaxNsID   uint64         `json:"maxNsID,omitempty"`
+	MaxTxnTs  uint64         `json:"maxTxnTs,omitempty"`
+	MaxRaftId uint64         `json:"maxRaftId,omitempty"`
+	Removed   []*pb.Member   `json:"removed,omitempty"`
+	Cid       string         `json:"cid,omitempty"`
+	License   *pb.License    `json:"license,omitempty"`
 }
 
 type clusterGroup struct {
@@ -56,15 +57,16 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 	var resultState map[string]interface{}
-	err = json.Unmarshal(b, &resultState)
+	err = schema.Unmarshal(b, &resultState)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): resultState},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): resultState},
+		nil,
+	)
 }
 
 // convertToGraphQLResp converts MembershipState proto to GraphQL layer response
@@ -98,8 +100,9 @@ func convertToGraphQLResp(ms pb.MembershipState) membershipState {
 	for _, v := range ms.Zeros {
 		state.Zeros = append(state.Zeros, v)
 	}
-	state.MaxLeaseId = ms.MaxLeaseId
+	state.MaxUID = ms.MaxUID
 	state.MaxTxnTs = ms.MaxTxnTs
+	state.MaxNsID = ms.MaxNsID
 	state.MaxRaftId = ms.MaxRaftId
 	state.Removed = ms.Removed
 	state.Cid = ms.Cid

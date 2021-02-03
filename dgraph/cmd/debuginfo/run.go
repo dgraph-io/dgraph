@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,15 +46,17 @@ var (
 func init() {
 	DebugInfo.Cmd = &cobra.Command{
 		Use:   "debuginfo",
-		Short: "Generate debug info on the current node.",
+		Short: "Generate debug information on the current node",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := collectDebugInfo(); err != nil {
 				glog.Errorf("error while collecting dgraph debug info: %s", err)
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
 	DebugInfo.EnvPrefix = "DGRAPH_AGENT_DEBUGINFO"
+	DebugInfo.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flags := DebugInfo.Cmd.Flags()
 	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "localhost:8080",

@@ -2196,8 +2196,8 @@ func manyMutationsWithQueryError(t *testing.T) {
 	}`, newCountry.ID)
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
-			`in result from Dgraph.  GraphQL error propagation triggered.`,
+		&x.GqlError{Message: "Non-nullable field 'name' (type String!) was not present " +
+			"in result from Dgraph.  GraphQL error propagation triggered.",
 			Locations: []x.Location{{Line: 18, Column: 7}},
 			Path:      []interface{}{"add2", "author", float64(0), "country", "name"}}}
 
@@ -3286,7 +3286,7 @@ func testNumUids(t *testing.T) {
 }
 
 func deleteUser(t *testing.T, userObj user) {
-	DeleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
+	DeleteGqlType(t, "User", GetXidFilter("name", []interface{}{userObj.Name}), 1, nil)
 }
 
 func threeLevelDeepMutation(t *testing.T) {
@@ -3354,9 +3354,9 @@ func threeLevelDeepMutation(t *testing.T) {
 	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].TaughtBy[0].Xid, "HT0")
 
 	// cleanup
-	filter := getXidFilter("xid", []string{"HS1", "HS2"})
+	filter := GetXidFilter("xid", []interface{}{"HS1", "HS2"})
 	DeleteGqlType(t, "Student", filter, 2, nil)
-	filter = getXidFilter("xid", []string{"HT0"})
+	filter = GetXidFilter("xid", []interface{}{"HT0"})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
 }
@@ -3436,9 +3436,9 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 		actualResult.AddStudent.Student[1].TaughtBy[0].ID)
 
 	// cleanup
-	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
+	filter := GetXidFilter("xid", []interface{}{newStudents[0].Xid, newStudents[1].Xid})
 	DeleteGqlType(t, "Student", filter, 2, nil)
-	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
+	filter = GetXidFilter("xid", []interface{}{newStudents[0].TaughtBy[0].Xid})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 }
 
@@ -3462,7 +3462,7 @@ func sliceSorter() cmp.Option {
 	})
 }
 
-func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
+func GetXidFilter(xidKey string, xidVals []interface{}) map[string]interface{} {
 	if len(xidVals) == 0 || xidKey == "" {
 		return nil
 	}
@@ -4618,7 +4618,6 @@ func idDirectiveWithIntMutation(t *testing.T) {
 		  addChapter(input:[{
 			chapterId: 2
 			name: "Graphql and more"
-			bookId: 1234567890123
 		  }]) {
 			numUids
 		  }
@@ -4673,4 +4672,150 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	require.Contains(t, response.Errors.Error(), "already exists")
 
 	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
+}
+
+func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
+	varMap1 := map[string]interface{}{
+		"missionId":   "Mission1",
+		"astronautId": "Astronaut1",
+		"des":         "Apollo1",
+	}
+	addMissionParams := &GraphQLParams{
+		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $des: String!) {
+			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
+				mission{
+					id
+					crew {
+						id
+						missions(order: {asc: id}){
+							id
+						}
+					}
+				}
+			}
+		}
+		`,
+		Variables: varMap1,
+	}
+	gqlResponse := addMissionParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON := `{
+		"addMission": {
+		  "mission": [
+			{
+			  "id": "Mission1",
+			  "crew": [
+				{
+				  "id": "Astronaut1",
+				  "missions": [
+					{
+					  "id": "Mission1"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
+
+	varMap2 := map[string]interface{}{
+		"missionId":   "Mission2",
+		"astronautId": "Astronaut1",
+		"des":         "Apollo2",
+	}
+	addMissionParams.Variables = varMap2
+
+	gqlResponse1 := addMissionParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON = `{
+		"addMission": {
+		  "mission": [
+			{
+			  "id": "Mission2",
+			  "crew": [
+				{
+				  "id": "Astronaut1",
+				  "missions": [
+					{
+					  "id": "Mission1"
+					},
+					{
+					  "id": "Mission2"
+					}
+				  ]
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse1.Data))
+
+	astronautDeleteFilter := map[string]interface{}{"id": []string{"Astronaut1"}}
+	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 1, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
+}
+
+func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
+	addAstronautParams := &GraphQLParams{
+		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+				astronaut(order: {asc: id}){
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1":        "Astronaut1",
+			"missionId1": "Mission1",
+			"id2":        "Astronaut2",
+			"missionId2": "Mission2",
+		},
+	}
+
+	gqlResponse := addAstronautParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expectedJSON := `{
+		"addAstronaut": {
+		  "astronaut": [
+			{
+			  "id": "Astronaut1",
+			  "missions": [
+				{
+				  "id": "Mission1",
+				  "designation": "Apollo1"
+				}
+			  ]
+			},
+			{
+			  "id": "Astronaut2",
+			  "missions": [
+				{
+				  "id": "Mission2",
+				  "designation": "Apollo2"
+				}
+			  ]
+			}
+		  ]
+		}
+	  }`
+
+	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
+
+	astronautDeleteFilter := map[string]interface{}{"id": []string{"Astronaut1", "Astronaut2"}}
+	DeleteGqlType(t, "Astronaut", astronautDeleteFilter, 2, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debuginfo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/decrypt"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 	raftmigrate "github.com/dgraph-io/dgraph/dgraph/cmd/raft-migrate"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/tool"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/upgrade"
@@ -49,7 +49,7 @@ var RootCmd = &cobra.Command{
 	Long: `
 Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
-It's built from ground up to perform for a rich set of queries. Being a native
+It's built from the ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
@@ -77,8 +77,8 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug, &increment.Increment, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
-	&raftmigrate.RaftMigrate, &tool.Tool,
+	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade,
+	&raftmigrate.RaftMigrate, &decrypt.Decrypt, &increment.Increment,
 }
 
 func initCmds() {
@@ -118,6 +118,7 @@ func initCmds() {
 	}
 	// For bash shell completion
 	RootCmd.AddCommand(shellCompletionCmd())
+	RootCmd.SetHelpTemplate(x.RootTemplate)
 
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward
@@ -175,10 +176,14 @@ func setGlogFlags(conf *viper.Viper) {
 }
 
 func shellCompletionCmd() *cobra.Command {
+
 	cmd := &cobra.Command{
-		Use:   "completion",
-		Short: "Generates shell completion scripts for bash or zsh",
+
+		Use:         "completion",
+		Short:       "Generates shell completion scripts for bash or zsh",
+		Annotations: map[string]string{"group": "tool"},
 	}
+	cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// bash subcommand
 	cmd.AddCommand(&cobra.Command{
@@ -219,4 +224,5 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 	})
 
 	return cmd
+
 }

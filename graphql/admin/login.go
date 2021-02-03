@@ -50,15 +50,15 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 		return resolve.EmptyResult(m, err), false
 	}
 
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{
 			m.Name(): map[string]interface{}{
 				"response": map[string]interface{}{
 					"accessJWT":  jwt.AccessJwt,
 					"refreshJWT": jwt.RefreshJwt}}},
-		Field: m,
-		Err:   nil,
-	}, true
+		nil,
+	), true
 
 }
 
