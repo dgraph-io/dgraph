@@ -49,6 +49,8 @@ type BackupProcessor struct {
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
 
+	// txn is used for the iterators in the threadLocal
+	txn     *badger.Txn
 	threads []*threadLocal
 }
 
@@ -59,6 +61,7 @@ type threadLocal struct {
 	// pre-allocated pb.BackupPostingList object.
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
+	itr   *badger.Iterator
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -67,9 +70,17 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		Request: req,
 		threads: make([]*threadLocal, backupNumGo),
 	}
+	if db != nil {
+		bp.txn = db.NewTransactionAt(req.ReadTs, false)
+	}
 	for i := range bp.threads {
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
+		}
+		if bp.txn != nil {
+			iopt := badger.DefaultIteratorOptions
+			iopt.AllVersions = true
+			bp.threads[i].itr = bp.txn.NewIterator(iopt)
 		}
 	}
 	return bp
@@ -84,6 +95,13 @@ type LoadResult struct {
 	MaxLeaseUid uint64
 	// The error, if any, of the load operation.
 	Err error
+}
+
+func (pr *BackupProcessor) Close() {
+	for _, th := range pr.threads {
+		th.itr.Close()
+	}
+	pr.txn.Discard()
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
@@ -129,11 +147,16 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.NumGo = backupNumGo
+	stream.SinceTs = pr.Request.SinceTs
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
 		tl.alloc = itr.Alloc
-		kvList, dropOp, err := tl.toBackupList(key, itr)
+
+		bitr := tl.itr // Use the threadlocal iterator because "itr" has the sinceTs set.
+		bitr.Seek(key)
+
+		kvList, dropOp, err := tl.toBackupList(key, bitr)
 		if err != nil {
 			return nil, err
 		}
