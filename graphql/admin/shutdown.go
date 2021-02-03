@@ -36,8 +36,9 @@ func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved,
 
 	ServerCloser.Signal()
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Server is shutting down")},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): response("Success", "Server is shutting down")},
+		nil,
+	), true
 }

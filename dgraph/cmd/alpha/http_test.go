@@ -575,7 +575,21 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	var qr x.QueryResWithData
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
 	require.Len(t, qr.Errors, 1)
-	require.Equal(t, qr.Errors[0].Extensions["code"], "Error")
+	require.Equal(t, "Error", qr.Errors[0].Extensions["code"])
+}
+
+// This test is a basic sanity test to check nothing breaks in the alter API.
+func TestAlterSanity(t *testing.T) {
+	ops := []string{`{"drop_attr": "name"}`,
+		`{"drop_op": "TYPE", "drop_value": "Film"}`,
+		`{"drop_op": "DATA"}`,
+		`{"drop_all":true}`}
+
+	for _, op := range ops {
+		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+		require.NoError(t, err)
+		require.Len(t, qr.Errors, 0)
+	}
 }
 
 func TestHttpCompressionSupport(t *testing.T) {

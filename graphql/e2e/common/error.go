@@ -310,7 +310,8 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }

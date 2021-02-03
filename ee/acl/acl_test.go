@@ -166,6 +166,7 @@ func TestInvalidGetUser(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
 			" contains an invalid number of segments",
+		Path: []interface{}{"getCurrentUser"},
 	}}, currentUser.Errors)
 }
 
@@ -231,6 +232,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
 			" for type User",
+		Path: []interface{}{"addUser"},
 	}}, resp.Errors)
 	checkUserCount(t, resp.Data, 0)
 

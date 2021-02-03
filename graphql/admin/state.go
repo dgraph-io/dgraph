@@ -57,15 +57,16 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 		return resolve.EmptyResult(q, err)
 	}
 	var resultState map[string]interface{}
-	err = json.Unmarshal(b, &resultState)
+	err = schema.Unmarshal(b, &resultState)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{q.Name(): resultState},
-		Field: q,
-	}
+	return resolve.DataResult(
+		q,
+		map[string]interface{}{q.Name(): resultState},
+		nil,
+	)
 }
 
 // convertToGraphQLResp converts MembershipState proto to GraphQL layer response

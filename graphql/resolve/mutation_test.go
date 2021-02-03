@@ -227,20 +227,23 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]struct {
-		mut      string
-		rewriter func() MutationRewriter
-		assigned map[string]string
-		result   map[string]interface{}
+		mut         string
+		payloadType string
+		rewriter    func() MutationRewriter
+		assigned    map[string]string
+		result      map[string]interface{}
 	}{
 		"Add Post ": {
-			mut:      `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
-			rewriter: NewAddRewriter,
-			assigned: map[string]string{"Post1": "0x4"},
+			mut:         `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
+			payloadType: "AddPostPayload",
+			rewriter:    NewAddRewriter,
+			assigned:    map[string]string{"Post1": "0x4"},
 		},
 		"Update Post ": {
 			mut: `updatePost(input: {filter: {postID
 				:  ["0x4"]}, set: {text: "Updated text"} }) `,
-			rewriter: NewUpdateRewriter,
+			payloadType: "UpdatePostPayload",
+			rewriter:    NewUpdateRewriter,
 			result: map[string]interface{}{
 				"updatePost": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 		},
@@ -268,6 +271,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 					rewriter := tt.rewriter()
 					// -- Arrange --
 					gqlMutationStr := strings.Replace(tcase.GQLQuery, testType, tt.mut, 1)
+					tcase.DGQuery = strings.Replace(tcase.DGQuery, "PAYLOAD_TYPE",
+						tt.payloadType, 1)
 					op, err := gqlSchema.Operation(
 						&schema.Request{
 							Query:     gqlMutationStr,
@@ -323,13 +328,11 @@ func TestCustomHTTPMutation(t *testing.T) {
 			gqlMutation := test.GetMutation(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPMutationResolver(client, StdQueryCompletion())
+			resolver := NewHTTPMutationResolver(client)
 			resolved, isResolved := resolver.Resolve(context.Background(), gqlMutation)
 			require.True(t, isResolved)
 
-			b, err := json.Marshal(resolved.Data)
-			require.NoError(t, err)
-			testutil.CompareJSON(t, tcase.ResolvedResponse, string(b))
+			testutil.CompareJSON(t, tcase.ResolvedResponse, string(resolved.Data))
 		})
 	}
 }
