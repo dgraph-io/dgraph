@@ -155,7 +155,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 			if err != nil {
 				return 0, errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
-
 			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
