@@ -678,7 +678,6 @@ func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte
 // as in update_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []byte) {
-	t.Skip()
 	var tests []AuthQueryRewritingCase
 	err := yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
