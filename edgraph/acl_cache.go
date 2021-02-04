@@ -13,12 +13,10 @@
 package edgraph
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -119,18 +117,12 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
 
-	glog.V(2).Infof("In authorizePredicate: predicate: %s %d", predicate, len(predicate))
-	glog.V(2).Infof("Predicate permissions are:")
-	for k, v := range predPerms {
-		fmt.Println("Permission", k, v)
-	}
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil
 		}
 	}
 
-	fmt.Println("Failed to authorize preds")
 	// no rule has been defined that can match the predicate
 	// by default we block operation
 	return errors.Errorf("unauthorized to do %s on predicate %s",

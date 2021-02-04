@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -119,6 +120,15 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	} else {
+		ns, err := getJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = x.AttachNamespace(ctx, ns)
+	}
 	req := &Request{
 		req: &api.Request{
 			Query: `query{
@@ -135,6 +145,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
+
 	type corsResponse struct {
 		Me []struct {
 			Uid        string `json:"uid"`

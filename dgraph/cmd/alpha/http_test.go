@@ -403,10 +403,9 @@ func TestTransactionBasic(t *testing.T) {
 	for _, pred := range mr.preds {
 		p := strings.Split(pred, "-")[1]
 		parsedPreds = append(parsedPreds, x.ParseAttr(p))
-		// parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
-	require.Equal(t, "balance", parsedPreds[0], mr.preds)
+	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
 	data, _, err := queryWithTs(q1, "application/dql", "", 0)
@@ -582,18 +581,19 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 
 // TODO(naman): See why this is breaking.
 // This test is a basic sanity test to check nothing breaks in the alter API.
-// func TestAlterSanity(t *testing.T) {
-// 	ops := []string{`{"drop_attr": "name"}`,
-// 		`{"drop_op": "TYPE", "drop_value": "Film"}`,
-// 		`{"drop_op": "DATA"}`,
-// 		`{"drop_all":true}`}
+func TestAlterSanity(t *testing.T) {
+	t.Skip()
+	ops := []string{`{"drop_attr": "name"}`,
+		`{"drop_op": "TYPE", "drop_value": "Film"}`,
+		`{"drop_op": "DATA"}`,
+		`{"drop_all":true}`}
 
-// 	for _, op := range ops {
-// 		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
-// 		require.NoError(t, err)
-// 		require.Len(t, qr.Errors, 0)
-// 	}
-// }
+	for _, op := range ops {
+		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+		require.NoError(t, err)
+		require.Len(t, qr.Errors, 0)
+	}
+}
 
 func TestHttpCompressionSupport(t *testing.T) {
 	require.NoError(t, dropAll())

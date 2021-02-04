@@ -109,6 +109,8 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+// This function is used while creating new namespace. New namespace creation is only allowed
+// by the guardians of the galaxy group.
 func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 	ctx = x.AttachNamespace(ctx, namespace)
 	if err := upsertGuardian(ctx); err != nil {
@@ -122,6 +124,8 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	glog.V(2).Info("Got create namespace request")
+
+	// Namespace creation is only allowed by the guardians of the galaxy group.
 	if err := AuthorizeGalaxyGuardians(ctx); err != nil {
 		return 0, errors.Wrapf(err, "While creating namespace got error: %s")
 	}
@@ -138,9 +142,12 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
+	// TODO(Ahsan): Remove this sleep, use a retry loop instead.
 	time.Sleep(2 * time.Second)
 
-	// Create the guardian group and groot user for the new namespace.
+	// Create the guardian group and groot user for the new namespace. We have already verified
+	// that this operation is being done by the galaxy guardian, so modifying namespace in ctx
+	// for mutations for creation of guardians/groot for new namespace is correct.
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
@@ -190,10 +197,11 @@ func PeriodicallyPostTelemetry() {
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema() (uid, graphQLSchema string, err error) {
+	ctx := context.WithValue(context.Background(), Authorize, false)
 	//TODO(Ahsan): There should be a way to getGQLSchema for all the namespaces and reinsert them
 	// after dropAll. Need to think about what should be the behaviour of drop operations.
-	ctx := context.WithValue(context.Background(), Authorize, false)
 	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+
 	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `

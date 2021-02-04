@@ -791,9 +791,7 @@ func run() {
 		edgraph.ResetCors(updaters)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
-			ctx := updaters.Ctx()
-			ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
-			_, origins, err := edgraph.GetCorsOrigins(ctx)
+			_, origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
 			if err != nil {
 				glog.Errorf("Error while retrieving cors origins: %s", err.Error())
 				time.Sleep(time.Second)
@@ -837,9 +835,8 @@ func run() {
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
 func listenForCorsUpdate(closer *z.Closer) {
-	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, "dgraph.cors"), 0)
-	// Remove uid from the key, to get the correct prefix
-	prefix = prefix[:len(prefix)-8]
+	prefix := x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.cors"))
+	// TODO(Ahsan): Use the correct ignore bytes in the prefix.
 	worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
 
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")

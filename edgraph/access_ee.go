@@ -20,7 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 
@@ -378,7 +377,7 @@ func RefreshAcls(closer *z.Closer) {
 		}
 
 		aclCachePtr.update(ns, groups)
-		glog.V(2).Infof("Updated the ACL cache")
+		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
 
@@ -481,7 +480,6 @@ func upsertGuardian(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
 	}
-	// atomic.StoreUint64(&x.GuardiansGroupUid, guardiansGroupUidUint)
 	x.GuardiansGroupUid.Store(x.ExtractNamespace(ctx), guardiansGroupUidUint)
 
 	glog.Infof("Successfully upserted the guardians group")
@@ -608,7 +606,6 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 func authorizePreds(ns uint64, userId string, groupIds, preds []string,
 	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
-	fmt.Println("In authorizePreds", preds)
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -622,14 +619,6 @@ func authorizePreds(ns uint64, userId string, groupIds, preds []string,
 			})
 
 			blockedPreds[pred] = struct{}{}
-		} else {
-			logAccess(&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: aclOp,
-				allowed:   true,
-			})
 		}
 	}
 	aclCachePtr.RLock()
@@ -671,7 +660,6 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			preds = append(preds, u.Predicate)
 		}
 	}
-	ns := x.ExtractNamespace(ctx)
 	var userId string
 	var groupIds []string
 
@@ -698,6 +686,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
+		ns := x.ExtractNamespace(ctx)
 		blockedPreds, _ := authorizePreds(ns, userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
@@ -783,7 +772,6 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
 	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
-	ns := x.ExtractNamespace(ctx)
 	var userId string
 	var groupIds []string
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
@@ -809,7 +797,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			}
 			return nil
 		}
-		fmt.Println("In authorize mutation")
+		ns := x.ExtractNamespace(ctx)
 		blockedPreds, allowedPreds := authorizePreds(ns, userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
@@ -928,13 +916,12 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
-	ns := x.ExtractNamespace(ctx)
 	predsAndvars := parsePredsFromQuery(parsedReq.Query)
 
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
 
-	spew.Dump("vars to predMap", varsToPredMap)
+	ns := x.ExtractNamespace(ctx)
 	// Need this to efficiently identify blocked variables from the
 	// list of blocked predicates
 	predToVarsMap := make(map[string]string)
@@ -955,16 +942,12 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil, nil
 		}
-		fmt.Println("In authorize query")
 		blockedPreds, allowedPreds := authorizePreds(ns, userId, groupIds, preds, acl.Read)
 		return blockedPreds, allowedPreds, nil
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
 
-	for pred := range blockedPreds {
-		fmt.Println("[BLOCKED] ", pred)
-	}
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
@@ -983,7 +966,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
 		if graphql {
-			fmt.Println("[In graphQL]")
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -999,7 +981,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		blockedVars := make(map[string]struct{})
 		for predicate := range blockedPreds {
 			if variable, found := predToVarsMap[predicate]; found {
-				fmt.Println("In the loop 994", len(variable), variable)
 				// Add variables to blockedPreds to delete from Query
 				blockedPreds[variable] = struct{}{}
 				// Collect blocked Variables to remove from QueryVars
@@ -1008,8 +989,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 		parsedReq.QueryVars = removeVarsFromQueryVars(parsedReq.QueryVars, blockedVars)
-		spew.Dump("parsedReq.Query", parsedReq.Query)
-		spew.Dump("parsedReq.QueryVars", parsedReq.QueryVars)
 	}
 	for i := range parsedReq.Query {
 		parsedReq.Query[i].AllowedPreds = allowedPreds
@@ -1038,7 +1017,6 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 		}
 	}
 
-	ns := x.ExtractNamespace(ctx)
 	doAuthorizeSchemaQuery := func() (map[string]struct{}, error) {
 		userData, err := extractUserAndGroups(ctx)
 		if err != nil {
@@ -1052,6 +1030,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
+		ns := x.ExtractNamespace(ctx)
 		blockedPreds, _ := authorizePreds(ns, userId, groupIds, preds, acl.Read)
 
 		return blockedPreds, nil
@@ -1278,25 +1257,18 @@ L:
 	for _, gq := range gqs {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
-
-				fmt.Println("skipping 0", gq.Func.Attr)
 				continue
 			}
 		}
 		if len(gq.Attr) > 0 {
-			fmt.Println("checking", gq.Attr)
 			if _, ok := blockedPreds[gq.Attr]; ok {
-				fmt.Println("skipping 1", gq.Attr)
 				continue
 			}
 			if gq.Attr == "val" {
 				// TODO (Anurag): If val supports multiple variables, this would
 				// need an upgrade
 				for _, variable := range gq.NeedsVar {
-					fmt.Println("checking2", variable.Name, len(variable.Name))
-
 					if _, ok := blockedPreds[variable.Name]; ok {
-						fmt.Println("Skipping", variable.Name)
 						continue L
 					}
 				}
@@ -1329,7 +1301,6 @@ func removeVarsFromQueryVars(gqs []*gql.Vars,
 		var defines []string
 		var needs []string
 		for _, variable := range gq.Defines {
-			fmt.Println("variable is at gq.Defines", variable, len(variable))
 			if _, ok := blockedVars[variable]; !ok {
 				defines = append(defines, variable)
 			}
