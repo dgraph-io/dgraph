@@ -209,6 +209,11 @@ const (
 		format: String
 
 		"""
+		Namespace for the export, if no value is given then it exports all namespaces.
+		"""
+		namespace: Int
+
+		"""
 		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
 		"""
 		destination: String

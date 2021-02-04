@@ -649,6 +649,8 @@ message ExportRequest {
 	string secret_key = 7;
 	string session_token = 8;
 	bool anonymous = 9;
+
+	uint64 namespace = 10;
 }
 
 message ExportResponse {

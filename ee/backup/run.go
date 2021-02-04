@@ -242,7 +242,7 @@ func runLsbackupCmd() error {
 	}
 
 	var paths []string
-	for path, _ := range manifests {
+	for path := range manifests {
 		paths = append(paths, path)
 	}
 	sort.Slice(paths, func(i, j int) bool {
