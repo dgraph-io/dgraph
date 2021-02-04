@@ -777,7 +777,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	// This is used to export the schema and types.
-	writeSchema := func(prefix byte) error {
+	writePrefix := func(prefix byte) error {
 		txn := db.NewTransactionAt(in.ReadTs, false)
 		defer txn.Discard()
 		// We don't need to iterate over all versions.
@@ -859,10 +859,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 	// Write the schema and types.
-	if err := writeSchema(x.ByteSchema); err != nil {
+	if err := writePrefix(x.ByteSchema); err != nil {
 		return nil, err
 	}
-	if err := writeSchema(x.ByteType); err != nil {
+	if err := writePrefix(x.ByteType); err != nil {
 		return nil, err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)

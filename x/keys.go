@@ -338,6 +338,21 @@ func (p ParsedKey) SkipPredicate() []byte {
 	return buf
 }
 
+// TODO(Naman): Remove these functions as they are unused.
+// SkipSchema returns the first key after all the schema keys.
+func (p ParsedKey) SkipSchema() []byte {
+	var buf [1]byte
+	buf[0] = ByteSchema + 1
+	return buf[:]
+}
+
+// SkipType returns the first key after all the type keys.
+func (p ParsedKey) SkipType() []byte {
+	var buf [1]byte
+	buf[0] = ByteType + 1
+	return buf[:]
+}
+
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)

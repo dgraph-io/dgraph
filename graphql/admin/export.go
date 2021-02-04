@@ -96,6 +96,7 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
 
+	// TODO(Naman): Get this from token.
 	// Export everything if namespace is not specified.
 	if v, ok := inputArg.(map[string]interface{}); ok {
 		if _, ok := v["namespace"]; !ok {

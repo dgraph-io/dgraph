@@ -135,8 +135,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		WithValueThreshold(1 << 20 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
-		WithIndexCacheSize(r.opt.IndexCacheSize).
-		WithNamespaceOffset(1)
+		WithIndexCacheSize(r.opt.IndexCacheSize)
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0
