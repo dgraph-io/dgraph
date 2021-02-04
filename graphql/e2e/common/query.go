@@ -1070,7 +1070,7 @@ func hasFilterOnListOfFields(t *testing.T) {
 	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
 	Filter := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{"text", "numViews"}}}
 	Expected := []*post{
-		{Title: "No Text"},
+		{Title: "No text"},
 	}
 	postTest(t, Filter, Expected)
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
