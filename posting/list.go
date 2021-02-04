@@ -872,9 +872,7 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
 	// uids. We do this to improve the memory usage.
 	if codec.ApproxLen(ol.Pack) > 1024 {
-		buf := codec.DecodeToBuffer(ol.Pack, 0)
-		defer buf.Release()
-		bl.UidBytes = buf.Bytes()
+		bl.UidBytes = codec.DecodeToBuffer(ol.Pack, 0)
 	} else {
 		bl.Uids = codec.Decode(ol.Pack, 0)
 	}
