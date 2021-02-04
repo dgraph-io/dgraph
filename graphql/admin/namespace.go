@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -23,13 +24,15 @@ func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if ns, err = (&edgraph.Server{}).CreateNamespace(ctx); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": int64(ns),
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): map[string]interface{}{
+			// TODO(naman): Fix coersion issue.
+			"namespaceId": strconv.Itoa(int(ns)),
 			"message":     "Created namespace successfully",
 		}},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -40,13 +43,14 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": req.NamespaceId,
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): map[string]interface{}{
+			"namespaceId": strconv.Itoa(req.NamespaceId),
 			"message":     "Deleted namespace successfully",
 		}},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func getNamespaceInput(m schema.Mutation) (*namespaceInput, error) {

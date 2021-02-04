@@ -569,6 +569,11 @@
             "type": "string"
         },
         {
+            "predicate": "Book.chapters",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Section.name",
             "type": "string"
         },
@@ -586,12 +591,8 @@
             "upsert": true
         },
         {
-            "index": true,
-            "predicate": "Chapter.bookId",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int"
+            "predicate": "Chapter.book",
+            "type": "uid"
         },
         {
             "index": true,
@@ -868,6 +869,9 @@
                 },
                 {
                     "name": "Book.bookId"
+                },
+                {
+                    "name": "Book.chapters"
                 }
             ],
             "name": "Book"
@@ -878,7 +882,7 @@
                     "name": "Chapter.name"
                 },
                 {
-                    "name": "Chapter.bookId"
+                    "name": "Chapter.book"
                 },
                 {
                     "name": "Chapter.chapterId"

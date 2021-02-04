@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,10 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run(Increment.Conf)
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
+	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")

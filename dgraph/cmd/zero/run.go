@@ -68,7 +68,7 @@ var Zero x.SubCommand
 func init() {
 	Zero.Cmd = &cobra.Command{
 		Use:   "zero",
-		Short: "Run Dgraph Zero",
+		Short: "Run Dgraph Zero management server ",
 		Long: `
 A Dgraph Zero instance manages the Dgraph cluster.  Typically, a single Zero
 instance is sufficient for the cluster; however, one can run multiple Zero
@@ -78,8 +78,10 @@ instances to achieve high-availability.
 			defer x.StartProfile(Zero.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Zero.EnvPrefix = "DGRAPH_ZERO"
+	Zero.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Zero.Cmd.Flags()
 	x.FillCommonFlags(flag)
