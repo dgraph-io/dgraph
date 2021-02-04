@@ -109,7 +109,7 @@ func (cd *ChangeData) processCDCEvents() {
 		msgs := make([]SinkMessage, len(pending))
 		for i, e := range pending {
 			// add commit timestamp here
-			e.Meta.Timestamp = commitTs
+			e.Meta.CommitTimestamp = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
 			// todo(aman bansal): use namespace for key.
@@ -178,6 +178,10 @@ func (cd *ChangeData) processCDCEvents() {
 				// across the cluster in case of failures.
 				if proposal.Mutations != nil && proposal.Mutations.StartTs > cd.getCDCMinReadTs() {
 					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
+					if events == nil {
+						cd.cdcIndex = entry.Index
+						continue
+					}
 					// In ludicrous events send the events as soon as you get it.
 					// We wont wait for oracle delta in case of ludicrous mode
 					if x.WorkerConfig.LudicrousMode {
@@ -189,6 +193,9 @@ func (cd *ChangeData) processCDCEvents() {
 					}
 					if cd.pendingEvents[proposal.Mutations.StartTs] == nil {
 						cd.pendingEvents[proposal.Mutations.StartTs] = make([]CDCEvent, 0)
+					}
+					if proposal.Mutations.StartTs == 10005 {
+						glog.Infof("pending event is %v", proposal.Mutations)
 					}
 					cd.pendingEvents[proposal.Mutations.StartTs] =
 						append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
@@ -206,6 +213,7 @@ func (cd *ChangeData) processCDCEvents() {
 							}
 							// delete from pending events once events are sent
 							delete(cd.pendingEvents, ts.StartTs)
+							_ = cd.evaluateAndSetMinReadTs()
 						}
 					}
 				}
@@ -232,6 +240,7 @@ func (cd *ChangeData) processCDCEvents() {
 					iter = 0
 					minTs := cd.evaluateAndSetMinReadTs()
 					glog.V(2).Infof("proposing CDC minReadTs %d", minTs)
+					glog.V(2).Infof("lenght of pending events %d", len(cd.pendingEvents))
 					if err := groups().Node.proposeCDCMinReadTs(minTs); err != nil {
 						glog.Errorf("not able to propose cdc minReadTs %v", err)
 					}
@@ -264,8 +273,9 @@ type CDCEvent struct {
 }
 
 type EventMeta struct {
-	CDCIndex  uint64 `json:"cdc_index"`
-	Timestamp uint64 `json:"timestamp"`
+	CDCIndex        uint64 `json:"cdc_index"`
+	ReadTimestamp   uint64 `json:"read_timestamp"`
+	CommitTimestamp uint64 `json:"commit_timestamp"`
 }
 
 type MutationEvent struct {
@@ -338,8 +348,8 @@ func transformMutationToCDCEvent(index uint64, mutation *pb.Mutations) []CDCEven
 		}
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
-				CDCIndex:  index,
-				Timestamp: mutation.StartTs,
+				CDCIndex:      index,
+				ReadTimestamp: mutation.StartTs,
 			},
 			EventType: "MUTATION",
 			Event: &MutationEvent{
