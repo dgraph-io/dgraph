@@ -13,10 +13,12 @@
 package edgraph
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -32,7 +34,7 @@ var aclCachePtr = &aclCache{
 	userPredPerms: make(map[string]map[string]int32),
 }
 
-func (cache *aclCache) update(groups []acl.Group) {
+func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
 	// the dev group has the following blob representing its ACL rules
 	// [friend, 4], [name, 7] where friend and name are predicates,
@@ -72,12 +74,13 @@ func (cache *aclCache) update(groups []acl.Group) {
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {
-				if groupPerms, found := predPerms[acl.Predicate]; found {
+				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				if groupPerms, found := predPerms[aclPred]; found {
 					groupPerms[group.GroupID] = acl.Perm
 				} else {
 					groupPerms := make(map[string]int32)
 					groupPerms[group.GroupID] = acl.Perm
-					predPerms[acl.Predicate] = groupPerms
+					predPerms[aclPred] = groupPerms
 				}
 			}
 		}
@@ -90,10 +93,11 @@ func (cache *aclCache) update(groups []acl.Group) {
 			// via different groups. Therefore we take OR if the user already has
 			// a permission for a predicate
 			for _, acl := range acls {
-				if _, found := userPredPerms[user.UserID][acl.Predicate]; found {
-					userPredPerms[user.UserID][acl.Predicate] |= acl.Perm
+				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				if _, found := userPredPerms[user.UserID][aclPred]; found {
+					userPredPerms[user.UserID][aclPred] |= acl.Perm
 				} else {
-					userPredPerms[user.UserID][acl.Predicate] = acl.Perm
+					userPredPerms[user.UserID][aclPred] = acl.Perm
 				}
 			}
 		}
@@ -115,12 +119,18 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
 
+	glog.V(2).Infof("In authorizePredicate: predicate: %s %d", predicate, len(predicate))
+	glog.V(2).Infof("Predicate permissions are:")
+	for k, v := range predPerms {
+		fmt.Println("Permission", k, v)
+	}
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil
 		}
 	}
 
+	fmt.Println("Failed to authorize preds")
 	// no rule has been defined that can match the predicate
 	// by default we block operation
 	return errors.Errorf("unauthorized to do %s on predicate %s",

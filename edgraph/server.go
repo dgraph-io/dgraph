@@ -131,22 +131,10 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	// Apply initial schema for the new namespace.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(ids.StartId)
+	m.Types = schema.InitialTypes(ids.StartId)
 	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		return 0, err
-	}
-
-	// Apply initial types for the new namespace.
-	for {
-		m = &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-		m.Types = schema.InitialTypes(ids.StartId)
-		_, err = query.ApplyMutations(ctx, m)
-		if err != nil {
-			glog.Errorf("While creating types for namespace: %s", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
 	}
 
 	time.Sleep(2 * time.Second)
@@ -259,6 +247,9 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	var err error
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
 		op := &api.Operation{Schema: dgraphSchema}
@@ -335,7 +326,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
 		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" modified", update.Predicate)
+				" modified", x.ParseAttr(update.Predicate))
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -349,7 +340,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
-				update.Predicate)
+				x.ParseAttr(update.Predicate))
 		}
 	}
 
@@ -362,7 +353,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		}
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 
 		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
@@ -370,7 +361,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 	}
 
@@ -403,6 +394,16 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
+
+	if x.WorkerConfig.AclEnabled {
+		ns, err := getJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = x.AttachNamespace(ctx, ns)
+	} else {
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	}
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -493,7 +494,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" dropped", attr)
+				" dropped", x.ParseAttr(attr))
 		}
 
 		nq := &api.NQuad{
@@ -1085,14 +1086,16 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 		ctx = x.AttachNamespace(ctx, ns)
 		return s.doQuery(ctx, req, NeedAuthorize)
 	}
-
-	//TODO(Ahsan): We should only set the namespace to 0 when ACL+MultiTenancy is disabled.
-	ctx = x.AttachNamespace(ctx, 0)
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	}
+
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}

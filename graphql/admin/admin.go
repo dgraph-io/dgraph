@@ -496,7 +496,7 @@ func newAdminResolver(
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
-	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+	go worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
 
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
 		glog.Infof("Updating GraphQL schema from subscription.")

@@ -1238,24 +1238,25 @@ func ToHex(i uint64, rdf bool) []byte {
 
 // KvWithMaxVersion returns a KV with the max version from the list of KVs.
 func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badgerpb.KV {
-	hasAnyPrefix := func(key []byte) bool {
-		for _, prefix := range prefixes {
-			if bytes.HasPrefix(key, prefix) {
-				return true
-			}
-		}
-		return false
-	}
+	// hasAnyPrefix := func(key []byte) bool {
+	// 	for _, prefix := range prefixes {
+	// 		if bytes.HasPrefix(key, prefix) {
+	// 			return true
+	// 		}
+	// 	}
+	// 	return false
+	// }
 	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
 	// KV contain the latest value.
 	var maxKv *badgerpb.KV
 	for _, kv := range kvs.GetKv() {
-		if !hasAnyPrefix(kv.GetKey()) {
-			// Verify that we got the key which was subscribed. This shouldn't happen, but added for
-			// robustness.
-			glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
-			continue
-		}
+		//TODO(Ahsan): Change this.
+		// if !hasAnyPrefix(kv.GetKey()) {
+		// 	// Verify that we got the key which was subscribed. This shouldn't happen, but added for
+		// 	// robustness.
+		// 	glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
+		// 	continue
+		// }
 		if maxKv.GetVersion() <= kv.GetVersion() {
 			maxKv = kv
 		}

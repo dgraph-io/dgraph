@@ -73,6 +73,9 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
 	updateHistory := oldSchemaHash != newSchemaHash
 
+	if x.WorkerConfig.AclEnabled == false {
+
+	}
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false

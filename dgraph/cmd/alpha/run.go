@@ -835,10 +835,10 @@ func run() {
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
 func listenForCorsUpdate(closer *z.Closer) {
-	prefix := x.DataKey("dgraph.cors", 0)
+	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, "dgraph.cors"), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
-	worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+	worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
 
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")
 		glog.Infof("Updating cors from subscription.")

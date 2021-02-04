@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 
@@ -89,7 +90,7 @@ func (s *Server) Login(ctx context.Context,
 		return nil, errors.Errorf(errMsg)
 	}
 
-	refreshJwt, err := getRefreshJwt(user.UserID)
+	refreshJwt, err := getRefreshJwt(user.UserID, request.Namespace)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
@@ -281,10 +282,11 @@ func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, 
 
 // getRefreshJwt constructs a refresh jwt with the given user id, and expiration ttl specified by
 // worker.Config.RefreshJwtTtl
-func getRefreshJwt(userId string) (string, error) {
+func getRefreshJwt(userId string, namespace uint64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userid": userId,
-		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
+		"userid":    userId,
+		"namespace": namespace,
+		"exp":       time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
 	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
@@ -347,7 +349,7 @@ func RefreshAcls(closer *z.Closer) {
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
 	var maxRefreshTs uint64
-	retrieveAcls := func(refreshTs uint64) error {
+	retrieveAcls := func(ns uint64, refreshTs uint64) error {
 		if refreshTs <= maxRefreshTs {
 			return nil
 		}
@@ -361,28 +363,32 @@ func RefreshAcls(closer *z.Closer) {
 		}
 
 		ctx := closer.Ctx()
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, ns)
 		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
 		groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
+		spew.Dump("groups", groups)
 		if err != nil {
 			return err
 		}
 
-		aclCachePtr.update(groups)
-		glog.V(3).Infof("Updated the ACL cache")
+		aclCachePtr.update(ns, groups)
+		glog.V(2).Infof("Updated the ACL cache")
 		return nil
 	}
 
 	closer.AddRunning(1)
-	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+	go worker.SubscribeForUpdates(aclPrefixes, "3-11", func(kvs *bpb.KVList) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
 		kv := x.KvWithMaxVersion(kvs, aclPrefixes, "ACL Subscription")
-		if err := retrieveAcls(kv.GetVersion()); err != nil {
+		pk, err := x.Parse(kv.GetKey())
+		x.Check(err)
+		ns, _ := x.ParseNamespaceAttr(pk.Attr)
+		if err := retrieveAcls(ns, kv.GetVersion()); err != nil {
 			glog.Errorf("Error while retrieving acls: %v", err)
 		}
 	}, 1, closer)
@@ -406,12 +412,12 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix("dgraph.acl.permission"),
-	x.PredicatePrefix("dgraph.acl.predicate"),
-	x.PredicatePrefix("dgraph.acl.rule"),
-	x.PredicatePrefix("dgraph.user.group"),
-	x.PredicatePrefix("dgraph.type.Group"),
-	x.PredicatePrefix("dgraph.xid"),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.permission")),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.predicate")),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.rule")),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.user.group")),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.type.Group")),
+	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.xid")),
 }
 
 func upsertGuardian(ctx context.Context) error {
@@ -593,6 +599,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 func authorizePreds(userId string, groupIds, preds []string,
 	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
+	fmt.Println("In authorizePreds", preds)
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
@@ -605,6 +612,14 @@ func authorizePreds(userId string, groupIds, preds []string,
 			})
 
 			blockedPreds[pred] = struct{}{}
+		} else {
+			logAccess(&accessEntry{
+				userId:    userId,
+				groups:    groupIds,
+				preds:     preds,
+				operation: aclOp,
+				allowed:   true,
+			})
 		}
 	}
 	aclCachePtr.RLock()
@@ -647,6 +662,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 	}
 
+	preds = x.NamespaceAttrList(x.ExtractNamespace(ctx), preds)
 	var userId string
 	var groupIds []string
 
@@ -758,6 +774,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	// A bug probably since f115de2eb6a40d882a86c64da68bf5c2a33ef69a
 	preds = append(preds, parsePredsFromMutation(gmu.Del)...)
 
+	preds = x.NamespaceAttrList(x.ExtractNamespace(ctx), preds)
 	var userId string
 	var groupIds []string
 	// doAuthorizeMutation checks if modification of all the predicates are allowed
@@ -783,7 +800,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			}
 			return nil
 		}
-
+		fmt.Println("In authorize mutation")
 		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
@@ -903,6 +920,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	var userId string
 	var groupIds []string
 	predsAndvars := parsePredsFromQuery(parsedReq.Query)
+	predsAndvars.preds = x.NamespaceAttrList(x.ExtractNamespace(ctx), predsAndvars.preds)
+
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
 
@@ -926,7 +945,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil, nil
 		}
-
+		fmt.Println("In authorize query")
 		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Read)
 		return blockedPreds, allowedPreds, nil
 	}

@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -904,6 +905,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
 	knownGid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
+	fmt.Println("preocessTask", knownGid, q.Attr)
 	switch {
 	case err != nil:
 		return nil, err
@@ -922,7 +924,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	}
 	// For now, remove the query level cache. It is causing contention for queries with high
 	// fan-out.
-
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
 		return nil, err
