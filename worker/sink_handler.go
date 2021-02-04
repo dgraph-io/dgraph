@@ -42,7 +42,6 @@ type SinkMeta struct {
 type SinkHandler interface {
 	// send message to the sink
 	SendMessage(message SinkMessage) error
-
 	// send in bulk to the sink
 	SendMessages(messages []SinkMessage) error
 	// close sink
@@ -174,16 +173,7 @@ func (f *fileSink) SendMessages(messages []SinkMessage) error {
 	return nil
 }
 
-//var iter uint64
-
 func (f *fileSink) SendMessage(message SinkMessage) error {
-	// this adds error behaviour to the send message for file sync. Just for testing purpose
-	//if atomic.LoadUint64(&iter) < 1000 && atomic.LoadUint64(&iter) > 100 {
-	//	atomic.AddUint64(&iter, 10)
-	//	return errors.New("")
-	//}
-	//atomic.AddUint64(&iter, 1)
-	//time.Sleep(time.Second * 3)
 	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": %s, \"value\": %s}\n",
 		string(message.Key), string(message.Value))))
 	return err

@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -42,7 +42,7 @@ type ChangeData struct {
 	maxReadTs uint64
 }
 
-func initChangeDataCapture(idx uint64) *ChangeData {
+func initChangeDataCapture() *ChangeData {
 	if Config.ChangeDataConf == "" {
 		return nil
 	}
@@ -55,7 +55,6 @@ func initChangeDataCapture(idx uint64) *ChangeData {
 	x.Check(err)
 	cd := &ChangeData{
 		sink:               sink,
-		cdcIndex:           idx,
 		maxRecoveryEntries: cdcFlag.GetUint64("max-recovery"),
 		closer:             z.NewCloser(1),
 		pendingEvents:      make(map[uint64][]CDCEvent),

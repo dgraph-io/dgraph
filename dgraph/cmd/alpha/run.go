@@ -206,13 +206,13 @@ they form a Raft group and provide synchronous replication.
 	flag.String("change_data", "",
 		`Various change data capture options.
 	enabled=true/false to enable change data capture. Default is false.
-	max_recovery=N to define the maximum amount of CDC index that can lag behind the
-	current index in case of sink failure. Default is 10000 Raft entries.
+	max_recovery=N to define the maximum amount of pending txn events can lag behind the
+	current index in case of sink failure. Default is 10000 pending txn entries.
 	`)
 
 	flag.String("sink", "",
 		`Various sink config options.
-	destination=host1,host2 to define comma separated list of host.
+	destination=kafka://host1,host2 to define comma separated list of host.
 	sasl_user=username to define sasl username for kafka.
 	sasl_password=password to define sasl password for kafka.
 	ca_cert=/path/to/ca/crt/file to define ca cert for tls encryption.

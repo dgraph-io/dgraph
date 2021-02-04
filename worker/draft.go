@@ -246,10 +246,11 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []raftpb.Entry, 1000),
-		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  z.NewCloser(4), // Matches CLOSER:1
-		ops:     make(map[op]*z.Closer),
+		applyCh:    make(chan []raftpb.Entry, 1000),
+		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:     z.NewCloser(4), // Matches CLOSER:1
+		ops:        make(map[op]*z.Closer),
+		cdcTracker: initChangeDataCapture(),
 	}
 	if x.WorkerConfig.LudicrousMode {
 		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
@@ -1744,7 +1745,6 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		n.cdcTracker = initChangeDataCapture(sp.Metadata.Index)
 		glog.V(2).Infoln("Restart node complete")
 
 	} else {
@@ -1764,8 +1764,6 @@ func (n *node) InitAndStartNode() {
 			// Trigger election, so this node can become the leader of this single-node cluster.
 			n.canCampaign = true
 		}
-		// initate cdc with raft index 1
-		n.cdcTracker = initChangeDataCapture(1)
 	}
 	go n.processTabletSizes()
 	go n.processApplyCh()
