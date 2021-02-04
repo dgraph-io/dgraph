@@ -235,6 +235,16 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
+
+	// Version is 0 if the backup was taken on an old version (v20.11).
+	if lastManifest.Version == 0 {
+		tmp := make([]string, 0, len(preds))
+		for _, pred := range preds {
+			tmp = append(tmp, x.NamespaceAttr(x.DefaultNamespace, pred))
+		}
+		preds = tmp
+	}
+
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
@@ -313,8 +323,9 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredential
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
-			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
+		getCredentialsFromRestoreRequest(req),
+		func(r io.Reader, groupId uint32, preds predicateSet,
+			dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.

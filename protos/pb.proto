@@ -649,6 +649,8 @@ message ExportRequest {
 	string secret_key = 7;
 	string session_token = 8;
 	bool anonymous = 9;
+
+	uint64 namespace = 10;
 }
 
 message ExportResponse {
@@ -677,6 +679,7 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
+	uint64 namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.

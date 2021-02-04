@@ -55,6 +55,10 @@ type Manifest struct {
 	// backup gets assigned the next available number. Used to verify the integrity
 	// of the data during a restore.
 	BackupNum uint64 `json:"backup_num"`
+	// Version specifies the Dgraph version, the backup was taken on. For the backup taken on older
+	// versions (<= 20.11), the predicates in Group map do not have namespace. Version will be zero
+	// for older versions.
+	Version int `json:"version"`
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
 	Path string `json:"-"`
@@ -73,6 +77,10 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 
 	predSet := make(predicateSet)
 	for _, pred := range preds {
+		if m.Version == 0 {
+			// For older versions, preds set will contain attribute without namespace.
+			pred = x.NamespaceAttr(x.DefaultNamespace, pred)
+		}
 		predSet[pred] = struct{}{}
 	}
 	return predSet

@@ -113,9 +113,9 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		_, ok1 := state.Groups["1"].Tablets["name1"]
-		_, ok2 := state.Groups["2"].Tablets["name2"]
-		_, ok3 := state.Groups["3"].Tablets["name3"]
+		_, ok1 := state.Groups["1"].Tablets[x.NamespaceAttr(x.DefaultNamespace, "name1")]
+		_, ok2 := state.Groups["2"].Tablets[x.NamespaceAttr(x.DefaultNamespace, "name2")]
+		_, ok3 := state.Groups["3"].Tablets[x.NamespaceAttr(x.DefaultNamespace, "name3")]
 		if ok1 && ok2 && ok3 {
 			moveOk = true
 			break

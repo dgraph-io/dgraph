@@ -54,11 +54,15 @@ const (
 	DefaultNamespace = uint64(0)
 )
 
-// NamespaceAttr is used to generate attr from namespace.
-func NamespaceAttr(ns uint64, attr string) string {
+func NamespaceToBytes(ns uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, ns)
-	return string(buf) + attr
+	return buf
+}
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(ns uint64, attr string) string {
+	return string(NamespaceToBytes(ns)) + attr
 }
 
 func NamespaceAttrList(ns uint64, preds []string) []string {
@@ -73,6 +77,11 @@ func NamespaceAttrList(ns uint64, preds []string) []string {
 func ParseNamespaceAttr(attr string) (uint64, string) {
 	AssertTrue(len(attr) >= 8)
 	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
+}
+
+func ParseNamespaceBytes(attr string) ([]byte, string) {
+	AssertTrue(len(attr) >= 8)
+	return []byte(attr[:8]), attr[8:]
 }
 
 // ParseAttr returns the attr from the given value.
@@ -115,7 +124,10 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 
 	buf := make([]byte, totalLen)
 	buf[0] = typeByte
-	rest := buf[1:]
+	// Separate namespace and attribute from attr and write namespace in the first 8 bytes of key.
+	namespace, attr := ParseNamespaceBytes(attr)
+	AssertTrue(copy(buf[1:], namespace) == 8)
+	rest := buf[9:]
 
 	writeAttr(rest, attr)
 	return buf
@@ -208,6 +220,7 @@ func IndexKey(attr, term string) []byte {
 	rest[0] = ByteIndex
 
 	rest = rest[1:]
+	AssertTrue(len(rest) == len(term))
 	AssertTrue(len(term) == copy(rest, term))
 	return buf
 }
@@ -310,13 +323,16 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 func (p ParsedKey) SkipPredicate() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = 0xFF
 	return buf
 }
 
+// TODO(Naman): Remove these functions as they are unused.
 // SkipSchema returns the first key after all the schema keys.
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
@@ -335,8 +351,10 @@ func (p ParsedKey) SkipType() []byte {
 func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteData
 	return buf
@@ -346,8 +364,10 @@ func (p ParsedKey) DataPrefix() []byte {
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = DefaultPrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteIndex
 	return buf
@@ -357,8 +377,10 @@ func (p ParsedKey) IndexPrefix() []byte {
 func (p ParsedKey) ReversePrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = DefaultPrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteReverse
 	return buf
@@ -368,8 +390,10 @@ func (p ParsedKey) ReversePrefix() []byte {
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	if reverse {
 		k[0] = ByteCountRev
@@ -381,8 +405,10 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 
 // ToBackupKey returns the key in the format used for writing backups.
 func (p ParsedKey) ToBackupKey() *pb.BackupKey {
+	ns, attr := ParseNamespaceAttr(p.Attr)
 	key := pb.BackupKey{}
-	key.Attr = p.Attr
+	key.Namespace = ns
+	key.Attr = attr
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
 	key.Term = p.Term
@@ -404,6 +430,7 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	case p.IsType():
 		key.Type = pb.BackupKey_TYPE
 	}
+
 	return &key
 }
 
@@ -413,22 +440,24 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 		return nil
 	}
 
+	attr := NamespaceAttr(backupKey.Namespace, backupKey.Attr)
+
 	var key []byte
 	switch backupKey.Type {
 	case pb.BackupKey_DATA:
-		key = DataKey(backupKey.Attr, backupKey.Uid)
+		key = DataKey(attr, backupKey.Uid)
 	case pb.BackupKey_INDEX:
-		key = IndexKey(backupKey.Attr, backupKey.Term)
+		key = IndexKey(attr, backupKey.Term)
 	case pb.BackupKey_REVERSE:
-		key = ReverseKey(backupKey.Attr, backupKey.Uid)
+		key = ReverseKey(attr, backupKey.Uid)
 	case pb.BackupKey_COUNT:
-		key = CountKey(backupKey.Attr, backupKey.Count, false)
+		key = CountKey(attr, backupKey.Count, false)
 	case pb.BackupKey_COUNT_REV:
-		key = CountKey(backupKey.Attr, backupKey.Count, true)
+		key = CountKey(attr, backupKey.Count, true)
 	case pb.BackupKey_SCHEMA:
-		key = SchemaKey(backupKey.Attr)
+		key = SchemaKey(attr)
 	case pb.BackupKey_TYPE:
-		key = TypeKey(backupKey.Attr)
+		key = TypeKey(attr)
 	}
 
 	if backupKey.StartUid > 0 {
@@ -457,7 +486,9 @@ func TypePrefix() []byte {
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
 	buf[0] = DefaultPrefix
-	k := writeAttr(buf[1:], predicate)
+	ns, predicate := ParseNamespaceBytes(predicate)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	k := writeAttr(buf[9:], predicate)
 	AssertTrue(len(k) == 0)
 	return buf
 }
@@ -484,27 +515,28 @@ func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
-	if len(key) == 0 {
-		return p, errors.New("0 length key")
+	if len(key) < 9 {
+		return p, errors.New("Key length less than 9")
 	}
-
 	p.bytePrefix = key[0]
+	namespace := key[1:9]
+	key = key[9:]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
-	p.HasStartUid = key[0] == ByteSplit
+	p.HasStartUid = p.bytePrefix == ByteSplit
 
 	if len(key) < 3 {
 		return p, errors.Errorf("Invalid format for key %v", key)
 	}
-	sz := int(binary.BigEndian.Uint16(key[1:3]))
-	k := key[3:]
+	sz := int(binary.BigEndian.Uint16(key[:2]))
+	k := key[2:]
 
 	if len(k) < sz {
 		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
 	}
-	p.Attr = string(k[:sz])
+	p.Attr = string(namespace) + string(k[:sz])
 	k = k[sz:]
 
 	switch p.bytePrefix {
@@ -578,7 +610,7 @@ func IsDropOpKey(key []byte) (bool, error) {
 		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 	}
 
-	if pk.IsData() && pk.Attr == "dgraph.drop.op" {
+	if pk.IsData() && ParseAttr(pk.Attr) == "dgraph.drop.op" {
 		return true, nil
 	}
 	return false, nil
