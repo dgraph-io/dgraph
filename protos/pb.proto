@@ -679,6 +679,7 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
+	uint64 namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.
