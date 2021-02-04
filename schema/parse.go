@@ -284,7 +284,8 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			if _, ok := seen[tokenizer.Name()]; !ok {
 				seen[tokenizer.Name()] = true
 			} else {
-				return errors.Errorf("Duplicate tokenizers present for attr %s", x.ParseAttr(schema.Predicate))
+				return errors.Errorf("Duplicate tokenizers present for attr %s",
+					x.ParseAttr(schema.Predicate))
 			}
 			if tokenizer.IsSortable() {
 				if seenSortableTok {
