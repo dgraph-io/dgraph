@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Shopify/sarama"
@@ -48,7 +50,10 @@ type SinkHandler interface {
 	Close() error
 }
 
-const defaultSinkConf = "destination=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+const (
+	defaultSinkFileName = "sink.log"
+	defaultSinkConf     = "destination=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+)
 
 func GetSinkHandler() (SinkHandler, error) {
 	if Config.SinkConfig != "" {
@@ -114,7 +119,7 @@ func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 	}
-	brokers := strings.Split(strings.TrimLeft(config.GetString("destination"), "kafka://"), ",")
+	brokers := strings.Split(strings.TrimPrefix(config.GetString("destination"), "kafka://"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
 		return nil, err
@@ -164,7 +169,7 @@ type fileSink struct {
 
 func (f *fileSink) SendMessages(messages []SinkMessage) error {
 	for _, m := range messages {
-		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": %s, \"value\": %s}\n",
+		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
 			string(m.Key), string(m.Value))))
 		if err != nil {
 			return err
@@ -174,7 +179,7 @@ func (f *fileSink) SendMessages(messages []SinkMessage) error {
 }
 
 func (f *fileSink) SendMessage(message SinkMessage) error {
-	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": %s, \"value\": %s}\n",
+	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
 		string(message.Key), string(message.Value))))
 	return err
 }
@@ -184,9 +189,18 @@ func (f *fileSink) Close() error {
 }
 
 func newFileBasedSink(path *x.SuperFlag) (SinkHandler, error) {
-	var err error
+	dir := strings.TrimPrefix(path.GetString("destination"), "file://")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, err
+	}
+
+	fp, err := filepath.Abs(filepath.Join(dir, defaultSinkFileName))
+	if err != nil {
+		return nil, err
+	}
+
 	w := &x.LogWriter{
-		FilePath: strings.TrimLeft(path.GetString("destination"), "file://"),
+		FilePath: fp,
 		MaxSize:  100,
 		MaxAge:   10,
 	}

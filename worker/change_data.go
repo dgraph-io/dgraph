@@ -25,7 +25,7 @@ import (
 type ChangeData struct {
 }
 
-func initChangeDataCapture(idx uint64) *ChangeData {
+func initChangeDataCapture() *ChangeData {
 	return nil
 }
 
