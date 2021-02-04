@@ -76,6 +76,8 @@ type options struct {
 	MapShards    int
 	ReduceShards int
 
+	Namespace uint64
+
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
@@ -100,6 +102,7 @@ type state struct {
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
 	writeTs       uint64       // All badger writes use this timestamp
+	namespaces    *sync.Map    // To store the encountered namespaces.
 }
 
 type loader struct {
@@ -136,6 +139,7 @@ func newLoader(opt *options) *loader {
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
+		namespaces:    &sync.Map{},
 	}
 	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
@@ -183,7 +187,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	result, err := schema.Parse(string(buf))
+	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
 	x.Check(err)
 	return result
 }
@@ -262,6 +266,8 @@ func (ld *loader) mapStage() {
 	// Send the graphql triples
 	ld.processGqlSchema(loadType)
 
+	// By this time, we will know about all the namespaces encountered. Else, we depend on the schema
+	// to contain whole of the information about namespace.
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
@@ -276,6 +282,7 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
+// TODO(Naman): Fix this for multi-tenancy.
 func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	if ld.opt.GqlSchemaFile == "" {
 		return
@@ -299,6 +306,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
+	// TODO(Naman): We will nedd this for all the namespaces.
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
 	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
 	_:gqlschema <dgraph.graphql.schema> %s .
@@ -309,6 +317,8 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		"dgraph.graphql.xid": "dgraph.graphql.schema",
 		"dgraph.graphql.schema": %s
 	}`
+
+	// TODO(Naman): Process the GQL schema here.
 
 	gqlBuf := &bytes.Buffer{}
 	schema := strconv.Quote(string(buf))

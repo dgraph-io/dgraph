@@ -189,8 +189,9 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	uid  string       // uid retrieved or allocated for the node.
-	fcts []*api.Facet // facets on the edge connecting this node to the source if any.
+	uid       string       // uid retrieved or allocated for the node.
+	namespace uint64       // namespace to which the node belongs.
+	fcts      []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
@@ -267,6 +268,7 @@ func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{
 		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
+			Namespace:   mr.namespace,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		})
 	}
@@ -447,12 +449,29 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		mr.uid = getNextBlank()
 	}
 
+	namespace := x.DefaultNamespace
+	if ns, ok := m["namespace"]; ok {
+		switch ns := ns.(type) {
+		case json.Number:
+			nsi, err := ns.Int64()
+			if err != nil {
+				return mr, err
+			}
+			namespace = uint64(nsi)
+
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+		case int64:
+			namespace = uint64(ns)
+		}
+	}
+	mr.namespace = namespace
+
 	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" {
+		if pred == "uid" || pred == "namespace" {
 			continue
 		}
 
@@ -462,6 +481,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				nq := &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
+					Namespace:   namespace,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				}
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -478,6 +498,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq := api.NQuad{
 			Subject:   mr.uid,
 			Predicate: pred,
+			Namespace: namespace,
 		}
 
 		prefix := pred + x.FacetDelimeter
@@ -545,6 +566,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
+					Namespace: namespace,
 				}
 
 				switch iv := item.(type) {
@@ -739,8 +761,11 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return nil
 	}
 	mr, err := buf.mapToNquads(ms, op, "")
+	if err != nil {
+		return err
+	}
 	buf.checkForDeletion(mr, ms, op)
-	return err
+	return nil
 }
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead

@@ -116,6 +116,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
 	m := true
 	p := Person{
+		Uid:     "1",
 		Name:    "Alice",
 		Age:     26,
 		Married: &m,
