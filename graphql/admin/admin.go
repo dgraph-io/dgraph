@@ -443,7 +443,8 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64, closer *z.Closer) (web.IServeGraphQL,
+func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
+	closer *z.Closer) (web.IServeGraphQL,
 	web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -872,7 +873,12 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// will match against global epoch to terminate the current subscriptions.
 	e := as.globalEpoch[ns]
 	atomic.AddUint64(&e, 1)
-	as.gqlServer[ns].ServeGQL(ns, resolve.New(gqlSchema, resolverFactory))
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	if as.gqlServer[ns] == nil {
+		as.gqlServer[ns] = web.NewServer(&e, resolvers, false)
+	} else {
+		as.gqlServer[ns].ServeGQL(ns, resolvers)
+	}
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()

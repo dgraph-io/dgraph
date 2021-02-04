@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -89,6 +90,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		First: 2,
 	})
 	if err != nil {
+		fmt.Println("err: ", err, " attr ", namespace, " pred: ", GqlSchemaPred)
 		return nil, err
 	}
 

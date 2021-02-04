@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -60,6 +61,9 @@ type IServeGraphQL interface {
 
 	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
 	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
+
+	// ResolveWithNs processes a GQL Request using the correct resolver and returns a GQL Response
+	ResolveWithNs(ctx context.Context, ns uint64, gqlReq *schema.Request) *schema.Response
 }
 
 type graphqlHandler struct {
@@ -95,6 +99,14 @@ func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver)
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
 	ns := x.ExtractNamespace(ctx)
+	for ns, r := range gh.resolver {
+		fmt.Printf("ns: %+v, r: %+v\n", ns, r)
+	}
+	return gh.resolver[ns].Resolve(ctx, gqlReq)
+}
+
+func (gh *graphqlHandler) ResolveWithNs(ctx context.Context, ns uint64,
+	gqlReq *schema.Request) *schema.Response {
 	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 

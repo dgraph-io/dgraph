@@ -2,10 +2,7 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
-// replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
-// replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
-
-replace github.com/dgraph-io/badger/v3 => /home/ash/go/src/github.com/dgraph-io/badger
+replace github.com/dgraph-io/badger/v3 => /home/pawan/go/src/github.com/dgraph-io/badger
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0

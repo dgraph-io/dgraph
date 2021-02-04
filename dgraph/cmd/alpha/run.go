@@ -458,7 +458,8 @@ func setupServer(closer *z.Closer) {
 	var mainServer web.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
-	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, globalEpoch, closer)
+	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
+		globalEpoch, closer)
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := r.Header.Get("namespace")
 		glog.Info("Namespace before parsing", namespace)

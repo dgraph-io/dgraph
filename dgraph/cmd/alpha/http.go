@@ -649,7 +649,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachNamespace(ctx, namespace)
 	fmt.Println("IN resolveWithAdminServer, ns: ", x.ExtractNamespace(ctx))
 
-	return adminServer.Resolve(ctx, gqlReq)
+	return adminServer.ResolveWithNs(ctx, 0, gqlReq)
 }
 
 func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {
