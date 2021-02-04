@@ -290,15 +290,17 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
-	ns, _ := x.ParseNamespaceAttr(nq.Predicate)
-	sid := m.uid(nq.GetSubject(), ns)
+	if m.opt.Namespace != math.MaxUint64 {
+		nq.Namespace = m.opt.Namespace
+	}
+	sid := m.uid(nq.GetSubject(), nq.Namespace)
 	if sid == 0 {
 		panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetSubject()))
 	}
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
-		oid = m.uid(nq.GetObjectId(), ns)
+		oid = m.uid(nq.GetObjectId(), nq.Namespace)
 		if oid == 0 {
 			panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetObjectId()))
 		}
@@ -309,13 +311,17 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		x.Check(err)
 	}
 
+	m.schema.checkAndSetInitialSchema(nq.Namespace)
+
+	// Appropriate schema must exist for the nquad's namespace by this time.
+	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 	fwd, rev := m.createPostings(nq, de)
-	shard := m.state.shards.shardFor(nq.Predicate)
-	key := x.DataKey(nq.Predicate, sid)
+	shard := m.state.shards.shardFor(attr)
+	key := x.DataKey(attr, sid)
 	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(nq.Predicate, oid)
+		key = x.ReverseKey(attr, oid)
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
@@ -354,13 +360,13 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
-	// TODO(Naman): We need to pass in the namespace here.
 	nq := gql.NQuad{NQuad: &api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",
 		ObjectValue: &api.Value{
 			Val: &api.Value_StrVal{StrVal: xid},
 		},
+		Namespace: ns,
 	}}
 	m.processNQuad(nq)
 	return uid
@@ -372,7 +378,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	m.schema.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
-	sch := m.schema.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
 	if nq.GetObjectValue() != nil {
 		lang := de.GetLang()
 		switch {
@@ -407,7 +413,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		return // Cannot index UIDs
 	}
 
-	sch := m.schema.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
 	for _, tokerName := range sch.GetTokenizer() {
 		// Find tokeniser.
 		toker, ok := tok.GetTokenizer(tokerName)
@@ -431,15 +437,16 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
+		attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 		// Store index posting.
 		for _, t := range toks {
 			m.addMapEntry(
-				x.IndexKey(nq.Predicate, t),
+				x.IndexKey(attr, t),
 				&pb.Posting{
 					Uid:         de.GetEntity(),
 					PostingType: pb.Posting_REF,
 				},
-				m.state.shards.shardFor(nq.Predicate),
+				m.state.shards.shardFor(attr),
 			)
 		}
 	}

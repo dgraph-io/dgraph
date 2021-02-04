@@ -189,8 +189,9 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	uid  string       // uid retrieved or allocated for the node.
-	fcts []*api.Facet // facets on the edge connecting this node to the source if any.
+	uid       string       // uid retrieved or allocated for the node.
+	namespace uint64       // namespace to which the node belongs.
+	fcts      []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
@@ -263,11 +264,11 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
-	// TODO(Naman): Pass namespace here.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
 		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
+			Namespace:   mr.namespace,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		})
 	}
@@ -440,8 +441,14 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	// TODO(Naman): Parse the namespace here.
-	// Check field in map.
+	if mr.uid == "" {
+		if op == DeleteNquads {
+			// Delete operations with a non-nil value must have a uid specified.
+			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
+		}
+		mr.uid = getNextBlank()
+	}
+
 	namespace := x.DefaultNamespace
 	if ns, ok := m["namespace"]; ok {
 		switch ns := ns.(type) {
@@ -457,14 +464,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			namespace = uint64(ns)
 		}
 	}
-
-	if mr.uid == "" {
-		if op == DeleteNquads {
-			// Delete operations with a non-nil value must have a uid specified.
-			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
-		}
-		mr.uid = getNextBlank()
-	}
+	mr.namespace = namespace
 
 	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
@@ -480,7 +480,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				// This corresponds to edge deletion.
 				nq := &api.NQuad{
 					Subject:     mr.uid,
-					Predicate:   x.NamespaceAttr(namespace, pred),
+					Predicate:   pred,
+					Namespace:   namespace,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				}
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -496,7 +497,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		nq := api.NQuad{
 			Subject:   mr.uid,
-			Predicate: x.NamespaceAttr(namespace, pred),
+			Predicate: pred,
+			Namespace: namespace,
 		}
 
 		prefix := pred + x.FacetDelimeter
@@ -563,7 +565,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			for idx, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
-					Predicate: x.NamespaceAttr(namespace, pred),
+					Predicate: pred,
+					Namespace: namespace,
 				}
 
 				switch iv := item.(type) {
@@ -753,14 +756,16 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 			if err != nil {
 				return err
 			}
-			// TODO(Naman): Check the handling of checkForDeletion in multi-tenant.
 			buf.checkForDeletion(mr, obj.(map[string]interface{}), op)
 		}
 		return nil
 	}
 	mr, err := buf.mapToNquads(ms, op, "")
+	if err != nil {
+		return err
+	}
 	buf.checkForDeletion(mr, ms, op)
-	return err
+	return nil
 }
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead

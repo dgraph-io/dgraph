@@ -102,6 +102,7 @@ type state struct {
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
 	writeTs       uint64       // All badger writes use this timestamp
+	namespaces    *sync.Map    // To store the encountered namespaces.
 }
 
 type loader struct {
@@ -138,6 +139,7 @@ func newLoader(opt *options) *loader {
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
+		namespaces:    &sync.Map{},
 	}
 	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
@@ -185,8 +187,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	// TODO(Naman): Handle namespace specific schema parsing.
-	result, err := schema.Parse(string(buf))
+	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
 	x.Check(err)
 	return result
 }

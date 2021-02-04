@@ -346,7 +346,6 @@ func run() {
 		}
 	}
 	loader.reduceStage()
-	// TODO(Naman): Nothing to be done after this. Just ensure that loader.schema has the correct schema.
 	loader.writeSchema()
 	loader.cleanup()
 }

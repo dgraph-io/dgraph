@@ -194,6 +194,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
+// TODO(Naman): We have namespace in NQuad. Check if this function needs special handling.
 func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	edges []*pb.DirectedEdge, err error) {
 

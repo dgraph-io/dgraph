@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -10,7 +11,7 @@ import (
 )
 
 type namespaceInput struct {
-	NamespaceId json.Number
+	NamespaceId int
 }
 
 func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -18,17 +19,13 @@ func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	v, err := req.NamespaceId.Int64()
-	if err != nil {
-		return resolve.EmptyResult(m, err), false
-	}
-	if err = (&edgraph.Server{}).CreateNamespace(ctx, uint64(v)); err != nil {
+	if err = (&edgraph.Server{}).CreateNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": req.NamespaceId,
+			"namespaceId": strconv.Itoa(req.NamespaceId),
 			"message":     "Created namespace successfully",
 		}},
 		nil,
@@ -40,17 +37,13 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	v, err := req.NamespaceId.Int64()
-	if err != nil {
-		return resolve.EmptyResult(m, err), false
-	}
-	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(v)); err != nil {
+	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": req.NamespaceId,
+			"namespaceId": strconv.Itoa(req.NamespaceId),
 			"message":     "Deleted namespace successfully",
 		}},
 		nil,

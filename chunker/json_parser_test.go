@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
@@ -136,13 +135,10 @@ func TestNquadsFromJson1(t *testing.T) {
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
-	spew.Dump(nq)
 
 	fastNQ, err := FastParse(b, SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(fastNQ))
-	spew.Dump(fastNQ)
-	return
 
 	exp := &Experiment{
 		t:      t,

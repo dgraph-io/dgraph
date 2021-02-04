@@ -90,6 +90,12 @@ func ParseAttr(attr string) string {
 	return attr[8:]
 }
 
+// ParseNamespace returns the namespace from the given value.
+func ParseNamespace(attr string) uint64 {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8]))
+}
+
 func ParseAttrList(attrs []string) []string {
 	var resp []string
 	for _, attr := range attrs {

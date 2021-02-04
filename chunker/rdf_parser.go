@@ -85,18 +85,6 @@ func ParseRDF(line string, l *lex.Lexer) (api.NQuad, error) {
 		return rnq, ErrEmpty
 	}
 
-	// Append the namespace to the predicate before returning NQuad.
-	defer func() {
-		// TODO(Naman): Ensure the label contains valid namespace.
-		namespace := x.DefaultNamespace
-		if rnq.Label != "" {
-			ns, err := strconv.Atoi(rnq.Label)
-			x.Check(err)
-			namespace = uint64(ns)
-		}
-		rnq.Predicate = x.NamespaceAttr(namespace, rnq.Predicate)
-	}()
-
 	l.Reset(line)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
@@ -206,8 +194,6 @@ L:
 			break L
 
 		case itemLabel:
-			// TODO(Naman): The label will contain the information about the namespace.
-			// JSON parser does not have it. Append this to predicate at the end.
 			rnq.Label = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemLeftRound:
@@ -238,6 +224,16 @@ L:
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) ||
 		!sane(rnq.ObjectId) || !sane(rnq.Label) {
 		return rnq, errors.Errorf("NQuad failed sanity check:%+v", rnq)
+	}
+
+	// TODO(Naman): Ensure the label contains valid namespace.
+	// Append the namespace to the predicate before returning NQuad.
+	if rnq.Label != "" {
+		ns, err := strconv.ParseUint(rnq.Label, 0, 64)
+		if err != nil {
+			return rnq, err
+		}
+		rnq.Namespace = ns
 	}
 
 	return rnq, nil

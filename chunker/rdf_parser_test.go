@@ -19,11 +19,11 @@ package chunker
 import (
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 )
 
 var testNQuads = []struct {
@@ -1009,19 +1009,16 @@ func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
 		l.Reset(test.input)
 		rnq, err := ParseRDF(test.input, l)
-		if err == nil {
-			spew.Dump(rnq)
+		switch {
+		case test.expectedErr && test.shouldIgnore:
+			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
+				err.Error())
+		case test.expectedErr:
+			require.Error(t, err, "Expected error for input: %q. Output: %+v",
+				test.input, rnq)
+		default:
+			require.NoError(t, err, "Got error for input: %q", test.input)
+			require.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
 		}
-		// switch {
-		// case test.expectedErr && test.shouldIgnore:
-		// 	require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
-		// 		err.Error())
-		// case test.expectedErr:
-		// 	require.Error(t, err, "Expected error for input: %q. Output: %+v",
-		// 		test.input, rnq)
-		// default:
-		// 	require.NoError(t, err, "Got error for input: %q", test.input)
-		// 	require.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
-		// }
 	}
 }
