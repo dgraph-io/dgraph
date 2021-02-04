@@ -181,14 +181,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			return false
 		}
 
-		// Backup type keys in every group.
-		if parsedKey.IsType() {
-			return true
-		}
-
-		// Only backup data keys for the requested predicates. The schema keys
-		// will be backed up separately.
-		return parsedKey.IsData()
+		// Skip backing up the schema and type keys. They will be backed up separately.
+		return !parsedKey.IsSchema() && !parsedKey.IsType()
 	}
 	stream.Send = func(buf *z.Buffer) error {
 		list, err := badger.BufferToKVList(buf)
