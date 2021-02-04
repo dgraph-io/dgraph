@@ -194,7 +194,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, gid, predSet, manifest.Version, manifest.DropOperations)
+			groupMaxUid, err := fn(fp, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}
@@ -314,7 +314,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		_, err = loadFromBackup(db, gzReader, 0, preds, x.DgraphVersion, nil)
+		_, err = loadFromBackup(db, gzReader, 0, preds, nil)
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot load backup")
 		}

@@ -390,8 +390,10 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 
 // ToBackupKey returns the key in the format used for writing backups.
 func (p ParsedKey) ToBackupKey() *pb.BackupKey {
+	ns, attr := ParseNamespaceAttr(p.Attr)
 	key := pb.BackupKey{}
-	key.Attr = p.Attr
+	key.Namespace = ns
+	key.Attr = attr
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
 	key.Term = p.Term
@@ -418,15 +420,12 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 }
 
 // FromBackupKey takes a key in the format used for backups and converts it to a key.
-func FromBackupKey(backupKey *pb.BackupKey, isOld bool) []byte {
+func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	if backupKey == nil {
 		return nil
 	}
 
-	attr := backupKey.Attr
-	if isOld {
-		attr = NamespaceAttr(DefaultNamespace, attr)
-	}
+	attr := NamespaceAttr(backupKey.Namespace, backupKey.Attr)
 
 	var key []byte
 	switch backupKey.Type {
