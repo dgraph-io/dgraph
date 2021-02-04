@@ -893,6 +893,11 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeCDCMinReadTs(minTs uint64) error {
+	// in case of ludicrous mode it could be zero. no need to send it
+	if minTs == 0 {
+		return nil
+	}
+
 	proposal := &pb.Proposal{
 		CDCMinReadTs: minTs,
 	}
