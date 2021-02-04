@@ -182,7 +182,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		}
 
 		// Skip backing up the schema and type keys. They will be backed up separately.
-		return !parsedKey.IsSchema() && !parsedKey.IsType()
+		if parsedKey.IsSchema() || parsedKey.IsType() {
+			return false
+		}
+		_, ok := predMap[parsedKey.Attr]
+		return ok
 	}
 	stream.Send = func(buf *z.Buffer) error {
 		list, err := badger.BufferToKVList(buf)
@@ -224,6 +228,14 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			item := itr.Item()
 			// Don't export deleted items.
 			if item.IsDeletedOrExpired() {
+				continue
+			}
+			parsedKey, err := x.Parse(item.Key())
+			if err != nil {
+				glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
+				continue
+			}
+			if _, ok := predMap[parsedKey.Attr]; !ok {
 				continue
 			}
 			kv := y.NewKV(tl.alloc)
