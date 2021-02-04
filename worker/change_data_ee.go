@@ -172,8 +172,11 @@ func (cd *ChangeData) processCDCEvents() {
 					cd.cdcIndex = entry.Index
 					continue
 				}
-
-				if proposal.Mutations != nil {
+				// this is to ensure that cdcMinReadTs will be monotically increasing
+				// In this way no min pending txn in case we skip some entries can affect
+				// the minReadTs to decrease. This way we will be able to provide gurantees
+				// across the cluster in case of failures.
+				if proposal.Mutations != nil && proposal.Mutations.StartTs > cd.getCDCMinReadTs() {
 					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
 					// In ludicrous events send the events as soon as you get it.
 					// We wont wait for oracle delta in case of ludicrous mode
@@ -228,8 +231,9 @@ func (cd *ChangeData) processCDCEvents() {
 				if iter == 5 {
 					iter = 0
 					minTs := cd.evaluateAndSetMinReadTs()
+					glog.V(2).Infof("proposing CDC minReadTs %d", minTs)
 					if err := groups().Node.proposeCDCMinReadTs(minTs); err != nil {
-						glog.Errorf("not able to propose snapshot %v", err)
+						glog.Errorf("not able to propose cdc minReadTs %v", err)
 					}
 				}
 			}
@@ -237,16 +241,17 @@ func (cd *ChangeData) processCDCEvents() {
 	}
 }
 
+// evaluateAndSetMinReadTs finds the minReadTs we have pending events for.
+// we can't send MaxUint64 as the response because when proposed,
+// it will nullify the state of cdc in the cluster,
+// thus making followers to clear raft logs between next proposal.
+// In this way we can loose some events.
 func (cd *ChangeData) evaluateAndSetMinReadTs() uint64 {
-	min := uint64(math.MaxUint64)
+	min := cd.maxReadTs
 	for ts := range cd.pendingEvents {
 		if ts < min {
 			min = ts
 		}
-	}
-	// if there is no pending events to send
-	if min == math.MaxUint64 {
-		min = cd.maxReadTs
 	}
 	cd.updateMinReadTs(min)
 	return min
