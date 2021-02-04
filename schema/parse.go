@@ -417,7 +417,7 @@ func parseNamespace(it *lex.ItemIterator) (uint64, error) {
 	if nextItems[0].Typ != itemNumber || nextItems[1].Typ != itemRightSquare {
 		return 0, errors.Errorf("Typed oes not match the expected")
 	}
-	ns, err := strconv.Atoi(nextItems[0].Val)
+	ns, err := strconv.ParseUint(nextItems[0].Val, 0, 64)
 	if err != nil {
 		return 0, err
 	}
@@ -457,11 +457,16 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 }
 
 // parse parses a schema string and returns the schema representation for it.
+// If namespace == math.MaxUint64, then it preserves the namespace. Else it forces the passed
+// namespace on schema/types.
+
+// Example schema:
+// [ns1] name: string .
+// [ns2] age: string .
+// parse(schema, 0) --> All the schema fields go to namespace 0.
+// parse(schema, x) --> All the schema fields go to namespace x.
+// parse(schema, math.MaxUint64) --> name (ns1), age(ns2) // Preserve the namespace
 func parse(s string, namespace uint64) (*ParsedSchema, error) {
-	defaultNs := x.DefaultNamespace
-	if namespace != math.MaxUint64 {
-		defaultNs = uint64(namespace)
-	}
 	var result ParsedSchema
 
 	var l lex.Lexer
@@ -500,7 +505,13 @@ func parse(s string, namespace uint64) (*ParsedSchema, error) {
 			return &result, nil
 
 		case itemText:
-			if err := parseTypeOrSchema(item, it, defaultNs); err != nil {
+			// For schema which does not contain the namespace information, use the default
+			// namespace, if namespace has to be preserved. Else, use the passed namespace.
+			ns := x.DefaultNamespace
+			if namespace != math.MaxUint64 {
+				ns = uint64(namespace)
+			}
+			if err := parseTypeOrSchema(item, it, ns); err != nil {
 				return nil, err
 			}
 
@@ -511,6 +522,7 @@ func parse(s string, namespace uint64) (*ParsedSchema, error) {
 				return nil, errors.Wrapf(err, "While parsing namespace:")
 			}
 			if namespace != math.MaxUint64 {
+				// Use the passed namespace, if we don't want to preserve the namespace.
 				ns = uint64(namespace)
 			}
 			// We have already called next in parseNamespace.

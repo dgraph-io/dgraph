@@ -265,7 +265,7 @@ func pathExist(path string) bool {
 	return !os.IsNotExist(err) && !os.IsPermission(err)
 }
 
-func (h *fileHandler) ExportBackup(backupDir, exportDir, format string, namespace uint64,
+func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	key x.SensitiveByteSlice) error {
 	if format != "json" && format != "rdf" {
 		return errors.Errorf("invalid format %s", format)
@@ -373,7 +373,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string, namespac
 				ReadTs:      manifest.Since,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
-				Namespace:   namespace,
+				Namespace:   math.MaxUint64, // Export all the namespaces.
 				Destination: exportDir,
 			}
 

@@ -16,7 +16,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"sort"
 	"time"
@@ -50,7 +49,6 @@ var opt struct {
 	forceZero   bool
 	destination string
 	format      string
-	namespace   uint64
 	verbose     bool
 }
 
@@ -244,7 +242,7 @@ func runLsbackupCmd() error {
 	}
 
 	var paths []string
-	for path, _ := range manifests {
+	for path := range manifests {
 		paths = append(paths, path)
 	}
 	sort.Slice(paths, func(i, j int) bool {
@@ -315,8 +313,6 @@ func initExportBackup() {
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
 		"The format of the export output. Accepts a value of either rdf or json")
-	flag.Uint64VarP(&opt.namespace, "namespace", "n", math.MaxUint64, "The namespace for which the"+
-		"backup has to be exported. By default, it will export all namespaces.")
 	enc.RegisterFlags(flag)
 }
 
@@ -327,5 +323,5 @@ func runExportBackup() error {
 	}
 
 	exporter := worker.BackupExporter{}
-	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.namespace, opt.key)
+	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }

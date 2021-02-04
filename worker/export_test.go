@@ -54,19 +54,19 @@ const (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: x.NamespaceAttr(x.DefaultNamespace, "Person"),
+	TypeName: testutil.DefaultNamespaceAttr("Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
+			Predicate: testutil.DefaultNamespaceAttr("name"),
 		},
 		{
-			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend"),
+			Predicate: testutil.DefaultNamespaceAttr("friend"),
 		},
 		{
-			Predicate: x.NamespaceAttr(x.DefaultNamespace, "~friend"),
+			Predicate: testutil.DefaultNamespaceAttr("~friend"),
 		},
 		{
-			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend_not_served"),
+			Predicate: testutil.DefaultNamespaceAttr("friend_not_served"),
 		},
 	},
 }
@@ -109,7 +109,7 @@ func populateGraphExport(t *testing.T) {
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
-		e.Attr = x.NamespaceAttr(x.DefaultNamespace, e.Attr)
+		e.Attr = testutil.DefaultNamespaceAttr(e.Attr)
 		require.NoError(t, err)
 		if set {
 			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
@@ -131,7 +131,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.DefaultSchemaKey("friend"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
 
@@ -140,17 +140,17 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	err = txn.Set(x.DefaultSchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	err = txn.Set(testutil.DefaultSchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	require.NoError(t, txn.Set(x.DefaultSchemaKey("friend_not_served"), val))
-	require.NoError(t, txn.Set(x.DefaultSchemaKey("age"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.DefaultTypeKey("Person"), val))
+	require.NoError(t, txn.Set(testutil.DefaultTypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	populateGraphExport(t)
@@ -158,7 +158,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	// Drop age predicate after populating DB.
 	// age should not exist in the exported schema.
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Delete(x.DefaultSchemaKey("age")))
+	require.NoError(t, txn.Delete(testutil.DefaultSchemaKey("age")))
 	require.NoError(t, txn.CommitAt(1, nil))
 }
 
@@ -202,7 +202,7 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, x.NamespaceAttr(x.DefaultNamespace, "http://www.w3.org/2000/01/rdf-schema#range"),
+	require.Equal(t, testutil.DefaultNamespaceAttr("http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
@@ -272,9 +272,9 @@ func TestExportRdf(t *testing.T) {
 					nq.ObjectValue)
 			case "0x4":
 			case "0x5":
-				require.Equal(t, `<0x5> <name> "" <0> .`, scanner.Text())
+				require.Equal(t, `<0x5> <name> "" <0x0> .`, scanner.Text())
 			case "0x6":
-				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0> .`,
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0x0> .`,
 					scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
@@ -355,15 +355,15 @@ func TestExportJson(t *testing.T) {
 
 	wantJson := `
 	[
-		{"uid":"0x1","namespace":"0","name":"pho\ton"},
-		{"uid":"0x2","namespace":"0","name@en":"pho\ton"},
-		{"uid":"0x3","namespace":"0","name":"First Line\nSecondLine"},
-		{"uid":"0x5","namespace":"0","name":""},
-		{"uid":"0x6","namespace":"0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
-		{"uid":"0x1","namespace":"0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x2","namespace":"0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x3","namespace":"0","friend":[{"uid":"0x5"}]},
-		{"uid":"0x4","namespace":"0","friend":[{"uid":"0x5"}],"friend|age":33,
+		{"uid":"0x1","namespace":"0x0","name":"pho\ton"},
+		{"uid":"0x2","namespace":"0x0","name@en":"pho\ton"},
+		{"uid":"0x3","namespace":"0x0","name":"First Line\nSecondLine"},
+		{"uid":"0x5","namespace":"0x0","name":""},
+		{"uid":"0x6","namespace":"0x0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
+		{"uid":"0x1","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x2","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x3","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x4","namespace":"0x0","friend":[{"uid":"0x5"}],"friend|age":33,
 			"friend|close":"true","friend|game":"football",
 			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
 	]

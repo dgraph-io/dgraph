@@ -250,36 +250,6 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	return buf
 }
 
-func DefaultSchemaKey(attr string) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return SchemaKey(attr)
-}
-
-func DefaultTypeKey(attr string) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return TypeKey(attr)
-}
-
-func DefaultDataKey(attr string, uid uint64) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return DataKey(attr, uid)
-}
-
-func DefaultReverseKey(attr string, uid uint64) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return ReverseKey(attr, uid)
-}
-
-func DefaultIndexKey(attr, term string) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return IndexKey(attr, term)
-}
-
-func DefaultCountKey(attr string, count uint32, reverse bool) []byte {
-	attr = NamespaceAttr(DefaultNamespace, attr)
-	return CountKey(attr, count, reverse)
-}
-
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
 	ByteType    byte

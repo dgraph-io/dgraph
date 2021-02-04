@@ -29,7 +29,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,7 +144,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	// Leaving it simple for now.
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"%d"`, e.uid, e.namespace)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -243,7 +242,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 		// Use label for storing namespace.
-		fmt.Fprintf(bp, " <%d>", e.namespace)
+		fmt.Fprintf(bp, " <0x%x>", e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
@@ -289,9 +288,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	ns, attr := x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
-	x.Check2(buf.WriteRune('['))
-	x.Check2(buf.WriteString(strconv.Itoa(int(ns))))
-	x.Check2(buf.WriteRune(']'))
+	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x]", ns)))
 	x.Check2(buf.WriteRune(' '))
 	x.Check2(buf.WriteRune('<'))
 	x.Check2(buf.WriteString(attr))
@@ -332,7 +329,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
 	ns, attr := x.ParseNamespaceAttr(attr)
-	x.Check2(buf.WriteString(fmt.Sprintf("[%d] type <%s> {\n", ns, attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -810,7 +807,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			switch prefix {
 			case x.ByteSchema:
 				if !skipZero {
-					if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
+					servesTablet, err := groups().ServesTablet(pk.Attr)
+					if err != nil || !servesTablet {
 						continue
 					}
 				}

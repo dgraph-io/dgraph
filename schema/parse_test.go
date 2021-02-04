@@ -601,6 +601,58 @@ func TestParseTypeComments(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseWithNamespace(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		[10] jobs: [string] @index(term) .
+		[0x123] occupations: [string] .
+		[0xf2] graduation: [dateTime] .
+		[0xf2] type Person {
+			name: [string!]!
+			address: string!
+			children: [Person]
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(result.Preds))
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(10, "jobs"),
+		ValueType: 9,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"term"},
+		List:      true,
+	}, result.Preds[0])
+
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(0x123, "occupations"),
+		ValueType: 9,
+		List:      true,
+	}, result.Preds[1])
+
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: x.NamespaceAttr(0xf2, "graduation"),
+		ValueType: 5,
+		List:      true,
+	}, result.Preds[2])
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: x.NamespaceAttr(0xf2, "Person"),
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: x.NamespaceAttr(0xf2, "name"),
+			},
+			{
+				Predicate: x.NamespaceAttr(0xf2, "address"),
+			},
+			{
+				Predicate: x.NamespaceAttr(0xf2, "children"),
+			},
+		},
+	}, result.Types[0])
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
