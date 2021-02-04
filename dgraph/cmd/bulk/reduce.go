@@ -658,7 +658,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
+		shouldSplit := pl.Size() >= (1<<20)/2
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)

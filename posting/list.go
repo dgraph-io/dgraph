@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -1019,6 +1020,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	// Update pl as well.
 	r.RemoveRange(uid, math.MaxUint64)
+	r.Remove(math.MaxUint64) // RemoveRange won't remove MaxUint64, so do that separately.
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
 	return nil
@@ -1067,7 +1069,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 				return start, end
 			}
 		}
-		return 1, math.MaxInt64
+		return 1, math.MaxUint64
 	}
 	{
 		// Moving these variables out of scope for rest of the function.
@@ -1093,21 +1095,23 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	}
 
 	// Pick up all the bitmaps first.
-	for startUid := range sranges {
-		endUid := sranges[startUid]
-
+	for startUid, endUid := range sranges {
 		r := bm.Clone()
 		r.RemoveRange(0, startUid)
-		r.RemoveRange(endUid, math.MaxUint64)
+		if endUid != math.MaxUint64 {
+			r.RemoveRange(endUid, math.MaxUint64)
+			r.Remove(math.MaxUint64)
+		}
 
 		plist := &pb.PostingList{}
 		plist.Bitmap = codec.ToBytes(r)
+
 		out.parts[startUid] = plist
 	}
 
 	// Now pick up all the postings.
 	startUid, endUid := getRange(1)
-	var plist *pb.PostingList
+	plist := out.parts[startUid]
 	err = l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
 			startUid, endUid = getRange(p.Uid)
@@ -1122,6 +1126,12 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
 	if err != nil {
 		return errors.Wrapf(err, "cannot iterate through the list")
+	}
+	if len(out.parts) > 1 {
+		for start, part := range out.parts {
+			r := codec.FromBytes(part.Bitmap)
+			glog.Infof("Start: %d. Bitmap: %+v\n", start, r.ToArray())
+		}
 	}
 	return nil
 }
@@ -1574,6 +1584,9 @@ func (out *rollupOutput) finalize() {
 		out.parts = nil
 	}
 	out.updateSplits()
+	if len(out.plist.Splits) > 0 {
+		glog.Infof("Got splits: %d\n", len(out.plist.Splits))
+	}
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are

@@ -1101,39 +1101,64 @@ func TestBinSplit(t *testing.T) {
 		require.Equal(t, size, len(ol.plist.Postings))
 		return ol
 	}
-	verifyBinSplit := func(t *testing.T, ol *List, startUids []uint64, pls []*pb.PostingList) {
-		require.Equal(t, 2, len(startUids))
-		require.Equal(t, 2, len(pls))
-		uids := codec.Decode(ol.plist.Pack, 0)
-		lowUids := codec.Decode(pls[0].Pack, startUids[0])
-		highUids := codec.Decode(pls[1].Pack, startUids[1])
+	verifyBinSplit := func(t *testing.T, ol *List, ro *rollupOutput) {
+		require.Equal(t, 2, len(ro.parts))
+
+		var keys []uint64
+		for start := range ro.parts {
+			keys = append(keys, start)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i] < keys[j]
+		})
+
+		low := codec.FromBytes(ro.parts[keys[0]].Bitmap)
+		high := codec.FromBytes(ro.parts[keys[1]].Bitmap)
+
+		uids := codec.ToUids(ol.plist, 0)
 		// Check if no data is lost in splitting.
-		require.Equal(t, uids, append(lowUids, highUids...))
-		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+		require.Equal(t, uids, append(low.ToArray(), high.ToArray()...))
+		require.Equal(t, ol.plist.Postings,
+			append(ro.parts[keys[0]].Postings, ro.parts[keys[1]].Postings...))
+
 		// Check if the postings belong to the correct half.
-		midUid := pls[1].Pack.Blocks[0].GetBase()
-		require.Equal(t, startUids[1], midUid)
-		for _, p := range pls[0].Postings {
+		midUid := high.Minimum()
+		require.Equal(t, keys[1], midUid)
+		for _, p := range ro.parts[keys[0]].Postings {
 			require.Less(t, p.Uid, midUid)
 		}
-		for _, p := range pls[1].Postings {
+		for _, p := range ro.parts[keys[1]].Postings {
 			require.GreaterOrEqual(t, p.Uid, midUid)
 		}
 	}
 	size := int(1e5)
 	ol := createList(t, size)
-	postings := ol.plist.Postings
-	startUids, pls := binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+
+	postings := make([]*pb.Posting, len(ol.plist.Postings))
+	copy(postings, ol.plist.Postings)
+
+	getRO := func(pl *pb.PostingList) *rollupOutput {
+		out := &rollupOutput{
+			plist: &pb.PostingList{},
+			parts: make(map[uint64]*pb.PostingList),
+		}
+		out.parts[1] = pl
+		return out
+	}
+	out := getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 
 	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
 	ol.plist.Postings = postings[:size/3]
-	startUids, pls = binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+	out = getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 
 	ol.plist.Postings = postings[:0]
-	startUids, pls = binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+	out = getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 }
 
 // Verify that iteration works with an afterUid value greater than zero.

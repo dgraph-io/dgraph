@@ -4,6 +4,7 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+replace github.com/RoaringBitmap/roaring => /home/mrjn/go/src/github.com/RoaringBitmap/roaring
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -57,6 +58,7 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.5.1
+	github.com/tinylib/msgp v1.1.5 // indirect
 	github.com/twpayne/go-geom v1.0.5
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.22.5

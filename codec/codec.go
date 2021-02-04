@@ -158,11 +158,20 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 	return iw
 }
 
+func FromBytes(buf []byte) *roaring64.Bitmap {
+	r := roaring64.New()
+	x.Check(r.UnmarshalBinary(buf))
+	return r
+}
+
 func FromBackup(buf []byte) *roaring64.Bitmap {
 	r := roaring64.New()
 	var prev uint64
 	for len(buf) > 0 {
 		uid, n := binary.Uvarint(buf)
+		if uid == 0 {
+			break
+		}
 		buf = buf[n:]
 
 		next := prev + uid
@@ -170,6 +179,13 @@ func FromBackup(buf []byte) *roaring64.Bitmap {
 		prev = next
 	}
 	return r
+}
+
+func ToUids(plist *pb.PostingList, start uint64) []uint64 {
+	r := roaring64.New()
+	x.Check(FromPostingList(r, plist))
+	r.RemoveRange(0, start)
+	return r.ToArray()
 }
 
 // // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would

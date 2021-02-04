@@ -410,7 +410,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
-			r := codec.FromBackup(plist.Bitmap)
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
 				r.GetCardinality(), len(plist.Bitmap))
 			itr := r.ManyIterator()

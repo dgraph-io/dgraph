@@ -1679,7 +1679,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		}
 	}
 
-	var out *roaring64.Bitmap
+	out := roaring64.New()
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
@@ -2173,7 +2173,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Now apply the results from filter.
 		var bitmaps []*roaring64.Bitmap
 		for _, filter := range sg.Filters {
-			bitmaps = append(bitmaps, filter.DestMap)
+			if filter.DestMap != nil {
+				bitmaps = append(bitmaps, filter.DestMap)
+			}
 		}
 
 		switch {
