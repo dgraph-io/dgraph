@@ -451,10 +451,12 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -482,13 +484,14 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return err
 	}
 
-	if x.WorkerConfig.AclEnabled && edge.GetAttr() == "dgraph.rule.permission" {
+	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
 		perm, ok := dst.Value.(int64)
 		if !ok {
 			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
 		}
 		if perm < 0 || perm > 7 {
-			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this predicate should be between 0 and 7", perm)
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this"+
+				" predicate should be between 0 and 7", perm)
 		}
 	}
 
