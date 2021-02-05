@@ -845,6 +845,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// will match against global epoch to terminate the current subscriptions.
 	e := as.globalEpoch[ns]
 	atomic.AddUint64(&e, 1)
+	as.globalEpoch[ns] = atomic.LoadUint64(&e)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
 	as.gqlServer.Set(ns, &e, resolvers)
 
