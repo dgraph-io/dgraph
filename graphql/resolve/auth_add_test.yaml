@@ -461,7 +461,7 @@
       "Project1": [ { "uid": "0x123" } ],
       "Ticket2": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
@@ -540,7 +540,7 @@
       "Project1": [ { "uid": "0x123" } ],
       "Ticket2": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
@@ -620,7 +620,7 @@
     {
       "Ticket1": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
@@ -710,7 +710,7 @@
     {
       "Ticket1": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x789)) {
         Column4 as Ticket.onColumn

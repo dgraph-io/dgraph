@@ -15,7 +15,7 @@
         "set": { "aSecret": "new Value" }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateUserSecret(func: uid(UserSecretRoot)) {
         uid
@@ -48,7 +48,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -110,7 +110,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -185,7 +185,7 @@
     {
       "Ticket1": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -255,7 +255,7 @@
     {
       "Ticket1": [ { "uid": "0x789" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -331,7 +331,7 @@
     {
       "Column1": [ { "uid": "0x456" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateTicket(func: uid(TicketRoot)) {
         uid
@@ -402,7 +402,7 @@
     {
       "Column1": [ { "uid": "0x456" } ]
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateTicket(func: uid(TicketRoot)) {
         uid
@@ -465,7 +465,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateLog()
     }
@@ -492,7 +492,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateLog(func: uid(LogRoot)) {
         uid
@@ -522,7 +522,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateProject(func: uid(ProjectRoot)) {
         uid
@@ -557,7 +557,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateProject(func: uid(ProjectRoot)) {
         uid
@@ -587,7 +587,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateIssue(func: uid(IssueRoot)) {
         uid
@@ -620,7 +620,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateIssue()
     }
@@ -646,7 +646,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateComplexLog(func: uid(ComplexLogRoot)) {
         uid
@@ -676,7 +676,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateComplexLog()
     }
@@ -703,7 +703,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateQuestion(func: uid(QuestionRoot)) {
         uid
@@ -740,7 +740,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateQuestion()
     }
@@ -767,7 +767,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateFbPost(func: uid(FbPostRoot)) {
         uid
@@ -804,7 +804,7 @@
         }
       }
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateFbPost()
     }
@@ -832,7 +832,7 @@
           }
         }
       }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updatePost(func: uid(PostRoot)) {
         uid
@@ -887,7 +887,7 @@
           }
         }
       }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updatePost(func: uid(PostRoot)) {
         uid
@@ -932,7 +932,7 @@
           }
         }
       }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updatePost()
     }
@@ -959,7 +959,7 @@
           }
         }
       }
-  deletequery: |-
+  dgquerysec: |-
     query {
       x as updateA(func: uid(ARoot)) {
         uid

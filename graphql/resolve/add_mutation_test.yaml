@@ -985,7 +985,7 @@
     {
       "Post1":"0x123"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x123)) {
         Author4 as Post.author
@@ -1079,7 +1079,7 @@
       "Post1":"0x123",
       "Post2":"0x124"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x123)) {
         Author5 as Post.author
@@ -1199,7 +1199,7 @@
       "Post1":"0x123",
       "Post2":"0x456"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x123)) {
         Author4 as Post.author
@@ -1414,7 +1414,7 @@
     {
       "State1":"0x12"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x12)) {
         Country3 as State.country
@@ -1481,7 +1481,7 @@
     {
       "State1":"0x12"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x12)) {
         Country3 as State.country
@@ -1958,7 +1958,7 @@
     {
       "Post1": "0x456"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x456)) {
         Author3 as Post.author
@@ -2024,7 +2024,7 @@
     {
       "State1": "0x1234"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x1234)) {
         Country4 as State.country
@@ -2627,7 +2627,7 @@
     {
       "ComputerOwner3": "0x123"
     }
-  deletequery: |-
+  dgquerysec: |-
     query {
       var(func: uid(0x123)) {
         Computer4 as ComputerOwner.computers

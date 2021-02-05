@@ -3387,46 +3387,53 @@ func threeLevelDeepMutation(t *testing.T) {
 }
 
 func parallelMutations(t *testing.T) {
-	// Add 100 mutations simultaneously using go routine. Only one should get added.
-
-	executeMutation := func(wg *sync.WaitGroup) {
+	// Add 100 mutations simultaneously using go routine.
+	// Only one for each xcode should be added.
+	// Each goroutine adds num different new nodes.
+	executeMutation := func(wg *sync.WaitGroup, num int) {
 		defer wg.Done()
-		addStateParams := &GraphQLParams{
-			Query: `mutation {
-            addState(input: [{xcode: "S2", name: "State2"}]) {
-                state {
-                    xcode
-                    name
-                }
-            }
-        }`,
+		for i := 0; i < num; i++ {
+			addStateParams := &GraphQLParams{
+				Query: fmt.Sprintf(`mutation {
+            			addState(input: [{xcode: "NewS%d", name: "State%d"}]) {
+							state {
+                    			xcode
+                    			name
+                			}
+            			}
+        			}`, i, i),
+			}
+			_ = addStateParams.ExecuteAsPost(t, GraphqlURL)
 		}
-		// State1,
-		_ = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	}
 
 	var wg sync.WaitGroup
+
+	// Nodes to be added per each goroutine
+	num := 20
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go executeMutation(&wg)
+		go executeMutation(&wg, num)
 	}
 	wg.Wait()
 
-	getStateParams := &GraphQLParams{
-		Query: `{
-			queryState(filter: { xcode: { eq: "S2"}}) {
-				name
-			}
-		}`,
+	for i := 0; i < num; i++ {
+		getStateParams := &GraphQLParams{
+			Query: fmt.Sprintf(`query {
+					queryState(filter: { xcode: { eq: "NewS%d"}}) {
+						name
+					}
+				}`, i),
+		}
+
+		// As we are using the same XID in all mutations. Only one should succeed.
+		gqlResponse := getStateParams.ExecuteAsPost(t, GraphqlURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, fmt.Sprintf(`{"queryState":[{"name":"State%d"}]}`, i), string(gqlResponse.Data))
+
+		filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": fmt.Sprintf("NewS%d", i)}}
+		deleteState(t, filter, 1, nil)
 	}
-
-	// As we are using the same XID in all mutations. Only one should succeed.
-	gqlResponse := getStateParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-	require.Equal(t, `{"queryState":[{"name":"State2"}]}`, string(gqlResponse.Data))
-
-	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
-	deleteState(t, filter, 1, nil)
 }
 
 func cyclicMutation(t *testing.T) {

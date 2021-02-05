@@ -81,13 +81,13 @@ type authExecutor struct {
 	state int
 
 	// existence query and its result in JSON
-	existenceQuery  string
+	dgQuery         string
 	queryResultJSON string
 
 	// initial mutation
-	deleteQuery string
-	json        string
-	uids        string
+	dgQuerySec string
+	json       string
+	uids       string
 
 	// auth
 	authQuery string
@@ -99,13 +99,13 @@ type authExecutor struct {
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
 	ex.state++
 	// Existence Query is not executed if it is empty. Increment the state value.
-	if ex.existenceQuery == "" && ex.state == 1 {
+	if ex.dgQuery == "" && ex.state == 1 {
 		ex.state++
 	}
 	switch ex.state {
 	case 1:
 		// existence query.
-		require.Equal(ex.t, ex.existenceQuery, req.Query)
+		require.Equal(ex.t, ex.dgQuery, req.Query)
 
 		// Return mocked result of existence query.
 		return &dgoapi.Response{
@@ -120,8 +120,8 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 			require.NoError(ex.t, err)
 		}
 
-		// Check delete query.
-		require.Equal(ex.t, ex.deleteQuery, req.Query)
+		// Check query generated along with mutation.
+		require.Equal(ex.t, ex.dgQuerySec, req.Query)
 
 		if len(assigned) == 0 {
 			// skip state 3, there's no new nodes to apply auth to
@@ -421,11 +421,12 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 // Tests that the queries that run after a mutation get auth correctly added in.
 func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	tests := map[string]struct {
-		gqlMut   string
-		rewriter func() MutationRewriter
-		assigned map[string]string
-		result   map[string]interface{}
-		dgQuery  string
+		gqlMut      string
+		rewriter    func() MutationRewriter
+		assigned    map[string]string
+		idExistence map[string]string
+		result      map[string]interface{}
+		dgQuery     string
 	}{
 		"Add Ticket": {
 			gqlMut: `mutation {
@@ -440,8 +441,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 				  }
 				}
 			  }`,
-			rewriter: NewAddRewriter,
-			assigned: map[string]string{"Ticket1": "0x4"},
+			rewriter:    NewAddRewriter,
+			assigned:    map[string]string{"Ticket2": "0x4"},
+			idExistence: map[string]string{"Column1": "0x1"},
 			dgQuery: `query {
   ticket(func: uid(TicketRoot)) {
     id : uid
@@ -488,7 +490,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 					  }
 				}
 			  }`,
-			rewriter: NewUpdateRewriter,
+			rewriter:    NewUpdateRewriter,
+			idExistence: map[string]string{},
 			result: map[string]interface{}{
 				"updateTicket": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 			dgQuery: `query {
@@ -542,7 +545,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
-			_, err = rewriter.Rewrite(ctx, gqlMutation)
+			_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
 			require.Nil(t, err)
 
 			// -- Act --
@@ -616,7 +620,9 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			}
 
 			// -- Act --
-			upsert, err := rewriterToTest.Rewrite(ctx, mut)
+			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			idExistence := make(map[string]string)
+			upsert, err := rewriterToTest.Rewrite(ctx, mut, idExistence)
 
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
@@ -727,9 +733,9 @@ func checkAddUpdateCase(
 		t:               t,
 		json:            tcase.Json,
 		queryResultJSON: tcase.QueryJSON,
-		deleteQuery:     tcase.DeleteQuery,
+		dgQuerySec:      tcase.DGQuerySec,
 		uids:            tcase.Uids,
-		existenceQuery:  tcase.DGQuery,
+		dgQuery:         tcase.DGQuery,
 		authQuery:       tcase.AuthQuery,
 		authJson:        tcase.AuthJson,
 		skipAuth:        tcase.SkipAuth,
