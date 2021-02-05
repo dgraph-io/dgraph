@@ -320,7 +320,7 @@ input AddCarInput {
 
 input CarFilter {
 	id: [ID!]
-	has: [CarHasFilter]
+	has: CarHasFilter
 	and: [CarFilter]
 	or: [CarFilter]
 	not: CarFilter

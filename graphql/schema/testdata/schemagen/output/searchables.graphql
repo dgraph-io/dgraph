@@ -456,7 +456,7 @@ input PostFilter {
 	postTypeRegexpExact: PostType_exact_StringRegExpFilter
 	postTypeHashRegexp: PostType_hash_StringRegExpFilter
 	postTypeNone: PostType_hash
-	has: [PostHasFilter]
+	has: PostHasFilter
 	and: [PostFilter]
 	or: [PostFilter]
 	not: PostFilter
