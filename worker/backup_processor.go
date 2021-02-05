@@ -21,8 +21,11 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"reflect"
+	"runtime/pprof"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -91,6 +94,62 @@ type LoadResult struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
+	go func() {
+		const seconds = 5
+		for i := 0; ; i++ {
+			// goroutine
+			goroutineFile, err := os.OpenFile(fmt.Sprintf("/data/goroutine_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("goroutine").WriteTo(goroutineFile, 2); err != nil {
+				panic(err)
+			}
+			// heap
+			heapFile, err := os.OpenFile(fmt.Sprintf("/data/heap_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("heap").WriteTo(heapFile, 1); err != nil {
+				panic(err)
+			}
+			// allocs
+			allocsFile, err := os.OpenFile(fmt.Sprintf("/data/allocs_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("allocs").WriteTo(allocsFile, 1); err != nil {
+				panic(err)
+			}
+			// threadcreate
+			threadFile, err := os.OpenFile(fmt.Sprintf("/data/thread_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("threadcreate").WriteTo(threadFile, 1); err != nil {
+				panic(err)
+			}
+			// block
+			blockFile, err := os.OpenFile(fmt.Sprintf("/data/block_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("block").WriteTo(blockFile, 1); err != nil {
+				panic(err)
+			}
+			// mutex
+			mutexFile, err := os.OpenFile(fmt.Sprintf("/data/mutex_%d", i*seconds), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if err = pprof.Lookup("mutex").WriteTo(mutexFile, 1); err != nil {
+				panic(err)
+			}
+
+			<-time.After(time.Second * seconds)
+		}
+	}()
+
 	var response pb.BackupResponse
 
 	if err := ctx.Err(); err != nil {
