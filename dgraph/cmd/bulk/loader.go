@@ -288,11 +288,9 @@ func (ld *loader) mapStage() {
 	x.Check(thr.Finish())
 
 	// Send the graphql triples
+	// TODO(Naman): Handle this.
 	ld.processGqlSchema(loadType)
 
-	// By this time, we will know about all the namespaces encountered. Else, we depend on the schema
-	// to contain whole of the information about namespace.
-	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.

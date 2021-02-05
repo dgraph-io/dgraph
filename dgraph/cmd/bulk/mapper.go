@@ -291,6 +291,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
 	if m.opt.Namespace != math.MaxUint64 {
+		// Use the specified namespace passed through '--force-namespace' flag.
 		nq.Namespace = m.opt.Namespace
 	}
 	sid := m.uid(nq.GetSubject(), nq.Namespace)
@@ -328,6 +329,8 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) uid(xid string, ns uint64) uint64 {
+	// TODO(Naman): Q: Can 2 namespaces have nquad with same xid and still use newUids=false?
+	// Think about this check.
 	if !m.opt.NewUids {
 		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
 			m.xids.BumpTo(uid)
@@ -352,7 +355,9 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	// sb := strings.Builder{}
 	// x.Check2(sb.WriteString(xid))
 	// uid, isNew := m.xids.AssignUid(sb.String())
-	uid, isNew := m.xids.AssignUid(xid)
+
+	// There might be a case where Nquad from different namespace have the same xid.
+	uid, isNew := m.xids.AssignUid(x.NamespaceAttr(ns, xid))
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}

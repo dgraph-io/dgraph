@@ -366,6 +366,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 					"cannot update uid lease due to no connection to zero leader")
 			}
 			zc := pb.NewZeroClient(pl.Get())
+			// TODO(Naman): Assign NsID as well.
 			if _, err = zc.AssignIds(ctx, &pb.Num{Val: maxUid, Type: pb.Num_UID}); err != nil {
 				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
