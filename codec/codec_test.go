@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
 )
@@ -74,11 +75,13 @@ func TestBufferUidPack(t *testing.T) {
 	// Some edge case tests.
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
-	buf := DecodeToBuffer(&pb.UidPack{}, 0)
+	buf := z.NewBuffer(1 << 10)
+	DecodeToBuffer(&pb.UidPack{}, 0, buf)
 	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
 
 	for i := 0; i < 13; i++ {
+		buf.Reset()
 		size := rand.Intn(10e6)
 		if size < 0 {
 			size = 1e6
@@ -90,12 +93,12 @@ func TestBufferUidPack(t *testing.T) {
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
 
-		actualbuffer := DecodeToBuffer(pack, 0)
-		enc := EncodeFromBuffer(actualbuffer.Bytes(), 256)
+		DecodeToBuffer(pack, 0, buf)
+		enc := EncodeFromBuffer(buf.Bytes(), 256)
 		require.Equal(t, ExactLen(pack), ExactLen(enc))
 
 		prev := uint64(0)
-		outBuf := actualbuffer.Bytes()
+		outBuf := buf.Bytes()
 		var uids []uint64
 		// Read all uids in the outBuf
 		for len(outBuf) > 0 {
@@ -107,9 +110,9 @@ func TestBufferUidPack(t *testing.T) {
 			uids = append(uids, next)
 		}
 		require.Equal(t, actual, uids)
-		require.NoError(t, actualbuffer.Release())
 		FreePack(pack)
 	}
+	require.NoError(t, buf.Release())
 }
 
 func TestSeek(t *testing.T) {
