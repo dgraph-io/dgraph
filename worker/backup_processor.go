@@ -239,7 +239,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 				glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
 				continue
 			}
-			if _, ok := predMap[parsedKey.Attr]; !ok {
+			// This check makes sense only for the schema keys. The types are not stored in it.
+			if _, ok := predMap[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
 			kv := y.NewKV(tl.alloc)
