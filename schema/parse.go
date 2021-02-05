@@ -333,7 +333,7 @@ func parseTypeDeclaration(it *lex.ItemIterator, ns uint64) (*pb.TypeUpdate, erro
 			for _, field := range fields {
 				if _, ok := fieldSet[field.GetPredicate()]; ok {
 					return nil, it.Item().Errorf("Duplicate fields with name: %s",
-						field.GetPredicate())
+						x.ParseAttr(field.GetPredicate()))
 				}
 
 				fieldSet[field.GetPredicate()] = struct{}{}
