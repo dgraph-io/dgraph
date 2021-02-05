@@ -8,7 +8,7 @@ FROM ubuntu:latest
 LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
 
 RUN apt-get update && \
-  apt-get install -y --no-install-recommends ca-certificates curl iputils-ping && \
+  apt-get install -y --no-install-recommends ca-certificates curl iputils-ping less htop && \
   rm -rf /var/lib/apt/lists/*
 
 ADD linux /usr/local/bin
