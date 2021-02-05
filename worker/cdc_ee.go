@@ -40,7 +40,9 @@ type CDC struct {
 	// sentTs is the timestamp till which we have send the event of txns.
 	// There will be no event below this timestamp for which we need to send the events
 	sentTs uint64
-	maxTs  uint64
+	// maxSentTs is the maximum timestamp till which we have sent the events of txns.
+	// this is helpful to maintain the state of the CDC till which we can clear the raft logs
+	maxSentTs uint64
 }
 
 func newCDC() *CDC {
@@ -76,7 +78,6 @@ func (cdc *CDC) updateTs(newTs uint64) {
 	if ts >= newTs {
 		return
 	}
-	glog.Infoln("ts updated to ", newTs)
 	atomic.CompareAndSwapUint64(&cdc.sentTs, ts, newTs)
 }
 
@@ -139,7 +140,7 @@ func (cdc *CDC) processCDCEvents() {
 		// skip ahead the index to prevent uncontrolled growth of raft logs.
 		if uint64(len(cdc.pendingTxnEvents)) > cdc.maxRecoveryEntries {
 			glog.Info("too many pending cdc events. Skipping for now.")
-			cdc.updateTs(cdc.maxTs)
+			cdc.updateTs(posting.Oracle().MaxAssigned())
 			cdc.index = last
 			cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
 			return
@@ -191,7 +192,6 @@ func (cdc *CDC) processCDCEvents() {
 
 				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						cdc.maxTs = x.Max(cdc.maxTs, ts.StartTs)
 						pending := cdc.pendingTxnEvents[ts.StartTs]
 						if ts.CommitTs > 0 && len(pending) > 0 {
 							if err := sendEvents(ts, pending); err != nil {
@@ -201,6 +201,7 @@ func (cdc *CDC) processCDCEvents() {
 						}
 						// delete from pending events once events are sent
 						delete(cdc.pendingTxnEvents, ts.StartTs)
+						cdc.maxSentTs = x.Max(cdc.maxSentTs, ts.StartTs)
 						cdc.evaluateAndSetTs()
 					}
 				}
@@ -244,8 +245,7 @@ func (cdc *CDC) evaluateAndSetTs() {
 	if cdc == nil || x.WorkerConfig.LudicrousMode {
 		return
 	}
-	min := cdc.maxTs
-	glog.Infoln(min, cdc.pendingTxnEvents)
+	min := cdc.maxSentTs
 	for ts := range cdc.pendingTxnEvents {
 		if ts < min {
 			min = ts
