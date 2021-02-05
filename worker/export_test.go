@@ -73,15 +73,15 @@ var personType = &pb.TypeUpdate{
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
-		`<1> <friend> <5> <author0> .`,
-		`<2> <friend> <5> <author0> .`,
+		`<1> <friend> <5> .`,
+		`<2> <friend> <5> .`,
 		`<3> <friend> <5> .`,
-		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,` +
+		`<4> <friend> <5> (since=2005-05-02T15:04:05,close=true,` +
 			`age=33,game="football",poem="roses are red\nviolets are blue") .`,
-		`<1> <name> "pho\ton\u0000" <author0> .`,
-		`<2> <name> "pho\ton"@en <author0> .`,
+		`<1> <name> "pho\ton\u0000" .`,
+		`<2> <name> "pho\ton"@en .`,
 		`<3> <name> "First Line\nSecondLine" .`,
-		"<1> <friend_not_served> <5> <author0> .",
+		"<1> <friend_not_served> <5> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 		`<7> <name> "node_to_delete" .`,
@@ -441,7 +441,6 @@ type skv struct {
 	schema pb.SchemaUpdate
 }
 
-// TODO(Naman): Update this test according to namespace format.
 func TestToSchema(t *testing.T) {
 	testCases := []struct {
 		skv      *skv

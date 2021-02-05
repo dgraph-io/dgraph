@@ -95,8 +95,8 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
-var uidFmtStrRdf = "<0x%x>"
-var uidFmtStrJson = "\"0x%x\""
+var uidFmtStrRdf = "<%#x>"
+var uidFmtStrJson = "\"%#x\""
 
 // valToStr converts a posting value to a string.
 func valToStr(v types.Val) (string, error) {
@@ -242,7 +242,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 		// Use label for storing namespace.
-		fmt.Fprintf(bp, " <0x%x>", e.namespace)
+		fmt.Fprintf(bp, " <%#x>", e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
@@ -288,7 +288,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	ns, attr := x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x]", ns)))
+	x.Check2(buf.WriteString(fmt.Sprintf("[%#x]", ns)))
 	x.Check2(buf.WriteRune(' '))
 	x.Check2(buf.WriteRune('<'))
 	x.Check2(buf.WriteString(attr))

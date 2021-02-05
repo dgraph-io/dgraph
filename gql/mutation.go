@@ -115,11 +115,9 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 var emptyEdge pb.DirectedEdge
 
 func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
-	// TODO(Naman): Check all occurances of NQuad and directed edges.
-	// Check if we are passing the appropriate namespace everywhere.
 	return &pb.DirectedEdge{
 		Entity: subjectUid,
-		Attr:   x.NamespaceAttr(nq.Namespace, nq.Predicate),
+		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Facets: nq.Facets,

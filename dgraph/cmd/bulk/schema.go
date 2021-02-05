@@ -64,8 +64,6 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		s.schemaMap[p] = sch
 	}
 
-	// TODO(Naman): Can types be there without the schema? Need to add initial schema for these
-	// namespaces?
 	s.types = initial.Types
 
 	return s
@@ -89,47 +87,51 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 
 // checkAndSetInitialSchema initializes the schema for namespace if it does not already exist.
 func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
-	if _, ok := s.namespaces.Load(namespace); !ok {
-		s.Lock()
-		defer s.Unlock()
-		if _, ok := s.namespaces.Load(namespace); !ok {
-			// Load all initial predicates. Some predicates that might not be used when
-			// the alpha is started (e.g ACL predicates) might be included but it's
-			// better to include them in case the input data contains triples with these
-			// predicates.
-			for _, update := range schema.CompleteInitialSchema(namespace) {
-				s.schemaMap[update.Predicate] = update
-			}
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
 
-			if s.opt.StoreXids {
-				s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
-					ValueType: pb.Posting_STRING,
-					Tokenizer: []string{"hash"},
-				}
-			}
-			s.namespaces.Store(namespace, struct{}{})
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	// Load all initial predicates. Some predicates that might not be used when
+	// the alpha is started (e.g ACL predicates) might be included but it's
+	// better to include them in case the input data contains triples with these
+	// predicates.
+	for _, update := range schema.CompleteInitialSchema(namespace) {
+		s.schemaMap[update.Predicate] = update
+	}
+
+	if s.opt.StoreXids {
+		s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
+			Tokenizer: []string{"hash"},
 		}
 	}
+	s.namespaces.Store(namespace, struct{}{})
 	return
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
+func (s *schemaStore) validateType(de *pb.DirectedEdge, namespace uint64, objectIsUID bool) {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
 
+	attr := x.NamespaceAttr(namespace, de.Attr)
 	s.RLock()
-	sch, ok := s.schemaMap[de.Attr]
+	sch, ok := s.schemaMap[attr]
 	s.RUnlock()
 	if !ok {
 		s.Lock()
-		sch, ok = s.schemaMap[de.Attr]
+		sch, ok = s.schemaMap[attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
 			if objectIsUID {
 				sch.List = true
 			}
-			s.schemaMap[de.Attr] = sch
+			s.schemaMap[attr] = sch
 		}
 		s.Unlock()
 	}

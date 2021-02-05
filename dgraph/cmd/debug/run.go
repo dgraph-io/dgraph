@@ -571,7 +571,7 @@ func printKeys(db *badger.DB) {
 			x.Check2(buf.WriteString("{r}"))
 		}
 		ns, attr := x.ParseNamespaceAttr(pk.Attr)
-		x.Check2(buf.WriteString(fmt.Sprintf(" ns: 0x%x ", ns)))
+		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
 		x.Check2(buf.WriteString(" attr: " + attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])

@@ -226,7 +226,6 @@ L:
 		return rnq, errors.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
-	// TODO(Naman): Ensure the label contains valid namespace.
 	// Append the namespace to the predicate before returning NQuad.
 	if rnq.Label != "" {
 		ns, err := strconv.ParseUint(rnq.Label, 0, 64)

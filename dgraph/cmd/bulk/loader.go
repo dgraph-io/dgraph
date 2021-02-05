@@ -180,7 +180,6 @@ func (ld *loader) leaseNamespaces() {
 	client := pb.NewZeroClient(ld.zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		// TODO(Naman): Maybe lease maxNs-1 with some handling. Using maxNs for simplicity for now.
 		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
 		cancel()
 		if err == nil {

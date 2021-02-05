@@ -329,8 +329,6 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) uid(xid string, ns uint64) uint64 {
-	// TODO(Naman): Q: Can 2 namespaces have nquad with same xid and still use newUids=false?
-	// Think about this check.
 	if !m.opt.NewUids {
 		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
 			m.xids.BumpTo(uid)
@@ -380,7 +378,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
-	m.schema.validateType(de, nq.ObjectValue == nil)
+	m.schema.validateType(de, nq.Namespace, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
@@ -405,7 +403,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.schema.validateType(de, true)
+	m.schema.validateType(de, nq.Namespace, true)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
