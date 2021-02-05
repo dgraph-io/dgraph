@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -33,16 +34,14 @@ const defaultCDCConfig = "enabled=false; max_recovery=10000; file=; kafka=; sasl
 
 type CDC struct {
 	sink               Sink
-	index              uint64
 	maxRecoveryEntries uint64
 	closer             *z.Closer
 	pendingTxnEvents   map[uint64][]CDCEvent
-	// sentTs is the timestamp till which we have send the event of txns.
+
+	seenIndex uint64
+	// startTs is the timestamp till which we have send the event of txns.
 	// There will be no event below this timestamp for which we need to send the events
-	sentTs uint64
-	// maxSentTs is the maximum timestamp till which we have sent the events of txns.
-	// this is helpful to maintain the state of the CDC till which we can clear the raft logs
-	maxSentTs uint64
+	startTs uint64
 }
 
 func newCDC() *CDC {
@@ -62,11 +61,22 @@ func newCDC() *CDC {
 	return cdc
 }
 
+func (cdc *CDC) getSeenIndex() uint64 {
+	// TODO: Fill this in.
+	return math.MaxUint64
+}
+
 func (cdc *CDC) getTs() uint64 {
 	if cdc == nil {
 		return math.MaxUint64
 	}
-	return atomic.LoadUint64(&cdc.sentTs)
+	// TODO: Check if this would work with ludicrous mode.
+	min := uint64(math.MaxUint64)
+	for startTs := range cdc.pendingTxnEvents {
+		min = x.Min(min, startTs)
+	}
+	return min
+	// return atomic.LoadUint64(&cdc.startTs)
 }
 
 func (cdc *CDC) updateTs(newTs uint64) {
@@ -78,7 +88,7 @@ func (cdc *CDC) updateTs(newTs uint64) {
 	if ts >= newTs {
 		return
 	}
-	atomic.CompareAndSwapUint64(&cdc.sentTs, ts, newTs)
+	atomic.CompareAndSwapUint64(&cdc.startTs, ts, newTs)
 }
 
 func (cdc *CDC) Close() {
@@ -96,29 +106,45 @@ func (cdc *CDC) processCDCEvents() {
 		return
 	}
 
-	sendEvents := func(ts *pb.TxnStatus, pending []CDCEvent) error {
+	var startTs, startIndex uint64
+	var batch []SinkMessage
+
+	flushEvents := func() error {
+		if err := cdc.sink.Send(batch); err != nil {
+			glog.Errorf("error while sending cdc event to sink %+v", err)
+			return err
+		}
+		// We successfully sent messages to sink.
+		batch = batch[:0]
+		cdc.updateTs(startTs)
+		cdc.seenIndex = x.Max(cdc.seenIndex, startIndex)
+		return nil
+	}
+
+	sendEvents := func(pending []CDCEvent, ts *pb.TxnStatus) error {
 		var commitTs uint64 = 0
 		if ts != nil {
 			commitTs = ts.CommitTs
 		}
-		msgs := make([]SinkMessage, len(pending))
-		for i, e := range pending {
+
+		for _, e := range pending {
 			// add commit timestamp here
-			e.Meta.CommitTimestamp = commitTs
+			startTs = x.Max(startTs, e.Meta.StartTs)
+			startIndex = x.Max(startIndex, e.Meta.RaftIndex)
+			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
 			// todo(aman bansal): use namespace for key.
-			msgs[i] = SinkMessage{
+			batch = append(batch, SinkMessage{
 				Meta: SinkMeta{
 					Topic: "dgraph-cdc",
 				},
 				Key:   []byte("dgraph-cdc-event"),
 				Value: b,
-			}
+			})
 		}
-		if err := cdc.sink.SendMessages(msgs); err != nil {
-			glog.Errorf("error while sending cdc event to sink %+v", err)
-			return err
+		if len(batch) > 1000 {
+			return flushEvents()
 		}
 		return nil
 	}
@@ -128,29 +154,34 @@ func (cdc *CDC) processCDCEvents() {
 	// Once Txn is done, it will try to send events to sink.
 	// index helps to define from which point we need to start reading from the raft logs
 	// clear map whenever we have send the events
-	checkAndSendCDCEvents := func() {
+	checkAndSendCDCEvents := func() error {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
-		cdcIndex := x.Max(cdc.index, first)
+		cdcIndex := x.Max(cdc.seenIndex, first)
 		last := groups().Node.Applied.DoneUntil()
 		if cdcIndex == last {
-			return
+			return nil
 		}
+
 		// if cdc is lagging behind the current via maxRecoveryEntries,
 		// skip ahead the index to prevent uncontrolled growth of raft logs.
 		if uint64(len(cdc.pendingTxnEvents)) > cdc.maxRecoveryEntries {
-			glog.Info("too many pending cdc events. Skipping for now.")
 			cdc.updateTs(posting.Oracle().MaxAssigned())
-			cdc.index = last
+			cdc.seenIndex = last
 			cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
-			return
+			return errors.New("too many pending CDC events. Dropping events.")
 		}
+
+		startTs := cdc.getTs()
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
+			if err != nil {
+				return errors.Wrapf(err, "while retrieving entries from Raft")
+			}
 			x.Check(err)
 			// Exit early from the loop if no entries were found.
 			if len(entries) == 0 {
-				break
+				return nil
 			}
 
 			batchFirst = entries[len(entries)-1].Index + 1
@@ -161,14 +192,14 @@ func (cdc *CDC) processCDCEvents() {
 
 				var proposal pb.Proposal
 				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-					glog.Errorf("CDC: not able to marshal the proposal %v", err)
+					glog.Warningf("CDC: unmarshal failed with error %v. Ignoring.", err)
 					continue
 				}
 				// this is to ensure that cdcTs will be monotonically increasing
 				// In this way no min pending txn in case we skip some entries can affect
 				// the sentTs to decrease. This way we will be able to provide guarantees
 				// across the cluster in case of failures.
-				if proposal.Mutations != nil && proposal.Mutations.StartTs > cdc.getTs() {
+				if proposal.Mutations != nil && proposal.Mutations.StartTs > startTs {
 					events := toCDCEvent(entry.Index, proposal.Mutations)
 					if len(events) == 0 {
 						continue
@@ -178,12 +209,9 @@ func (cdc *CDC) processCDCEvents() {
 					// Since all mutations will eventually succeed.
 					// We can set the read ts here only.
 					if x.WorkerConfig.LudicrousMode {
-						if err := sendEvents(nil, events); err != nil {
-							glog.Errorf("not able to send messages to the sink %v", err)
-							return
+						if err := sendEvents(events, nil); err != nil {
+							return errors.Wrapf(err, "unable to send messages")
 						}
-						cdc.index = entry.Index
-						cdc.updateTs(proposal.Mutations.StartTs)
 						continue
 					}
 					cdc.pendingTxnEvents[proposal.Mutations.StartTs] =
@@ -192,23 +220,21 @@ func (cdc *CDC) processCDCEvents() {
 
 				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						pending := cdc.pendingTxnEvents[ts.StartTs]
-						if ts.CommitTs > 0 && len(pending) > 0 {
-							if err := sendEvents(ts, pending); err != nil {
-								glog.Errorf("not able to send messages to the sink %v", err)
-								return
+						if ts.CommitTs > 0 {
+							events := cdc.pendingTxnEvents[ts.StartTs]
+							if err := sendEvents(events, ts); err != nil {
+								return errors.Wrapf(err, "unable to send messages to sink")
 							}
 						}
 						// delete from pending events once events are sent
 						delete(cdc.pendingTxnEvents, ts.StartTs)
-						cdc.maxSentTs = x.Max(cdc.maxSentTs, ts.StartTs)
 						cdc.evaluateAndSetTs()
 					}
 				}
-				cdc.index = entry.Index
+				cdc.seenIndex = entry.Index
 			}
 		}
-		return
+		return nil
 	}
 
 	eventTick := time.NewTicker(time.Second)
@@ -261,9 +287,9 @@ type CDCEvent struct {
 }
 
 type EventMeta struct {
-	CDCIndex        uint64 `json:"cdc_index"`
-	ReadTimestamp   uint64 `json:"read_timestamp"`
-	CommitTimestamp uint64 `json:"commit_timestamp"`
+	RaftIndex uint64 `json:"raft_index"`
+	StartTs   uint64 `json:"start_ts"`
+	CommitTs  uint64 `json:"commit_ts"`
 }
 
 type MutationEvent struct {
@@ -296,7 +322,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 					Type:      mutation.DropValue,
 				},
 				Meta: &EventMeta{
-					CDCIndex: index,
+					RaftIndex: index,
 				},
 			},
 		}
@@ -316,7 +342,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 						Pred:      edge.Attr,
 					},
 					Meta: &EventMeta{
-						CDCIndex: index,
+						RaftIndex: index,
 					},
 				},
 			}
@@ -336,8 +362,8 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		}
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
-				CDCIndex:      index,
-				ReadTimestamp: mutation.StartTs,
+				RaftIndex: index,
+				StartTs:   mutation.StartTs,
 			},
 			EventType: "MUTATION",
 			Event: &MutationEvent{

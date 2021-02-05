@@ -1554,7 +1554,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
-	last := n.Applied.DoneUntil()
+	last := x.Min(n.Applied.DoneUntil(), n.cdcTracker.getSeenIndex())
 	if int(last-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil

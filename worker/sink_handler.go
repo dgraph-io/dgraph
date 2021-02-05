@@ -42,10 +42,8 @@ type SinkMeta struct {
 }
 
 type Sink interface {
-	// send message to the sink
-	SendMessage(message SinkMessage) error
 	// send in bulk to the sink
-	SendMessages(messages []SinkMessage) error
+	Send(messages []SinkMessage) error
 	// close sink
 	Close() error
 }
@@ -130,16 +128,10 @@ func newKafkaSink(config *x.SuperFlag) (Sink, error) {
 	}, nil
 }
 
-func (k *kafkaSinkClient) SendMessage(message SinkMessage) error {
-	_, _, err := k.writer.SendMessage(&sarama.ProducerMessage{
-		Topic: message.Meta.Topic,
-		Key:   sarama.ByteEncoder(message.Key),
-		Value: sarama.ByteEncoder(message.Value),
-	})
-	return err
-}
-
-func (k *kafkaSinkClient) SendMessages(messages []SinkMessage) error {
+func (k *kafkaSinkClient) Send(messages []SinkMessage) error {
+	if len(messages) == 0 {
+		return nil
+	}
 	msgs := make([]*sarama.ProducerMessage, len(messages))
 	for i, m := range messages {
 		msgs[i] = &sarama.ProducerMessage{
@@ -148,7 +140,6 @@ func (k *kafkaSinkClient) SendMessages(messages []SinkMessage) error {
 			Value: sarama.ByteEncoder(m.Value),
 		}
 	}
-
 	return k.writer.SendMessages(msgs)
 }
 
@@ -163,7 +154,7 @@ type fileSink struct {
 	fileWriter *x.LogWriter
 }
 
-func (f *fileSink) SendMessages(messages []SinkMessage) error {
+func (f *fileSink) Send(messages []SinkMessage) error {
 	for _, m := range messages {
 		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
 			string(m.Key), string(m.Value))))
@@ -172,12 +163,6 @@ func (f *fileSink) SendMessages(messages []SinkMessage) error {
 		}
 	}
 	return nil
-}
-
-func (f *fileSink) SendMessage(message SinkMessage) error {
-	_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
-		string(message.Key), string(message.Value))))
-	return err
 }
 
 func (f *fileSink) Close() error {
