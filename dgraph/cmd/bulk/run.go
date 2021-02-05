@@ -330,6 +330,7 @@ func run() {
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+		loader.leaseNamespaces()
 
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,

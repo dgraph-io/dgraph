@@ -168,6 +168,30 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
+func (ld *loader) leaseNamespaces() {
+	var maxNs uint64
+	ld.namespaces.Range(func(key, value interface{}) bool {
+		if ns := key.(uint64); ns > maxNs {
+			maxNs = ns
+		}
+		return true
+	})
+
+	client := pb.NewZeroClient(ld.zero)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// TODO(Naman): Maybe lease maxNs-1 with some handling. Using maxNs for simplicity for now.
+		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
+		cancel()
+		if err == nil {
+			fmt.Printf("Assigned namespaces till %d", ns.GetEndId())
+			return
+		}
+		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+		time.Sleep(time.Second)
+	}
+}
+
 func readSchema(opt *options) *schema.ParsedSchema {
 	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
