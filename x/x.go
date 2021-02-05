@@ -142,16 +142,16 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
-	// GuardiansGroupUid is Uid of guardians group node.
-	GuardiansGroupUid sync.Map
+	// GuardiansUid is Uid of guardians group node.
+	GuardiansUid sync.Map
 	// GrootUser Uid is Uid of groot user node.
-	GrootUserUid sync.Map
+	GrootUid sync.Map
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
-	GuardiansGroupUid.Store(DefaultNamespace, 0)
-	GrootUserUid.Store(DefaultNamespace, 0)
+	GuardiansUid.Store(GalaxyNamespace, 0)
+	GrootUid.Store(GalaxyNamespace, 0)
 
 }
 
@@ -272,7 +272,7 @@ func ExtractNamespace(ctx context.Context) uint64 {
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		return DefaultNamespace
+		return GalaxyNamespace
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)

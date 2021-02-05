@@ -19,35 +19,35 @@ package testutil
 import "github.com/dgraph-io/dgraph/x"
 
 func DefaultNamespaceAttr(attr string) string {
-	return x.NamespaceAttr(x.DefaultNamespace, attr)
+	return x.NamespaceAttr(x.GalaxyNamespace, attr)
 }
 
 func DefaultSchemaKey(attr string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.SchemaKey(attr)
 }
 
 func DefaultTypeKey(attr string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.TypeKey(attr)
 }
 
 func DefaultDataKey(attr string, uid uint64) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.DataKey(attr, uid)
 }
 
 func DefaultReverseKey(attr string, uid uint64) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.ReverseKey(attr, uid)
 }
 
 func DefaultIndexKey(attr, term string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.IndexKey(attr, term)
 }
 
 func DefaultCountKey(attr string, count uint32, reverse bool) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.NamespaceAttr(x.GalaxyNamespace, attr)
 	return x.CountKey(attr, count, reverse)
 }

@@ -77,7 +77,7 @@ func ResetCors(closer *z.Closer) {
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
 		//TODO(Ahsan): Is this namespace specific?
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -118,7 +118,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 	}
 	ctx = context.WithValue(ctx, IsGraphql, true)
 	// TODO(Ahsan): Is this namespace specific?
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	_, err = (&Server{}).doQuery(ctx, req)
 	return err
 }
@@ -126,7 +126,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	} else {
 		ns, err := getJWTNamespace(ctx)
 		if err != nil {
@@ -148,7 +148,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	}
 	//TODO(Ahsan): Is this namespace specific?
 	ctx = context.WithValue(ctx, IsGraphql, true)
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	res, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return "", nil, err
@@ -215,7 +215,7 @@ func UpdateSchemaHistory(ctx context.Context, schema string) error {
 	}
 	//TODO(Pawan): Make this use right namespace.
 	ctx = context.WithValue(ctx, IsGraphql, true)
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	_, err := (&Server{}).doQuery(ctx, req)
 	return err
 }
@@ -255,7 +255,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
@@ -316,7 +316,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		_, err := (&Server{}).doQuery(ctx, req)
 		return err
 

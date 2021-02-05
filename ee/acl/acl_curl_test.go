@@ -42,7 +42,7 @@ func TestCurlAuthorization(t *testing.T) {
 		Endpoint:  adminEndpoint,
 		UserID:    userid,
 		Passwd:    userpassword,
-		Namespace: x.DefaultNamespace,
+		Namespace: x.GalaxyNamespace,
 	})
 	require.NoError(t, err, "login failed")
 
@@ -101,7 +101,7 @@ func TestCurlAuthorization(t *testing.T) {
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   adminEndpoint,
 		RefreshJwt: token.RefreshToken,
-		Namespace:  x.DefaultNamespace,
+		Namespace:  x.GalaxyNamespace,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 

@@ -24,7 +24,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
@@ -67,9 +66,6 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
 	updateHistory := oldSchemaHash != newSchemaHash
 
-	if x.WorkerConfig.AclEnabled == false {
-
-	}
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false

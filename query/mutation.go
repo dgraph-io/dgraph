@@ -248,24 +248,24 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 		return nil
 	}
 	namespace := x.ExtractNamespace(ctx)
-	guardianGroupUid, ok := x.GuardiansGroupUid.Load(namespace)
+	guardianUid, ok := x.GuardiansUid.Load(namespace)
 	if !ok {
-		guardianGroupUid = 0
+		return errors.Errorf("Guradian not found for the namespace")
 	}
-	grootUserUid, ok := x.GrootUserUid.Load(namespace)
+	grootsUid, ok := x.GrootUid.Load(namespace)
 	if !ok {
-		grootUserUid = 0
+		return errors.Errorf("Groot not found for the namespace")
 	}
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
 		// Disallow deleting of guardians group
-		if edge.Entity == guardianGroupUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == guardianUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}
 		// Disallow deleting of groot user
-		if edge.Entity == grootUserUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == grootsUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}

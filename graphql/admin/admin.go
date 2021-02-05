@@ -496,8 +496,8 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	// TODO(Ahsan): The namespace shouldn't be default always"
-	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
+	// TODO(Pawan): The namespace shouldn't be default always"
+	prefix := x.DataKey(x.NamespaceAttr(x.GalaxyNamespace, worker.GqlSchemaPred), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.

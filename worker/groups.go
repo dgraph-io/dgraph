@@ -203,7 +203,7 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) applyInitialTypes() {
-	initialTypes := schema.InitialTypes(x.DefaultNamespace)
+	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
@@ -218,7 +218,7 @@ func (g *groupi) applyInitialSchema() {
 	if g.groupId() != 1 {
 		return
 	}
-	initialSchema := schema.InitialSchema(x.DefaultNamespace)
+	initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {
@@ -1122,8 +1122,8 @@ func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.
-		stream, err := client.Subscribe(closer.Ctx(), &pb.SubscriptionRequest{Prefixes: prefixes,
-			Ignore: ignore})
+		stream, err := client.Subscribe(closer.Ctx(),
+			&pb.SubscriptionRequest{Prefixes: prefixes, Ignore: ignore})
 		if err != nil {
 			return errors.Wrapf(err, "error from client.subscribe")
 		}

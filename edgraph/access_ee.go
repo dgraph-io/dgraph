@@ -418,12 +418,12 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.permission")),
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.predicate")),
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.acl.rule")),
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.user.group")),
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.type.Group")),
-	x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.xid")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.permission")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.predicate")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.xid")),
 }
 
 func upsertGuardian(ctx context.Context) error {
@@ -464,7 +464,7 @@ func upsertGuardian(ctx context.Context) error {
 		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
 	}
 	var groupResp groupQryResp
-	var guardiansGroupUid string
+	var guardiansUidStr string
 	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
 		return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
 	}
@@ -474,19 +474,19 @@ func upsertGuardian(ctx context.Context) error {
 		// no guardians group found
 		// Extract guardians group uid from mutation
 		newGroupUidMap := resp.GetUids()
-		guardiansGroupUid = newGroupUidMap["newgroup"]
+		guardiansUidStr = newGroupUidMap["newgroup"]
 	} else if len(groupResp.GuardiansGroup) == 1 {
 		// we found a guardians group
-		guardiansGroupUid = groupResp.GuardiansGroup[0].Uid
+		guardiansUidStr = groupResp.GuardiansGroup[0].Uid
 	} else {
 		return errors.Wrap(err, "Multiple guardians group found")
 	}
 
-	guardiansGroupUidUint, err := strconv.ParseUint(guardiansGroupUid, 0, 64)
+	uid, err := strconv.ParseUint(guardiansUidStr, 0, 64)
 	if err != nil {
-		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansGroupUid)
+		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansUidStr)
 	}
-	x.GuardiansGroupUid.Store(x.ExtractNamespace(ctx), guardiansGroupUidUint)
+	x.GuardiansUid.Store(x.ExtractNamespace(ctx), uid)
 
 	glog.Infof("Successfully upserted the guardians group")
 	return nil
@@ -554,11 +554,11 @@ func upsertGroot(ctx context.Context) error {
 		return errors.Wrap(err, "Multiple groot users found")
 	}
 
-	grootUserUidUint, err := strconv.ParseUint(grootUserUid, 0, 64)
+	uid, err := strconv.ParseUint(grootUserUid, 0, 64)
 	if err != nil {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 	}
-	x.GrootUserUid.Store(x.ExtractNamespace(ctx), grootUserUidUint)
+	x.GrootUid.Store(x.ExtractNamespace(ctx), uid)
 	glog.Infof("Successfully upserted groot account")
 	return nil
 }
@@ -576,7 +576,7 @@ func ResetAcl(closer *z.Closer) {
 	}
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		defer cancel()
 		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
@@ -588,7 +588,7 @@ func ResetAcl(closer *z.Closer) {
 
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
@@ -609,9 +609,11 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return userInfo, err
 }
 
-func authorizePreds(ns uint64, userId string, groupIds, preds []string,
+func authorizePreds(ns uint64, userData, preds []string,
 	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
+	userId := userData[0]
+	groupIds := userData[1:]
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -693,7 +695,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		ns := x.ExtractNamespace(ctx)
-		blockedPreds, _ := authorizePreds(ns, userId, groupIds, preds, acl.Modify)
+		blockedPreds, _ := authorizePreds(ns, userData, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -804,7 +806,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 		ns := x.ExtractNamespace(ctx)
-		blockedPreds, allowedPreds := authorizePreds(ns, userId, groupIds, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(ns, userData, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -948,7 +950,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil, nil
 		}
-		blockedPreds, allowedPreds := authorizePreds(ns, userId, groupIds, preds, acl.Read)
+		blockedPreds, allowedPreds := authorizePreds(ns, userData, preds, acl.Read)
 		return blockedPreds, allowedPreds, nil
 	}
 
@@ -1029,15 +1031,13 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId := userData[0]
 		groupIds := userData[1:]
-
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
 		ns := x.ExtractNamespace(ctx)
-		blockedPreds, _ := authorizePreds(ns, userId, groupIds, preds, acl.Read)
+		blockedPreds, _ := authorizePreds(ns, userData, preds, acl.Read)
 
 		return blockedPreds, nil
 	}
@@ -1072,10 +1072,10 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	return nil
 }
 
-func AuthorizeGalaxyGuardians(ctx context.Context) error {
+func AuthGuardiansOfTheGalaxy(ctx context.Context) error {
 	ns, err := getJWTNamespace(ctx)
 	if err != nil {
-		return errors.Wrapf(err, "While authorizing galaxy user got error: %s")
+		return errors.Wrap(err, "While authorizing galaxy user got error:")
 	}
 	if ns != 0 {
 		return errors.New("Only guardians of galaxy is allowed to do this operation")

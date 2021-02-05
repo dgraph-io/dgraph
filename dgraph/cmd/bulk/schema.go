@@ -52,7 +52,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 	// better to include them in case the input data contains triples with these
 	// predicates.
 	// TODO(Ahsan): Use the right namespace here.
-	for _, update := range schema.CompleteInitialSchema(x.DefaultNamespace) {
+	for _, update := range schema.CompleteInitialSchema(x.GalaxyNamespace) {
 		s.schemaMap[update.Predicate] = update
 	}
 

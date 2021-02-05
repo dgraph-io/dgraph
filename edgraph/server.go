@@ -114,10 +114,10 @@ type existingGQLSchemaQryResp struct {
 func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 	ctx = x.AttachNamespace(ctx, namespace)
 	if err := upsertGuardian(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "While creating Guardian")
 	}
 	if err := upsertGroot(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "While creating Groot")
 	}
 	return nil
 }
@@ -126,7 +126,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	glog.V(2).Info("Got create namespace request")
 
 	// Namespace creation is only allowed by the guardians of the galaxy group.
-	if err := AuthorizeGalaxyGuardians(ctx); err != nil {
+	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
 		return 0, errors.Wrapf(err, "While creating namespace got error: %s")
 	}
 
@@ -142,8 +142,9 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	// TODO(Ahsan): Remove this sleep, use a retry loop instead.
-	time.Sleep(2 * time.Second)
+	if err = worker.WaitForIndexingOrCtxError(ctx, true); err != nil {
+		return 0, errors.Wrap(err, "While creating namespace got error")
+	}
 
 	// Create the guardian group and groot user for the new namespace. We have already verified
 	// that this operation is being done by the galaxy guardian, so modifying namespace in ctx
@@ -156,7 +157,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
-	if err := AuthorizeGalaxyGuardians(ctx); err != nil {
+	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
 		return errors.Wrapf(err, "While deleting namespace got error: %s")
 	}
 	ps := worker.State.Pstore
@@ -200,7 +201,7 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
 	//TODO(Ahsan): There should be a way to getGQLSchema for all the namespaces and reinsert them
 	// after dropAll. Need to think about what should be the behaviour of drop operations.
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 
 	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
@@ -257,7 +258,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
 	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
@@ -402,7 +403,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		ctx = x.AttachNamespace(ctx, ns)
 	} else {
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	}
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
@@ -1102,7 +1103,7 @@ func getAuthMode(ctx context.Context) AuthMode {
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
 	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	} else {
 		ns, err := getJWTNamespace(ctx)
 		if err != nil {
@@ -1117,7 +1118,7 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	authMode := getAuthMode(ctx)
 	if authMode == NoAuthorize {
-		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	} else {
 		ns, err := getJWTNamespace(ctx)
 		if err != nil {

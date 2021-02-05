@@ -114,7 +114,7 @@ func TestAclLogin(t *testing.T) {
 		Endpoint:  adminEndpoint,
 		UserID:    x.GrootId,
 		Passwd:    "password",
-		Namespace: x.DefaultNamespace,
+		Namespace: x.GalaxyNamespace,
 	})
 	require.NoError(t, err, "login failed")
 
