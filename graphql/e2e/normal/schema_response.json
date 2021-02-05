@@ -9,6 +9,15 @@
             ]
         },
         {
+            "predicate": "post1.author",
+            "type": "uid"
+        },
+        {
+            "list": true,
+            "predicate": "author1.posts",
+            "type": "uid"
+        },
+        {
             "predicate": "Astronaut.id",
             "type": "string",
             "index": true,
@@ -619,6 +628,16 @@
                 "int"
             ],
             "type": "int"
+        },
+        {
+            "index": true,
+            "predicate": "author1.name",
+            "tokenizer": [
+                "hash",
+                "trigram"
+            ],
+            "type": "string",
+            "upsert": true
         }
     ],
     "types": [
@@ -1163,6 +1182,9 @@
         {
             "fields": [
                 {
+                    "name": "post1.author"
+                },
+                {
                     "name": "post1.title"
                 },
                 {
@@ -1184,6 +1206,17 @@
                 }
             ],
             "name": "dgraph.type.cors"
+        },
+        {
+            "fields": [
+                {
+                    "name": "author1.name"
+                },
+                {
+                    "name": "author1.posts"
+                }
+            ],
+            "name": "author1"
         }
     ]
 }
