@@ -360,7 +360,7 @@ input AddMissionInput {
 
 input AstronautFilter {
 	id: [ID!]
-	has: [AstronautHasFilter]
+	has: AstronautHasFilter
 	and: [AstronautFilter]
 	or: [AstronautFilter]
 	not: AstronautFilter
@@ -383,7 +383,7 @@ input AstronautRef {
 
 input MissionFilter {
 	id: [ID!]
-	has: [MissionHasFilter]
+	has: MissionHasFilter
 	and: [MissionFilter]
 	or: [MissionFilter]
 	not: MissionFilter

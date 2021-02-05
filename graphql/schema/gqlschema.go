@@ -1516,7 +1516,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition) {
 	// Has filter makes sense only if there is atleast one non ID field in the defn
 	if len(getFieldsWithoutIDType(schema, defn)) > 0 {
 		filter.Fields = append(filter.Fields,
-			&ast.FieldDefinition{Name: "has", Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "HasFilter"}}},
+			&ast.FieldDefinition{Name: "has", Type: &ast.Type{NamedType: defn.Name + "HasFilter"}},
 		)
 	}
 

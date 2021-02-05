@@ -377,7 +377,7 @@ input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
 	dateCompleted: StringTermFilter
-	has: [TodoHasFilter]
+	has: TodoHasFilter
 	and: [TodoFilter]
 	or: [TodoFilter]
 	not: TodoFilter
@@ -426,7 +426,7 @@ input UpdateUserInput {
 
 input UserFilter {
 	username: StringHashFilter
-	has: [UserHasFilter]
+	has: UserHasFilter
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter

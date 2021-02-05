@@ -377,7 +377,7 @@ input AddPostInput {
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
-	has: [AuthorHasFilter]
+	has: AuthorHasFilter
 	and: [AuthorFilter]
 	or: [AuthorFilter]
 	not: AuthorFilter
@@ -406,7 +406,7 @@ input PostFilter {
 	postID: [ID!]
 	title: StringFullTextFilter_StringTermFilter
 	text: StringFullTextFilter_StringTermFilter
-	has: [PostHasFilter]
+	has: PostHasFilter
 	and: [PostFilter]
 	or: [PostFilter]
 	not: PostFilter

@@ -325,7 +325,7 @@ input UpdateUserInput {
 
 input UserFilter {
 	id: [ID!]
-	has: [UserHasFilter]
+	has: UserHasFilter
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter
