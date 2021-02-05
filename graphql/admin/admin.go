@@ -209,6 +209,11 @@ const (
 		format: String
 
 		"""
+		Namespace for the export, if no value is given then it exports all namespaces.
+		"""
+		namespace: Int
+
+		"""
 		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
 		"""
 		destination: String
@@ -496,7 +501,7 @@ func newAdminResolver(
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
-	go worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
+	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
 		glog.Infof("Updating GraphQL schema from subscription.")

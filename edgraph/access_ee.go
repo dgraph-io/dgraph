@@ -663,7 +663,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		for _, u := range update.Preds {
-			preds = append(preds, u.Predicate)
+			preds = append(preds, x.ParseAttr(u.Predicate))
 		}
 	}
 	var userId string

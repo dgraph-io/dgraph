@@ -54,19 +54,19 @@ const (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: "Person",
+	TypeName: testutil.DefaultNamespaceAttr("Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: "name",
+			Predicate: testutil.DefaultNamespaceAttr("name"),
 		},
 		{
-			Predicate: "friend",
+			Predicate: testutil.DefaultNamespaceAttr("friend"),
 		},
 		{
-			Predicate: "~friend",
+			Predicate: testutil.DefaultNamespaceAttr("~friend"),
 		},
 		{
-			Predicate: "friend_not_served",
+			Predicate: testutil.DefaultNamespaceAttr("friend_not_served"),
 		},
 	},
 }
@@ -109,6 +109,7 @@ func populateGraphExport(t *testing.T) {
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
+		e.Attr = testutil.DefaultNamespaceAttr(e.Attr)
 		require.NoError(t, err)
 		if set {
 			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
@@ -130,7 +131,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
 
@@ -139,17 +140,17 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	err = txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	err = txn.Set(testutil.DefaultSchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	require.NoError(t, txn.Set(x.SchemaKey("friend_not_served"), val))
-	require.NoError(t, txn.Set(x.SchemaKey("age"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(x.TypeKey("Person"), val))
+	require.NoError(t, txn.Set(testutil.DefaultTypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	populateGraphExport(t)
@@ -157,7 +158,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	// Drop age predicate after populating DB.
 	// age should not exist in the exported schema.
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Delete(x.SchemaKey("age")))
+	require.NoError(t, txn.Delete(testutil.DefaultSchemaKey("age")))
 	require.NoError(t, txn.CommitAt(1, nil))
 }
 
@@ -201,7 +202,7 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+	require.Equal(t, testutil.DefaultNamespaceAttr("http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
@@ -271,9 +272,10 @@ func TestExportRdf(t *testing.T) {
 					nq.ObjectValue)
 			case "0x4":
 			case "0x5":
-				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
+				require.Equal(t, `<0x5> <name> "" <0x0> .`, scanner.Text())
 			case "0x6":
-				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`, scanner.Text())
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0x0> .`,
+					scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -324,7 +326,7 @@ func TestExportRdf(t *testing.T) {
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name: string @index(exact) .")
+	initTestExport(t, `name: string @index(exact) .`)
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -337,7 +339,7 @@ func TestExportJson(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json"}
+	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json", Namespace: math.MaxUint64}
 	files, err := export(context.Background(), &req)
 	require.NoError(t, err)
 
@@ -352,18 +354,20 @@ func TestExportJson(t *testing.T) {
 	require.NoError(t, err)
 
 	wantJson := `
-[
-  {"uid":"0x1","name":"pho\ton"},
-  {"uid":"0x2","name@en":"pho\ton"},
-  {"uid":"0x3","name":"First Line\nSecondLine"},
-  {"uid":"0x5","name":""},
-  {"uid":"0x6","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
-  {"uid":"0x1","friend":[{"uid":"0x5"}]},
-  {"uid":"0x2","friend":[{"uid":"0x5"}]},
-  {"uid":"0x3","friend":[{"uid":"0x5"}]},
-  {"uid":"0x4","friend":[{"uid":"0x5"}],"friend|age":33,"friend|close":"true","friend|game":"football","friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
-]
-`
+	[
+		{"uid":"0x1","namespace":"0x0","name":"pho\ton"},
+		{"uid":"0x2","namespace":"0x0","name@en":"pho\ton"},
+		{"uid":"0x3","namespace":"0x0","name":"First Line\nSecondLine"},
+		{"uid":"0x5","namespace":"0x0","name":""},
+		{"uid":"0x6","namespace":"0x0","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
+		{"uid":"0x1","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x2","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x3","namespace":"0x0","friend":[{"uid":"0x5"}]},
+		{"uid":"0x4","namespace":"0x0","friend":[{"uid":"0x5"}],"friend|age":33,
+			"friend|close":"true","friend|game":"football",
+			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
+	]
+	`
 	gotJson, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	var expected interface{}
@@ -437,6 +441,7 @@ type skv struct {
 	schema pb.SchemaUpdate
 }
 
+// TODO(Naman): Update this test according to namespace format.
 func TestToSchema(t *testing.T) {
 	testCases := []struct {
 		skv      *skv
@@ -549,8 +554,7 @@ func TestToSchema(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		list, err := toSchema(testCase.skv.attr, &testCase.skv.schema)
-		require.NoError(t, err)
-		require.Equal(t, testCase.expected, string(list.Kv[0].Value))
+		kv := toSchema(testCase.skv.attr, &testCase.skv.schema)
+		require.Equal(t, testCase.expected, string(kv.Value))
 	}
 }

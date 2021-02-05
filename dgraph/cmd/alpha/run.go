@@ -837,7 +837,7 @@ func run() {
 func listenForCorsUpdate(closer *z.Closer) {
 	prefix := x.PredicatePrefix(x.NamespaceAttr(x.DefaultNamespace, "dgraph.cors"))
 	// TODO(Ahsan): Use the correct ignore bytes in the prefix.
-	worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
+	worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
 		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")
 		glog.Infof("Updating cors from subscription.")

@@ -102,7 +102,7 @@ func TestBackupMinio(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.DefaultNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
