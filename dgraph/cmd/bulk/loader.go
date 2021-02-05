@@ -291,6 +291,7 @@ func (ld *loader) mapStage() {
 	// TODO(Naman): Handle this.
 	ld.processGqlSchema(loadType)
 
+	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
