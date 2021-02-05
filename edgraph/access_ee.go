@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/ristretto/z"
 
@@ -122,6 +123,9 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		return nil, errors.Wrapf(err, "invalid login request")
 	}
 
+	// In case of login, we can't extract namespace from JWT because we have not yet given JWT
+	// to the user, so the login request should contain the namespace, which is then set to ctx.
+	ctx = x.AttachNamespace(ctx, request.Namespace)
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
@@ -131,13 +135,13 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		userId := userData[0]
-		user, err = authorizeUser(ctx, userId, "", request.Namespace)
+		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
 			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate: invalid login request")
+			return nil, errors.Errorf("unable to authenticate: invalid credentials, no user found")
 		}
 
 		glog.Infof("Authenticated user %s through refresh token", userId)
@@ -146,7 +150,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	// authorize the user using password
 	var err error
-	user, err = authorizeUser(ctx, request.Userid, request.Password, request.Namespace)
+	user, err = authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while querying user with id %v",
 			request.Userid)
@@ -310,7 +314,7 @@ const queryUser = `
 
 // authorizeUser queries the user with the given user id, and returns the associated uid,
 // acl groups, and whether the password stored in DB matches the supplied password
-func authorizeUser(ctx context.Context, userid string, password string, namespace uint64) (
+func authorizeUser(ctx context.Context, userid string, password string) (
 	*acl.User, error) {
 
 	queryVars := map[string]string{
@@ -324,7 +328,6 @@ func authorizeUser(ctx context.Context, userid string, password string, namespac
 		},
 		doAuth: NoAuthorize,
 	}
-
 	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
@@ -367,7 +370,8 @@ func RefreshAcls(closer *z.Closer) {
 			doAuth: NoAuthorize,
 		}
 
-		queryResp, err := (&Server{}).doQuery(closer.Ctx(), req)
+		ctx := x.AttachNamespace(closer.Ctx(), ns)
+		queryResp, err := (&Server{}).doQuery(ctx, req)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -382,7 +386,7 @@ func RefreshAcls(closer *z.Closer) {
 	}
 
 	closer.AddRunning(1)
-	go worker.SubscribeForUpdates(aclPrefixes, "3-11", func(kvs *bpb.KVList) {
+	go worker.SubscribeForUpdates(aclPrefixes, x.IgnoreBytes, func(kvs *bpb.KVList) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
@@ -464,6 +468,8 @@ func upsertGuardian(ctx context.Context) error {
 	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
 		return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
 	}
+
+	spew.Dump("Created guardian", groupResp)
 	if len(groupResp.GuardiansGroup) == 0 {
 		// no guardians group found
 		// Extract guardians group uid from mutation

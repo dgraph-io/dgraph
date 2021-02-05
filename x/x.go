@@ -416,7 +416,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	}
 
 	ns := strconv.FormatUint(namespace, 10)
-	md.Append("namespace", ns)
+	md.Set("namespace", ns)
 	ctx = metadata.NewIncomingContext(ctx, md)
 	return ctx
 }

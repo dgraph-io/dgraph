@@ -52,6 +52,8 @@ const (
 	ByteUnused = byte(0xff)
 	// DefaultNamespace is the default namespace name.
 	DefaultNamespace = uint64(0)
+	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
+	IgnoreBytes = "3-10"
 )
 
 // NamespaceAttr is used to generate attr from namespace.

@@ -1110,18 +1110,7 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
-	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
-}
-
-// Query handles queries or mutations
-func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
-}
-
-func (s *Server) doQuery(ctx context.Context, req *Request) (
-	resp *api.Response, rerr error) {
-
-	if req.doAuth == NoAuthorize {
+	if !x.WorkerConfig.AclEnabled {
 		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
 	} else {
 		ns, err := getJWTNamespace(ctx)
@@ -1130,10 +1119,30 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		}
 		ctx = x.AttachNamespace(ctx, ns)
 	}
+	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+}
 
+// Query handles queries or mutations
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	authMode := getAuthMode(ctx)
+	if authMode == NoAuthorize {
+		ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	} else {
+		ns, err := getJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = x.AttachNamespace(ctx, ns)
+	}
+	return s.doQuery(ctx, &Request{req: req, doAuth: authMode})
+}
+
+func (s *Server) doQuery(ctx context.Context, req *Request) (
+	resp *api.Response, rerr error) {
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req.req)
 	}
+	fmt.Println("The namespace is:", x.ExtractNamespace(ctx))
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
