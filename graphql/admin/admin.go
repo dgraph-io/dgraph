@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -70,14 +69,6 @@ const (
 
 	type Cors @dgraph(type: "dgraph.cors"){
 		acceptedOrigins: [String]
-	}
-
-	"""
-	SchemaHistory contains the schema and the time when the schema has been created.
-	"""
-	type SchemaHistory @dgraph(type: "dgraph.graphql.history") {
-		schema: String! @id @dgraph(pred: "dgraph.graphql.schema_history")
-		created_at: DateTime! @dgraph(pred: "dgraph.graphql.schema_created_at")
 	}
 
 	"""
@@ -283,7 +274,6 @@ const (
 		state: MembershipState
 		config: Config
 		getAllowedCORSOrigins: Cors
-		querySchemaHistory(first: Int, offset: Int): [SchemaHistory]
 		` + adminQueries + `
 	}
 
@@ -352,7 +342,6 @@ var (
 		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"querySchemaHistory":    {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
@@ -534,7 +523,6 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-		fmt.Printf("Schema %s\n", newSchema.Schema)
 		server.mux.RLock()
 
 		currentSchema, ok := server.schema[ns]
@@ -623,12 +611,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
 		}).
-		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(
-				func(ctx context.Context, query schema.Query) *resolve.Resolved {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
-				})
-		})
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
 		// otherwise you get variable capture issues
@@ -778,15 +760,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			}).
 		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
-		}).
-		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
-			// Add the desceding order to the created_at to get the schema history in
-			// descending order.
-			q.Arguments()["order"] = map[string]interface{}{"desc": "created_at"}
-			return resolve.NewQueryResolver(
-				qryRw,
-				dgEx,
-				resolve.StdQueryCompletion())
 		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 
@@ -66,31 +65,10 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
-	ns := x.ExtractNamespace(ctx)
-	fmt.Printf("In updateGQLSchema ns: %+v\n", ns)
-
-	// TODO - We don't need schema history stuff for now.
-	// usr.admin.mux.RLock()
-	// schema := ""
-	// if usr.admin.schema[ns] != nil {
-	// 	schema = usr.admin.schema[ns].Schema
-	// }
-	// oldSchemaHash := farm.Fingerprint64([]byte(schema))
-	// usr.admin.mux.RUnlock()
-
-	// newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
-	// updateHistory := oldSchemaHash != newSchemaHash
-
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-
-	// if updateHistory {
-	// 	if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
-	// 		glog.Errorf("error while updating schema history %s", err.Error())
-	// 	}
-	// }
 
 	return &resolve.Resolved{
 		Data: map[string]interface{}{
@@ -117,10 +95,6 @@ func (gsr *getSchemaResolver) Execute(
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 	ns := x.ExtractNamespace(ctx)
-	fmt.Println("getSchema req ns: ", ns)
-	for ns, sch := range gsr.admin.schema {
-		fmt.Printf("ns: %+v, sch: %+v\n", ns, sch.Schema)
-	}
 	b, err := doQuery(gsr.admin.schema[ns], gsr.gqlQuery)
 	return &dgoapi.Response{Json: b}, err
 }

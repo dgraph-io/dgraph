@@ -462,6 +462,7 @@ func setupServer(closer *z.Closer) {
 		globalEpoch, closer)
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := r.Header.Get("namespace")
+		r.Header.Set("resolver", namespace)
 		glog.Info("Namespace before parsing", namespace)
 		ns, _ := strconv.ParseUint(namespace, 10, 64)
 		glog.Info("Serving request on /graphql for namespace", ns)
@@ -483,11 +484,14 @@ func setupServer(closer *z.Closer) {
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&e)))))
 	})
-	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
-		http.MethodGet:     true,
-		http.MethodPost:    true,
-		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler())))
+	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("resolver", "0")
+		allowedMethodsHandler(allowedMethods{
+			http.MethodGet:     true,
+			http.MethodPost:    true,
+			http.MethodOptions: true,
+		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
+	})
 
 	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {

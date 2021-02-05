@@ -23,9 +23,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/gql"
 	"sort"
 	"time"
+
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -156,34 +157,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
 	corsLast := corsRes.Me[len(corsRes.Me)-1]
 	return corsLast.Uid, corsLast.DgraphCors, nil
-}
-
-// UpdateSchemaHistory updates graphql schema history.
-func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	req := &api.Request{
-		Mutations: []*api.Mutation{
-			{
-				Set: []*api.NQuad{
-					{
-						Subject:     "_:a",
-						Predicate:   "dgraph.graphql.schema_history",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: schema}},
-					},
-					{
-						Subject:   "_:a",
-						Predicate: "dgraph.type",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{
-							StrVal: "dgraph.graphql.history"}},
-					},
-				},
-				SetNquads: []byte(fmt.Sprintf(`_:a <dgraph.graphql.schema_created_at> "%s" .`,
-					time.Now().Format(time.RFC3339))),
-			},
-		},
-		CommitNow: true,
-	}
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
-	return err
 }
 
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:

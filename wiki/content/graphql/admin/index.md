@@ -75,14 +75,6 @@ Here are the important types, queries, and mutations from the `admin` schema.
 	}
 
 	"""
-	SchemaHistory contains the schema and the time when the schema has been created.
-	"""
-	type SchemaHistory @dgraph(type: "dgraph.graphql.history") {
-		schema: String! @id @dgraph(pred: "dgraph.graphql.schema_history")
-		created_at: DateTime! @dgraph(pred: "dgraph.graphql.schema_created_at")
-	}
-
-	"""
 	A NodeState is the state of an individual Alpha or Zero node in the Dgraph cluster.
 	"""
 	type NodeState {
@@ -279,7 +271,6 @@ Here are the important types, queries, and mutations from the `admin` schema.
 		state: MembershipState
 		config: Config
 		getAllowedCORSOrigins: Cors
-		querySchemaHistory(first: Int, offset: Int): [SchemaHistory]
 	}
 
 	type Mutation {
@@ -410,42 +401,6 @@ mutation {
   }
 }
 ```
-
-## Using `querySchemaHistory` to see schema history
-
-You can query the history of your schema using `querySchemaHistory` on the
-`/admin` endpoint. This allows you to debug any issues that arise as you iterate
-your schema. You can specify how many entries to return, and an offset to skip
-the first few entries in the query result.
-
-Because a query using `querySchemaHistory` returns the complete schema
-for each version, you can use the JSON returned by such a query to manually roll
-back to an earlier schema version. To roll back, copy the desired
-schema version from query results, and then send it to `updateGQLSchema`.
-
-For example, to see the first 10 entries in your schema history, run the
-following query on the `/admin` endpoint:
-
-```graphql
-query {
-          querySchemaHistory ( first : 10 ){
-              schema
-              created_at
-           }
-}
-```
-You could also skip the first entry when querying your schema history by setting
-an offset, as in the following example:
-
-```graphql
-query {
-          querySchemaHistory ( first : 10, offset : 1 ){
-              schema
-              created_at
-           }
-}
-```
-
 
 ## Initial schema
 

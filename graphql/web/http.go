@@ -230,6 +230,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ns := r.Header.Get("namespace")
 	namespace, _ := strconv.ParseUint(ns, 10, 64)
 	ctx = x.AttachNamespace(ctx, namespace)
+	rs := r.Header.Get("resolver")
+	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)
@@ -244,7 +246,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res = gh.resolver[namespace].Resolve(ctx, gqlReq)
+	res = gh.resolver[resolver].Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
