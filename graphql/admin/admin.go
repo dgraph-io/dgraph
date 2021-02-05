@@ -430,7 +430,7 @@ type adminServer struct {
 	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
-	gqlServer map[uint64]web.IServeGraphQL
+	gqlServer web.IServeGraphQL
 
 	schema map[uint64]*gqlSchema
 
@@ -444,8 +444,7 @@ type adminServer struct {
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
-	closer *z.Closer) (web.IServeGraphQL,
-	web.IServeGraphQL, *GraphQLHealthStore) {
+	closer *z.Closer) (web.IServeGraphQL, web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -453,7 +452,8 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
 	e := globalEpoch[x.DefaultNamespace]
-	mainServer := web.NewServer(&e, resolvers, false)
+	mainServer := web.NewServer(false)
+	mainServer.Set(x.DefaultNamespace, &e, resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -464,7 +464,8 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	e = globalEpoch[x.DefaultNamespace]
-	adminServer := web.NewServer(&e, adminResolvers, true)
+	adminServer := web.NewServer(true)
+	adminServer.Set(x.DefaultNamespace, &e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
 }
@@ -491,10 +492,8 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 		globalEpoch:       epoch,
 		schema:            make(map[uint64]*gqlSchema),
-		gqlServer:         make(map[uint64]web.IServeGraphQL),
+		gqlServer:         defaultGqlServer,
 	}
-
-	server.gqlServer[x.DefaultNamespace] = defaultGqlServer
 
 	// TODO(Ahsan): The namespace shouldn't be default always"
 	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
@@ -874,11 +873,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	e := as.globalEpoch[ns]
 	atomic.AddUint64(&e, 1)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	if as.gqlServer[ns] == nil {
-		as.gqlServer[ns] = web.NewServer(&e, resolvers, false)
-	} else {
-		as.gqlServer[ns].ServeGQL(ns, resolvers)
-	}
+	as.gqlServer.Set(ns, &e, resolvers)
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()

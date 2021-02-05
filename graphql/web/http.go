@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -56,8 +55,10 @@ type IServeGraphQL interface {
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
 	ServeGQL(ns uint64, resolver *resolve.RequestResolver)
 
+	Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver)
+
 	// HTTPHandler returns a http.Handler that serves GraphQL.
-	HTTPHandler(ns uint64) http.Handler
+	HTTPHandler() http.Handler
 
 	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
 	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
@@ -68,28 +69,27 @@ type IServeGraphQL interface {
 
 type graphqlHandler struct {
 	resolver map[uint64]*resolve.RequestResolver
-	handler  map[uint64]http.Handler
+	handler  http.Handler
 	poller   map[uint64]*subscription.Poller
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver, admin bool) IServeGraphQL {
+func NewServer(admin bool) IServeGraphQL {
 	gh := &graphqlHandler{
 		resolver: make(map[uint64]*resolve.RequestResolver),
 		poller:   make(map[uint64]*subscription.Poller),
-		handler:  make(map[uint64]http.Handler),
 	}
-	gh.resolver[x.DefaultNamespace] = resolver
-	gh.poller[x.DefaultNamespace] = subscription.NewPoller(schemaEpoch, resolver)
-	gh.handler[x.DefaultNamespace] = recoveryHandler(commonHeaders(admin, gh.Handler()))
+	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
 	return gh
 }
 
-func (gh *graphqlHandler) HTTPHandler(ns uint64) http.Handler {
-	if _, ok := gh.handler[ns]; !ok {
-		return nil
-	}
-	return gh.handler[ns]
+func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver) {
+	gh.resolver[ns] = resolver
+	gh.poller[ns] = subscription.NewPoller(schemaEpoch, resolver)
+}
+
+func (gh *graphqlHandler) HTTPHandler() http.Handler {
+	return gh.handler
 }
 
 func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver) {
@@ -99,9 +99,6 @@ func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver)
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
 	ns := x.ExtractNamespace(ctx)
-	for ns, r := range gh.resolver {
-		fmt.Printf("ns: %+v, r: %+v\n", ns, r)
-	}
 	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 
@@ -231,7 +228,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
 	ns := r.Header.Get("namespace")
-	namespace, _ := strconv.ParseUint(ns, 64, 10)
+	namespace, _ := strconv.ParseUint(ns, 10, 64)
 	ctx = x.AttachNamespace(ctx, namespace)
 
 	var res *schema.Response

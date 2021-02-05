@@ -465,7 +465,7 @@ func setupServer(closer *z.Closer) {
 		glog.Info("Namespace before parsing", namespace)
 		ns, _ := strconv.ParseUint(namespace, 10, 64)
 		glog.Info("Serving request on /graphql for namespace", ns)
-		if handler := mainServer.HTTPHandler(ns); handler != nil {
+		if handler := mainServer.HTTPHandler(); handler != nil {
 			handler.ServeHTTP(w, r)
 		} else {
 			glog.Error("No graphQL handler for the given namespace")
@@ -487,7 +487,7 @@ func setupServer(closer *z.Closer) {
 		http.MethodGet:     true,
 		http.MethodPost:    true,
 		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler(x.DefaultNamespace))))
+	}, adminAuthHandler(adminServer.HTTPHandler())))
 
 	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
