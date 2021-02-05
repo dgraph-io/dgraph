@@ -57,8 +57,9 @@ type threadLocal struct {
 	// pre-allocated pb.PostingList object.
 	pl pb.PostingList
 	// pre-allocated pb.BackupPostingList object.
-	bpl   pb.BackupPostingList
-	alloc *z.Allocator
+	bpl    pb.BackupPostingList
+	alloc  *z.Allocator // Created and managed by the stream framework.
+	buffer *z.Buffer    // Used for the uid pack. Managed by the backupProcessor.
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -68,11 +69,21 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		threads: make([]*threadLocal, backupNumGo),
 	}
 	for i := range bp.threads {
+		buf, err := z.NewBufferWith(16<<20, 32<<30, z.UseCalloc)
+		x.Check(err)
+		buf.AutoMmapAfter(1 << 30)
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
+			buffer:  buf,
 		}
 	}
 	return bp
+}
+
+func (bp *BackupProcessor) Close() {
+	for _, th := range bp.threads {
+		th.buffer.Release()
+	}
 }
 
 // LoadResult holds the output of a Load operation.
@@ -263,7 +274,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		}
 
 		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
-		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc, tl.buffer)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while rolling up list")
 		}

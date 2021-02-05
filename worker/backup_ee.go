@@ -57,6 +57,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 	}
 	defer closer.Done()
 	bp := NewBackupProcessor(pstore, req)
+	defer bp.Close()
 	return bp.WriteBackup(ctx)
 }
 
@@ -211,6 +212,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
 
 	bp := NewBackupProcessor(nil, req)
+	defer bp.Close()
 	return bp.CompleteBackup(ctx, &m)
 }
 
