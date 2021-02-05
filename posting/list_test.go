@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -1377,7 +1378,8 @@ func TestSingleListRollup(t *testing.T) {
 	}
 
 	var bl pb.BackupPostingList
-	kv, err := ol.ToBackupPostingList(&bl, nil)
+	buf := z.NewBuffer(1 << 10)
+	kv, err := ol.ToBackupPostingList(&bl, nil, buf)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(kv.UserMeta))
 	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
@@ -1385,6 +1387,8 @@ func TestSingleListRollup(t *testing.T) {
 	plist := FromBackupPostingList(&bl)
 	require.Equal(t, 0, len(plist.Splits))
 	// TODO: Need more testing here.
+
+	require.NoError(t, buf.Release())
 }
 
 func TestRecursiveSplits(t *testing.T) {
