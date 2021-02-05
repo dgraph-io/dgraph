@@ -29,70 +29,69 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-const defaultCDCConfig = "enabled=false; max_recovery=10000"
+const defaultCDCConfig = "enabled=false; max_recovery=10000; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 
-type ChangeData struct {
+type CDC struct {
 	sink               SinkHandler
-	cdcIndex           uint64
+	index              uint64
 	maxRecoveryEntries uint64
 	closer             *z.Closer
-	pendingEvents      map[uint64][]CDCEvent
-	//// minimum read timestamp till which we have pending txns for which we want to send events
-	minReadTs uint64
-	maxReadTs uint64
+	pendingTxnEvents   map[uint64][]CDCEvent
+	// sentTs is the timestamp till which we have send the event of txns.
+	// There will be no event below this timestamp for which we need to send the events
+	sentTs uint64
+	maxTs  uint64
 }
 
-func initChangeDataCapture() *ChangeData {
+func newCDC() *CDC {
 	if Config.ChangeDataConf == "" {
 		return nil
 	}
 
 	cdcFlag := x.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
-	if !cdcFlag.GetBool("enabled") {
-		return nil
-	}
-	sink, err := GetSinkHandler()
+	sink, err := GetSinkHandler(cdcFlag)
 	x.Check(err)
-	cd := &ChangeData{
+	cdc := &CDC{
 		sink:               sink,
 		maxRecoveryEntries: cdcFlag.GetUint64("max-recovery"),
 		closer:             z.NewCloser(1),
-		pendingEvents:      make(map[uint64][]CDCEvent),
+		pendingTxnEvents:   make(map[uint64][]CDCEvent),
 	}
-	return cd
+	return cdc
 }
 
-func (cd *ChangeData) getCDCMinReadTs() uint64 {
-	if cd == nil {
+func (cdc *CDC) getTs() uint64 {
+	if cdc == nil {
 		return math.MaxUint64
 	}
-	return atomic.LoadUint64(&cd.minReadTs)
+	return atomic.LoadUint64(&cdc.sentTs)
 }
 
-func (cd *ChangeData) updateMinReadTs(newTs uint64) {
-	if cd == nil {
+func (cdc *CDC) updateTs(newTs uint64) {
+	if cdc == nil {
 		return
 	}
 	// current cdc read ts is larger than the proposed newts. Skip this
-	ts := cd.getCDCMinReadTs()
+	ts := cdc.getTs()
 	if ts >= newTs {
 		return
 	}
-	atomic.CompareAndSwapUint64(&cd.minReadTs, ts, newTs)
+	glog.Infoln("ts updated to ", newTs)
+	atomic.CompareAndSwapUint64(&cdc.sentTs, ts, newTs)
 }
 
-func (cd *ChangeData) Close() {
-	if cd == nil {
+func (cdc *CDC) Close() {
+	if cdc == nil {
 		return
 	}
 	glog.Infof("closing CDC events...")
-	cd.closer.SignalAndWait()
-	err := cd.sink.Close()
+	cdc.closer.SignalAndWait()
+	err := cdc.sink.Close()
 	glog.Errorf("error while closing sink %v", err)
 }
 
-func (cd *ChangeData) processCDCEvents() {
-	if cd == nil {
+func (cdc *CDC) processCDCEvents() {
+	if cdc == nil {
 		return
 	}
 
@@ -110,13 +109,13 @@ func (cd *ChangeData) processCDCEvents() {
 			// todo(aman bansal): use namespace for key.
 			msgs[i] = SinkMessage{
 				Meta: SinkMeta{
-					Topic: "dgraph_cdc",
+					Topic: "dgraph-cdc",
 				},
 				Key:   []byte("dgraph-cdc-event"),
 				Value: b,
 			}
 		}
-		if err := cd.sink.SendMessages(msgs); err != nil {
+		if err := cdc.sink.SendMessages(msgs); err != nil {
 			glog.Errorf("error while sending cdc event to sink %+v", err)
 			return err
 		}
@@ -126,24 +125,23 @@ func (cd *ChangeData) processCDCEvents() {
 	// This will always run on leader node only.
 	// Leader will check the Raft logs and keep in memory events that are pending.
 	// Once Txn is done, it will try to send events to sink.
-	// cdcIndex helps to define from which point we need to start reading from the raft logs
+	// index helps to define from which point we need to start reading from the raft logs
 	// clear map whenever we have send the events
 	checkAndSendCDCEvents := func() {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
-
-		cdcIndex := x.Max(cd.cdcIndex, first)
+		cdcIndex := x.Max(cdc.index, first)
 		last := groups().Node.Applied.DoneUntil()
 		if cdcIndex == last {
 			return
 		}
 		// if cdc is lagging behind the current via maxRecoveryEntries,
-		// skip ahead the cdcIndex to prevent uncontrolled growth of raft logs.
-		if uint64(len(cd.pendingEvents)) > cd.maxRecoveryEntries {
+		// skip ahead the index to prevent uncontrolled growth of raft logs.
+		if uint64(len(cdc.pendingTxnEvents)) > cdc.maxRecoveryEntries {
 			glog.Info("too many pending cdc events. Skipping for now.")
-			cd.updateMinReadTs(cd.maxReadTs)
-			cd.cdcIndex = last
-			cd.pendingEvents = make(map[uint64][]CDCEvent)
+			cdc.updateTs(cdc.maxTs)
+			cdc.index = last
+			cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
 			return
 		}
 		for batchFirst := cdcIndex; batchFirst <= last; {
@@ -157,24 +155,21 @@ func (cd *ChangeData) processCDCEvents() {
 			batchFirst = entries[len(entries)-1].Index + 1
 			for _, entry := range entries {
 				if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
-					cd.cdcIndex = entry.Index
 					continue
 				}
 
 				var proposal pb.Proposal
 				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
 					glog.Errorf("CDC: not able to marshal the proposal %v", err)
-					cd.cdcIndex = entry.Index
 					continue
 				}
-				// this is to ensure that cdcMinReadTs will be monotically increasing
+				// this is to ensure that cdcMinReadTs will be monotonically increasing
 				// In this way no min pending txn in case we skip some entries can affect
-				// the minReadTs to decrease. This way we will be able to provide gurantees
+				// the sentTs to decrease. This way we will be able to provide guarantees
 				// across the cluster in case of failures.
-				if proposal.Mutations != nil && proposal.Mutations.StartTs > cd.getCDCMinReadTs() {
-					events := transformMutationToCDCEvent(entry.Index, proposal.Mutations)
-					if events == nil {
-						cd.cdcIndex = entry.Index
+				if proposal.Mutations != nil && proposal.Mutations.StartTs > cdc.getTs() {
+					events := toCDCEvent(entry.Index, proposal.Mutations)
+					if len(events) == 0 {
 						continue
 					}
 					// In ludicrous events send the events as soon as you get it.
@@ -183,84 +178,80 @@ func (cd *ChangeData) processCDCEvents() {
 					// We can set the read ts here only.
 					if x.WorkerConfig.LudicrousMode {
 						if err := sendEvents(nil, events); err != nil {
+							glog.Errorf("not able to send messages to the sink %v", err)
 							return
 						}
-						cd.cdcIndex = entry.Index
-						cd.updateMinReadTs(proposal.Mutations.StartTs)
+						cdc.index = entry.Index
+						cdc.updateTs(proposal.Mutations.StartTs)
 						continue
 					}
-					if cd.pendingEvents[proposal.Mutations.StartTs] == nil {
-						cd.pendingEvents[proposal.Mutations.StartTs] = make([]CDCEvent, 0)
-					}
-					cd.pendingEvents[proposal.Mutations.StartTs] =
-						append(cd.pendingEvents[proposal.Mutations.StartTs], events...)
+					cdc.pendingTxnEvents[proposal.Mutations.StartTs] =
+						append(cdc.pendingTxnEvents[proposal.Mutations.StartTs], events...)
 				}
 
 				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						cd.maxReadTs = x.Max(cd.maxReadTs, ts.StartTs)
-						pending := cd.pendingEvents[ts.StartTs]
+						cdc.maxTs = x.Max(cdc.maxTs, ts.StartTs)
+						pending := cdc.pendingTxnEvents[ts.StartTs]
 						if ts.CommitTs > 0 && len(pending) > 0 {
 							if err := sendEvents(ts, pending); err != nil {
+								glog.Errorf("not able to send messages to the sink %v", err)
 								return
 							}
 						}
 						// delete from pending events once events are sent
-						delete(cd.pendingEvents, ts.StartTs)
-						_ = cd.evaluateAndSetMinReadTs()
+						delete(cdc.pendingTxnEvents, ts.StartTs)
+						cdc.evaluateAndSetTs()
 					}
 				}
-				cd.cdcIndex = entry.Index
+				cdc.index = entry.Index
 			}
 		}
 		return
 	}
 
-	tick := time.NewTicker(time.Second)
-	defer cd.closer.Done()
-	defer tick.Stop()
-	iter := 0
+	eventTick := time.NewTicker(time.Second)
+	proposalTick := time.NewTicker(time.Minute)
+	defer cdc.closer.Done()
+	defer eventTick.Stop()
+	defer proposalTick.Stop()
 	for {
 		select {
-		case <-cd.closer.HasBeenClosed():
+		case <-cdc.closer.HasBeenClosed():
 			return
-		case <-tick.C:
+		case <-eventTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
 				checkAndSendCDCEvents()
-				iter = iter + 1
-				if iter == 5 {
-					iter = 0
-					minTs := cd.evaluateAndSetMinReadTs()
-					glog.V(2).Infof("proposing CDC minReadTs %d", minTs)
-					if err := groups().Node.proposeCDCMinReadTs(minTs); err != nil {
-						glog.Errorf("not able to propose cdc minReadTs %v", err)
-					}
+			}
+		case <-proposalTick.C:
+			if groups().Node.AmLeader() && EnterpriseEnabled() {
+				ts := cdc.getTs()
+				glog.V(2).Infof("proposing CDC sentTs %d", ts)
+				if err := groups().Node.proposeCDCTs(ts); err != nil {
+					glog.Errorf("not able to propose cdc sentTs %v", err)
 				}
 			}
 		}
 	}
 }
 
-// evaluateAndSetMinReadTs finds the minReadTs we have pending events for.
+// evaluateAndSetTs finds the sentTs we have pending events for.
 // we can't send MaxUint64 as the response because when proposed,
 // it will nullify the state of cdc in the cluster,
 // thus making followers to clear raft logs between next proposal.
 // In this way we can loose some events.
-func (cd *ChangeData) evaluateAndSetMinReadTs() uint64 {
-	if cd == nil {
-		return math.MaxUint64
+func (cdc *CDC) evaluateAndSetTs() {
+	if cdc == nil || x.WorkerConfig.LudicrousMode {
+		return
 	}
-	if x.WorkerConfig.LudicrousMode {
-		return cd.getCDCMinReadTs()
-	}
-	min := cd.maxReadTs
-	for ts := range cd.pendingEvents {
+	min := cdc.maxTs
+	glog.Infoln(min, cdc.pendingTxnEvents)
+	for ts := range cdc.pendingTxnEvents {
 		if ts < min {
 			min = ts
 		}
 	}
-	cd.updateMinReadTs(min)
-	return min
+	cdc.updateTs(min)
 }
 
 type CDCEvent struct {
@@ -289,7 +280,7 @@ type DropEvent struct {
 	Pred      string `json:"pred"`
 }
 
-func transformMutationToCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
+func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// we are skipping schema updates for now.
 	if len(mutation.Schema) > 0 || len(mutation.Types) > 0 {
 		return nil

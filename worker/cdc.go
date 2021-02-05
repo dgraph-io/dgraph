@@ -22,26 +22,26 @@ import (
 	"math"
 )
 
-type ChangeData struct {
+type CDC struct {
 }
 
-func initChangeDataCapture() *ChangeData {
+func newCDC() *CDC {
 	return nil
 }
 
-func (cd *ChangeData) getCDCMinReadTs() uint64 {
+func (cd *CDC) getTs() uint64 {
 	return math.MaxUint64
 }
 
-func (cd *ChangeData) updateMinReadTs(ts uint64) {
+func (cd *CDC) updateTs(ts uint64) {
 	return
 }
 
-func (cd *ChangeData) Close() {
+func (cd *CDC) Close() {
 	return
 }
 
 // todo: test cases old cluster restart, live loader, bulk loader, backup restore etc
-func (cd *ChangeData) processCDCEvents() {
+func (cd *CDC) processCDCEvents() {
 	return
 }

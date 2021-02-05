@@ -52,18 +52,14 @@ type SinkHandler interface {
 
 const (
 	defaultSinkFileName = "sink.log"
-	defaultSinkConf     = "destination=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 )
 
-func GetSinkHandler() (SinkHandler, error) {
-	if Config.SinkConfig != "" {
-		sinkConf := x.NewSuperFlag(Config.SinkConfig).MergeAndCheckDefault(defaultSinkConf)
-		if strings.HasPrefix(sinkConf.GetString("destination"), "file://") {
-			return newFileBasedSink(sinkConf)
-		} else if strings.HasPrefix(sinkConf.GetString("destination"), "kafka://") {
-			return newKafkaSinkHandler(sinkConf)
-		}
-		return nil, errors.New("wrong sink config is provided")
+func GetSinkHandler(conf *x.SuperFlag) (SinkHandler, error) {
+	switch {
+	case conf.GetString("kafka") != "":
+		return newKafkaSinkHandler(conf)
+	case conf.GetString("file") != "":
+		return newFileBasedSink(conf)
 	}
 	return nil, errors.New("sink config is not provided")
 }
@@ -76,7 +72,7 @@ type kafkaSinkClient struct {
 }
 
 func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
-	if config.GetString("destination") == "" {
+	if config.GetString("kafka") == "" {
 		return nil, errors.New("brokers are not provided for the kafka config")
 	}
 
@@ -119,7 +115,7 @@ func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
 		saramaConf.Net.SASL.User = config.GetString("sasl-user")
 		saramaConf.Net.SASL.Password = config.GetString("sasl-password")
 	}
-	brokers := strings.Split(strings.TrimPrefix(config.GetString("destination"), "kafka://"), ",")
+	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
 		return nil, err
@@ -189,7 +185,7 @@ func (f *fileSink) Close() error {
 }
 
 func newFileBasedSink(path *x.SuperFlag) (SinkHandler, error) {
-	dir := strings.TrimPrefix(path.GetString("destination"), "file://")
+	dir := path.GetString("file")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}

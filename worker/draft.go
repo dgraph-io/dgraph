@@ -70,7 +70,7 @@ type node struct {
 	// Used to track the ops going on in the system.
 	ops         map[op]*z.Closer
 	opsLock     sync.Mutex
-	cdcTracker  *ChangeData
+	cdcTracker  *CDC
 	canCampaign bool
 	elog        trace.EventLog
 
@@ -250,7 +250,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:     z.NewCloser(4), // Matches CLOSER:1
 		ops:        make(map[op]*z.Closer),
-		cdcTracker: initChangeDataCapture(),
+		cdcTracker: newCDC(),
 	}
 	if x.WorkerConfig.LudicrousMode {
 		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
@@ -612,8 +612,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
-	case proposal.CDCMinReadTs > 0:
-		n.cdcTracker.updateMinReadTs(proposal.CDCMinReadTs)
+	case proposal.CdcTs > 0:
+		n.cdcTracker.updateTs(proposal.CdcTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
@@ -893,14 +893,14 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeCDCMinReadTs(minTs uint64) error {
+func (n *node) proposeCDCTs(minTs uint64) error {
 	// in case of ludicrous mode it could be zero. no need to send it
 	if minTs == 0 {
 		return nil
 	}
 
 	proposal := &pb.Proposal{
-		CDCMinReadTs: minTs,
+		CdcTs: minTs,
 	}
 	data := make([]byte, 8+proposal.Size())
 	sz, err := proposal.MarshalToSizedBuffer(data[8:])
@@ -1576,7 +1576,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getCDCMinReadTs())
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 

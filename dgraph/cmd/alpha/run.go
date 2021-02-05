@@ -203,22 +203,20 @@ they form a Raft group and provide synchronous replication.
 	flag.
 	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
-	flag.String("change_data", "",
+	flag.String("cdc", "",
 		`Various change data capture options.
-	enabled=true/false to enable change data capture. Default is false.
-	max_recovery=N to define the maximum amount of pending txn events can lag behind the
+	max-recovery=N to define the maximum amount of pending txn events can lag behind the
 	current index in case of sink failure. Default is 10000 pending txn entries.
+	
+	file=/path/to/directory where audit logs will be stored
+	kafka=host1,host2 to define comma separated list of host.
+	sasl-user=username to define sasl username for kafka.
+	sasl-password=password to define sasl password for kafka.
+	ca-cert=/path/to/ca/crt/file to define ca cert for tls encryption.
+	client-cert=/path/to/client/cert/file to define the client certificate for tls encryption.
+	client-key=/path/to/client/key/file to define the client key for tls encryption.
 	`)
 
-	flag.String("sink", "",
-		`Various sink config options.
-	destination=kafka://host1,host2 to define comma separated list of host.
-	sasl_user=username to define sasl username for kafka.
-	sasl_password=password to define sasl password for kafka.
-	ca_cert=/path/to/ca/crt/file to define ca cert for tls encryption.
-	client_cert=/path/to/client/cert/file to define the client certificate for tls encryption.
-	client_key=/path/to/client/key/file to define the client key for tls encryption.
-	`)
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -637,8 +635,7 @@ func run() {
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		Audit:          conf,
-		ChangeDataConf: Alpha.Conf.GetString("change_data"),
-		SinkConfig:     Alpha.Conf.GetString("sink"),
+		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

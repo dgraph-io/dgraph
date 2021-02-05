@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package change_data
+package cdc
 
 import (
 	"bufio"
@@ -32,7 +32,7 @@ import (
 )
 
 func TestCDC(t *testing.T) {
-	defer os.RemoveAll("./cdc/sink.log")
+	defer os.RemoveAll("./cdc_logs/sink.log")
 	cmd := exec.Command("dgraph", "increment", "--num", "10",
 		"--alpha", testutil.SockAddr)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -40,7 +40,7 @@ func TestCDC(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Second * 15)
-	verifyCDC(t, "./cdc/sink.log")
+	verifyCDC(t, "./cdc_logs/sink.log")
 }
 
 type CDCEvent struct {
