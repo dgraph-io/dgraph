@@ -803,3 +803,18 @@ type Astronaut @key(fields: "id") @extends @auth(
     missions: [Mission]
 }
 
+interface Vehicle @auth(
+    query:{
+        or:[
+            {rule: "{$ROLE: { eq: \"ADMIN\" } }"},
+            {rule: "query($USER: String!) { queryVehicle(filter: { owner: { eq: $USER }}) { owner } }"}
+        ]
+    }
+){
+    owner: String! @search(by: [exact])
+}
+
+type Car implements Vehicle {
+    id: ID!
+    manufacturer: String!
+}
