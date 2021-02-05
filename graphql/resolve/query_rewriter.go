@@ -782,11 +782,14 @@ func (authRw *authRewriter) addAuthQueries(
 				hasAuthRules:  authRw.hasAuthRules,
 			}).rewriteAuthQueries(object)
 
-			// If there is no Auth Query for the Given type then it means that
+			// 1. If there is no Auth Query for the Given type then it means that
 			// neither the inherited interface, nor this type has any Auth rules.
 			// In this case the query must return all the nodes of this type.
 			// then simply we need to Put uid(Todo1) with OR in the main query filter.
-			if len(objAuthQueries) == 0 {
+			// 2. If rbac evaluates to `Positive` which means RBAC rule is satisfied.
+			// Either it is the only auth rule, or it is present with `OR`, which means
+			// query must return all the nodes of this type.
+			if len(objAuthQueries) == 0 || rbac == schema.Positive {
 				objfilter = &gql.FilterTree{
 					Func: &gql.Function{
 						Name: "uid",
