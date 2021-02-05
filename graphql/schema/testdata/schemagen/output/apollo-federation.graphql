@@ -541,7 +541,7 @@ input AddUserInput {
 
 input CountryFilter {
 	code: StringHashFilter
-	has: [CountryHasFilter]
+	has: CountryHasFilter
 	and: [CountryFilter]
 	or: [CountryFilter]
 	not: CountryFilter
@@ -564,7 +564,7 @@ input CountryRef {
 
 input ProductFilter {
 	id: [ID!]
-	has: [ProductHasFilter]
+	has: ProductHasFilter
 	and: [ProductFilter]
 	or: [ProductFilter]
 	not: ProductFilter
@@ -587,7 +587,7 @@ input ProductRef {
 
 input ReviewsFilter {
 	id: [ID!]
-	has: [ReviewsHasFilter]
+	has: ReviewsHasFilter
 	and: [ReviewsFilter]
 	or: [ReviewsFilter]
 	not: ReviewsFilter
@@ -610,7 +610,7 @@ input ReviewsRef {
 
 input SchoolFilter {
 	id: [ID!]
-	has: [SchoolHasFilter]
+	has: SchoolHasFilter
 	and: [SchoolFilter]
 	or: [SchoolFilter]
 	not: SchoolFilter
@@ -627,7 +627,7 @@ input SchoolRef {
 
 input StudentFilter {
 	id: [ID!]
-	has: [StudentHasFilter]
+	has: StudentHasFilter
 	and: [StudentFilter]
 	or: [StudentFilter]
 	not: StudentFilter
@@ -688,7 +688,7 @@ input UpdateUserInput {
 
 input UserFilter {
 	name: StringHashFilter
-	has: [UserHasFilter]
+	has: UserHasFilter
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter

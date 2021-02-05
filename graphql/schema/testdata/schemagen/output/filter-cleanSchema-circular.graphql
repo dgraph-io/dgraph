@@ -401,7 +401,7 @@ input UpdateZInput {
 }
 
 input XFilter {
-	has: [XHasFilter]
+	has: XHasFilter
 	and: [XFilter]
 	or: [XFilter]
 	not: XFilter
@@ -416,7 +416,7 @@ input XRef {
 }
 
 input YFilter {
-	has: [YHasFilter]
+	has: YHasFilter
 	and: [YFilter]
 	or: [YFilter]
 	not: YFilter
@@ -431,7 +431,7 @@ input YRef {
 }
 
 input ZFilter {
-	has: [ZHasFilter]
+	has: ZHasFilter
 	and: [ZFilter]
 	or: [ZFilter]
 	not: ZFilter

@@ -315,7 +315,7 @@ input AddDataInput {
 
 input DataFilter {
 	id: [ID!]
-	has: [DataHasFilter]
+	has: DataHasFilter
 	and: [DataFilter]
 	or: [DataFilter]
 	not: DataFilter
