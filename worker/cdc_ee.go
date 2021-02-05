@@ -32,7 +32,7 @@ import (
 const defaultCDCConfig = "enabled=false; max_recovery=10000; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 
 type CDC struct {
-	sink               SinkHandler
+	sink               Sink
 	index              uint64
 	maxRecoveryEntries uint64
 	closer             *z.Closer
@@ -51,7 +51,7 @@ func newCDC() *CDC {
 	}
 
 	cdcFlag := x.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
-	sink, err := GetSinkHandler(cdcFlag)
+	sink, err := GetSink(cdcFlag)
 	x.Check(err)
 	cdc := &CDC{
 		sink:               sink,
@@ -164,7 +164,7 @@ func (cdc *CDC) processCDCEvents() {
 					glog.Errorf("CDC: not able to marshal the proposal %v", err)
 					continue
 				}
-				// this is to ensure that cdcMinReadTs will be monotonically increasing
+				// this is to ensure that cdcTs will be monotonically increasing
 				// In this way no min pending txn in case we skip some entries can affect
 				// the sentTs to decrease. This way we will be able to provide guarantees
 				// across the cluster in case of failures.

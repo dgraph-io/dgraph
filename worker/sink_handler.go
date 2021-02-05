@@ -41,7 +41,7 @@ type SinkMeta struct {
 	Topic string
 }
 
-type SinkHandler interface {
+type Sink interface {
 	// send message to the sink
 	SendMessage(message SinkMessage) error
 	// send in bulk to the sink
@@ -54,12 +54,12 @@ const (
 	defaultSinkFileName = "sink.log"
 )
 
-func GetSinkHandler(conf *x.SuperFlag) (SinkHandler, error) {
+func GetSink(conf *x.SuperFlag) (Sink, error) {
 	switch {
 	case conf.GetString("kafka") != "":
-		return newKafkaSinkHandler(conf)
+		return newKafkaSink(conf)
 	case conf.GetString("file") != "":
-		return newFileBasedSink(conf)
+		return newFileSink(conf)
 	}
 	return nil, errors.New("sink config is not provided")
 }
@@ -71,7 +71,7 @@ type kafkaSinkClient struct {
 	writer sarama.SyncProducer
 }
 
-func newKafkaSinkHandler(config *x.SuperFlag) (SinkHandler, error) {
+func newKafkaSink(config *x.SuperFlag) (Sink, error) {
 	if config.GetString("kafka") == "" {
 		return nil, errors.New("brokers are not provided for the kafka config")
 	}
@@ -184,7 +184,7 @@ func (f *fileSink) Close() error {
 	return f.fileWriter.Close()
 }
 
-func newFileBasedSink(path *x.SuperFlag) (SinkHandler, error) {
+func newFileSink(path *x.SuperFlag) (Sink, error) {
 	dir := path.GetString("file")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
