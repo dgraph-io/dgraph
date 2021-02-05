@@ -335,7 +335,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	item := itr.Item()
 	if item.Version() < tl.Request.SinceTs {
 		return list, nil,
-			errors.Errorf("toBackupList: Item.Version(): %s should be less than sinceTs: %d",
+			errors.Errorf("toBackupList: Item.Version(): %d should be less than sinceTs: %d",
 				item.Version(), tl.Request.SinceTs)
 	}
 	if item.IsDeletedOrExpired() {
