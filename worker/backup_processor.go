@@ -147,6 +147,10 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.NumGo = backupNumGo
+	// Ignore versions less than given sinceTs timestamp, or skip older versions of
+	// the given key by returning an empty list.
+	// Do not do this for schema and type keys. Those keys always have a
+	// version of one. They're handled separately.
 	stream.SinceTs = pr.Request.SinceTs
 	stream.Prefix = []byte{x.ByteData}
 
@@ -328,11 +332,12 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	var dropOp *pb.DropOperation
 
 	item := itr.Item()
-	if item.Version() < tl.Request.SinceTs || item.IsDeletedOrExpired() {
-		// Ignore versions less than given timestamp, or skip older versions of
-		// the given key by returning an empty list.
-		// Do not do this for schema and type keys. Those keys always have a
-		// version of one so they would be incorrectly rejected by above check.
+	if item.Version() < tl.Request.SinceTs {
+		return list, nil,
+			errors.Errorf("toBackupList: Item.Version(): %s should be less than sinceTs: %d",
+				item.Version(), tl.Request.SinceTs)
+	}
+	if item.IsDeletedOrExpired() {
 		return list, nil, nil
 	}
 
