@@ -167,9 +167,15 @@ func TestStringCustomClaim(t *testing.T) {
 	test.LoadSchemaFromString(t, string(authSchema))
 	testutil.SetAuthMeta(string(authSchema))
 
-	// Token with string custom claim
-	// "https://xyz.io/jwt/claims": "{\"USER\": \"50950b40-262f-4b26-88a7-cbbb780b2176\", \"ROLE\": \"ADMIN\"}",
-	token := "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImF1ZCI6IjYzZG8wcTE2bjZlYmpna3VtdTA1a2tlaWFuIiwiZXZlbnRfaWQiOiIzMWM5ZDY4NC0xZDQ1LTQ2ZjctOGMyYi1jYzI3YjFmNmYwMWIiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTU5MDMzMzM1NiwibmFtZSI6IkRhdmlkIFBlZWsiLCJleHAiOjQ1OTAzNzYwMzIsImlhdCI6MTU5MDM3MjQzMiwiZW1haWwiOiJkYXZpZEB0eXBlam9pbi5jb20ifQ.g6rAkPdNIJ6wvXOo6F4XmoVqqbGs_CdUHx_k7NrvLY8"
+	// Token with custom claim:
+	// "https://xyz.io/jwt/claims": {
+	// 	"USERNAME": "Random User",
+	// 	"email": "random@dgraph.io"
+	//   }
+	//
+	// It also contains standard claim :  "email": "test@dgraph.io", but the
+	// value of "email" gets overwritten by the value present inside custom claim.
+	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjM1MTYyMzkwMjIsImVtYWlsIjoidGVzdEBkZ3JhcGguaW8iLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifX0.6XvP9wlvHx8ZBBMH9iyy49cRiIk7H6NNoZf69USkg2c"
 	md := metadata.New(map[string]string{"authorizationJwt": token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
@@ -177,9 +183,13 @@ func TestStringCustomClaim(t *testing.T) {
 	require.NoError(t, err)
 	authVar := customClaims.AuthVariables
 	result := map[string]interface{}{
-		"ROLE": "ADMIN",
-		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
+		"sub":      "1234567890",
+		"name":     "John Doe",
+		"USERNAME": "Random User",
+		"email":    "random@dgraph.io",
 	}
+	delete(authVar, "exp")
+	delete(authVar, "iat")
 	require.Equal(t, authVar, result)
 	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
@@ -232,18 +242,8 @@ func TestAudienceClaim(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			_, err := authorization.ExtractCustomClaims(ctx)
 			require.Equal(t, tcase.err, err)
-			if err != nil {
-				return
-			}
-
-			authVar := customClaims.AuthVariables
-			result := map[string]interface{}{
-				"ROLE": "ADMIN",
-				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
-			}
-			require.Equal(t, authVar, result)
 		})
 	}
 	// reset auth meta, so that it won't effect other tests
@@ -340,18 +340,10 @@ func TestJWTExpiry(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			_, err := authorization.ExtractCustomClaims(ctx)
 			if tcase.invalid {
 				require.True(t, strings.Contains(err.Error(), "token is expired"))
-				return
 			}
-
-			authVar := customClaims.AuthVariables
-			result := map[string]interface{}{
-				"ROLE": "ADMIN",
-				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
-			}
-			require.Equal(t, authVar, result)
 		})
 	}
 

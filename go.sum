@@ -129,6 +129,8 @@ github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210204105926-13024c7bdb7e h1:GOe4M9eSEqKobxuydk/elptr/b11H9BJ152TYvsufi8=
 github.com/dgraph-io/ristretto v0.0.4-0.20210204105926-13024c7bdb7e/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
+github.com/dgraph-io/ristretto v0.0.4-0.20210205131921-1fb8d282aa8b h1:ivk3pt+NpQ1Pp9gZKX3WKJxRr0I0TC5t/io6jEZC1Mg=
+github.com/dgraph-io/ristretto v0.0.4-0.20210205131921-1fb8d282aa8b/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
 github.com/dgraph-io/simdjson-go v0.3.0/go.mod h1:Otpysdjaxj9OGaJusn4pgQV7OFh2bELuHANq0I78uvY=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
