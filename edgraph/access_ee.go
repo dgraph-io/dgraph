@@ -394,6 +394,7 @@ func RefreshAcls(closer *z.Closer) {
 		pk, err := x.Parse(kv.GetKey())
 		x.Check(err)
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
+		glog.V(2).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
 		if err := retrieveAcls(ns, kv.GetVersion()); err != nil {
 			glog.Errorf("Error while retrieving acls: %v", err)
 		}
@@ -1083,6 +1084,7 @@ func AuthGuardiansOfTheGalaxy(ctx context.Context) error {
 	if err := AuthorizeGuardians(ctx); err != nil {
 		return err
 	}
+	glog.V(2).Info("Successfully authorised the guardian of the galaxy")
 	return nil
 }
 

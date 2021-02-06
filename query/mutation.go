@@ -248,14 +248,12 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 		return nil
 	}
 	namespace := x.ExtractNamespace(ctx)
-	guardianUid, ok := x.GuardiansUid.Load(namespace)
-	if !ok {
-		return errors.Errorf("Guradian not found for the namespace")
-	}
-	grootsUid, ok := x.GrootUid.Load(namespace)
-	if !ok {
-		return errors.Errorf("Groot not found for the namespace")
-	}
+
+	// Its okay if the guradian/groot doesn't exist for the namespace yet. In that case, the
+	// operation can not be a delete operation on the guradian/groot node. If it doesn't exist, then
+	// the value of guardianUid and grootsUid will be 0.
+	guardianUid, _ := x.GuardiansUid.Load(namespace)
+	grootsUid, _ := x.GrootUid.Load(namespace)
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {

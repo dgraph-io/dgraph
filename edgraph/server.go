@@ -112,7 +112,6 @@ type existingGQLSchemaQryResp struct {
 // This function is used while creating new namespace. New namespace creation is only allowed
 // by the guardians of the galaxy group.
 func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
-	ctx = x.AttachNamespace(ctx, namespace)
 	if err := upsertGuardian(ctx); err != nil {
 		return errors.Wrap(err, "While creating Guardian")
 	}
@@ -123,7 +122,7 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 }
 
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
-	glog.V(2).Info("Got create namespace request")
+	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
 
 	// Namespace creation is only allowed by the guardians of the galaxy group.
 	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
@@ -132,16 +131,19 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
-
+	ns := ids.StartId
+	glog.V(2).Infof("Got a lease for NsID: %d", ns)
+	ctx = x.AttachNamespace(ctx, ns)
 	// Apply initial schema for the new namespace.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	m.Schema = schema.InitialSchema(ids.StartId)
-	m.Types = schema.InitialTypes(ids.StartId)
+	m.Schema = schema.InitialSchema(ns)
+	m.Types = schema.InitialTypes(ns)
 	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		return 0, err
 	}
 
+	glog.V(2).Info("Applied initial types and schema for new namespace")
 	if err = worker.WaitForIndexingOrCtxError(ctx, true); err != nil {
 		return 0, errors.Wrap(err, "While creating namespace got error")
 	}
@@ -152,7 +154,8 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
-	return ids.StartId, nil
+	glog.V(2).Infof("Created namespace: %d", ns)
+	return ns, nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
