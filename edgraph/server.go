@@ -399,15 +399,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 
-	if x.WorkerConfig.AclEnabled {
-		ns, err := getJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		}
-		ctx = x.AttachNamespace(ctx, ns)
-	} else {
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	}
+	ctx = x.AttachJWTNamespace(ctx)
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -1105,15 +1097,7 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
-	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	} else {
-		ns, err := getJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		}
-		ctx = x.AttachNamespace(ctx, ns)
-	}
+	ctx = x.AttachJWTNamespace(ctx)
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
@@ -1123,7 +1107,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	if authMode == NoAuthorize {
 		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	} else {
-		ns, err := getJWTNamespace(ctx)
+		ns, err := x.ExtractJWTNamespace(ctx)
 		if err != nil {
 			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
 		}
@@ -1137,7 +1121,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req.req)
 	}
-	fmt.Println("The namespace is:", x.ExtractNamespace(ctx))
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)

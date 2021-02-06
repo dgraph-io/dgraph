@@ -368,7 +368,7 @@ func TestMain(m *testing.M) {
 	gr.tablets = make(map[string]*pb.Tablet)
 	addTablets := func(attrs []string, gid uint32) {
 		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(x.GalaxyNamespace, attr)] = &pb.Tablet{GroupId: gid}
+			gr.tablets[x.GalaxyAttr(attr)] = &pb.Tablet{GroupId: gid}
 		}
 	}
 

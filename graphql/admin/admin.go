@@ -496,14 +496,13 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	// TODO(Pawan): The namespace shouldn't be default always"
-	prefix := x.DataKey(x.NamespaceAttr(x.GalaxyNamespace, worker.GqlSchemaPred), 0)
+	prefix := x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
 	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
-		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.

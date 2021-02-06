@@ -835,11 +835,10 @@ func run() {
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
 func listenForCorsUpdate(closer *z.Closer) {
-	prefix := x.PredicatePrefix(x.NamespaceAttr(x.GalaxyNamespace, "dgraph.cors"))
-	// TODO(Ahsan): Use the correct ignore bytes in the prefix.
+	prefix := x.PredicatePrefix(x.GalaxyAttr("dgraph.cors"))
 	worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
-		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "CORS Subscription")
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}

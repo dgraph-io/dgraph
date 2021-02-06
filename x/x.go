@@ -142,9 +142,9 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
-	// GuardiansUid is Uid of guardians group node.
+	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid sync.Map
-	// GrootUser Uid is Uid of groot user node.
+	// GrootUser Uid is a map from namespace to the Uid of groot user node.
 	GrootUid sync.Map
 )
 
@@ -410,13 +410,27 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+// AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
+// it attaches the galaxy namespace.
+func AttachJWTNamespace(ctx context.Context) context.Context {
+	if WorkerConfig.AclEnabled {
+		ns, err := ExtractJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = AttachNamespace(ctx, ns)
+	} else {
+		ctx = AttachNamespace(ctx, GalaxyNamespace)
+	}
+	return ctx
+}
+
 // AttachNamespace adds given namespace to the metadata of the context.
 func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
-
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
 	ctx = metadata.NewIncomingContext(ctx, md)
@@ -1305,26 +1319,11 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 `
 
 // KvWithMaxVersion returns a KV with the max version from the list of KVs.
-func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badgerpb.KV {
-	// hasAnyPrefix := func(key []byte) bool {
-	// 	for _, prefix := range prefixes {
-	// 		if bytes.HasPrefix(key, prefix) {
-	// 			return true
-	// 		}
-	// 	}
-	// 	return false
-	// }
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
 	// KV contain the latest value.
 	var maxKv *badgerpb.KV
 	for _, kv := range kvs.GetKv() {
-		//TODO(Ahsan): Change this.
-		// if !hasAnyPrefix(kv.GetKey()) {
-		// 	// Verify that we got the key which was subscribed. This shouldn't happen, but added for
-		// 	// robustness.
-		// 	glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
-		// 	continue
-		// }
 		if maxKv.GetVersion() <= kv.GetVersion() {
 			maxKv = kv
 		}

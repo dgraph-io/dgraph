@@ -17,12 +17,14 @@
 package x
 
 import (
+	"context"
+
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 )
 
-func ExtractUserName(jwtToken string) (string, error) {
-	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
+func ParseJWT(jwtStr string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v",
 				token.Header["alg"])
@@ -31,18 +33,42 @@ func ExtractUserName(jwtToken string) (string, error) {
 	})
 
 	if err != nil {
-		return "", errors.Wrapf(err, "unable to parse jwt token")
+		return nil, errors.Wrapf(err, "unable to parse jwt token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", errors.Errorf("claims in jwt token is not map claims")
+		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
+	return claims, nil
+}
 
+func ExtractUserName(jwtToken string) (string, error) {
+	claims, err := ParseJWT(jwtToken)
+	if err != nil {
+		return "", err
+	}
 	userId, ok := claims["userid"].(string)
 	if !ok {
 		return "", errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
 	return userId, nil
+}
+
+func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
+	jwtString, err := ExtractJwt(ctx)
+	if err != nil {
+		return 0, err
+	}
+	claims, err := ParseJWT(jwtString[0])
+	if err != nil {
+		return 0, err
+	}
+
+	namespace, ok := claims["namespace"].(float64)
+	if !ok {
+		return 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
+	}
+	return uint64(namespace), nil
 }

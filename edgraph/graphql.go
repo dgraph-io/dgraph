@@ -76,7 +76,8 @@ func ResetCors(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
-		//TODO(Ahsan): Is this namespace specific?
+		//TODO(Ahsan): I don't think this is namespace specific, we will have to reset cors for
+		// all the namespaces.
 		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
@@ -125,15 +126,7 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
-	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	} else {
-		ns, err := getJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		}
-		ctx = x.AttachNamespace(ctx, ns)
-	}
+	ctx = x.AttachJWTNamespace(ctx)
 	req := &Request{
 		req: &api.Request{
 			Query: `query{
