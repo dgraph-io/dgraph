@@ -59,6 +59,12 @@ var (
 	// NumEdges is the total number of edges created so far.
 	NumEdges = stats.Int64("num_edges_total",
 		"Total number of edges created", stats.UnitDimensionless)
+	// NumBackups is the number of backups requested
+	NumBackups = stats.Int64("num_backups_total",
+		"Total number of backups requested", stats.UnitDimensionless)
+	// NumBackupsSuccess is the number of backups successfully completed
+	NumBackupsSuccess = stats.Int64("num_backups_success",
+		"Total number of backups completed", stats.UnitDimensionless)
 	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
@@ -71,6 +77,9 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
+	// PendingBackups records if a backup is currently in progress
+	PendingBackups = stats.Int64("pending_backups_total",
+		"Number of backups", stats.UnitDimensionless)
 	// MemoryAlloc records the amount of memory allocated via jemalloc
 	MemoryAlloc = stats.Int64("memory_alloc_bytes",
 		"Amount of memory allocated", stats.UnitBytes)
@@ -184,6 +193,20 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
+			Name:        NumBackups.Name(),
+			Measure:     NumBackups,
+			Description: NumBackups.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
+			Name:        NumBackupsSuccess.Name(),
+			Measure:     NumBackupsSuccess,
+			Description: NumBackupsSuccess.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
 			Name:        TxnCommits.Name(),
 			Measure:     TxnCommits,
 			Description: TxnCommits.Description(),
@@ -224,6 +247,13 @@ var (
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     nil,
+		},
+		{
+			Name:        PendingBackups.Name(),
+			Measure:     PendingBackups,
+			Description: PendingBackups.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     nil,
 		},
