@@ -92,6 +92,15 @@ var (
 	// MemoryProc records the amount of memory used in processes.
 	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
+	// DiskFree records the number of bytes free on the disk
+	DiskFree = stats.Int64("disk_free",
+		"Total number of bytes free on disk", stats.UnitBytes)
+	// DiskUsed records the number of bytes free on the disk
+	DiskUsed = stats.Int64("disk_used",
+		"Total number of bytes used on disk", stats.UnitBytes)
+	// DiskTotal records the number of bytes free on the disk
+	DiskTotal = stats.Int64("disk_total",
+		"Total number of bytes on disk", stats.UnitBytes)
 	// ActiveMutations is the current number of active mutations.
 	ActiveMutations = stats.Int64("active_mutations_total",
 		"Number of active mutations", stats.UnitDimensionless)
@@ -150,6 +159,9 @@ var (
 	// KeyMethod is the tag key used to record the method (e.g read or mutate).
 	KeyMethod, _ = tag.NewKey("method")
 
+	// KeyDirType is the tag key used to record the group for FileSystem metrics
+	KeyDirType, _ = tag.NewKey("dir_type")
+
 	// Tag values.
 
 	// TagValueStatusOK is the tag value used to signal a successful operation.
@@ -169,6 +181,8 @@ var (
 	}
 
 	allRaftKeys = []tag.Key{KeyGroup}
+
+	allFSKeys = []tag.Key{KeyDirType}
 
 	allViews = []*view.View{
 		{
@@ -284,6 +298,27 @@ var (
 			Description: MemoryProc.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        DiskFree.Name(),
+			Measure:     DiskFree,
+			Description: DiskFree.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskUsed.Name(),
+			Measure:     DiskUsed,
+			Description: DiskUsed.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskTotal.Name(),
+			Measure:     DiskTotal,
+			Description: DiskTotal.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
 		},
 		{
 			Name:        AlphaHealth.Name(),
