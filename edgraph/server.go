@@ -133,8 +133,8 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
 	ns := ids.StartId
 	glog.V(2).Infof("Got a lease for NsID: %d", ns)
+
 	ctx = x.AttachNamespace(ctx, ns)
-	// Apply initial schema for the new namespace.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(ns)
 	m.Types = schema.InitialTypes(ns)
@@ -147,10 +147,6 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	if err = worker.WaitForIndexingOrCtxError(ctx, true); err != nil {
 		return 0, errors.Wrap(err, "While creating namespace got error")
 	}
-
-	// Create the guardian group and groot user for the new namespace. We have already verified
-	// that this operation is being done by the galaxy guardian, so modifying namespace in ctx
-	// for mutations for creation of guardians/groot for new namespace is correct.
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
 	}
@@ -1005,8 +1001,6 @@ type queryContext struct {
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
-	// namespace of the given query.
-	namespace uint64
 }
 
 // Request represents a query request sent to the doQuery() method on the Server.
@@ -1179,12 +1173,11 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	}
 
 	qc := &queryContext{
-		req:       req.req,
-		latency:   l,
-		span:      span,
-		graphql:   isGraphQL,
-		namespace: x.ExtractNamespace(ctx),
-		gqlField:  req.gqlField,
+		req:      req.req,
+		latency:  l,
+		span:     span,
+		graphql:  isGraphQL,
+		gqlField: req.gqlField,
 	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
