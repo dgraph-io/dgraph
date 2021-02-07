@@ -435,6 +435,8 @@ func init() {
 	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
 	view.RegisterExporter(pe)
 
+	// Exposing metrics at /metrics, which is the usual standard, as well as at the old endpoint
+	http.Handle("/metrics", pe)
 	http.Handle("/debug/prometheus_metrics", pe)
 }
 
