@@ -4828,7 +4828,7 @@ func inputCoerciontoList(t *testing.T) {
 		variables string
 		expected  string
 	}{
-		{name: "Scalar value at root to list ",
+		{name: "Coercion of Scalar value at root to list ",
 			query: ` mutation{
 					 	addpost1(input:{title:"GraphQL",commentsByMonth:1}){
 							post1{
@@ -4848,7 +4848,7 @@ func inputCoerciontoList(t *testing.T) {
 							}
 						}`,
 		},
-		{name: "Scalar value at root to list using variables",
+		{name: "Coercion of Scalar value at root to list using variables",
 			query: ` mutation($post1:[Addpost1Input!]!){
 					 	addpost1(input:$post1){
 							post1{
@@ -4869,7 +4869,7 @@ func inputCoerciontoList(t *testing.T) {
 						}`,
 			variables: `{"post1": {"title":"Dgraph","commentsByMonth":1}}`,
 		},
-		{name: "nested scalar value to list ",
+		{name: "Coercing nested scalar value to list ",
 			query: ` mutation{
 					 	addauthor1(input:{name:"Jack",posts:{title:"RDBMS",commentsByMonth:1}}){
 							author1{
@@ -4897,7 +4897,7 @@ func inputCoerciontoList(t *testing.T) {
 						  }
 						}`,
 		},
-		{name: "nested scalar value to list using variables",
+		{name: "Coercing nested scalar value to list using variables",
 			query: ` mutation($author:[Addauthor1Input!]!){
 					 	addauthor1(input:$author){
 							author1{
