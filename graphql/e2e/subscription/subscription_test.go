@@ -989,6 +989,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 }
 
 func TestSubscriptionWithCustomDQL(t *testing.T) {
+	t.Skip()
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
