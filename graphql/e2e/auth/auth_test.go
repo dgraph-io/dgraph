@@ -159,6 +159,7 @@ type TestCase struct {
 	ans           bool
 	result        string
 	name          string
+	jwt           string
 	filter        map[string]interface{}
 	variables     map[string]interface{}
 	query         string
@@ -537,7 +538,50 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
 	}
+
+func TestQueryWithStandardClaims(t *testing.T) {
+	if metaInfo.Algo == "RS256" {
+		t.Skip()
+	}
+	testCases := []TestCase{
+		{
+			query: `
+            query {
+                queryProject (order: {asc: name}) {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6IkFETUlOIn0.cH_EcC8Sd0pawJs96XPhpRsYVXuTybT1oUkluBDS8B4",
+			result: `{"queryProject":[{"name":"Project1"},{"name":"Project2"}]}`,
+		},
+		{
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.wabcAkINZ6ycbEuziTQTSpv8T875Ky7JQu68ynoyDQE",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: make(http.Header),
+			Query:   tcase.query,
+		}
+		queryParams.Headers.Set(metaInfo.Header, tcase.jwt)
+
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
 }
+
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
@@ -1666,7 +1710,11 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 							[
 								{
 									"username": "user1",
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMax": null,
+										"msgMin": null
+									}
 								}
 							]
 					}`},
@@ -1712,7 +1760,7 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1728,7 +1776,11 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 								{
 									"username": "user1",
 									"issues":[],
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMin": null,
+										"msgMax": null
+									}
 								}
 							]
 					}`},
@@ -1783,7 +1835,7 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,12 +48,14 @@ var defaultOutDir = "./out"
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
-		Short: "Run Dgraph bulk loader",
+		Short: "Run Dgraph Bulk Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
+	Bulk.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ var (
 func init() {
 	Alpha.Cmd = &cobra.Command{
 		Use:   "alpha",
-		Short: "Run Dgraph Alpha",
+		Short: "Run Dgraph Alpha database server",
 		Long: `
 A Dgraph Alpha instance stores the data. Each Dgraph Alpha is responsible for
 storing and serving one data group. If multiple Alphas serve the same group,
@@ -94,8 +94,10 @@ they form a Raft group and provide synchronous replication.
 			defer x.StartProfile(Alpha.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
+	Alpha.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// If you change any of the flags below, you must also update run() to call Alpha.Conf.Get
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
@@ -473,9 +475,9 @@ func setupServer(closer *z.Closer) {
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
-		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
+		w.WriteHeader(httpStatusCode)
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
 	})
@@ -663,7 +665,7 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
+	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
