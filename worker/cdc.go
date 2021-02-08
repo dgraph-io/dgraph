@@ -20,6 +20,8 @@ package worker
 
 import (
 	"math"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 type CDC struct {
@@ -34,6 +36,14 @@ func (cd *CDC) getTs() uint64 {
 }
 
 func (cd *CDC) updateTs(ts uint64) {
+	return
+}
+
+func (cdc *CDC) getSeenIndex() uint64 {
+	return math.MaxUint64
+}
+
+func (cdc *CDC) updateCDCState(state *pb.CDCState) {
 	return
 }
 

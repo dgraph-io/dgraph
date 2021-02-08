@@ -266,10 +266,6 @@ func (cdc *CDC) processCDCEvents() {
 				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
-				// todo remove this
-				cdc.Lock()
-				glog.Infoln("pending event size is ", len(cdc.pendingTxnEvents))
-				cdc.Unlock()
 			}
 		}
 	}
