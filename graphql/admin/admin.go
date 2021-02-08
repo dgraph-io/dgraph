@@ -427,12 +427,12 @@ type adminServer struct {
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
 	fns               *resolve.ResolverFns
 	withIntrospection bool
-	globalEpoch       map[uint64]uint64
+	globalEpoch       map[uint64]*uint64
 }
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
+func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	closer *z.Closer) (web.IServeGraphQL, web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
@@ -442,7 +442,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
 	e := globalEpoch[x.DefaultNamespace]
 	mainServer := web.NewServer(false)
-	mainServer.Set(x.DefaultNamespace, &e, resolvers)
+	mainServer.Set(x.DefaultNamespace, e, resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -454,7 +454,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]uint64,
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	e = globalEpoch[x.DefaultNamespace]
 	adminServer := web.NewServer(true)
-	adminServer.Set(x.DefaultNamespace, &e, adminResolvers)
+	adminServer.Set(x.DefaultNamespace, e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
 }
@@ -464,7 +464,7 @@ func newAdminResolver(
 	defaultGqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
-	epoch map[uint64]uint64,
+	epoch map[uint64]*uint64,
 	closer *z.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
@@ -844,10 +844,13 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
 	// will match against global epoch to terminate the current subscriptions.
 	e := as.globalEpoch[ns]
-	atomic.AddUint64(&e, 1)
-	as.globalEpoch[ns] = atomic.LoadUint64(&e)
+	if e == nil {
+		e = new(uint64)
+		as.globalEpoch[ns] = e
+	}
+	atomic.AddUint64(e, 1)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	as.gqlServer.Set(ns, &e, resolvers)
+	as.gqlServer.Set(ns, e, resolvers)
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
