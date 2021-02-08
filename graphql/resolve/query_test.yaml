@@ -906,7 +906,7 @@
   dgquery: |-
     query {
       queryTeacher(func: type(Teacher)) @filter((has(Teacher.subject) AND has(Teacher.teaches))) {
-        name : People.name
+        Teacher.name : People.name
         dgraph.uid : uid
       }
     }
@@ -1242,9 +1242,9 @@
   dgquery: |-
     query {
       queryAuthor(func: type(Author)) {
-        name : Author.name
-        posts : Author.posts @filter((has(Post.tags) AND has(Post.text))) {
-          title : Post.title
+        Author.name : Author.name
+        Author.posts : Author.posts @filter((has(Post.tags) AND has(Post.text))) {
+          Post.title : Post.title
           dgraph.uid : uid
         }
         dgraph.uid : uid
