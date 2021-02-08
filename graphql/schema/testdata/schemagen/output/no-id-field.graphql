@@ -401,7 +401,7 @@ input AddPostInput {
 
 input AuthorFilter {
 	id: [ID!]
-	has: AuthorHasFilter
+	has: [AuthorHasFilter]
 	and: [AuthorFilter]
 	or: [AuthorFilter]
 	not: AuthorFilter
@@ -425,7 +425,7 @@ input AuthorRef {
 }
 
 input GenreFilter {
-	has: GenreHasFilter
+	has: [GenreHasFilter]
 	and: [GenreFilter]
 	or: [GenreFilter]
 	not: GenreFilter
@@ -446,7 +446,7 @@ input GenreRef {
 }
 
 input PostFilter {
-	has: PostHasFilter
+	has: [PostHasFilter]
 	and: [PostFilter]
 	or: [PostFilter]
 	not: PostFilter

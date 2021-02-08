@@ -404,7 +404,7 @@ input AddMissionInput {
 
 input AstronautFilter {
 	id: [ID!]
-	has: AstronautHasFilter
+	has: [AstronautHasFilter]
 	and: [AstronautFilter]
 	or: [AstronautFilter]
 	not: AstronautFilter
@@ -427,7 +427,7 @@ input AstronautRef {
 
 input CarFilter {
 	id: [ID!]
-	has: CarHasFilter
+	has: [CarHasFilter]
 	and: [CarFilter]
 	or: [CarFilter]
 	not: CarFilter
@@ -450,7 +450,7 @@ input CarRef {
 
 input MissionFilter {
 	id: [ID!]
-	has: MissionHasFilter
+	has: [MissionHasFilter]
 	and: [MissionFilter]
 	or: [MissionFilter]
 	not: MissionFilter
