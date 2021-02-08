@@ -126,7 +126,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
 
 	// Namespace creation is only allowed by the guardians of the galaxy group.
-	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 		return 0, errors.Wrapf(err, "Creating namespace, got error:")
 	}
 
@@ -162,7 +162,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
 	ctx = x.AttachJWTNamespace(ctx)
-	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 		return errors.Wrapf(err, "Creating namespace, got error: ")
 	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
@@ -422,6 +422,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
+				" galaxy")
+		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}

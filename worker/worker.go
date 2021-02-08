@@ -82,9 +82,9 @@ type grpcWorker struct {
 
 func (w *grpcWorker) Subscribe(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
-	var matches []*badgerpb.Match
+	var matches []badgerpb.Match
 	for _, prefix := range req.GetPrefixes() {
-		matches = append(matches, &badgerpb.Match{Prefix: prefix, IgnoreBytes: req.Ignore})
+		matches = append(matches, badgerpb.Match{Prefix: prefix, IgnoreBytes: req.Ignore})
 	}
 	// Subscribe on given prefixes with the ignore byte.
 	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {

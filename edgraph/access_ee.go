@@ -1039,8 +1039,11 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	return nil
 }
 
-func AuthGuardiansOfTheGalaxy(ctx context.Context) error {
-	ns := x.ExtractNamespace(ctx)
+func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")
+	}
 	if ns != 0 {
 		return errors.New("Only guardian of galaxy is allowed to do this operation")
 	}
