@@ -17,7 +17,7 @@ services:
         source: ./cdc_logs
         target: /cdc
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      --cdc "max_recovery=10000;file=/cdc" -v=2
+      --cdc "file=/cdc" -v=2
       --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest

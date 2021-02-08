@@ -91,7 +91,7 @@ func (cdc *CDC) addEventsAndUpdateIndex(ts uint64, index uint64, events []CDCEve
 	cdc.Lock()
 	cdc.pendingTxnEvents[ts] = append(cdc.pendingTxnEvents[ts], events...)
 	cdc.Unlock()
-	atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.seenIndex), index))
+	cdc.updateSeenIndex(index)
 }
 
 func (cdc *CDC) deleteEventsAndUpdateIndex(ts uint64, index uint64) {
@@ -101,11 +101,32 @@ func (cdc *CDC) deleteEventsAndUpdateIndex(ts uint64, index uint64) {
 	cdc.Lock()
 	delete(cdc.pendingTxnEvents, ts)
 	cdc.Unlock()
-	atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.seenIndex), index))
+	cdc.updateSeenIndex(index)
+}
+
+func (cdc *CDC) updateSeenIndex(index uint64) {
+	if cdc == nil {
+		return
+	}
+	idx := atomic.LoadUint64(&cdc.seenIndex)
+	if idx >= index {
+		return
+	}
+	atomic.CompareAndSwapUint64(&cdc.seenIndex, idx, index)
 }
 
 func (cdc *CDC) updateCDCState(state *pb.CDCState) {
 	if cdc == nil {
+		return
+	}
+	// events are sent as soon as we get mutation proposal in ludicrous mode.
+	// hence we only update the sentIndex in ludicrous mode.
+	// in normal mode sentTs will manage the state of CDC across cluster.
+	// Therefore, sentIndex has same significance in ludicrous mode as sentTs in default mode.
+	// Dont try to update seen index in case of default mode else cdc job will not be able to
+	// build the complete pending txns in case of membership changes.
+	if x.WorkerConfig.LudicrousMode {
+		cdc.updateSeenIndex(state.SentIndex)
 		return
 	}
 	ts := atomic.LoadUint64(&cdc.sentTs)
@@ -170,11 +191,18 @@ func (cdc *CDC) processCDCEvents() {
 		return flushEvents(ts)
 	}
 
-	// This will always run on leader node only.
+	// This will always run on leader node only. For default mode,
 	// Leader will check the Raft logs and keep in memory events that are pending.
 	// Once Txn is done, it will try to send events to sink.
-	// index helps to define from which point we need to start reading from the raft logs
-	// clear map whenever we have send the events
+	// Across the cluster, the process will manage sentTs
+	// as the maximum commit timestamp CDC has sent to the sink.
+	// In this way, even if leadership changes,
+	// new leader will know which new events are to be sent.
+	//
+	// In case of ludicrous mode, this has been achieved using seenIndex.
+	// We sent the events to the sink as soon as we get the proposal.Mutation
+	// in ludicrous mode. Hence, this job will manage seenIndex across the cluster
+	// to manage from which index we have to send the events.
 	checkAndSendCDCEvents := func() error {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
@@ -217,8 +245,7 @@ func (cdc *CDC) processCDCEvents() {
 						if err := sendEvents(events, nil); err != nil {
 							return errors.Wrapf(err, "unable to send messages")
 						}
-						atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.
-							seenIndex), entry.Index))
+						cdc.updateSeenIndex(entry.Index)
 						continue
 					}
 					cdc.addEventsAndUpdateIndex(proposal.Mutations.StartTs, entry.Index, events)
@@ -246,25 +273,27 @@ func (cdc *CDC) processCDCEvents() {
 		return nil
 	}
 
-	eventTick := time.NewTicker(time.Second)
-	slowTick := time.NewTicker(time.Minute)
+	jobTick := time.NewTicker(time.Second)
+	proposalTick := time.NewTicker(5 * time.Minute)
 	defer cdc.closer.Done()
-	defer eventTick.Stop()
+	defer jobTick.Stop()
+	defer proposalTick.Stop()
 	for {
 		select {
 		case <-cdc.closer.HasBeenClosed():
 			return
-		case <-eventTick.C:
+		case <-jobTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
 				err := checkAndSendCDCEvents()
 				if err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
 			}
-		case <-slowTick.C:
+		case <-proposalTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
-					glog.Errorf("unable to send events %+v", err)
+				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.seenIndex),
+					atomic.LoadUint64(&cdc.sentTs)); err != nil {
+					glog.Errorf("unable to propose cdc state %+v", err)
 				}
 			}
 		}
