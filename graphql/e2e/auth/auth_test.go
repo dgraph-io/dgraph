@@ -498,8 +498,10 @@ func TestAuthOnInterfaces(t *testing.T) {
 func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
 	getVehicleParams := &common.GraphQLParams{
 		Query: `
-		queryVehicle{
-			owner
+		query {
+			queryVehicle{
+				owner
+			}
 		}`,
 		Headers: common.GetJWT(t, "Alice", "ADMIN", metaInfo),
 	}
