@@ -665,7 +665,7 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
+	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
