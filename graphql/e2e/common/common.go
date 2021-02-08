@@ -230,8 +230,15 @@ type GqlSchema struct {
 	GeneratedSchema string
 }
 
-func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
-	resp, err := http.Get("http://" + authority + "/probe/graphql")
+func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, error) {
+
+	request, err := http.NewRequest("GET", "http://"+authority+"/probe/graphql", nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	request.Header = header
+	resp, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -251,9 +258,9 @@ func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 	return &probeResp, nil
 }
 
-func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
+func retryProbeGraphQL(authority string, header http.Header) *ProbeGraphQLResp {
 	for i := 0; i < 10; i++ {
-		resp, err := probeGraphQL(authority)
+		resp, err := probeGraphQL(authority, header)
 		if err == nil && resp.Healthy {
 			return resp
 		}
@@ -262,8 +269,8 @@ func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
 	return nil
 }
 
-func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
-	if resp := retryProbeGraphQL(authority); resp != nil {
+func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *ProbeGraphQLResp {
+	if resp := retryProbeGraphQL(authority, header); resp != nil {
 		return resp
 	}
 	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
@@ -273,9 +280,9 @@ func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
 // AssertSchemaUpdateCounterIncrement asserts that the schemaUpdateCounter is greater than the
 // oldCounter, indicating that the GraphQL schema has been updated.
 // If it can't make the assertion with enough retries, it fails the test.
-func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64) {
+func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
 	for i := 0; i < 10; i++ {
-		if RetryProbeGraphQL(t, authority).SchemaUpdateCounter == oldCounter+1 {
+		if RetryProbeGraphQL(t, authority, header).SchemaUpdateCounter == oldCounter+1 {
 			return
 		}
 		time.Sleep(time.Second)
@@ -439,14 +446,14 @@ func AssertUpdateGQLSchemaFailure(t *testing.T, authority, schema string, header
 // fail the test with a fatal error.
 func SafelyUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
+	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
 
 	// update the GraphQL schema
 	gqlSchema := AssertUpdateGQLSchemaSuccess(t, authority, schema, headers)
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter, headers)
 	return gqlSchema
 }
 
@@ -479,9 +486,9 @@ func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema s
 	}
 }
 
-func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
+func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
+	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
 
 	// update the GraphQL schema and assert success
 	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`,
@@ -489,7 +496,7 @@ func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema 
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter, headers)
 }
 
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
@@ -526,9 +533,9 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
-func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
+func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldProbe := retryProbeGraphQL(Alpha1HTTP)
+	oldProbe := retryProbeGraphQL(Alpha1HTTP, headers)
 
 	// then, add the GraphQL schema
 	for {
@@ -551,7 +558,7 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 	// This makes sure that one can make queries as per the new schema.
 	i := 0
 	for ; i < 10; i++ {
-		newProbe := retryProbeGraphQL(Alpha1HTTP)
+		newProbe := retryProbeGraphQL(Alpha1HTTP, headers)
 		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
 			break
 		}
@@ -585,7 +592,7 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	addSchemaAndData(schema, data, client)
+	addSchemaAndData(schema, data, client, nil)
 	if err = d.Close(); err != nil {
 		x.Panic(err)
 	}

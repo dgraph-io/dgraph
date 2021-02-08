@@ -58,15 +58,15 @@ func TestSchemaSubscribe(t *testing.T) {
 		id: ID!
 		name: String!
 	}`
-	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
 
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
 	// reached all the servers.
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, nil)
 
 	introspectionQuery := `
 	query {
@@ -124,9 +124,9 @@ func TestSchemaSubscribe(t *testing.T) {
 	groupThreePreUpdateCounter := groupOnePreUpdateCounter + 1
 	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema, nil)
 
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter, nil)
 
 	expectedResult =
 		`{
@@ -165,6 +165,12 @@ func TestSchemaSubscribe(t *testing.T) {
 // in a dgraph alpha for one group for any namespace, that update should also be propagated to alpha nodes in other
 // groups.
 func TestSchemaSubscribeNamespace(t *testing.T) {
+
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	time.Sleep(2 * time.Second)
+
 	header := http.Header{}
 	header.Set("namespace", "0")
 	header1 := http.Header{}
@@ -176,15 +182,15 @@ func TestSchemaSubscribeNamespace(t *testing.T) {
 		name: String!
 	}`
 
-	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
-	common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, header)
+	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
 	time.Sleep(2 * time.Second)
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
 	// reached all the servers.
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, header)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, header)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, header)
 
 	// Now update schema on an alpha node 1 for namespace 1 and see if other alpha nodes get it.
 	schema1 := `
@@ -196,11 +202,11 @@ func TestSchemaSubscribeNamespace(t *testing.T) {
 	groupThreePreUpdateCounter := groupOnePreUpdateCounter + 1
 	common.CreateNamespace(t, 1)
 	time.Sleep(2 * time.Second)
-	common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema1, header1)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema1, header1)
 	time.Sleep(2 * time.Second)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter, header1)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter, header1)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter, header1)
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupOneHTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupTwoHTTP, header).Schema)
@@ -354,13 +360,13 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
 func TestIntrospectionQueryAfterDropAll(t *testing.T) {
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	// Then, Do the drop_all operation
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	// wait for the schema update to reach the GraphQL layer
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	introspectionQuery := `
 	query{
@@ -388,7 +394,7 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	type A {
 		b: String!
 	}`, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 
 	// now do drop_all
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -396,7 +402,7 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	// need to wait a bit, because the update notification takes time to reach the alpha
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 	// now retrieving the GraphQL schema should report no schema
 	require.Empty(t, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
 
@@ -417,7 +423,7 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 				b: String!
 			}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 
 	// now do drop_data
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -428,7 +434,7 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// otherwise we are anyways gonna get the previous schema from the in-memory schema
 	time.Sleep(5 * time.Second)
 	// drop_data should not increment the schema update counter
-	newCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	newCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	require.Equal(t, oldCounter, newCounter)
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
@@ -604,6 +610,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaNamespace(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	time.Sleep(2 * time.Second)
 
 	header := http.Header{}
 	header.Set("namespace", "0")
@@ -616,7 +626,7 @@ func TestSchemaNamespace(t *testing.T) {
 		name: String!
 	}`
 
-	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema, header)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
 	time.Sleep(5 * time.Second)
 	schema1 := `
 	type ex1 {
@@ -625,7 +635,7 @@ func TestSchemaNamespace(t *testing.T) {
 	}`
 	common.CreateNamespace(t, 2)
 
-	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema1, header1)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema1, header1)
 	time.Sleep(5 * time.Second)
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
@@ -638,6 +648,10 @@ func TestSchemaNamespace(t *testing.T) {
 }
 
 func TestSchemaNamespaceWithData(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	time.Sleep(2 * time.Second)
 
 	header := http.Header{}
 	header.Set("namespace", "0")
@@ -650,12 +664,12 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 		name: String!
 	}`
 
-	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema, header)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
 	time.Sleep(2 * time.Second)
 	common.CreateNamespace(t, 3)
 	time.Sleep(2 * time.Second)
 
-	common.AssertUpdateGQLSchemaSuccess(t, common.Alpha1HTTP, schema, header1)
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header1)
 	time.Sleep(2 * time.Second)
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
