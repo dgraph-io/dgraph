@@ -86,8 +86,9 @@ type authExecutor struct {
 
 	// initial mutation
 	dgQuerySec string
-	json       string
-	uids       string
+	// json is the response of the query following the mutation
+	json string
+	uids string
 
 	// auth
 	authQuery string

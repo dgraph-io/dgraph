@@ -3387,7 +3387,7 @@ func threeLevelDeepMutation(t *testing.T) {
 }
 
 func parallelMutations(t *testing.T) {
-	// Add 100 mutations simultaneously using go routine.
+	// Add 20 mutations simultaneously using go routine.
 	// Only one for each xcode should be added.
 	// Each goroutine adds num different new nodes.
 	executeMutation := func(wg *sync.WaitGroup, num int) {
@@ -3410,8 +3410,8 @@ func parallelMutations(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Nodes to be added per each goroutine
-	num := 20
-	for i := 0; i < 100; i++ {
+	num := 5
+	for i := 0; i < 20; i++ {
 		wg.Add(1)
 		go executeMutation(&wg, num)
 	}

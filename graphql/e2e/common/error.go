@@ -135,7 +135,7 @@ func deepMutationErrors(t *testing.T) {
 		"missing ID and XID": {
 			set: &country{States: []*state{{Name: "NOT A VALID STATE"}}},
 			exp: "couldn't rewrite mutation updateCountry because failed to rewrite" +
-				" mutation payload because XID field xcode cannot be empty",
+				" mutation payload because field xcode cannot be empty",
 		},
 		"ID not valid": {
 			set: &country{States: []*state{{ID: "HI"}}},

@@ -42,11 +42,9 @@ import (
 // to see what the test is actually doing.
 
 type executor struct {
-	// isNew is set to true if the executor is used to mock new mutation rewriter.
-	// In that case, existenceQueriesResp stores JSON response of the existence queries
-	// and is returned for every third Execute call.
+	// existenceQueriesResp stores JSON response of the existence queries in case of Add
+	// or Update mutations and is returned for every third Execute call.
 	// counter is used to count how many times Execute function has been called.
-	isNew                bool
 	existenceQueriesResp string
 	counter              int
 	resp                 string
@@ -90,10 +88,11 @@ type Post {
 }`
 
 func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
-	// In case ex.isNew is set to true, the new mutation rewriter is used. In this case, every call to Execute
+	// In case ex.existenceQueriesResp is non empty, its an Add or an Update mutation. In this case,
+	// every third call to Execute
 	// query is an existence query and existenceQueriesResp is returned.
 	ex.counter++
-	if ex.isNew && ex.counter%3 == 1 {
+	if ex.existenceQueriesResp != "" && ex.counter%3 == 1 {
 		return &dgoapi.Response{
 			Json: []byte(ex.existenceQueriesResp),
 		}, nil
@@ -230,8 +229,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
 				&executor{
-					isNew:                true,
-					existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					result:               tcase.mutQryResp,
@@ -403,8 +401,7 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
-					isNew:                true,
-					existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					failMutation:         2})

@@ -592,7 +592,7 @@
   explanation: "Remove requires an XID or ID"
   error2:
     { "message":
-      "failed to rewrite mutation payload because XID field name cannot be empty" }
+      "failed to rewrite mutation payload because field name cannot be empty" }
 
 -
   name: "Update remove with XID"

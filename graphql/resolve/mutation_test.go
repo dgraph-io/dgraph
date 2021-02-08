@@ -148,10 +148,11 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 		})
 	mut := test.GetMutation(t, op)
 
+	addRewriter := NewAddRewriter()
 	idExistence := make(map[string]string)
 	for n := 0; n < b.N; n++ {
-		NewAddRewriter().RewriteQueries(context.Background(), mut)
-		NewAddRewriter().Rewrite(context.Background(), mut, idExistence)
+		addRewriter.RewriteQueries(context.Background(), mut)
+		addRewriter.Rewrite(context.Background(), mut, idExistence)
 	}
 }
 
@@ -316,94 +317,6 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 		})
 	}
 }
-
-/*
-func updateMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
-	b, err := ioutil.ReadFile(file)
-	require.NoError(t, err, "Unable to read test file")
-
-	var tests []testCase
-	err = yaml.Unmarshal(b, &tests)
-	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
-
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
-
-	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
-		require.Len(t, generated, len(test))
-		for i, expected := range test {
-			require.Equal(t, expected.Cond, generated[i].Cond)
-			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
-				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
-			}
-
-			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
-				require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
-			}
-		}
-	}
-
-	for _, tcase := range tests {
-		t.Run(tcase.Name, func(t *testing.T) {
-			// -- Arrange --
-			var vars map[string]interface{}
-			if tcase.GQLVariables != "" {
-				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
-				require.NoError(t, err)
-			}
-
-			op, err := gqlSchema.Operation(
-				&schema.Request{
-					Query:     tcase.GQLMutation,
-					Variables: vars,
-				})
-			if tcase.ValidationError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tcase.ValidationError.Error(), err.Error())
-				return
-			} else {
-				require.NoError(t, err)
-			}
-			mut := test.GetMutation(t, op)
-
-			rewriterToTest := rewriterFactory()
-
-			// -- Query --
-			queries, err := rewriterToTest.RewriteQueries(context.Background(), mut)
-			// -- Assert --
-			if tcase.Error != nil || err != nil {
-				require.NotNil(t, err)
-				require.NotNil(t, tcase.Error)
-				require.Equal(t, tcase.Error.Error(), err.Error())
-				return
-			}
-			require.Equal(t, tcase.DGQuery, dgraph.AsString(queries))
-
-			// -- Parse qNameToUID map
-			qNameToUID := make(map[string]string)
-			if tcase.QNameToUID != "" {
-				err = json.Unmarshal([]byte(tcase.QNameToUID), &qNameToUID)
-				require.NoError(t, err)
-			}
-
-			// Mutate
-			upsert, err := rewriterToTest.Rewrite(context.Background(), mut, qNameToUID)
-			if tcase.Error2 != nil || err != nil {
-				require.NotNil(t, err)
-				require.NotNil(t, tcase.Error2)
-				require.Equal(t, tcase.Error2.Error(), err.Error())
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, 1, len(upsert))
-			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
-
-			// Compare query generated for updating mutations.
-			dgQuerySec := dgraph.AsString(upsert[0].Query)
-			require.Equal(t, tcase.DGQuerySec, dgQuerySec)
-		})
-	}
-}
-*/
 
 func TestMutationQueryRewriting(t *testing.T) {
 	testTypes := map[string]struct {

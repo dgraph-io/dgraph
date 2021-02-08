@@ -133,8 +133,7 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			isNew:                true,
-			existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
 			queryTouched:         2,
 			mutationTouched:      5,
 		})
@@ -189,8 +188,7 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			isNew:                true,
-			existenceQueriesResp: "{ \"Author1\": [{\"uid\":\"0x1\"}]}",
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
 			queryTouched:         2,
 			mutationTouched:      5,
 		})

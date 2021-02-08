@@ -227,6 +227,9 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 //
 // This query will be executed and depending on the result it would be decided whether
 // to create a new country as part of this mutation or link it to an existing country.
+// If it is found out that there is an existing country, no modifications are made to
+// the country's attributes and its children. Mutations of the country's children are
+// simply ignored.
 // If it is found out that the Person with id 0x123 does not exist, the corresponding
 // mutation will fail.
 func (mrw *AddRewriter) RewriteQueries(
@@ -556,9 +559,6 @@ func (urw *UpdateRewriter) Rewrite(
 			urw.delFrags = append(urw.delFrags, fragment)
 		}
 	}
-
-	// mutationsAll := []*dgoapi.Mutation{}
-	// queries := &gql.GraphQuery{}
 
 	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
@@ -963,7 +963,6 @@ func (drw *deleteRewriter) RewriteQueries(
 	m schema.Mutation) ([]*gql.GraphQuery, error) {
 
 	drw.VarGen = NewVariableGenerator()
-	drw.XidMetadata = NewXidMetadata()
 
 	return []*gql.GraphQuery{}, nil
 }
@@ -1103,7 +1102,21 @@ func checkUIDExistsQuery(
 	return query, nil
 }
 
-func newAsIDReference(
+// asIDReference makes a mutation fragment that resolves a reference to the uid in val.  There's
+// a bit of extra mutation to build if the original mutation contains a reference to
+// another node: e.g it was say adding a Post with:
+// { "title": "...", "author": { "id": "0x123" }, ... }
+// and we'd gotten to here        ^^
+// in rewriteObject with srcField = "author" srcUID = "XYZ"
+// and the schema says that Post.author and Author.Posts are inverses of each other, then we need
+// to make sure that inverse link is added/removed.  We have to make sure the Dgraph upsert
+// mutation ends up like:
+//
+// mutation :
+// { "uid": "XYZ", "title": "...", "author": { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }, ... }
+// asIDReference builds the fragment
+// { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }
+func asIDReference(
 	ctx context.Context,
 	val interface{},
 	srcField schema.FieldDefinition,
@@ -1201,7 +1214,7 @@ func rewriteObject(
 					retErrors = append(retErrors, err)
 					return nil, retErrors
 				} else {
-					return newAsIDReference(ctx, idVal, srcField, srcUID, varGen, isRemove), nil
+					return asIDReference(ctx, idVal, srcField, srcUID, varGen, isRemove), nil
 				}
 			} else {
 				// Reference UID does not exist. This is an error.
@@ -1256,7 +1269,7 @@ func rewriteObject(
 					retErrors = append(retErrors, err)
 					return nil, retErrors
 				} else {
-					return newAsIDReference(ctx, uid, srcField, srcUID, varGen, isRemove), nil
+					return asIDReference(ctx, uid, srcField, srcUID, varGen, isRemove), nil
 				}
 			} else {
 				// Node with XID does not exist. It means this is a new node.
@@ -1287,7 +1300,7 @@ func rewriteObject(
 			//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 			//    with the function.
 			if !isUpdate || !atTopLevel {
-				err := errors.Errorf("XID field %s cannot be empty", xid.Name())
+				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
 				return nil, retErrors
 			}
@@ -1747,50 +1760,6 @@ func checkQueryResult(qry string, yes, no error) resultChecker {
 		return no
 	}
 }
-
-// asIDReference makes a mutation fragment that resolves a reference to the uid in val.  There's
-// a bit of extra mutation to build if the original mutation contains a reference to
-// another node: e.g it was say adding a Post with:
-// { "title": "...", "author": { "id": "0x123" }, ... }
-// and we'd gotten to here        ^^
-// in rewriteObject with srcField = "author" srcUID = "XYZ"
-// and the schema says that Post.author and Author.Posts are inverses of each other, then we need
-// to make sure that inverse link is added/removed.  We have to make sure the Dgraph upsert
-// mutation ends up like:
-//
-// query :
-// Author1 as Author1(func: uid(0x123)) @filter(type(Author)) { uid }
-// condition :
-// len(Author1) > 0
-// mutation :
-// { "uid": "XYZ", "title": "...", "author": { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }, ... }
-// asIDReference builds the fragment
-// { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }
-/*
-func asIDReference
-*/
-
-// asXIDReference makes a mutation fragment that resolves a reference to an XID.  There's
-// a bit of extra mutation to build since if the original mutation contains a reference to
-// another node, e.g it was say adding a Post with:
-// { "title": "...", "author": { "username": "A-user" }, ... }
-// and we'd gotten to here        ^^
-// in rewriteObject with srcField = "author" srcUID = "XYZ"
-// and the schema says that Post.author and Author.Posts are inverses of each other, then we need
-// to make sure that inverse link is added/removed.  We have to make sure the Dgraph upsert
-// mutation ends up like:
-//
-// query :
-// Author1 as Author1(func: eq(username, "A-user")) @filter(type(Author)) { uid }
-// condition :
-// len(Author1) > 0
-// mutation :
-// { "uid": "XYZ", "title": "...", "author": { "id": "uid(Author1)", "posts": ...
-// where asXIDReference builds the fragment
-// { "id": "uid(Author1)", "posts": [ { "uid": "XYZ" } ] }
-/*
-func asXIDReference(
-}*/
 
 // addAdditionalDeletes creates any additional deletes that are needed when a reference changes.
 // E.g. if we have
