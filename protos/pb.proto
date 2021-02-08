@@ -322,8 +322,8 @@ message Proposal {
 }
 
 message CDCState {
-	uint64 sentIndex = 1;
-	uint64 sentTs = 2;
+	uint64 sent_index = 1;
+	uint64 sent_ts    = 2;
 }
 
 message KVS {

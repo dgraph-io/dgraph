@@ -30,16 +30,15 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-const defaultCDCConfig = "enabled=false; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+const defaultCDCConfig = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 const defaultEventTopic = "dgraph-cdc"
 const defaultEventKey = "dgraph-cdc-event"
 
 type CDC struct {
 	sync.Mutex
-	sink               Sink
-	maxRecoveryEntries uint64
-	closer             *z.Closer
-	pendingTxnEvents   map[uint64][]CDCEvent
+	sink             Sink
+	closer           *z.Closer
+	pendingTxnEvents map[uint64][]CDCEvent
 
 	// dont use mutex, use atomic for these
 	seenIndex uint64 // index till which we have read the raft logs.
@@ -55,10 +54,9 @@ func newCDC() *CDC {
 	sink, err := GetSink(cdcFlag)
 	x.Check(err)
 	cdc := &CDC{
-		sink:               sink,
-		maxRecoveryEntries: cdcFlag.GetUint64("max-recovery"),
-		closer:             z.NewCloser(1),
-		pendingTxnEvents:   make(map[uint64][]CDCEvent),
+		sink:             sink,
+		closer:           z.NewCloser(1),
+		pendingTxnEvents: make(map[uint64][]CDCEvent),
 	}
 	return cdc
 }
