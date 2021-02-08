@@ -464,15 +464,9 @@ func setupServer(closer *z.Closer) {
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := r.Header.Get("namespace")
 		r.Header.Set("resolver", namespace)
-		glog.Info("Namespace before parsing", namespace)
-		ns, _ := strconv.ParseUint(namespace, 10, 64)
-		glog.Info("Serving request on /graphql for namespace", ns)
-		if handler := mainServer.HTTPHandler(); handler != nil {
-			handler.ServeHTTP(w, r)
-		} else {
-			glog.Error("No graphQL handler for the given namespace")
-		}
+		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
+
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
