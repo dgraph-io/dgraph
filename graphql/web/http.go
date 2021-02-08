@@ -227,9 +227,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ns := r.Header.Get("namespace")
-	namespace, _ := strconv.ParseUint(ns, 10, 64)
-	ctx = x.AttachNamespace(ctx, namespace)
+	ctx = x.AttachNamespace(ctx, x.ExtractNamespaceHTTP(r))
 	rs := r.Header.Get("resolver")
 	resolver, _ := strconv.ParseUint(rs, 10, 64)
 

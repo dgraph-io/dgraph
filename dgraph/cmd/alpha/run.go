@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -462,8 +461,7 @@ func setupServer(closer *z.Closer) {
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
-		namespace := r.Header.Get("namespace")
-		r.Header.Set("resolver", namespace)
+		r.Header.Set("resolver", r.Header.Get(x.NamespaceHeaderHTTP))
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
@@ -475,9 +473,7 @@ func setupServer(closer *z.Closer) {
 		}
 		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
-		namespace := r.Header.Get("namespace")
-		ns, _ := strconv.ParseUint(namespace, 10, 64)
-		e = globalEpoch[ns]
+		e = globalEpoch[x.ExtractNamespaceHTTP(r)]
 		var counter uint64
 		if e != nil {
 			counter = atomic.LoadUint64(e)

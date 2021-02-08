@@ -127,6 +127,10 @@ const (
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
+
+	// headers used for multi-tenancy namespace
+	NamespaceHeaderGRPC = "namespace"
+	NamespaceHeaderHTTP = "namespace"
 )
 
 var (
@@ -250,12 +254,20 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+// ExtractNamespaceHTTP parse the namespace value from the given HTTP request.
+func ExtractNamespaceHTTP(r *http.Request) uint64 {
+	// let's ignore the error and return the default namespace, i.e. 0.
+	ns, _ := strconv.ParseUint(r.Header.Get(NamespaceHeaderHTTP), 10, 64)
+	return ns
+}
+
+// ExtractNamespace parses the namespace value from the incoming gRPC context.
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return DefaultNamespace
 	}
-	ns := md.Get("namespace")
+	ns := md.Get(NamespaceHeaderGRPC)
 	if len(ns) == 0 {
 		return DefaultNamespace
 	}
@@ -415,7 +427,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	}
 	// ns, _ := strconv.ParseUint(namespace, 64, 10)
 	ns := strconv.FormatUint(namespace, 10)
-	md.Append("namespace", ns)
+	md.Append(NamespaceHeaderGRPC, ns)
 	return metadata.NewIncomingContext(ctx, md)
 }
 

@@ -172,9 +172,9 @@ func TestSchemaSubscribeNamespace(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	header := http.Header{}
-	header.Set("namespace", "0")
+	header.Set(x.NamespaceHeaderHTTP, "0")
 	header1 := http.Header{}
-	header1.Set("namespace", "1")
+	header1.Set(x.NamespaceHeaderHTTP, "1")
 
 	schema := `
 	type Author {
@@ -616,9 +616,9 @@ func TestSchemaNamespace(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	header := http.Header{}
-	header.Set("namespace", "0")
+	header.Set(x.NamespaceHeaderHTTP, "0")
 	header1 := http.Header{}
-	header1.Set("namespace", "2")
+	header1.Set(x.NamespaceHeaderHTTP, "2")
 
 	schema := `
 	type ex {
@@ -654,9 +654,9 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	header := http.Header{}
-	header.Set("namespace", "0")
+	header.Set(x.NamespaceHeaderHTTP, "0")
 	header1 := http.Header{}
-	header1.Set("namespace", "3")
+	header1.Set(x.NamespaceHeaderHTTP, "3")
 
 	schema := `
 	type Author {
