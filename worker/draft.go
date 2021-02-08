@@ -687,6 +687,9 @@ func (n *node) processApplyCh() {
 
 			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
 			// commit ts.
+			// WARNING: This would cause the leader and the follower to diverge in the timestamp
+			// they use to commit the same thing.
+			// TODO: This is broken. We need to find a way to fix this.
 			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
@@ -909,7 +912,8 @@ func (n *node) proposeCDCState(index, ts uint64) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(0, discardN)
+	lastIdx := x.Min(n.Applied.DoneUntil(), n.cdcTracker.getSeenIndex())
+	snap, err := n.calculateSnapshot(0, lastIdx, discardN)
 	if err != nil {
 		return err
 	}
@@ -956,7 +960,7 @@ func (n *node) updateRaftProgress() error {
 	// stored applied.
 	applied := n.Store.Uint(raftwal.CheckpointIndex)
 
-	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	snap, err := n.calculateSnapshot(applied, n.Applied.DoneUntil(), 3) // 3 is a randomly chosen small number.
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
@@ -1517,7 +1521,7 @@ func (n *node) abortOldTransactions() {
 // This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
 // This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
 // until that last checkpoint) that we can use as a new start point for the snapshot calculation.
-func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+func (n *node) calculateSnapshot(startIdx, lastIdx uint64, discardN int) (*pb.Snapshot, error) {
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
@@ -1553,7 +1557,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
-	last := x.Min(n.Applied.DoneUntil(), n.cdcTracker.getSeenIndex())
+	last := lastIdx
 	if int(last-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
@@ -1575,6 +1579,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
+	// TODO: This should be passed in as well.
 	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64

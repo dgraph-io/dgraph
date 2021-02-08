@@ -34,14 +34,30 @@ const defaultCDCConfig = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; c
 const defaultEventTopic = "dgraph-cdc"
 const defaultEventKey = "dgraph-cdc-event"
 
+// CDC struct is being used to send out change data capture events. There are two ways to do this:
+// 1. Use Badger Subscribe.
+// 2. Use Raft WAL.
+// We chose to go with Raft WAL because in case we lose connection to the sink (say Kafka), we can
+// resume from the last sent event and ensure there's continuity in event sending. Note the events
+// would sent in the same order as they're being committed.
+// With Badger Subscribe, if we lose the connection, we would have no way to send over the "missed"
+// events. Even if we scan over Badger, we'd still not get those events in the right order, i.e.
+// order of their commit timestamp. So, this approach would be tricky to get right.
+//
+// Now, with ludicrous mode, Raft WAL does not help as well. It does NOT contain the commit
+// timestamps. So, for now we're going to not support it.
 type CDC struct {
 	sync.Mutex
 	sink             Sink
 	closer           *z.Closer
 	pendingTxnEvents map[uint64][]CDCEvent
 
-	// dont use mutex, use atomic for these
-	seenIndex uint64 // index till which we have read the raft logs.
+	// dont use mutex, use atomic for the following.
+
+	// seenIndex is the Raft index till which we have read the raft logs, and
+	// put the events in our pendingTxnEvents. This does NOT mean that we have
+	// sent them yet.
+	seenIndex uint64
 	sentTs    uint64 // max commit ts for which we have send the events.
 }
 
@@ -188,6 +204,7 @@ func (cdc *CDC) processCDCEvents() {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
 		cdcIndex := x.Max(atomic.LoadUint64(&cdc.seenIndex)+1, first)
+
 		last := groups().Node.Applied.DoneUntil()
 		if cdcIndex == last {
 			return nil
@@ -223,6 +240,9 @@ func (cdc *CDC) processCDCEvents() {
 					// In ludicrous, we send the events as soon as we get it.
 					// We won't wait for oracle delta in case of ludicrous mode
 					// since all mutations will eventually succeed.
+					// TODO: We should get a confirmation from ludicrous scheduler about this.
+					// It should tell you what the commit ts used was.
+					// TODO: For now, do NOT support ludicrous mode.
 					if x.WorkerConfig.LudicrousMode {
 						if err := sendEvents(events, 0); err != nil {
 							return errors.Wrapf(err, "unable to send messages")
