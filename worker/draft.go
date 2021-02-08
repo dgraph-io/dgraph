@@ -636,6 +636,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 				{StartTs: ts, CommitTs: ts},
 			},
 		})
+	case proposal.CdcState != nil:
+		n.cdcTracker.updateCDCState(proposal.CdcState)
+		return nil
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
@@ -888,6 +891,20 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	groups().triggerMembershipSync()
 	return nil
+}
+
+func (n *node) proposeCDCState(ts uint64) error {
+	proposal := &pb.Proposal{
+		CdcState: &pb.CDCState{
+			SentTs: ts,
+		},
+	}
+	glog.V(2).Infof("Proposing new CDC state ts: %d\n", ts)
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
+	x.Check(err)
+	return n.Raft().Propose(n.ctx, data)
 }
 
 func (n *node) proposeSnapshot(discardN int) error {

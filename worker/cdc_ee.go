@@ -31,7 +31,7 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-const defaultCDCConfig = "enabled=false; max_recovery=10000; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+const defaultCDCConfig = "enabled=false; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 const defaultEventTopic = "dgraph-cdc"
 const defaultEventKey = "dgraph-cdc-event"
 
@@ -42,8 +42,9 @@ type CDC struct {
 	closer             *z.Closer
 	pendingTxnEvents   map[uint64][]CDCEvent
 
-	// dont use mutex, use atomic for this
-	seenIndex uint64
+	// dont use mutex, use atomic for these
+	seenIndex uint64 // index till which we have read the raft logs.
+	sentTs    uint64 // max commit ts for which we have send the events.
 }
 
 func newCDC() *CDC {
@@ -103,6 +104,17 @@ func (cdc *CDC) deleteEventsAndUpdateIndex(ts uint64, index uint64) {
 	atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.seenIndex), index))
 }
 
+func (cdc *CDC) updateCDCState(state *pb.CDCState) {
+	if cdc == nil {
+		return
+	}
+	ts := atomic.LoadUint64(&cdc.sentTs)
+	if ts >= state.SentTs {
+		return
+	}
+	atomic.CompareAndSwapUint64(&cdc.sentTs, ts, state.SentTs)
+}
+
 func (cdc *CDC) Close() {
 	if cdc == nil {
 		return
@@ -120,13 +132,14 @@ func (cdc *CDC) processCDCEvents() {
 
 	var batch []SinkMessage
 
-	flushEvents := func() error {
+	flushEvents := func(ts *pb.TxnStatus) error {
 		if err := cdc.sink.Send(batch); err != nil {
 			glog.Errorf("error while sending cdc event to sink %+v", err)
 			batch = batch[:0]
 			return err
 		}
 		// We successfully sent messages to sink.
+		atomic.StoreUint64(&cdc.sentTs, ts.CommitTs)
 		batch = batch[:0]
 		return nil
 	}
@@ -154,7 +167,7 @@ func (cdc *CDC) processCDCEvents() {
 		//	return flushEvents()
 		//}
 		//return nil
-		return flushEvents()
+		return flushEvents(ts)
 	}
 
 	// This will always run on leader node only.
@@ -169,14 +182,6 @@ func (cdc *CDC) processCDCEvents() {
 		last := groups().Node.Applied.DoneUntil()
 		if cdcIndex == last {
 			return nil
-		}
-
-		// if cdc is lagging behind the current via maxRecoveryEntries,
-		// skip ahead the index to prevent uncontrolled growth of raft logs.
-		if uint64(len(cdc.pendingTxnEvents)) > cdc.maxRecoveryEntries {
-			atomic.StoreUint64(&cdc.seenIndex, last)
-			cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
-			return errors.New("too many pending CDC events. Dropping events.")
 		}
 
 		for batchFirst := cdcIndex; batchFirst <= last; {
@@ -221,7 +226,8 @@ func (cdc *CDC) processCDCEvents() {
 
 				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						if ts.CommitTs > 0 {
+						// this ensures we dont send events again in case of membership changes
+						if ts.CommitTs > 0 && atomic.LoadUint64(&cdc.sentTs) < ts.CommitTs {
 							events := cdc.pendingTxnEvents[ts.StartTs]
 							if err := sendEvents(events, ts); err != nil {
 								return errors.Wrapf(err, "unable to send messages to sink")
@@ -253,13 +259,18 @@ func (cdc *CDC) processCDCEvents() {
 				err := checkAndSendCDCEvents()
 				if err != nil {
 					glog.Errorf("unable to send events %+v", err)
-					//batch = batch[:0]
 				}
 			}
 		case <-slowTick.C:
-			cdc.Lock()
-			glog.Infoln("pending event size is ", len(cdc.pendingTxnEvents))
-			cdc.Unlock()
+			if groups().Node.AmLeader() && EnterpriseEnabled() {
+				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
+					glog.Errorf("unable to send events %+v", err)
+				}
+				// todo remove this
+				cdc.Lock()
+				glog.Infoln("pending event size is ", len(cdc.pendingTxnEvents))
+				cdc.Unlock()
+			}
 		}
 	}
 }
@@ -271,8 +282,8 @@ type CDCEvent struct {
 }
 
 type EventMeta struct {
-	RaftIndex uint64 `json:"raft_index"`
-	StartTs   uint64 `json:"start_ts"`
+	RaftIndex uint64 `json:"-"`
+	StartTs   uint64 `json:"-"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
