@@ -122,6 +122,7 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 }
 
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
 
 	// Namespace creation is only allowed by the guardians of the galaxy group.
@@ -143,8 +144,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	glog.V(2).Info("Applied initial types and schema for new namespace")
-	if err = worker.WaitForIndexingOrCtxError(ctx, true); err != nil {
+	if err = worker.WaitForIndexing(ctx, true); err != nil {
 		return 0, errors.Wrap(err, "While creating namespace got error")
 	}
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
@@ -156,6 +156,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
+	ctx = x.AttachJWTNamespace(ctx)
 	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
 		return errors.Wrapf(err, "While deleting namespace got error: %s")
 	}
@@ -548,7 +549,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+	if err = worker.WaitForIndexing(ctx, !op.RunInBackground); err != nil {
 		return empty, err
 	}
 

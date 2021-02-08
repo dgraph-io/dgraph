@@ -143,9 +143,9 @@ var (
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
-	GuardiansUid sync.Map
+	GuardiansUid = &sync.Map{}
 	// GrootUser Uid is a map from namespace to the Uid of groot user node.
-	GrootUid sync.Map
+	GrootUid = &sync.Map{}
 )
 
 func init() {
@@ -268,11 +268,11 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		panic("No metadata in context")
+		glog.Fatal("No metadata in the context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		return GalaxyNamespace
+		glog.Fatal("No namespace in the metadata of context")
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
