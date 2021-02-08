@@ -220,7 +220,8 @@ func runRestoreCmd() error {
 			return err
 		}
 
-		leaseIDs := func(val uint64, typ pb.NumLeaseType) error {
+		leaseID := func(val uint64, typ pb.NumLeaseType) error {
+			// MaxLeaseUid can be zero if the backup was taken on an empty DB.
 			if val == 0 {
 				return nil
 			}
@@ -228,15 +229,16 @@ func runRestoreCmd() error {
 			defer cancel()
 			if _, err = zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ}); err != nil {
 				fmt.Printf("Failed to assign %s %d in Zero: %v\n",
-					pb.NumLeaseType_name[typ], val, err)
+					pb.NumLeaseType_name[int32(typ)], val, err)
 				return err
 			}
+			return nil
 		}
 
-		if err := leaseIDs(result.MaxLeaseUid, pb.Num_UID); err != nil {
+		if err := leaseID(result.MaxLeaseUid, pb.Num_UID); err != nil {
 			return err
 		}
-		if err := leaseIDs(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
+		if err := leaseID(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
 			return err
 		}
 	}

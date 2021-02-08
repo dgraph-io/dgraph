@@ -368,7 +368,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			}
 
 			zc := pb.NewZeroClient(pl.Get())
-			leaseIDs := func(val uint64, typ pb.NumLeaseType) error {
+			leaseID := func(val uint64, typ pb.NumLeaseType) error {
 				if val == 0 {
 					return nil
 				}
@@ -376,10 +376,10 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return err
 			}
 
-			if err := leaseIDs(maxUid, pb.Num_UID); err != nil {
+			if err := leaseID(maxUid, pb.Num_UID); err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
-			if err := leaseIDs(maxNsId, pb.Num_NS_ID); err != nil {
+			if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
 			}
 
