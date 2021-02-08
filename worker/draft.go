@@ -612,9 +612,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
-	case proposal.CdcTs > 0:
-		n.cdcTracker.updateTs(proposal.CdcTs)
-		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
@@ -891,22 +888,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	}
 	groups().triggerMembershipSync()
 	return nil
-}
-
-func (n *node) proposeCDCTs(minTs uint64) error {
-	// in case of ludicrous mode it could be zero. no need to send it
-	if minTs == 0 {
-		return nil
-	}
-
-	proposal := &pb.Proposal{
-		CdcTs: minTs,
-	}
-	data := make([]byte, 8+proposal.Size())
-	sz, err := proposal.MarshalToSizedBuffer(data[8:])
-	data = data[:8+sz]
-	x.Check(err)
-	return n.Raft().Propose(n.ctx, data)
 }
 
 func (n *node) proposeSnapshot(discardN int) error {

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"math"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,17 +32,18 @@ import (
 )
 
 const defaultCDCConfig = "enabled=false; max_recovery=10000; file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+const defaultEventTopic = "dgraph-cdc"
+const defaultEventKey = "dgraph-cdc-event"
 
 type CDC struct {
+	sync.Mutex
 	sink               Sink
 	maxRecoveryEntries uint64
 	closer             *z.Closer
 	pendingTxnEvents   map[uint64][]CDCEvent
 
+	// dont use mutex, use atomic for this
 	seenIndex uint64
-	// startTs is the timestamp till which we have send the event of txns.
-	// There will be no event below this timestamp for which we need to send the events
-	startTs uint64
 }
 
 func newCDC() *CDC {
@@ -62,33 +64,43 @@ func newCDC() *CDC {
 }
 
 func (cdc *CDC) getSeenIndex() uint64 {
-	// TODO: Fill this in.
-	return math.MaxUint64
+	if cdc == nil {
+		return math.MaxUint64
+	}
+	return atomic.LoadUint64(&cdc.seenIndex)
 }
 
 func (cdc *CDC) getTs() uint64 {
 	if cdc == nil {
 		return math.MaxUint64
 	}
-	// TODO: Check if this would work with ludicrous mode.
+	cdc.Lock()
+	defer cdc.Unlock()
 	min := uint64(math.MaxUint64)
 	for startTs := range cdc.pendingTxnEvents {
 		min = x.Min(min, startTs)
 	}
 	return min
-	// return atomic.LoadUint64(&cdc.startTs)
 }
 
-func (cdc *CDC) updateTs(newTs uint64) {
+func (cdc *CDC) addEventsAndUpdateIndex(ts uint64, index uint64, events []CDCEvent) {
 	if cdc == nil {
 		return
 	}
-	// current cdc read ts is larger than the proposed newts. Skip this
-	ts := cdc.getTs()
-	if ts >= newTs {
+	cdc.Lock()
+	cdc.pendingTxnEvents[ts] = append(cdc.pendingTxnEvents[ts], events...)
+	cdc.Unlock()
+	atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.seenIndex), index))
+}
+
+func (cdc *CDC) deleteEventsAndUpdateIndex(ts uint64, index uint64) {
+	if cdc == nil {
 		return
 	}
-	atomic.CompareAndSwapUint64(&cdc.startTs, ts, newTs)
+	cdc.Lock()
+	delete(cdc.pendingTxnEvents, ts)
+	cdc.Unlock()
+	atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.seenIndex), index))
 }
 
 func (cdc *CDC) Close() {
@@ -106,18 +118,16 @@ func (cdc *CDC) processCDCEvents() {
 		return
 	}
 
-	var startTs, startIndex uint64
 	var batch []SinkMessage
 
 	flushEvents := func() error {
 		if err := cdc.sink.Send(batch); err != nil {
 			glog.Errorf("error while sending cdc event to sink %+v", err)
+			batch = batch[:0]
 			return err
 		}
 		// We successfully sent messages to sink.
 		batch = batch[:0]
-		cdc.updateTs(startTs)
-		cdc.seenIndex = x.Max(cdc.seenIndex, startIndex)
 		return nil
 	}
 
@@ -128,25 +138,23 @@ func (cdc *CDC) processCDCEvents() {
 		}
 
 		for _, e := range pending {
-			// add commit timestamp here
-			startTs = x.Max(startTs, e.Meta.StartTs)
-			startIndex = x.Max(startIndex, e.Meta.RaftIndex)
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
 			// todo(aman bansal): use namespace for key.
 			batch = append(batch, SinkMessage{
 				Meta: SinkMeta{
-					Topic: "dgraph-cdc",
+					Topic: defaultEventTopic,
 				},
-				Key:   []byte("dgraph-cdc-event"),
+				Key:   []byte(defaultEventKey),
 				Value: b,
 			})
 		}
-		if len(batch) > 1000 {
-			return flushEvents()
-		}
-		return nil
+		//if len(batch) > 1000 {
+		//	return flushEvents()
+		//}
+		//return nil
+		return flushEvents()
 	}
 
 	// This will always run on leader node only.
@@ -157,7 +165,7 @@ func (cdc *CDC) processCDCEvents() {
 	checkAndSendCDCEvents := func() error {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
-		cdcIndex := x.Max(cdc.seenIndex, first)
+		cdcIndex := x.Max(atomic.LoadUint64(&cdc.seenIndex)+1, first)
 		last := groups().Node.Applied.DoneUntil()
 		if cdcIndex == last {
 			return nil
@@ -166,24 +174,19 @@ func (cdc *CDC) processCDCEvents() {
 		// if cdc is lagging behind the current via maxRecoveryEntries,
 		// skip ahead the index to prevent uncontrolled growth of raft logs.
 		if uint64(len(cdc.pendingTxnEvents)) > cdc.maxRecoveryEntries {
-			cdc.updateTs(posting.Oracle().MaxAssigned())
-			cdc.seenIndex = last
+			atomic.StoreUint64(&cdc.seenIndex, last)
 			cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
 			return errors.New("too many pending CDC events. Dropping events.")
 		}
 
-		startTs := cdc.getTs()
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			if err != nil {
 				return errors.Wrapf(err, "while retrieving entries from Raft")
 			}
-			x.Check(err)
-			// Exit early from the loop if no entries were found.
 			if len(entries) == 0 {
 				return nil
 			}
-
 			batchFirst = entries[len(entries)-1].Index + 1
 			for _, entry := range entries {
 				if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
@@ -195,11 +198,8 @@ func (cdc *CDC) processCDCEvents() {
 					glog.Warningf("CDC: unmarshal failed with error %v. Ignoring.", err)
 					continue
 				}
-				// this is to ensure that cdcTs will be monotonically increasing
-				// In this way no min pending txn in case we skip some entries can affect
-				// the sentTs to decrease. This way we will be able to provide guarantees
-				// across the cluster in case of failures.
-				if proposal.Mutations != nil && proposal.Mutations.StartTs > startTs {
+
+				if proposal.Mutations != nil {
 					events := toCDCEvent(entry.Index, proposal.Mutations)
 					if len(events) == 0 {
 						continue
@@ -212,10 +212,11 @@ func (cdc *CDC) processCDCEvents() {
 						if err := sendEvents(events, nil); err != nil {
 							return errors.Wrapf(err, "unable to send messages")
 						}
+						atomic.StoreUint64(&cdc.seenIndex, x.Max(atomic.LoadUint64(&cdc.
+							seenIndex), entry.Index))
 						continue
 					}
-					cdc.pendingTxnEvents[proposal.Mutations.StartTs] =
-						append(cdc.pendingTxnEvents[proposal.Mutations.StartTs], events...)
+					cdc.addEventsAndUpdateIndex(proposal.Mutations.StartTs, entry.Index, events)
 				}
 
 				if proposal.Delta != nil {
@@ -227,57 +228,40 @@ func (cdc *CDC) processCDCEvents() {
 							}
 						}
 						// delete from pending events once events are sent
-						delete(cdc.pendingTxnEvents, ts.StartTs)
-						cdc.evaluateAndSetTs()
+						cdc.deleteEventsAndUpdateIndex(ts.StartTs, entry.Index)
 					}
 				}
-				cdc.seenIndex = entry.Index
 			}
 		}
+
+		//if err := flushEvents(); err != nil {
+		//	return errors.Wrapf(err, "unable to flush messages to sink")
+		//}
 		return nil
 	}
 
 	eventTick := time.NewTicker(time.Second)
-	proposalTick := time.NewTicker(time.Minute)
+	slowTick := time.NewTicker(time.Minute)
 	defer cdc.closer.Done()
 	defer eventTick.Stop()
-	defer proposalTick.Stop()
 	for {
 		select {
 		case <-cdc.closer.HasBeenClosed():
 			return
 		case <-eventTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				checkAndSendCDCEvents()
-			}
-		case <-proposalTick.C:
-			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				ts := cdc.getTs()
-				glog.V(2).Infof("proposing CDC sentTs %d", ts)
-				if err := groups().Node.proposeCDCTs(ts); err != nil {
-					glog.Errorf("not able to propose cdc sentTs %v", err)
+				err := checkAndSendCDCEvents()
+				if err != nil {
+					glog.Errorf("unable to send events %+v", err)
+					//batch = batch[:0]
 				}
 			}
+		case <-slowTick.C:
+			cdc.Lock()
+			glog.Infoln("pending event size is ", len(cdc.pendingTxnEvents))
+			cdc.Unlock()
 		}
 	}
-}
-
-// evaluateAndSetTs finds the sentTs we have pending events for.
-// we can't send MaxUint64 as the response because when proposed,
-// it will nullify the state of cdc in the cluster,
-// thus making followers to clear raft logs between next proposal.
-// In this way we can loose some events.
-func (cdc *CDC) evaluateAndSetTs() {
-	if cdc == nil || x.WorkerConfig.LudicrousMode {
-		return
-	}
-	min := cdc.maxSentTs
-	for ts := range cdc.pendingTxnEvents {
-		if ts < min {
-			min = ts
-		}
-	}
-	cdc.updateTs(min)
 }
 
 type CDCEvent struct {
@@ -306,6 +290,12 @@ type DropEvent struct {
 	Pred      string `json:"pred"`
 }
 
+const (
+	EventTypeDrop     = "DROP"
+	EventTypeMutation = "MUTATION"
+	DropEventOpPred   = "PREDICATE"
+)
+
 func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// we are skipping schema updates for now.
 	if len(mutation.Schema) > 0 || len(mutation.Types) > 0 {
@@ -316,7 +306,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	if mutation.DropOp != pb.Mutations_NONE {
 		return []CDCEvent{
 			{
-				EventType: "DROP",
+				EventType: EventTypeDrop,
 				Event: &DropEvent{
 					Operation: mutation.DropOp.String(),
 					Type:      mutation.DropValue,
@@ -336,9 +326,9 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
 				{
-					EventType: "DROP",
+					EventType: EventTypeDrop,
 					Event: &DropEvent{
-						Operation: "PREDICATE",
+						Operation: DropEventOpPred,
 						Pred:      edge.Attr,
 					},
 					Meta: &EventMeta{
@@ -365,7 +355,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 				RaftIndex: index,
 				StartTs:   mutation.StartTs,
 			},
-			EventType: "MUTATION",
+			EventType: EventTypeMutation,
 			Event: &MutationEvent{
 				MutationType:  edge.Op.String(),
 				Uid:           edge.Entity,
@@ -380,7 +370,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 }
 
 func skipAttribute(attr string) bool {
-	if strings.HasPrefix(attr, "dgraph") {
+	if strings.HasPrefix(attr, "dgraph.") {
 		return true
 	}
 	return false
