@@ -570,7 +570,9 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-		x.Check2(buf.WriteString(" attr: " + pk.Attr))
+		ns, attr := x.ParseNamespaceAttr(pk.Attr)
+		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
+		x.Check2(buf.WriteString(" attr: " + attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}

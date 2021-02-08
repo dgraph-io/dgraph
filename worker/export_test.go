@@ -73,24 +73,30 @@ var personType = &pb.TypeUpdate{
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
-		`<1> <friend> <5> <author0> .`,
-		`<2> <friend> <5> <author0> .`,
+		`<1> <friend> <5> .`,
+		`<2> <friend> <5> .`,
 		`<3> <friend> <5> .`,
-		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,` +
+		`<4> <friend> <5> (since=2005-05-02T15:04:05,close=true,` +
 			`age=33,game="football",poem="roses are red\nviolets are blue") .`,
-		`<1> <name> "pho\ton\u0000" <author0> .`,
-		`<2> <name> "pho\ton"@en <author0> .`,
+		`<1> <name> "pho\ton\u0000" .`,
+		`<2> <name> "pho\ton"@en .`,
 		`<3> <name> "First Line\nSecondLine" .`,
-		"<1> <friend_not_served> <5> <author0> .",
+		"<1> <friend_not_served> <5> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 		`<7> <name> "node_to_delete" .`,
 		fmt.Sprintf("<8> <dgraph.graphql.schema> \"%s\" .", gqlSchema),
 		`<8> <dgraph.graphql.xid> "dgraph.graphql.schema" .`,
 		`<8> <dgraph.type> "dgraph.graphql" .`,
+		`<9> <name> "ns2" <0x2> .`,
+		`<10> <name> "ns2_node_to_delete" <0x2> .`,
 	}
 	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
-	edgeToDelete := `<7> <name> "node_to_delete" .`
+	edgesToDelete := []string{
+		`<7> <name> "node_to_delete" .`,
+		`<10> <name> "ns2_node_to_delete" <0x2> .`,
+	}
+
 	idMap := map[string]uint64{
 		"1": 1,
 		"2": 2,
@@ -109,7 +115,7 @@ func populateGraphExport(t *testing.T) {
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
-		e.Attr = testutil.DefaultNamespaceAttr(e.Attr)
+		e.Attr = x.NamespaceAttr(nq.Namespace, e.Attr)
 		require.NoError(t, err)
 		if set {
 			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
@@ -121,7 +127,9 @@ func populateGraphExport(t *testing.T) {
 	for _, edge := range rdfEdges {
 		processEdge(edge, true)
 	}
-	processEdge(edgeToDelete, false)
+	for _, edge := range edgesToDelete {
+		processEdge(edge, false)
+	}
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
@@ -228,6 +236,7 @@ func TestExportRdf(t *testing.T) {
 	initTestExport(t, `
 		name: string @index(exact) .
 		age: int .
+		[0x2] name: string @index(exact) .
 		`)
 
 	bdir, err := ioutil.TempDir("", "export")
@@ -241,7 +250,8 @@ func TestExportRdf(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	files, err := export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
+	files, err := export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1,
+		Namespace: math.MaxUint64, Format: "rdf"})
 	require.NoError(t, err)
 
 	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
@@ -261,7 +271,7 @@ func TestExportRdf(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := chunker.ParseRDF(scanner.Text(), l)
 		require.NoError(t, err)
-		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
+		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6", "0x9"}, nq.Subject)
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "0x1", "0x2":
@@ -276,6 +286,8 @@ func TestExportRdf(t *testing.T) {
 			case "0x6":
 				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" <0x0> .`,
 					scanner.Text())
+			case "0x9":
+				require.Equal(t, `<0x9> <name> "ns2" <0x2> .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -326,7 +338,8 @@ func TestExportRdf(t *testing.T) {
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, `name: string @index(exact) .`)
+	initTestExport(t, `name: string @index(exact) .
+				 [0x2] name: string @index(exact) .`)
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -365,7 +378,8 @@ func TestExportJson(t *testing.T) {
 		{"uid":"0x3","namespace":"0x0","friend":[{"uid":"0x5"}]},
 		{"uid":"0x4","namespace":"0x0","friend":[{"uid":"0x5"}],"friend|age":33,
 			"friend|close":"true","friend|game":"football",
-			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
+			"friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"},
+		{"uid":"0x9","namespace":"0x2","name":"ns2"}
 	]
 	`
 	gotJson, err := ioutil.ReadAll(r)
@@ -441,7 +455,6 @@ type skv struct {
 	schema pb.SchemaUpdate
 }
 
-// TODO(Naman): Update this test according to namespace format.
 func TestToSchema(t *testing.T) {
 	testCases := []struct {
 		skv      *skv

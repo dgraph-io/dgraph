@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -24,7 +25,7 @@ func resolveCreateNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": req.NamespaceId,
+			"namespaceId": json.Number(strconv.Itoa(req.NamespaceId)),
 			"message":     "Created namespace successfully",
 		}},
 		nil,
@@ -42,7 +43,7 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): map[string]interface{}{
-			"namespaceId": req.NamespaceId,
+			"namespaceId": json.Number(strconv.Itoa(req.NamespaceId)),
 			"message":     "Deleted namespace successfully",
 		}},
 		nil,

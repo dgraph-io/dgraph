@@ -116,11 +116,11 @@ var emptyEdge pb.DirectedEdge
 
 func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
-		Entity: subjectUid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Facets: nq.Facets,
+		Entity:    subjectUid,
+		Attr:      nq.Predicate,
+		Namespace: nq.Namespace,
+		Lang:      nq.Lang,
+		Facets:    nq.Facets,
 	}
 }
 
@@ -132,7 +132,7 @@ func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedE
 	return out
 }
 
-// CreateValueEdge returns a DirectedEdge with the given subject. The predicate, label,
+// CreateValueEdge returns a DirectedEdge with the given subject. The predicate,
 // language, and facet values are derived from the NQuad.
 func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	var err error
@@ -154,12 +154,12 @@ func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 	out := &pb.DirectedEdge{
 		// This along with edge.ObjectValue == x.Star would indicate
 		// that we want to delete the predicate.
-		Entity: 0,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Facets: nq.Facets,
-		Op:     pb.DirectedEdge_DEL,
+		Entity:    0,
+		Attr:      nq.Predicate,
+		Namespace: nq.Namespace,
+		Lang:      nq.Lang,
+		Facets:    nq.Facets,
+		Op:        pb.DirectedEdge_DEL,
 	}
 
 	if err := copyValue(out, nq); err != nil {
