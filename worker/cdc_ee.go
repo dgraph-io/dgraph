@@ -16,7 +16,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -153,24 +152,19 @@ func (cdc *CDC) processCDCEvents() {
 
 	var batch []SinkMessage
 
-	flushEvents := func(ts *pb.TxnStatus) error {
+	flushEvents := func(commitTs uint64) error {
 		if err := cdc.sink.Send(batch); err != nil {
 			glog.Errorf("error while sending cdc event to sink %+v", err)
 			batch = batch[:0]
 			return err
 		}
 		// We successfully sent messages to sink.
-		atomic.StoreUint64(&cdc.sentTs, ts.CommitTs)
+		atomic.StoreUint64(&cdc.sentTs, commitTs)
 		batch = batch[:0]
 		return nil
 	}
 
-	sendEvents := func(pending []CDCEvent, ts *pb.TxnStatus) error {
-		var commitTs uint64 = 0
-		if ts != nil {
-			commitTs = ts.CommitTs
-		}
-
+	sendEvents := func(pending []CDCEvent, commitTs uint64) error {
 		for _, e := range pending {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
@@ -188,7 +182,7 @@ func (cdc *CDC) processCDCEvents() {
 		//	return flushEvents()
 		//}
 		//return nil
-		return flushEvents(ts)
+		return flushEvents(commitTs)
 	}
 
 	// This will always run on leader node only. For default mode,
@@ -200,7 +194,7 @@ func (cdc *CDC) processCDCEvents() {
 	// new leader will know which new events are to be sent.
 	//
 	// In case of ludicrous mode, this has been achieved using seenIndex.
-	// We sent the events to the sink as soon as we get the proposal.Mutation
+	// We send the events to the sink as soon as we get the proposal.Mutation
 	// in ludicrous mode. Hence, this job will manage seenIndex across the cluster
 	// to manage from which index we have to send the events.
 	checkAndSendCDCEvents := func() error {
@@ -215,7 +209,9 @@ func (cdc *CDC) processCDCEvents() {
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			if err != nil {
-				return errors.Wrapf(err, "while retrieving entries from Raft")
+				return errors.Wrapf(err,
+					"CDC: failed to retrieve entries from Raft. Start: %d End: %d",
+					batchFirst, last+1)
 			}
 			if len(entries) == 0 {
 				return nil
@@ -237,12 +233,11 @@ func (cdc *CDC) processCDCEvents() {
 					if len(events) == 0 {
 						continue
 					}
-					// In ludicrous events send the events as soon as you get it.
-					// We wont wait for oracle delta in case of ludicrous mode.
-					// Since all mutations will eventually succeed.
-					// We can set the read ts here only.
+					// In ludicrous, we send the events as soon as we get it.
+					// We won't wait for oracle delta in case of ludicrous mode
+					// since all mutations will eventually succeed.
 					if x.WorkerConfig.LudicrousMode {
-						if err := sendEvents(events, nil); err != nil {
+						if err := sendEvents(events, 0); err != nil {
 							return errors.Wrapf(err, "unable to send messages")
 						}
 						cdc.updateSeenIndex(entry.Index)
@@ -253,14 +248,14 @@ func (cdc *CDC) processCDCEvents() {
 
 				if proposal.Delta != nil {
 					for _, ts := range proposal.Delta.Txns {
-						// this ensures we dont send events again in case of membership changes
+						// This ensures we dont send events again in case of membership changes.
 						if ts.CommitTs > 0 && atomic.LoadUint64(&cdc.sentTs) < ts.CommitTs {
 							events := cdc.pendingTxnEvents[ts.StartTs]
-							if err := sendEvents(events, ts); err != nil {
+							if err := sendEvents(events, ts.CommitTs); err != nil {
 								return errors.Wrapf(err, "unable to send messages to sink")
 							}
 						}
-						// delete from pending events once events are sent
+						// Delete from pending events once events are sent.
 						cdc.deleteEventsAndUpdateIndex(ts.StartTs, entry.Index)
 					}
 				}
@@ -284,8 +279,7 @@ func (cdc *CDC) processCDCEvents() {
 			return
 		case <-jobTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				err := checkAndSendCDCEvents()
-				if err != nil {
+				if err := checkAndSendCDCEvents(); err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
 			}
@@ -329,16 +323,16 @@ type DropEvent struct {
 const (
 	EventTypeDrop     = "DROP"
 	EventTypeMutation = "MUTATION"
-	DropEventOpPred   = "PREDICATE"
+	OpDropPred        = "PREDICATE"
 )
 
 func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
-	// we are skipping schema updates for now.
+	// todo(Aman): we are skipping schema updates for now. Fix this later.
 	if len(mutation.Schema) > 0 || len(mutation.Types) > 0 {
 		return nil
 	}
 
-	// if drop operation
+	// If drop operation
 	if mutation.DropOp != pb.Mutations_NONE {
 		return []CDCEvent{
 			{
@@ -356,15 +350,16 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 
 	cdcEvents := make([]CDCEvent, 0)
 	for _, edge := range mutation.Edges {
-		if skipAttribute(edge.Attr) {
+		if x.IsReservedPredicate(edge.Attr) {
 			continue
 		}
+		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
 				{
 					EventType: EventTypeDrop,
 					Event: &DropEvent{
-						Operation: DropEventOpPred,
+						Operation: OpDropPred,
 						Pred:      edge.Attr,
 					},
 					Meta: &EventMeta{
@@ -403,11 +398,4 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	return cdcEvents
-}
-
-func skipAttribute(attr string) bool {
-	if strings.HasPrefix(attr, "dgraph.") {
-		return true
-	}
-	return false
 }
