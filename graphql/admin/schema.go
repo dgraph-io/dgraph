@@ -109,7 +109,8 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 	x.Check2(buf.WriteString(`{ "`))
 	x.Check2(buf.WriteString(field.Name()))
 
-	if gql.ID == "" {
+	// Its possible that there is no schema for the namespace in which case gql would be nil.
+	if gql == nil || gql.ID == "" {
 		x.Check2(buf.WriteString(`": null }`))
 		return buf.Bytes(), nil
 	}
