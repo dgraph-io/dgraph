@@ -140,7 +140,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate: invalid credentials, no user found")
+			return nil, errors.Errorf("unable to authenticate: invalid credentials")
 		}
 
 		glog.Infof("Authenticated user %s through refresh token", userId)
@@ -156,7 +156,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate: invalid credentials, no user found")
+		return nil, errors.Errorf("unable to authenticate: invalid credentials")
 	}
 	if !user.PasswordMatch {
 		return nil, x.ErrorInvalidLogin
@@ -573,13 +573,13 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	userInfo, err := validateToken(accessJwt[0])
-	return userInfo, err
+	return validateToken(accessJwt[0])
 }
 
-func authorizePreds(ns uint64, userData, preds []string,
+func authorizePreds(ctx context.Context, userData, preds []string,
 	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
+	ns := x.ExtractNamespace(ctx)
 	userId := userData[0]
 	groupIds := userData[1:]
 	blockedPreds := make(map[string]struct{})
@@ -662,8 +662,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		ns := x.ExtractNamespace(ctx)
-		blockedPreds, _ := authorizePreds(ns, userData, preds, acl.Modify)
+		blockedPreds, _ := authorizePreds(ctx, userData, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -774,8 +773,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			}
 			return nil
 		}
-		ns := x.ExtractNamespace(ctx)
-		blockedPreds, allowedPreds := authorizePreds(ns, userData, preds, acl.Write)
+		blockedPreds, allowedPreds := authorizePreds(ctx, userData, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -898,7 +896,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	preds := predsAndvars.preds
 	varsToPredMap := predsAndvars.vars
 
-	ns := x.ExtractNamespace(ctx)
 	// Need this to efficiently identify blocked variables from the
 	// list of blocked predicates
 	predToVarsMap := make(map[string]string)
@@ -920,7 +917,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			return nil, nil, nil
 		}
 
-		blockedPreds, allowedPreds := authorizePreds(ns, userData, preds, acl.Read)
+		blockedPreds, allowedPreds := authorizePreds(ctx, userData, preds, acl.Read)
 		return blockedPreds, allowedPreds, nil
 	}
 
@@ -1007,8 +1004,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
-		ns := x.ExtractNamespace(ctx)
-		blockedPreds, _ := authorizePreds(ns, userData, preds, acl.Read)
+		blockedPreds, _ := authorizePreds(ctx, userData, preds, acl.Read)
 
 		return blockedPreds, nil
 	}
@@ -1046,7 +1042,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 func AuthGuardiansOfTheGalaxy(ctx context.Context) error {
 	ns := x.ExtractNamespace(ctx)
 	if ns != 0 {
-		return errors.New("Only guardians of galaxy is allowed to do this operation")
+		return errors.New("Only guardian of galaxy is allowed to do this operation")
 	}
 	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
 	// any of the group to which the user belongs is "guardians" or not.

@@ -113,10 +113,10 @@ type existingGQLSchemaQryResp struct {
 // by the guardians of the galaxy group.
 func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 	if err := upsertGuardian(ctx); err != nil {
-		return errors.Wrap(err, "While creating Guardian")
+		return errors.Wrap(err, "Creating guardian and groot, got error:")
 	}
 	if err := upsertGroot(ctx); err != nil {
-		return errors.Wrap(err, "While creating Groot")
+		return errors.Wrap(err, "Creating guardian and groot, got error:")
 	}
 	return nil
 }
@@ -127,11 +127,15 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 
 	// Namespace creation is only allowed by the guardians of the galaxy group.
 	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
-		return 0, errors.Wrapf(err, "While creating namespace got error: %s")
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
 	}
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
+	}
+
 	ns := ids.StartId
 	glog.V(2).Infof("Got a lease for NsID: %d", ns)
 
@@ -146,10 +150,10 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	}
 
 	if err = worker.WaitForIndexing(ctx, true); err != nil {
-		return 0, errors.Wrap(err, "While creating namespace got error")
+		return 0, errors.Wrap(err, "Creating namespace, got error: ")
 	}
 	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
-		return 0, errors.Wrapf(err, "Failed to create guardian and groot: %s")
+		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
 	}
 	glog.V(2).Infof("Created namespace: %d", ns)
 	return ns, nil
@@ -159,7 +163,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
 	ctx = x.AttachJWTNamespace(ctx)
 	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "While deleting namespace got error: %s")
+		return errors.Wrapf(err, "Creating namespace, got error: ")
 	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
