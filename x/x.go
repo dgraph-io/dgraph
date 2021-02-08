@@ -1019,7 +1019,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+	if err := dg.Login(ctx, opt.UserID, password, DefaultNamespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")

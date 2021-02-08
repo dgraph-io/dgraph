@@ -2,8 +2,6 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
-replace github.com/dgraph-io/dgo/v200 => /home/algod/go/src/github.com/dgraph-io/dgo
-
 // replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 
@@ -19,7 +17,7 @@ require (
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v3 v3.0.0-20210125092849-88bf5aab9f50
-	github.com/dgraph-io/dgo/v200 v200.0.0-20210125093441-2ab429259580
+	github.com/dgraph-io/dgo/v200 v200.0.0-20210208110130-c589adec3d8f
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.4
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
@@ -69,6 +67,7 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210105210732-16f7687f5001
 	golang.org/x/text v0.3.3
+	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
 	google.golang.org/grpc v1.27.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
