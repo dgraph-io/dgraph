@@ -475,9 +475,8 @@ const adminMutations = `
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 
 	"""
-	Create or Delete a namespace.
+	Delete a namespace.
 	"""
-	createNamespace(input: NamespaceInput!): NamespacePayload
 	deleteNamespace(input: NamespaceInput!): NamespacePayload
 	`
 
@@ -496,4 +495,9 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+	"""
+	Get a new namespace
+	"""
+	getNewNamespace: NamespacePayload
+	`

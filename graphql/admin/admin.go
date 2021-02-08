@@ -567,7 +567,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"backup":          resolveBackup,
 		"config":          resolveUpdateConfig,
-		"createNamespace": resolveCreateNamespace,
 		"deleteNamespace": resolveDeleteNamespace,
 		"draining":        resolveDraining,
 		"export":          resolveExport,
@@ -590,6 +589,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
+		}).
+		WithQueryResolver("getNewNamespace", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetNewNamespace)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
