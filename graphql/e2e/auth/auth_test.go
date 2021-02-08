@@ -538,6 +538,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
 		}
 	}
+}
 
 func TestQueryWithStandardClaims(t *testing.T) {
 	if metaInfo.Algo == "RS256" {
