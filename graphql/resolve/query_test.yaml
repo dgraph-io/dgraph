@@ -9,8 +9,8 @@
   dgquery: |-
     query {
       queryState(func: type(State)) @filter(NOT (has(State.code))) {
-        code : State.code
-        name : State.name
+        State.code : State.code
+        State.name : State.name
         dgraph.uid : uid
       }
     }
@@ -25,7 +25,7 @@
   dgquery: |-
     query {
       queryCountry(func: type(Country)) {
-        name : Country.name
+        Country.name : Country.name
         dgraph.uid : uid
       }
     }
