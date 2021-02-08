@@ -38,6 +38,7 @@ type Request struct {
 	Variables     map[string]interface{} `json:"variables"`
 	Extensions    RequestExtensions
 	Header        http.Header
+	Namespace     uint64
 }
 
 // RequestExtensions represents extensions recieved in requests
