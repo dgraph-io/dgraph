@@ -208,7 +208,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 		since = manifest.Since
 	}
 
-	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxNsID: maxNsId}
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
 // Verify performs basic checks to decide whether the specified backup can be restored
