@@ -205,7 +205,7 @@ they form a Raft group and provide synchronous replication.
 
 	flag.String("cdc", "",
 		`Various change data capture options.
-	file=/path/to/directory where audit logs will be stored
+	file=/path/to/directory where audit logs will be stored.
 	kafka=host1,host2 to define comma separated list of host.
 	sasl-user=username to define sasl username for kafka.
 	sasl-password=password to define sasl password for kafka.

@@ -148,39 +148,28 @@ func (cdc *CDC) processCDCEvents() {
 		return
 	}
 
-	var batch []SinkMessage
-
-	flushEvents := func(commitTs uint64) error {
-		if err := cdc.sink.Send(batch); err != nil {
-			glog.Errorf("error while sending cdc event to sink %+v", err)
-			batch = batch[:0]
-			return err
-		}
-		// We successfully sent messages to sink.
-		atomic.StoreUint64(&cdc.sentTs, commitTs)
-		batch = batch[:0]
-		return nil
-	}
-
 	sendEvents := func(pending []CDCEvent, commitTs uint64) error {
-		for _, e := range pending {
+		batch := make([]SinkMessage, len(pending))
+		for i, e := range pending {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
 			// todo(aman bansal): use namespace for key.
-			batch = append(batch, SinkMessage{
+			batch[i] = SinkMessage{
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
 				},
 				Key:   []byte(defaultEventKey),
 				Value: b,
-			})
+			}
 		}
-		//if len(batch) > 1000 {
-		//	return flushEvents()
-		//}
-		//return nil
-		return flushEvents(commitTs)
+		if err := cdc.sink.Send(batch); err != nil {
+			glog.Errorf("error while sending cdc event to sink %+v", err)
+			return err
+		}
+		// We successfully sent messages to sink.
+		atomic.StoreUint64(&cdc.sentTs, commitTs)
+		return nil
 	}
 
 	// This will always run on leader node only. For default mode,
@@ -259,10 +248,6 @@ func (cdc *CDC) processCDCEvents() {
 				}
 			}
 		}
-
-		//if err := flushEvents(); err != nil {
-		//	return errors.Wrapf(err, "unable to flush messages to sink")
-		//}
 		return nil
 	}
 

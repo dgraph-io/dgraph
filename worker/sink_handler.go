@@ -19,12 +19,13 @@ package worker
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/Shopify/sarama"
 
@@ -65,8 +66,8 @@ func GetSink(conf *x.SuperFlag) (Sink, error) {
 // Kafka client is not concurrency safe.
 // Its the responsibility of callee to manage the concurrency.
 type kafkaSinkClient struct {
-	client sarama.Client
-	writer sarama.SyncProducer
+	client   sarama.Client
+	producer sarama.SyncProducer
 }
 
 func newKafkaSink(config *x.SuperFlag) (Sink, error) {
@@ -89,7 +90,7 @@ func newKafkaSink(config *x.SuperFlag) (Sink, error) {
 		}
 		caFile, err := ioutil.ReadFile(config.GetString("ca-cert"))
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "unable to read ca cert file")
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
 			return nil, errors.New("not able to append certificates")
@@ -100,7 +101,7 @@ func newKafkaSink(config *x.SuperFlag) (Sink, error) {
 		if cert != "" && key != "" {
 			cert, err := tls.LoadX509KeyPair(cert, key)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "unable to load client cert and key")
 			}
 			tlsCfg.Certificates = []tls.Certificate{cert}
 		}
@@ -116,15 +117,15 @@ func newKafkaSink(config *x.SuperFlag) (Sink, error) {
 	brokers := strings.Split(config.GetString("kafka"), ",")
 	client, err := sarama.NewClient(brokers, saramaConf)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to create kafka client")
 	}
 	producer, err := sarama.NewSyncProducerFromClient(client)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to create producer from kafka client")
 	}
 	return &kafkaSinkClient{
-		client: client,
-		writer: producer,
+		client:   client,
+		producer: producer,
 	}, nil
 }
 
@@ -140,11 +141,11 @@ func (k *kafkaSinkClient) Send(messages []SinkMessage) error {
 			Value: sarama.ByteEncoder(m.Value),
 		}
 	}
-	return k.writer.SendMessages(msgs)
+	return k.producer.SendMessages(msgs)
 }
 
 func (k *kafkaSinkClient) Close() error {
-	_ = k.writer.Close()
+	_ = k.producer.Close()
 	return k.client.Close()
 }
 
@@ -159,7 +160,7 @@ func (f *fileSink) Send(messages []SinkMessage) error {
 		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
 			string(m.Key), string(m.Value))))
 		if err != nil {
-			return err
+			return errors.Wrap(err, "unable to add message in the file sink")
 		}
 	}
 	return nil
@@ -172,12 +173,12 @@ func (f *fileSink) Close() error {
 func newFileSink(path *x.SuperFlag) (Sink, error) {
 	dir := path.GetString("file")
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to create directory for file sink")
 	}
 
 	fp, err := filepath.Abs(filepath.Join(dir, defaultSinkFileName))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to find file sink path")
 	}
 
 	w := &x.LogWriter{
@@ -186,7 +187,7 @@ func newFileSink(path *x.SuperFlag) (Sink, error) {
 		MaxAge:   10,
 	}
 	if w, err = w.Init(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to init the file writer ")
 	}
 	return &fileSink{
 		fileWriter: w,
