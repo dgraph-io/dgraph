@@ -135,6 +135,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	ns := ids.StartId
 	glog.V(2).Infof("Got a lease for NsID: %d", ns)
 
+	// Attach the newly leased NsID in the context in order to create guardians/groot for it.
 	ctx = x.AttachNamespace(ctx, ns)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	m.Schema = schema.InitialSchema(ns)

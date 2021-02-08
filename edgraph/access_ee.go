@@ -1044,10 +1044,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 }
 
 func AuthGuardiansOfTheGalaxy(ctx context.Context) error {
-	ns, err := x.ExtractJWTNamespace(ctx)
-	if err != nil {
-		return errors.Wrap(err, "While authorizing galaxy user got error:")
-	}
+	ns := x.ExtractNamespace(ctx)
 	if ns != 0 {
 		return errors.New("Only guardians of galaxy is allowed to do this operation")
 	}
