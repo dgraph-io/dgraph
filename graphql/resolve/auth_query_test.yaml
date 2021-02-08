@@ -1086,7 +1086,7 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        username : User.username
+        User.username : User.username
         dgraph.uid : uid
       }
       UserRoot as var(func: uid(User3))
