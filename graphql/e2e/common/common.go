@@ -651,6 +651,7 @@ func RunAll(t *testing.T) {
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
 	t.Run("has filters", hasFilters)
+	t.Run("has filter on list of fields", hasFilterOnListOfFields)
 	t.Run("Int filters", int32Filters)
 	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)

@@ -1806,63 +1806,53 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					},
 				})
 			case []interface{}:
+				// has: [comments, text] -> has(comments) AND has(text)
 				// ids: [ 0x123, 0x124]
-
-				// If ids is an @external field then it gets rewritten just like `in` filter
-				//  ids: [0x123, 0x124] -> eq(typeName.ids, "0x123", 0x124)
-				if typ.Field(field).IsExternal() {
-					fn := "eq"
-					args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
-					for _, v := range dgFunc {
-						args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+				switch field {
+				case "has":
+					ands = append(ands, buildHasFilterList(typ, dgFunc)...)
+				default:
+					// If ids is an @external field then it gets rewritten just like `in` filter
+					//  ids: [0x123, 0x124] -> eq(typeName.ids, "0x123", 0x124)
+					if typ.Field(field).IsExternal() {
+						fn := "eq"
+						args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
+						for _, v := range dgFunc {
+							args = append(args, gql.Arg{Value: maybeQuoteArg(fn, v)})
+						}
+						ands = append(ands, &gql.FilterTree{
+							Func: &gql.Function{
+								Name: fn,
+								Args: args,
+							},
+						})
+					} else {
+						// if it is not an @external field then it is rewritten as uid filter.
+						// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
+						ids := convertIDs(dgFunc)
+						ands = append(ands, &gql.FilterTree{
+							Func: &gql.Function{
+								Name: "uid",
+								UID:  ids,
+							},
+						})
 					}
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: fn,
-							Args: args,
-						},
-					})
-				} else {
-					// if it is not an @external field then it is rewritten as uid filter.
-					// ids: [ 0x123, 0x124 ] -> uid(0x123, 0x124)
-					ids := convertIDs(dgFunc)
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: "uid",
-							UID:  ids,
-						},
-					})
 				}
 			case interface{}:
-				// has: comments -> has(Post.comments)
-				// OR
 				// isPublished: true -> eq(Post.isPublished, true)
 				// OR an enum case
 				// postType: Question -> eq(Post.postType, "Question")
-				switch field {
-				case "has":
-					fieldName := fmt.Sprintf("%v", dgFunc)
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: field,
-							Args: []gql.Arg{
-								{Value: typ.DgraphPredicate(fieldName)},
-							},
-						},
-					})
 
-				default:
-					fn := "eq"
-					ands = append(ands, &gql.FilterTree{
-						Func: &gql.Function{
-							Name: fn,
-							Args: []gql.Arg{
-								{Value: typ.DgraphPredicate(field)},
-								{Value: fmt.Sprintf("%v", dgFunc)},
-							},
+				fn := "eq"
+				ands = append(ands, &gql.FilterTree{
+					Func: &gql.Function{
+						Name: fn,
+						Args: []gql.Arg{
+							{Value: typ.DgraphPredicate(field)},
+							{Value: fmt.Sprintf("%v", dgFunc)},
 						},
-					})
-				}
+					},
+				})
 			}
 		}
 	}
@@ -1887,6 +1877,22 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 		Op:    "or",
 		Child: []*gql.FilterTree{andFt, or},
 	}
+}
+
+func buildHasFilterList(typ schema.Type, fieldsSlice []interface{}) []*gql.FilterTree {
+	var ands []*gql.FilterTree
+	fn := "has"
+	for _, fieldName := range fieldsSlice {
+		ands = append(ands, &gql.FilterTree{
+			Func: &gql.Function{
+				Name: fn,
+				Args: []gql.Arg{
+					{Value: typ.DgraphPredicate(fieldName.(string))},
+				},
+			},
+		})
+	}
+	return ands
 }
 
 func buildPoint(point map[string]interface{}, buf *bytes.Buffer) {

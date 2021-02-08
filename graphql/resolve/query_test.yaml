@@ -895,6 +895,21 @@
       }
     }
 
+-
+  name: "has Filter on list of fields"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: [subject, teaches ] } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter((has(Teacher.subject) AND has(Teacher.teaches))) {
+        Teacher.name : People.name
+        dgraph.uid : uid
+      }
+    }
 - name: "Query Has Filter on type which has neither ID field nor any search argument"
   gqlquery: |
     query {
@@ -1207,6 +1222,28 @@
       queryAuthor(func: type(Author)) {
         Author.name : Author.name
         Author.posts : Author.posts @filter(has(Post.tags)) {
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+-
+  name: "Deep filter with has filter on list of fields"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { has : [tags, text] }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        Author.name : Author.name
+        Author.posts : Author.posts @filter((has(Post.tags) AND has(Post.text))) {
           Post.title : Post.title
           dgraph.uid : uid
         }
