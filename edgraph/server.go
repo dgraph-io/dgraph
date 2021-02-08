@@ -161,6 +161,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	if err := AuthGuardiansOfTheGalaxy(ctx); err != nil {
 		return errors.Wrapf(err, "While deleting namespace got error: %s")
 	}
+	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
 }
@@ -1099,17 +1100,8 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	authMode := getAuthMode(ctx)
-	if authMode == NoAuthorize {
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	} else {
-		ns, err := x.ExtractJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		}
-		ctx = x.AttachNamespace(ctx, ns)
-	}
-	return s.doQuery(ctx, &Request{req: req, doAuth: authMode})
+	ctx = x.AttachJWTNamespace(ctx)
+	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (
