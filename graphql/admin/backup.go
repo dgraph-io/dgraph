@@ -52,10 +52,11 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
+		nil,
+	), true
 }
 
 func getBackupInput(m schema.Mutation) (*backupInput, error) {

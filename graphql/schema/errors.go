@@ -141,3 +141,24 @@ func AppendGQLErrs(err1, err2 error) error {
 	}
 	return append(AsGQLErrors(err1), AsGQLErrors(err2)...)
 }
+
+// SetPathIfEmpty sets error's path with the given path item as the only item in path,
+// only if initially the error had no path.
+func SetPathIfEmpty(err error, pathItem interface{}) error {
+	gqlErrs := AsGQLErrors(err)
+	for _, e := range gqlErrs {
+		if len(e.Path) == 0 {
+			e.Path = []interface{}{pathItem}
+		}
+	}
+	return gqlErrs
+}
+
+// PrependPath adds the given path item as the first item in the error's path list.
+func PrependPath(err error, pathItem interface{}) error {
+	gqlErrs := AsGQLErrors(err)
+	for _, e := range gqlErrs {
+		e.Path = append([]interface{}{pathItem}, e.Path...)
+	}
+	return gqlErrs
+}
