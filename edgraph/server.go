@@ -109,18 +109,6 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-// This function is used while creating new namespace. New namespace creation is only allowed
-// by the guardians of the galaxy group.
-func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
-	if err := upsertGuardian(ctx); err != nil {
-		return errors.Wrap(err, "Creating guardian and groot, got error:")
-	}
-	if err := upsertGroot(ctx); err != nil {
-		return errors.Wrap(err, "Creating guardian and groot, got error:")
-	}
-	return nil
-}
-
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	ctx = x.AttachJWTNamespace(ctx)
 	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
