@@ -168,6 +168,8 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
+// leaseNamespace is called at the end of map phase. It leases the namespace ids till the maximum
+// seen namespace id.
 func (ld *loader) leaseNamespaces() {
 	var maxNs uint64
 	ld.namespaces.Range(func(key, value interface{}) bool {
@@ -176,6 +178,11 @@ func (ld *loader) leaseNamespaces() {
 		}
 		return true
 	})
+
+	// If only the default namespace is seen, do nothing.
+	if maxNs == 0 {
+		return
+	}
 
 	client := pb.NewZeroClient(ld.zero)
 	for {
@@ -287,7 +294,9 @@ func (ld *loader) mapStage() {
 	x.Check(thr.Finish())
 
 	// Send the graphql triples
-	// TODO(Naman): Handle this.
+	// TODO(Naman): Handle this. Currently we are not attaching the namespace info with the exported
+	// graphql schema (See exportInternal). Also, attach the namespace information once for the
+	// namespace we are loading into.
 	ld.processGqlSchema(loadType)
 
 	close(ld.readerChunkCh)

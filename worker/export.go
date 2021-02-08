@@ -240,7 +240,6 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				fmt.Fprint(bp, "^^<"+rdfType+">")
 			}
 		}
-		// Let's skip labels. Dgraph doesn't support them for any functionality.
 		// Use label for storing namespace.
 		fmt.Fprintf(bp, " <%#x>", e.namespace)
 
@@ -609,6 +608,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
+		fmt.Println(pk)
 		// Do not pick keys storing parts of a multi-part list. They will be read
 		// from the main key.
 		if pk.HasStartUid {
@@ -626,7 +626,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				return false
 			}
 		}
-
 		return pk.IsData()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {

@@ -451,9 +451,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 	namespace := x.DefaultNamespace
 	if ns, ok := m["namespace"]; ok {
-		switch ns := ns.(type) {
+		switch nsVal := ns.(type) {
 		case json.Number:
-			nsi, err := ns.Int64()
+			nsi, err := nsVal.Int64()
 			if err != nil {
 				return mr, err
 			}
@@ -461,7 +461,16 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
 		case int64:
-			namespace = uint64(ns)
+			namespace = uint64(nsVal)
+		case string:
+			s := stripSpaces(nsVal)
+			if s == "" {
+				namespace = 0
+			} else if n, err := strconv.ParseUint(s, 0, 64); err == nil {
+				namespace = n
+			} else {
+				return mr, err
+			}
 		}
 	}
 	mr.namespace = namespace

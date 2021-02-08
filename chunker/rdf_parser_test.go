@@ -352,7 +352,6 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "0xf2",
 			Namespace:   0xf2,
 		},
 		expectedErr: false,
@@ -364,7 +363,6 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "0xf2",
 			Namespace:   0xf2,
 		},
 		expectedErr: false,
@@ -376,7 +374,6 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "10",
 			Namespace:   10,
 		},
 		expectedErr: false,
@@ -608,7 +605,6 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "stuff"}},
-			Label:       "0x10",
 			Namespace:   0x10,
 			Facets: []*api.Facet{
 				{
@@ -633,7 +629,6 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "stuff"}},
-			Label:       "0x12",
 			Namespace:   0x12,
 			Facets: []*api.Facet{
 				{
