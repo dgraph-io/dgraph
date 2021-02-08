@@ -286,7 +286,35 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 	t.Fatal(safelyUpdateGQLSchemaErr)
 }
 
-func getGQLSchema(t *testing.T, authority string) *GraphQLResponse {
+func CreateNamespace(t *testing.T, id int64) {
+	createNamespace := &GraphQLParams{
+		Query: `mutation createNamespace($id:Int!){
+					createNamespace(input:{namespaceId:$id}){
+						namespaceId
+					}
+				}`,
+		Variables: map[string]interface{}{"id": id},
+	}
+
+	gqlResponse := createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	RequireNoGQLErrors(t, gqlResponse)
+}
+
+func DeleteNamespace(t *testing.T, id int64) {
+	deleteNamespace := &GraphQLParams{
+		Query: `mutation deleteNamespace($id:Int!){
+					deleteNamespace(input:{namespaceId:$id}){
+						namespaceId
+					}
+				}`,
+		Variables: map[string]interface{}{"id": id},
+	}
+
+	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	RequireNoGQLErrors(t, gqlResponse)
+}
+
+func getGQLSchema(t *testing.T, authority string, header http.Header) *GraphQLResponse {
 	getSchemaParams := &GraphQLParams{
 		Query: `query {
 			getGQLSchema {
@@ -295,14 +323,15 @@ func getGQLSchema(t *testing.T, authority string) *GraphQLResponse {
 				generatedSchema
 			}
 		}`,
+		Headers: header,
 	}
 	return getSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
 }
 
 // AssertGetGQLSchema queries the current GraphQL schema using getGQLSchema query and asserts that
 // the query doesn't give any errors. It returns a *GqlSchema received in response to the query.
-func AssertGetGQLSchema(t *testing.T, authority string) *GqlSchema {
-	resp := getGQLSchema(t, authority)
+func AssertGetGQLSchema(t *testing.T, authority string, header http.Header) *GqlSchema {
+	resp := getGQLSchema(t, authority, header)
 	RequireNoGQLErrors(t, resp)
 
 	var getResult struct {
@@ -315,8 +344,8 @@ func AssertGetGQLSchema(t *testing.T, authority string) *GqlSchema {
 
 // In addition to AssertGetGQLSchema, it also asserts that the response returned from the
 // getGQLSchema query isn't nil and the Id in the response is actually a uid.
-func AssertGetGQLSchemaRequireId(t *testing.T, authority string) *GqlSchema {
-	resp := AssertGetGQLSchema(t, authority)
+func AssertGetGQLSchemaRequireId(t *testing.T, authority string, header http.Header) *GqlSchema {
+	resp := AssertGetGQLSchema(t, authority, header)
 	require.NotNil(t, resp)
 	testutil.RequireUid(t, resp.Id)
 	return resp
@@ -574,7 +603,6 @@ func RunAll(t *testing.T) {
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
-
 	// header tests
 	t.Run("touched uids header", touchedUidsHeader)
 	t.Run("cache-control header", cacheControlHeader)
