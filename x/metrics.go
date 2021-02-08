@@ -63,8 +63,11 @@ var (
 	NumBackups = stats.Int64("num_backups_total",
 		"Total number of backups requested", stats.UnitDimensionless)
 	// NumBackupsSuccess is the number of backups successfully completed
-	NumBackupsSuccess = stats.Int64("num_backups_success",
+	NumBackupsSuccess = stats.Int64("num_backups_success_total",
 		"Total number of backups completed", stats.UnitDimensionless)
+	// NumBackupsFailed is the number of backups failed
+	NumBackupsFailed = stats.Int64("num_backups_failed_total",
+		"Total number of backups failed", stats.UnitDimensionless)
 	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
@@ -93,13 +96,13 @@ var (
 	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
 	// DiskFree records the number of bytes free on the disk
-	DiskFree = stats.Int64("disk_free",
+	DiskFree = stats.Int64("disk_free_bytes",
 		"Total number of bytes free on disk", stats.UnitBytes)
 	// DiskUsed records the number of bytes free on the disk
-	DiskUsed = stats.Int64("disk_used",
+	DiskUsed = stats.Int64("disk_used_bytes",
 		"Total number of bytes used on disk", stats.UnitBytes)
 	// DiskTotal records the number of bytes free on the disk
-	DiskTotal = stats.Int64("disk_total",
+	DiskTotal = stats.Int64("disk_total_bytes",
 		"Total number of bytes on disk", stats.UnitBytes)
 	// ActiveMutations is the current number of active mutations.
 	ActiveMutations = stats.Int64("active_mutations_total",
@@ -160,7 +163,7 @@ var (
 	KeyMethod, _ = tag.NewKey("method")
 
 	// KeyDirType is the tag key used to record the group for FileSystem metrics
-	KeyDirType, _ = tag.NewKey("dir_type")
+	KeyDirType, _ = tag.NewKey("dir")
 
 	// Tag values.
 

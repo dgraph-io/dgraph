@@ -9,5 +9,5 @@ import (
 
 func MonitorDiskMetrics(_ string, _ string, lc *z.Closer) {
 	defer lc.Done()
-	glog.Infoln("File System Metrics are not currently supported on non-linux platforms")
+	glog.Infoln("File system metrics are not currently supported on non-Linux platforms")
 }

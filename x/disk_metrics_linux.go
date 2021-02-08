@@ -15,9 +15,9 @@ import (
 	"go.opencensus.io/tag"
 )
 
-func MonitorDiskMetrics(dirType string, dir string, lc *z.Closer) {
+func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
 	defer lc.Done()
-	ctx, err := tag.New(context.Background(), tag.Upsert(KeyDirType, dirType))
+	ctx, err := tag.New(context.Background(), tag.Upsert(KeyDirType, dirTag))
 
 	fastTicker := time.NewTicker(10 * time.Second)
 	defer fastTicker.Stop()

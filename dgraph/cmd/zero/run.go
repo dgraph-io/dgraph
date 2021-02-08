@@ -343,7 +343,7 @@ func run() {
 
 	st.zero.closer.AddRunning(2)
 	go x.MonitorMemoryMetrics(st.zero.closer)
-	go x.MonitorDiskMetrics("zero_wal_dir", opts.w, st.zero.closer)
+	go x.MonitorDiskMetrics("wal", opts.w, st.zero.closer)
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()

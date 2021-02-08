@@ -113,8 +113,15 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	backupLock.Lock()
 	defer backupLock.Unlock()
 
+	backupSuccessful := false
 	ostats.Record(ctx, x.NumBackups.M(1), x.PendingBackups.M(1))
-	defer ostats.Record(ctx, x.PendingBackups.M(0))
+	defer func() {
+		if backupSuccessful {
+			ostats.Record(ctx, x.NumBackupsSuccess.M(1), x.PendingBackups.M(0))
+		} else {
+			ostats.Record(ctx, x.NumBackupsFailed.M(1), x.PendingBackups.M(0))
+		}
+	}()
 
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
@@ -221,7 +228,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		return err
 	}
 
-	ostats.Record(ctx, x.NumBackupsSuccess.M(1))
+	backupSuccessful = true
 	return nil
 }
 
