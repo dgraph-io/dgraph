@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -653,7 +652,6 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			fmt.Printf("mu: %+v\n", mu)
 			span.Annotatef(nil, "state: %+v", groups().state)
 			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
 			return tctx, errNonExistentTablet

@@ -188,6 +188,10 @@ func (gs *graphqlSubscription) Subscribe(
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
+		Namespace:     namespace,
+	}
+	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
+		return nil, nil
 	}
 	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req, customClaims)
 	if err != nil {
