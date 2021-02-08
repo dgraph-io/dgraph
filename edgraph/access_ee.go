@@ -392,6 +392,42 @@ var aclPrefixes = [][]byte{
 	x.PredicatePrefix(x.GalaxyAttr("dgraph.xid")),
 }
 
+// clears the aclCachePtr and upserts the Groot account.
+func ResetAcl(closer *z.Closer) {
+	defer func() {
+		glog.Infof("ResetAcl closed")
+		closer.Done()
+	}()
+
+	if len(worker.Config.HmacSecret) == 0 {
+		// The acl feature is not turned on.
+		return
+	}
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		if err := upsertGuardian(ctx); err != nil {
+			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
+	for closer.Ctx().Err() == nil {
+		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
+		defer cancel()
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		if err := upsertGroot(ctx); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+}
+
 // upsertGuardian must be called after setting the namespace in the context.
 func upsertGuardian(ctx context.Context) error {
 	query := fmt.Sprintf(`
@@ -529,42 +565,6 @@ func upsertGroot(ctx context.Context) error {
 	x.GrootUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted groot account for namespace %d\n", ns)
 	return nil
-}
-
-// clears the aclCachePtr and upserts the Groot account.
-func ResetAcl(closer *z.Closer) {
-	defer func() {
-		glog.Infof("ResetAcl closed")
-		closer.Done()
-	}()
-
-	if len(worker.Config.HmacSecret) == 0 {
-		// The acl feature is not turned on.
-		return
-	}
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGuardian(ctx); err != nil {
-			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
-	}
-
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGroot(ctx); err != nil {
-			glog.Infof("Unable to upsert the groot account. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
-	}
 }
 
 // extract the userId, groupIds from the accessJwt in the context
