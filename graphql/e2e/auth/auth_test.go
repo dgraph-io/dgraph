@@ -513,7 +513,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 			name: "Query with null value in jwt: deep level",
 			query: `
 			query {
-				queryUser(order: {asc: username}, first: 1) {
+				queryUser(order: {desc: username}, first: 1) {
 					username
 					issues {
 						msg
@@ -522,7 +522,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 			}
 			`,
 			role:   "ADMIN",
-			result: `{"queryUser":[{"username":"user1","issues":[]}]}`,
+			result: `{"queryUser":[{"username":"user8","issues":[]}]}`,
 		},
 	}
 
