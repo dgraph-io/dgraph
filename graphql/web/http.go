@@ -150,11 +150,15 @@ func (gs *graphqlSubscription) Subscribe(
 		StandardClaims: jwt.StandardClaims{},
 	}
 	header, _ := ctx.Value("Header").(json.RawMessage)
-
+	var namespace uint64
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
 			return nil, err
+		}
+
+		if v, ok := payload["namespace"].(string); ok {
+			namespace, _ = strconv.ParseUint(v, 10, 64)
 		}
 
 		name := authorization.GetHeader()
@@ -185,8 +189,7 @@ func (gs *graphqlSubscription) Subscribe(
 		Query:         document,
 		Variables:     variableValues,
 	}
-	ns := x.ExtractNamespace(ctx)
-	res, err := gs.graphqlHandler.poller[ns].AddSubscriber(req, customClaims)
+	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req, customClaims)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +198,7 @@ func (gs *graphqlSubscription) Subscribe(
 		// Context is cancelled when a client disconnects, so delete subscription after client
 		// disconnects.
 		<-ctx.Done()
-		gs.graphqlHandler.poller[ns].TerminateSubscription(res.BucketID, res.SubscriptionID)
+		gs.graphqlHandler.poller[namespace].TerminateSubscription(res.BucketID, res.SubscriptionID)
 	}()
 	return res.UpdateCh, ctx.Err()
 }
