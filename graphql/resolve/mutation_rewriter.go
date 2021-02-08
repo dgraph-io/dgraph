@@ -40,6 +40,18 @@ const (
 	updateMutationCondition = `gt(len(x), 0)`
 )
 
+// Enum passed on to rewriteObject function.
+type MutationType int
+
+const (
+	// Add Mutation
+	Add MutationType = iota
+	// Update Mutation used for to setting new nodes, edges.
+	UpdateWithSet
+	// Update Mutation used for removing edges.
+	UpdateWithRemove
+)
+
 type Rewriter struct {
 	// VarGen is the VariableGenerator used accross RewriteQueries and Rewrite functions
 	// for Mutation. It generates unique variable names for DQL queries and mutations.
@@ -395,7 +407,7 @@ func (mrw *AddRewriter) Rewrite(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, false, false)
+		fragment, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, Add)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -527,7 +539,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		obj := setArg.(map[string]interface{})
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, false, true)
+		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithSet)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -545,7 +557,7 @@ func (urw *UpdateRewriter) Rewrite(
 	if delArg != nil {
 		obj := delArg.(map[string]interface{})
 		// Set additional deletes to false
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, true, true)
+		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithRemove)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -1171,8 +1183,7 @@ func rewriteObject(
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
 	idExistence map[string]string,
-	isRemove bool,
-	isUpdate bool) (*mutationFragment, []error) {
+	mutationType MutationType) (*mutationFragment, []error) {
 
 	// There could be the following cases:
 	// 1. We need to create a new node.
@@ -1214,7 +1225,7 @@ func rewriteObject(
 					retErrors = append(retErrors, err)
 					return nil, retErrors
 				} else {
-					return asIDReference(ctx, idVal, srcField, srcUID, varGen, isRemove), nil
+					return asIDReference(ctx, idVal, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
 				}
 			} else {
 				// Reference UID does not exist. This is an error.
@@ -1269,7 +1280,7 @@ func rewriteObject(
 					retErrors = append(retErrors, err)
 					return nil, retErrors
 				} else {
-					return asIDReference(ctx, uid, srcField, srcUID, varGen, isRemove), nil
+					return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
 				}
 			} else {
 				// Node with XID does not exist. It means this is a new node.
@@ -1299,7 +1310,7 @@ func rewriteObject(
 			//    In this case this is not an error as the UID at top level of Update Mutation is
 			//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 			//    with the function.
-			if !isUpdate || !atTopLevel {
+			if mutationType == Add || !atTopLevel {
 				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
 				return nil, retErrors
@@ -1325,14 +1336,14 @@ func rewriteObject(
 	// Create newObj map. This map will be returned as part of mutationFragment.
 	newObj := make(map[string]interface{}, len(obj))
 
-	if isUpdate && atTopLevel {
+	if mutationType != Add && atTopLevel {
 		// It's an update and we are at top level. So, the UID of node(s) for which
 		// we are rewriting is/are referenced using "uid(x)" as part of mutations.
 		// We don't need to create a new blank node in this case.
 		// srcUID is equal to uid(x) in this case.
 		newObj["uid"] = srcUID
 		myUID = srcUID
-	} else if isRemove {
+	} else if mutationType == UpdateWithRemove {
 		// It's a remove. As remove can only be part of Update Mutation. It can
 		// be inferred that this is an Update Mutation.
 		// In case of remove of Update, deeper level nodes have to be referenced by ID
@@ -1391,7 +1402,7 @@ func rewriteObject(
 		switch val := val.(type) {
 		case map[string]interface{}:
 			if fieldDef.Type().IsUnion() {
-				fieldMutationFragment, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, isRemove, isUpdate)
+				fieldMutationFragment, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1404,7 +1415,7 @@ func rewriteObject(
 						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
 					}
 			} else {
-				fieldMutationFragment, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, isRemove, isUpdate)
+				fieldMutationFragment, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1419,7 +1430,7 @@ func rewriteObject(
 				switch object := object.(type) {
 				case map[string]interface{}:
 					if fieldDef.Type().IsUnion() {
-						fieldMutationFragment, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, isRemove, isUpdate)
+						fieldMutationFragment, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
 					} else if fieldDef.Type().IsGeo() {
 						fieldMutationFragment = newFragment(
 							map[string]interface{}{
@@ -1428,7 +1439,7 @@ func rewriteObject(
 							},
 						)
 					} else {
-						fieldMutationFragment, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, isRemove, isUpdate)
+						fieldMutationFragment, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
 					}
 					if fieldMutationFragment != nil {
 						mutationFragments = append(mutationFragments, fieldMutationFragment.fragment)
@@ -1677,8 +1688,7 @@ func rewriteUnionField(
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
 	existenceQueriesResult map[string]string,
-	isRemove bool,
-	isUpdate bool) (*mutationFragment, []error) {
+	mutationType MutationType) (*mutationFragment, []error) {
 
 	var newtyp schema.Type
 	for memberRef, memberRefVal := range obj {
@@ -1688,7 +1698,7 @@ func rewriteUnionField(
 		newtyp = srcField.Type()
 		obj = memberRefVal.(map[string]interface{})
 	}
-	return rewriteObject(ctx, newtyp, srcField, srcUID, varGen, obj, xidMetadata, existenceQueriesResult, isRemove, isUpdate)
+	return rewriteObject(ctx, newtyp, srcField, srcUID, varGen, obj, xidMetadata, existenceQueriesResult, mutationType)
 }
 
 // rewriteGeoObject rewrites the given value correctly based on the underlying Geo type.
