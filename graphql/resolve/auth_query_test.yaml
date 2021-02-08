@@ -1851,7 +1851,7 @@
     query {
       queryVehicle(func: uid(VehicleRoot)) {
         dgraph.type
-        Vehicle.owner : Vehicle.owner
+        owner : Vehicle.owner
         dgraph.uid : uid
       }
       VehicleRoot as var(func: uid(Vehicle1)) @filter((uid(Car1)))
