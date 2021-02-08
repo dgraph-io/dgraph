@@ -51,7 +51,6 @@ type testCase struct {
 	DGMutations     []*dgraphMutation
 	DGMutationsSec  []*dgraphMutation
 	DGQuery         string
-	DeleteQuery     string
 	DGQuerySec      string
 	Error           *x.GqlError
 	Error2          *x.GqlError
@@ -70,13 +69,13 @@ func TestMutationRewriting(t *testing.T) {
 		mutationValidation(t, "validate_mutation_test.yaml", NewAddRewriter)
 	})
 	t.Run("Add Mutation Rewriting", func(t *testing.T) {
-		newMutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter)
+		mutationRewriting(t, "add_mutation_test.yaml", NewAddRewriter)
 	})
 	t.Run("Update Mutation Rewriting", func(t *testing.T) {
 		mutationRewriting(t, "update_mutation_test.yaml", NewUpdateRewriter)
 	})
 	t.Run("Delete Mutation Rewriting", func(t *testing.T) {
-		mutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter)
+		deleteMutationRewriting(t, "delete_mutation_test.yaml", NewDeleteRewriter)
 	})
 }
 
@@ -149,8 +148,11 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 		})
 	mut := test.GetMutation(t, op)
 
+	addRewriter := NewAddRewriter()
+	idExistence := make(map[string]string)
 	for n := 0; n < b.N; n++ {
-		NewAddRewriter().Rewrite(context.Background(), mut)
+		addRewriter.RewriteQueries(context.Background(), mut)
+		addRewriter.Rewrite(context.Background(), mut, idExistence)
 	}
 }
 
@@ -160,7 +162,7 @@ func Benchmark3LevelDeep100(b *testing.B)   { benchmark3LevelDeep(100, b) }
 func Benchmark3LevelDeep1000(b *testing.B)  { benchmark3LevelDeep(1000, b) }
 func Benchmark3LevelDeep10000(b *testing.B) { benchmark3LevelDeep(10000, b) }
 
-func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
+func deleteMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
 	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
@@ -208,7 +210,9 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 			rewriterToTest := rewriterFactory()
 
 			// -- Act --
-			upsert, err := rewriterToTest.Rewrite(context.Background(), mut)
+			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			idExistence := make(map[string]string)
+			upsert, err := rewriterToTest.Rewrite(context.Background(), mut, idExistence)
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)
@@ -228,7 +232,7 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 	}
 }
 
-func newMutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
+func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
 	b, err := ioutil.ReadFile(file)
 	require.NoError(t, err, "Unable to read test file")
 
@@ -241,6 +245,7 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
 		require.Len(t, generated, len(test))
 		for i, expected := range test {
+			require.Equal(t, expected.Cond, generated[i].Cond)
 			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
 				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
 			}
@@ -274,10 +279,10 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 			}
 			mut := test.GetMutation(t, op)
 
+			rewriterToTest := rewriterFactory()
+
 			// -- Query --
-			varGen := NewVariableGenerator()
-			xidMd := newXidMetadata()
-			queries, err := NewRewrite(context.Background(), mut, varGen, xidMd)
+			queries, err := rewriterToTest.RewriteQueries(context.Background(), mut)
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
 				require.NotNil(t, err)
@@ -295,7 +300,7 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 			}
 
 			// Mutate
-			upsert, _, err := NewCreateMutations(context.Background(), mut, varGen, xidMd, qNameToUID)
+			upsert, err := rewriterToTest.Rewrite(context.Background(), mut, qNameToUID)
 			if tcase.Error2 != nil || err != nil {
 				require.NotNil(t, err)
 				require.NotNil(t, tcase.Error2)
@@ -306,9 +311,9 @@ func newMutationRewriting(t *testing.T, file string, rewriterFactory func() Muta
 			require.Equal(t, 1, len(upsert))
 			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
 
-			// Compare Query generated for deleting existing edges
-			deleteQuery := dgraph.AsString(upsert[0].Query)
-			require.Equal(t, tcase.DeleteQuery, deleteQuery)
+			// Compare the query generated along with mutations.
+			dgQuerySec := dgraph.AsString(upsert[0].Query)
+			require.Equal(t, tcase.DGQuerySec, dgQuerySec)
 		})
 	}
 }
@@ -318,6 +323,7 @@ func TestMutationQueryRewriting(t *testing.T) {
 		mut         string
 		payloadType string
 		rewriter    func() MutationRewriter
+		idExistence map[string]string
 		assigned    map[string]string
 		result      map[string]interface{}
 	}{
@@ -325,7 +331,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 			mut:         `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
 			payloadType: "AddPostPayload",
 			rewriter:    NewAddRewriter,
-			assigned:    map[string]string{"Post1": "0x4"},
+			idExistence: map[string]string{"Author1": "0x1"},
+			assigned:    map[string]string{"Post2": "0x4"},
 		},
 		"Update Post ": {
 			mut: `updatePost(input: {filter: {postID
@@ -368,7 +375,9 @@ func TestMutationQueryRewriting(t *testing.T) {
 						})
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
-					_, err = rewriter.Rewrite(context.Background(), gqlMutation)
+
+					_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+					_, err = rewriter.Rewrite(context.Background(), gqlMutation, tt.idExistence)
 					require.Nil(t, err)
 
 					// -- Act --

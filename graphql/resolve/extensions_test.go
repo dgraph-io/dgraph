@@ -122,7 +122,6 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 }
 
 func TestMutationsPropagateExtensions(t *testing.T) {
-	t.Skip()
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 	mutation := `mutation {
 		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
@@ -134,9 +133,10 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			assigned:        map[string]string{"Post1": "0x2"},
-			queryTouched:    2,
-			mutationTouched: 5,
+			assigned:             map[string]string{"Post1": "0x2"},
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+			queryTouched:         2,
+			mutationTouched:      5,
 		})
 
 	require.NotNil(t, resp)
@@ -173,7 +173,6 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 }
 
 func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
-	t.Skip()
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 	mutation := `mutation {
 		a: addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
@@ -190,9 +189,10 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			assigned:        map[string]string{"Post1": "0x2"},
-			queryTouched:    2,
-			mutationTouched: 5,
+			assigned:             map[string]string{"Post1": "0x2"},
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+			queryTouched:         2,
+			mutationTouched:      5,
 		})
 
 	require.NotNil(t, resp)

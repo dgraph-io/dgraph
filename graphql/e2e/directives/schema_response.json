@@ -9,6 +9,20 @@
       ]
     },
     {
+      "predicate": "Astronaut.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Astronaut.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Book.bookId",
       "type": "int",
       "index": true,
@@ -16,6 +30,11 @@
         "int"
       ],
       "upsert": true
+    },
+    {
+      "predicate": "Book.chapters",
+      "type": "uid",
+      "list": true
     },
     {
       "predicate": "Book.desc",
@@ -35,12 +54,8 @@
       "list": true
     },
     {
-      "predicate": "Chapter.bookId",
-      "type": "int",
-      "index": true,
-      "tokenizer": [
-        "int"
-      ]
+      "predicate": "Chapter.book",
+      "type": "uid"
     },
     {
       "predicate": "Chapter.chapterId",
@@ -179,6 +194,37 @@
       "list": true
     },
     {
+      "predicate": "Mission.crew",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Mission.designation",
+      "type": "string"
+    },
+    {
+      "predicate": "Mission.endDate",
+      "type": "string"
+    },
+    {
+      "predicate": "Mission.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Mission.spaceShip",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Mission.startDate",
+      "type": "string"
+    },
+    {
       "predicate": "Movie.name",
       "type": "string"
     },
@@ -312,6 +358,20 @@
         "float"
       ],
       "upsert": true
+    },
+    {
+      "predicate": "SpaceShip.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "SpaceShip.missions",
+      "type": "uid",
+      "list": true
     },
     {
       "predicate": "State.capital",
@@ -678,31 +738,27 @@
     {
       "fields": [
         {
+          "name": "Astronaut.id"
+        },
+        {
+          "name": "Astronaut.missions"
+        }
+      ],
+      "name": "Astronaut"
+    },
+    {
+      "fields": [
+        {
           "name": "Book.bookId"
         },
         {
-            "predicate": "Astronaut.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Astronaut.missions",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Category.name",
-            "type": "string"
-=======
           "name": "Book.name"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         },
         {
           "name": "Book.desc"
+        },
+        {
+          "name": "Book.chapters"
         }
       ],
       "name": "Book"
@@ -727,7 +783,7 @@
           "name": "Chapter.name"
         },
         {
-          "name": "Chapter.bookId"
+          "name": "Chapter.book"
         }
       ],
       "name": "Chapter"
@@ -774,43 +830,7 @@
           "name": "Dataset.owner"
         },
         {
-<<<<<<< HEAD
-            "predicate": "Mission.crew",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Mission.designation",
-            "type": "string"
-        },
-        {
-            "predicate": "Mission.endDate",
-            "type": "string"
-        },
-        {
-            "predicate": "Mission.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Mission.spaceShip",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Mission.startDate",
-            "type": "string"
-        },
-        {
-            "predicate": "Movie.name",
-            "type": "string"
-=======
           "name": "Dataset.project"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         },
         {
           "name": "Dataset.name"
@@ -901,6 +921,29 @@
         }
       ],
       "name": "Message"
+    },
+    {
+      "fields": [
+        {
+          "name": "Mission.id"
+        },
+        {
+          "name": "Mission.crew"
+        },
+        {
+          "name": "Mission.spaceShip"
+        },
+        {
+          "name": "Mission.designation"
+        },
+        {
+          "name": "Mission.startDate"
+        },
+        {
+          "name": "Mission.endDate"
+        }
+      ],
+      "name": "Mission"
     },
     {
       "fields": [
@@ -1031,6 +1074,17 @@
         }
       ],
       "name": "Section"
+    },
+    {
+      "fields": [
+        {
+          "name": "SpaceShip.id"
+        },
+        {
+          "name": "SpaceShip.missions"
+        }
+      ],
+      "name": "SpaceShip"
     },
     {
       "fields": [
@@ -1199,26 +1253,7 @@
           "name": "myPost.title"
         },
         {
-<<<<<<< HEAD
-            "predicate": "SpaceShip.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "SpaceShip.missions",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "star.ship.length",
-            "type": "float"
-=======
           "name": "text"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         },
         {
           "name": "myPost.tags"
@@ -1284,15 +1319,6 @@
           "name": "appears_in"
         },
         {
-<<<<<<< HEAD
-            "predicate": "Book.chapters",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Section.name",
-            "type": "string"
-=======
           "name": "roboDroid.primaryFunction"
         }
       ],
@@ -1302,7 +1328,6 @@
       "fields": [
         {
           "name": "star.ship.name"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         },
         {
           "name": "star.ship.length"
@@ -1319,12 +1344,7 @@
           "name": "test.dgraph.author.dob"
         },
         {
-<<<<<<< HEAD
-            "predicate": "Chapter.book",
-            "type": "uid"
-=======
           "name": "test.dgraph.author.reputation"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         },
         {
           "name": "test.dgraph.author.qualification"
@@ -1335,573 +1355,6 @@
         {
           "name": "test.dgraph.author.posts"
         }
-<<<<<<< HEAD
-    ],
-    "types": [
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                }
-            ],
-            "name": "Animal"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Astronaut.id"
-                },
-                {
-                    "name": "Astronaut.missions"
-                }
-            ],
-            "name": "Astronaut"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Category.name"
-                },
-                {
-                    "name": "Category.posts"
-                }
-            ],
-            "name": "Category"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Cheetah.speed"
-                }
-            ],
-            "name": "Cheetah"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Comment1.id"
-                },
-                {
-                    "name": "Comment1.replies"
-                }
-            ],
-            "name": "Comment1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Country.name"
-                },
-                {
-                    "name": "hasStates"
-                }
-            ],
-            "name": "Country"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Dog.breed"
-                }
-            ],
-            "name": "Dog"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Home.address"
-                },
-                {
-                    "name": "Home.members"
-                },
-                {
-                    "name": "Home.favouriteMember"
-                }
-            ],
-            "name": "Home"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Hotel.name"
-                },
-                {
-                    "name": "Hotel.location"
-                },
-                {
-                    "name": "Hotel.area"
-                },
-                {
-                    "name": "Hotel.branches"
-                }
-            ],
-            "name": "Hotel"
-        },
-        {
-            "fields": [
-                {
-                    "name": "test.dgraph.employee.en.ename"
-                },
-                {
-                    "name": "performance.character.name"
-                },
-                {
-                    "name": "appears_in"
-                },
-                {
-                    "name": "Human.starships"
-                },
-                {
-                    "name": "credits"
-                }
-            ],
-            "name": "Human"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post"
-                },
-                {
-                    "name": "职业"
-                }
-            ],
-            "name": "Message"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Mission.id"
-                },
-                {
-                    "name": "Mission.crew"
-                },
-                {
-                    "name": "Mission.spaceShip"
-                },
-                {
-                    "name": "Mission.designation"
-                },
-                {
-                    "name": "Mission.startDate"
-                },
-                {
-                    "name": "Mission.endDate"
-                }
-            ],
-            "name": "Mission"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Movie.name"
-                }
-            ],
-            "name": "Movie"
-        },
-        {
-            "fields": [
-                {
-                    "name": "MovieDirector.name"
-                },
-                {
-                    "name": "directed.movies"
-                }
-            ],
-            "name": "MovieDirector"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Parrot.repeatsWords"
-                }
-            ],
-            "name": "Parrot"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                }
-            ],
-            "name": "People"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Person1.name"
-                },
-                {
-                    "name": "Person1.friends"
-                }
-            ],
-            "name": "Person1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Plant.breed"
-                }
-            ],
-            "name": "Plant"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Post1.id"
-                },
-                {
-                    "name": "Post1.comments"
-                }
-            ],
-            "name": "Post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "SpaceShip.id"
-                },
-                {
-                    "name": "SpaceShip.missions"
-                }
-            ],
-            "name": "SpaceShip"
-        },
-        {
-            "fields": [
-                {
-                    "name": "State.xcode"
-                },
-                {
-                    "name": "State.name"
-                },
-                {
-                    "name": "State.capital"
-                },
-                {
-                    "name": "inCountry"
-                }
-            ],
-            "name": "State"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Student.taughtBy"
-                }
-            ],
-            "name": "Student"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Teacher.subject"
-                },
-                {
-                    "name": "Teacher.teaches"
-                }
-            ],
-            "name": "Teacher"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                }
-            ],
-            "name": "Thing"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingOne.color"
-                },
-                {
-                    "name": "ThingOne.usedBy"
-                }
-            ],
-            "name": "ThingOne"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingTwo.color"
-                },
-                {
-                    "name": "ThingTwo.owner"
-                }
-            ],
-            "name": "ThingTwo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "University.name"
-                },
-                {
-                    "name": "University.numStudents"
-                }
-            ],
-            "name": "University"
-        },
-        {
-            "fields": [
-                {
-                    "name": "User.name"
-                },
-                {
-                    "name": "pwd"
-                }
-            ],
-            "name": "User"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Zoo.animals"
-                },
-                {
-                    "name": "Zoo.city"
-                }
-            ],
-            "name": "Zoo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },
-                {
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        },
-        {
-            "fields": [
-                {
-                    "name": "myPost.title"
-                },
-                {
-                    "name": "text"
-                },
-                {
-                    "name": "myPost.tags"
-                },
-                {
-                    "name": "test.dgraph.topic"
-                },
-                {
-                    "name": "myPost.numLikes"
-                },
-                {
-                    "name": "myPost.numViews"
-                },
-                {
-                    "name": "is_published"
-                },
-                {
-                    "name": "myPost.postType"
-                },
-                {
-                    "name": "post.author"
-                },
-                {
-                    "name": "myPost.category"
-                }
-            ],
-            "name": "myPost"
-        },
-        {
-            "fields": [
-                {
-                    "name": "performance.character.name"
-                },
-                {
-                    "name": "appears_in"
-                }
-            ],
-            "name": "performance.character"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                },
-                {
-                    "name": "post1.commentsByMonth"
-                },
-                {
-                    "name": "post1.likesByMonth"
-                }
-
-            ],
-            "name": "post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "performance.character.name"
-                },
-                {
-                    "name": "appears_in"
-                },
-                {
-                    "name": "roboDroid.primaryFunction"
-                }
-            ],
-            "name": "roboDroid"
-        },
-        {
-            "fields": [
-                {
-                    "name": "star.ship.name"
-                },
-                {
-                    "name": "star.ship.length"
-                }
-            ],
-            "name": "star.ship"
-        },
-        {
-            "fields": [
-                {
-                    "name": "test.dgraph.author.name"
-                },
-                {
-                    "name": "test.dgraph.author.dob"
-                },
-                {
-                    "name": "test.dgraph.author.reputation"
-                },
-                {
-                    "name": "test.dgraph.author.country"
-                },
-                {
-                    "name": "test.dgraph.author.posts"
-                },
-                {
-                    "name": "test.dgraph.author.qualification"
-                }
-            ],
-            "name": "test.dgraph.author"
-        },
-        {
-            "fields": [
-                {
-                    "name": "test.dgraph.employee.en.ename"
-                }
-            ],
-            "name": "test.dgraph.employee.en"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Book.name"
-                },
-                {
-                    "name": "Book.desc"
-                },
-                {
-                    "name": "Book.bookId"
-                },
-                {
-                    "name": "Book.chapters"
-                }
-            ],
-            "name": "Book"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Chapter.name"
-                },
-                {
-                    "name": "Chapter.book"
-                },
-                {
-                    "name": "Chapter.chapterId"
-                }
-            ],
-            "name": "Chapter"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Section.sectionId"
-                },
-                {
-                    "name": "Section.chapterId"
-                },
-                {
-                    "name": "Section.name"
-                }
-            ],
-            "name": "Section"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.cors"
-                }
-            ],
-            "name": "dgraph.type.cors"
-=======
       ],
       "name": "test.dgraph.author"
     },
@@ -1909,7 +1362,6 @@
       "fields": [
         {
           "name": "test.dgraph.employee.en.ename"
->>>>>>> Feat(GraphQL): Refactor Mutation Rewriting for AddRewriter (#7257)
         }
       ],
       "name": "test.dgraph.employee.en"
