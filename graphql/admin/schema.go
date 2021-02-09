@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -64,20 +65,9 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
-<<<<<<< HEAD
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
-=======
-	if updateHistory {
-		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
-			glog.Errorf("error while updating schema history %s", err.Error())
-		}
-	}
-
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{
->>>>>>> ibrahim/multitenancy
 			m.Name(): map[string]interface{}{
 				"gqlSchema": map[string]interface{}{
 					"id":              query.UidToHex(resp.Uid),
@@ -92,52 +82,26 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
+
 	ns := x.ExtractNamespace(ctx)
-	b, err := doQuery(gsr.admin.schema[ns], gsr.gqlQuery)
-	return &dgoapi.Response{Json: b}, err
+
+	cs := gsr.admin.schema[ns]
+	if cs == nil || cs.ID == "" {
+		data = map[string]interface{}{q.Name(): nil}
+	} else {
+		data = map[string]interface{}{
+			q.Name(): map[string]interface{}{
+				"id":              cs.ID,
+				"schema":          cs.Schema,
+				"generatedSchema": cs.GeneratedSchema,
+			}}
+	}
+
+	return resolve.DataResult(q, data, nil)
 }
 
 func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
 	return nil
-}
-
-func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
-
-	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(field.Name()))
-
-	// Its possible that there is no schema for the namespace in which case gql would be nil.
-	if gql == nil || gql.ID == "" {
-		x.Check2(buf.WriteString(`": null }`))
-		return buf.Bytes(), nil
-	}
-
-	x.Check2(buf.WriteString(`": [{`))
-
-	for i, sel := range field.SelectionSet() {
-		var val []byte
-		var err error
-		switch sel.Name() {
-		case "id":
-			val, err = json.Marshal(gql.ID)
-		case "schema":
-			val, err = json.Marshal(gql.Schema)
-		case "generatedSchema":
-			val, err = json.Marshal(gql.GeneratedSchema)
-		}
-		x.Check2(val, err)
-
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.Name()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.Write(val))
-	}
-
-	return resolve.DataResult(q, data, nil)
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

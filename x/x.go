@@ -450,16 +450,6 @@ func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 	}
 	return ctx
 }
-func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
-	// ns, _ := strconv.ParseUint(namespace, 64, 10)
-	ns := strconv.FormatUint(namespace, 10)
-	md.Append("namespace", ns)
-	return metadata.NewIncomingContext(ctx, md)
-}
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
 func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
@@ -1304,7 +1294,7 @@ Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations
 
 	/*Additional Commands:{{range .Commands}}{{if (and .IsAvailableCommand (not .Annotations.group))}}
 	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}*/
-	`	
+	`
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
@@ -1320,7 +1310,7 @@ Usage:{{if .Runnable}}
 
 Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-  
+
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 

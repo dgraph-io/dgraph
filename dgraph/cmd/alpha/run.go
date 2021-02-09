@@ -466,33 +466,27 @@ func setupServer(closer *z.Closer) {
 	globalEpoch := make(map[uint64]*uint64)
 	e := new(uint64)
 	atomic.StoreUint64(e, 0)
-	globalEpoch[x.DefaultNamespace] = e
+	globalEpoch[x.GalaxyNamespace] = e
 	var mainServer web.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
-<<<<<<< HEAD
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
-	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		namespace := r.Header.Get("namespace")
 		r.Header.Set("resolver", namespace)
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
-	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
-=======
-	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	baseMux.Handle("/graphql", mainServer.HTTPHandler())
-	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter,
-		r *http.Request) {
->>>>>>> ibrahim/multitenancy
+	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
 		w.Header().Set("Content-Type", "application/json")
-<<<<<<< HEAD
+		x.AddCorsHeaders(w)
+		w.WriteHeader(httpStatusCode)
 		namespace := r.Header.Get("namespace")
 		ns, _ := strconv.ParseUint(namespace, 10, 64)
 		e = globalEpoch[ns]
@@ -500,14 +494,10 @@ func setupServer(closer *z.Closer) {
 		if e != nil {
 			counter = atomic.LoadUint64(e)
 		}
-=======
-		x.AddCorsHeaders(w)
-		w.WriteHeader(httpStatusCode)
->>>>>>> ibrahim/multitenancy
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, counter))))
 	})
-	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", "0")
 		allowedMethodsHandler(allowedMethods{
 			http.MethodGet:     true,
@@ -515,14 +505,6 @@ func setupServer(closer *z.Closer) {
 			http.MethodOptions: true,
 		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
 	})
-<<<<<<< HEAD
-=======
-	baseMux.Handle("/admin", allowedMethodsHandler(allowedMethods{
-		http.MethodGet:     true,
-		http.MethodPost:    true,
-		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler())))
->>>>>>> ibrahim/multitenancy
 
 	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
 		w http.ResponseWriter,
@@ -597,7 +579,7 @@ func setupServer(closer *z.Closer) {
 
 		<-admin.ServerCloser.HasBeenClosed()
 		// TODO - Verify why do we do this and does it have to be done for all namespaces.
-		e = globalEpoch[x.DefaultNamespace]
+		e = globalEpoch[x.GalaxyNamespace]
 		atomic.StoreUint64(e, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.

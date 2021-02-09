@@ -447,9 +447,9 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
-	e := globalEpoch[x.DefaultNamespace]
+	e := globalEpoch[x.GalaxyNamespace]
 	mainServer := web.NewServer(false)
-	mainServer.Set(x.DefaultNamespace, e, resolvers)
+	mainServer.Set(x.GalaxyNamespace, e, resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -459,9 +459,9 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
-	e = globalEpoch[x.DefaultNamespace]
+	e = globalEpoch[x.GalaxyNamespace]
 	adminServer := web.NewServer(true)
-	adminServer.Set(x.DefaultNamespace, e, adminResolvers)
+	adminServer.Set(x.GalaxyNamespace, e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
 }
@@ -528,15 +528,11 @@ func newAdminResolver(
 			Schema:  string(pl.Postings[0].Value),
 		}
 		server.mux.RLock()
-<<<<<<< HEAD
 
 		currentSchema, ok := server.schema[ns]
-		if ok && newSchema.Schema == currentSchema.Schema {
-			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
-=======
-		if newSchema.Version <= server.schema.Version || newSchema.Schema == server.schema.Schema {
-			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.", newSchema.Version, server.schema.Version)
->>>>>>> ibrahim/multitenancy
+		if ok && (newSchema.Version <= currentSchema.Version || newSchema.Schema == currentSchema.Schema) {
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.",
+				newSchema.Version, currentSchema.Version)
 			server.mux.RUnlock()
 			return
 		}
@@ -682,7 +678,7 @@ func (as *adminServer) initServer() {
 			continue
 		}
 
-		as.schema[x.DefaultNamespace] = sch
+		as.schema[x.GalaxyNamespace] = sch
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
@@ -699,7 +695,7 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		as.resetSchema(x.DefaultNamespace, generatedSchema)
+		as.resetSchema(x.GalaxyNamespace, generatedSchema)
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
@@ -744,15 +740,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
 		}).
-<<<<<<< HEAD
-=======
-		WithQueryResolver("querySchemaHistory", func(q schema.Query) resolve.QueryResolver {
-			// Add the descending order to the created_at to get the schema history in
-			// descending order.
-			q.Arguments()["order"] = map[string]interface{}{"desc": "created_at"}
-			return resolve.NewQueryResolver(qryRw, dgEx)
-		}).
->>>>>>> ibrahim/multitenancy
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
@@ -797,12 +784,7 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
-<<<<<<< HEAD
 func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
-=======
-// Todo(Minhaj): Fetch NewHandler for service query only once
-func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
->>>>>>> ibrahim/multitenancy
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
 
@@ -821,7 +803,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 				return resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					as.mux.RLock()
 					defer as.mux.RUnlock()
-					sch := as.schema.Schema
+					sch := as.schema[ns].Schema
 					handler, err := schema.NewHandler(sch, false, true)
 					if err != nil {
 						return resolve.EmptyResult(query, err)
