@@ -103,7 +103,7 @@ func (cdc *CDC) getTs() uint64 {
 	return min
 }
 
-func (cdc *CDC) resetPendingTxns() {
+func (cdc *CDC) resetPendingEvents() {
 	if cdc == nil {
 		return
 	}
@@ -219,22 +219,25 @@ func (cdc *CDC) processCDCEvents() {
 			if len(events) == 0 {
 				return
 			}
-			if proposal.Mutations.DropOp != pb.Mutations_NONE {
+			// In ludicrous, we execute the mutations as soon as we get the proposal.
+			// TODO: We should get a confirmation from ludicrous scheduler about this.
+			// It should tell you what the commit ts used was.
+			// TODO: For now, do NOT support ludicrous mode.
+
+			switch {
+			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
 				if proposal.Mutations.DropOp == pb.Mutations_ALL ||
 					proposal.Mutations.DropOp == pb.Mutations_DATA {
-					cdc.resetPendingTxns()
+					cdc.resetPendingEvents()
 				}
 				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
 					return
 				}
+			default:
+				cdc.addToPending(proposal.Mutations.StartTs, events)
 			}
-			// In ludicrous, we execute the mutations as soon as we get the proposal.
-			// TODO: We should get a confirmation from ludicrous scheduler about this.
-			// It should tell you what the commit ts used was.
-			// TODO: For now, do NOT support ludicrous mode.
-			cdc.addToPending(proposal.Mutations.StartTs, events)
 		}
 
 		if proposal.Delta != nil {
