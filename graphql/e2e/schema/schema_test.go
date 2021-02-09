@@ -62,18 +62,13 @@ func TestSchemaSubscribe(t *testing.T) {
 		name: String!
 	}`
 	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
-	t.Log("1")
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	t.Log("2")
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
 	// reached all the servers.
 	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, nil)
-	t.Log("3")
 	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, nil)
-	t.Log("4")
 	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, nil)
-	t.Log("5")
 
 	introspectionQuery := `
 	query {
@@ -130,14 +125,10 @@ func TestSchemaSubscribe(t *testing.T) {
 	}`
 	groupThreePreUpdateCounter := groupOnePreUpdateCounter + 1
 	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema, nil)
-	t.Log("6")
 
 	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter, nil)
-	t.Log("7")
 	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter, nil)
-	t.Log("8")
 	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter, nil)
-	t.Log("9")
 
 	expectedResult =
 		`{
@@ -190,16 +181,12 @@ func TestSchemaSubscribeNamespace(t *testing.T) {
 
 	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
-	t.Log("1")
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
 	// reached all the servers.
 	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, header)
-	t.Log("2")
 	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, header)
-	t.Log("3")
 	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, header)
-	t.Log("4")
 
 	// Now update schema on an alpha node for group 3 for namespace 1 and see if nodes in group 1
 	// and 2 also get it.
@@ -214,13 +201,9 @@ func TestSchemaSubscribeNamespace(t *testing.T) {
 
 	group3NS1PreUpdateCounter := uint64(0) // this has to be 0 as namespace was just created
 	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema1, header1)
-	t.Log("5")
 	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, group3NS1PreUpdateCounter, header1)
-	t.Log("6")
 	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, group3NS1PreUpdateCounter, header1)
-	t.Log("7")
 	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, group3NS1PreUpdateCounter, header1)
-	t.Log("8")
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupOneHTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupTwoHTTP, header).Schema)

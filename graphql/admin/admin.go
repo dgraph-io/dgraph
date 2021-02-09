@@ -529,13 +529,6 @@ func newAdminResolver(
 
 		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
-		glog.Infof("****** namespace: %v", ns)
-		glog.Infof("****** new schema:\n%s", newSchema.Schema)
-		if ok {
-			glog.Infof("****** current schema:\n%s", currentSchema.Schema)
-		} else {
-			glog.Infof("****** no current schema")
-		}
 		if ok && newSchema.Schema == currentSchema.Schema {
 			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
 			server.mux.RUnlock()
