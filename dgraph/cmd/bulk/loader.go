@@ -87,6 +87,7 @@ type options struct {
 	BadgerCompressionLevel int
 	BlockCacheSize         int64
 	IndexCacheSize         int64
+	BadgerVlogPercentile   float64
 }
 
 type state struct {

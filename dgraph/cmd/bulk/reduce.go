@@ -132,7 +132,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
-		WithValueThreshold(1 << 20 /* 1 KB */).
+		WithValueThreshold(1 << 10 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
 		WithIndexCacheSize(r.opt.IndexCacheSize)
@@ -145,6 +145,7 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 		opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
 	}
 
+	opt.VLogPercentile = r.state.opt.BadgerVlogPercentile
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 
