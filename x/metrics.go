@@ -271,7 +271,7 @@ var (
 			Name:        PendingBackups.Name(),
 			Measure:     PendingBackups,
 			Description: PendingBackups.Description(),
-			Aggregation: view.LastValue(),
+			Aggregation: view.Sum(),
 			TagKeys:     nil,
 		},
 		{

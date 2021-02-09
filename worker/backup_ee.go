@@ -117,9 +117,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	ostats.Record(ctx, x.NumBackups.M(1), x.PendingBackups.M(1))
 	defer func() {
 		if backupSuccessful {
-			ostats.Record(ctx, x.NumBackupsSuccess.M(1), x.PendingBackups.M(0))
+			ostats.Record(ctx, x.NumBackupsSuccess.M(1), x.PendingBackups.M(-1))
 		} else {
-			ostats.Record(ctx, x.NumBackupsFailed.M(1), x.PendingBackups.M(0))
+			ostats.Record(ctx, x.NumBackupsFailed.M(1), x.PendingBackups.M(-1))
 		}
 	}()
 
