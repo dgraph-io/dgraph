@@ -151,6 +151,7 @@ func (gs *graphqlSubscription) Subscribe(
 	}
 	header, _ := ctx.Value("Header").(json.RawMessage)
 	var namespace uint64
+	newCtx := context.Background()
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
@@ -163,9 +164,9 @@ func (gs *graphqlSubscription) Subscribe(
 			req := &http.Request{
 				Header: make(map[string][]string),
 			}
-			req.Header.Set("X-Dgraph-Access-Token", v)
-			ctx := x.AttachAccessJwt(context.Background(), req)
-			namespace, _ = x.ExtractJWTNamespace(ctx)
+			req.Header.Set("X-Dgraph-AccessToken", v)
+			newCtx = x.AttachAccessJwt(newCtx, req)
+			namespace, _ = x.ExtractJWTNamespace(newCtx)
 		}
 		for key, val := range payload {
 			if !strings.EqualFold(key, name) {
@@ -193,7 +194,9 @@ func (gs *graphqlSubscription) Subscribe(
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
-		Namespace:     namespace,
+		// We pass down the context because it contains the accessJWT which is used for the query
+		// Resolve method.
+		Context: newCtx,
 	}
 	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
 		return nil, nil

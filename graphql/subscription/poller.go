@@ -93,8 +93,7 @@ func (p *Poller) AddSubscriber(
 	p.Lock()
 	defer p.Unlock()
 
-	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
-	ctx = x.AttachNamespace(ctx, req.Namespace)
+	ctx := context.WithValue(req.Context, authorization.AuthVariables, customClaims.AuthVariables)
 	res := resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
@@ -136,7 +135,7 @@ func (p *Poller) AddSubscriber(
 		graphqlReq:    req,
 		authVariables: customClaims.AuthVariables,
 		localEpoch:    localEpoch,
-		namespace:     req.Namespace,
+		context:       req.Context,
 	}
 	go p.poll(pollR)
 
@@ -153,7 +152,7 @@ type pollRequest struct {
 	bucketID      uint64
 	localEpoch    uint64
 	authVariables map[string]interface{}
-	namespace     uint64
+	context       context.Context
 }
 
 func (p *Poller) poll(req *pollRequest) {
@@ -174,8 +173,7 @@ func (p *Poller) poll(req *pollRequest) {
 			p.terminateSubscriptions(req.bucketID)
 		}
 
-		ctx := context.WithValue(context.Background(), authorization.AuthVariables, req.authVariables)
-		ctx = x.AttachNamespace(ctx, req.namespace)
+		ctx := context.WithValue(req.context, authorization.AuthVariables, req.authVariables)
 		res := resolver.Resolve(ctx, req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
