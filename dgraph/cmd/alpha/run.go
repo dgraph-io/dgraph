@@ -203,6 +203,17 @@ they form a Raft group and provide synchronous replication.
 	flag.
 	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
+	flag.String("cdc", "",
+		`Various change data capture options.
+	file=/path/to/directory where audit logs will be stored.
+	kafka=host1,host2 to define comma separated list of host.
+	sasl-user=username to define sasl username for kafka.
+	sasl-password=password to define sasl password for kafka.
+	ca-cert=/path/to/ca/crt/file to define ca cert for tls encryption.
+	client-cert=/path/to/client/cert/file to define the client certificate for tls encryption.
+	client-key=/path/to/client/key/file to define the client key for tls encryption.
+	`)
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -618,9 +629,10 @@ func run() {
 		PIndexCacheSize:            pstoreIndexCacheSize,
 		WalCache:                   walCache,
 
-		MutationsMode: worker.AllowMutations,
-		AuthToken:     Alpha.Conf.GetString("auth_token"),
-		Audit:         conf,
+		MutationsMode:  worker.AllowMutations,
+		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		Audit:          conf,
+		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

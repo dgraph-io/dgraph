@@ -261,7 +261,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
-	if err := groups().Node.proposeSnapshot(1); err != nil {
+	if err := groups().Node.proposeSnapshot(); err != nil {
 		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
 	}
 

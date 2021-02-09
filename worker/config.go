@@ -72,6 +72,9 @@ type Options struct {
 	CacheMb int64
 
 	Audit *audit.AuditConf
+
+	// Define different ChangeDataCapture configurations
+	ChangeDataConf string
 }
 
 // Config holds an instance of the server options..

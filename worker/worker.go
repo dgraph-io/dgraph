@@ -129,6 +129,8 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+
+	groups().Node.cdcTracker.Close()
 }
 
 // UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.
