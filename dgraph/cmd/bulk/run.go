@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 
@@ -47,12 +48,14 @@ var defaultOutDir = "./out"
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
-		Short: "Run Dgraph bulk loader",
+		Short: "Run Dgraph Bulk Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
+	Bulk.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
@@ -110,6 +113,8 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Uint64("force-namespace", math.MaxUint64,
+		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -153,6 +158,8 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
+		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
+
 		// Badger options
 		BadgerCompression:      ctype,
 		BadgerCompressionLevel: clevel,
@@ -209,7 +216,8 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+	}
+	if !filestore.Exists(opt.SchemaFile) {
 		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
 		os.Exit(1)
 	}
@@ -219,7 +227,7 @@ func run() {
 	} else {
 		fileList := strings.Split(opt.DataFiles, ",")
 		for _, file := range fileList {
-			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+			if !filestore.Exists(file) {
 				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
 				os.Exit(1)
 			}
@@ -322,6 +330,7 @@ func run() {
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+		loader.leaseNamespaces()
 
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,

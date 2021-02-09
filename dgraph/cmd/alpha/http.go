@@ -40,9 +40,8 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -643,7 +642,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachNamespace(ctx, x.ExtractNamespaceHTTP(r))
+	ctx = x.AttachJWTNamespace(ctx)
 
 	return adminServer.ResolveWithNs(ctx, 0, gqlReq)
 }

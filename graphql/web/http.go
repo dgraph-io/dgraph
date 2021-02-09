@@ -151,17 +151,23 @@ func (gs *graphqlSubscription) Subscribe(
 	}
 	header, _ := ctx.Value("Header").(json.RawMessage)
 	var namespace uint64
+	newCtx := context.Background()
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
 			return nil, err
 		}
 
-		if v, ok := payload[x.NamespaceHeaderHTTP].(string); ok {
-			namespace, _ = strconv.ParseUint(v, 10, 64)
-		}
-
 		name := authorization.GetHeader()
+		v, ok := payload["X-Dgraph-AccessToken"].(string)
+		if ok {
+			req := &http.Request{
+				Header: make(map[string][]string),
+			}
+			req.Header.Set("X-Dgraph-AccessToken", v)
+			newCtx = x.AttachAccessJwt(newCtx, req)
+			namespace, _ = x.ExtractJWTNamespace(newCtx)
+		}
 		for key, val := range payload {
 			if !strings.EqualFold(key, name) {
 				continue
@@ -188,7 +194,9 @@ func (gs *graphqlSubscription) Subscribe(
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
-		Namespace:     namespace,
+		// We pass down the context because it contains the accessJWT which is used for the query
+		// Resolve method.
+		Context: newCtx,
 	}
 	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
 		return nil, nil
@@ -234,7 +242,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachNamespace(ctx, x.ExtractNamespaceHTTP(r))
+	ctx = x.AttachJWTNamespace(ctx)
 	rs := r.Header.Get("resolver")
 	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
@@ -273,10 +281,7 @@ func (gz gzreadCloser) Close() error {
 }
 
 func getRequest(r *http.Request) (*schema.Request, error) {
-	gqlReq := &schema.Request{
-		Header:    r.Header,
-		Namespace: x.ExtractNamespaceHTTP(r),
-	}
+	gqlReq := &schema.Request{}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := gzip.NewReader(r.Body)
@@ -339,6 +344,7 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 		return nil,
 			errors.New("Unrecognised request method.  Please use GET or POST for GraphQL requests")
 	}
+	gqlReq.Header = r.Header
 
 	return gqlReq, nil
 }

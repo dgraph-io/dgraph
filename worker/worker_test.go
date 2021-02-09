@@ -101,7 +101,6 @@ func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
 	edge := &pb.DirectedEdge{
 		ValueId: 23,
-		Label:   "author0",
 		Attr:    "neighbour",
 	}
 	edge.Entity = 10
@@ -366,16 +365,17 @@ func TestMain(m *testing.M) {
 	gr = new(groupi)
 	gr.gid = 1
 	gr.tablets = make(map[string]*pb.Tablet)
-	gr.tablets["name"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["name2"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["age"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["friend"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
-	gr.tablets[""] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
-	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
+	addTablets := func(attrs []string, gid uint32, namespace uint64) {
+		for _, attr := range attrs {
+			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
+		}
+	}
+
+	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
+		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
+		1, x.GalaxyNamespace)
+	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
+	addTablets([]string{"name"}, 1, 0x2)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

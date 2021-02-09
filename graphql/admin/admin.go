@@ -132,7 +132,8 @@ const (
 		counter: Int
 		groups: [ClusterGroup]
 		zeros: [Member]
-		maxLeaseId: Int
+		maxUID: Int
+		maxNsID: Int
 		maxTxnTs: Int
 		maxRaftId: Int
 		removed: [Member]
@@ -198,6 +199,11 @@ const (
 		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
 		"""
 		format: String
+
+		"""
+		Namespace for the export, if no value is given then it exports all namespaces.
+		"""
+		namespace: Int
 
 		"""
 		Destination for the export: e.g. Minio or S3 bucket or /absolute/path
@@ -370,7 +376,7 @@ var (
 )
 
 func SchemaValidate(sch string) error {
-	schHandler, err := schema.NewHandler(sch, true)
+	schHandler, err := schema.NewHandler(sch, true, false)
 	if err != nil {
 		return err
 	}
@@ -410,6 +416,7 @@ func (g *GraphQLHealthStore) updatingSchema() {
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
 	Schema          string `json:"schema,omitempty"`
+	Version         uint64
 	GeneratedSchema string
 }
 
@@ -442,9 +449,9 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
-	e := globalEpoch[x.DefaultNamespace]
+	e := globalEpoch[x.GalaxyNamespace]
 	mainServer := web.NewServer(false)
-	mainServer.Set(x.DefaultNamespace, e, resolvers)
+	mainServer.Set(x.GalaxyNamespace, e, resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -454,9 +461,9 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
-	e = globalEpoch[x.DefaultNamespace]
+	e = globalEpoch[x.GalaxyNamespace]
 	adminServer := web.NewServer(true)
-	adminServer.Set(x.DefaultNamespace, e, adminResolvers)
+	adminServer.Set(x.GalaxyNamespace, e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
 }
@@ -487,17 +494,13 @@ func newAdminResolver(
 	}
 	adminServerVar = server // store the admin server in package variable
 
-	// TODO(Ahsan): The namespace shouldn't be default always"
-	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
+	prefix := x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
-	go worker.SubscribeForUpdates([][]byte{prefix}, "3-11", func(kvs *badgerpb.KVList) {
+	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
-
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -523,14 +526,16 @@ func newAdminResolver(
 		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 
 		newSchema := &gqlSchema{
-			ID:     query.UidToHex(pk.Uid),
-			Schema: string(pl.Postings[0].Value),
+			ID:      query.UidToHex(pk.Uid),
+			Version: kv.GetVersion(),
+			Schema:  string(pl.Postings[0].Value),
 		}
 
 		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
-		if ok && newSchema.Schema == currentSchema.Schema {
-			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+		if ok && (newSchema.Version <= currentSchema.Version || newSchema.Schema == currentSchema.Schema) {
+			glog.Infof("Skipping GraphQL schema update, new badger key version is %d, the old version was %d.",
+				newSchema.Version, currentSchema.Version)
 			server.mux.RUnlock()
 			return
 		}
@@ -571,7 +576,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"backup":          resolveBackup,
 		"config":          resolveUpdateConfig,
-		"createNamespace": resolveCreateNamespace,
 		"deleteNamespace": resolveDeleteNamespace,
 		"draining":        resolveDraining,
 		"export":          resolveExport,
@@ -594,6 +598,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
+		}).
+		WithQueryResolver("getNewNamespace", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetNewNamespace)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
@@ -644,7 +651,7 @@ func getCurrentGraphQLSchema(namespace uint64) (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema, false)
+	schHandler, err := schema.NewHandler(sch.Schema, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -675,13 +682,13 @@ func (as *adminServer) initServer() {
 	for {
 		<-time.After(waitFor)
 
-		sch, err := getCurrentGraphQLSchema(x.DefaultNamespace)
+		sch, err := getCurrentGraphQLSchema(x.GalaxyNamespace)
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
 		}
 
-		as.schema[x.DefaultNamespace] = sch
+		as.schema[x.GalaxyNamespace] = sch
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
@@ -698,7 +705,7 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		as.resetSchema(x.DefaultNamespace, generatedSchema)
+		as.resetSchema(x.GalaxyNamespace, generatedSchema)
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
@@ -714,104 +721,58 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
-			return &updateSchemaResolver{
-				admin: as,
-			}
+			return &updateSchemaResolver{admin: as}
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
-				getResolver := &getSchemaResolver{
-					admin: as,
-				}
-
-				return resolve.NewQueryResolver(
-					getResolver,
-					getResolver,
-					resolve.StdQueryCompletion())
+				return &getSchemaResolver{admin: as}
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getCurrentUser",
 			func(q schema.Query) resolve.QueryResolver {
-				cuResolver := &currentUserResolver{
-					baseRewriter: qryRw,
-				}
-
-				return resolve.NewQueryResolver(
-					cuResolver,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(&currentUserResolver{baseRewriter: qryRw}, dgEx)
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
-					qryRw,
-					dgEx,
-					resolve.StdQueryCompletion())
+				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
 		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveGetCors)
 		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewAddRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					NewAddGroupRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(NewAddGroupRewriter(), dgEx)
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewUpdateRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewUpdateRewriter(), dgEx)
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					NewUpdateGroupRewriter(),
-					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+				return resolve.NewDgraphResolver(NewUpdateGroupRewriter(), dgEx)
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewDeleteRewriter(),
-					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
-					resolve.NewDeleteRewriter(),
-					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
 			}).
 		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(resolveReplaceAllowedCORSOrigins)
@@ -857,6 +818,25 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	} else {
 		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
 			WithConventionResolvers(gqlSchema, as.fns)
+		// If the schema is a Federated Schema then attach "_service" resolver
+		if gqlSchema.IsFederated() {
+			resolverFactory.WithQueryResolver("_service", func(s schema.Query) resolve.QueryResolver {
+				return resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
+					as.mux.RLock()
+					defer as.mux.RUnlock()
+					sch := as.schema[ns].Schema
+					handler, err := schema.NewHandler(sch, false, true)
+					if err != nil {
+						return resolve.EmptyResult(query, err)
+					}
+					data := handler.GQLSchemaWithoutApolloExtras()
+					return resolve.DataResult(query,
+						map[string]interface{}{"_service": map[string]interface{}{"sdl": data}},
+						nil)
+				})
+			})
+		}
+
 		if as.withIntrospection {
 			resolverFactory.WithSchemaIntrospection()
 		}

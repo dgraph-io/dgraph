@@ -352,7 +352,7 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 // and decompressed automatically even without the gz extension. The key, if non-nil,
 // is used to decrypt the file. The caller is responsible for calling the returned cleanup
 // function when done with the reader.
-func FileReader(file string, key x.SensitiveByteSlice) (rd *bufio.Reader, cleanup func()) {
+func FileReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -363,6 +363,12 @@ func FileReader(file string, key x.SensitiveByteSlice) (rd *bufio.Reader, cleanu
 
 	x.Check(err)
 
+	return StreamReader(file, key, f)
+}
+
+// StreamReader returns a bufio given a ReadCloser. The file is passed just to check for .gz files
+func StreamReader(file string, key x.SensitiveByteSlice, f io.ReadCloser) (
+	rd *bufio.Reader, cleanup func()) {
 	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {

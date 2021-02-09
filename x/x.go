@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -42,6 +43,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto/z"
@@ -67,6 +69,8 @@ var (
 	ErrNoJwt        = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
+	// ErrConflict is returned when commit couldn't succeed due to conflicts.
+	ErrConflict = errors.New("Transaction conflict")
 )
 
 const (
@@ -128,9 +132,7 @@ const (
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
-	// headers used for multi-tenancy namespace
-	NamespaceHeaderGRPC = "namespace"
-	NamespaceHeaderHTTP = "namespace"
+	DgraphVersion = 2103
 )
 
 var (
@@ -140,16 +142,17 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
-	// GuardiansGroupUid is Uid of guardians group node.
-	GuardiansGroupUid uint64
-	// GrootUser Uid is Uid of groot user node.
-	GrootUserUid uint64
+	// GuardiansUid is a map from namespace to the Uid of guardians group node.
+	GuardiansUid = &sync.Map{}
+	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	GrootUid = &sync.Map{}
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
-	atomic.StoreUint64(&GuardiansGroupUid, 0)
-	atomic.StoreUint64(&GrootUserUid, 0)
+	GuardiansUid.Store(GalaxyNamespace, 0)
+	GrootUid.Store(GalaxyNamespace, 0)
+
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.
@@ -213,6 +216,14 @@ type queryRes struct {
 	Errors GqlErrorList `json:"errors"`
 }
 
+// IsGqlErrorList tells whether the given err is a list of GraphQL errors.
+func IsGqlErrorList(err error) bool {
+	if _, ok := err.(GqlErrorList); ok {
+		return true
+	}
+	return false
+}
+
 func (gqlErr *GqlError) Error() string {
 	var buf bytes.Buffer
 	if gqlErr == nil {
@@ -254,22 +265,15 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
-// ExtractNamespaceHTTP parse the namespace value from the given HTTP request.
-func ExtractNamespaceHTTP(r *http.Request) uint64 {
-	// let's ignore the error and return the default namespace, i.e. 0.
-	ns, _ := strconv.ParseUint(r.Header.Get(NamespaceHeaderHTTP), 10, 64)
-	return ns
-}
-
 // ExtractNamespace parses the namespace value from the incoming gRPC context.
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return DefaultNamespace
+		glog.Fatal("No metadata in the context")
 	}
-	ns := md.Get(NamespaceHeaderGRPC)
+	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		return DefaultNamespace
+		glog.Fatal("No namespace in the metadata of context")
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
@@ -407,6 +411,33 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+// AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
+// it attaches the galaxy namespace.
+func AttachJWTNamespace(ctx context.Context) context.Context {
+	if WorkerConfig.AclEnabled {
+		ns, err := ExtractJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = AttachNamespace(ctx, ns)
+	} else {
+		ctx = AttachNamespace(ctx, GalaxyNamespace)
+	}
+	return ctx
+}
+
+// AttachNamespace adds given namespace to the metadata of the context.
+func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	ns := strconv.FormatUint(namespace, 10)
+	md.Set("namespace", ns)
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
+}
+
 // AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
 func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
@@ -419,16 +450,6 @@ func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx
-}
-func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
-	// ns, _ := strconv.ParseUint(namespace, 64, 10)
-	ns := strconv.FormatUint(namespace, 10)
-	md.Append(NamespaceHeaderGRPC, ns)
-	return metadata.NewIncomingContext(ctx, md)
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -1028,7 +1049,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+	if err := dg.Login(ctx, opt.UserID, password, GalaxyNamespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
@@ -1237,4 +1258,75 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+// RootTemplate defines the help template for dgraph command.
+var RootTemplate string = `Dgraph is a horizontally scalable and distributed graph database,
+providing ACID transactions, consistent replication and linearizable reads.
+It's built from the ground up to perform for a rich set of queries. Being a native
+graph database, it tightly controls how the data is arranged on disk to optimize
+for query performance and throughput, reducing disk seeks and network calls in a
+cluster.` + BuildDetails() +
+	`Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
+
+Generic: {{range .Commands}} {{if (or (and .IsAvailableCommand (eq .Annotations.group "default")) (eq .Name "help"))}}
+ {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Available Commands:
+
+Dgraph Core: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Data Loading: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Security: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Debug: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "debug"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "tool"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+` +
+	// uncomment this part when new availalble commands are added
+
+	/*Additional Commands:{{range .Commands}}{{if (and .IsAvailableCommand (not .Annotations.group))}}
+	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}*/
+	`
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
+// NonRootTemplate defines the help template for dgraph sub-command.
+var NonRootTemplate string = `{{if .Long}} {{.Long}} {{else}} {{.Short}} {{end}}
+Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
+
+Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
+// KvWithMaxVersion returns a KV with the max version from the list of KVs.
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
+	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+	// KV contain the latest value.
+	var maxKv *badgerpb.KV
+	for _, kv := range kvs.GetKv() {
+		if maxKv.GetVersion() <= kv.GetVersion() {
+			maxKv = kv
+		}
+	}
+	return maxKv
 }

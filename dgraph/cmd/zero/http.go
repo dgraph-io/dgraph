@@ -73,12 +73,17 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	what := r.URL.Query().Get("what")
 	switch what {
 	case "uids":
-		ids, err = st.zero.AssignUids(ctx, num)
+		num.Type = pb.Num_UID
+		ids, err = st.zero.AssignIds(ctx, num)
 	case "timestamps":
+		num.Type = pb.Num_TXN_TS
 		if num.Val == 0 {
 			num.ReadOnly = true
 		}
 		ids, err = st.zero.Timestamps(ctx, num)
+	case "nsids":
+		num.Type = pb.Num_NS_ID
+		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
 			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
@@ -151,7 +156,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	tablet := r.URL.Query().Get("tablet")
 
 	// TODO(Ahsan): The move tablet request should be namespace aware.
-	tablet = x.NamespaceAttr(x.DefaultNamespace, tablet)
+	tablet = x.NamespaceAttr(x.GalaxyNamespace, tablet)
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")

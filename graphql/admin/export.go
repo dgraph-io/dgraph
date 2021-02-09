@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"math"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -29,7 +30,8 @@ import (
 )
 
 type exportInput struct {
-	Format string
+	Format    string
+	Namespace uint64
 	DestinationFields
 }
 
@@ -50,8 +52,11 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
+	// TODO(Naman): Check if that namespace exist and the relevant permissions.
+
 	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
 		Format:       format,
+		Namespace:    input.Namespace,
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
@@ -63,20 +68,22 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	}
 
 	responseData := response("Success", "Export completed.")
-	responseData["exportedFiles"] = toGraphQLArray(files)
+	responseData["exportedFiles"] = toInterfaceSlice(files)
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): responseData},
-		Field: m,
-	}, true
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{m.Name(): responseData},
+		nil,
+	), true
 }
 
-func toGraphQLArray(s []string) []interface{} {
-	outputFiles := make([]interface{}, 0, len(s))
-	for _, f := range s {
-		outputFiles = append(outputFiles, f)
+// toInterfaceSlice converts []string to []interface{}
+func toInterfaceSlice(in []string) []interface{} {
+	out := make([]interface{}, 0, len(in))
+	for _, s := range in {
+		out = append(out, s)
 	}
-	return outputFiles
+	return out
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {
@@ -88,5 +95,13 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 
 	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
+
+	// TODO(Naman): Get this from token.
+	// Export everything if namespace is not specified.
+	if v, ok := inputArg.(map[string]interface{}); ok {
+		if _, ok := v["namespace"]; !ok {
+			input.Namespace = math.MaxUint64
+		}
+	}
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }

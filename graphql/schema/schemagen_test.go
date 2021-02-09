@@ -55,7 +55,7 @@ func TestDGSchemaGen(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				schHandler, errs := NewHandler(sch.Input, false)
+				schHandler, errs := NewHandler(sch.Input, false, false)
 				require.NoError(t, errs)
 
 				dgSchema := schHandler.DGSchema()
@@ -84,7 +84,7 @@ func TestSchemaString(t *testing.T) {
 			str1, err := ioutil.ReadFile(inputFileName)
 			require.NoError(t, err)
 
-			schHandler, errs := NewHandler(string(str1), false)
+			schHandler, errs := NewHandler(string(str1), false, false)
 			require.NoError(t, errs)
 
 			newSchemaStr := schHandler.GQLSchema()
@@ -102,6 +102,36 @@ func TestSchemaString(t *testing.T) {
 	}
 }
 
+func TestApolloServiceQueryResult(t *testing.T) {
+	inputDir := "testdata/apolloservice/input/"
+	outputDir := "testdata/apolloservice/output/"
+
+	files, err := ioutil.ReadDir(inputDir)
+	require.NoError(t, err)
+
+	for _, testFile := range files {
+		t.Run(testFile.Name(), func(t *testing.T) {
+			inputFileName := inputDir + testFile.Name()
+			str1, err := ioutil.ReadFile(inputFileName)
+			require.NoError(t, err)
+
+			schHandler, errs := NewHandler(string(str1), false, true)
+			require.NoError(t, errs)
+
+			apolloServiceResult := schHandler.GQLSchemaWithoutApolloExtras()
+
+			_, err = FromString(schHandler.GQLSchema())
+			require.NoError(t, err)
+			outputFileName := outputDir + testFile.Name()
+			str2, err := ioutil.ReadFile(outputFileName)
+			require.NoError(t, err)
+			if diff := cmp.Diff(string(str2), apolloServiceResult); diff != "" {
+				t.Errorf("result mismatch - diff (- want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestSchemas(t *testing.T) {
 	fileName := "gqlschema_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
@@ -114,7 +144,7 @@ func TestSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				schHandler, errlist := NewHandler(sch.Input, false)
+				schHandler, errlist := NewHandler(sch.Input, false, false)
 				require.NoError(t, errlist, sch.Name)
 
 				newSchemaStr := schHandler.GQLSchema()
@@ -128,7 +158,7 @@ func TestSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input, false)
+				_, errlist := NewHandler(sch.Input, false, false)
 				if diff := cmp.Diff(sch.Errlist, errlist, cmpopts.IgnoreUnexported(gqlerror.Error{})); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
@@ -154,7 +184,7 @@ func TestAuthSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				schHandler, errlist := NewHandler(sch.Input, false)
+				schHandler, errlist := NewHandler(sch.Input, false, false)
 				require.NoError(t, errlist, sch.Name)
 
 				_, authError := FromString(schHandler.GQLSchema())
@@ -166,7 +196,7 @@ func TestAuthSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				schHandler, errlist := NewHandler(sch.Input, false)
+				schHandler, errlist := NewHandler(sch.Input, false, false)
 				require.NoError(t, errlist, sch.Name)
 
 				_, authError := FromString(schHandler.GQLSchema())
@@ -305,7 +335,7 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, errlist := NewHandler(test.schema, false)
+			_, errlist := NewHandler(test.schema, false, false)
 			require.Len(t, errlist, test.expectedErrors,
 				"every field in this test applies @search wrongly and should raise an error")
 		})

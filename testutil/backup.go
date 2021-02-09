@@ -117,7 +117,7 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 	}
 	defer db.Close()
 
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+	attr = x.GalaxyAttr(attr)
 	values := make(map[string]string)
 
 	txn := db.NewTransactionAt(readTs, false)

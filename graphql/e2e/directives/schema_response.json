@@ -9,6 +9,20 @@
             ]
         },
         {
+            "predicate": "Astronaut.id",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ],
+            "upsert": true
+        },
+        {
+            "predicate": "Astronaut.missions",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Category.name",
             "type": "string"
         },
@@ -101,6 +115,37 @@
             "predicate": "Human.starships",
             "type": "uid",
             "list": true
+        },
+        {
+            "predicate": "Mission.crew",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Mission.designation",
+            "type": "string"
+        },
+        {
+            "predicate": "Mission.endDate",
+            "type": "string"
+        },
+        {
+            "predicate": "Mission.id",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ],
+            "upsert": true
+        },
+        {
+            "predicate": "Mission.spaceShip",
+            "type": "uid",
+            "list": true
+        },
+        {
+            "predicate": "Mission.startDate",
+            "type": "string"
         },
         {
             "predicate": "Movie.name",
@@ -423,6 +468,20 @@
             "type": "string"
         },
         {
+            "predicate": "SpaceShip.id",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "hash"
+            ],
+            "upsert": true
+        },
+        {
+            "predicate": "SpaceShip.missions",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "star.ship.length",
             "type": "float"
         },
@@ -510,6 +569,11 @@
             "type": "string"
         },
         {
+            "predicate": "Book.chapters",
+            "type": "uid",
+            "list": true
+        },
+        {
             "predicate": "Section.name",
             "type": "string"
         },
@@ -527,12 +591,8 @@
             "upsert": true
         },
         {
-            "index": true,
-            "predicate": "Chapter.bookId",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int"
+            "predicate": "Chapter.book",
+            "type": "uid"
         },
         {
             "index": true,
@@ -569,6 +629,17 @@
                 }
             ],
             "name": "Animal"
+        },
+        {
+            "fields": [
+                {
+                    "name": "Astronaut.id"
+                },
+                {
+                    "name": "Astronaut.missions"
+                }
+            ],
+            "name": "Astronaut"
         },
         {
             "fields": [
@@ -690,6 +761,29 @@
         {
             "fields": [
                 {
+                    "name": "Mission.id"
+                },
+                {
+                    "name": "Mission.crew"
+                },
+                {
+                    "name": "Mission.spaceShip"
+                },
+                {
+                    "name": "Mission.designation"
+                },
+                {
+                    "name": "Mission.startDate"
+                },
+                {
+                    "name": "Mission.endDate"
+                }
+            ],
+            "name": "Mission"
+        },
+        {
+            "fields": [
+                {
                     "name": "Movie.name"
                 }
             ],
@@ -757,6 +851,17 @@
                 }
             ],
             "name": "Post1"
+        },
+        {
+            "fields": [
+                {
+                    "name": "SpaceShip.id"
+                },
+                {
+                    "name": "SpaceShip.missions"
+                }
+            ],
+            "name": "SpaceShip"
         },
         {
             "fields": [
@@ -1038,6 +1143,9 @@
                 },
                 {
                     "name": "Book.bookId"
+                },
+                {
+                    "name": "Book.chapters"
                 }
             ],
             "name": "Book"
@@ -1048,7 +1156,7 @@
                     "name": "Chapter.name"
                 },
                 {
-                    "name": "Chapter.bookId"
+                    "name": "Chapter.book"
                 },
                 {
                     "name": "Chapter.chapterId"

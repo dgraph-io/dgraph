@@ -285,6 +285,19 @@ func (l *Lexer) Peek() rune {
 	return r
 }
 
+// Peek returns the next two rune without advancing the lexer.
+func (l *Lexer) PeekTwo() []rune {
+	r1 := l.Next()
+	if r1 == EOF {
+		l.Backup()
+		return []rune{r1, EOF}
+	}
+	r2 := l.Next()
+	l.Backup()
+	l.Backup()
+	return []rune{r1, r2}
+}
+
 func (l *Lexer) moveStartToPos() {
 	// check if we are about to move Start to a new line
 	for offset := l.Start; offset < l.Pos; {
