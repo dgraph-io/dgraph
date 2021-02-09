@@ -100,7 +100,7 @@ func (cdc *CDC) getTs() uint64 {
 	return min
 }
 
-func (cdc *CDC) addEventsAndUpdateIndex(ts uint64, index uint64, events []CDCEvent) {
+func (cdc *CDC) addToPending(ts uint64, index uint64, events []CDCEvent) {
 	if cdc == nil {
 		return
 	}
@@ -110,7 +110,7 @@ func (cdc *CDC) addEventsAndUpdateIndex(ts uint64, index uint64, events []CDCEve
 	cdc.updateSeenIndex(index)
 }
 
-func (cdc *CDC) deleteEventsAndUpdateIndex(ts uint64, index uint64) {
+func (cdc *CDC) removeFromPending(ts uint64, index uint64) {
 	if cdc == nil {
 		return
 	}
@@ -169,7 +169,7 @@ func (cdc *CDC) processCDCEvents() {
 		return
 	}
 
-	sendEvents := func(pending []CDCEvent, commitTs uint64) error {
+	sendToSink := func(pending []CDCEvent, commitTs uint64) error {
 		batch := make([]SinkMessage, len(pending))
 		for i, e := range pending {
 			e.Meta.CommitTs = commitTs
@@ -193,15 +193,62 @@ func (cdc *CDC) processCDCEvents() {
 		return nil
 	}
 
-	// This will always run on leader node only. For default mode,
-	// Leader will check the Raft logs and keep in memory events that are pending.
-	// Once Txn is done, it will try to send events to sink.
-	// Across the cluster, the process will manage sentTs
-	// as the maximum commit timestamp CDC has sent to the sink.
-	// In this way, even if leadership changes,
-	// new leader will know which new events are to be sent.
-	//
-	checkAndSendCDCEvents := func() error {
+	handleEntry := func(entry raftpb.Entry) (rerr error) {
+		defer func() {
+			// Irrespective of whether we act on this entry or not, we should
+			// always update the seenIndex. Otherwise, we'll loop over these
+			// entries over and over again. However, if we encounter an error,
+			// we should not update the index.
+			if rerr == nil {
+				cdc.updateSeenIndex(entry.Index)
+			}
+		}()
+
+		if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
+			return
+		}
+
+		var proposal pb.Proposal
+		if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
+			glog.Warningf("CDC: unmarshal failed with error %v. Ignoring.", err)
+			return
+		}
+
+		if proposal.Mutations != nil {
+			events := toCDCEvent(entry.Index, proposal.Mutations)
+			if len(events) == 0 {
+				return
+			}
+			// In ludicrous, we send the events as soon as we get it.
+			// We won't wait for oracle delta in case of ludicrous mode
+			// since all mutations will eventually succeed.
+			// TODO: We should get a confirmation from ludicrous scheduler about this.
+			// It should tell you what the commit ts used was.
+			// TODO: For now, do NOT support ludicrous mode.
+			cdc.addToPending(proposal.Mutations.StartTs, entry.Index, events)
+		}
+
+		if proposal.Delta != nil {
+			for _, ts := range proposal.Delta.Txns {
+				// This ensures we dont send events again in case of membership changes.
+				if ts.CommitTs > 0 && atomic.LoadUint64(&cdc.sentTs) < ts.CommitTs {
+					events := cdc.pendingTxnEvents[ts.StartTs]
+					if err := sendToSink(events, ts.CommitTs); err != nil {
+						rerr = errors.Wrapf(err, "unable to send messages to sink")
+						return
+					}
+				}
+				// Delete from pending events once events are sent.
+				cdc.removeFromPending(ts.StartTs, entry.Index)
+			}
+		}
+		return
+	}
+
+	// This will always run on leader node only. For default mode, Leader will
+	// check the Raft logs and keep in memory events that are pending.  Once
+	// Txn is done, it will send events to sink, and update sentTs locally.
+	sendEvents := func() error {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
 		cdcIndex := x.Max(atomic.LoadUint64(&cdc.seenIndex)+1, first)
@@ -223,50 +270,7 @@ func (cdc *CDC) processCDCEvents() {
 			}
 			batchFirst = entries[len(entries)-1].Index + 1
 			for _, entry := range entries {
-				if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
-					continue
-				}
-
-				var proposal pb.Proposal
-				if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-					glog.Warningf("CDC: unmarshal failed with error %v. Ignoring.", err)
-					continue
-				}
-
-				if proposal.Mutations != nil {
-					events := toCDCEvent(entry.Index, proposal.Mutations)
-					if len(events) == 0 {
-						continue
-					}
-					// In ludicrous, we send the events as soon as we get it.
-					// We won't wait for oracle delta in case of ludicrous mode
-					// since all mutations will eventually succeed.
-					// TODO: We should get a confirmation from ludicrous scheduler about this.
-					// It should tell you what the commit ts used was.
-					// TODO: For now, do NOT support ludicrous mode.
-					//if x.WorkerConfig.LudicrousMode {
-					//	if err := sendEvents(events, 0); err != nil {
-					//		return errors.Wrapf(err, "unable to send messages")
-					//	}
-					//	cdc.updateSeenIndex(entry.Index)
-					//	continue
-					//}
-					cdc.addEventsAndUpdateIndex(proposal.Mutations.StartTs, entry.Index, events)
-				}
-
-				if proposal.Delta != nil {
-					for _, ts := range proposal.Delta.Txns {
-						// This ensures we dont send events again in case of membership changes.
-						if ts.CommitTs > 0 && atomic.LoadUint64(&cdc.sentTs) < ts.CommitTs {
-							events := cdc.pendingTxnEvents[ts.StartTs]
-							if err := sendEvents(events, ts.CommitTs); err != nil {
-								return errors.Wrapf(err, "unable to send messages to sink")
-							}
-						}
-						// Delete from pending events once events are sent.
-						cdc.deleteEventsAndUpdateIndex(ts.StartTs, entry.Index)
-					}
-				}
+				handleEntry(entry)
 			}
 		}
 		return nil
@@ -283,11 +287,14 @@ func (cdc *CDC) processCDCEvents() {
 			return
 		case <-jobTick.C:
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				if err := checkAndSendCDCEvents(); err != nil {
+				if err := sendEvents(); err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
 			}
 		case <-proposalTick.C:
+			// The leader would propose the max seenIndex over to the group.
+			// So, in case of a crash or a leadership change, the new leader
+			// would know where to being iterating over the Raft logs.
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
 				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.seenIndex),
 					atomic.LoadUint64(&cdc.sentTs)); err != nil {
