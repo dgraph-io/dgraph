@@ -103,7 +103,6 @@ type pIterator struct {
 	l     *List
 	plist *pb.PostingList
 	pidx  int // index of postings
-	plen  int
 
 	afterUid uint64
 	splitIdx int
@@ -139,8 +138,7 @@ func (it *pIterator) seek(l *List, afterUid, deleteBelowTs uint64) error {
 		return nil
 	}
 
-	it.plen = len(it.plist.Postings)
-	it.pidx = sort.Search(it.plen, func(idx int) bool {
+	it.pidx = sort.Search(len(it.plist.Postings), func(idx int) bool {
 		p := it.plist.Postings[idx]
 		return it.afterUid < p.Uid
 	})
@@ -151,58 +149,38 @@ func (it *pIterator) selectInitialSplit(afterUid uint64) int {
 	return it.l.splitIdx(afterUid)
 }
 
-// moveToNextPart re-initializes the iterator at the start of the next list part.
-func (it *pIterator) moveToNextPart() error {
-	it.splitIdx++
-	plist, err := it.l.readListPart(it.l.plist.Splits[it.splitIdx])
-	if err != nil {
-		return errors.Wrapf(err, "cannot move to next list part in iterator for list with key %s",
-			hex.EncodeToString(it.l.key))
-	}
-	it.plist = plist
-
-	it.plen = len(it.plist.Postings)
-	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := it.plist.Postings[idx]
-		return it.afterUid < p.Uid
-	})
-
-	return nil
-}
-
 // moveToNextValidPart moves the iterator to the next part that contains valid data.
 // This is used to skip over parts of the list that might not contain postings.
 func (it *pIterator) moveToNextValidPart() error {
 	// Not a multi-part list, the iterator has reached the end of the list.
-	if len(it.l.plist.Splits) == 0 {
-		return nil
-	}
+	splits := it.l.plist.Splits
+	it.splitIdx++
 
-	// Iterate while there are no UIDs, and while we have more splits to iterate over.
-	for len(it.plist.Postings) == 0 && it.splitIdx < len(it.l.plist.Splits)-1 {
-		// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
-		// continue until len(splits)-1.
-		if err := it.moveToNextPart(); err != nil {
-			return err
+	for ; it.splitIdx < len(splits); it.splitIdx++ {
+		plist, err := it.l.readListPart(splits[it.splitIdx])
+		if err != nil {
+			return errors.Wrapf(err,
+				"cannot move to next list part in iterator for list with key %s",
+				hex.EncodeToString(it.l.key))
 		}
+		it.plist = plist
+		if len(plist.Postings) == 0 {
+			continue
+		}
+		if plist.Postings[0].Uid > it.afterUid {
+			it.pidx = 0
+			return nil
+		}
+		it.pidx = sort.Search(len(plist.Postings), func(idx int) bool {
+			p := plist.Postings[idx]
+			return it.afterUid < p.Uid
+		})
+		if it.pidx == len(plist.Postings) {
+			continue
+		}
+		return nil
 	}
-
 	return nil
-}
-
-// next advances pIterator to the next valid part.
-func (it *pIterator) next() error {
-	if it.deleteBelowTs > 0 {
-		return nil
-	}
-	it.pidx++
-	if it.pidx < it.plen {
-		return nil
-	}
-
-	err := it.moveToNextValidPart()
-	return errors.Wrapf(err, "cannot advance iterator for list with key %s",
-		hex.EncodeToString(it.l.key))
 }
 
 // valid asserts that pIterator has valid uids, or advances it to the next valid part.
@@ -211,12 +189,15 @@ func (it *pIterator) valid() (bool, error) {
 	if it.deleteBelowTs > 0 {
 		return false, nil
 	}
+	if it.pidx < len(it.plist.Postings) {
+		return true, nil
+	}
 
 	err := it.moveToNextValidPart()
 	switch {
 	case err != nil:
 		return false, errors.Wrapf(err, "cannot advance iterator when calling pIterator.valid")
-	case it.pidx < it.plen:
+	case it.pidx < len(it.plist.Postings):
 		return true, nil
 	default:
 		return false, nil
@@ -224,7 +205,8 @@ func (it *pIterator) valid() (bool, error) {
 }
 
 func (it *pIterator) posting() *pb.Posting {
-	return it.plist.Postings[it.pidx]
+	p := it.plist.Postings[it.pidx]
+	return p
 }
 
 // ListOptions is used in List.Uids (in posting) to customize our output list of
@@ -732,10 +714,7 @@ loop:
 			if err != nil {
 				break loop
 			}
-
-			if err = pitr.next(); err != nil {
-				break loop
-			}
+			pitr.pidx++
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
@@ -754,9 +733,7 @@ loop:
 				}
 			}
 			prevUid = mp.Uid
-			if err = pitr.next(); err != nil {
-				break loop
-			}
+			pitr.pidx++
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
@@ -984,6 +961,37 @@ type rollupOutput struct {
 	plist    *pb.PostingList
 	parts    map[uint64]*pb.PostingList
 	newMinTs uint64
+	sranges  map[uint64]uint64
+}
+
+// A range contains [start, end], both inclusive. So, no overlap should exist
+// between ranges.
+func (ro *rollupOutput) initRanges(split bool) {
+	ro.sranges = make(map[uint64]uint64)
+	splits := ro.plist.Splits
+	if !split {
+		splits = splits[:0]
+	}
+	for i := 0; i < len(splits); i++ {
+		end := uint64(math.MaxUint64)
+		if i < len(splits)-1 {
+			end = splits[i+1] - 1
+		}
+		start := splits[i]
+		ro.sranges[start] = end
+	}
+	if len(ro.sranges) == 0 {
+		ro.sranges[1] = math.MaxUint64
+	}
+}
+
+func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
+	for start, end := range ro.sranges {
+		if uid >= start && uid < end {
+			return start, end
+		}
+	}
+	return 1, math.MaxUint64
 }
 
 func (ro *rollupOutput) runSplits() error {
@@ -1033,6 +1041,12 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	codec.RemoveRange(r, uid, math.MaxInt64)
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
+
+	// if startUid == uint64(126) {
+	// 	fmt.Printf("Start Split %d. First Part (%d -> %d, %d). Second (%d -> %d, %d)\n",
+	// 		startUid, r.Minimum(), r.Maximum(), len(newpl.Postings),
+	// 		nr.Minimum(), nr.Maximum(), len(pl.Postings))
+	// }
 	return nil
 }
 
@@ -1072,43 +1086,14 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		return err
 	}
 
-	sranges := make(map[uint64]uint64)
-	getRange := func(uid uint64) (uint64, uint64) {
-		for start, end := range sranges {
-			if uid >= start && uid < end {
-				return start, end
-			}
-		}
-		return 1, math.MaxUint64
-	}
-	{
-		// Moving these variables out of scope for rest of the function.
-		splits := l.plist.Splits
-		if !split {
-			splits = splits[:0]
-		}
-		for i := 0; i < len(splits); i++ {
-			end := uint64(math.MaxUint64)
-			if i < len(splits)-1 {
-				end = splits[i+1]
-			}
-			start := splits[i]
-			sranges[start] = end
-		}
-	}
-	if !split {
-		x.AssertTrue(len(sranges) == 0)
-	}
-	if len(sranges) == 0 {
-		s, e := getRange(1)
-		sranges[s] = e
-	}
-
+	out.initRanges(split)
 	// Pick up all the bitmaps first.
-	for startUid, endUid := range sranges {
+	for startUid, endUid := range out.sranges {
 		r := bm.Clone()
-		r.RemoveRange(0, startUid)                   // Excluding startUid.
-		codec.RemoveRange(r, endUid, math.MaxUint64) // Removes both.
+		r.RemoveRange(0, startUid) // Excluding startUid.
+		if endUid != math.MaxUint64 {
+			codec.RemoveRange(r, endUid+1, math.MaxUint64) // Removes both.
+		}
 
 		plist := &pb.PostingList{}
 		plist.Bitmap = codec.ToBytes(r)
@@ -1117,11 +1102,11 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	}
 
 	// Now pick up all the postings.
-	startUid, endUid := getRange(1)
+	startUid, endUid := out.getRange(1)
 	plist := out.parts[startUid]
 	err = l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
-			startUid, endUid = getRange(p.Uid)
+			startUid, endUid = out.getRange(p.Uid)
 			plist = out.parts[startUid]
 		}
 
@@ -1598,6 +1583,17 @@ func (out *rollupOutput) finalize() {
 	if len(out.plist.Splits) > 0 {
 		glog.Infof("Got splits: %d\n", len(out.plist.Splits))
 	}
+	// if len(out.plist.Splits) > 1 {
+	// 	start := out.plist.Splits[1]
+	// 	pl := out.parts[start]
+	// 	first := pl.Postings[0]
+	// 	last := pl.Postings[len(pl.Postings)-1]
+	// 	r := roaring64.New()
+	// 	codec.FromPostingList(r, pl)
+	// 	fmt.Printf("Start: %d. Len: %d. Postings: (%d -> %d). Bitmap: %d -> %d, %d\n",
+	// 		start, len(pl.Postings), first.Uid, last.Uid,
+	// 		r.Minimum(), r.Maximum(), r.GetCardinality())
+	// }
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are

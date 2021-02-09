@@ -1205,6 +1205,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
+	t.Logf("Splits: %d\n", len(ol.plist.Splits))
 	var labels []string
 	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
 		if len(p.Label) > 0 {
