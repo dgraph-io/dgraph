@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	ostats "go.opencensus.io/stats"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -113,6 +114,16 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	// Grab the lock here to avoid more than one request to be processed at the same time.
 	backupLock.Lock()
 	defer backupLock.Unlock()
+
+	backupSuccessful := false
+	ostats.Record(ctx, x.NumBackups.M(1), x.PendingBackups.M(1))
+	defer func() {
+		if backupSuccessful {
+			ostats.Record(ctx, x.NumBackupsSuccess.M(1), x.PendingBackups.M(-1))
+		} else {
+			ostats.Record(ctx, x.NumBackupsFailed.M(1), x.PendingBackups.M(-1))
+		}
+	}()
 
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
@@ -213,7 +224,14 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
 
 	bp := NewBackupProcessor(nil, req)
-	return bp.CompleteBackup(ctx, &m)
+	err = bp.CompleteBackup(ctx, &m)
+
+	if err != nil {
+		return err
+	}
+
+	backupSuccessful = true
+	return nil
 }
 
 func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) (

@@ -341,8 +341,9 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
-	st.zero.closer.AddRunning(1)
+	st.zero.closer.AddRunning(2)
 	go x.MonitorMemoryMetrics(st.zero.closer)
+	go x.MonitorDiskMetrics("wal_fs", opts.w, st.zero.closer)
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
