@@ -29,7 +29,7 @@ import (
 )
 
 func TestRunAll_Normal(t *testing.T) {
-	//	common.RunAll(t)
+	common.RunAll(t)
 	common.RunCorsTest(t)
 }
 
