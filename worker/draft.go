@@ -1538,8 +1538,8 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
-
 	discardN := 1
+
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
 	// pending iterators which would ensure that the data above their read ts would not be
 	// discarded. Secondly, if a new snapshot does get calculated and applied, the follower can just

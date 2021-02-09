@@ -201,10 +201,6 @@ func (cdc *CDC) processCDCEvents() {
 	// In this way, even if leadership changes,
 	// new leader will know which new events are to be sent.
 	//
-	// In case of ludicrous mode, this has been achieved using seenIndex.
-	// We send the events to the sink as soon as we get the proposal.Mutation
-	// in ludicrous mode. Hence, this job will manage seenIndex across the cluster
-	// to manage from which index we have to send the events.
 	checkAndSendCDCEvents := func() error {
 		first, err := groups().Node.Store.FirstIndex()
 		x.Check(err)
