@@ -896,11 +896,10 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeCDCState(index, ts uint64) error {
+func (n *node) proposeCDCState(ts uint64) error {
 	proposal := &pb.Proposal{
 		CdcState: &pb.CDCState{
-			SentTs:    ts,
-			SentIndex: index,
+			SentTs: ts,
 		},
 	}
 	glog.V(2).Infof("Proposing new CDC state ts: %d\n", ts)

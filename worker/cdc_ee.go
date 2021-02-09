@@ -105,9 +105,8 @@ func (cdc *CDC) addToPending(ts uint64, index uint64, events []CDCEvent) {
 		return
 	}
 	cdc.Lock()
+	defer cdc.Unlock()
 	cdc.pendingTxnEvents[ts] = append(cdc.pendingTxnEvents[ts], events...)
-	cdc.Unlock()
-	cdc.updateSeenIndex(index)
 }
 
 func (cdc *CDC) removeFromPending(ts uint64, index uint64) {
@@ -115,9 +114,8 @@ func (cdc *CDC) removeFromPending(ts uint64, index uint64) {
 		return
 	}
 	cdc.Lock()
+	defer cdc.Unlock()
 	delete(cdc.pendingTxnEvents, ts)
-	cdc.Unlock()
-	cdc.updateSeenIndex(index)
 }
 
 func (cdc *CDC) updateSeenIndex(index uint64) {
@@ -135,18 +133,9 @@ func (cdc *CDC) updateCDCState(state *pb.CDCState) {
 	if cdc == nil {
 		return
 	}
-	// events are sent as soon as we get mutation proposal in ludicrous mode.
-	// hence we only update the sentIndex in ludicrous mode.
-	// in normal mode sentTs will manage the state of CDC across cluster.
-	// Therefore, sentIndex has same significance in ludicrous mode as sentTs in default mode.
-	//
-	//if x.WorkerConfig.LudicrousMode {
-	//	cdc.updateSeenIndex(state.SentIndex)
-	//	return
-	//}
 
-	// Dont try to update seen index in case of default mode else cdc job will not be able to
-	// build the complete pending txns in case of membership changes.
+	// Dont try to update seen index in case of default mode else cdc job will not
+	// be able to build the complete pending txns in case of membership changes.
 	ts := atomic.LoadUint64(&cdc.sentTs)
 	if ts >= state.SentTs {
 		return
@@ -270,7 +259,9 @@ func (cdc *CDC) processCDCEvents() {
 			}
 			batchFirst = entries[len(entries)-1].Index + 1
 			for _, entry := range entries {
-				handleEntry(entry)
+				if err := handleEntry(entry); err != nil {
+					return errors.Wrapf(err, "CDC: unable to process raft entry")
+				}
 			}
 		}
 		return nil
@@ -292,12 +283,11 @@ func (cdc *CDC) processCDCEvents() {
 				}
 			}
 		case <-proposalTick.C:
-			// The leader would propose the max seenIndex over to the group.
+			// The leader would propose the max sentTs over to the group.
 			// So, in case of a crash or a leadership change, the new leader
-			// would know where to being iterating over the Raft logs.
+			// would know where to send the cdc events from the Raft logs.
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
-				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.seenIndex),
-					atomic.LoadUint64(&cdc.sentTs)); err != nil {
+				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
 					glog.Errorf("unable to propose cdc state %+v", err)
 				}
 			}
