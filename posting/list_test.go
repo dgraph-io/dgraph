@@ -964,7 +964,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
 	defer setMaxListSize(maxListSize)
-	maxListSize = 10000
+	maxListSize = 1000
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -987,6 +987,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
+	t.Logf("Num splits: %d\n", len(ol.plist.Splits))
 	require.True(t, len(ol.plist.Splits) > 0)
 	verifySplits(t, ol.plist.Splits)
 

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -1211,7 +1210,6 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if err != nil {
 		return out, err
 	}
-	fmt.Printf("Bitmap Size: %d\n", bm.GetCardinality())
 
 	// TODO: Need to fix this. We shouldn't pick up too many uids.
 	// Before this, we were only picking math.Int32 number of uids.
@@ -1602,11 +1600,14 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 	if len(plist.Splits) > 0 {
 		return false
 	}
-	// TODO: Check what would the size of Bitmap be for an empty Roaring Bitmap.
-	if len(plist.Bitmap) == 0 {
-		return true
+	r := roaring64.New()
+	if err := codec.FromPostingList(r, plist); err != nil {
+		return false
 	}
-	return false
+	if r.GetCardinality() > 0 {
+		return false
+	}
+	return true
 }
 
 // TODO: Remove this func.
