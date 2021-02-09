@@ -306,7 +306,6 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		// file reader and verifying the encryption in the backup file.
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 			WithSyncWrites(false).
-			WithValueThreshold(1 << 10).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithEncryptionKey(key))
 
@@ -358,7 +357,6 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", group))
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
-				WithValueThreshold(1 << 10).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 
