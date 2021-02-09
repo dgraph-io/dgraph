@@ -492,6 +492,32 @@ func TestAuthOnInterfaces(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
+	getVehicleParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryVehicle{
+				owner
+			}
+		}`,
+		Headers: common.GetJWT(t, "Alice", "ADMIN", metaInfo),
+	}
+	gqlResponse := getVehicleParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	result := `
+	{
+		"queryVehicle": [
+		  {
+			"owner": "Bob"
+		  }
+		]
+	  }`
+
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
