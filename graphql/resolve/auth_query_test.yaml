@@ -668,7 +668,7 @@
     query {
       queryProject(func: uid(ProjectRoot)) {
         name : Project.name
-        dgraph.uid : id
+        dgraph.uid : uid
       }
       ProjectRoot as var(func: uid(Project1)) @filter(uid(ProjectAuth2))
       Project1 as var(func: type(Project))
