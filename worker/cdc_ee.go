@@ -268,10 +268,11 @@ func (cdc *CDC) processCDCEvents() {
 	}
 
 	jobTick := time.NewTicker(time.Second)
-	proposalTick := time.NewTicker(5 * time.Minute)
+	proposalTick := time.NewTicker(3 * time.Minute)
 	defer cdc.closer.Done()
 	defer jobTick.Stop()
 	defer proposalTick.Stop()
+	var lastSent uint64
 	for {
 		select {
 		case <-cdc.closer.HasBeenClosed():
@@ -287,8 +288,15 @@ func (cdc *CDC) processCDCEvents() {
 			// So, in case of a crash or a leadership change, the new leader
 			// would know where to send the cdc events from the Raft logs.
 			if groups().Node.AmLeader() && EnterpriseEnabled() {
+				sentTs := atomic.LoadUint64(&cdc.sentTs)
+				if lastSent == sentTs {
+					// No need to propose anything.
+					continue
+				}
 				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
 					glog.Errorf("unable to propose cdc state %+v", err)
+				} else {
+					lastSent = sentTs
 				}
 			}
 		}
