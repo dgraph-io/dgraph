@@ -462,6 +462,7 @@ func setupServer(closer *z.Closer) {
 		globalEpoch, closer)
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", r.Header.Get(x.NamespaceHeaderHTTP))
+		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
@@ -483,6 +484,9 @@ func setupServer(closer *z.Closer) {
 	})
 	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", "0")
+		// We don't need to load the schema for all the admin operations.
+		// Only a few like getUser, queryGroup require this. So, this can be optimized.
+		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
 		allowedMethodsHandler(allowedMethods{
 			http.MethodGet:     true,
 			http.MethodPost:    true,

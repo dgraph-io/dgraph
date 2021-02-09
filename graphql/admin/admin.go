@@ -365,6 +365,8 @@ var (
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
+	//
+	adminServerVar *adminServer
 )
 
 func SchemaValidate(sch string) error {
@@ -483,6 +485,7 @@ func newAdminResolver(
 		schema:            make(map[uint64]*gqlSchema),
 		gqlServer:         defaultGqlServer,
 	}
+	adminServerVar = server // store the admin server in package variable
 
 	// TODO(Ahsan): The namespace shouldn't be default always"
 	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
@@ -523,15 +526,23 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-		server.mux.RLock()
 
+		server.mux.RLock()
 		currentSchema, ok := server.schema[ns]
+		glog.Infof("****** namespace: %v", ns)
+		glog.Infof("****** new schema:\n%s", newSchema.Schema)
+		if ok {
+			glog.Infof("****** current schema:\n%s", currentSchema.Schema)
+		} else {
+			glog.Infof("****** no current schema")
+		}
 		if ok && newSchema.Schema == currentSchema.Schema {
 			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
 			server.mux.RUnlock()
 			return
 		}
 		server.mux.RUnlock()
+
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
@@ -545,6 +556,12 @@ func newAdminResolver(
 		server.mux.Lock()
 		defer server.mux.Unlock()
 
+		server.incrementSchemaUpdateCounter(ns)
+		// if the schema hasn't been loaded yet, then we don't need to load it here
+		if !ok {
+			glog.Infof("Skipping GraphQL schema update as the schema hasn't been loaded yet.")
+			return
+		}
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
 
@@ -624,8 +641,8 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf.WithSchemaIntrospection()
 }
 
-func getCurrentGraphQLSchema() (*gqlSchema, error) {
-	uid, graphQLSchema, err := edgraph.GetGQLSchema()
+func getCurrentGraphQLSchema(namespace uint64) (*gqlSchema, error) {
+	uid, graphQLSchema, err := edgraph.GetGQLSchema(namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +682,7 @@ func (as *adminServer) initServer() {
 	for {
 		<-time.After(waitFor)
 
-		sch, err := getCurrentGraphQLSchema()
+		sch, err := getCurrentGraphQLSchema(x.DefaultNamespace)
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
@@ -823,6 +840,17 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
+func (as *adminServer) incrementSchemaUpdateCounter(ns uint64) {
+	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
+	// will match against global epoch to terminate the current subscriptions.
+	e := as.globalEpoch[ns]
+	if e == nil {
+		e = new(uint64)
+		as.globalEpoch[ns] = e
+	}
+	atomic.AddUint64(e, 1)
+}
+
 func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// set status as updating schema
 	mainHealthStore.updatingSchema()
@@ -841,19 +869,50 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 		}
 	}
 
-	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
-	// will match against global epoch to terminate the current subscriptions.
-	e := as.globalEpoch[ns]
-	if e == nil {
-		e = new(uint64)
-		as.globalEpoch[ns] = e
-	}
-	atomic.AddUint64(e, 1)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	as.gqlServer.Set(ns, e, resolvers)
+	as.gqlServer.Set(ns, as.globalEpoch[ns], resolvers)
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
+}
+
+func (as *adminServer) lazyLoadSchema(namespace uint64) {
+	// if the schema is already in memory, no need to fetch it from disk
+	as.mux.RLock()
+	if _, ok := as.schema[namespace]; ok {
+		as.mux.RUnlock()
+		return
+	}
+	as.mux.RUnlock()
+
+	// otherwise, fetch the schema from disk
+	sch, err := getCurrentGraphQLSchema(namespace)
+	if err != nil {
+		glog.Infof("Error reading GraphQL schema: %s.", err)
+		return
+	}
+
+	if sch.Schema == "" {
+		glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
+		return
+	}
+
+	generatedSchema, err := generateGQLSchema(sch)
+	if err != nil {
+		glog.Infof("Error processing GraphQL schema: %s.", err)
+		return
+	}
+
+	as.mux.Lock()
+	defer as.mux.Unlock()
+	as.schema[namespace] = sch
+	as.resetSchema(namespace, generatedSchema)
+
+	glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
+}
+
+func LazyLoadSchema(namespace uint64) {
+	adminServerVar.lazyLoadSchema(namespace)
 }
 
 func response(code, msg string) map[string]interface{} {

@@ -58,11 +58,11 @@ var (
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
 
-	safelyUpdateGQLSchemaErr = errors.New(
+	safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
 		"Schema update counter didn't increment, " +
-			"indicating that the GraphQL layer didn't get the updated schema even after 10" +
-			" retries. The most probable cause is the new GraphQL schema is same as the old" +
-			" GraphQL schema.")
+		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
+		" retries. The most probable cause is the new GraphQL schema is same as the old" +
+		" GraphQL schema."
 )
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
@@ -281,8 +281,10 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 // oldCounter, indicating that the GraphQL schema has been updated.
 // If it can't make the assertion with enough retries, it fails the test.
 func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
+	var newCounter uint64
 	for i := 0; i < 10; i++ {
-		if RetryProbeGraphQL(t, authority, header).SchemaUpdateCounter == oldCounter+1 {
+		if newCounter = RetryProbeGraphQL(t, authority,
+			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
 		}
 		time.Sleep(time.Second)
@@ -290,7 +292,7 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
-	t.Fatal(safelyUpdateGQLSchemaErr)
+	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
 func CreateNamespace(t *testing.T, id int64) {
@@ -557,8 +559,9 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Head
 	// now, move forward only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
 	i := 0
+	var newProbe *ProbeGraphQLResp
 	for ; i < 10; i++ {
-		newProbe := retryProbeGraphQL(Alpha1HTTP, headers)
+		newProbe = retryProbeGraphQL(Alpha1HTTP, headers)
 		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
 			break
 		}
@@ -567,7 +570,8 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Head
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
 	if i == 10 {
-		x.Panic(safelyUpdateGQLSchemaErr)
+		x.Panic(errors.Errorf(safelyUpdateGQLSchemaErr, newProbe.SchemaUpdateCounter,
+			oldProbe.SchemaUpdateCounter))
 	}
 
 	err := maybePopulateData(client, data)

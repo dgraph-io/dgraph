@@ -157,7 +157,7 @@ func (gs *graphqlSubscription) Subscribe(
 			return nil, err
 		}
 
-		if v, ok := payload["namespace"].(string); ok {
+		if v, ok := payload[x.NamespaceHeaderHTTP].(string); ok {
 			namespace, _ = strconv.ParseUint(v, 10, 64)
 		}
 
@@ -239,7 +239,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
 	var res *schema.Response
-	gqlReq, err := getRequest(ctx, r)
+	gqlReq, err := getRequest(r)
 
 	if err != nil {
 		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
@@ -272,8 +272,11 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
-	gqlReq := &schema.Request{}
+func getRequest(r *http.Request) (*schema.Request, error) {
+	gqlReq := &schema.Request{
+		Header:    r.Header,
+		Namespace: x.ExtractNamespaceHTTP(r),
+	}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {
 		zr, err := gzip.NewReader(r.Body)
@@ -336,7 +339,6 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 		return nil,
 			errors.New("Unrecognised request method.  Please use GET or POST for GraphQL requests")
 	}
-	gqlReq.Header = r.Header
 
 	return gqlReq, nil
 }
