@@ -654,7 +654,8 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if Live.Conf.GetUint64("namespace") == x.GalaxyNamespace && opt.namespaceToLoad == math.MaxInt64 {
+	if Live.Conf.GetUint64("namespace") == x.GalaxyNamespace &&
+		opt.namespaceToLoad == math.MaxUint64 {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx)
