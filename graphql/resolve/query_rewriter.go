@@ -1731,7 +1731,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 					// it will be interpreted as {filter: {not: {has: title}}}, rest of
 					// the filters with null values will be ignored in query rewriting.
 					if fn == "eq" {
-						hasFilterMap := map[string]interface{}{"not": map[string]interface{}{"has": field}}
+						hasFilterMap := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{field}}}
 						ands = append(ands, buildFilter(typ, hasFilterMap))
 					}
 					continue
