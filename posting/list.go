@@ -315,7 +315,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		ValType:     t.ValueType,
 		PostingType: postingType,
 		LangTag:     []byte(t.Lang),
-		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
 	}
@@ -1026,7 +1025,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		}
 
 		enc.Add(p.Uid)
-		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
+		if p.Facets != nil || p.PostingType != pb.Posting_REF {
 			plist.Postings = append(plist.Postings, p)
 		}
 		return nil
