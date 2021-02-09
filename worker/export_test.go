@@ -54,19 +54,19 @@ const (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: testutil.GalaxyNamespaceAttr("Person"),
+	TypeName: x.GalaxyAttr("Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: testutil.GalaxyNamespaceAttr("name"),
+			Predicate: x.GalaxyAttr("name"),
 		},
 		{
-			Predicate: testutil.GalaxyNamespaceAttr("friend"),
+			Predicate: x.GalaxyAttr("friend"),
 		},
 		{
-			Predicate: testutil.GalaxyNamespaceAttr("~friend"),
+			Predicate: x.GalaxyAttr("~friend"),
 		},
 		{
-			Predicate: testutil.GalaxyNamespaceAttr("friend_not_served"),
+			Predicate: x.GalaxyAttr("friend_not_served"),
 		},
 	},
 }
@@ -210,7 +210,7 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, testutil.GalaxyNamespaceAttr("http://www.w3.org/2000/01/rdf-schema#range"),
+	require.Equal(t, x.GalaxyAttr("http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
@@ -330,7 +330,7 @@ func TestExportRdf(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming.
-	require.Equal(t, 9, count)
+	require.Equal(t, 10, count)
 
 	checkExportSchema(t, schemaFileList)
 	checkExportGqlSchema(t, gqlSchema)
