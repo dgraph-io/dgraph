@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -316,7 +315,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		ValType:     t.ValueType,
 		PostingType: postingType,
 		LangTag:     []byte(t.Lang),
-		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
 	}
@@ -501,7 +499,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	l.AssertLock()
 
 	if txn.ShouldAbort() {
-		return zero.ErrConflict
+		return x.ErrConflict
 	}
 
 	mpost := NewPosting(t)
@@ -1027,7 +1025,7 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		}
 
 		enc.Add(p.Uid)
-		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
+		if p.Facets != nil || p.PostingType != pb.Posting_REF {
 			plist.Postings = append(plist.Postings, p)
 		}
 		return nil

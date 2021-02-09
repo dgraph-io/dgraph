@@ -373,6 +373,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 				ReadTs:      manifest.Since,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
+				Namespace:   math.MaxUint64, // Export all the namespaces.
 				Destination: exportDir,
 			}
 

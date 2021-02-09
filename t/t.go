@@ -436,8 +436,7 @@ func getPackages() []task {
 		return false
 	}
 
-	// slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
-	slowPkgs := []string{"systest", "cmd/alpha", "worker", "e2e"}
+	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
 
 	moveSlowToFront := func(list []task) []task {
@@ -486,12 +485,12 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
 			continue
 		}
 
 		if has(skipPkgs, pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its available in skip list \n", pkg.ID)
+			fmt.Printf("Skipping package %s as its available in skip list \n", pkg.ID)
 			continue
 		}
 

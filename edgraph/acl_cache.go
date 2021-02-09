@@ -32,7 +32,7 @@ var aclCachePtr = &aclCache{
 	userPredPerms: make(map[string]map[string]int32),
 }
 
-func (cache *aclCache) update(groups []acl.Group) {
+func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
 	// the dev group has the following blob representing its ACL rules
 	// [friend, 4], [name, 7] where friend and name are predicates,
@@ -72,12 +72,13 @@ func (cache *aclCache) update(groups []acl.Group) {
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {
-				if groupPerms, found := predPerms[acl.Predicate]; found {
+				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				if groupPerms, found := predPerms[aclPred]; found {
 					groupPerms[group.GroupID] = acl.Perm
 				} else {
 					groupPerms := make(map[string]int32)
 					groupPerms[group.GroupID] = acl.Perm
-					predPerms[acl.Predicate] = groupPerms
+					predPerms[aclPred] = groupPerms
 				}
 			}
 		}
@@ -90,10 +91,11 @@ func (cache *aclCache) update(groups []acl.Group) {
 			// via different groups. Therefore we take OR if the user already has
 			// a permission for a predicate
 			for _, acl := range acls {
-				if _, found := userPredPerms[user.UserID][acl.Predicate]; found {
-					userPredPerms[user.UserID][acl.Predicate] |= acl.Perm
+				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				if _, found := userPredPerms[user.UserID][aclPred]; found {
+					userPredPerms[user.UserID][aclPred] |= acl.Perm
 				} else {
-					userPredPerms[user.UserID][acl.Predicate] = acl.Perm
+					userPredPerms[user.UserID][aclPred] = acl.Perm
 				}
 			}
 		}

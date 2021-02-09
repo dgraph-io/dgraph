@@ -39,6 +39,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -75,6 +76,8 @@ type options struct {
 	MapShards    int
 	ReduceShards int
 
+	Namespace uint64
+
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
@@ -99,6 +102,7 @@ type state struct {
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
 	writeTs       uint64       // All badger writes use this timestamp
+	namespaces    *sync.Map    // To store the encountered namespaces.
 }
 
 type loader struct {
@@ -135,6 +139,7 @@ func newLoader(opt *options) *loader {
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
+		namespaces:    &sync.Map{},
 	}
 	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
@@ -163,8 +168,38 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
+// leaseNamespace is called at the end of map phase. It leases the namespace ids till the maximum
+// seen namespace id.
+func (ld *loader) leaseNamespaces() {
+	var maxNs uint64
+	ld.namespaces.Range(func(key, value interface{}) bool {
+		if ns := key.(uint64); ns > maxNs {
+			maxNs = ns
+		}
+		return true
+	})
+
+	// If only the default namespace is seen, do nothing.
+	if maxNs == 0 {
+		return
+	}
+
+	client := pb.NewZeroClient(ld.zero)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
+		cancel()
+		if err == nil {
+			fmt.Printf("Assigned namespaces till %d", ns.GetEndId())
+			return
+		}
+		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+		time.Sleep(time.Second)
+	}
+}
+
 func readSchema(opt *options) *schema.ParsedSchema {
-	f, err := os.Open(opt.SchemaFile)
+	f, err := filestore.Open(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
 
@@ -182,7 +217,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	result, err := schema.Parse(string(buf))
+	result, err := schema.ParseWithNamespace(string(buf), opt.Namespace)
 	x.Check(err)
 	return result
 }
@@ -199,7 +234,9 @@ func (ld *loader) mapStage() {
 	}
 	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
-	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	fs := filestore.NewFileStore(ld.opt.DataFiles)
+
+	files := fs.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
 		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
 		os.Exit(1)
@@ -237,7 +274,7 @@ func (ld *loader) mapStage() {
 			if !ld.opt.Encrypted {
 				key = nil
 			}
-			r, cleanup := chunker.FileReader(file, key)
+			r, cleanup := fs.ChunkReader(file, key)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)
@@ -257,6 +294,9 @@ func (ld *loader) mapStage() {
 	x.Check(thr.Finish())
 
 	// Send the graphql triples
+	// TODO(Naman): Handle this. Currently we are not attaching the namespace info with the exported
+	// graphql schema (See exportInternal). Also, attach the namespace information once for the
+	// namespace we are loading into.
 	ld.processGqlSchema(loadType)
 
 	close(ld.readerChunkCh)
@@ -273,12 +313,13 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
+// TODO(Naman): Fix this for multi-tenancy.
 func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	if ld.opt.GqlSchemaFile == "" {
 		return
 	}
 
-	f, err := os.Open(ld.opt.GqlSchemaFile)
+	f, err := filestore.Open(ld.opt.GqlSchemaFile)
 	x.Check(err)
 	defer f.Close()
 
@@ -296,6 +337,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
+	// TODO(Naman): We will nedd this for all the namespaces.
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
 	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
 	_:gqlschema <dgraph.graphql.schema> %s .
@@ -306,6 +348,8 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		"dgraph.graphql.xid": "dgraph.graphql.schema",
 		"dgraph.graphql.schema": %s
 	}`
+
+	// TODO(Naman): Process the GQL schema here.
 
 	gqlBuf := &bytes.Buffer{}
 	schema := strconv.Quote(string(buf))

@@ -1622,7 +1622,11 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 							[
 								{
 									"username": "user1",
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMax": null,
+										"msgMin": null
+									}
 								}
 							]
 					}`},
@@ -1668,7 +1672,7 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1684,7 +1688,11 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 								{
 									"username": "user1",
 									"issues":[],
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMin": null,
+										"msgMax": null
+									}
 								}
 							]
 					}`},
@@ -1739,7 +1747,7 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }

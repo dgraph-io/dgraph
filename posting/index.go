@@ -1139,7 +1139,6 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
-			edge.Label = pp.Label
 
 			for {
 				// we only need to build reverse index here.
@@ -1220,7 +1219,6 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
-			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
 		return pl.addMutation(ctx, txn, newEdge)

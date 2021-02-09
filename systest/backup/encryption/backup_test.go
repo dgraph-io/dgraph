@@ -90,7 +90,7 @@ func TestBackupMinioE(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	client := testutil.GetHttpsClient(t)
-	tabletName := x.NamespaceAttr(x.DefaultNamespace, "movie")
+	tabletName := x.NamespaceAttr(x.GalaxyNamespace, "movie")
 	// Move tablet to group 1 to avoid messes later.
 	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)

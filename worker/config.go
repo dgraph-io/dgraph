@@ -21,7 +21,7 @@ import (
 	"time"
 
 	bo "github.com/dgraph-io/badger/v3/options"
-
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -70,6 +70,8 @@ type Options struct {
 	CachePercentage string
 	// CacheMb is the total memory allocated between all the caches.
 	CacheMb int64
+
+	Audit *audit.AuditConf
 }
 
 // Config holds an instance of the server options..
@@ -94,7 +96,20 @@ func (opt *Options) validate() {
 	x.Check(err)
 	td, err := filepath.Abs(x.WorkerConfig.TmpDir)
 	x.Check(err)
-	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
-	x.AssertTruef(pd != td, "Posting and Tmp directory cannot be the same ('%s').", opt.PostingDir)
-	x.AssertTruef(wd != td, "WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
+	x.AssertTruef(pd != wd,
+		"Posting and WAL directory cannot be the same ('%s').", opt.PostingDir)
+	x.AssertTruef(pd != td,
+		"Posting and Tmp directory cannot be the same ('%s').", opt.PostingDir)
+	x.AssertTruef(wd != td,
+		"WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
+	if opt.Audit != nil {
+		ad, err := filepath.Abs(opt.Audit.Dir)
+		x.Check(err)
+		x.AssertTruef(ad != pd,
+			"Posting and Audit Directory cannot be the same ('%s').", opt.Audit.Dir)
+		x.AssertTruef(ad != wd,
+			"WAL and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+		x.AssertTruef(ad != td,
+			"Tmp and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+	}
 }

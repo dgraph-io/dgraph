@@ -78,6 +78,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	schemaLock.Lock()
 	defer schemaLock.Unlock()
 
+	ctx = x.AttachJWTNamespace(ctx)
 	namespace := x.ExtractNamespace(ctx)
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
@@ -98,7 +99,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	uidMtrxLen := len(res.GetUidMatrix())
 	if uidMtrxLen == 0 || (uidMtrxLen == 1 && len(res.GetUidMatrix()[0].GetUids()) == 0) {
 		// if there was no schema node earlier, then need to assign a new uid for the node
-		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1})
+		res, err := AssignUidsOverNetwork(ctx, &pb.Num{Val: 1, Type: pb.Num_UID})
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +182,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			return nil, errors.Wrap(err, ErrGraphQLSchemaAlterFailed)
 		}
 		// busy waiting for indexing to finish
-		if err = WaitForIndexingOrCtxError(ctx, true); err != nil {
+		if err = WaitForIndexing(ctx, true); err != nil {
 			return nil, err
 		}
 	}
@@ -190,10 +191,10 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	return &pb.UpdateGraphQLSchemaResponse{Uid: schemaNodeUid}, nil
 }
 
-// WaitForIndexingOrCtxError does a busy wait for indexing to finish or the context to error out,
+// WaitForIndexing does a busy wait for indexing to finish or the context to error out,
 // if the input flag shouldWait is true. Otherwise, it just returns nil straight away.
 // If the context errors, it returns that error.
-func WaitForIndexingOrCtxError(ctx context.Context, shouldWait bool) error {
+func WaitForIndexing(ctx context.Context, shouldWait bool) error {
 	for shouldWait {
 		if ctx.Err() != nil {
 			return ctx.Err()

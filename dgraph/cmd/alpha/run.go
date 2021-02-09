@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ import (
 	"time"
 
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgraph/ee/audit"
+
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -77,14 +79,13 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer web.IServeGraphQL
-
-	initDone uint32
+	initDone    uint32
 )
 
 func init() {
 	Alpha.Cmd = &cobra.Command{
 		Use:   "alpha",
-		Short: "Run Dgraph Alpha",
+		Short: "Run Dgraph Alpha database server",
 		Long: `
 A Dgraph Alpha instance stores the data. Each Dgraph Alpha is responsible for
 storing and serving one data group. If multiple Alphas serve the same group,
@@ -94,8 +95,10 @@ they form a Raft group and provide synchronous replication.
 			defer x.StartProfile(Alpha.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
+	Alpha.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	// If you change any of the flags below, you must also update run() to call Alpha.Conf.Get
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
@@ -114,10 +117,6 @@ they form a Raft group and provide synchronous replication.
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
-	flag.Int("snapshot_after", 10000,
-		"Create a new Raft snapshot after this many number of Raft entries. The"+
-			" lower this number, the more frequent snapshot creation would be."+
-			" Also determines how often Rollups would happen.")
 	flag.String("abort_older_than", "5m",
 		"Abort any pending transactions older than this duration. The liveness of a"+
 			" transaction is determined by its last mutation.")
@@ -131,13 +130,16 @@ they form a Raft group and provide synchronous replication.
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
-	flag.String("raft", "idx=0; group=0; learner=false",
+		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
+
+	flag.String("raft", worker.RaftDefaults,
 		`Various raft options.
 	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
 	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
 	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would
 		not participate in Raft elections. This can be used to achieve a read-only replica.
+	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
+		The lower this number, the more frequent snapshot creation would be.
 	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
@@ -154,9 +156,6 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Float64P("lru_mb", "l", 0, // TODO: Remove this flag in the next release.
-		"[Deprecated] Estimated memory the LRU cache can take. "+
-			"Actual usage by the process would be more than specified here.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -196,6 +195,14 @@ they form a Raft group and provide synchronous replication.
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
+	flag.String("audit", "",
+		`Various audit options.
+	dir=/path/to/audits to define the path where to store the audit logs.
+	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
+	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	flag.
+	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
@@ -385,6 +392,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
@@ -423,15 +431,18 @@ func setupServer(closer *z.Closer) {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/query/", queryHandler)
-	http.HandleFunc("/mutate", mutationHandler)
-	http.HandleFunc("/mutate/", mutationHandler)
-	http.HandleFunc("/commit", commitHandler)
-	http.HandleFunc("/alter", alterHandler)
-	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/state", stateHandler)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.HandleFunc("/query", queryHandler)
+	baseMux.HandleFunc("/query/", queryHandler)
+	baseMux.HandleFunc("/mutate", mutationHandler)
+	baseMux.HandleFunc("/mutate/", mutationHandler)
+	baseMux.HandleFunc("/commit", commitHandler)
+	baseMux.HandleFunc("/alter", alterHandler)
+	baseMux.HandleFunc("/health", healthCheck)
+	baseMux.HandleFunc("/state", stateHandler)
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -459,6 +470,7 @@ func setupServer(closer *z.Closer) {
 	var mainServer web.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
+<<<<<<< HEAD
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
 	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
@@ -468,13 +480,19 @@ func setupServer(closer *z.Closer) {
 	})
 
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
+=======
+	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
+	baseMux.Handle("/graphql", mainServer.HTTPHandler())
+	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter,
+		r *http.Request) {
+>>>>>>> ibrahim/multitenancy
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
 			httpStatusCode = http.StatusServiceUnavailable
 		}
-		w.WriteHeader(httpStatusCode)
 		w.Header().Set("Content-Type", "application/json")
+<<<<<<< HEAD
 		namespace := r.Header.Get("namespace")
 		ns, _ := strconv.ParseUint(namespace, 10, 64)
 		e = globalEpoch[ns]
@@ -482,6 +500,10 @@ func setupServer(closer *z.Closer) {
 		if e != nil {
 			counter = atomic.LoadUint64(e)
 		}
+=======
+		x.AddCorsHeaders(w)
+		w.WriteHeader(httpStatusCode)
+>>>>>>> ibrahim/multitenancy
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
 			healthStatus.StatusMsg, counter))))
 	})
@@ -493,13 +515,22 @@ func setupServer(closer *z.Closer) {
 			http.MethodOptions: true,
 		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
 	})
+<<<<<<< HEAD
+=======
+	baseMux.Handle("/admin", allowedMethodsHandler(allowedMethods{
+		http.MethodGet:     true,
+		http.MethodPost:    true,
+		http.MethodOptions: true,
+	}, adminAuthHandler(adminServer.HTTPHandler())))
+>>>>>>> ibrahim/multitenancy
 
-	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
+	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
+		w http.ResponseWriter,
 		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
 	})))
 
-	http.Handle("/admin/schema/validate", http.HandlerFunc(func(w http.ResponseWriter,
+	baseMux.HandleFunc("/admin/schema/validate", func(w http.ResponseWriter,
 		r *http.Request) {
 		schema := readRequest(w, r)
 		w.Header().Set("Content-Type", "application/json")
@@ -514,26 +545,28 @@ func setupServer(closer *z.Closer) {
 		w.WriteHeader(http.StatusBadRequest)
 		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
 		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	}))
+	})
 
-	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.
+		MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			shutDownHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+	baseMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
 		http.MethodPut:  true,
 		http.MethodPost: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		drainingHandler(w, r, adminServer)
 	}))))
 
-	http.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+	baseMux.Handle("/admin/export", allowedMethodsHandler(
+		allowedMethods{http.MethodGet: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			exportHandler(w, r, adminServer)
 		}))))
 
-	http.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
+	baseMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
 		http.MethodGet: true,
 		http.MethodPut: true,
 	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -545,10 +578,10 @@ func setupServer(closer *z.Closer) {
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
 
 	// Add OpenCensus z-pages.
-	zpages.Handle(http.DefaultServeMux, "/z")
+	zpages.Handle(baseMux, "/z")
 
-	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/ui/keywords", keywordHandler)
+	baseMux.Handle("/", http.HandlerFunc(homeHandler))
+	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the servers.
 	admin.ServerCloser.AddRunning(3)
@@ -612,6 +645,8 @@ func run() {
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
 	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+
+	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
 		WALDir:                     Alpha.Conf.GetString("wal"),
@@ -624,6 +659,7 @@ func run() {
 
 		MutationsMode: worker.AllowMutations,
 		AuthToken:     Alpha.Conf.GetString("auth_token"),
+		Audit:         conf,
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -668,26 +704,27 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
+	raft := x.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:               Alpha.Conf.GetString("tmp"),
 		ExportPath:           Alpha.Conf.GetString("export"),
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
-		Raft:                 Alpha.Conf.GetString("raft"),
+		Raft:                 raft,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:           secretFile != "",
-		SnapshotAfter:        Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:       abortDur,
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
 		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
 		TLSClientConfig:      tlsClientConf,
 		TLSServerConfig:      tlsServerConf,
+		HmacSecret:           opts.HmacSecret,
+		Audit:                opts.Audit != nil,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
-	x.CheckFlag(x.WorkerConfig.Raft, "group", "idx", "learner")
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
@@ -726,6 +763,9 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
+
+	// Audit is enterprise feature.
+	x.Check(audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled))
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
@@ -820,6 +860,8 @@ func run() {
 	adminCloser.SignalAndWait()
 	glog.Infoln("adminCloser closed.")
 
+	audit.Close()
+
 	worker.State.Dispose()
 	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")
@@ -832,14 +874,10 @@ func run() {
 
 // listenForCorsUpdate listen for any cors change and update the accepeted cors.
 func listenForCorsUpdate(closer *z.Closer) {
-	//TODO(Ahsan): Fix subscription here.
-	prefix := x.DataKey("dgraph.cors", 0)
-	// Remove uid from the key, to get the correct prefix
-	prefix = prefix[:len(prefix)-8]
-	worker.SubscribeForUpdates([][]byte{prefix}, "", func(kvs *badgerpb.KVList) {
-		// Last update contains the latest value. So, taking the last update.
-		lastIdx := len(kvs.GetKv()) - 1
-		kv := kvs.GetKv()[lastIdx]
+	prefix := x.PredicatePrefix(x.GalaxyAttr("dgraph.cors"))
+	worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
+
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
 		glog.Infof("Updating cors from subscription.")
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}

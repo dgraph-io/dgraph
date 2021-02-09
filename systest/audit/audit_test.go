@@ -1,0 +1,136 @@
+/*
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package audit
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+func TestZeroAudit(t *testing.T) {
+	defer os.RemoveAll("audit_dir/za/dgraph_audit.log")
+	zeroCmd := map[string][]string{
+		"/removeNode": []string{`--location`, "--request", "GET",
+			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
+		"/assign": []string{"--location", "--request", "GET",
+			fmt.Sprintf("%s/assign?what=uids&num=100", testutil.SockAddrZeroHttp)},
+		"/moveTablet": []string{"--location", "--request", "GET",
+			fmt.Sprintf("%s/moveTablet?tablet=name&group=2", testutil.SockAddrZeroHttp)}}
+
+	msgs := make([]string, 0)
+	// logger is buffered. make calls in bunch so that dont want to wait for flush
+	for i := 0; i < 500; i++ {
+		for req, c := range zeroCmd {
+			msgs = append(msgs, req)
+			cmd := exec.Command("curl", c...)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Println(string(out))
+				t.Fatal(err)
+			}
+		}
+	}
+
+	verifyLogs(t, "./audit_dir/za/dgraph_audit.log", msgs)
+}
+func TestAlphaAudit(t *testing.T) {
+	defer os.Remove("audit_dir/aa/dgraph_audit.log")
+	testCommand := map[string][]string{
+		"/admin": []string{"--location", "--request", "POST",
+			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
+			"--header", "Content-Type: application/json",
+			"--data-raw", `'{"query":"mutation {\n  backup(
+input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {\n      message\n      code\n    }\n  }\n}\n","variables":{}}'`},
+
+		"/graphql": []string{"--location", "--request", "POST", fmt.Sprintf("%s/graphql", testutil.SockAddrHttp),
+			"--header", "Content-Type: application/json",
+			"--data-raw", `'{"query":"query {\n  __schema {\n    __typename\n  }\n}","variables":{}}'`},
+
+		"/alter": []string{"-X", "POST", fmt.Sprintf("%s/alter", testutil.SockAddrHttp), "-d",
+			`'name: string @index(term) .
+			type Person {
+			  name
+			}'`},
+		"/query": []string{"-H", "'Content-Type: application/dql'", "-X", "POST", fmt.Sprintf("%s/query", testutil.SockAddrHttp),
+			"-d", `$'
+			{
+			 balances(func: anyofterms(name, "Alice Bob")) {
+			   uid
+			   name
+			   balance
+			 }
+			}'`},
+		"/mutate": []string{"-H", "'Content-Type: application/rdf'", "-X",
+			"POST", fmt.Sprintf("%s/mutate?startTs=4", testutil.SockAddrHttp), "-d", `$'
+			{
+			 set {
+			   <0x1> <balance> "110" .
+			   <0x1> <dgraph.type> "Balance" .
+			   <0x2> <balance> "60" .
+			   <0x2> <dgraph.type> "Balance" .
+			 }
+			}
+			'`},
+	}
+
+	msgs := make([]string, 0)
+	// logger is buffered. make calls in bunch so that dont want to wait for flush
+	for i := 0; i < 200; i++ {
+		for req, c := range testCommand {
+			msgs = append(msgs, req)
+			cmd := exec.Command("curl", c...)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Println(string(out))
+				t.Fatal(err)
+			}
+		}
+	}
+	verifyLogs(t, "./audit_dir/aa/dgraph_audit.log", msgs)
+}
+
+func verifyLogs(t *testing.T, path string, cmds []string) {
+	abs, err := filepath.Abs(path)
+	require.Nil(t, err)
+	f, err := os.Open(abs)
+	require.Nil(t, err)
+
+	type log struct {
+		Msg string `json:"msg"`
+	}
+	logMap := make(map[string]bool)
+
+	var fileScanner *bufio.Scanner
+	fileScanner = bufio.NewScanner(f)
+	for fileScanner.Scan() {
+		bytes := fileScanner.Bytes()
+		l := new(log)
+		_ = json.Unmarshal(bytes, l)
+		logMap[l.Msg] = true
+	}
+	for _, m := range cmds {
+		if !logMap[m] {
+			t.Fatalf("audit logs not present for command %s", m)
+		}
+	}
+}

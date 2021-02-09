@@ -48,7 +48,8 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		// login to cluster
-		if err = dg.Login(ctx, userName, password); err != nil {
+		//TODO(Ahsan): What should be the namespace here?
+		if err = dg.Login(ctx, userName, password, x.GalaxyNamespace); err != nil {
 			x.Check(conn.Close())
 			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
 		}

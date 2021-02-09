@@ -46,9 +46,9 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
+	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -109,17 +109,63 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-// TODO(Ahsan): Complete the below two functions.
-func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("Creating namespace", namespace)
+func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
+	ctx = x.AttachJWTNamespace(ctx)
+	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
+
+	// Namespace creation is only allowed by the guardians of the galaxy group.
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
+	}
+
+	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
+	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
+	}
+
+	ns := ids.StartId
+	glog.V(2).Infof("Got a lease for NsID: %d", ns)
+
+	// Attach the newly leased NsID in the context in order to create guardians/groot for it.
+	ctx = x.AttachNamespace(ctx, ns)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	m.Schema = schema.InitialSchema(namespace)
-	_, err := query.ApplyMutations(ctx, m)
-	return err
+	m.Schema = schema.InitialSchema(ns)
+	m.Types = schema.InitialTypes(ns)
+	_, err = query.ApplyMutations(ctx, m)
+	if err != nil {
+		return 0, err
+	}
+
+	if err = worker.WaitForIndexing(ctx, true); err != nil {
+		return 0, errors.Wrap(err, "Creating namespace, got error: ")
+	}
+	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
+		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
+	}
+	glog.V(2).Infof("Created namespace: %d", ns)
+	return ns, nil
+}
+
+// This function is used while creating new namespace. New namespace creation is only allowed
+// by the guardians of the galaxy group.
+func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
+	if err := upsertGuardian(ctx); err != nil {
+		return errors.Wrap(err, "While creating Guardian")
+	}
+	if err := upsertGroot(ctx); err != nil {
+		return errors.Wrap(err, "While creating Groot")
+	}
+	return nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
+	ctx = x.AttachJWTNamespace(ctx)
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return errors.Wrapf(err, "Creating namespace, got error: ")
+	}
+	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
 }
@@ -159,7 +205,8 @@ func PeriodicallyPostTelemetry() {
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
-	ctx = x.AttachNamespace(ctx, x.DefaultNamespace)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+
 	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
@@ -214,6 +261,9 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	var err error
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
 		op := &api.Operation{Schema: dgraphSchema}
@@ -275,7 +325,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		return nil, errIndexingInProgress
 	}
 
-	result, err := schema.Parse(op.Schema)
+	result, err := schema.ParseWithNamespace(op.Schema, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -283,14 +333,9 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		//
-		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
-		// example?
-
-		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
 		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" modified", update.Predicate)
+				" modified", x.ParseAttr(update.Predicate))
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -304,20 +349,16 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
-				update.Predicate)
+				x.ParseAttr(update.Predicate))
 		}
 	}
 
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
-		for _, field := range typ.Fields {
-			field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
-		}
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 
 		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
@@ -325,7 +366,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 	}
 
@@ -340,8 +381,8 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 // then restoring from the incremental backup of such a DB would restore even the dropped
 // data back.
 func insertDropRecord(ctx context.Context, dropOp string) error {
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true),
-		&api.Request{
+	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &Request{
+		req: &api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
 					Subject:     "_:r",
@@ -350,7 +391,7 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 				}},
 			}},
 			CommitNow: true,
-		}, NoAuthorize)
+		}, doAuth: NoAuthorize})
 	return err
 }
 
@@ -358,6 +399,8 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
+
+	ctx = x.AttachJWTNamespace(ctx)
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -377,6 +420,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
+				" galaxy")
+		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
@@ -407,6 +454,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
+		// TODO - Get GQLSchema for the correct namespace.
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
 		_, graphQLSchema, err := GetGQLSchema()
 		if err != nil {
@@ -448,7 +496,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" dropped", attr)
+				" dropped", x.ParseAttr(attr))
 		}
 
 		nq := &api.NQuad{
@@ -510,7 +558,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+	if err = worker.WaitForIndexing(ctx, !op.RunInBackground); err != nil {
 		return empty, err
 	}
 
@@ -598,7 +646,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 	if !qc.req.CommitNow {
 		calculateMutationMetrics()
-		if err == zero.ErrConflict {
+		if err == x.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
 
@@ -617,7 +665,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		resp.Txn.Aborted = true
 		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
 
-		if err == zero.ErrConflict {
+		if err == x.ErrConflict {
 			// We have already aborted the transaction, so the error message should reflect that.
 			return dgo.ErrAborted
 		}
@@ -953,13 +1001,27 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
+	// gqlField stores the GraphQL field for which the query is being processed.
+	// This would be set only if the request is a query from GraphQL layer,
+	// otherwise it would be nil. (Eg. nil cases: in case of a DQL query,
+	// a mutation being executed from GraphQL layer).
+	gqlField gqlSchema.Field
 	// nquadsCount maintains numbers of nquads which would be inserted as part of this request.
 	// In some cases(mostly upserts), numbers of nquads to be inserted can to huge(we have seen upto
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
-	// namespace of the given query.
-	namespace uint64
+}
+
+// Request represents a query request sent to the doQuery() method on the Server.
+// It contains all the metadata required to execute a query.
+type Request struct {
+	// req is the incoming gRPC request
+	req *api.Request
+	// gqlField is the GraphQL field for which the request is being sent
+	gqlField gqlSchema.Field
+	// doAuth tells whether this request needs ACL authorization or not
+	doAuth AuthMode
 }
 
 // Health handles /health and /health?all requests.
@@ -1029,19 +1091,30 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	return &api.Response{Json: jsonState.Bytes()}, nil
 }
 
-// Query handles queries or mutations
-func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	auth := ctx.Value(Authorize)
-	if auth == nil || auth.(bool) {
-		return s.doQuery(ctx, req, NeedAuthorize)
+func getAuthMode(ctx context.Context) AuthMode {
+	if auth := ctx.Value(Authorize); auth == nil || auth.(bool) {
+		return NeedAuthorize
 	}
-	return s.doQuery(ctx, req, NoAuthorize)
+	return NoAuthorize
 }
 
-func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
+// QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
+func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
+	field gqlSchema.Field) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
+	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+}
+
+// Query handles queries or mutations
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
+	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
+}
+
+func (s *Server) doQuery(ctx context.Context, req *Request) (
 	resp *api.Response, rerr error) {
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
-		glog.Infof("Got a query: %+v", req)
+		glog.Infof("Got a query: %+v", req.req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
@@ -1057,7 +1130,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	isMutation := len(req.Mutations) > 0
+	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
 		methodRequest = methodMutate
@@ -1082,14 +1155,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return
 	}
 
-	req.Query = strings.TrimSpace(req.Query)
-	isQuery := req.Query != ""
+	req.req.Query = strings.TrimSpace(req.req.Query)
+	isQuery := len(req.req.Query) != 0
 	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.Annotatef(nil, "Request received: %v", req)
+	span.Annotatef(nil, "Request received: %v", req.req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
@@ -1101,17 +1174,17 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	}
 
 	qc := &queryContext{
-		req:       req,
-		latency:   l,
-		span:      span,
-		graphql:   isGraphQL,
-		namespace: x.ExtractNamespace(ctx),
+		req:      req.req,
+		latency:  l,
+		span:     span,
+		graphql:  isGraphQL,
+		gqlField: req.gqlField,
 	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
 
-	if doAuth == NeedAuthorize {
+	if req.doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}
@@ -1121,19 +1194,31 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 {
+	if isMutation && req.req.StartTs == 0 {
 		if x.WorkerConfig.LudicrousMode {
-			req.StartTs = posting.Oracle().MaxAssigned()
+			req.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			start := time.Now()
-			req.StartTs = worker.State.GetTimestamp(false)
+			req.req.StartTs = worker.State.GetTimestamp(false)
 			qc.latency.AssignTimestamp = time.Since(start)
 		}
 	}
 
+	var gqlErrs error
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
-		return
+		// if rerr is just some error from GraphQL encoding, then we need to continue the normal
+		// execution ignoring the error as we still need to assign latency info to resp. If we can
+		// change the api.Response proto to have a field to contain GraphQL errors, that would be
+		// great. Otherwise, we will have to do such checks a lot and that would make code ugly.
+		if qc.gqlField != nil && x.IsGqlErrorList(rerr) {
+			gqlErrs = rerr
+		} else {
+			return
+		}
 	}
+	// if it were a mutation, simple or upsert, in any case gqlErrs would be empty as GraphQL JSON
+	// is formed only for queries. So, gqlErrs can have something only in the case of a pure query.
+	// So, safe to ignore gqlErrs and not return that here.
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
 	}
@@ -1153,7 +1238,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
-	return resp, nil
+	return resp, gqlErrs
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
@@ -1237,9 +1322,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	} else if qc.req.RespFormat == api.Request_RDF {
 		resp.Rdf, err = query.ToRDF(qc.latency, er.Subgraphs)
 	} else {
-		resp.Json, err = query.ToJson(qc.latency, er.Subgraphs)
+		resp.Json, err = query.ToJson(ctx, qc.latency, er.Subgraphs, qc.gqlField)
 	}
-	if err != nil {
+	// if err is just some error from GraphQL encoding, then we need to continue the normal
+	// execution ignoring the error as we still need to assign metrics and latency info to resp.
+	if err != nil && (qc.gqlField == nil || !x.IsGqlErrorList(err)) {
 		return resp, err
 	}
 	qc.span.Annotatef(nil, "Response = %s", resp.Json)

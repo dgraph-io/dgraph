@@ -40,9 +40,8 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )

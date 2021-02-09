@@ -17,25 +17,19 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
 type getSchemaResolver struct {
 	admin *adminServer
-
-	gqlQuery schema.Query
 }
 
 type updateGQLSchemaInput struct {
@@ -56,7 +50,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 
 	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
 	// is returned from badger.
-	schHandler, err := schema.NewHandler(input.Set.Schema, true)
+	schHandler, err := schema.NewHandler(input.Set.Schema, true, false)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -70,28 +64,32 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
+<<<<<<< HEAD
 	return &resolve.Resolved{
 		Data: map[string]interface{}{
+=======
+	if updateHistory {
+		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
+			glog.Errorf("error while updating schema history %s", err.Error())
+		}
+	}
+
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{
+>>>>>>> ibrahim/multitenancy
 			m.Name(): map[string]interface{}{
 				"gqlSchema": map[string]interface{}{
 					"id":              query.UidToHex(resp.Uid),
 					"schema":          input.Set.Schema,
 					"generatedSchema": schHandler.GQLSchema(),
 				}}},
-		Field: m,
-		Err:   nil,
-	}, true
+		nil), true
 }
 
-func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
-	gsr.gqlQuery = gqlQuery
-	return nil, nil
-}
+func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *resolve.Resolved {
+	var data map[string]interface{}
 
-func (gsr *getSchemaResolver) Execute(
-	ctx context.Context,
-	req *dgoapi.Request) (*dgoapi.Response, error) {
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 	ns := x.ExtractNamespace(ctx)
@@ -138,9 +136,8 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 		x.Check2(buf.WriteString(`":`))
 		x.Check2(buf.Write(val))
 	}
-	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return resolve.DataResult(q, data, nil)
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

@@ -322,10 +322,17 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 	return qr, respBody, resp, err
 }
 
-func commitWithTs(keys, preds []string, ts uint64) error {
+func commitWithTs(keys, preds []string, ts uint64, abort bool) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
+	}
+	if abort {
+		if ts != 0 {
+			url += "&abort=true"
+		} else {
+			url += "?abort=true"
+		}
 	}
 
 	m := make(map[string]interface{})
@@ -396,10 +403,9 @@ func TestTransactionBasic(t *testing.T) {
 	for _, pred := range mr.preds {
 		p := strings.Split(pred, "-")[1]
 		parsedPreds = append(parsedPreds, x.ParseAttr(p))
-		// parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
-	require.Equal(t, "balance", parsedPreds[0], mr.preds)
+	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
 	data, _, err := queryWithTs(q1, "application/dql", "", 0)
@@ -412,7 +418,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -458,7 +464,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, ts, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -570,7 +576,23 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	var qr x.QueryResWithData
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
 	require.Len(t, qr.Errors, 1)
-	require.Equal(t, qr.Errors[0].Extensions["code"], "Error")
+	require.Equal(t, "Error", qr.Errors[0].Extensions["code"])
+}
+
+// TODO(naman): See why this is breaking.
+// This test is a basic sanity test to check nothing breaks in the alter API.
+func TestAlterSanity(t *testing.T) {
+	t.Skip()
+	ops := []string{`{"drop_attr": "name"}`,
+		`{"drop_op": "TYPE", "drop_value": "Film"}`,
+		`{"drop_op": "DATA"}`,
+		`{"drop_all":true}`}
+
+	for _, op := range ops {
+		qr, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+		require.NoError(t, err)
+		require.Len(t, qr.Errors, 0)
+	}
 }
 
 func TestHttpCompressionSupport(t *testing.T) {

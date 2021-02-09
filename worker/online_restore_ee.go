@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -55,7 +56,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync
 		currentGroups = append(currentGroups, gid)
 	}
 
-	creds := Credentials{
+	creds := x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -209,7 +210,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// backup could be in a different group. The tablets need to be moved.
 
 	// Reset tablets and set correct tablets to match the restored backup.
-	creds := &Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -234,6 +235,16 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
+
+	// Version is 0 if the backup was taken on an old version (v20.11).
+	if lastManifest.Version == 0 {
+		tmp := make([]string, 0, len(preds))
+		for _, pred := range preds {
+			tmp = append(tmp, x.GalaxyAttr(pred))
+		}
+		preds = tmp
+	}
+
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
@@ -301,8 +312,8 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
-func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
-	return &Credentials{
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -312,8 +323,9 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req), func(r io.Reader, groupId uint32,
-			preds predicateSet, dropOperations []*pb.DropOperation) (uint64, error) {
+		getCredentialsFromRestoreRequest(req),
+		func(r io.Reader, groupId uint32, preds predicateSet,
+			dropOperations []*pb.DropOperation) (uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -354,7 +366,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 					"cannot update uid lease due to no connection to zero leader")
 			}
 			zc := pb.NewZeroClient(pl.Get())
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid}); err != nil {
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: maxUid, Type: pb.Num_UID}); err != nil {
 				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
 

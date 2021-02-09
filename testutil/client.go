@@ -119,7 +119,7 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, x.GrootId, "password")
+		err = dg.Login(ctx, x.GrootId, "password", x.GalaxyNamespace)
 		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
 			strings.Contains(err.Error(), "user not found")) {
 
@@ -250,6 +250,7 @@ type LoginParams struct {
 	Endpoint   string
 	UserID     string
 	Passwd     string
+	Namespace  uint64
 	RefreshJwt string
 }
 
@@ -265,8 +266,8 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		loginPayload.Password = params.Passwd
 	}
 
-	login := `mutation login($userId: String, $password: String, $refreshToken: String) {
-		login(userId: $userId, password: $password, refreshToken: $refreshToken) {
+	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
 			response {
 				accessJWT
 				refreshJWT
@@ -279,6 +280,7 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		Variables: map[string]interface{}{
 			"userId":       params.UserID,
 			"password":     params.Passwd,
+			"namespace":    params.Namespace,
 			"refreshToken": params.RefreshJwt,
 		},
 	}

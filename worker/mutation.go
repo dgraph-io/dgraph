@@ -362,7 +362,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		return errors.Errorf("Nil schema")
 	}
 
-	if len(s.Predicate) == 0 {
+	if s.Predicate == "" {
 		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
@@ -451,10 +451,12 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -482,19 +484,33 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return err
 	}
 
-	if x.WorkerConfig.AclEnabled && edge.GetAttr() == "dgraph.rule.permission" {
+	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
 		perm, ok := dst.Value.(int64)
 		if !ok {
 			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
 		}
 		if perm < 0 || perm > 7 {
-			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this predicate should be between 0 and 7", perm)
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this"+
+				" predicate should be between 0 and 7", perm)
 		}
 	}
 
 	edge.ValueType = schemaType.Enum()
 	edge.Value = b.Value.([]byte)
 	return nil
+}
+
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
+func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_NS_ID
+	return c.AssignIds(ctx, num)
 }
 
 // AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
@@ -506,7 +522,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.AssignUids(ctx, num)
+	num.Type = pb.Num_UID
+	return c.AssignIds(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
@@ -687,7 +704,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates already present in the schema.
 	var fields []string
 	for _, t := range m.Types {
-		if len(t.TypeName) == 0 {
+		if t.TypeName == "" {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
@@ -744,11 +761,11 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 // typeSanityCheck performs basic sanity checks on the given type update.
 func typeSanityCheck(t *pb.TypeUpdate) error {
 	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
+		if field.Predicate == "" {
 			return errors.Errorf("Field in type definition must have a name")
 		}
 
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+		if field.ValueType == pb.Posting_OBJECT && field.ObjectTypeName == "" {
 			return errors.Errorf(
 				"Field with value type OBJECT must specify the name of the object type")
 		}
@@ -770,6 +787,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
 	defer span.End()
 
+	clientDiscard := false
+	if tc.Aborted {
+		// The client called Discard
+		ostats.Record(ctx, x.TxnDiscards.M(1))
+		clientDiscard = true
+	}
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return 0, conn.ErrNoConnection
@@ -787,9 +811,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
-		ostats.Record(context.Background(), x.TxnAborts.M(1))
+		if !clientDiscard {
+			// The server aborted the txn (not the client)
+			ostats.Record(ctx, x.TxnAborts.M(1))
+		}
 		return 0, dgo.ErrAborted
 	}
+	ostats.Record(ctx, x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 
