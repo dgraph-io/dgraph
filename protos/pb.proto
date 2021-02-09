@@ -561,6 +561,7 @@ service Worker {
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
 	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
+	rpc DeleteNamespace (DeleteNsRequest)              returns (Status) {}
 }
 
 message SubscriptionRequest {
@@ -708,6 +709,11 @@ message UpdateGraphQLSchemaResponse {
 message BulkMeta {
 	int64 edge_count = 1;
 	map<string, SchemaUpdate> schema_map = 2;
+}
+
+message DeleteNsRequest {
+	uint32 group_id = 1;
+	uint64 namespace = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

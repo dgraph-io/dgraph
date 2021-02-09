@@ -93,6 +93,8 @@ func (id op) String() string {
 		return "opBackup"
 	case opPredMove:
 		return "opPredMove"
+	case opDeleteNS:
+		return "opDeleteNS"
 	default:
 		return "opUnknown"
 	}
@@ -105,6 +107,7 @@ const (
 	opRestore
 	opBackup
 	opPredMove
+	opDeleteNS
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -171,6 +174,16 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
 		}
+	case opDeleteNS:
+		for otherId, otherCloser := range n.ops {
+			// TODO(Ahsan): We need to see what all operations to stop while delete NS.
+			if otherId == opDeleteNS {
+				return nil, errors.Errorf("another delete namespace operation is already running")
+			}
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
 		return nil, nil

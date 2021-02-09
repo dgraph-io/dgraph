@@ -166,8 +166,10 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 		return errors.Wrapf(err, "Creating namespace, got error: ")
 	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
-	ps := worker.State.Pstore
-	return ps.BanNamespace(namespace)
+
+	return worker.ProcessDeleteNsRequest(ctx, namespace)
+	// ps := worker.State.Pstore
+	// return ps.BanNamespace(namespace)
 }
 
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
