@@ -1021,6 +1021,20 @@
       queryUserSecret()
     }
 
+- name: "Query with null variable - top level"
+  gqlquery: |
+    query {
+      queryUserSecret {
+        id
+      }
+    }
+  jwtVar:
+    USER: null
+  dgquery: |-
+    query {
+      queryUserSecret()
+    }
+
 - name:  "Get with top level RBAC false"
   gqlquery: |
     query {
@@ -1046,6 +1060,29 @@
         }
       }
     }
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.username : User.username
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User3))
+      User3 as var(func: type(User))
+    }
+
+- name: "Query with null variable - deep query"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets {
+          id
+          title
+        }
+      }
+    }
+  jwtvar:
+    USER: null
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {

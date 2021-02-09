@@ -1,3 +1,35 @@
+- name: "eq filter with null value get translated into NOT(has) filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {eq: null}}) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter(NOT (has(State.code))) {
+        State.code : State.code
+        State.name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+- name: "le filter with null value doesn't get translated"
+  gqlquery: |
+    query {
+      queryCountry(filter: {name: {le: null}}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        Country.name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
 -
   name: "in filter on string type"
   gqlquery: |

@@ -1727,6 +1727,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *gql.FilterTree
 
 				fn, val := first(dgFunc)
 				if val == nil {
+					// If it is `eq` filter for eg: {filter: { title: {eq: null }}} then
+					// it will be interpreted as {filter: {not: {has: title}}}, rest of
+					// the filters with null values will be ignored in query rewriting.
+					if fn == "eq" {
+						hasFilterMap := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{field}}}
+						ands = append(ands, buildFilter(typ, hasFilterMap))
+					}
 					continue
 				}
 				args := []gql.Arg{{Value: typ.DgraphPredicate(field)}}
