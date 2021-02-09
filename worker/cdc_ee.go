@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,9 +31,11 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-const defaultCDCConfig = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
-const defaultEventTopic = "dgraph-cdc"
-const defaultEventKey = "dgraph-cdc-event"
+const (
+	defaultCDCConfig  = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
+	defaultEventTopic = "dgraph-cdc"
+	defaultEventKey   = "dgraph-cdc-event"
+)
 
 // CDC struct is being used to send out change data capture events. There are two ways to do this:
 // 1. Use Badger Subscribe.
@@ -100,7 +103,7 @@ func (cdc *CDC) getTs() uint64 {
 	return min
 }
 
-func (cdc *CDC) addToPending(ts uint64, index uint64, events []CDCEvent) {
+func (cdc *CDC) addToPending(ts uint64, events []CDCEvent) {
 	if cdc == nil {
 		return
 	}
@@ -109,7 +112,7 @@ func (cdc *CDC) addToPending(ts uint64, index uint64, events []CDCEvent) {
 	cdc.pendingTxnEvents[ts] = append(cdc.pendingTxnEvents[ts], events...)
 }
 
-func (cdc *CDC) removeFromPending(ts uint64, index uint64) {
+func (cdc *CDC) removeFromPending(ts uint64) {
 	if cdc == nil {
 		return
 	}
@@ -202,19 +205,16 @@ func (cdc *CDC) processCDCEvents() {
 			glog.Warningf("CDC: unmarshal failed with error %v. Ignoring.", err)
 			return
 		}
-
 		if proposal.Mutations != nil {
 			events := toCDCEvent(entry.Index, proposal.Mutations)
 			if len(events) == 0 {
 				return
 			}
-			// In ludicrous, we send the events as soon as we get it.
-			// We won't wait for oracle delta in case of ludicrous mode
-			// since all mutations will eventually succeed.
+			// In ludicrous, we execute the mutations as soon as we get the proposal.
 			// TODO: We should get a confirmation from ludicrous scheduler about this.
 			// It should tell you what the commit ts used was.
 			// TODO: For now, do NOT support ludicrous mode.
-			cdc.addToPending(proposal.Mutations.StartTs, entry.Index, events)
+			cdc.addToPending(proposal.Mutations.StartTs, events)
 		}
 
 		if proposal.Delta != nil {
@@ -228,7 +228,7 @@ func (cdc *CDC) processCDCEvents() {
 					}
 				}
 				// Delete from pending events once events are sent.
-				cdc.removeFromPending(ts.StartTs, entry.Index)
+				cdc.removeFromPending(ts.StartTs)
 			}
 		}
 		return
@@ -243,10 +243,9 @@ func (cdc *CDC) processCDCEvents() {
 		cdcIndex := x.Max(atomic.LoadUint64(&cdc.seenIndex)+1, first)
 
 		last := groups().Node.Applied.DoneUntil()
-		if cdcIndex == last {
+		if cdcIndex > last {
 			return nil
 		}
-
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			if err != nil {
@@ -304,23 +303,22 @@ func (cdc *CDC) processCDCEvents() {
 }
 
 type CDCEvent struct {
-	Meta      *EventMeta  `json:"meta"`
-	EventType string      `json:"event_type"`
-	Event     interface{} `json:"event"`
+	Meta  *EventMeta  `json:"meta"`
+	Type  string      `json:"type"`
+	Event interface{} `json:"event"`
 }
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
-	StartTs   uint64 `json:"-"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
 type MutationEvent struct {
-	MutationType  string      `json:"mutation_type"`
-	Uid           uint64      `json:"uid"`
-	Attribute     string      `json:"attribute"`
-	Value         interface{} `json:"value"`
-	ValueDataType string      `json:"value_data_type"`
+	Operation string      `json:"operation"`
+	Uid       uint64      `json:"uid"`
+	Attr      string      `json:"attr"`
+	Value     interface{} `json:"value"`
+	ValueType string      `json:"value_type"`
 }
 
 type DropEvent struct {
@@ -330,9 +328,9 @@ type DropEvent struct {
 }
 
 const (
-	EventTypeDrop     = "DROP"
-	EventTypeMutation = "MUTATION"
-	OpDropPred        = "PREDICATE"
+	EventTypeDrop     = "drop"
+	EventTypeMutation = "mutation"
+	OpDropPred        = "predicate"
 )
 
 func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
@@ -345,9 +343,9 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	if mutation.DropOp != pb.Mutations_NONE {
 		return []CDCEvent{
 			{
-				EventType: EventTypeDrop,
+				Type: EventTypeDrop,
 				Event: &DropEvent{
-					Operation: mutation.DropOp.String(),
+					Operation: strings.ToLower(mutation.DropOp.String()),
 					Type:      mutation.DropValue,
 				},
 				Meta: &EventMeta{
@@ -366,7 +364,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
 				{
-					EventType: EventTypeDrop,
+					Type: EventTypeDrop,
 					Event: &DropEvent{
 						Operation: OpDropPred,
 						Pred:      edge.Attr,
@@ -379,9 +377,12 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		}
 
 		var val interface{}
-		if posting.TypeID(edge) == types.UidID {
+		switch {
+		case posting.TypeID(edge) == types.UidID:
 			val = edge.ValueId
-		} else {
+		case posting.TypeID(edge) == types.PasswordID:
+			val = "****"
+		default:
 			// convert to correct type
 			src := types.Val{Tid: types.BinaryID, Value: edge.Value}
 			if v, err := types.Convert(src, posting.TypeID(edge)); err == nil {
@@ -393,15 +394,14 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
 				RaftIndex: index,
-				StartTs:   mutation.StartTs,
 			},
-			EventType: EventTypeMutation,
+			Type: EventTypeMutation,
 			Event: &MutationEvent{
-				MutationType:  edge.Op.String(),
-				Uid:           edge.Entity,
-				Attribute:     edge.Attr,
-				Value:         val,
-				ValueDataType: posting.TypeID(edge).Name(),
+				Operation: strings.ToLower(edge.Op.String()),
+				Uid:       edge.Entity,
+				Attr:      edge.Attr,
+				Value:     val,
+				ValueType: posting.TypeID(edge).Name(),
 			},
 		})
 	}
