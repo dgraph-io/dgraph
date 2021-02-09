@@ -536,7 +536,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 		}
 	}
 }
-  
+
 func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
 	getVehicleParams := &common.GraphQLParams{
 		Query: `
