@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -540,15 +541,20 @@ func (l *List) Bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 	deleteBelow, posts := l.pickPostings(opt.ReadTs)
 
-	iw := codec.FromList(opt.Intersect)
+	var iw *roaring64.Bitmap
+	if opt.Intersect != nil {
+		iw = codec.FromList(opt.Intersect)
+	}
 
 	r := roaring64.New()
 	if deleteBelow == 0 {
 		if err := codec.FromPostingList(r, l.plist); err != nil {
 			return nil, errors.Wrapf(err, "Bitmap: l.plist")
 		}
-		r.And(iw)
-		r.RemoveRange(0, opt.AfterUid)
+		if iw != nil {
+			r.And(iw)
+		}
+		codec.RemoveRange(r, 0, opt.AfterUid)
 
 		si := l.splitIdx(opt.AfterUid)
 		for _, startUid := range l.plist.Splits[si:] {
@@ -562,10 +568,12 @@ func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 				return nil, errors.Wrapf(err, "Bitmap: split")
 			}
 			// Intersect with opt.Intersect.
-			s.And(iw)
+			if iw != nil {
+				s.And(iw)
+			}
 			if startUid < opt.AfterUid {
 				// Only keep the Uids after opt.AfterUid.
-				s.RemoveRange(0, opt.AfterUid)
+				codec.RemoveRange(s, 0, opt.AfterUid)
 			}
 			r.Or(s)
 		}
@@ -956,6 +964,9 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		plist.Pack.AllocRef = 0
 	}
 
+	// bm := codec.FromBytes(plist.Bitmap)
+	// fmt.Printf("MarshalPostingList: %d\n", bm.GetCardinality())
+
 	out := alloc.Allocate(plist.Size())
 	n, err := plist.MarshalToSizedBuffer(out)
 	x.Check(err)
@@ -991,7 +1002,7 @@ top:
 
 func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
-	x.AssertTrue(pl.Size() >= maxListSize)
+	// x.AssertTrue(pl.Size() >= maxListSize)
 
 	r := roaring64.New()
 	if err := codec.FromPostingList(r, pl); err != nil {
@@ -1009,7 +1020,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 
 	// Remove everything from startUid to uid.
 	nr := r.Clone()
-	nr.RemoveRange(startUid, uid)
+	nr.RemoveRange(0, uid) // Keep all uids >= uid.
 	newpl.Bitmap = codec.ToBytes(nr)
 
 	// Take everything from the first posting where posting.Uid >= uid.
@@ -1018,9 +1029,8 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	})
 	newpl.Postings = pl.Postings[idx:]
 
-	// Update pl as well.
-	r.RemoveRange(uid, math.MaxUint64)
-	r.Remove(math.MaxUint64) // RemoveRange won't remove MaxUint64, so do that separately.
+	// Update pl as well. Keeps the lower UIDs.
+	codec.RemoveRange(r, uid, math.MaxInt64)
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
 	return nil
@@ -1097,11 +1107,8 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	// Pick up all the bitmaps first.
 	for startUid, endUid := range sranges {
 		r := bm.Clone()
-		r.RemoveRange(0, startUid)
-		if endUid != math.MaxUint64 {
-			r.RemoveRange(endUid, math.MaxUint64)
-			r.Remove(math.MaxUint64)
-		}
+		r.RemoveRange(0, startUid)                   // Excluding startUid.
+		codec.RemoveRange(r, endUid, math.MaxUint64) // Removes both.
 
 		plist := &pb.PostingList{}
 		plist.Bitmap = codec.ToBytes(r)
@@ -1219,12 +1226,16 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if err != nil {
 		return out, err
 	}
+	fmt.Printf("Bitmap Size: %d\n", bm.GetCardinality())
 
 	// TODO: Need to fix this. We shouldn't pick up too many uids.
 	// Before this, we were only picking math.Int32 number of uids.
 	// Now we're picking everything.
 	if opt.First == 0 {
-		out.Bitmap = codec.ToBytes(bm)
+		out.Uids = bm.ToArray()
+		// TODO: Not yet ready to use Bitmap for data transfer. We'd have to deal with all the
+		// places where List.Uids is being called.
+		// out.Bitmap = codec.ToBytes(bm)
 		return out, nil
 	}
 

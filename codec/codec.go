@@ -188,6 +188,12 @@ func ToUids(plist *pb.PostingList, start uint64) []uint64 {
 	return r.ToArray()
 }
 
+// RemoveRange would remove [from, to] from bm.
+func RemoveRange(bm *roaring64.Bitmap, from, to uint64) {
+	bm.RemoveRange(from, to)
+	bm.Remove(to)
+}
+
 // // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // // need to do more specific things than just return the list back.
 // func Decode(pack *pb.UidPack, seek uint64) []uint64 {

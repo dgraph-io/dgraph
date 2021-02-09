@@ -26,8 +26,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -486,10 +488,12 @@ func TestMillion(t *testing.T) {
 
 	t.Logf("Completed a million writes.\n")
 	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
+	bm, err := ol.Bitmap(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	require.Equal(t, uint64(commits), bm.GetCardinality())
+
+	uids := bm.ToArray()
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1)*2, uid)
 	}
 }
@@ -1017,12 +1021,9 @@ func TestDeleteStarMultiPartList(t *testing.T) {
 	require.NoError(t, err)
 
 	validateCount := func(expected int) {
-		count := 0
-		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
-			count++
-			return nil
-		})
-		require.Equal(t, expected, count)
+		bm, err := list.Bitmap(ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.Equal(t, uint64(expected), bm.GetCardinality())
 	}
 	validateCount(numEdges)
 
@@ -1067,8 +1068,11 @@ func TestMultiPartListBasic(t *testing.T) {
 	}
 }
 
+var maxReadTs = ListOptions{ReadTs: math.MaxUint64}
+
 // Checks if the binSplit works correctly.
 func TestBinSplit(t *testing.T) {
+
 	createList := func(t *testing.T, size int) *List {
 		// This is a package level constant, so reset it after use.
 		originalListSize := maxListSize
@@ -1088,9 +1092,13 @@ func TestBinSplit(t *testing.T) {
 			addMutationHelper(t, ol, edge, Set, &txn)
 			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		}
+		bm, err := ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		t.Logf("createList Bitmap: %d\n", bm.GetCardinality())
 
 		kvs, err := ol.Rollup(nil)
 		require.NoError(t, err)
+		t.Logf("Num KVs: %d\n", len(kvs))
 		for _, kv := range kvs {
 			require.Equal(t, uint64(size+1), kv.Version)
 		}
@@ -1099,6 +1107,10 @@ func TestBinSplit(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, len(ol.plist.Splits))
 		require.Equal(t, size, len(ol.plist.Postings))
+
+		bm, err = ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		t.Logf("createList Bitmap after store: %d\n", bm.GetCardinality())
 		return ol
 	}
 	verifyBinSplit := func(t *testing.T, ol *List, ro *rollupOutput) {
@@ -1115,9 +1127,19 @@ func TestBinSplit(t *testing.T) {
 		low := codec.FromBytes(ro.parts[keys[0]].Bitmap)
 		high := codec.FromBytes(ro.parts[keys[1]].Bitmap)
 
-		uids := codec.ToUids(ol.plist, 0)
+		bm, err := ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		expected := bm.ToArray()
+
 		// Check if no data is lost in splitting.
-		require.Equal(t, uids, append(low.ToArray(), high.ToArray()...))
+		t.Logf("expected: %d [%d -> %d] low: %d [%d -> %d] high: %d [%d -> %d]\n",
+			bm.GetCardinality(), bm.Minimum(), bm.Maximum(),
+			low.GetCardinality(), low.Minimum(), low.Maximum(),
+			high.GetCardinality(), high.Minimum(), high.Maximum())
+		require.Equal(t, uint64(0), roaring64.And(low, high).GetCardinality())
+		got := append(low.ToArray(), high.ToArray()...)
+		require.Equal(t, len(expected), len(got))
+		require.Equal(t, expected, got)
 		require.Equal(t, ol.plist.Postings,
 			append(ro.parts[keys[0]].Postings, ro.parts[keys[1]].Postings...))
 
@@ -1142,7 +1164,8 @@ func TestBinSplit(t *testing.T) {
 			plist: &pb.PostingList{},
 			parts: make(map[uint64]*pb.PostingList),
 		}
-		out.parts[1] = pl
+		out.plist.Splits = append(out.plist.Splits, uint64(1))
+		out.parts[1] = proto.Clone(pl).(*pb.PostingList)
 		return out
 	}
 	out := getRO(ol.plist)
@@ -1166,13 +1189,13 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
 
-	var visitedUids []uint64
-	ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
-		visitedUids = append(visitedUids, p.Uid)
-		return nil
+	bm, err := ol.Bitmap(ListOptions{
+		ReadTs:   uint64(size + 1),
+		AfterUid: 50000,
 	})
-	require.Equal(t, 50000, len(visitedUids))
-	for i, uid := range visitedUids {
+	require.NoError(t, err)
+	require.Equal(t, uint64(50000), bm.GetCardinality())
+	for i, uid := range bm.ToArray() {
 		require.Equal(t, uint64(50000+i+1), uid)
 	}
 }
