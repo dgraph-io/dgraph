@@ -2470,7 +2470,7 @@ func (t *astType) ImplementingTypes() []Type {
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
 	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
-		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion {
+		if fld.Type.NonNull && !isID(fld) && fld.Name != exclusion && t.inSchema.customDirectives[t.Name()][fld.Name] == nil {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
 					"type %s requires a value for field %s, but no value present",
