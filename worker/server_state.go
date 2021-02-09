@@ -107,7 +107,6 @@ func (s *ServerState) initStorage() {
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
-			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize)
