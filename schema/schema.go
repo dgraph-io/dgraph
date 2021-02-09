@@ -763,13 +763,13 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 // IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
 // If the passed update is not a pre-defined predicate then it just returns false.
-func IsPreDefPredChanged(namespace uint64, update *pb.SchemaUpdate) bool {
+func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema(namespace)
+	initialSchema := CompleteInitialSchema(x.ParseNamespace(update.Predicate))
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
@@ -782,13 +782,13 @@ func IsPreDefPredChanged(namespace uint64, update *pb.SchemaUpdate) bool {
 // IsPreDefTypeChanged returns true if the initial update for the pre-defined
 // type is different than the passed update.
 // If the passed update is not a pre-defined type than it just returns false.
-func IsPreDefTypeChanged(namespace uint64, update *pb.TypeUpdate) bool {
+func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
 	if !x.IsPreDefinedType(update.TypeName) {
 		return false
 	}
 
-	initialTypes := CompleteInitialTypes(namespace)
+	initialTypes := CompleteInitialTypes(x.ParseNamespace(update.TypeName))
 	for _, original := range initialTypes {
 		if original.TypeName != update.TypeName {
 			continue

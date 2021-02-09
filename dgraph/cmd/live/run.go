@@ -77,6 +77,7 @@ type options struct {
 	upsertPredicate string
 	tmpDir          string
 	key             x.SensitiveByteSlice
+	namespaceToLoad uint64
 }
 
 type predicate struct {
@@ -103,10 +104,13 @@ type request struct {
 	conflicts []uint64
 }
 
-func (l *schema) init() {
+func (l *schema) init(ns uint64) {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
+		if ns != math.MaxUint64 {
+			i.Predicate = x.NamespaceAttr(ns, i.Predicate)
+		}
 		l.preds[i.Predicate] = i
 	}
 }
@@ -161,12 +165,17 @@ func init() {
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
+	flag.Uint64P("namespace", "n", 0, "Namespace to login.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
+	flag.Uint64("force-namespace", math.MaxUint64,
+		"Namespace onto which to load the data. If not set, will preserve the namespace."+
+			"Only guardian of galaxy should use this for loading data into multiple namespaces."+
+			"This flag will be ignored when not logging into galaxy namespace.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -174,7 +183,7 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -187,7 +196,9 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	sch.init()
+	// If we are not loading data across namespaces, the schema query result will not contain the
+	// namespace information. Set it inside the init function.
+	sch.init(ns)
 	return &sch, nil
 }
 
@@ -222,7 +233,7 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 	return dgraphClient.Alter(ctx, op)
 }
 
-func (l *loader) uid(val string) string {
+func (l *loader) uid(val string, ns uint64) string {
 	// Attempt to parse as a UID (in the same format that dgraph outputs - a
 	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
 	// to be an existing node in the graph. There is limited protection against
@@ -234,8 +245,10 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
+	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
+	// this string.
 	sb := strings.Builder{}
-	x.Check2(sb.WriteString(val))
+	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
 	return fmt.Sprintf("%#x", uint64(uid))
@@ -298,11 +311,13 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	for _, i := range nqs {
 		// taking hash as the value might contain invalid symbols
-		ids[i.Subject] = generateBlankNode(i.Subject)
+		subject := x.NamespaceAttr(i.Namespace, i.Subject)
+		ids[subject] = generateBlankNode(subject)
 
 		if len(i.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			ids[i.ObjectId] = generateBlankNode(i.ObjectId)
+			object := x.NamespaceAttr(i.Namespace, i.Subject)
+			ids[object] = generateBlankNode(object)
 		}
 	}
 
@@ -443,8 +458,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
-				iPred := sch.preds[buffer[i].Predicate]
-				jPred := sch.preds[buffer[j].Predicate]
+				iPred := sch.preds[x.NamespaceAttr(buffer[i].Namespace, buffer[i].Predicate)]
+				jPred := sch.preds[x.NamespaceAttr(buffer[j].Namespace, buffer[j].Predicate)]
 				t := func(a *predicate) int {
 					if a != nil && a.Count {
 						return 1
@@ -454,6 +469,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 				// Sorts the nquads on basis of their predicates, while keeping the
 				// predicates with count index later than those without it.
+				// TODO(Naman): Why do we keep count indexes later?
 				if t(iPred) != t(jPred) {
 					return t(iPred) < t(jPred)
 				}
@@ -478,13 +494,23 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			if opt.upsertPredicate == "" {
 				l.allocateUids(nqs)
 			} else {
+				// TODO(Naman): Handle this. Upserts UIDs send a single upsert block for multiple
+				// nquads. These nquads may belong to different namespaces. Hence, alpha can't
+				// figure out its processsing.
+				// Currently, this option works with data loading in the logged-in namespace.
+				// TODO(Naman): Add a test for a case when it works and when it doesn't.
 				l.upsertUids(nqs)
 			}
 
 			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
+				if opt.namespaceToLoad != math.MaxUint64 {
+					// If do not preserve namespace, use the namespace passed through
+					// `--force-namespace` flag.
+					nq.Namespace = opt.namespaceToLoad
+				}
+				nq.Subject = l.uid(nq.Subject, nq.Namespace)
 				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
+					nq.ObjectId = l.uid(nq.ObjectId, nq.Namespace)
 				}
 			}
 
@@ -608,6 +634,12 @@ func run() error {
 		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
+		namespaceToLoad: Live.Conf.GetUint64("force-namespace"),
+	}
+
+	// Do a preliminary check on the login namespace and the namespace user wants to load into.
+	if Live.Conf.GetUint64("namespace") != 0 {
+		opt.namespaceToLoad = Live.Conf.GetUint64("namespace")
 	}
 
 	z.SetTmpDir(opt.tmpDir)
@@ -622,6 +654,12 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
+	if Live.Conf.GetUint64("namespace") == x.GalaxyNamespace && opt.namespaceToLoad == math.MaxInt64 {
+		// Attach the galaxy to the context to specify that the query/mutations with this context
+		// will be galaxy-wide.
+		ctx = x.AttachGalaxyOperation(ctx)
+	}
+
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,
 		Pending:       opt.concurrent,
@@ -653,7 +691,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	l.schema, err = getSchema(ctx, dg)
+	l.schema, err = getSchema(ctx, dg, opt.namespaceToLoad)
 	if err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err

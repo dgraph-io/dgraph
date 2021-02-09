@@ -23,8 +23,7 @@ func resolveGetNewNamespace(ctx context.Context, m schema.Query) *resolve.Resolv
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): map[string]interface{}{
-			// TODO(naman): Fix coersion issue.
-			"namespaceId": strconv.Itoa(int(ns)),
+			"namespaceId": json.Number(strconv.Itoa(int(ns))),
 			"message":     "Created namespace successfully",
 		}},
 		nil,

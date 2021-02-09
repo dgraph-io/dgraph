@@ -272,8 +272,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 		if err = validateAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
-		namespace := x.ExtractNamespace(ctx)
-		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(namespace, op); err != nil {
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
 	}
@@ -320,14 +319,28 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema.ParsedSchema,
+func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*schema.ParsedSchema,
 	error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
 	}
 
-	result, err := schema.ParseWithNamespace(op.Schema, namespace)
+	var result *schema.ParsedSchema
+	var err error
+	if x.IsGalaxyOperation(ctx) {
+		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
+		// needed by live loader.
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+		}
+		// Parse the schema preserving the namespace.
+		result, err = schema.Parse(op.Schema)
+	} else {
+		namespace := x.ExtractNamespace(ctx)
+		result, err = schema.ParseWithNamespace(op.Schema, namespace)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +348,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefPredChanged(namespace, update) {
+		if schema.IsPreDefPredChanged(update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
 				" modified", x.ParseAttr(update.Predicate))
 		}
@@ -358,7 +371,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 	for _, typ := range result.Types {
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefTypeChanged(namespace, typ) {
+		if schema.IsPreDefTypeChanged(typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
 				x.ParseAttr(typ.TypeName))
 		}
@@ -539,12 +552,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-	result, err := parseSchemaFromAlterOperation(namespace, op)
+	result, err := parseSchemaFromAlterOperation(ctx, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
 		time.Sleep(time.Second)
 		return nil, err
-
 	} else if err != nil {
 		return nil, err
 	}
@@ -1172,6 +1184,14 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	}
 	if isMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
+	}
+
+	if x.IsGalaxyOperation(ctx) {
+		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
+		// needed by live loader.
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+		}
 	}
 
 	qc := &queryContext{

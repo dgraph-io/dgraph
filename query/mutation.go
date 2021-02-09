@@ -60,8 +60,22 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	namespace := x.ExtractNamespace(ctx)
+	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+
+	// Reset the namespace to the original.
+	defer func(ns uint64) {
+		x.AttachNamespace(ctx, ns)
+	}(namespace)
+
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
+		if isGalaxyQuery {
+			// The caller should make sure that the directed edges contain the namespace we want
+			// to insert into. Now, attach the namespace in the context, so that further query
+			// proceeds as if made from the user of 'namespace'.
+			namespace = edge.GetNamespace()
+			x.AttachNamespace(ctx, namespace)
+		}
 
 		var preds []string
 		if edge.Attr != x.Star {

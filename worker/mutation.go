@@ -73,6 +73,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if isDeletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
 	}
+
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially

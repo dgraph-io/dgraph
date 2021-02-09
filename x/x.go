@@ -279,6 +279,15 @@ func ExtractNamespace(ctx context.Context) uint64 {
 	return namespace
 }
 
+func IsGalaxyOperation(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		glog.Fatal("No metadata in the context")
+	}
+	ns := md.Get("galaxy-operation")
+	return len(ns) > 0 && ns[0] == "true"
+}
+
 func ExtractJwt(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -418,6 +427,7 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		if err != nil {
 			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
 		}
+		// TODO(Ahsan): Shouldn't we return an error from here?
 		ctx = AttachNamespace(ctx, ns)
 	} else {
 		ctx = AttachNamespace(ctx, GalaxyNamespace)
@@ -434,6 +444,17 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
 	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
+}
+
+// AttachGalaxyOperation adds given namespace to the metadata of the context.
+func AttachGalaxyOperation(ctx context.Context) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	md.Set("galaxy-operation", "true")
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	return ctx
 }
 
@@ -908,6 +929,7 @@ type CredOpt struct {
 	Conf        *viper.Viper
 	UserID      string
 	PasswordOpt string
+	Namespace   uint64
 }
 
 type authorizationCredentials struct {
@@ -993,6 +1015,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 			Conf:        conf,
 			UserID:      user,
 			PasswordOpt: "password",
+			Namespace:   conf.GetUint64("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
@@ -1048,7 +1071,8 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password, GalaxyNamespace); err != nil {
+	//TODO(Ahsan): What should be the namespace here?
+	if err := dg.Login(ctx, opt.UserID, password, opt.Namespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
