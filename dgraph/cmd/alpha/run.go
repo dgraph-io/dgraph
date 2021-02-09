@@ -473,8 +473,11 @@ func setupServer(closer *z.Closer) {
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
 	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
-		namespace := r.Header.Get("namespace")
-		r.Header.Set("resolver", namespace)
+		ctx := x.AttachAccessJwt(context.Background(), r)
+		// Ignording error because the default value is zero anyways.
+		namespace, _ := x.ExtractJWTNamespace(ctx)
+		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
+		r.Header.Set("namespace", strconv.FormatUint(namespace, 10))
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
@@ -487,8 +490,8 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
-		namespace := r.Header.Get("namespace")
-		ns, _ := strconv.ParseUint(namespace, 10, 64)
+		ctx := x.AttachAccessJwt(context.Background(), r)
+		ns, _ := x.ExtractJWTNamespace(ctx)
 		e = globalEpoch[ns]
 		var counter uint64
 		if e != nil {

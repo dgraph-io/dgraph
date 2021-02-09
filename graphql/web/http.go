@@ -157,11 +157,16 @@ func (gs *graphqlSubscription) Subscribe(
 			return nil, err
 		}
 
-		if v, ok := payload["namespace"].(string); ok {
-			namespace, _ = strconv.ParseUint(v, 10, 64)
-		}
-
 		name := authorization.GetHeader()
+		v, ok := payload["X-Dgraph-AccessToken"].(string)
+		if ok {
+			req := &http.Request{
+				Header: make(map[string][]string),
+			}
+			req.Header.Set("X-Dgraph-Access-Token", v)
+			ctx := x.AttachAccessJwt(context.Background(), req)
+			namespace, _ = x.ExtractJWTNamespace(ctx)
+		}
 		for key, val := range payload {
 			if !strings.EqualFold(key, name) {
 				continue
@@ -234,9 +239,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ns := r.Header.Get("namespace")
-	namespace, _ := strconv.ParseUint(ns, 10, 64)
-	ctx = x.AttachNamespace(ctx, namespace)
+	ctx = x.AttachJWTNamespace(ctx)
 	rs := r.Header.Get("resolver")
 	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
