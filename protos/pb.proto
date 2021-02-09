@@ -569,6 +569,7 @@ service Worker {
 
 message SubscriptionRequest {
 	repeated bytes prefixes = 1;
+	repeated badgerpb3.Match matches = 2;
 }
 
 message SubscriptionResponse {
