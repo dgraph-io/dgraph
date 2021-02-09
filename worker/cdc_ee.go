@@ -103,6 +103,15 @@ func (cdc *CDC) getTs() uint64 {
 	return min
 }
 
+func (cdc *CDC) resetPendingTxns() {
+	if cdc == nil {
+		return
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
 func (cdc *CDC) addToPending(ts uint64, events []CDCEvent) {
 	if cdc == nil {
 		return
@@ -209,6 +218,17 @@ func (cdc *CDC) processCDCEvents() {
 			events := toCDCEvent(entry.Index, proposal.Mutations)
 			if len(events) == 0 {
 				return
+			}
+			if proposal.Mutations.DropOp != pb.Mutations_NONE {
+				// if there is DROP ALL or DROP DATA operation, clear pending events also.
+				if proposal.Mutations.DropOp == pb.Mutations_ALL ||
+					proposal.Mutations.DropOp == pb.Mutations_DATA {
+					cdc.resetPendingTxns()
+				}
+				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
+					rerr = errors.Wrapf(err, "unable to send messages to sink")
+					return
+				}
 			}
 			// In ludicrous, we execute the mutations as soon as we get the proposal.
 			// TODO: We should get a confirmation from ludicrous scheduler about this.
