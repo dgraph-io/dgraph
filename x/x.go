@@ -447,7 +447,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	return ctx
 }
 
-// AttachGalaxyOperation adds given namespace to the metadata of the context.
+// AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
 func AttachGalaxyOperation(ctx context.Context) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {

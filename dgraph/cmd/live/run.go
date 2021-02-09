@@ -309,14 +309,14 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	ids := make(map[string]string)
 
-	for _, i := range nqs {
+	for _, nq := range nqs {
 		// taking hash as the value might contain invalid symbols
-		subject := x.NamespaceAttr(i.Namespace, i.Subject)
+		subject := x.NamespaceAttr(nq.Namespace, nq.Subject)
 		ids[subject] = generateBlankNode(subject)
 
-		if len(i.ObjectId) > 0 {
+		if len(nq.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			object := x.NamespaceAttr(i.Namespace, i.Subject)
+			object := x.NamespaceAttr(nq.Namespace, nq.Subject)
 			ids[object] = generateBlankNode(object)
 		}
 	}
@@ -491,6 +491,14 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
+			if opt.namespaceToLoad != math.MaxUint64 {
+				// If do not preserve namespace, use the namespace passed through
+				// `--force-namespace` flag.
+				for _, nq := range nqs {
+					nq.Namespace = opt.namespaceToLoad
+				}
+			}
+
 			if opt.upsertPredicate == "" {
 				l.allocateUids(nqs)
 			} else {
@@ -503,11 +511,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			}
 
 			for _, nq := range nqs {
-				if opt.namespaceToLoad != math.MaxUint64 {
-					// If do not preserve namespace, use the namespace passed through
-					// `--force-namespace` flag.
-					nq.Namespace = opt.namespaceToLoad
-				}
 				nq.Subject = l.uid(nq.Subject, nq.Namespace)
 				if len(nq.ObjectId) > 0 {
 					nq.ObjectId = l.uid(nq.ObjectId, nq.Namespace)
