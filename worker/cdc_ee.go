@@ -72,7 +72,7 @@ func newCDC() *CDC {
 		x.Fatalf("cdc is not supported in ludicrous mode")
 	}
 
-	cdcFlag := x.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
+	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
 	sink, err := GetSink(cdcFlag)
 	x.Check(err)
 	cdc := &CDC{

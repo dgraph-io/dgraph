@@ -30,6 +30,7 @@ import (
 	"github.com/Shopify/sarama"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 type SinkMessage struct {
@@ -53,7 +54,7 @@ const (
 	defaultSinkFileName = "sink.log"
 )
 
-func GetSink(conf *x.SuperFlag) (Sink, error) {
+func GetSink(conf *z.SuperFlag) (Sink, error) {
 	switch {
 	case conf.GetString("kafka") != "":
 		return newKafkaSink(conf)
@@ -70,7 +71,7 @@ type kafkaSinkClient struct {
 	producer sarama.SyncProducer
 }
 
-func newKafkaSink(config *x.SuperFlag) (Sink, error) {
+func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 	if config.GetString("kafka") == "" {
 		return nil, errors.New("brokers are not provided for the kafka config")
 	}
@@ -170,7 +171,7 @@ func (f *fileSink) Close() error {
 	return f.fileWriter.Close()
 }
 
-func newFileSink(path *x.SuperFlag) (Sink, error) {
+func newFileSink(path *z.SuperFlag) (Sink, error) {
 	dir := path.GetString("file")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, errors.Wrap(err, "unable to create directory for file sink")
