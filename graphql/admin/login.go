@@ -18,6 +18,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -29,6 +30,7 @@ import (
 type loginInput struct {
 	UserId       string
 	Password     string
+	Namespace    uint64
 	RefreshToken string
 }
 
@@ -39,6 +41,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
+		Namespace:    input.Namespace,
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
@@ -67,11 +70,13 @@ func getLoginInput(m schema.Mutation) *loginInput {
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
 	userID, _ := m.ArgValue("userId").(string)
 	password, _ := m.ArgValue("password").(string)
+	namespace, _ := m.ArgValue("namespace").(json.Number).Int64()
 	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
 	return &loginInput{
 		userID,
 		password,
+		uint64(namespace),
 		refreshToken,
 	}
 }

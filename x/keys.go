@@ -50,8 +50,10 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
-	// DefaultNamespace is the default namespace name.
-	DefaultNamespace = uint64(0)
+	// GalaxyNamespace is the default namespace name.
+	GalaxyNamespace = uint64(0)
+	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
+	IgnoreBytes = "1-8"
 )
 
 func NamespaceToBytes(ns uint64) []byte {
@@ -71,6 +73,10 @@ func NamespaceAttrList(ns uint64, preds []string) []string {
 		resp = append(resp, NamespaceAttr(ns, pred))
 	}
 	return resp
+}
+
+func GalaxyAttr(attr string) string {
+	return NamespaceAttr(GalaxyNamespace, attr)
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.

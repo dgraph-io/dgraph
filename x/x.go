@@ -34,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -141,16 +142,17 @@ var (
 	Nilbyte []byte
 	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
 	AcceptedOrigins = atomic.Value{}
-	// GuardiansGroupUid is Uid of guardians group node.
-	GuardiansGroupUid uint64
-	// GrootUser Uid is Uid of groot user node.
-	GrootUserUid uint64
+	// GuardiansUid is a map from namespace to the Uid of guardians group node.
+	GuardiansUid = &sync.Map{}
+	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	GrootUid = &sync.Map{}
 )
 
 func init() {
 	AcceptedOrigins.Store(map[string]struct{}{})
-	atomic.StoreUint64(&GuardiansGroupUid, 0)
-	atomic.StoreUint64(&GrootUserUid, 0)
+	GuardiansUid.Store(GalaxyNamespace, 0)
+	GrootUid.Store(GalaxyNamespace, 0)
+
 }
 
 // UpdateCorsOrigins updates the cors allowlist with the given origins.
@@ -266,11 +268,11 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return DefaultNamespace
+		glog.Fatal("No metadata in the context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		return DefaultNamespace
+		glog.Fatal("No namespace in the metadata of context")
 	}
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
@@ -406,6 +408,33 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
+// it attaches the galaxy namespace.
+func AttachJWTNamespace(ctx context.Context) context.Context {
+	if WorkerConfig.AclEnabled {
+		ns, err := ExtractJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		}
+		ctx = AttachNamespace(ctx, ns)
+	} else {
+		ctx = AttachNamespace(ctx, GalaxyNamespace)
+	}
+	return ctx
+}
+
+// AttachNamespace adds given namespace to the metadata of the context.
+func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	ns := strconv.FormatUint(namespace, 10)
+	md.Set("namespace", ns)
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
 }
 
 // AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
@@ -1019,7 +1048,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password, DefaultNamespace); err != nil {
+	if err := dg.Login(ctx, opt.UserID, password, GalaxyNamespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
@@ -1289,25 +1318,11 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 `
 
 // KvWithMaxVersion returns a KV with the max version from the list of KVs.
-func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte, tag string) *badgerpb.KV {
-	hasAnyPrefix := func(key []byte) bool {
-		for _, prefix := range prefixes {
-			if bytes.HasPrefix(key, prefix) {
-				return true
-			}
-		}
-		return false
-	}
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
 	// KV contain the latest value.
 	var maxKv *badgerpb.KV
 	for _, kv := range kvs.GetKv() {
-		if !hasAnyPrefix(kv.GetKey()) {
-			// Verify that we got the key which was subscribed. This shouldn't happen, but added for
-			// robustness.
-			glog.Errorf("[%s] Got key: %x which was not subscribed", tag, kv.GetKey())
-			continue
-		}
 		if maxKv.GetVersion() <= kv.GetVersion() {
 			maxKv = kv
 		}

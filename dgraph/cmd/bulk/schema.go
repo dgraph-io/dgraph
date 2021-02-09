@@ -47,10 +47,9 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		state:     state,
 	}
 
-	// TODO(Ahsan): Use the right namespace here.
 	// Initialize only for the default namespace. Initialization for other namespaces will be done
 	// whenever we see data for a new namespace.
-	s.checkAndSetInitialSchema(x.DefaultNamespace)
+	s.checkAndSetInitialSchema(x.GalaxyNamespace)
 
 	// This is from the schema read from the schema file.
 	for _, sch := range initial.Preds {

@@ -565,6 +565,7 @@ service Worker {
 
 message SubscriptionRequest {
 	repeated bytes prefixes = 1;
+	string ignore =2;
 }
 
 message SubscriptionResponse {

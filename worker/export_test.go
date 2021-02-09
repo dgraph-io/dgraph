@@ -54,19 +54,19 @@ const (
 )
 
 var personType = &pb.TypeUpdate{
-	TypeName: testutil.DefaultNamespaceAttr("Person"),
+	TypeName: testutil.GalaxyNamespaceAttr("Person"),
 	Fields: []*pb.SchemaUpdate{
 		{
-			Predicate: testutil.DefaultNamespaceAttr("name"),
+			Predicate: testutil.GalaxyNamespaceAttr("name"),
 		},
 		{
-			Predicate: testutil.DefaultNamespaceAttr("friend"),
+			Predicate: testutil.GalaxyNamespaceAttr("friend"),
 		},
 		{
-			Predicate: testutil.DefaultNamespaceAttr("~friend"),
+			Predicate: testutil.GalaxyNamespaceAttr("~friend"),
 		},
 		{
-			Predicate: testutil.DefaultNamespaceAttr("friend_not_served"),
+			Predicate: testutil.GalaxyNamespaceAttr("friend_not_served"),
 		},
 	},
 }
@@ -139,7 +139,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
 
@@ -148,17 +148,17 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	err = txn.Set(testutil.DefaultSchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	err = txn.Set(testutil.GalaxySchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("friend_not_served"), val))
-	require.NoError(t, txn.Set(testutil.DefaultSchemaKey("age"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Set(testutil.DefaultTypeKey("Person"), val))
+	require.NoError(t, txn.Set(testutil.GalaxyTypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
 	populateGraphExport(t)
@@ -166,7 +166,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	// Drop age predicate after populating DB.
 	// age should not exist in the exported schema.
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	require.NoError(t, txn.Delete(testutil.DefaultSchemaKey("age")))
+	require.NoError(t, txn.Delete(testutil.GalaxySchemaKey("age")))
 	require.NoError(t, txn.CommitAt(1, nil))
 }
 
@@ -210,7 +210,7 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	require.Equal(t, 2, len(result.Preds))
 	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
-	require.Equal(t, testutil.DefaultNamespaceAttr("http://www.w3.org/2000/01/rdf-schema#range"),
+	require.Equal(t, testutil.GalaxyNamespaceAttr("http://www.w3.org/2000/01/rdf-schema#range"),
 		result.Preds[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 

@@ -593,7 +593,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	// TODO(Naman): Get this from token.
 	if in.Namespace != math.MaxUint64 {
 		// Export a specific namespace.
-		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(in.Namespace)...)
+		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(x.ExtractNamespace(ctx))...)
 	}
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {

@@ -240,7 +240,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if lastManifest.Version == 0 {
 		tmp := make([]string, 0, len(preds))
 		for _, pred := range preds {
-			tmp = append(tmp, x.NamespaceAttr(x.DefaultNamespace, pred))
+			tmp = append(tmp, x.GalaxyAttr(pred))
 		}
 		preds = tmp
 	}

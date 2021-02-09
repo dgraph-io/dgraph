@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -45,11 +44,10 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	}
 	m.Edges = edges
 
-	err = checkIfDeletingAclOperation(m.Edges)
+	err = checkIfDeletingAclOperation(ctx, m.Edges)
 	if err != nil {
 		return nil, err
 	}
-
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -244,24 +242,33 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	return edges, nil
 }
 
-func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
+func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) error {
 	// Don't need to make any checks if ACL is not enabled
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
+	namespace := x.ExtractNamespace(ctx)
 
-	guardianGroupUid := atomic.LoadUint64(&x.GuardiansGroupUid)
-	grootUserUid := atomic.LoadUint64(&x.GrootUserUid)
+	// If the guardian or groot node is not present, then the request cannot be a delete operation
+	// on guardian or groot node.
+	guardianUid, ok := x.GuardiansUid.Load(namespace)
+	if !ok {
+		return nil
+	}
+	grootsUid, ok := x.GrootUid.Load(namespace)
+	if !ok {
+		return nil
+	}
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
 		// Disallow deleting of guardians group
-		if edge.Entity == guardianGroupUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == guardianUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}
 		// Disallow deleting of groot user
-		if edge.Entity == grootUserUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == grootsUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}

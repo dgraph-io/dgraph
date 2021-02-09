@@ -18,36 +18,32 @@ package testutil
 
 import "github.com/dgraph-io/dgraph/x"
 
-func DefaultNamespaceAttr(attr string) string {
-	return x.NamespaceAttr(x.DefaultNamespace, attr)
-}
-
-func DefaultSchemaKey(attr string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxySchemaKey(attr string) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.SchemaKey(attr)
 }
 
-func DefaultTypeKey(attr string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxyTypeKey(attr string) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.TypeKey(attr)
 }
 
-func DefaultDataKey(attr string, uid uint64) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxyDataKey(attr string, uid uint64) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.DataKey(attr, uid)
 }
 
-func DefaultReverseKey(attr string, uid uint64) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxyReverseKey(attr string, uid uint64) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.ReverseKey(attr, uid)
 }
 
-func DefaultIndexKey(attr, term string) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxyIndexKey(attr, term string) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.IndexKey(attr, term)
 }
 
-func DefaultCountKey(attr string, count uint32, reverse bool) []byte {
-	attr = x.NamespaceAttr(x.DefaultNamespace, attr)
+func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
+	attr = x.GalaxyAttr(attr)
 	return x.CountKey(attr, count, reverse)
 }
