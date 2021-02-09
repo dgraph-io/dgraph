@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -86,11 +88,22 @@ type MutationResolver interface {
 // mutation query rewriting is dependent on the context set up by the result of
 // the mutation.
 type MutationRewriter interface {
+	// RewriteQueries generates and rewrites GraphQL mutation m into DQL queries which
+	// check if any referenced node by XID or ID exist or not.
+	// Example existence queries:
+	// 1. Parrot1(func: uid(0x127)) @filter(type: Parrot) {
+	//      uid
+	//    }
+	// 2.  Computer2(func: eq(Computer.name, "computer1")) @filter(type(Computer)) {
+	//       uid
+	//     }
+	// These query will be created in case of Add or Update Mutation which references node
+	// 0x127 or Computer of name "computer1"
+	RewriteQueries(ctx context.Context, m schema.Mutation) ([]*gql.GraphQuery, error)
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
-	Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error)
-
+	Rewrite(ctx context.Context, m schema.Mutation, idExistence map[string]string) ([]*UpsertMutation, error)
 	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
 	// mutation and constructs a Dgraph query.  It's used to find the return
 	// value from a GraphQL mutation - i.e. we've run the mutation indicated by m
@@ -193,9 +206,11 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 	}
 }
 
-func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
+func (mr *dgraphResolver) rewriteAndExecute(
+	ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
 	var mutResp, qryResp *dgoapi.Response
+	req := &dgoapi.Request{}
 	commit := false
 
 	defer func() {
@@ -238,7 +253,87 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		}
 	}
 
-	upserts, err := mr.mutationRewriter.Rewrite(ctx, mutation)
+	// upserts stores rewritten []*UpsertMutation by Rewrite function. These mutations
+	// are then executed and the results processed and returned.
+	var upserts []*UpsertMutation
+	var err error
+	// queries stores rewritten []*gql.GraphQuery by RewriteQueries function. These queries
+	// are then executed and the results are processed
+	var queries []*gql.GraphQuery
+	queries, err = mr.mutationRewriter.RewriteQueries(ctx, mutation)
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
+			resolverFailed
+	}
+	// Execute queries and parse its result into a map
+	qry := dgraph.AsString(queries)
+	req.Query = qry
+
+	// The query will be empty in case there is no reference XID / UID in the mutation.
+	// Don't execute the query in those cases.
+	// The query will also be empty in case this is not an Add or an Update Mutation.
+	if req.Query != "" {
+		mutResp, err = mr.executor.Execute(ctx, req, nil)
+	}
+	if err != nil {
+		gqlErr := schema.GQLWrapLocationf(
+			err, mutation.Location(), "mutation %s failed", mutation.Name())
+		return emptyResult(gqlErr), resolverFailed
+	}
+
+	// Parse the result of query.
+	// mutResp.Json will contain response to the query.
+	// The response is parsed to existenceQueriesResult
+	// Example Response:
+	// {
+	// 	Project1 :
+	//		[
+	//			{
+	//				"uid" : "0x123"
+	// 			}
+	//		],
+	//	Column2 :
+	//		[
+	//			{
+	//				"uid": "0x234"
+	// 			}
+	//		]
+	// }
+	queryResultMap := make(map[string][]map[string]string)
+	if mutResp != nil {
+		err = json.Unmarshal(mutResp.Json, &queryResultMap)
+	}
+	if err != nil {
+		gqlErr := schema.GQLWrapLocationf(
+			err, mutation.Location(), "mutation %s failed", mutation.Name())
+		return emptyResult(gqlErr), resolverFailed
+	}
+
+	// The above response is parsed into map[string]string as follows:
+	// {
+	// 		"Project1" : "0x123",
+	// 		"Column2" : "0x234"
+	// }
+	// As only Add and Update mutations generate queries using RewriteQueries,
+	// qNameToUID map will be non-empty only in case of Add or Update Mutation.
+	qNameToUID := make(map[string]string)
+	for key, result := range queryResultMap {
+		if len(result) == 1 {
+			// Found exactly one UID / XID corresponding to given condition
+			qNameToUID[key] = result[0]["uid"]
+		} else if len(result) > 1 {
+			// Found multiple UIDs for query. This should ideally not happen.
+			// This indicates that there are multiple nodes with same XIDs / UIDs. Throw an error.
+			err = errors.New(fmt.Sprintf("Found multiple nodes with ID: %s", result[0]["uid"]))
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+		}
+	}
+
+	// Create upserts, delete mutations, update mutations, add mutations.
+	upserts, err = mr.mutationRewriter.Rewrite(ctx, mutation, qNameToUID)
+
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
@@ -278,7 +373,6 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 
 	result := make(map[string]interface{})
-	req := &dgoapi.Request{}
 	newNodes := make(map[string]schema.Type)
 
 	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
@@ -313,7 +407,8 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
 
-	dgQuery, err := mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
+	var dgQuery []*gql.GraphQuery
+	dgQuery, err = mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	queryErrs = schema.AppendGQLErrs(queryErrs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 	if dgQuery == nil && err != nil {

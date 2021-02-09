@@ -1,1189 +1,1370 @@
 {
-    "schema": [
-        {
-            "predicate": "Animal.category",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ]
-        },
-        {
-            "predicate": "Astronaut.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Astronaut.missions",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Author.country",
-            "type": "uid"
-        },
-        {
-            "predicate": "Author.dob",
-            "type": "datetime",
-            "index": true,
-            "tokenizer": [
-                "year"
-            ]
-        },
-        {
-            "predicate": "Author.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Author.posts",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Author.reputation",
-            "type": "float",
-            "index": true,
-            "tokenizer": [
-                "float"
-            ]
-        },
-        {
-            "index": true,
-            "predicate": "Author.qualification",
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ],
-            "type": "string"
-        },
-        {
-            "predicate": "Category.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Category.posts",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Character.appearsIn",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "list": true
-        },
-        {
-            "predicate": "Character.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
-            "predicate": "Cheetah.speed",
-            "type": "float"
-        },
-        {
-            "predicate": "Comment1.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Comment1.replies",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Country.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Country.states",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Dog.breed",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "term"
-            ]
-        },
-        {
-            "predicate": "Droid.primaryFunction",
-            "type": "string"
-        },
-        {
-            "predicate": "Employee.ename",
-            "type": "string"
-        },
-        {
-            "predicate": "Home.address",
-            "type": "string"
-        },
-        {
-            "predicate": "Home.favouriteMember",
-            "type": "uid"
-        },
-        {
-            "predicate": "Home.members",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Hotel.area",
-            "type": "geo",
-            "index": true,
-            "tokenizer": [
-                "geo"
-            ]
-        },
-        {
-            "predicate": "Hotel.branches",
-            "type": "geo",
-            "index": true,
-            "tokenizer": [
-                "geo"
-            ]
-        },
-        {
-            "predicate": "Hotel.location",
-            "type": "geo",
-            "index": true,
-            "tokenizer": [
-                "geo"
-            ]
-        },
-        {
-            "predicate": "Hotel.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
-            "predicate": "Human.starships",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Human.totalCredits",
-            "type": "float"
-        },
-        {
-            "predicate": "Mission.crew",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Mission.designation",
-            "type": "string"
-        },
-        {
-            "predicate": "Mission.endDate",
-            "type": "string"
-        },
-        {
-            "predicate": "Mission.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Mission.spaceShip",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Mission.startDate",
-            "type": "string"
-        },
-        {
-            "predicate": "Movie.director",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Movie.name",
-            "type": "string"
-        },
-        {
-            "predicate": "MovieDirector.directed",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "MovieDirector.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Parrot.repeatsWords",
-            "type": "string",
-            "list": true
-        },
-        {
-            "predicate": "People.name",
-            "type": "string"
-        },
-        {
-            "predicate": "People.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Person.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Person1.friends",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Person1.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Plant.breed",
-            "type": "string"
-        },
-        {
-            "predicate": "Post.author",
-            "type": "uid"
-        },
-        {
-            "predicate": "Post.category",
-            "type": "uid"
-        },
-        {
-            "predicate": "Post.isPublished",
-            "type": "bool",
-            "index": true,
-            "tokenizer": [
-                "bool"
-            ]
-        },
-        {
-            "predicate": "Post.numLikes",
-            "type": "int",
-            "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "Post.numViews",
-            "type": "int",
-            "index": true,
-            "tokenizer": [
-                "int"
-            ]
-        },
-        {
-            "predicate": "Post.postType",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ]
-        },
-        {
-            "predicate": "Post.tags",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        },
-        {
-            "predicate": "Post.text",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "fulltext"
-            ]
-        },
-        {
-            "predicate": "Post.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "fulltext",
-                "term"
-            ]
-        },
-        {
-            "predicate": "Post.topic",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ]
-        },
-        {
-            "predicate": "Post1.comments",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Post1.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "SpaceShip.id",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "SpaceShip.missions",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Starship.length",
-            "type": "float"
-        },
-        {
-            "predicate": "Starship.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "term"
-            ]
-        },
-        {
-            "predicate": "State.capital",
-            "type": "string"
-        },
-        {
-            "predicate": "State.country",
-            "type": "uid"
-        },
-        {
-            "predicate": "State.name",
-            "type": "string"
-        },
-        {
-            "predicate": "State.xcode",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "Student.taughtBy",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Teacher.subject",
-            "type": "string"
-        },
-        {
-            "predicate": "Teacher.teaches",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Thing.name",
-            "type": "string"
-        },
-        {
-            "predicate": "ThingOne.color",
-            "type": "string"
-        },
-        {
-            "predicate": "ThingOne.usedBy",
-            "type": "string"
-        },
-        {
-            "predicate": "ThingTwo.color",
-            "type": "string"
-        },
-        {
-            "predicate": "ThingTwo.owner",
-            "type": "string"
-        },
-        {
-            "predicate": "University.name",
-            "type": "string"
-        },
-        {
-            "predicate": "University.numStudents",
-            "type": "int"
-        },
-        {
-            "predicate": "User.name",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "User.password",
-            "type": "password"
-        },
-        {
-            "predicate": "Zoo.animals",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Zoo.city",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true,
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.drop.op",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_history",
-            "type": "string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_query",
-            "type":"string"
-        },
-        {
-            "predicate":"dgraph.graphql.p_sha256hash",
-            "type":"string",
-            "index":true,
-            "tokenizer":["exact"]
-        },
-        {
-            "predicate": "dgraph.graphql.xid",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "dgraph.type",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true
-        },
-        {
-            "index": true,
-            "predicate": "post1.numLikes",
-            "tokenizer": [
-              "int"
-            ],
-            "type": "int"
-        },
-        {
-            "predicate": "post1.title",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "hash",
-                "trigram"
-            ],
-            "upsert": true
-        },
-        {
-            "predicate": "post1.commentsByMonth",
-            "list": true,
-            "type": "int"
-        },
-        {
-            "predicate": "post1.likesByMonth",
-            "list": true,
-            "type": "int"
-        },
-        {
-            "predicate": "Book.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Book.desc",
-            "type": "string"
-        },
-        {
-            "predicate": "Book.chapters",
-            "type": "uid",
-            "list": true
-        },
-        {
-            "predicate": "Section.name",
-            "type": "string"
-        },
-        {
-            "predicate": "Chapter.name",
-            "type": "string"
-        },
-        {
-            "index": true,
-            "predicate": "Section.sectionId",
-            "tokenizer": [
-                "float"
-            ],
-            "type": "float",
-            "upsert": true
-        },
-        {
-            "predicate": "Chapter.book",
-            "type": "uid"
-        },
-        {
-            "index": true,
-            "predicate": "Chapter.chapterId",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int",
-            "upsert": true
-        },
-        {
-            "index": true,
-            "predicate": "Book.bookId",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int",
-            "upsert": true
-        },
-        {
-            "index": true,
-            "predicate": "Section.chapterId",
-            "tokenizer": [
-                "int"
-            ],
-            "type": "int"
+  "schema": [
+    {
+      "predicate": "Animal.category",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ]
+    },
+    {
+      "predicate": "Astronaut.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Astronaut.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Author.country",
+      "type": "uid"
+    },
+    {
+      "predicate": "Author.dob",
+      "type": "datetime",
+      "index": true,
+      "tokenizer": [
+        "year"
+      ]
+    },
+    {
+      "predicate": "Author.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ]
+    },
+    {
+      "predicate": "Author.posts",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Author.qualification",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ]
+    },
+    {
+      "predicate": "Author.reputation",
+      "type": "float",
+      "index": true,
+      "tokenizer": [
+        "float"
+      ]
+    },
+    {
+      "predicate": "Book.bookId",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Book.chapters",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Book.desc",
+      "type": "string"
+    },
+    {
+      "predicate": "Book.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Category.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Category.posts",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Chapter.book",
+      "type": "uid"
+    },
+    {
+      "predicate": "Chapter.chapterId",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Chapter.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Character.appearsIn",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "Character.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    },
+    {
+      "predicate": "Cheetah.speed",
+      "type": "float"
+    },
+    {
+      "predicate": "Comment1.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Comment1.replies",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Country.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ]
+    },
+    {
+      "predicate": "Country.states",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Dataset.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Dataset.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ]
+    },
+    {
+      "predicate": "Dataset.owner",
+      "type": "uid"
+    },
+    {
+      "predicate": "Dataset.project",
+      "type": "uid"
+    },
+    {
+      "predicate": "District.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "District.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Dog.breed",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "term"
+      ]
+    },
+    {
+      "predicate": "Droid.primaryFunction",
+      "type": "string"
+    },
+    {
+      "predicate": "Employee.ename",
+      "type": "string"
+    },
+    {
+      "predicate": "Home.address",
+      "type": "string"
+    },
+    {
+      "predicate": "Home.favouriteMember",
+      "type": "uid"
+    },
+    {
+      "predicate": "Home.members",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Hotel.area",
+      "type": "geo",
+      "index": true,
+      "tokenizer": [
+        "geo"
+      ]
+    },
+    {
+      "predicate": "Hotel.branches",
+      "type": "geo",
+      "index": true,
+      "tokenizer": [
+        "geo"
+      ]
+    },
+    {
+      "predicate": "Hotel.location",
+      "type": "geo",
+      "index": true,
+      "tokenizer": [
+        "geo"
+      ]
+    },
+    {
+      "predicate": "Hotel.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    },
+    {
+      "predicate": "Human.starships",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Human.totalCredits",
+      "type": "float"
+    },
+    {
+      "predicate": "Mission.crew",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Mission.designation",
+      "type": "string"
+    },
+    {
+      "predicate": "Mission.endDate",
+      "type": "string"
+    },
+    {
+      "predicate": "Mission.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Mission.spaceShip",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Mission.startDate",
+      "type": "string"
+    },
+    {
+      "predicate": "Movie.director",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Movie.name",
+      "type": "string"
+    },
+    {
+      "predicate": "MovieDirector.directed",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "MovieDirector.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Owner.password",
+      "type": "string"
+    },
+    {
+      "predicate": "Owner.projects",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Owner.username",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Parrot.repeatsWords",
+      "type": "string",
+      "list": true
+    },
+    {
+      "predicate": "People.name",
+      "type": "string"
+    },
+    {
+      "predicate": "People.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Person.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Person1.friends",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Person1.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Plant.breed",
+      "type": "string"
+    },
+    {
+      "predicate": "Post.author",
+      "type": "uid"
+    },
+    {
+      "predicate": "Post.category",
+      "type": "uid"
+    },
+    {
+      "predicate": "Post.isPublished",
+      "type": "bool",
+      "index": true,
+      "tokenizer": [
+        "bool"
+      ]
+    },
+    {
+      "predicate": "Post.numLikes",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ]
+    },
+    {
+      "predicate": "Post.numViews",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ]
+    },
+    {
+      "predicate": "Post.postType",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ]
+    },
+    {
+      "predicate": "Post.tags",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "Post.text",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "fulltext"
+      ]
+    },
+    {
+      "predicate": "Post.title",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "fulltext",
+        "term"
+      ]
+    },
+    {
+      "predicate": "Post.topic",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    },
+    {
+      "predicate": "Post1.comments",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Post1.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Project.datasets",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Project.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Project.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ]
+    },
+    {
+      "predicate": "Project.owner",
+      "type": "uid"
+    },
+    {
+      "predicate": "Region.district",
+      "type": "uid"
+    },
+    {
+      "predicate": "Region.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Region.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Section.chapterId",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ]
+    },
+    {
+      "predicate": "Section.name",
+      "type": "string"
+    },
+    {
+      "predicate": "Section.sectionId",
+      "type": "float",
+      "index": true,
+      "tokenizer": [
+        "float"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "SpaceShip.id",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "SpaceShip.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Starship.length",
+      "type": "float"
+    },
+    {
+      "predicate": "Starship.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "term"
+      ]
+    },
+    {
+      "predicate": "State.capital",
+      "type": "string"
+    },
+    {
+      "predicate": "State.country",
+      "type": "uid"
+    },
+    {
+      "predicate": "State.name",
+      "type": "string"
+    },
+    {
+      "predicate": "State.region",
+      "type": "uid"
+    },
+    {
+      "predicate": "State.xcode",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Student.taughtBy",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Teacher.subject",
+      "type": "string"
+    },
+    {
+      "predicate": "Teacher.teaches",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Thing.name",
+      "type": "string"
+    },
+    {
+      "predicate": "ThingOne.color",
+      "type": "string"
+    },
+    {
+      "predicate": "ThingOne.usedBy",
+      "type": "string"
+    },
+    {
+      "predicate": "ThingTwo.color",
+      "type": "string"
+    },
+    {
+      "predicate": "ThingTwo.owner",
+      "type": "string"
+    },
+    {
+      "predicate": "University.name",
+      "type": "string"
+    },
+    {
+      "predicate": "University.numStudents",
+      "type": "int"
+    },
+    {
+      "predicate": "User.name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "User.password",
+      "type": "password"
+    },
+    {
+      "predicate": "Zoo.animals",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "Zoo.city",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.cors",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true,
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.drop.op",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.p_query",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.p_sha256hash",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    },
+    {
+      "predicate": "dgraph.graphql.schema",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.schema_created_at",
+      "type": "datetime"
+    },
+    {
+      "predicate": "dgraph.graphql.schema_history",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.type",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "post1.commentsByMonth",
+      "type": "int",
+      "list": true
+    },
+    {
+      "predicate": "post1.likesByMonth",
+      "type": "int",
+      "list": true
+    },
+    {
+      "predicate": "post1.numLikes",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ]
+    },
+    {
+      "predicate": "post1.title",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ],
+      "upsert": true
+    }
+  ],
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "Animal.category"
         }
-    ],
-    "types": [
+      ],
+      "name": "Animal"
+    },
+    {
+      "fields": [
         {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                }
-            ],
-            "name": "Animal"
+          "name": "Astronaut.id"
         },
         {
-            "fields": [
-                {
-                    "name": "Astronaut.id"
-                },
-                {
-                    "name": "Astronaut.missions"
-                }
-            ],
-            "name": "Astronaut"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Author.name"
-                },
-                {
-                    "name": "Author.dob"
-                },
-                {
-                    "name": "Author.reputation"
-                },
-                {
-                    "name": "Author.country"
-                },
-                {
-                    "name": "Author.posts"
-                },
-                {
-                    "name": "Author.qualification"
-                }
-            ],
-            "name": "Author"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Category.name"
-                },
-                {
-                    "name": "Category.posts"
-                }
-            ],
-            "name": "Category"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Character.name"
-                },
-                {
-                    "name": "Character.appearsIn"
-                }
-            ],
-            "name": "Character"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Cheetah.speed"
-                }
-            ],
-            "name": "Cheetah"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Comment1.id"
-                },
-                {
-                    "name": "Comment1.replies"
-                }
-            ],
-            "name": "Comment1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Country.name"
-                },
-                {
-                    "name": "Country.states"
-                }
-            ],
-            "name": "Country"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Dog.breed"
-                }
-            ],
-            "name": "Dog"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Character.name"
-                },
-                {
-                    "name": "Character.appearsIn"
-                },
-                {
-                    "name": "Droid.primaryFunction"
-                }
-            ],
-            "name": "Droid"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Employee.ename"
-                }
-            ],
-            "name": "Employee"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Home.address"
-                },
-                {
-                    "name": "Home.members"
-                },
-                {
-                    "name": "Home.favouriteMember"
-                }
-            ],
-            "name": "Home"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Hotel.name"
-                },
-                {
-                    "name": "Hotel.location"
-                },
-                {
-                    "name": "Hotel.area"
-                },
-                {
-                    "name": "Hotel.branches"
-                }
-            ],
-            "name": "Hotel"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Employee.ename"
-                },
-                {
-                    "name": "Character.name"
-                },
-                {
-                    "name": "Character.appearsIn"
-                },
-                {
-                    "name": "Human.starships"
-                },
-                {
-                    "name": "Human.totalCredits"
-                }
-            ],
-            "name": "Human"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Mission.id"
-                },
-                {
-                    "name": "Mission.crew"
-                },
-                {
-                    "name": "Mission.spaceShip"
-                },
-                {
-                    "name": "Mission.designation"
-                },
-                {
-                    "name": "Mission.startDate"
-                },
-                {
-                    "name": "Mission.endDate"
-                }
-            ],
-            "name": "Mission"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Movie.name"
-                },
-                {
-                    "name": "Movie.director"
-                }
-            ],
-            "name": "Movie"
-        },
-        {
-            "fields": [
-                {
-                    "name": "MovieDirector.name"
-                },
-                {
-                    "name": "MovieDirector.directed"
-                }
-            ],
-            "name": "MovieDirector"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Animal.category"
-                },
-                {
-                    "name": "Parrot.repeatsWords"
-                }
-            ],
-            "name": "Parrot"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Book.name"
-                },
-                {
-                    "name": "Book.desc"
-                },
-                {
-                    "name": "Book.bookId"
-                },
-                {
-                    "name": "Book.chapters"
-                }
-            ],
-            "name": "Book"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Chapter.name"
-                },
-                {
-                    "name": "Chapter.book"
-                },
-                {
-                    "name": "Chapter.chapterId"
-                }
-            ],
-            "name": "Chapter"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Section.sectionId"
-                },
-                {
-                    "name": "Section.chapterId"
-                },
-                {
-                    "name": "Section.name"
-                }
-            ],
-            "name": "Section"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                }
-            ],
-            "name": "People"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Person.name"
-                }
-            ],
-            "name": "Person"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Person1.name"
-                },
-                {
-                    "name": "Person1.friends"
-                }
-            ],
-            "name": "Person1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Plant.breed"
-                }
-            ],
-            "name": "Plant"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Post.title"
-                },
-                {
-                    "name": "Post.text"
-                },
-                {
-                    "name": "Post.tags"
-                },
-                {
-                    "name": "Post.topic"
-                },
-                {
-                    "name": "Post.numLikes"
-                },
-                {
-                    "name": "Post.numViews"
-                },
-                {
-                    "name": "Post.isPublished"
-                },
-                {
-                    "name": "Post.postType"
-                },
-                {
-                    "name": "Post.author"
-                },
-                {
-                    "name": "Post.category"
-                }
-            ],
-            "name": "Post"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Post1.id"
-                },
-                {
-                    "name": "Post1.comments"
-                }
-            ],
-            "name": "Post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "SpaceShip.id"
-                },
-                {
-                    "name": "SpaceShip.missions"
-                }
-            ],
-            "name": "SpaceShip"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Starship.name"
-                },
-                {
-                    "name": "Starship.length"
-                }
-            ],
-            "name": "Starship"
-        },
-        {
-            "fields": [
-                {
-                    "name": "State.xcode"
-                },
-                {
-                    "name": "State.name"
-                },
-                {
-                    "name": "State.capital"
-                },
-                {
-                    "name": "State.country"
-                }
-            ],
-            "name": "State"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Student.taughtBy"
-                }
-            ],
-            "name": "Student"
-        },
-        {
-            "fields": [
-                {
-                    "name": "People.xid"
-                },
-                {
-                    "name": "People.name"
-                },
-                {
-                    "name": "Teacher.subject"
-                },
-                {
-                    "name": "Teacher.teaches"
-                }
-            ],
-            "name": "Teacher"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                }
-            ],
-            "name": "Thing"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingOne.color"
-                },
-                {
-                    "name": "ThingOne.usedBy"
-                }
-            ],
-            "name": "ThingOne"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Thing.name"
-                },
-                {
-                    "name": "ThingTwo.color"
-                },
-                {
-                    "name": "ThingTwo.owner"
-                }
-            ],
-            "name": "ThingTwo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "University.name"
-                },
-                {
-                    "name": "University.numStudents"
-                }
-            ],
-            "name": "University"
-        },
-        {
-            "fields": [
-                {
-                    "name": "User.name"
-                },
-                {
-                    "name": "User.password"
-                }
-            ],
-            "name": "User"
-        },
-        {
-            "fields": [
-                {
-                    "name": "Zoo.animals"
-                },
-                {
-                    "name": "Zoo.city"
-                }
-            ],
-            "name": "Zoo"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema"
-                },
-                {
-                    "name": "dgraph.graphql.xid"
-                }
-            ],
-            "name": "dgraph.graphql"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.schema_history"
-                },
-                {
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.graphql.p_query"
-                },
-                {
-                    "name": "dgraph.graphql.p_sha256hash"
-                }
-            ],
-            "name": "dgraph.graphql.persisted_query"
-        },
-        {
-            "fields": [
-                {
-                    "name": "post1.title"
-                },
-                {
-                    "name": "post1.numLikes"
-                },
-                {
-                    "name": "post1.commentsByMonth"
-                },
-                {
-                    "name": "post1.likesByMonth"
-                }
-            ],
-            "name": "post1"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.cors"
-                }
-            ],
-            "name": "dgraph.type.cors"
+          "name": "Astronaut.missions"
         }
-    ]
+      ],
+      "name": "Astronaut"
+    },
+    {
+      "fields": [
+        {
+          "name": "Author.name"
+        },
+        {
+          "name": "Author.dob"
+        },
+        {
+          "name": "Author.reputation"
+        },
+        {
+          "name": "Author.qualification"
+        },
+        {
+          "name": "Author.country"
+        },
+        {
+          "name": "Author.posts"
+        }
+      ],
+      "name": "Author"
+    },
+    {
+      "fields": [
+        {
+          "name": "Book.bookId"
+        },
+        {
+          "name": "Book.name"
+        },
+        {
+          "name": "Book.desc"
+        },
+        {
+          "name": "Book.chapters"
+        }
+      ],
+      "name": "Book"
+    },
+    {
+      "fields": [
+        {
+          "name": "Category.name"
+        },
+        {
+          "name": "Category.posts"
+        }
+      ],
+      "name": "Category"
+    },
+    {
+      "fields": [
+        {
+          "name": "Chapter.chapterId"
+        },
+        {
+          "name": "Chapter.name"
+        },
+        {
+          "name": "Chapter.book"
+        }
+      ],
+      "name": "Chapter"
+    },
+    {
+      "fields": [
+        {
+          "name": "Character.name"
+        },
+        {
+          "name": "Character.appearsIn"
+        }
+      ],
+      "name": "Character"
+    },
+    {
+      "fields": [
+        {
+          "name": "Animal.category"
+        },
+        {
+          "name": "Cheetah.speed"
+        }
+      ],
+      "name": "Cheetah"
+    },
+    {
+      "fields": [
+        {
+          "name": "Comment1.id"
+        },
+        {
+          "name": "Comment1.replies"
+        }
+      ],
+      "name": "Comment1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Country.name"
+        },
+        {
+          "name": "Country.states"
+        }
+      ],
+      "name": "Country"
+    },
+    {
+      "fields": [
+        {
+          "name": "Dataset.id"
+        },
+        {
+          "name": "Dataset.owner"
+        },
+        {
+          "name": "Dataset.project"
+        },
+        {
+          "name": "Dataset.name"
+        }
+      ],
+      "name": "Dataset"
+    },
+    {
+      "fields": [
+        {
+          "name": "District.id"
+        },
+        {
+          "name": "District.name"
+        }
+      ],
+      "name": "District"
+    },
+    {
+      "fields": [
+        {
+          "name": "Animal.category"
+        },
+        {
+          "name": "Dog.breed"
+        }
+      ],
+      "name": "Dog"
+    },
+    {
+      "fields": [
+        {
+          "name": "Character.name"
+        },
+        {
+          "name": "Character.appearsIn"
+        },
+        {
+          "name": "Droid.primaryFunction"
+        }
+      ],
+      "name": "Droid"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employee.ename"
+        }
+      ],
+      "name": "Employee"
+    },
+    {
+      "fields": [
+        {
+          "name": "Home.address"
+        },
+        {
+          "name": "Home.members"
+        },
+        {
+          "name": "Home.favouriteMember"
+        }
+      ],
+      "name": "Home"
+    },
+    {
+      "fields": [
+        {
+          "name": "Hotel.name"
+        },
+        {
+          "name": "Hotel.location"
+        },
+        {
+          "name": "Hotel.area"
+        },
+        {
+          "name": "Hotel.branches"
+        }
+      ],
+      "name": "Hotel"
+    },
+    {
+      "fields": [
+        {
+          "name": "Character.name"
+        },
+        {
+          "name": "Character.appearsIn"
+        },
+        {
+          "name": "Employee.ename"
+        },
+        {
+          "name": "Human.starships"
+        },
+        {
+          "name": "Human.totalCredits"
+        }
+      ],
+      "name": "Human"
+    },
+    {
+      "fields": [
+        {
+          "name": "Mission.id"
+        },
+        {
+          "name": "Mission.crew"
+        },
+        {
+          "name": "Mission.spaceShip"
+        },
+        {
+          "name": "Mission.designation"
+        },
+        {
+          "name": "Mission.startDate"
+        },
+        {
+          "name": "Mission.endDate"
+        }
+      ],
+      "name": "Mission"
+    },
+    {
+      "fields": [
+        {
+          "name": "Movie.name"
+        },
+        {
+          "name": "Movie.director"
+        }
+      ],
+      "name": "Movie"
+    },
+    {
+      "fields": [
+        {
+          "name": "MovieDirector.name"
+        },
+        {
+          "name": "MovieDirector.directed"
+        }
+      ],
+      "name": "MovieDirector"
+    },
+    {
+      "fields": [
+        {
+          "name": "Owner.username"
+        },
+        {
+          "name": "Owner.password"
+        },
+        {
+          "name": "Owner.projects"
+        }
+      ],
+      "name": "Owner"
+    },
+    {
+      "fields": [
+        {
+          "name": "Animal.category"
+        },
+        {
+          "name": "Parrot.repeatsWords"
+        }
+      ],
+      "name": "Parrot"
+    },
+    {
+      "fields": [
+        {
+          "name": "People.xid"
+        },
+        {
+          "name": "People.name"
+        }
+      ],
+      "name": "People"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        }
+      ],
+      "name": "Person"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person1.name"
+        },
+        {
+          "name": "Person1.friends"
+        }
+      ],
+      "name": "Person1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Plant.breed"
+        }
+      ],
+      "name": "Plant"
+    },
+    {
+      "fields": [
+        {
+          "name": "Post.title"
+        },
+        {
+          "name": "Post.text"
+        },
+        {
+          "name": "Post.tags"
+        },
+        {
+          "name": "Post.topic"
+        },
+        {
+          "name": "Post.numLikes"
+        },
+        {
+          "name": "Post.numViews"
+        },
+        {
+          "name": "Post.isPublished"
+        },
+        {
+          "name": "Post.postType"
+        },
+        {
+          "name": "Post.author"
+        },
+        {
+          "name": "Post.category"
+        }
+      ],
+      "name": "Post"
+    },
+    {
+      "fields": [
+        {
+          "name": "Post1.id"
+        },
+        {
+          "name": "Post1.comments"
+        }
+      ],
+      "name": "Post1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Project.id"
+        },
+        {
+          "name": "Project.owner"
+        },
+        {
+          "name": "Project.name"
+        },
+        {
+          "name": "Project.datasets"
+        }
+      ],
+      "name": "Project"
+    },
+    {
+      "fields": [
+        {
+          "name": "Region.id"
+        },
+        {
+          "name": "Region.name"
+        },
+        {
+          "name": "Region.district"
+        }
+      ],
+      "name": "Region"
+    },
+    {
+      "fields": [
+        {
+          "name": "Section.sectionId"
+        },
+        {
+          "name": "Section.name"
+        },
+        {
+          "name": "Section.chapterId"
+        }
+      ],
+      "name": "Section"
+    },
+    {
+      "fields": [
+        {
+          "name": "SpaceShip.id"
+        },
+        {
+          "name": "SpaceShip.missions"
+        }
+      ],
+      "name": "SpaceShip"
+    },
+    {
+      "fields": [
+        {
+          "name": "Starship.name"
+        },
+        {
+          "name": "Starship.length"
+        }
+      ],
+      "name": "Starship"
+    },
+    {
+      "fields": [
+        {
+          "name": "State.xcode"
+        },
+        {
+          "name": "State.name"
+        },
+        {
+          "name": "State.capital"
+        },
+        {
+          "name": "State.region"
+        },
+        {
+          "name": "State.country"
+        }
+      ],
+      "name": "State"
+    },
+    {
+      "fields": [
+        {
+          "name": "People.xid"
+        },
+        {
+          "name": "People.name"
+        },
+        {
+          "name": "Student.taughtBy"
+        }
+      ],
+      "name": "Student"
+    },
+    {
+      "fields": [
+        {
+          "name": "People.xid"
+        },
+        {
+          "name": "People.name"
+        },
+        {
+          "name": "Teacher.subject"
+        },
+        {
+          "name": "Teacher.teaches"
+        }
+      ],
+      "name": "Teacher"
+    },
+    {
+      "fields": [
+        {
+          "name": "Thing.name"
+        }
+      ],
+      "name": "Thing"
+    },
+    {
+      "fields": [
+        {
+          "name": "Thing.name"
+        },
+        {
+          "name": "ThingOne.color"
+        },
+        {
+          "name": "ThingOne.usedBy"
+        }
+      ],
+      "name": "ThingOne"
+    },
+    {
+      "fields": [
+        {
+          "name": "Thing.name"
+        },
+        {
+          "name": "ThingTwo.color"
+        },
+        {
+          "name": "ThingTwo.owner"
+        }
+      ],
+      "name": "ThingTwo"
+    },
+    {
+      "fields": [
+        {
+          "name": "University.name"
+        },
+        {
+          "name": "University.numStudents"
+        }
+      ],
+      "name": "University"
+    },
+    {
+      "fields": [
+        {
+          "name": "User.name"
+        },
+        {
+          "name": "User.password"
+        }
+      ],
+      "name": "User"
+    },
+    {
+      "fields": [
+        {
+          "name": "Zoo.animals"
+        },
+        {
+          "name": "Zoo.city"
+        }
+      ],
+      "name": "Zoo"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.schema"
+        },
+        {
+          "name": "dgraph.graphql.xid"
+        }
+      ],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.schema_history"
+        },
+        {
+          "name": "dgraph.graphql.schema_created_at"
+        }
+      ],
+      "name": "dgraph.graphql.history"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.p_query"
+        },
+        {
+          "name": "dgraph.graphql.p_sha256hash"
+        }
+      ],
+      "name": "dgraph.graphql.persisted_query"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.cors"
+        }
+      ],
+      "name": "dgraph.type.cors"
+    },
+    {
+      "fields": [
+        {
+          "name": "post1.title"
+        },
+        {
+          "name": "post1.numLikes"
+        },
+        {
+          "name": "post1.commentsByMonth"
+        },
+        {
+          "name": "post1.likesByMonth"
+        }
+      ],
+      "name": "post1"
+    }
+  ]
 }

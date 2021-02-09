@@ -1,3 +1,35 @@
+- name: "eq filter with null value get translated into NOT(has) filter"
+  gqlquery: |
+    query {
+      queryState(filter: {code: {eq: null}}) {
+        code
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryState(func: type(State)) @filter(NOT (has(State.code))) {
+        State.code : State.code
+        State.name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+- name: "le filter with null value doesn't get translated"
+  gqlquery: |
+    query {
+      queryCountry(filter: {name: {le: null}}) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryCountry(func: type(Country)) {
+        Country.name : Country.name
+        dgraph.uid : uid
+      }
+    }
+
 -
   name: "in filter on string type"
   gqlquery: |
@@ -895,6 +927,21 @@
       }
     }
 
+-
+  name: "has Filter on list of fields"
+  gqlquery: |
+    query {
+      queryTeacher(filter: {has: [subject, teaches ] } ) {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      queryTeacher(func: type(Teacher)) @filter((has(Teacher.subject) AND has(Teacher.teaches))) {
+        Teacher.name : People.name
+        dgraph.uid : uid
+      }
+    }
 - name: "Query Has Filter on type which has neither ID field nor any search argument"
   gqlquery: |
     query {
@@ -1207,6 +1254,28 @@
       queryAuthor(func: type(Author)) {
         Author.name : Author.name
         Author.posts : Author.posts @filter(has(Post.tags)) {
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+-
+  name: "Deep filter with has filter on list of fields"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { has : [tags, text] }) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        Author.name : Author.name
+        Author.posts : Author.posts @filter((has(Post.tags) AND has(Post.text))) {
           Post.title : Post.title
           dgraph.uid : uid
         }
