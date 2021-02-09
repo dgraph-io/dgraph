@@ -473,9 +473,7 @@ func setupServer(closer *z.Closer) {
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
 	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
-		ctx := x.AttachAccessJwt(context.Background(), r)
-		// Ignording error because the default value is zero anyways.
-		namespace, _ := x.ExtractJWTNamespace(ctx)
+		namespace := x.ExtractNamespaceHTTP(r)
 		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
 		admin.LazyLoadSchema(namespace)
 		mainServer.HTTPHandler().ServeHTTP(w, r)
@@ -490,9 +488,7 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
-		ctx := x.AttachAccessJwt(context.Background(), r)
-		ns, _ := x.ExtractJWTNamespace(ctx)
-		e = globalEpoch[ns]
+		e = globalEpoch[x.ExtractNamespaceHTTP(r)]
 		var counter uint64
 		if e != nil {
 			counter = atomic.LoadUint64(e)
@@ -502,11 +498,9 @@ func setupServer(closer *z.Closer) {
 	})
 	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", "0")
-		ctx := x.AttachAccessJwt(context.Background(), r)
-		ns, _ := x.ExtractJWTNamespace(ctx)
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
-		admin.LazyLoadSchema(ns)
+		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
 		allowedMethodsHandler(allowedMethods{
 			http.MethodGet:     true,
 			http.MethodPost:    true,
