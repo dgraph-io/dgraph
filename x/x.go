@@ -265,6 +265,14 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+// ExtractNamespaceHTTP parses the namespace value from the incoming HTTP request.
+func ExtractNamespaceHTTP(r *http.Request) uint64 {
+	ctx := AttachAccessJwt(context.Background(), r)
+	// Ignoring error because the default value is zero anyways.
+	namespace, _ := ExtractJWTNamespace(ctx)
+	return namespace
+}
+
 // ExtractNamespace parses the namespace value from the incoming gRPC context.
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
