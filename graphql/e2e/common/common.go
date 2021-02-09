@@ -300,21 +300,29 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
-func CreateNamespace(t *testing.T, id int64) {
+func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	createNamespace := &GraphQLParams{
-		Query: `mutation createNamespace($id:Int!){
-					createNamespace(input:{namespaceId:$id}){
+		Query: `query {
+					getNewNamespace{
 						namespaceId
 					}
 				}`,
-		Variables: map[string]interface{}{"id": id},
+		Headers: headers,
 	}
 
 	gqlResponse := createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		GetNewNamespace struct {
+			NamespaceId uint64
+		}
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	return resp.GetNewNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id int64) {
+func DeleteNamespace(t *testing.T, id uint64) {
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){

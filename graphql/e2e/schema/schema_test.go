@@ -37,13 +37,10 @@ import (
 )
 
 var (
-	groupOneHTTP   = "localhost:8080"
-	groupTwoHTTP   = "localhost:8081"
-	groupThreeHTTP = "localhost:8082"
-	//groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
-	//groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
-	//groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
-	groupOnegRPC = testutil.SockAddr
+	groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
+	groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
+	groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
+	groupOnegRPC   = testutil.SockAddr
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"
 	groupTwoGraphQLServer   = "http://" + groupTwoHTTP + "/graphql"
@@ -161,60 +158,6 @@ func TestSchemaSubscribe(t *testing.T) {
 	introspectionResult = introspect.ExecuteAsPost(t, groupThreeGraphQLServer)
 	common.RequireNoGQLErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
-}
-
-// This test is supposed to test the graphql schema subscribe feature for multiple namespaces. Whenever schema is updated
-// in a dgraph alpha for one group for any namespace, that update should also be propagated to alpha nodes in other
-// groups.
-func TestSchemaSubscribeNamespace(t *testing.T) {
-	t.Skipf("port to a separate container")
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
-	header := http.Header{}
-	//header.Set(x.NamespaceHeaderHTTP, "0")
-	schema := `
-	type Author {
-		id: ID!
-		name: String!
-	}`
-
-	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
-	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
-	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
-	// should have got incremented and must be the same, indicating that the schema update has
-	// reached all the servers.
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, header)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, header)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, header)
-
-	// Now update schema on an alpha node for group 3 for namespace 1 and see if nodes in group 1
-	// and 2 also get it.
-	common.CreateNamespace(t, 1)
-	header1 := http.Header{}
-	//header1.Set(x.NamespaceHeaderHTTP, "1")
-	schema1 := `
-	type Author1 {
-		id: ID!
-		name: String!
-	}`
-
-	group3NS1PreUpdateCounter := uint64(0) // this has to be 0 as namespace was just created
-	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema1, header1)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, group3NS1PreUpdateCounter, header1)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, group3NS1PreUpdateCounter, header1)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, group3NS1PreUpdateCounter, header1)
-
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupOneHTTP, header).Schema)
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupTwoHTTP, header).Schema)
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, groupThreeHTTP, header).Schema)
-	require.Equal(t, schema1, common.AssertGetGQLSchema(t, groupOneHTTP, header1).Schema)
-	require.Equal(t, schema1, common.AssertGetGQLSchema(t, groupTwoHTTP, header1).Schema)
-	require.Equal(t, schema1, common.AssertGetGQLSchema(t, groupThreeHTTP, header1).Schema)
-
-	common.DeleteNamespace(t, 1)
-
 }
 
 // TestConcurrentSchemaUpdates checks that if there are too many concurrent requests to update the
@@ -660,127 +603,4 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
-}
-
-func TestSchemaNamespace(t *testing.T) {
-	t.Skipf("port to a separate container")
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
-	header := http.Header{}
-	//header.Set(x.NamespaceHeaderHTTP, "0")
-	schema := `
-	type ex {
-		id: ID!
-		name: String!
-	}`
-	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
-
-	header1 := http.Header{}
-	//header1.Set(x.NamespaceHeaderHTTP, "2")
-	schema1 := `
-	type ex1 {
-		id: ID!
-		name: String!
-	}`
-	common.CreateNamespace(t, 2)
-	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema1, header1)
-
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
-	require.Equal(t, schema1, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
-
-	common.DeleteNamespace(t, 2)
-
-}
-
-func TestSchemaNamespaceWithData(t *testing.T) {
-	t.Skipf("port to a separate container")
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
-	header := http.Header{}
-	//header.Set(x.NamespaceHeaderHTTP, "0")
-	schema := `
-	type Author {
-		id: ID!
-		name: String!
-	}`
-	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
-
-	header1 := http.Header{}
-	//header1.Set(x.NamespaceHeaderHTTP, "3")
-	common.CreateNamespace(t, 3)
-	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header1)
-
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
-	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
-
-	query := `
-	mutation {
-		addAuthor(input:{name: "Alice"}) {
-			author{
-				name
-			}
-		}
-	}`
-
-	expectedResult :=
-		`{
-			"addAuthor": {
-				"author":[{
-					"name":"Alice"
-				}]
-			}
-		}`
-
-	queryAuthor := &common.GraphQLParams{
-		Query:   query,
-		Headers: nil,
-	}
-
-	queryAuthor.Headers = header
-	queryResult := queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
-	Query1 := `
-	query {
-		queryAuthor {
-			name
-		}
-	}`
-
-	expectedResult =
-		`{
-			"queryAuthor": [
-				{
-					"name":"Alice"
-				}
-			]
-		}`
-
-	queryAuthor.Query = Query1
-	queryAuthor.Headers = header
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
-	query2 := `
-	query {
-		queryAuthor {
-			name
-		}
-	}`
-
-	expectedResult =
-		`{
-			"queryAuthor": []
-		}`
-
-	queryAuthor.Query = query2
-	queryAuthor.Headers = header1
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
-	common.DeleteNamespace(t, 3)
 }

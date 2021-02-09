@@ -363,10 +363,15 @@ type HttpToken struct {
 // GrootHttpLogin logins using the groot account with the default password
 // and returns the access JWT
 func GrootHttpLogin(endpoint string) *HttpToken {
+	return GrootHttpLoginNamespace(endpoint, 0)
+}
+
+func GrootHttpLoginNamespace(endpoint string, namespace uint64) *HttpToken {
 	token, err := HttpLogin(&LoginParams{
-		Endpoint: endpoint,
-		UserID:   x.GrootId,
-		Passwd:   "password",
+		Endpoint:  endpoint,
+		UserID:    x.GrootId,
+		Passwd:    "password",
+		Namespace: namespace,
 	})
 	x.Check(err)
 	return token
