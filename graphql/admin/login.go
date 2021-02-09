@@ -18,7 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -70,7 +69,7 @@ func getLoginInput(m schema.Mutation) *loginInput {
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
 	userID, _ := m.ArgValue("userId").(string)
 	password, _ := m.ArgValue("password").(string)
-	namespace, _ := m.ArgValue("namespace").(json.Number).Int64()
+	namespace, _ := m.ArgValue("namespace").(uint64)
 	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
 	return &loginInput{
