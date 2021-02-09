@@ -65,6 +65,9 @@ func newCDC() *CDC {
 	if Config.ChangeDataConf == "" {
 		return nil
 	}
+	if x.WorkerConfig.LudicrousMode {
+		x.Fatalf("cdc is not supported in ludicrous mode")
+	}
 
 	cdcFlag := x.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
 	sink, err := GetSink(cdcFlag)
@@ -136,12 +139,14 @@ func (cdc *CDC) updateCDCState(state *pb.CDCState) {
 	// hence we only update the sentIndex in ludicrous mode.
 	// in normal mode sentTs will manage the state of CDC across cluster.
 	// Therefore, sentIndex has same significance in ludicrous mode as sentTs in default mode.
+	//
+	//if x.WorkerConfig.LudicrousMode {
+	//	cdc.updateSeenIndex(state.SentIndex)
+	//	return
+	//}
+
 	// Dont try to update seen index in case of default mode else cdc job will not be able to
 	// build the complete pending txns in case of membership changes.
-	if x.WorkerConfig.LudicrousMode {
-		cdc.updateSeenIndex(state.SentIndex)
-		return
-	}
 	ts := atomic.LoadUint64(&cdc.sentTs)
 	if ts >= state.SentTs {
 		return
@@ -243,13 +248,13 @@ func (cdc *CDC) processCDCEvents() {
 					// TODO: We should get a confirmation from ludicrous scheduler about this.
 					// It should tell you what the commit ts used was.
 					// TODO: For now, do NOT support ludicrous mode.
-					if x.WorkerConfig.LudicrousMode {
-						if err := sendEvents(events, 0); err != nil {
-							return errors.Wrapf(err, "unable to send messages")
-						}
-						cdc.updateSeenIndex(entry.Index)
-						continue
-					}
+					//if x.WorkerConfig.LudicrousMode {
+					//	if err := sendEvents(events, 0); err != nil {
+					//		return errors.Wrapf(err, "unable to send messages")
+					//	}
+					//	cdc.updateSeenIndex(entry.Index)
+					//	continue
+					//}
 					cdc.addEventsAndUpdateIndex(proposal.Mutations.StartTs, entry.Index, events)
 				}
 

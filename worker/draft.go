@@ -911,9 +911,21 @@ func (n *node) proposeCDCState(index, ts uint64) error {
 	return n.Raft().Propose(n.ctx, data)
 }
 
-func (n *node) proposeSnapshot(discardN int) error {
+func (n *node) proposeSnapshot() error {
 	lastIdx := x.Min(n.Applied.DoneUntil(), n.cdcTracker.getSeenIndex())
-	snap, err := n.calculateSnapshot(0, lastIdx, discardN)
+	// We can't rely upon the Raft entries to determine the minPendingStart,
+	// because there are many cases during mutations where we don't commit or
+	// abort the transaction. This might happen due to an early error thrown.
+	// Only the mutations which make it to Zero for a commit/abort decision have
+	// corresponding Delta entries. So, instead of replicating all that logic
+	// here, we just use the MinPendingStartTs tracked by the Oracle, and look
+	// for that in the logs.
+	//
+	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
+	// snapshotIdx. In any case, we continue picking up txn updates, to generate
+	// a maxCommitTs, which would become the readTs for the snapshot.
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
+	snap, err := n.calculateSnapshot(0, lastIdx, minPendingStart)
 	if err != nil {
 		return err
 	}
@@ -960,7 +972,8 @@ func (n *node) updateRaftProgress() error {
 	// stored applied.
 	applied := n.Store.Uint(raftwal.CheckpointIndex)
 
-	snap, err := n.calculateSnapshot(applied, n.Applied.DoneUntil(), 3) // 3 is a randomly chosen small number.
+	snap, err := n.calculateSnapshot(applied, n.Applied.DoneUntil(),
+		posting.Oracle().MinPendingStartTs())
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
@@ -1029,7 +1042,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					// We can set discardN argument to zero, because we already know that calculate
 					// would be true if either we absolutely needed to calculate the snapshot,
 					// or our checkpoint already crossed the SnapshotAfter threshold.
-					if err := n.proposeSnapshot(0); err != nil {
+					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
@@ -1521,11 +1534,12 @@ func (n *node) abortOldTransactions() {
 // This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
 // This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
 // until that last checkpoint) that we can use as a new start point for the snapshot calculation.
-func (n *node) calculateSnapshot(startIdx, lastIdx uint64, discardN int) (*pb.Snapshot, error) {
+func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb.Snapshot, error) {
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
 
+	discardN := 1
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
 	// pending iterators which would ensure that the data above their read ts would not be
 	// discarded. Secondly, if a new snapshot does get calculated and applied, the follower can just
@@ -1557,30 +1571,16 @@ func (n *node) calculateSnapshot(startIdx, lastIdx uint64, discardN int) (*pb.Sn
 	}
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
-	last := lastIdx
-	if int(last-first) < discardN {
+	if int(lastIdx-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
 	}
-	span.Annotatef(nil, "Found Raft entries: %d", last-first)
+	span.Annotatef(nil, "Found Raft entries: %d", lastIdx-first)
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
-	// We can't rely upon the Raft entries to determine the minPendingStart,
-	// because there are many cases during mutations where we don't commit or
-	// abort the transaction. This might happen due to an early error thrown.
-	// Only the mutations which make it to Zero for a commit/abort decision have
-	// corresponding Delta entries. So, instead of replicating all that logic
-	// here, we just use the MinPendingStartTs tracked by the Oracle, and look
-	// for that in the logs.
-	//
-	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
-	// snapshotIdx. In any case, we continue picking up txn updates, to generate
-	// a maxCommitTs, which would become the readTs for the snapshot.
-	// TODO: This should be passed in as well.
-	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
@@ -1588,8 +1588,8 @@ func (n *node) calculateSnapshot(startIdx, lastIdx uint64, discardN int) (*pb.Sn
 	// cases where the raft log is too big to fit into memory. Instead of retrieving
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
-	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
+	for batchFirst := first; batchFirst <= lastIdx; {
+		entries, err := n.Store.Entries(batchFirst, lastIdx+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
