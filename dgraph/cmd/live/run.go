@@ -469,7 +469,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 
 				// Sorts the nquads on basis of their predicates, while keeping the
 				// predicates with count index later than those without it.
-				// TODO(Naman): Why do we keep count indexes later?
 				if t(iPred) != t(jPred) {
 					return t(iPred) < t(jPred)
 				}
@@ -640,7 +639,6 @@ func run() error {
 		namespaceToLoad: Live.Conf.GetUint64("force-namespace"),
 	}
 
-	// Do a preliminary check on the login namespace and the namespace user wants to load into.
 	if Live.Conf.GetUint64("namespace") != 0 {
 		opt.namespaceToLoad = Live.Conf.GetUint64("namespace")
 	}
@@ -662,6 +660,11 @@ func run() error {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx)
+		// We don't support upsert predicate while loading data in multiple namespace.
+		if len(opt.upsertPredicate) > 0 {
+			return errors.Errorf("Upsert Predicate feature is not supported for loading" +
+				"into multiple namespaces.")
+		}
 	}
 
 	bmOpts := batchMutationOptions{

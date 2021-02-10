@@ -285,7 +285,7 @@ func IsGalaxyOperation(ctx context.Context) bool {
 		glog.Fatal("No metadata in the context")
 	}
 	ns := md.Get("galaxy-operation")
-	return len(ns) > 0 && ns[0] == "true"
+	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
 }
 
 func ExtractJwt(ctx context.Context) ([]string, error) {
@@ -443,8 +443,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	}
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
-	ctx = metadata.NewIncomingContext(ctx, md)
-	return ctx
+	return metadata.NewIncomingContext(ctx, md)
 }
 
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
@@ -454,8 +453,7 @@ func AttachGalaxyOperation(ctx context.Context) context.Context {
 		md = metadata.New(nil)
 	}
 	md.Set("galaxy-operation", "true")
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	return ctx
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
