@@ -56,12 +56,12 @@
       }
       TweetsRoot as var(func: uid(Tweets1))
       Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
-      tweets(func: uid(Tweets3)) {
+      tweets(func: uid(Tweets4)) {
         text : Tweets.text
         dgraph.uid : uid
       }
-      Tweets3 as var(func: uid(Tweets4))
-      Tweets4 as var(func: uid(x))
+      Tweets4 as var(func: uid(Tweets5))
+      Tweets5 as var(func: uid(x))
     }
 
 - name: "Delete with inverse field and RBAC false"
@@ -86,12 +86,12 @@
   dgquery: |-
     query {
       x as deleteTweets()
-      tweets(func: uid(Tweets1)) {
+      tweets(func: uid(Tweets2)) {
         text : Tweets.text
         dgraph.uid : uid
       }
-      Tweets1 as var(func: uid(Tweets2))
-      Tweets2 as var(func: uid(x))
+      Tweets2 as var(func: uid(Tweets3))
+      Tweets3 as var(func: uid(x))
     }
 
 - name: "Delete with deep auth"
@@ -195,12 +195,12 @@
           }
         }
       }
-      ticket(func: uid(Ticket5)) {
+      ticket(func: uid(Ticket6)) {
         title : Ticket.title
-        onColumn : Ticket.onColumn @filter(uid(Column6)) {
-          inProject : Column.inProject @filter(uid(Project8)) {
-            roles : Project.roles @filter(uid(Role10)) {
-              assignedTo : Role.assignedTo @filter(uid(User12)) {
+        onColumn : Ticket.onColumn @filter(uid(Column7)) {
+          inProject : Column.inProject @filter(uid(Project9)) {
+            roles : Project.roles @filter(uid(Role11)) {
+              assignedTo : Role.assignedTo @filter(uid(User13)) {
                 username : User.username
                 age : User.age
                 dgraph.uid : uid
@@ -213,9 +213,9 @@
         }
         dgraph.uid : uid
       }
-      Ticket5 as var(func: uid(Ticket16)) @filter(uid(TicketAuth17))
-      Ticket16 as var(func: uid(x))
-      TicketAuth17 as var(func: uid(Ticket16)) @cascade {
+      Ticket6 as var(func: uid(Ticket17)) @filter(uid(TicketAuth18))
+      Ticket17 as var(func: uid(x))
+      TicketAuth18 as var(func: uid(Ticket17)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -224,28 +224,28 @@
           }
         }
       }
-      var(func: uid(Ticket5)) {
-        Column7 as Ticket.onColumn
+      var(func: uid(Ticket6)) {
+        Column8 as Ticket.onColumn
       }
-      Column6 as var(func: uid(Column7)) @filter(uid(ColumnAuth15))
-      var(func: uid(Column6)) {
-        Project9 as Column.inProject
+      Column7 as var(func: uid(Column8)) @filter(uid(ColumnAuth16))
+      var(func: uid(Column7)) {
+        Project10 as Column.inProject
       }
-      Project8 as var(func: uid(Project9)) @filter(uid(ProjectAuth14))
-      var(func: uid(Project8)) {
-        Role11 as Project.roles
+      Project9 as var(func: uid(Project10)) @filter(uid(ProjectAuth15))
+      var(func: uid(Project9)) {
+        Role12 as Project.roles
       }
-      Role10 as var(func: uid(Role11))
-      var(func: uid(Role10)) {
-        User13 as Role.assignedTo
+      Role11 as var(func: uid(Role12))
+      var(func: uid(Role11)) {
+        User14 as Role.assignedTo
       }
-      User12 as var(func: uid(User13))
-      ProjectAuth14 as var(func: uid(Project9)) @cascade {
+      User13 as var(func: uid(User14))
+      ProjectAuth15 as var(func: uid(Project10)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
-      ColumnAuth15 as var(func: uid(Column7)) @cascade {
+      ColumnAuth16 as var(func: uid(Column8)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -448,13 +448,13 @@
       }
       LogRoot as var(func: uid(Log1))
       Log1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
-      log(func: uid(Log2), orderasc: Log.logs) {
+      log(func: uid(Log3), orderasc: Log.logs) {
         logs : Log.logs
         random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3), orderasc: Log.logs)
-      Log3 as var(func: uid(x))
+      Log3 as var(func: uid(Log4), orderasc: Log.logs)
+      Log4 as var(func: uid(x))
     }
 
 - name: "Delete with top level OR RBAC true."
