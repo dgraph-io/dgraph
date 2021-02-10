@@ -1190,7 +1190,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
-			errors.New("input: Invalid `Dgraph.Authorization` format: Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
+			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
 		},
 		{
 			"should throw an error if multiple authorization values are specified",
