@@ -1111,6 +1111,71 @@ func TestParseSecrets(t *testing.T) {
 		expectedAuthHeader string
 		err                error
 	}{
+		{"should be able to parse secrets",
+			`
+		type User {
+			id: ID!
+			name: String!
+		}
+
+		# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+		`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"",
+			nil,
+		},
+		{"should be able to parse secret where schema also has other comments.",
+			`
+	# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+
+	type User {
+		id: ID!
+		name: String!
+	}
+
+	# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+	# random comment
+	`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"",
+			nil,
+		},
+		{
+			"should throw an error if the secret is not in the correct format",
+			`
+		type User {
+			id: ID!
+			name: String!
+		}
+
+		# Dgraph.Secret RANDOM_TOKEN
+		`,
+			nil,
+			"",
+			errors.New("incorrect format for specifying Dgraph secret found for " +
+				"comment: `# Dgraph.Secret RANDOM_TOKEN`, it should " +
+				"be `# Dgraph.Secret key value`"),
+		},
+		{
+			"Dgraph.Authorization old format",
+			`
+		type User {
+			id: ID!
+			name: String!
+		}
+
+		# Dgraph.Secret  "GITHUB_API_TOKEN"   "some-super-secret-token"
+		# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+		`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"X-Test-Dgraph",
+			nil,
+		},
 		{
 			"Dgraph.Authorization old format error",
 			`
@@ -1156,6 +1221,20 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
+		},
+		{
+			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			#Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
