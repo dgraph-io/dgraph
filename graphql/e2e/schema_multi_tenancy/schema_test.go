@@ -18,10 +18,7 @@ package schema
 
 import (
 	"net/http"
-	"os"
 	"testing"
-
-	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -256,13 +253,4 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
 
 	common.DeleteNamespace(t, ns, header)
-}
-
-func TestMain(m *testing.M) {
-	err := common.CheckGraphQLStarted(common.GraphqlAdminURL)
-	if err != nil {
-		x.Log(err, "Waited for GraphQL test server to become available, but it never did.")
-		os.Exit(1)
-	}
-	os.Exit(m.Run())
 }
