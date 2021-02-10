@@ -302,24 +302,28 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 
 func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	createNamespace := &GraphQLParams{
-		Query: `query {
-					getNewNamespace{
+		Query: `mutation {
+					addNamespace{
 						namespaceId
 					}
 				}`,
 		Headers: headers,
 	}
 
-	gqlResponse := createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	// retry a few times to avoid the error: `Predicate dgraph.xid is not indexed`
+	var gqlResponse *GraphQLResponse
+	for i := 0; i < 10 && (gqlResponse == nil || gqlResponse.Errors != nil); i++ {
+		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	}
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var resp struct {
-		GetNewNamespace struct {
+		addNamespace struct {
 			NamespaceId uint64
 		}
 	}
 	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
-	return resp.GetNewNamespace.NamespaceId
+	return resp.addNamespace.NamespaceId
 }
 
 func DeleteNamespace(t *testing.T, id uint64, header http.Header) {

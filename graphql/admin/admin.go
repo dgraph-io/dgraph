@@ -368,6 +368,8 @@ var (
 		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addNamespace":              {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteNamespace":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
@@ -574,6 +576,7 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
+		"addNamespace":    resolveAddNamespace,
 		"backup":          resolveBackup,
 		"config":          resolveUpdateConfig,
 		"deleteNamespace": resolveDeleteNamespace,
@@ -598,9 +601,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
-		}).
-		WithQueryResolver("getNewNamespace", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveGetNewNamespace)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
