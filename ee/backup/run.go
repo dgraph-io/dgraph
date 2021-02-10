@@ -236,10 +236,10 @@ func runRestoreCmd() error {
 		}
 
 		if err := leaseID(result.MaxLeaseUid, pb.Num_UID); err != nil {
-			return err
+			return errors.Wrapf(err, "While leasing Uid")
 		}
 		if err := leaseID(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
-			return err
+			return errors.Wrapf(err, "While leasing Namespace ID")
 		}
 	}
 
