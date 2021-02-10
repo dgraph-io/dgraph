@@ -22,7 +22,6 @@ import (
 	"github.com/RoaringBitmap/roaring/roaring64"
 	cindex "github.com/google/codesearch/index"
 
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -42,7 +41,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	// TODO: Unnecessary conversion here. Avoid if possible.
 	if intersect.GetCardinality() > 0 {
 		opts.Intersect = &pb.List{
-			Bitmap: codec.ToBytes(intersect),
+			Uids: intersect.ToArray(),
 		}
 	}
 

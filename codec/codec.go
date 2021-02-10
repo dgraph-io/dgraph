@@ -149,10 +149,11 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 	if l == nil {
 		return iw
 	}
-	if len(l.Bitmap) > 0 {
+	if len(l.BitmapDoNotUse) > 0 {
 		// Only one of Uids or Bitmap should be defined.
-		x.Check(iw.UnmarshalBinary(l.Bitmap))
-	} else if len(l.Uids) > 0 {
+		x.Check(iw.UnmarshalBinary(l.BitmapDoNotUse))
+	}
+	if len(l.Uids) > 0 {
 		iw.AddMany(l.Uids)
 	}
 	return iw
