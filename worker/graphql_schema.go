@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -62,6 +64,11 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 	}
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
+
+	// pass on the incoming metadata to the group-1 leader
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
 
 	return c.UpdateGraphQLSchema(ctx, req)
 }

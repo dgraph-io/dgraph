@@ -1040,6 +1040,9 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 }
 
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")

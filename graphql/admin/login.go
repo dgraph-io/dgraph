@@ -68,15 +68,21 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 func getLoginInput(m schema.Mutation) *loginInput {
 	// We should be able to convert these to string as GraphQL schema validation should ensure this.
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
-	userID, _ := m.ArgValue("userId").(string)
-	password, _ := m.ArgValue("password").(string)
-	namespace, _ := m.ArgValue("namespace").(json.Number).Int64()
-	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
-	return &loginInput{
-		userID,
-		password,
-		uint64(namespace),
-		refreshToken,
+	var input loginInput
+
+	input.UserId, _ = m.ArgValue("userId").(string)
+	input.Password, _ = m.ArgValue("password").(string)
+	input.RefreshToken, _ = m.ArgValue("refreshToken").(string)
+
+	b, err := json.Marshal(m.ArgValue("namespace"))
+	if err != nil {
+		return nil
 	}
+
+	err = json.Unmarshal(b, &input.Namespace)
+	if err != nil {
+		return nil
+	}
+	return &input
 }
