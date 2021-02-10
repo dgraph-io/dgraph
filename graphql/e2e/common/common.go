@@ -1073,6 +1073,7 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
+	// TODO(jatin): uncomment this after CORS is fixed with multi-tenancy
 	// if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
 	// 	return nil, errors.Errorf("cors headers weren't set in response")
 	// }

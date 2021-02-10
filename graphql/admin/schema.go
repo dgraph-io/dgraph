@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -98,10 +97,6 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 	}
 
 	return resolve.DataResult(q, data, nil)
-}
-
-func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

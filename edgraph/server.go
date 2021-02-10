@@ -453,9 +453,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
-		// TODO - Get GQLSchema for the correct namespace.
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
-		_, graphQLSchema, err := GetGQLSchema(x.ExtractNamespace(ctx))
+		_, graphQLSchema, err := GetGQLSchema(namespace)
 		if err != nil {
 			return empty, err
 		}

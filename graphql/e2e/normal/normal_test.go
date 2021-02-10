@@ -30,6 +30,7 @@ import (
 
 func TestRunAll_Normal(t *testing.T) {
 	common.RunAll(t)
+	// TODO(jatin): enable this after CORS is fixed with multi-tenancy
 	//	common.RunCorsTest(t)
 }
 
