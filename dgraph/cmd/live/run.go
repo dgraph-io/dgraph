@@ -153,19 +153,26 @@ func init() {
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file. If used with --slash_grpc_endpoint, then this "+
-			"should be set to the API token issued by Slash GraphQL")
-	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
-		"all other TLS options and connection options will be ignored")
+		"The auth token passed to the server for Alter operation of the schema file. "+
+			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
+			"by Slash GraphQL")
+	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. "+
+		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be"+
+		"ignored")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
-	flag.StringP("user", "u", "", "Username if login is required.")
-	flag.StringP("password", "p", "", "Password of the user.")
-	flag.Uint64P("namespace", "n", 0, "Namespace to login.")
+
+	flag.String("creds", "",
+		`Various login credentials if login is required.
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
+
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
@@ -617,6 +624,8 @@ func run() error {
 		zero = Live.Conf.GetString("zero")
 	}
 
+	creds := x.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+
 	var err error
 	x.PrintVersion()
 	opt = options{
@@ -639,8 +648,8 @@ func run() error {
 		namespaceToLoad: Live.Conf.GetUint64("force-namespace"),
 	}
 
-	if Live.Conf.GetUint64("namespace") != 0 {
-		opt.namespaceToLoad = Live.Conf.GetUint64("namespace")
+	if creds.GetUint64("namespace") != 0 {
+		opt.namespaceToLoad = creds.GetUint64("namespace")
 	}
 
 	z.SetTmpDir(opt.tmpDir)
@@ -655,8 +664,8 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if len(Live.Conf.GetString("user")) > 0 && opt.namespaceToLoad == math.MaxUint64 &&
-		Live.Conf.GetUint64("namespace") == x.GalaxyNamespace {
+	if len(creds.GetString("user")) > 0 && opt.namespaceToLoad == math.MaxUint64 &&
+		creds.GetUint64("namespace") == x.GalaxyNamespace {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx)

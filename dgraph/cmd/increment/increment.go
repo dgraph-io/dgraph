@@ -54,8 +54,14 @@ func init() {
 	flag.Int("num", 1, "How many times to run.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.String("user", "", "Username if login is required.")
-	flag.String("password", "", "Password of the user.")
+
+	flag.String("creds", "",
+		`Various login credentials if login is required.
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
+
 	flag.String("pred", "counter.val",
 		"Predicate to use for storing the counter.")
 	flag.Bool("ro", false,
@@ -170,6 +176,9 @@ func run(conf *viper.Viper) {
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 	format := "0102 03:04:05.999"
+
+	// Do a sanity check on the passed credentials.
+	_ = x.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
 	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
 	defer closeFunc()

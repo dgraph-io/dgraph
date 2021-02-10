@@ -127,6 +127,9 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
+	// DefaultCreds is the default credentials for login via dgo client.
+	DefaultCreds = "user=; password=; namespace=0;"
+
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
@@ -1006,12 +1009,13 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dg := dgo.NewDgraphClient(clients...)
-	user := conf.GetString("user")
+	creds := NewSuperFlag(conf.GetString("creds"))
+	user := creds.GetString("user")
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
 			UserID:    user,
-			Password:  conf.GetString("password"),
-			Namespace: conf.GetUint64("namespace"),
+			Password:  creds.GetString("password"),
+			Namespace: creds.GetUint64("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
