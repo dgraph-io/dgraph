@@ -322,7 +322,7 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	return resp.GetNewNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64) {
+func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
@@ -330,6 +330,7 @@ func DeleteNamespace(t *testing.T, id uint64) {
 					}
 				}`,
 		Variables: map[string]interface{}{"id": id},
+		Headers:   header,
 	}
 
 	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)

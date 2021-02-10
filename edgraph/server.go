@@ -163,7 +163,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
 	ctx = x.AttachJWTNamespace(ctx)
 	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "Creating namespace, got error: ")
+		return errors.Wrapf(err, "Deleting namespace, got error: ")
 	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore

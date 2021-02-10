@@ -557,7 +557,7 @@ func newAdminResolver(
 		server.incrementSchemaUpdateCounter(ns)
 		// if the schema hasn't been loaded yet, then we don't need to load it here
 		if !ok {
-			glog.Infof("Skipping GraphQL schema update as the schema hasn't been loaded yet.")
+			glog.Info("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
 			return
 		}
 		server.schema[ns] = newSchema
@@ -881,7 +881,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
-	glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
+	glog.Infof("Successfully lazy-loaded GraphQL schema. Serving GraphQL API.")
 }
 
 func LazyLoadSchema(namespace uint64) {
