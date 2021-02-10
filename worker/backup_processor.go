@@ -82,6 +82,8 @@ type LoadResult struct {
 	// MaxLeaseUid is the max UID seen by the load operation. Needed to request zero
 	// for the proper number of UIDs.
 	MaxLeaseUid uint64
+	// MaxLeaseNsId is the max namespace ID seen by the load operation.
+	MaxLeaseNsId uint64
 	// The error, if any, of the load operation.
 	Err error
 }
