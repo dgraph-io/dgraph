@@ -236,10 +236,10 @@ func runRestoreCmd() error {
 		}
 
 		if err := leaseID(result.MaxLeaseUid, pb.Num_UID); err != nil {
-			return errors.Wrapf(err, "While leasing Uid")
+			return errors.Wrapf(err, "cannot update max uid lease after restore.")
 		}
 		if err := leaseID(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
-			return errors.Wrapf(err, "While leasing Namespace ID")
+			return errors.Wrapf(err, "cannot update max namespace lease after restore.")
 		}
 	}
 
