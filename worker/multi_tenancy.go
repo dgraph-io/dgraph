@@ -14,94 +14,79 @@ package worker
 
 import (
 	"context"
+	"time"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
-// deleteNamespace handles a request coming from another node.
 func (w *grpcWorker) DeleteNamespace(ctx context.Context,
 	req *pb.DeleteNsRequest) (*pb.Status, error) {
-	glog.V(2).Infof("Received delete namespace request via Grpc: %+v", req)
-	return deleteNsCurrentGroup(ctx, req)
+	var emptyRes pb.Status
+	if !groups().ServesGroup(req.GroupId) {
+		return &emptyRes, errors.Errorf("The server doesn't serve group id: %v", req.GroupId)
+	}
+
+	if err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Delete: req}); err != nil {
+		return &emptyRes, errors.Wrapf(err, "Delete namespace error: ")
+	}
+	return &emptyRes, nil
 }
 
 func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
-	if !EnterpriseEnabled() {
-		return errors.New("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
-	if err := x.HealthCheck(); err != nil {
-		glog.Errorf("Failed to delete Namespace, Server not ready to accept requests: %s", err)
-		return err
-	}
-
 	// Update the membership state to get the latest mapping of groups to predicates.
 	if err := UpdateMembershipState(ctx); err != nil {
-		return err
+		return errors.Wrapf(err, "Failed to update membership state while deleting namesapce")
 	}
 
 	// Get the current membership state and parse it for easier processing.
 	state := GetMembershipState()
 
+	errCh := make(chan error, len(state.Groups))
 	for gid, _ := range state.Groups {
-		req := &pb.DeleteNsRequest{
-			Namespace: ns,
-			GroupId:   gid,
-		}
-		deleteNamespace(ctx, req)
+		req := &pb.DeleteNsRequest{Namespace: ns, GroupId: gid}
+		go func(req *pb.DeleteNsRequest) {
+			errCh <- tryDeleteProposal(ctx, req)
+		}(req)
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// TODO - Currently there is no way by which we can prevent partial banning. It is possible
+	// that if a group is behind a network partition then we might not be able to propose to it.
+	for range state.Groups {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
 
 	return nil
-
-}
-func deleteNsCurrentGroup(ctx context.Context, req *pb.DeleteNsRequest) (*pb.Status, error) {
-	glog.Infof("Delete namespace request: group %d for namespace %d", req.GroupId, req.Namespace)
-	if err := ctx.Err(); err != nil {
-		glog.Errorf("Context error during delete namespace: %v\n", err)
-		return nil, err
-	}
-
-	g := groups()
-	if g.groupId() != req.GroupId {
-		return nil, errors.Errorf("Delete namespace request invalid, group Id: %d. Requested: %d\n",
-			g.groupId(), req.GroupId)
-	}
-
-	closer, err := g.Node.startTask(opDeleteNS)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Cannot perform delete namespace operation")
-	}
-	defer closer.Done()
-
-	ps := State.Pstore
-	if err := ps.BanNamespace(req.Namespace); err != nil {
-		return &pb.Status{Code: 1, Msg: "Failed to delete the namespace"}, err
-	}
-	return &pb.Status{Code: 0, Msg: "Successfully deleted namespace"}, nil
 }
 
-func deleteNamespace(ctx context.Context, req *pb.DeleteNsRequest) (*pb.Status, error) {
-	glog.V(2).Infof("Sending delete namespace request: %+v\n", req)
-	if groups().groupId() == req.GroupId {
-		return deleteNsCurrentGroup(ctx, req)
+func tryDeleteProposal(ctx context.Context, req *pb.DeleteNsRequest) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = proposeDeleteOrSend(ctx, req)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return err
+}
+
+func proposeDeleteOrSend(ctx context.Context, req *pb.DeleteNsRequest) error {
+	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
+		_, err := (&grpcWorker{}).DeleteNamespace(ctx, req)
+		return err
 	}
 
-	// This node is not part of the requested group, send the request over the network.
-	pl := groups().AnyServer(req.GroupId)
+	pl := groups().Leader(req.GetGroupId())
 	if pl == nil {
-		return nil, errors.Errorf("Couldn't find a server in group %d", req.GroupId)
+		return conn.ErrNoConnection
 	}
-	res, err := pb.NewWorkerClient(pl.Get()).DeleteNamespace(ctx, req)
-	if err != nil {
-		glog.Errorf("Delete namespace error, group %d: %s", req.GroupId, err)
-		return nil, err
-	}
-	return res, nil
+	con := pl.Get()
+	c := pb.NewWorkerClient(con)
+
+	_, err := c.DeleteNamespace(ctx, req)
+	return err
 }
