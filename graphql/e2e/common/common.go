@@ -278,6 +278,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 	if resp := retryProbeGraphQL(authority, header); resp != nil {
 		return resp
 	}
+	debug.PrintStack()
 	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
 	return nil
 }
@@ -297,6 +298,7 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
+	debug.PrintStack()
 	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
@@ -438,6 +440,7 @@ func AssertUpdateGQLSchemaSuccess(t *testing.T, authority, schema string,
 		}
 	}
 	if err := json.Unmarshal(updateResp.Data, &updateResult); err != nil {
+		debug.PrintStack()
 		t.Fatalf("failed to unmarshal updateGQLSchema response: %s", err.Error())
 	}
 	require.NotNil(t, updateResult.UpdateGQLSchema.GqlSchema)
