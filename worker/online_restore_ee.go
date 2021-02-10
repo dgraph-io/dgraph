@@ -325,54 +325,67 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
 		getCredentialsFromRestoreRequest(req),
 		func(r io.Reader, groupId uint32, preds predicateSet,
-			dropOperations []*pb.DropOperation) (uint64, error) {
+			dropOperations []*pb.DropOperation) (uint64, uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
-				return 0, nil
+				return 0, 0, nil
 			}
 
 			cfg, err := getEncConfig(req)
 			if err != nil {
-				return 0, errors.Wrapf(err, "unable to get encryption config")
+				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
 			}
 			key, err := enc.ReadKey(cfg)
 			if err != nil {
-				return 0, errors.Wrapf(err, "unable to read key")
+				return 0, 0, errors.Wrapf(err, "unable to read key")
 			}
 			r, err = enc.GetReader(key, r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot get encrypted reader")
+				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "couldn't create gzip reader")
+				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds, dropOperations)
+			maxUid, maxNsId, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds,
+				dropOperations)
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot write backup")
+				return 0, 0, errors.Wrapf(err, "cannot write backup")
 			}
 
 			if maxUid == 0 {
 				// No need to update the lease, return here.
-				return 0, nil
+				return 0, 0, nil
 			}
 
 			// Use the value of maxUid to update the uid lease.
 			pl := groups().connToZeroLeader()
 			if pl == nil {
-				return 0, errors.Errorf(
+				return 0, 0, errors.Errorf(
 					"cannot update uid lease due to no connection to zero leader")
 			}
+
 			zc := pb.NewZeroClient(pl.Get())
-			if _, err = zc.AssignIds(ctx, &pb.Num{Val: maxUid, Type: pb.Num_UID}); err != nil {
-				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
+			leaseID := func(val uint64, typ pb.NumLeaseType) error {
+				if val == 0 {
+					return nil
+				}
+				_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
+				return err
 			}
 
-			// We return the maxUid to enforce the signature of the method but it will
+			if err := leaseID(maxUid, pb.Num_UID); err != nil {
+				return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
+			}
+			if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
+				return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
+			}
+
+			// We return the maxUid/maxNsId to enforce the signature of the method but it will
 			// be ignored as the uid lease was updated above.
-			return maxUid, nil
+			return maxUid, maxNsId, nil
 		})
 	if res.Err != nil {
 		return errors.Wrapf(res.Err, "cannot write backup")
