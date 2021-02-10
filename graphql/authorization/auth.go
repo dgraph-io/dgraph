@@ -43,7 +43,7 @@ type authVariablekey string
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
 	AuthVariables  = authVariablekey("authVariable")
-	AuthMetaHeader = "Dgraph.Authorization "
+	AuthMetaHeader = "Dgraph.Authorization"
 )
 
 var (
