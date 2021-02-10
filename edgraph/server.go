@@ -109,6 +109,61 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
+func (s *Server) ResetPassword(ctx context.Context, ns uint64, id, password string) error {
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return errors.Wrapf(err, "Reset password got error:")
+	}
+
+	query := fmt.Sprintf(`{
+			x as updateUser(func: type(dgraph.type.User)) @filter(eq(dgraph.xid, "%s")) {
+				uid
+			}
+		}`, id)
+
+	userNQuads := []*api.NQuad{
+		{
+			Subject:     "uid(x)",
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
+		},
+	}
+	req := &Request{
+		req: &api.Request{
+			CommitNow: true,
+			Query:     query,
+			Mutations: []*api.Mutation{
+				{
+					Set:  userNQuads,
+					Cond: "@if(gt(len(x), 0))",
+				},
+			},
+		},
+		doAuth: NoAuthorize,
+	}
+	ctx = x.AttachNamespace(ctx, ns)
+	resp, err := (&Server{}).doQuery(ctx, req)
+	if err != nil {
+		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
+	}
+
+	type userNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type userQryResp struct {
+		User []userNode `json:"updateUser"`
+	}
+	var userResp userQryResp
+	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+		return errors.Wrap(err, "Reset password failed with error")
+	}
+
+	if len(userResp.User) == 0 {
+		return errors.New("Failed to reset password, user doesn't exist")
+	}
+	return nil
+}
+
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	ctx = x.AttachJWTNamespace(ctx)
 	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
