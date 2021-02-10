@@ -924,10 +924,9 @@ type CloseFunc func()
 
 // CredOpt stores the options for logging in, including the password and user.
 type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
-	Namespace   uint64
+	UserID    string
+	Password  string
+	Namespace uint64
 }
 
 type authorizationCredentials struct {
@@ -1010,10 +1009,9 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	user := conf.GetString("user")
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
-			Conf:        conf,
-			UserID:      user,
-			PasswordOpt: "password",
-			Namespace:   conf.GetUint64("namespace"),
+			UserID:    user,
+			Password:  conf.GetString("password"),
+			Namespace: conf.GetUint64("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
@@ -1059,7 +1057,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 // GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
-	password := opt.Conf.GetString(opt.PasswordOpt)
+	password := opt.Password
 	if len(password) == 0 {
 		var err error
 		password, err = AskUserPassword(opt.UserID, "Current", 1)
