@@ -371,7 +371,7 @@ var (
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
-	//
+	// adminServerVar stores a pointer to the adminServer. It is used for lazy loading schema.
 	adminServerVar *adminServer
 )
 
