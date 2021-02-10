@@ -177,7 +177,7 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 
 		if strings.HasPrefix(text, "#") {
 			header := strings.TrimSpace(text[1:])
-			if strings.HasPrefix(header, "Dgraph.Autorization") {
+			if strings.HasPrefix(header, "Dgraph.Authorization") {
 				if authSecret != "" {
 					return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
 						"a schema, found second mention: %v", text)
