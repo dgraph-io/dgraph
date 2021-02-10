@@ -373,8 +373,8 @@ func TestMain(m *testing.M) {
 
 	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
 		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
-		1, x.DefaultNamespace)
-	addTablets([]string{"friend_not_served"}, 2, x.DefaultNamespace)
+		1, x.GalaxyNamespace)
+	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
 	addTablets([]string{"name"}, 1, 0x2)
 
 	dir, err := ioutil.TempDir("", "storetest_")
