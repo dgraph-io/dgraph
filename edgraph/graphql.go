@@ -38,7 +38,7 @@ import (
 
 // ResetCors make the dgraph to accept all the origins if no origins were given
 // by the users.
-func ResetCors(closer *z.Closer) {
+func ResetCors(closer *z.Closer, namespace uint64) {
 	defer func() {
 		glog.Infof("ResetCors closed")
 		closer.Done()
@@ -76,9 +76,7 @@ func ResetCors(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
-		//TODO(Ahsan): I don't think this is namespace specific, we will have to reset cors for
-		// all the namespaces.
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		ctx = x.AttachNamespace(ctx, namespace)
 		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -117,9 +115,8 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		doAuth: NoAuthorize,
 	}
+	ctx = x.AttachJWTNamespace(ctx)
 	ctx = context.WithValue(ctx, IsGraphql, true)
-	// TODO(Ahsan): Is this namespace specific?
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	_, err = (&Server{}).doQuery(ctx, req)
 	return err
 }
@@ -139,9 +136,7 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 		},
 		doAuth: NoAuthorize,
 	}
-	//TODO(Ahsan): Is this namespace specific?
 	ctx = context.WithValue(ctx, IsGraphql, true)
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	res, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return "", nil, err

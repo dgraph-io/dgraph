@@ -811,7 +811,7 @@ func run() {
 		// and health check passes
 		edgraph.ResetAcl(updaters)
 		edgraph.RefreshAcls(updaters)
-		edgraph.ResetCors(updaters)
+		edgraph.ResetCors(updaters, x.GalaxyNamespace)
 		// Update the accepted cors origins.
 		for updaters.Ctx().Err() == nil {
 			_, origins, err := edgraph.GetCorsOrigins(updaters.Ctx())
@@ -820,7 +820,7 @@ func run() {
 				time.Sleep(time.Second)
 				continue
 			}
-			x.UpdateCorsOrigins(origins)
+			x.UpdateCorsOrigins(origins, x.GalaxyNamespace)
 			return
 		}
 	}()
@@ -875,9 +875,16 @@ func listenForCorsUpdate(closer *z.Closer) {
 		if len(pl.Postings) == 0 {
 			return
 		}
+		pk, err := x.Parse(kv.GetKey())
+		if err != nil {
+			glog.Errorf("Unable to find uid of updated cors %s", err)
+			return
+		}
+		ns, _ := x.ParseNamespaceAttr(pk.Attr)
 		origins := make([]string, 0)
 		for _, posting := range pl.Postings {
 			val := strings.TrimSpace(string(posting.Value))
+			glog.Infof("actual:%v", val)
 			if val == "_STAR_ALL" {
 				// If the posting list contains __STAR_ALL then it's a delete call.
 				// we usually do it before updating as part of upsert. So, let's
@@ -886,7 +893,10 @@ func listenForCorsUpdate(closer *z.Closer) {
 			}
 			origins = append(origins, val)
 		}
-		glog.Infof("Updating cors origins: %+v", origins)
-		x.UpdateCorsOrigins(origins)
+		if len(origins) == 1 && origins[0] == "" {
+			return
+		}
+		glog.Infof("Updating cors origins for namespace %v is: %v", ns, origins)
+		x.UpdateCorsOrigins(origins, ns)
 	}, 1, closer)
 }

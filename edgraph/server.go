@@ -133,6 +133,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	m.Schema = schema.InitialSchema(ns)
 	m.Types = schema.InitialTypes(ns)
 	_, err = query.ApplyMutations(ctx, m)
+	ResetCors(nil, ns)
 	if err != nil {
 		return 0, err
 	}
@@ -444,7 +445,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
-		ResetCors(nil)
+		ResetCors(nil, namespace)
 		return empty, err
 	}
 
@@ -476,7 +477,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
 		ResetAcl(nil)
-		ResetCors(nil)
+		ResetCors(nil, namespace)
 		return empty, err
 	}
 

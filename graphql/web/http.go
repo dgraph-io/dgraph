@@ -355,7 +355,7 @@ func commonHeaders(admin bool, next http.Handler) http.Handler {
 			x.AddCorsHeaders(w)
 		} else {
 			// /graphql endpoint is protected by allow listed origins.
-			addDynamicHeaders(r.Header.Get("Origin"), w)
+			addDynamicHeaders(r.Header.Get("Origin"), x.ExtractNamespaceHTTP(r), w)
 		}
 		// Overwrite the allowed headers after also including headers which are part of
 		// forwardHeaders.
@@ -382,10 +382,16 @@ func recoveryHandler(next http.Handler) http.Handler {
 
 // addCorsHeader checks the given origin is in allowlist or not. If it's in
 // allow list we'll let them access /graphql endpoint.
-func addDynamicHeaders(origin string, w http.ResponseWriter) {
+func addDynamicHeaders(origin string, namespace uint64, w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
-	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
-	_, ok := allowList[origin]
+	value, ok := x.AcceptedOrigins[namespace]
+	glog.Infof("%v", namespace)
+	var allowList map[string]struct{}
+	if ok {
+		allowList = value.Load().(map[string]struct{})
+	}
+	_, ok = allowList[origin]
+	glog.Infof("\n%v", allowList)
 	// Given origin is not in the allow list so let's not
 	// add any cors headers.
 	if !ok && len(allowList) != 0 {
