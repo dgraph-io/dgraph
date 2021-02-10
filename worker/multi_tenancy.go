@@ -40,7 +40,6 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 		return errors.Wrapf(err, "Failed to update membership state while deleting namesapce")
 	}
 
-	// Get the current membership state and parse it for easier processing.
 	state := GetMembershipState()
 
 	errCh := make(chan error, len(state.Groups))
@@ -51,17 +50,16 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 		}(req)
 	}
 
-	// TODO - Currently there is no way by which we can prevent partial banning. It is possible
-	// that if a group is behind a network partition then we might not be able to propose to it.
 	for range state.Groups {
 		if err := <-errCh; err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
+// TODO - Currently there is no way by which we can prevent partial banning. It is possible
+// that if a group is behind a network partition then we might not be able to propose to it.
 func tryDeleteProposal(ctx context.Context, req *pb.DeleteNsRequest) error {
 	var err error
 	for i := 0; i < 10; i++ {

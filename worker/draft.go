@@ -579,7 +579,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	case proposal.Delta != nil:
-		n.elog.Printf("applying oracle delta for key: %d", key)
+		n.elog.Printf("Applying oracle delta for key: %d", key)
 		return n.commitOrAbort(key, proposal.Delta)
 
 	case proposal.Snapshot != nil:
