@@ -101,7 +101,6 @@ func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
 	edge := &pb.DirectedEdge{
 		ValueId: 23,
-		Label:   "author0",
 		Attr:    "neighbour",
 	}
 	edge.Entity = 10
@@ -366,15 +365,17 @@ func TestMain(m *testing.M) {
 	gr = new(groupi)
 	gr.gid = 1
 	gr.tablets = make(map[string]*pb.Tablet)
-	addTablets := func(attrs []string, gid uint32) {
+	addTablets := func(attrs []string, gid uint32, namespace uint64) {
 		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(x.DefaultNamespace, attr)] = &pb.Tablet{GroupId: gid}
+			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
 		}
 	}
 
 	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
-		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"}, 1)
-	addTablets([]string{"friend_not_served"}, 2)
+		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
+		1, x.DefaultNamespace)
+	addTablets([]string{"friend_not_served"}, 2, x.DefaultNamespace)
+	addTablets([]string{"name"}, 1, 0x2)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

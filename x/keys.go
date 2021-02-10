@@ -50,8 +50,10 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
-	// DefaultNamespace is the default namespace name.
-	DefaultNamespace = uint64(0)
+	// GalaxyNamespace is the default namespace name.
+	GalaxyNamespace = uint64(0)
+	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
+	IgnoreBytes = "1-8"
 )
 
 func NamespaceToBytes(ns uint64) []byte {
@@ -73,6 +75,10 @@ func NamespaceAttrList(ns uint64, preds []string) []string {
 	return resp
 }
 
+func GalaxyAttr(attr string) string {
+	return NamespaceAttr(GalaxyNamespace, attr)
+}
+
 // ParseNamespaceAttr returns the namespace and attr from the given value.
 func ParseNamespaceAttr(attr string) (uint64, string) {
 	AssertTrue(len(attr) >= 8)
@@ -88,6 +94,12 @@ func ParseNamespaceBytes(attr string) ([]byte, string) {
 func ParseAttr(attr string) string {
 	AssertTrue(len(attr) >= 8)
 	return attr[8:]
+}
+
+// ParseNamespace returns the namespace from the given value.
+func ParseNamespace(attr string) uint64 {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8]))
 }
 
 func ParseAttrList(attrs []string) []string {

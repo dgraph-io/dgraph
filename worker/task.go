@@ -922,7 +922,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	}
 	// For now, remove the query level cache. It is causing contention for queries with high
 	// fan-out.
-
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
 		return nil, err
@@ -1835,7 +1834,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
@@ -1848,7 +1848,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		fc.intersectDest = needsIntersect(f)
 		// Max Levenshtein distance

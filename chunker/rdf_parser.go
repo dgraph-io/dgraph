@@ -36,9 +36,9 @@ var (
 	ErrEmpty = errors.New("RDF: harmless error, e.g. comment line")
 )
 
-// Function to do sanity check for subject, predicate, object and label strings.
+// Function to do sanity check for subject, predicate and object strings.
 func sane(s string) bool {
-	// Label and ObjectId can be "", we already check that subject and predicate
+	// ObjectId can be "", we already check that subject and predicate
 	// shouldn't be empty.
 	if len(s) == 0 {
 		return true
@@ -194,7 +194,12 @@ L:
 			break L
 
 		case itemLabel:
-			rnq.Label = strings.TrimFunc(item.Val, isSpaceRune)
+			s := strings.TrimFunc(item.Val, isSpaceRune)
+			namespace, err := strconv.ParseUint(s, 0, 64)
+			if err != nil {
+				return rnq, errors.Errorf("Invalid namespace ID. Input: [%s]", line)
+			}
+			rnq.Namespace = namespace
 
 		case itemLeftRound:
 			it.Prev() // backup '('
@@ -221,8 +226,7 @@ L:
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, errors.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
-	if !sane(rnq.Subject) || !sane(rnq.Predicate) ||
-		!sane(rnq.ObjectId) || !sane(rnq.Label) {
+	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) {
 		return rnq, errors.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 

@@ -496,14 +496,13 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	// TODO(Ahsan): The namespace shouldn't be default always"
-	prefix := x.DataKey(x.NamespaceAttr(x.DefaultNamespace, worker.GqlSchemaPred), 0)
+	prefix := x.DataKey(x.GalaxyAttr(worker.GqlSchemaPred), 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
-	go worker.SubscribeForUpdates([][]byte{prefix}, func(kvs *badgerpb.KVList) {
+	go worker.SubscribeForUpdates([][]byte{prefix}, x.IgnoreBytes, func(kvs *badgerpb.KVList) {
 
-		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix}, "GraphQL Schema Subscription")
+		kv := x.KvWithMaxVersion(kvs, [][]byte{prefix})
 		glog.Infof("Updating GraphQL schema from subscription.")
 
 		// Unmarshal the incoming posting list.
@@ -568,7 +567,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"backup":          resolveBackup,
 		"config":          resolveUpdateConfig,
-		"createNamespace": resolveCreateNamespace,
 		"deleteNamespace": resolveDeleteNamespace,
 		"draining":        resolveDraining,
 		"export":          resolveExport,
@@ -591,6 +589,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
+		}).
+		WithQueryResolver("getNewNamespace", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetNewNamespace)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

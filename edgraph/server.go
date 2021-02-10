@@ -109,18 +109,63 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-// TODO(Ahsan): Complete the below two functions.
-func (s *Server) CreateNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("Creating namespace", namespace)
+func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
+	ctx = x.AttachJWTNamespace(ctx)
+	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
+
+	// Namespace creation is only allowed by the guardians of the galaxy group.
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
+	}
+
+	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
+	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Creating namespace, got error:")
+	}
+
+	ns := ids.StartId
+	glog.V(2).Infof("Got a lease for NsID: %d", ns)
+
+	// Attach the newly leased NsID in the context in order to create guardians/groot for it.
+	ctx = x.AttachNamespace(ctx, ns)
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	m.Schema = schema.InitialSchema(namespace)
-	m.Types = schema.InitialTypes(namespace)
-	_, err := query.ApplyMutations(ctx, m)
-	return err
+	m.Schema = schema.InitialSchema(ns)
+	m.Types = schema.InitialTypes(ns)
+	_, err = query.ApplyMutations(ctx, m)
+	if err != nil {
+		return 0, err
+	}
+
+	if err = worker.WaitForIndexing(ctx, true); err != nil {
+		return 0, errors.Wrap(err, "Creating namespace, got error: ")
+	}
+	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
+		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
+	}
+	glog.V(2).Infof("Created namespace: %d", ns)
+	return ns, nil
+}
+
+// This function is used while creating new namespace. New namespace creation is only allowed
+// by the guardians of the galaxy group.
+func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
+	if err := upsertGuardian(ctx); err != nil {
+		return errors.Wrap(err, "While creating Guardian")
+	}
+	if err := upsertGroot(ctx); err != nil {
+		return errors.Wrap(err, "While creating Groot")
+	}
+	return nil
 }
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
+	ctx = x.AttachJWTNamespace(ctx)
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return errors.Wrapf(err, "Creating namespace, got error: ")
+	}
+	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
 }
@@ -159,7 +204,12 @@ func PeriodicallyPostTelemetry() {
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema() (uid, graphQLSchema string, err error) {
-	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+	ctx := context.WithValue(context.Background(), Authorize, false)
+	//TODO(Ahsan): There should be a way to getGQLSchema for all the namespaces and reinsert them
+	// after dropAll. Need to think about what should be the behaviour of drop operations.
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+
+	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
 			query {
@@ -213,6 +263,9 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	var err error
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
 		op := &api.Operation{Schema: dgraphSchema}
@@ -284,7 +337,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		// if the update is equal to the existing one.
 		if schema.IsPreDefPredChanged(namespace, update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" modified", update.Predicate)
+				" modified", x.ParseAttr(update.Predicate))
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -307,7 +360,7 @@ func parseSchemaFromAlterOperation(namespace uint64, op *api.Operation) (*schema
 		// if the update is equal to the existing one.
 		if schema.IsPreDefTypeChanged(namespace, typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 
 		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
@@ -348,6 +401,8 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
+
+	ctx = x.AttachJWTNamespace(ctx)
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -367,6 +422,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
+				" galaxy")
+		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
@@ -438,7 +497,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" dropped", attr)
+				" dropped", x.ParseAttr(attr))
 		}
 
 		nq := &api.NQuad{
@@ -500,7 +559,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+	if err = worker.WaitForIndexing(ctx, !op.RunInBackground); err != nil {
 		return empty, err
 	}
 
@@ -953,8 +1012,6 @@ type queryContext struct {
 	// 1B) and resulting in OOM. We are limiting number of nquads which can be inserted in
 	// a single request.
 	nquadsCount int
-	// namespace of the given query.
-	namespace uint64
 }
 
 // Request represents a query request sent to the doQuery() method on the Server.
@@ -1045,11 +1102,13 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
@@ -1116,12 +1175,11 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	}
 
 	qc := &queryContext{
-		req:       req.req,
-		latency:   l,
-		span:      span,
-		graphql:   isGraphQL,
-		namespace: x.ExtractNamespace(ctx),
-		gqlField:  req.gqlField,
+		req:      req.req,
+		latency:  l,
+		span:     span,
+		graphql:  isGraphQL,
+		gqlField: req.gqlField,
 	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return

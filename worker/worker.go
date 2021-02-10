@@ -82,10 +82,14 @@ type grpcWorker struct {
 
 func (w *grpcWorker) Subscribe(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
-	// Subscribe on given prefixes.
+	var matches []badgerpb.Match
+	for _, prefix := range req.GetPrefixes() {
+		matches = append(matches, badgerpb.Match{Prefix: prefix, IgnoreBytes: req.Ignore})
+	}
+	// Subscribe on given prefixes with the ignore byte.
 	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
 		return stream.Send(kvs)
-	}, req.GetPrefixes()...)
+	}, matches)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from

@@ -30,8 +30,7 @@ import (
 
 func TestRunAll_Normal(t *testing.T) {
 	common.RunAll(t)
-	//TODO(Ahsan): Fix this test.
-	// common.RunCorsTest(t)
+	common.RunCorsTest(t)
 }
 
 func TestSchema_Normal(t *testing.T) {

@@ -60,14 +60,15 @@ type address struct {
 }
 
 type Person struct {
-	Uid     string     `json:"uid,omitempty"`
-	Name    string     `json:"name,omitempty"`
-	Age     int        `json:"age,omitempty"`
-	Married *bool      `json:"married,omitempty"`
-	Now     *time.Time `json:"now,omitempty"`
-	Address address    `json:"address,omitempty"` // geo value
-	Friends []Person   `json:"friend,omitempty"`
-	School  *School    `json:"school,omitempty"`
+	Uid       string     `json:"uid,omitempty"`
+	Namespace string     `json:"namespace,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	Age       int        `json:"age,omitempty"`
+	Married   *bool      `json:"married,omitempty"`
+	Now       *time.Time `json:"now,omitempty"`
+	Address   address    `json:"address,omitempty"` // geo value
+	Friends   []Person   `json:"friend,omitempty"`
+	School    *School    `json:"school,omitempty"`
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
@@ -90,6 +91,7 @@ func (exp *Experiment) verify() {
 		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
+	// TODO(Naman): Fix these tests, once the ACL is integrated.
 	ctx := context.Background()
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
@@ -116,10 +118,12 @@ func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
 	m := true
 	p := Person{
-		Name:    "Alice",
-		Age:     26,
-		Married: &m,
-		Now:     &tn,
+		Uid:       "1",
+		Namespace: "0x2",
+		Name:      "Alice",
+		Age:       26,
+		Married:   &m,
+		Now:       &tn,
 		Address: address{
 			Type:   "Point",
 			Coords: []float64{1.1, 2.0},

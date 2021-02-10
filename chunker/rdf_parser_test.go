@@ -346,40 +346,40 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> <label> .`,
+		input: `_:alice <knows> "stuff"^^<xs:string> <0xf2> .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "label",
+			Namespace:   0xf2,
 		},
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> _:label .`,
+		input: `_:alice <knows> "stuff"^^<xs:string> <0xf2> .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "_:label",
+			Namespace:   0xf2,
 		},
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> _:label . # comment`,
+		input: `_:alice <knows> "stuff"^^<xs:string> <10> . # comment`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "stuff"}},
-			Label:       "_:label",
+			Namespace:   10,
 		},
 		expectedErr: false,
 	},
 	{
-		input:       `_:alice <knows> "stuff"^^<xs:string> "label" .`,
+		input:       `_:alice <knows> "stuff"^^<xs:string> "0xf2" .`,
 		expectedErr: true,
 	},
 	{
@@ -599,13 +599,13 @@ var testNQuads = []struct {
 
 	// Edge Facets test.
 	{
-		input: `_:alice <knows> "stuff" _:label (key1="val1",key2=13) .`,
+		input: `_:alice <knows> "stuff" <0x10> (key1="val1",key2=13) .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "stuff"}},
-			Label:       "_:label",
+			Namespace:   0x10,
 			Facets: []*api.Facet{
 				{
 					Key:     "key1",
@@ -623,13 +623,13 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff" _:label (key1=,key2=13) .`,
+		input: `_:alice <knows> "stuff" <0x12> (key1=,key2=13) .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "stuff"}},
-			Label:       "_:label",
+			Namespace:   0x12,
 			Facets: []*api.Facet{
 				{
 					Key:     "key1",

@@ -38,14 +38,12 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
 				Attr:  "name",
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Label:     "test-mutation",
 				Attr:      "name",
 				ValueType: 9,
 			},
@@ -53,7 +51,6 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
 				Attr:  "name",
 				Op:    pb.DirectedEdge_DEL,
 			},
@@ -61,7 +58,6 @@ func TestConvertEdgeType(t *testing.T) {
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Label:     "test-mutation",
 				Attr:      "name",
 				Op:        pb.DirectedEdge_DEL,
 				ValueType: 9,
@@ -70,7 +66,6 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				ValueId: 123,
-				Label:   "test-mutation",
 				Attr:    "name",
 			},
 			to:        types.StringID,
@@ -79,7 +74,6 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
 				Attr:  "name",
 			},
 			to:        types.UidID,
@@ -105,7 +99,6 @@ func TestConvertEdgeType(t *testing.T) {
 func TestValidateEdgeTypeError(t *testing.T) {
 	edge := &pb.DirectedEdge{
 		Value: []byte("set edge"),
-		Label: "test-mutation",
 		Attr:  "name",
 	}
 
@@ -119,7 +112,6 @@ func TestValidateEdgeTypeError(t *testing.T) {
 func TestPopulateMutationMap(t *testing.T) {
 	edges := []*pb.DirectedEdge{{
 		Value: []byte("set edge"),
-		Label: "test-mutation",
 	}}
 	schema := []*pb.SchemaUpdate{{
 		Predicate: "name",
