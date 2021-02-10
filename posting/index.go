@@ -1169,7 +1169,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", rb.CurrentSchema.Predicate)
+			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
 	}
 
 	return false, nil

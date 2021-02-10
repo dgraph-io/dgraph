@@ -532,7 +532,9 @@ func TestNeedsListTypeRebuild(t *testing.T) {
 	require.NoError(t, err)
 
 	rb.OldSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
-	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
+	rb.CurrentSchema = &pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false,
+		Predicate: x.GalaxyAttr("")} // This is added to prevent a crash in rebuilder.
+	// We don't expect rebuilder to have predicates without namespace.
 	rebuild, err = rb.needsListTypeRebuild()
 	require.False(t, rebuild)
 	require.Error(t, err)
