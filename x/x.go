@@ -426,8 +426,13 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		ns, err := ExtractJWTNamespace(ctx)
 		if err != nil {
 			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		} else {
+			// Attach the namespace only if we got one from JWT.
+			// This preserves any namespace directly present in the context which is needed for
+			// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+			// context is created by hand.
+			ctx = AttachNamespace(ctx, ns)
 		}
-		ctx = AttachNamespace(ctx, ns)
 	} else {
 		ctx = AttachNamespace(ctx, GalaxyNamespace)
 	}

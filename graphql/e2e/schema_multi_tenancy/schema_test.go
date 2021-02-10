@@ -46,7 +46,7 @@ var (
 // Whenever schema is updated in a dgraph alpha for one group for any namespace,
 // that update should also be propagated to alpha nodes in other groups.
 func TestSchemaSubscribe(t *testing.T) {
-	t.Skipf("need to check the reason of failure")
+	t.Skip()
 	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
@@ -110,7 +110,7 @@ func TestSchemaSubscribe(t *testing.T) {
 	common.RequireNoGQLErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	// Now update schema on an alpha node for group 3 for namespace 1 and see if nodes in group 1
+	// Now update schema on an alpha node for group 3 for new namespace and see if nodes in group 1
 	// and 2 also get it.
 	ns := common.CreateNamespace(t, header)
 	header.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, ns).AccessJwt)
@@ -124,7 +124,7 @@ func TestSchemaSubscribe(t *testing.T) {
 	interface Post {
 		id: ID!
 	}`
-	grp3NS1PreUpdateCounter := uint64(0) // this has to be 0 as namespace 1 was just created
+	grp3NS1PreUpdateCounter := uint64(0) // this has to be 0 as namespace was just created
 	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema, header)
 
 	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, grp3NS1PreUpdateCounter, header)
@@ -163,11 +163,14 @@ func TestSchemaSubscribe(t *testing.T) {
 	common.RequireNoGQLErrors(t, introspectionResult)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	common.DeleteNamespace(t, ns)
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	common.DeleteNamespace(t, ns, header)
 }
 
+// This test ensures that even though different namespaces have the same GraphQL schema, if their
+// data is different the same should be reflected in the GraphQL responses.
+// In a way, it also tests lazy-loading of GraphQL schema.
 func TestSchemaNamespaceWithData(t *testing.T) {
-	t.Skipf("need to check the reason of failure")
 	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
@@ -250,5 +253,5 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 	common.RequireNoGQLErrors(t, queryResult)
 	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
 
-	common.DeleteNamespace(t, ns)
+	common.DeleteNamespace(t, ns, header)
 }

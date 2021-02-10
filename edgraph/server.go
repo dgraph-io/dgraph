@@ -163,7 +163,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
 	ctx = x.AttachJWTNamespace(ctx)
 	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "Creating namespace, got error: ")
+		return errors.Wrapf(err, "Deleting namespace, got error: ")
 	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
@@ -453,9 +453,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
-		// TODO - Get GQLSchema for the correct namespace.
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
-		_, graphQLSchema, err := GetGQLSchema(x.ExtractNamespace(ctx))
+		_, graphQLSchema, err := GetGQLSchema(namespace)
 		if err != nil {
 			return empty, err
 		}

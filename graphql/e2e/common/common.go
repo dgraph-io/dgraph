@@ -278,6 +278,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 	if resp := retryProbeGraphQL(authority, header); resp != nil {
 		return resp
 	}
+	debug.PrintStack()
 	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
 	return nil
 }
@@ -297,32 +298,38 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
+	debug.PrintStack()
 	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
 func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	createNamespace := &GraphQLParams{
-		Query: `query {
-					getNewNamespace{
+		Query: `mutation {
+					addNamespace{
 						namespaceId
 					}
 				}`,
 		Headers: headers,
 	}
 
-	gqlResponse := createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	// retry a few times to avoid the error: `Predicate dgraph.xid is not indexed`
+	var gqlResponse *GraphQLResponse
+	for i := 0; i < 10 && (gqlResponse == nil || gqlResponse.Errors != nil); i++ {
+		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	}
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var resp struct {
-		GetNewNamespace struct {
+		AddNamespace struct {
 			NamespaceId uint64
 		}
 	}
 	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
-	return resp.GetNewNamespace.NamespaceId
+	require.Greater(t, resp.AddNamespace.NamespaceId, x.GalaxyNamespace)
+	return resp.AddNamespace.NamespaceId
 }
 
-func DeleteNamespace(t *testing.T, id uint64) {
+func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
 	deleteNamespace := &GraphQLParams{
 		Query: `mutation deleteNamespace($id:Int!){
 					deleteNamespace(input:{namespaceId:$id}){
@@ -330,6 +337,7 @@ func DeleteNamespace(t *testing.T, id uint64) {
 					}
 				}`,
 		Variables: map[string]interface{}{"id": id},
+		Headers:   header,
 	}
 
 	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
@@ -432,6 +440,7 @@ func AssertUpdateGQLSchemaSuccess(t *testing.T, authority, schema string,
 		}
 	}
 	if err := json.Unmarshal(updateResp.Data, &updateResult); err != nil {
+		debug.PrintStack()
 		t.Fatalf("failed to unmarshal updateGQLSchema response: %s", err.Error())
 	}
 	require.NotNil(t, updateResult.UpdateGQLSchema.GqlSchema)
@@ -1072,6 +1081,7 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
+	// TODO(jatin): uncomment this after CORS is fixed with multi-tenancy
 	// if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
 	// 	return nil, errors.Errorf("cors headers weren't set in response")
 	// }

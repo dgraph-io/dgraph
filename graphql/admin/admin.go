@@ -368,10 +368,12 @@ var (
 		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addNamespace":              {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteNamespace":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
-	//
+	// adminServerVar stores a pointer to the adminServer. It is used for lazy loading schema.
 	adminServerVar *adminServer
 )
 
@@ -557,7 +559,7 @@ func newAdminResolver(
 		server.incrementSchemaUpdateCounter(ns)
 		// if the schema hasn't been loaded yet, then we don't need to load it here
 		if !ok {
-			glog.Infof("Skipping GraphQL schema update as the schema hasn't been loaded yet.")
+			glog.Info("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
 			return
 		}
 		server.schema[ns] = newSchema
@@ -574,6 +576,7 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
+		"addNamespace":    resolveAddNamespace,
 		"backup":          resolveBackup,
 		"config":          resolveUpdateConfig,
 		"deleteNamespace": resolveDeleteNamespace,
@@ -598,9 +601,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
-		}).
-		WithQueryResolver("getNewNamespace", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveGetNewNamespace)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
@@ -881,7 +881,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
-	glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
+	glog.Infof("Successfully lazy-loaded GraphQL schema. Serving GraphQL API.")
 }
 
 func LazyLoadSchema(namespace uint64) {
