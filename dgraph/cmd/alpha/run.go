@@ -497,6 +497,10 @@ func setupServer(closer *z.Closer) {
 			healthStatus.StatusMsg, counter))))
 	})
 	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		if x.WorkerConfig.AclEnabled && r.Header.Get("X-Dgraph-AccessToken") == "" {
+			x.SetStatus(w, "X-Dgraph-AccessToken is mandatory", "Operation failed")
+			return
+		}
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
