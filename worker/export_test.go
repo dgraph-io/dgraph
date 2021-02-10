@@ -462,9 +462,9 @@ func TestToSchema(t *testing.T) {
 	}{
 		{
 			skv: &skv{
-				attr: "Alice",
+				attr: x.GalaxyAttr("Alice"),
 				schema: pb.SchemaUpdate{
-					Predicate: "mother",
+					Predicate: x.GalaxyAttr("mother"),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
@@ -473,13 +473,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
+			expected: "[0x0] <Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{
-				attr: "Alice:best",
+				attr: x.NamespaceAttr(0xf2, "Alice:best"),
 				schema: pb.SchemaUpdate{
-					Predicate: "mother",
+					Predicate: x.NamespaceAttr(0xf2, "mother"),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
@@ -488,13 +488,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<Alice:best>:string @reverse @lang . \n",
+			expected: "[0xf2] <Alice:best>:string @reverse @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "username/password",
+				attr: x.GalaxyAttr("username/password"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -503,13 +503,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      false,
 				},
 			},
-			expected: "<username/password>:string . \n",
+			expected: "[0x0] <username/password>:string . \n",
 		},
 		{
 			skv: &skv{
-				attr: "B*-tree",
+				attr: x.GalaxyAttr("B*-tree"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_UID,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      true,
@@ -518,13 +518,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      false,
 				},
 			},
-			expected: "<B*-tree>:[uid] @reverse . \n",
+			expected: "[0x0] <B*-tree>:[uid] @reverse . \n",
 		},
 		{
 			skv: &skv{
-				attr: "base_de_données",
+				attr: x.GalaxyAttr("base_de_données"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -533,13 +533,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<base_de_données>:string @lang . \n",
+			expected: "[0x0] <base_de_données>:string @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "data_base",
+				attr: x.GalaxyAttr("data_base"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -548,13 +548,13 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<data_base>:string @lang . \n",
+			expected: "[0x0] <data_base>:string @lang . \n",
 		},
 		{
 			skv: &skv{
-				attr: "data.base",
+				attr: x.GalaxyAttr("data.base"),
 				schema: pb.SchemaUpdate{
-					Predicate: "",
+					Predicate: x.GalaxyAttr(""),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_NONE,
 					List:      false,
@@ -563,7 +563,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "<data.base>:string @lang . \n",
+			expected: "[0x0] <data.base>:string @lang . \n",
 		},
 	}
 	for _, testCase := range testCases {
