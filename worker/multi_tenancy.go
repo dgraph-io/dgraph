@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -28,7 +28,7 @@ func (w *grpcWorker) DeleteNamespace(ctx context.Context,
 		return &emptyRes, errors.Errorf("The server doesn't serve group id: %v", req.GroupId)
 	}
 
-	if err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Delete: req}); err != nil {
+	if err := groups().Node.proposeAndWait(ctx, &pb.Proposal{DeleteNs: req}); err != nil {
 		return &emptyRes, errors.Wrapf(err, "Delete namespace error: ")
 	}
 	return &emptyRes, nil
