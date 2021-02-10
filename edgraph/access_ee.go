@@ -1043,6 +1043,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
+	ctx = x.AttachJWTNamespace(ctx)
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")

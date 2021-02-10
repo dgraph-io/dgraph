@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -52,9 +53,13 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	// TODO(Naman): Check if that namespace exist and the relevant permissions.
+	// For the request made from non-galaxy user, use the namespace from the context.
+	ns := x.ExtractNamespace(ctx)
+	if ns != x.GalaxyNamespace {
+		input.Namespace = ns
+	}
 
-	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
+	files, err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
 		Format:       format,
 		Namespace:    input.Namespace,
 		Destination:  input.Destination,
@@ -96,7 +101,6 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
 
-	// TODO(Naman): Get this from token.
 	// Export everything if namespace is not specified.
 	if v, ok := inputArg.(map[string]interface{}); ok {
 		if _, ok := v["namespace"]; !ok {

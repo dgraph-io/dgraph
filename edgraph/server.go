@@ -110,13 +110,7 @@ type existingGQLSchemaQryResp struct {
 }
 
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
-	ctx = x.AttachJWTNamespace(ctx)
 	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
-
-	// Namespace creation is only allowed by the guardians of the galaxy group.
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return 0, errors.Wrapf(err, "Creating namespace, got error:")
-	}
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
@@ -161,10 +155,6 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
 
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)
-	ctx = x.AttachJWTNamespace(ctx)
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "Deleting namespace, got error: ")
-	}
 	// TODO(Ahsan): We have to ban the pstore for all the groups.
 	ps := worker.State.Pstore
 	return ps.BanNamespace(namespace)
