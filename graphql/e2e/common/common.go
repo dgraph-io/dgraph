@@ -318,12 +318,13 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	var resp struct {
-		addNamespace struct {
+		AddNamespace struct {
 			NamespaceId uint64
 		}
 	}
 	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
-	return resp.addNamespace.NamespaceId
+	require.Greater(t, resp.AddNamespace.NamespaceId, x.GalaxyNamespace)
+	return resp.AddNamespace.NamespaceId
 }
 
 func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
