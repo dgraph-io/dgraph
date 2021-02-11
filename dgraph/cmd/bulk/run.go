@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -29,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/filestore"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -45,12 +48,14 @@ var defaultOutDir = "./out"
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
-		Short: "Run Dgraph bulk loader",
+		Short: "Run Dgraph Bulk Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
+	Bulk.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
@@ -207,7 +212,8 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+	}
+	if !filestore.Exists(opt.SchemaFile) {
 		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
 		os.Exit(1)
 	}
@@ -217,7 +223,7 @@ func run() {
 	} else {
 		fileList := strings.Split(opt.DataFiles, ",")
 		for _, file := range fileList {
-			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+			if !filestore.Exists(file) {
 				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
 				os.Exit(1)
 			}
@@ -298,9 +304,42 @@ func run() {
 	defer os.RemoveAll(bufDir)
 
 	loader := newLoader(&opt)
-	if !opt.SkipMapPhase {
+
+	const bulkMetaFilename = "bulk.meta"
+	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
+
+	if opt.SkipMapPhase {
+		bulkMetaData, err := ioutil.ReadFile(bulkMetaPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading from bulk meta file")
+			os.Exit(1)
+		}
+
+		var bulkMeta pb.BulkMeta
+		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
+			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
+			os.Exit(1)
+		}
+
+		loader.prog.mapEdgeCount = bulkMeta.EdgeCount
+		loader.schema.schemaMap = bulkMeta.SchemaMap
+	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+
+		bulkMeta := pb.BulkMeta{
+			EdgeCount: loader.prog.mapEdgeCount,
+			SchemaMap: loader.schema.schemaMap,
+		}
+		bulkMetaData, err := bulkMeta.Marshal()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
+			os.Exit(1)
+		}
+		if err = ioutil.WriteFile(bulkMetaPath, bulkMetaData, 0644); err != nil {
+			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
+			os.Exit(1)
+		}
 	}
 	loader.reduceStage()
 	loader.writeSchema()

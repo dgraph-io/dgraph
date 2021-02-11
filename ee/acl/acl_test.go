@@ -166,6 +166,7 @@ func TestInvalidGetUser(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
 			" contains an invalid number of segments",
+		Path: []interface{}{"getCurrentUser"},
 	}}, currentUser.Errors)
 }
 
@@ -196,7 +197,7 @@ func TestPasswordReturn(t *testing.T) {
 
 func TestGetCurrentUser(t *testing.T) {
 	token := testutil.GrootHttpLogin(adminEndpoint)
-	
+
 	currentUser := getCurrentUser(t, token)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
@@ -228,10 +229,9 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	// adding the user again should fail
 	token := testutil.GrootHttpLogin(adminEndpoint)
 	resp := createUser(t, token, userid, userpassword)
-	require.Equal(t, x.GqlErrorList{{
-		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
-			" for type User",
-	}}, resp.Errors)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
+		" alice already exists for type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
@@ -2299,6 +2299,14 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.cors"
+        }
+      ],
+      "name": "dgraph.type.cors"
     }
   ]
 }`
@@ -2337,6 +2345,10 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.type.User"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.cors"
     }
   ]
 }`

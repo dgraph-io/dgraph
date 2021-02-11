@@ -16,7 +16,9 @@
 
 package x
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/spf13/pflag"
+)
 
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {

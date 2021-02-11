@@ -35,10 +35,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	bo "github.com/dgraph-io/badger/v2/options"
-	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -132,7 +132,6 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
-		WithValueThreshold(1 << 20 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
 		WithIndexCacheSize(r.opt.IndexCacheSize)
@@ -292,7 +291,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 		}
 
 		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
-			// Flush the write batch when the max batch length is reached to prevent the
+			// flush the write batch when the max batch length is reached to prevent the
 			// value log from growing over the allowed limit.
 			if splitBatchLen >= maxSplitBatchLen {
 				x.Check(ci.splitWriter.Flush())
@@ -569,6 +568,12 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
+	alloc := z.NewAllocator(16 << 20)
+	defer func() {
+		// We put alloc.Release in defer because we reassign alloc for split posting lists.
+		alloc.Release()
+	}()
+
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
@@ -595,7 +600,8 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		enc := codec.Encoder{BlockSize: 256}
+		alloc.Reset()
+		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -629,7 +635,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		if numUids == 0 {
-			codec.FreePack(pl.Pack)
+			// No need to FrePack here because we are reusing alloc.
 			return
 		}
 
@@ -657,6 +663,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
+			// Assign a new allocator, so we don't reset the one we were using during Rollup.
+			alloc = z.NewAllocator(16 << 20)
+
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
@@ -666,7 +675,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		} else {
 			kv := posting.MarshalPostingList(pl, nil)
-			codec.FreePack(pl.Pack)
+			// No need to FreePack here, because we are reusing alloc.
 
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs

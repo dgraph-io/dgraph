@@ -249,6 +249,7 @@ directive @generate(
 
 input IntFilter {
 	eq: Int
+	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -258,6 +259,7 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
+	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -267,6 +269,7 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
+	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -276,6 +279,7 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
+	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
@@ -533,7 +537,7 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: CharacterHasFilter
+	has: [CharacterHasFilter]
 	and: [CharacterFilter]
 	or: [CharacterFilter]
 	not: CharacterFilter
@@ -560,7 +564,7 @@ input DroidFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: DroidHasFilter
+	has: [DroidHasFilter]
 	and: [DroidFilter]
 	or: [DroidFilter]
 	not: DroidFilter
@@ -598,7 +602,7 @@ input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: HumanHasFilter
+	has: [HumanHasFilter]
 	and: [HumanFilter]
 	or: [HumanFilter]
 	not: HumanFilter
@@ -631,7 +635,7 @@ input HumanRef {
 
 input PlanetFilter {
 	id: [ID!]
-	has: PlanetHasFilter
+	has: [PlanetHasFilter]
 	and: [PlanetFilter]
 	or: [PlanetFilter]
 	not: PlanetFilter
@@ -670,7 +674,7 @@ input ResidentRef {
 input StarshipFilter {
 	id: [ID!]
 	name: StringTermFilter
-	has: StarshipHasFilter
+	has: [StarshipHasFilter]
 	and: [StarshipFilter]
 	or: [StarshipFilter]
 	not: StarshipFilter

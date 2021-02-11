@@ -98,9 +98,11 @@ setup_systemd_zero() {
   WAL=/var/lib/dgraph/zw
   IDX=$(( $(grep -o '[0-9]' <<< $HOSTNAME) + 1 ))
   if [[ $TYPE == "leader" ]]; then
-    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --wal $WAL --idx=$IDX --replicas $REPLICAS'"
+    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --wal $WAL
+    --raft="idx=$IDX" --replicas $REPLICAS'"
   else
-    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --peer $LDR --wal $WAL --idx=$IDX --replicas $REPLICAS'"
+    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --peer $LDR --wal $WAL
+    --raft="idx=$IDX" --replicas $REPLICAS'"
   fi
 
   mkdir -p /var/{log/dgraph,lib/dgraph/zw}

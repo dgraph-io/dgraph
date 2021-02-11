@@ -18,15 +18,18 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,7 +41,7 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	if req == nil {
 		return errors.Errorf("restore request cannot be nil")
 	}
@@ -53,7 +56,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		currentGroups = append(currentGroups, gid)
 	}
 
-	creds := Credentials{
+	creds := x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -95,7 +98,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-
+		wg.Add(1)
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
@@ -106,6 +109,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 			if err := <-errCh; err != nil {
 				glog.Errorf("Error while restoring %v", err)
 			}
+			wg.Done()
 		}
 	}()
 
@@ -206,7 +210,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// backup could be in a different group. The tablets need to be moved.
 
 	// Reset tablets and set correct tablets to match the restored backup.
-	creds := &Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -257,7 +261,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
-	if err := groups().Node.proposeSnapshot(1); err != nil {
+	if err := groups().Node.proposeSnapshot(); err != nil {
 		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
 	}
 
@@ -298,8 +302,8 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	return config, nil
 }
 
-func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
-	return &Credentials{
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -351,7 +355,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 					"cannot update uid lease due to no connection to zero leader")
 			}
 			zc := pb.NewZeroClient(pl.Get())
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid}); err != nil {
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: maxUid, Type: pb.Num_UID}); err != nil {
 				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
 

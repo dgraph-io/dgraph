@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -73,7 +73,6 @@ type flagOptions struct {
 	wdir           string
 	wtruncateUntil uint64
 	wsetSnapshot   string
-	oldWalFormat   bool
 }
 
 func init() {
@@ -83,7 +82,9 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
+	Debug.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
@@ -102,8 +103,6 @@ func init() {
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
-	flag.BoolVar(&opt.oldWalFormat, "old-wal", false,
-		"Denotes that the directory pointed by --wal is a wal directory in old format.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
@@ -856,8 +855,10 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 		fmt.Fprintf(buf, " Member: %+v .", zpr.Member)
 	case zpr.Tablet != nil:
 		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
-	case zpr.MaxLeaseId > 0:
-		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxLeaseId)
+	case zpr.MaxUID > 0:
+		fmt.Fprintf(buf, " MaxUID: %d .", zpr.MaxUID)
+	case zpr.MaxNsID > 0:
+		fmt.Fprintf(buf, " MaxNsID: %d .", zpr.MaxNsID)
 	case zpr.MaxRaftId > 0:
 		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
 	case zpr.MaxTxnTs > 0:
@@ -893,6 +894,15 @@ func run() {
 		return
 	}
 
+	if isWal {
+		store, err := raftwal.InitEncrypted(dir, opt.key)
+		x.Check(err)
+		if err := handleWal(store); err != nil {
+			fmt.Printf("\nGot error while handling WAL: %v\n", err)
+		}
+		return
+	}
+
 	bopts := badger.DefaultOptions(dir).
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key).
@@ -902,44 +912,11 @@ func run() {
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
-	// If this is a new format WAL, print and return.
-	if isWal && !opt.oldWalFormat {
-		store, err := raftwal.InitEncrypted(dir, opt.key)
-		x.Check(err)
-		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
-		isZero := store.Uint(raftwal.GroupId) == 0
-
-		// TODO: Fix the pending logic.
-		pending := make(map[uint64]bool)
-
-		start, last := printBasic(store)
-		for start < last-1 {
-			entries, err := store.Entries(start, last+1, 64<<20)
-			x.Check(err)
-			for _, e := range entries {
-				printEntry(e, pending, isZero)
-				start = x.Max(start, e.Index)
-			}
-		}
-		fmt.Println("Done")
-		return
-	}
-
 	db, err := badger.OpenManaged(bopts)
 	x.Check(err)
 	// Not using posting list cache
 	posting.Init(db, 0)
 	defer db.Close()
-
-	if isWal {
-		if err := handleWal(db); err != nil {
-			fmt.Printf("\nGot error while handling WAL: %v\n", err)
-		}
-		fmt.Println("Done")
-		// WAL can't execute the getMinMax function, so we need to deal with it
-		// here, instead of in the select case below.
-		return
-	}
 
 	// Commenting the following out because on large Badger DBs, this can take a LONG time.
 	// min, max := getMinMax(db, opt.readTs)

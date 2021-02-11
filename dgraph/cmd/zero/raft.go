@@ -27,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -39,7 +38,12 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
+
+var raftDefault = "idx=1; learner=false"
 
 type node struct {
 	*conn.Node
@@ -119,7 +123,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		// unique key is randomly generated key and could have collision.
+		// This is to ensure that even if collision occurs, we retry.
+		for !n.Proposals.Store(key, pctx) {
+			glog.Warningf("Found existing proposal with key: [%v]", key)
+			key = n.uniqueKey()
+		}
 		defer n.Proposals.Delete(key)
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
@@ -210,7 +219,16 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
-	if !has && len(group.Members) >= n.server.NumReplicas {
+	var numReplicas int
+	for _, gm := range group.Members {
+		if !gm.Learner {
+			numReplicas++
+		}
+	}
+	switch {
+	case has || member.GetLearner():
+		// pass
+	case numReplicas >= n.server.NumReplicas:
 		// We shouldn't allow more members than the number of replicas.
 		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
@@ -220,8 +238,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
-	if member.GroupId == n.server.nextGroup &&
-		len(group.Members) >= n.server.NumReplicas {
+	if member.GroupId == n.server.nextGroup && numReplicas >= n.server.NumReplicas {
 		n.server.nextGroup++
 	}
 	if member.Leader {
@@ -311,9 +328,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	// We are storing only the MembershipState in the meta file. The other 2 fields of ZeroSnapshot;
-	// Index and CheckpointTs need not be persisted as they are used only for in-memory operations.
-	data, err := snap.GetState().Marshal()
+	data, err := snap.Marshal()
 	x.Check(err)
 
 	for {
@@ -390,6 +405,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
+			}
+		}
 	}
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {
@@ -398,15 +418,18 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 	}
 
 	switch {
-	case p.MaxLeaseId > state.MaxLeaseId:
-		state.MaxLeaseId = p.MaxLeaseId
+	case p.MaxUID > state.MaxUID:
+		state.MaxUID = p.MaxUID
 	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	case p.MaxLeaseId != 0 || p.MaxTxnTs != 0:
+	case p.MaxNsID > state.MaxNsID:
+		state.MaxNsID = p.MaxNsID
+	case p.MaxUID != 0 || p.MaxTxnTs != 0 || p.MaxNsID != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
-		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
-			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
+		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID=%d\n",
+			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
@@ -433,7 +456,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
@@ -545,11 +573,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var ms pb.MembershipState
-			x.Check(ms.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&ms)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, ms.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
@@ -791,6 +819,12 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -843,6 +877,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
@@ -864,9 +914,9 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {

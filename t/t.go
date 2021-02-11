@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -84,6 +83,9 @@ var (
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
 	race = pflag.Bool("race", false, "Set true to build with race")
+	skip = pflag.String("skip", "",
+		"comma separated list of packages that needs to be skipped. "+
+			"Package Check uses string.Contains(). Please check the flag carefully")
 )
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
@@ -109,13 +111,13 @@ func startCluster(composeFile, prefix string) error {
 		"up", "--force-recreate", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
-	fmt.Printf("Bringing up cluster %s...\n", prefix)
+	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
 			strings.Join(cmd.Args, " "), err)
 		return err
 	}
-	fmt.Printf("CLUSTER UP: %s\n", prefix)
+	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
 
 	// Wait for cluster to be healthy.
 	for i := 1; i <= 3; i++ {
@@ -211,7 +213,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 
 func hasTestFiles(pkg string) bool {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	dir = path.Join(*baseDir, dir)
+	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -245,7 +247,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		closer.Done()
 	}()
 
-	defaultCompose := path.Join(*baseDir, "dgraph/docker-compose.yml")
+	defaultCompose := filepath.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getClusterPrefix()
 
 	var started, stopped bool
@@ -350,7 +352,7 @@ func findPackagesFor(testName string) []string {
 	for scan.Scan() {
 		fname := scan.Text()
 		if strings.HasSuffix(fname, "_test.go") {
-			dir := strings.Replace(path.Dir(fname), *baseDir, "", 1)
+			dir := strings.Replace(filepath.Dir(fname), *baseDir, "", 1)
 			dirs = append(dirs, dir)
 		}
 	}
@@ -421,13 +423,13 @@ type task struct {
 
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
-	return path.Join(*baseDir, dir, "docker-compose.yml")
+	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
 func getPackages() []task {
 	has := func(list []string, in string) bool {
 		for _, l := range list {
-			if strings.Contains(in, l) {
+			if len(l) > 0 && strings.Contains(in, l) {
 				return true
 			}
 		}
@@ -435,6 +437,8 @@ func getPackages() []task {
 	}
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	skipPkgs := strings.Split(*skip, ",")
+
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
 		left := 0
@@ -481,7 +485,12 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			continue
+		}
+
+		if has(skipPkgs, pkg.ID) {
+			fmt.Printf("Skipping package %s as its available in skip list \n", pkg.ID)
 			continue
 		}
 
@@ -612,7 +621,7 @@ func downloadDataFiles() {
 }
 
 func executePreRunSteps() error {
-	testutil.GeneratePlugins()
+	testutil.GeneratePlugins(*race)
 	return nil
 }
 

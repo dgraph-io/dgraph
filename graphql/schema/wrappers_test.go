@@ -83,7 +83,7 @@ type Starship {
         length: Float
 }`
 
-	schHandler, errs := NewHandler(schemaStr, false)
+	schHandler, errs := NewHandler(schemaStr, false, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 			length: Float
 	}`
 
-	schHandler, errs := NewHandler(schemaStr, false)
+	schHandler, errs := NewHandler(schemaStr, false, false)
 	require.NoError(t, errs)
 	sch, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
@@ -582,14 +582,7 @@ func TestSubstituteVarsInBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			var templatePtr *interface{}
-			if test.template == nil {
-				templatePtr = nil
-			} else {
-				templatePtr = &test.template
-			}
-			SubstituteVarsInBody(templatePtr, test.variables)
-			require.Equal(t, test.expected, test.template)
+			require.Equal(t, test.expected, SubstituteVarsInBody(test.template, test.variables))
 		})
 	}
 }
@@ -745,7 +738,7 @@ func TestParseBodyTemplate(t *testing.T) {
 				if b == nil {
 					require.Nil(t, test.expected)
 				} else {
-					require.Equal(t, test.expected, *b)
+					require.Equal(t, test.expected, b)
 				}
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
@@ -779,7 +772,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute query params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies?id=$ids&name=$names&check=$check",
 			"http://myapi.com/favMovies?check=1&check=3.14&check=test&id=1&id=2&name=M1&name=M2",
@@ -824,7 +817,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute path params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies/$ids/$names/$check",
 			"http://myapi.com/favMovies/1%2C2/M1%2CM2/1%2C3.14%2Ctest",
@@ -921,7 +914,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			schHandler, errs := NewHandler(tcase.GQLSchema, false)
+			schHandler, errs := NewHandler(tcase.GQLSchema, false, false)
 			require.NoError(t, errs)
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -961,13 +954,13 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
-			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false, false)
 			require.NoError(t, errs)
 			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
 			require.NoError(t, err)
 
 			// Validate the generated query against the remote schema.
-			tmpl, ok := (*c.Template).(map[string]interface{})
+			tmpl, ok := (c.Template).(map[string]interface{})
 			require.True(t, ok)
 
 			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
@@ -1021,7 +1014,7 @@ func TestAllowedHeadersList(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			schHandler, errs := NewHandler(test.schemaStr, false)
+			schHandler, errs := NewHandler(test.schemaStr, false, false)
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
@@ -1104,7 +1097,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewHandler(test.schemaStr, false)
+			_, err := NewHandler(test.schemaStr, false, false)
 			require.EqualError(t, err, test.err.Error())
 		})
 	}

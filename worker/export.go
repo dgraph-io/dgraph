@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,8 +35,8 @@ import (
 	"github.com/minio/minio-go/v6"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -405,14 +404,14 @@ type localExportStorage struct {
 
 // remoteExportStorage uses localExportStorage to write files, then uploads to minio
 type remoteExportStorage struct {
-	mc     *minio.Client
+	mc     *x.MinioClient
 	bucket string
 	prefix string // stores the path within the bucket.
 	les    *localExportStorage
 }
 
 func newLocalExportStorage(destination, backupName string) (*localExportStorage, error) {
-	bdir, err := filepath.Abs(path.Join(destination, backupName))
+	bdir, err := filepath.Abs(filepath.Join(destination, backupName))
 	if err != nil {
 		return nil, err
 	}
@@ -425,9 +424,9 @@ func newLocalExportStorage(destination, backupName string) (*localExportStorage,
 }
 
 func (l *localExportStorage) openFile(fileName string) (*fileWriter, error) {
-	fw := &fileWriter{relativePath: path.Join(l.relativePath, fileName)}
+	fw := &fileWriter{relativePath: filepath.Join(l.relativePath, fileName)}
 
-	filePath, err := filepath.Abs(path.Join(l.destination, fw.relativePath))
+	filePath, err := filepath.Abs(filepath.Join(l.destination, fw.relativePath))
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +469,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	mc, err := newMinioClient(uri, &Credentials{
+	mc, err := x.NewMinioClient(uri, &x.MinioCredentials{
 		AccessKey:    in.AccessKey,
 		SecretKey:    in.SecretKey,
 		SessionToken: in.SessionToken,
@@ -480,7 +479,7 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 		return nil, err
 	}
 
-	bucket, prefix, err := validateBucket(mc, uri)
+	bucket, prefix, err := mc.ValidateBucket(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +504,7 @@ func (r *remoteExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, e
 		} else {
 			d = r.prefix + "/" + f
 		}
-		filePath := path.Join(r.les.destination, f)
+		filePath := filepath.Join(r.les.destination, f)
 		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
 		glog.Infof("Uploading from %s to %s\n", filePath, d)
 		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{

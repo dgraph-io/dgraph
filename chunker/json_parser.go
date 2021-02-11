@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	simdjson "github.com/dgraph-io/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -82,6 +83,14 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 			jsonValue = jsonInt
 			valueType = api.Facet_INT
 		}
+	// these int64/float64 cases are needed for the FastParseJSON simdjson
+	// parser, which doesn't use json.Number
+	case int64:
+		jsonValue = v
+		valueType = api.Facet_INT
+	case float64:
+		jsonValue = v
+		valueType = api.Facet_FLOAT
 	case bool:
 		jsonValue = v
 		valueType = api.Facet_BOOL
@@ -200,6 +209,14 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return err
 		}
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
+
+	// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+	case int64:
+		if v == 0 && op == DeleteNquads {
+			nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
+			return nil
+		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
 
 	case string:
 		// Default value is considered as S P * deletion.
@@ -399,9 +416,13 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			uid = uint64(ui)
 
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+		case int64:
+			uid = uint64(uidVal)
+
 		case string:
 			s := stripSpaces(uidVal)
-			if len(uidVal) == 0 {
+			if uidVal == "" {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
@@ -418,7 +439,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	if len(mr.uid) == 0 {
+	if mr.uid == "" {
 		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
@@ -473,6 +494,13 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
 		switch v := v.(type) {
+		// these int64/float64 cases are needed for FastParseJSON, which doesn't use json.Number
+		case int64, float64:
+			if err := handleBasicType(pred, v, op, &nq); err != nil {
+				return mr, err
+			}
+			buf.Push(&nq)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
@@ -520,7 +548,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				}
 
 				switch iv := item.(type) {
-				case string, float64, json.Number:
+				case string, float64, json.Number, int64:
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
@@ -595,6 +623,87 @@ const (
 	DeleteNquads
 )
 
+// FastParseJSON currently parses NQuads about 30% faster than ParseJSON.
+//
+// This function is very similar to buf.ParseJSON, but we just replace encoding/json with
+// simdjson-go.
+func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
+	if !simdjson.SupportedCPU() {
+		// default to slower / old parser
+		return buf.ParseJSON(b, op)
+	}
+	// parse the json into tape format
+	tape, err := simdjson.Parse(b, nil)
+	if err != nil {
+		return err
+	}
+
+	// we only need the iter to get the first element, either an array or object
+	iter := tape.Iter()
+
+	tmp := &simdjson.Iter{}
+
+	// if root object, this will be filled
+	obj := &simdjson.Object{}
+	// if root array, this will be filled
+	arr := &simdjson.Array{}
+
+	// grab the first element
+	typ := iter.Advance()
+	switch typ {
+	case simdjson.TypeRoot:
+		if typ, tmp, err = iter.Root(tmp); err != nil {
+			return err
+		}
+		if typ == simdjson.TypeObject {
+			// the root element is an object, so parse the object
+			if obj, err = tmp.Object(obj); err != nil {
+				return err
+			}
+			// attempt to convert to map[string]interface{}
+			m, err := obj.Map(nil)
+			if err != nil {
+				return err
+			}
+			// pass to next parsing stage
+			mr, err := buf.mapToNquads(m, op, "")
+			if err != nil {
+				return err
+			}
+			buf.checkForDeletion(mr, m, op)
+		} else if typ == simdjson.TypeArray {
+			// the root element is an array, so parse the array
+			if arr, err = tmp.Array(arr); err != nil {
+				return err
+			}
+			// attempt to convert to []interface{}
+			a, err := arr.Interface()
+			if err != nil {
+				return err
+			}
+			if len(a) > 0 {
+				// attempt to convert each array element to a
+				// map[string]interface{} for further parsing
+				var o interface{}
+				for _, o = range a {
+					if _, ok := o.(map[string]interface{}); !ok {
+						return errors.Errorf("only array of map allowed at root")
+					}
+					// pass to next parsing stage
+					mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+					if err != nil {
+						return err
+					}
+					buf.checkForDeletion(mr, o.(map[string]interface{}), op)
+				}
+			}
+		}
+	default:
+		return errors.Errorf("initial element not found in json")
+	}
+	return nil
+}
+
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
@@ -638,7 +747,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 // to high memory usage. So be careful using this.
 func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	err := buf.ParseJSON(b, op)
+	err := buf.FastParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -990,11 +990,6 @@ func evalLevelAgg(
 		// The aggregated value doesn't really belong to a uid, we put it in UidToVal map
 		// corresponding to uid 0 to avoid defining another field in SubGraph.
 		vals := doneVars[needsVar].Vals
-		if len(vals) == 0 {
-			mp = make(map[uint64]types.Val)
-			mp[0] = types.Val{Tid: types.FloatID, Value: 0.0}
-			return mp, nil
-		}
 
 		ag := aggregator{
 			name: sg.SrcFunc.Name,
@@ -1724,7 +1719,13 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if err := sg.replaceVarInFunc(); err != nil {
 		return err
 	}
-	lists = append(lists, sg.DestUIDs)
+
+	if len(sg.DestUIDs.GetUids()) > 0 {
+		// Don't add sg.DestUIDs in case its size is 0.
+		// This is to avoiding adding nil (empty element) to lists.
+		lists = append(lists, sg.DestUIDs)
+	}
+
 	sg.DestUIDs = algo.MergeSorted(lists)
 	return nil
 }

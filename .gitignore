@@ -33,3 +33,4 @@ dgraph.iml
 .DS_Store
 
 vendor
+.minio.sys
