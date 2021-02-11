@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -61,8 +60,10 @@ type AuthQueryRewritingCase struct {
 	Length string
 
 	// UIDS and json from the Dgraph result
-	Uids string
-	Json string
+	Uids        string
+	Json        string
+	QueryJSON   string
+	DeleteQuery string
 
 	// Post-mutation auth query and result Dgraph returns from that query
 	AuthQuery string
@@ -76,14 +77,18 @@ type AuthQueryRewritingCase struct {
 }
 
 type authExecutor struct {
-	t      *testing.T
-	state  int
-	length int
+	t     *testing.T
+	state int
+
+	// existence query and its result in JSON
+	dgQuery         string
+	queryResultJSON string
 
 	// initial mutation
-	upsertQuery []string
-	json        string
-	uids        string
+	dgQuerySec string
+	// json is the response of the query following the mutation
+	json string
+	uids string
 
 	// auth
 	authQuery string
@@ -95,32 +100,39 @@ type authExecutor struct {
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 	field schema.Field) (*dgoapi.Response, error) {
 	ex.state++
+	// Existence Query is not executed if it is empty. Increment the state value.
+	if ex.dgQuery == "" && ex.state == 1 {
+		ex.state++
+	}
 	switch ex.state {
 	case 1:
-		// initial mutation
-		ex.length -= 1
+		// existence query.
+		require.Equal(ex.t, ex.dgQuery, req.Query)
 
-		// check that the upsert has built in auth, if required
-		require.Equal(ex.t, ex.upsertQuery[ex.length], req.Query)
+		// Return mocked result of existence query.
+		return &dgoapi.Response{
+			Json: []byte(ex.queryResultJSON),
+		}, nil
 
+	case 2:
+		// mutation to create new nodes
 		var assigned map[string]string
 		if ex.uids != "" {
 			err := json.Unmarshal([]byte(ex.uids), &assigned)
 			require.NoError(ex.t, err)
 		}
 
+		// Check query generated along with mutation.
+		require.Equal(ex.t, ex.dgQuerySec, req.Query)
+
 		if len(assigned) == 0 {
-			// skip state 2, there's no new nodes to apply auth to
+			// skip state 3, there's no new nodes to apply auth to
 			ex.state++
 		}
 
-		// For rules that don't require auth, it should directly go to step 3.
+		// For rules that don't require auth, it should directly go to step 4.
 		if ex.skipAuth {
 			ex.state++
-		}
-
-		if ex.length != 0 {
-			ex.state = 0
 		}
 
 		return &dgoapi.Response{
@@ -129,7 +141,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
 		}, nil
 
-	case 2:
+	case 3:
 		// auth
 
 		// check that we got the expected auth query
@@ -141,7 +153,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
 		}, nil
 
-	case 3:
+	case 4:
 		// final result
 
 		return &dgoapi.Response{
@@ -167,9 +179,15 @@ func TestStringCustomClaim(t *testing.T) {
 	test.LoadSchemaFromString(t, string(authSchema))
 	testutil.SetAuthMeta(string(authSchema))
 
-	// Token with string custom claim
-	// "https://xyz.io/jwt/claims": "{\"USER\": \"50950b40-262f-4b26-88a7-cbbb780b2176\", \"ROLE\": \"ADMIN\"}",
-	token := "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImF1ZCI6IjYzZG8wcTE2bjZlYmpna3VtdTA1a2tlaWFuIiwiZXZlbnRfaWQiOiIzMWM5ZDY4NC0xZDQ1LTQ2ZjctOGMyYi1jYzI3YjFmNmYwMWIiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTU5MDMzMzM1NiwibmFtZSI6IkRhdmlkIFBlZWsiLCJleHAiOjQ1OTAzNzYwMzIsImlhdCI6MTU5MDM3MjQzMiwiZW1haWwiOiJkYXZpZEB0eXBlam9pbi5jb20ifQ.g6rAkPdNIJ6wvXOo6F4XmoVqqbGs_CdUHx_k7NrvLY8"
+	// Token with custom claim:
+	// "https://xyz.io/jwt/claims": {
+	// 	"USERNAME": "Random User",
+	// 	"email": "random@dgraph.io"
+	//   }
+	//
+	// It also contains standard claim :  "email": "test@dgraph.io", but the
+	// value of "email" gets overwritten by the value present inside custom claim.
+	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjM1MTYyMzkwMjIsImVtYWlsIjoidGVzdEBkZ3JhcGguaW8iLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjp7IlVTRVJOQU1FIjoiUmFuZG9tIFVzZXIiLCJlbWFpbCI6InJhbmRvbUBkZ3JhcGguaW8ifX0.6XvP9wlvHx8ZBBMH9iyy49cRiIk7H6NNoZf69USkg2c"
 	md := metadata.New(map[string]string{"authorizationJwt": token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
@@ -177,9 +195,13 @@ func TestStringCustomClaim(t *testing.T) {
 	require.NoError(t, err)
 	authVar := customClaims.AuthVariables
 	result := map[string]interface{}{
-		"ROLE": "ADMIN",
-		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
+		"sub":      "1234567890",
+		"name":     "John Doe",
+		"USERNAME": "Random User",
+		"email":    "random@dgraph.io",
 	}
+	delete(authVar, "exp")
+	delete(authVar, "iat")
 	require.Equal(t, authVar, result)
 	// reset auth meta, so that it won't effect other tests
 	authorization.SetAuthMeta(&authorization.AuthMeta{})
@@ -232,18 +254,8 @@ func TestAudienceClaim(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			_, err := authorization.ExtractCustomClaims(ctx)
 			require.Equal(t, tcase.err, err)
-			if err != nil {
-				return
-			}
-
-			authVar := customClaims.AuthVariables
-			result := map[string]interface{}{
-				"ROLE": "ADMIN",
-				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
-			}
-			require.Equal(t, authVar, result)
 		})
 	}
 	// reset auth meta, so that it won't effect other tests
@@ -340,18 +352,10 @@ func TestJWTExpiry(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			_, err := authorization.ExtractCustomClaims(ctx)
 			if tcase.invalid {
 				require.True(t, strings.Contains(err.Error(), "token is expired"))
-				return
 			}
-
-			authVar := customClaims.AuthVariables
-			result := map[string]interface{}{
-				"ROLE": "ADMIN",
-				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
-			}
-			require.Equal(t, authVar, result)
 		})
 	}
 
@@ -411,11 +415,12 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 // Tests that the queries that run after a mutation get auth correctly added in.
 func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	tests := map[string]struct {
-		gqlMut   string
-		rewriter func() MutationRewriter
-		assigned map[string]string
-		result   map[string]interface{}
-		dgQuery  string
+		gqlMut      string
+		rewriter    func() MutationRewriter
+		assigned    map[string]string
+		idExistence map[string]string
+		result      map[string]interface{}
+		dgQuery     string
 	}{
 		"Add Ticket": {
 			gqlMut: `mutation {
@@ -430,8 +435,9 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 				  }
 				}
 			  }`,
-			rewriter: NewAddRewriter,
-			assigned: map[string]string{"Ticket1": "0x4"},
+			rewriter:    NewAddRewriter,
+			assigned:    map[string]string{"Ticket2": "0x4"},
+			idExistence: map[string]string{"Column1": "0x1"},
 			dgQuery: `query {
   AddTicketPayload.ticket(func: uid(TicketRoot)) {
     Ticket.id : uid
@@ -478,7 +484,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 					  }
 				}
 			  }`,
-			rewriter: NewUpdateRewriter,
+			rewriter:    NewUpdateRewriter,
+			idExistence: map[string]string{},
 			result: map[string]interface{}{
 				"updateTicket": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 			dgQuery: `query {
@@ -532,7 +539,8 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
-			_, err = rewriter.Rewrite(ctx, gqlMutation)
+			_, _ = rewriter.RewriteQueries(context.Background(), gqlMutation)
+			_, err = rewriter.Rewrite(ctx, gqlMutation, tt.idExistence)
 			require.Nil(t, err)
 
 			// -- Act --
@@ -606,7 +614,9 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta,
 			}
 
 			// -- Act --
-			upsert, err := rewriterToTest.Rewrite(ctx, mut)
+			_, _ = rewriterToTest.RewriteQueries(context.Background(), mut)
+			idExistence := make(map[string]string)
+			upsert, err := rewriterToTest.Rewrite(ctx, mut, idExistence)
 
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
@@ -713,26 +723,16 @@ func checkAddUpdateCase(
 		require.NoError(t, err)
 	}
 
-	length := 1
-	upsertQuery := []string{tcase.DGQuery}
-
-	if tcase.Length != "" {
-		length, _ = strconv.Atoi(tcase.Length)
-	}
-
-	if length == 2 {
-		upsertQuery = []string{tcase.DGQuerySec, tcase.DGQuery}
-	}
-
 	ex := &authExecutor{
-		t:           t,
-		upsertQuery: upsertQuery,
-		json:        tcase.Json,
-		uids:        tcase.Uids,
-		authQuery:   tcase.AuthQuery,
-		authJson:    tcase.AuthJson,
-		skipAuth:    tcase.SkipAuth,
-		length:      length,
+		t:               t,
+		json:            tcase.Json,
+		queryResultJSON: tcase.QueryJSON,
+		dgQuerySec:      tcase.DGQuerySec,
+		uids:            tcase.Uids,
+		dgQuery:         tcase.DGQuery,
+		authQuery:       tcase.AuthQuery,
+		authJson:        tcase.AuthJson,
+		skipAuth:        tcase.SkipAuth,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex)
 
@@ -777,12 +777,10 @@ func TestAuthQueryRewriting(t *testing.T) {
 		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
 			mutationQueryRewriting(t, strSchema, metaInfo)
 		})
-
 		b = read(t, "auth_add_test.yaml")
 		t.Run("Add Mutation "+algo, func(t *testing.T) {
 			mutationAdd(t, strSchema, metaInfo, b)
 		})
-
 		b = read(t, "auth_update_test.yaml")
 		t.Run("Update Mutation "+algo, func(t *testing.T) {
 			mutationUpdate(t, strSchema, metaInfo, b)

@@ -626,7 +626,7 @@ func run() error {
 		zero = Live.Conf.GetString("zero")
 	}
 
-	creds := x.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
 	var err error
 	x.PrintVersion()

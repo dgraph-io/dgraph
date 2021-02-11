@@ -231,11 +231,9 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	// adding the user again should fail
 	token := testutil.GrootHttpLogin(adminEndpoint)
 	resp := createUser(t, token, userid, userpassword)
-	require.Equal(t, x.GqlErrorList{{
-		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
-			" for type User",
-		Path: []interface{}{"addUser"},
-	}}, resp.Errors)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
+		" alice already exists for type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user

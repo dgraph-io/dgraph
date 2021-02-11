@@ -319,7 +319,12 @@ message Proposal {
 	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
 	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
 	RestoreRequest restore 		= 12;
-	DeleteNsRequest delete_ns = 13; // Used to delete namespace.
+	CDCState cdc_state 				= 13;
+	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+}
+
+message CDCState {
+	uint64 sent_ts    = 1;
 }
 
 message KVS {
@@ -567,7 +572,7 @@ service Worker {
 
 message SubscriptionRequest {
 	repeated bytes prefixes = 1;
-	string ignore = 2;
+	repeated badgerpb3.Match matches = 2;
 }
 
 message SubscriptionResponse {

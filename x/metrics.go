@@ -59,6 +59,15 @@ var (
 	// NumEdges is the total number of edges created so far.
 	NumEdges = stats.Int64("num_edges_total",
 		"Total number of edges created", stats.UnitDimensionless)
+	// NumBackups is the number of backups requested
+	NumBackups = stats.Int64("num_backups_total",
+		"Total number of backups requested", stats.UnitDimensionless)
+	// NumBackupsSuccess is the number of backups successfully completed
+	NumBackupsSuccess = stats.Int64("num_backups_success_total",
+		"Total number of backups completed", stats.UnitDimensionless)
+	// NumBackupsFailed is the number of backups failed
+	NumBackupsFailed = stats.Int64("num_backups_failed_total",
+		"Total number of backups failed", stats.UnitDimensionless)
 	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
@@ -71,6 +80,9 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
+	// PendingBackups records if a backup is currently in progress
+	PendingBackups = stats.Int64("pending_backups_total",
+		"Number of backups", stats.UnitDimensionless)
 	// MemoryAlloc records the amount of memory allocated via jemalloc
 	MemoryAlloc = stats.Int64("memory_alloc_bytes",
 		"Amount of memory allocated", stats.UnitBytes)
@@ -83,6 +95,15 @@ var (
 	// MemoryProc records the amount of memory used in processes.
 	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
+	// DiskFree records the number of bytes free on the disk
+	DiskFree = stats.Int64("disk_free_bytes",
+		"Total number of bytes free on disk", stats.UnitBytes)
+	// DiskUsed records the number of bytes free on the disk
+	DiskUsed = stats.Int64("disk_used_bytes",
+		"Total number of bytes used on disk", stats.UnitBytes)
+	// DiskTotal records the number of bytes free on the disk
+	DiskTotal = stats.Int64("disk_total_bytes",
+		"Total number of bytes on disk", stats.UnitBytes)
 	// ActiveMutations is the current number of active mutations.
 	ActiveMutations = stats.Int64("active_mutations_total",
 		"Number of active mutations", stats.UnitDimensionless)
@@ -141,6 +162,9 @@ var (
 	// KeyMethod is the tag key used to record the method (e.g read or mutate).
 	KeyMethod, _ = tag.NewKey("method")
 
+	// KeyDirType is the tag key used to record the group for FileSystem metrics
+	KeyDirType, _ = tag.NewKey("dir")
+
 	// Tag values.
 
 	// TagValueStatusOK is the tag value used to signal a successful operation.
@@ -160,6 +184,8 @@ var (
 	}
 
 	allRaftKeys = []tag.Key{KeyGroup}
+
+	allFSKeys = []tag.Key{KeyDirType}
 
 	allViews = []*view.View{
 		{
@@ -182,6 +208,20 @@ var (
 			Description: NumEdges.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        NumBackups.Name(),
+			Measure:     NumBackups,
+			Description: NumBackups.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
+		},
+		{
+			Name:        NumBackupsSuccess.Name(),
+			Measure:     NumBackupsSuccess,
+			Description: NumBackupsSuccess.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        TxnCommits.Name(),
@@ -228,6 +268,13 @@ var (
 			TagKeys:     nil,
 		},
 		{
+			Name:        PendingBackups.Name(),
+			Measure:     PendingBackups,
+			Description: PendingBackups.Description(),
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
+		},
+		{
 			Name:        MemoryAlloc.Name(),
 			Measure:     MemoryAlloc,
 			Description: MemoryAlloc.Description(),
@@ -254,6 +301,27 @@ var (
 			Description: MemoryProc.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        DiskFree.Name(),
+			Measure:     DiskFree,
+			Description: DiskFree.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskUsed.Name(),
+			Measure:     DiskUsed,
+			Description: DiskUsed.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskTotal.Name(),
+			Measure:     DiskTotal,
+			Description: DiskTotal.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
 		},
 		{
 			Name:        AlphaHealth.Name(),
@@ -370,6 +438,8 @@ func init() {
 	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
 	view.RegisterExporter(pe)
 
+	// Exposing metrics at /metrics, which is the usual standard, as well as at the old endpoint
+	http.Handle("/metrics", pe)
 	http.Handle("/debug/prometheus_metrics", pe)
 }
 

@@ -131,7 +131,7 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 
 func (node *RuleNode) staticEvaluation(av map[string]interface{}) RuleResult {
 	for _, v := range node.Variables {
-		if _, ok := av[v.Variable]; !ok {
+		if val, ok := av[v.Variable]; !ok || val == nil {
 			return Negative
 		}
 	}

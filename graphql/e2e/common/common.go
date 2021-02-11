@@ -183,6 +183,18 @@ type state struct {
 	Code    string   `json:"xcode,omitempty"`
 	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
+	Region  *region  `json:"region,omitempty"`
+}
+
+type region struct {
+	ID       string    `json:"id,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	District *district `json:"district,omitempty"`
+}
+
+type district struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type movie struct {
@@ -707,6 +719,7 @@ func RunAll(t *testing.T) {
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
 	t.Run("has filters", hasFilters)
+	t.Run("has filter on list of fields", hasFilterOnListOfFields)
 	t.Run("Int filters", int32Filters)
 	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
@@ -814,6 +827,10 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
 	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
+	t.Run("three level double XID mutation", threeLevelDoubleXID)
+	t.Run("two levels linked to one XID", twoLevelsLinkedToXID)
+	t.Run("cyclically linked mutation", cyclicMutation)
+	t.Run("parallel mutations", parallelMutations)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -1286,6 +1303,18 @@ func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) h
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
 
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
+}
+
+func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	metaInfo.AuthVars["USER"] = nil
+	metaInfo.AuthVars["ROLE"] = role
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h

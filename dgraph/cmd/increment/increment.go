@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -178,7 +179,7 @@ func run(conf *viper.Viper) {
 	format := "0102 03:04:05.999"
 
 	// Do a sanity check on the passed credentials.
-	_ = x.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+	_ = z.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
 	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
 	defer closeFunc()

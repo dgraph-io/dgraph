@@ -43,6 +43,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v3/pb"
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -1022,7 +1023,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dg := dgo.NewDgraphClient(clients...)
-	creds := NewSuperFlag(conf.GetString("creds"))
+	creds := z.NewSuperFlag(conf.GetString("creds"))
 	user := creds.GetString("user")
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
@@ -1122,7 +1123,7 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	runGC := func() {
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.9)
+			err = store.RunValueLogGC(0.7)
 		}
 		_, sz := store.Size()
 		if abs(lastSz, sz) > 512<<20 {
@@ -1364,4 +1365,16 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 		}
 	}
 	return maxKv
+}
+
+// PrefixesToMatches converts the prefixes for subscription to a list of match.
+func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
+	matches := make([]*pb.Match, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		matches = append(matches, &pb.Match{
+			Prefix:      prefix,
+			IgnoreBytes: ignore,
+		})
+	}
+	return matches
 }

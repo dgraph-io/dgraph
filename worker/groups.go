@@ -1123,7 +1123,7 @@ func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb
 
 		// Get Subscriber stream.
 		stream, err := client.Subscribe(closer.Ctx(),
-			&pb.SubscriptionRequest{Prefixes: prefixes, Ignore: ignore})
+			&pb.SubscriptionRequest{Matches: x.PrefixesToMatches(prefixes, ignore)})
 		if err != nil {
 			return errors.Wrapf(err, "error from client.subscribe")
 		}

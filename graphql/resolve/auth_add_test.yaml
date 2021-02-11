@@ -26,7 +26,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }] }  
+    {
+      "UserSecret": [ { "uid": "0x123" }]
+    }
 
 - name: "Add multiple nodes"
   gqlquery: |
@@ -47,7 +49,10 @@
       ]
     }
   uids: |
-    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+    {
+      "UserSecret1": "0x123",
+      "UserSecret2": "0x456"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -57,7 +62,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ] } 
+    {
+      "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ]
+    }
 
 - name: "Add one node that fails auth"
   gqlquery: |
@@ -71,13 +78,17 @@
   jwtvar:
     USER: "user1"
   variables: |
-    { "secret":
-      { "aSecret": "it is",
-        "ownedBy": "user2"
-      }
+    {
+      "secret":
+        {
+          "aSecret": "it is",
+          "ownedBy": "user2"
+        }
     }
   uids: |
-    { "UserSecret1": "0x123" }
+    {
+      "UserSecret1": "0x123"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -87,7 +98,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ ] }  
+    {
+      "UserSecret": [ ]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -110,7 +123,10 @@
       ]
     }
   uids: |
-    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+    {
+      "UserSecret1": "0x123",
+      "UserSecret2": "0x456"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -120,7 +136,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }] } 
+    {
+      "UserSecret": [ { "uid": "0x123" }]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -144,14 +162,19 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
-    { "Project2": [ { "uid": "0x123" } ] }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ]
+    }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -206,14 +229,19 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
-    { "Project2": [ { "uid": "0x123" } ] }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ]
+    }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -242,7 +270,9 @@
       }
     }
   authjson: |
-    { "Ticket": [ { "uid": "0x789" } ]}
+    {
+      "Ticket": [ { "uid": "0x789" } ]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -271,20 +301,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
-        uid
-      }
-      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
+  queryjson: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ]
+      "Project1": [ { "uid": "0x123" } ]
     }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789",
+      "Column4": "0x459",
+      "Ticket5": "0x799"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -343,20 +374,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
-        uid
-      }
-      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
+  queryjson: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ]
+      "Project1": [ { "uid": "0x123" } ]
     }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789",
+      "Column4": "0x459",
+      "Ticket5": "0x799"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -417,13 +449,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket2(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ],
+      "Ticket2": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -440,15 +480,15 @@
         }
       }
     }
+  uids: |
+    {
+      "Column3": "0x456"
+    }
   json: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
       "Column4.auth": [ { "uid": "0x799" } ]
     }
-  uids: |
-    { "Column1": "0x456" }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -488,13 +528,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket2(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ],
+      "Ticket2": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -513,12 +561,12 @@
     }
   json: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
-    { "Column1": "0x456" }
+    {
+      "Column3": "0x456"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -564,10 +612,17 @@
     }
   dgquery: |-
     query {
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -586,14 +641,13 @@
     }
   json: |
     {
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
       "Column4.auth": [ { "uid": "0x799" } ]
     }
   uids: |
     {
-      "Project1": "0x123",
-      "Column2": "0x456"
+      "Project2": "0x123",
+      "Column3": "0x456"
     }
   authquery: |-
     query {
@@ -648,10 +702,17 @@
     }
   dgquery: |-
     query {
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -670,13 +731,12 @@
     }
   json: |
     {
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
     {
-      "Project1": "0x123",
-      "Column2": "0x456"
+      "Project2": "0x123",
+      "Column3": "0x456"
     }
   authquery: |-
     query {
@@ -755,7 +815,9 @@
       }
     }
   uids: |
-    { "Log1": "0x123" }
+    {
+      "Log1": "0x123"
+    }
   skipauth: true
 
 - name: "Add with top level OR RBAC true."
@@ -846,21 +908,18 @@
     }
   dgquery: |-
     query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+      User1(func: eq(User.username, "user1")) @filter(type(User)) {
         uid
       }
     }
-  dgquerysec: |-
-    query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
-        uid
-      }
+  queryjson: |
+    {
+      "User1": [ { "uid": "0x123" } ]
     }
-  length: "2"
-  json: |
-    { "User3": [ { "uid": "0x123" } ] }
   uids: |
-    { "Issue1": "0x789" }
+    {
+      "Issue2": "0x789"
+    }
   authquery: |-
     query {
       Issue(func: uid(Issue1)) @filter(uid(IssueAuth2)) {
@@ -872,7 +931,9 @@
       }
     }
   authjson: |
-    { "Issue": [ { "uid": "0x789" }] }
+    {
+      "Issue": [ { "uid": "0x789" }]
+    }
 
 - name: "Add with top level And RBAC false."
   gqlquery: |
@@ -897,21 +958,18 @@
     }
   dgquery: |-
     query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+      User1(func: eq(User.username, "user1")) @filter(type(User)) {
         uid
       }
     }
-  dgquerysec: |-
-    query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
-        uid
-      }
+  queryjson: |
+    {
+      "User1": [ { "uid": "0x123" } ]
     }
-  length: "2"
-  json: |
-    { "User3": [ { "uid": "0x123" } ] }
   uids: |
-    { "Issue1": "0x789" }
+    {
+      "Issue2": "0x789"
+    }
   authquery: |-
     query {
       Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
@@ -944,7 +1002,9 @@
       }
     }
   uids: |
-    { "ComplexLog1": "0x123" }
+    {
+      "ComplexLog1": "0x123"
+    }
   error:
     { "message": "mutation failed because authorization failed"}
 
@@ -967,7 +1027,9 @@
       }
     }
   uids: |
-    { "ComplexLog1": "0x123" }
+    {
+      "ComplexLog1": "0x123"
+    }
   skipauth: true
 
 - name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
@@ -998,7 +1060,10 @@
       }]
     }
   uids: |
-    {"Question1": "0x123", "Author1": "0x456" }
+    {
+      "Question1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
@@ -1016,7 +1081,10 @@
       }
     }
   authjson: |
-    {"Question": [ {"uid": "0x123"}]}
+    {
+      "Question": [ {"uid": "0x123"}]
+    }
+
 - name: "Adding node for a Type that inherits auth rules from an interface fails."
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
@@ -1045,7 +1113,10 @@
       }]
     }
   uids: |
-    {"Question1": "0x123", "Author1": "0x456" }
+    {
+      "Question1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
@@ -1063,7 +1134,9 @@
       }
     }
   authjson: |
-    {"Question": [ ], "Author": [ { "uid" : "0x456"} ] }
+    {
+      "Question": [ ], "Author": [ { "uid" : "0x456"} ]
+    }
   error:
     { "message": "mutation failed because authorization failed"}
 
@@ -1093,7 +1166,10 @@
       }]
     }
   uids: |
-    {"FbPost1": "0x123", "Author1": "0x456" }
+    {
+      "FbPost1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       FbPost(func: uid(FbPost1)) @filter(uid(FbPostAuth2)) {
@@ -1108,7 +1184,9 @@
       }
     }
   authjson: |
-    {"FbPost": [ {"uid": "0x123"}]}
+    {
+      "FbPost": [ {"uid": "0x123"}]
+    }
 
 - name: "Add type with Having RBAC rule on interface failed"
   gqlquery: |
@@ -1136,7 +1214,10 @@
       }]
     }
   uids: |
-    {"FbPost1": "0x123", "Author1": "0x456" }
+    {
+      "FbPost1": "0x123",
+      "Author1": "0x456"
+    }
   error:
     {"message" : "mutation failed because authorization failed"}
   
