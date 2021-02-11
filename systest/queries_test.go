@@ -1281,7 +1281,6 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 }
 
 func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
-	t.Skipf("giving some error,fix later ")
 	ctx := context.Background()
 
 	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
