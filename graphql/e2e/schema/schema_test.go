@@ -58,15 +58,14 @@ func TestSchemaSubscribe(t *testing.T) {
 		id: ID!
 		name: String!
 	}`
-	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	groupOnePreUpdateCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-
 	// since the schema has been updated on group one, the schemaUpdateCounter on all the servers
 	// should have got incremented and must be the same, indicating that the schema update has
 	// reached all the servers.
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupOnePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupOnePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupOnePreUpdateCounter, nil)
 
 	introspectionQuery := `
 	query {
@@ -124,9 +123,9 @@ func TestSchemaSubscribe(t *testing.T) {
 	groupThreePreUpdateCounter := groupOnePreUpdateCounter + 1
 	common.SafelyUpdateGQLSchema(t, groupThreeHTTP, schema, nil)
 
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter)
-	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, groupThreePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupTwoHTTP, groupThreePreUpdateCounter, nil)
+	common.AssertSchemaUpdateCounterIncrement(t, groupThreeHTTP, groupThreePreUpdateCounter, nil)
 
 	expectedResult =
 		`{
@@ -270,7 +269,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	}`
 
 	// now check that both the final GraphQL schema and Dgraph schema are the ones we expect
-	require.Equal(t, finalGraphQLSchema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP).Schema)
+	require.Equal(t, finalGraphQLSchema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
 	testutil.VerifySchema(t, dg, testutil.SchemaOptions{
 		UserPreds:        finalDgraphPreds,
 		UserTypes:        finalDgraphTypes,
@@ -301,13 +300,13 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
 func TestIntrospectionQueryAfterDropAll(t *testing.T) {
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	// Then, Do the drop_all operation
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 	// wait for the schema update to reach the GraphQL layer
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	introspectionQuery := `
 	query{
@@ -335,7 +334,7 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	type A {
 		b: String!
 	}`, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 
 	// now do drop_all
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -343,9 +342,9 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	// need to wait a bit, because the update notification takes time to reach the alpha
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 	// now retrieving the GraphQL schema should report no schema
-	require.Empty(t, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP).Schema)
+	require.Empty(t, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
 
 	// updating the schema now should work
 	schema := `
@@ -354,7 +353,7 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 			}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
 	// we should get the schema we expect
-	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP).Schema)
+	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
 }
 
 // TestGQLSchemaAfterDropData checks if the schema still exists after drop_data
@@ -364,7 +363,7 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 				b: String!
 			}`
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 
 	// now do drop_data
 	dg, err := testutil.DgraphClient(groupOnegRPC)
@@ -375,109 +374,11 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	// otherwise we are anyways gonna get the previous schema from the in-memory schema
 	time.Sleep(5 * time.Second)
 	// drop_data should not increment the schema update counter
-	newCounter := common.RetryProbeGraphQL(t, groupOneHTTP).SchemaUpdateCounter
+	newCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	require.Equal(t, oldCounter, newCounter)
 	// we should still get the schema we inserted earlier
-	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP).Schema)
+	require.Equal(t, schema, common.AssertGetGQLSchemaRequireId(t, groupOneHTTP, nil).Schema)
 
-}
-
-// TestSchemaHistory checks the admin schema history API working properly or not.
-func TestSchemaHistory(t *testing.T) {
-	// Drop all to remove all the previous schema history.
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
-
-	// Let's get the schema. It should return empty results.
-	get := &common.GraphQLParams{
-		Query: `query{
-			querySchemaHistory(first:10){
-			  schema
-			  created_at
-			}
-		  }`,
-	}
-	getResult := get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-
-	require.JSONEq(t, `{
-		"querySchemaHistory": []
-	  }`, string(getResult.Data))
-
-	// Let's add an schema and expect the history in the history api.
-	schema := `
-	type A {
-		b: String!
-	}`
-	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
-
-	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-	type History struct {
-		Schema    string `json:"schema"`
-		CreatedAt string `json:"created_at"`
-	}
-	type schemaHistory struct {
-		QuerySchemaHistory []History `json:"querySchemaHistory"`
-	}
-	history := schemaHistory{}
-	require.NoError(t, json.Unmarshal(getResult.Data, &history))
-	require.Equal(t, int(1), len(history.QuerySchemaHistory))
-	require.Equal(t, history.QuerySchemaHistory[0].Schema, schema)
-
-	// Let's update with the same schema. But we should not get the 2 history because, we
-	// are updating with the same schema.
-	common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)
-
-	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-	history = schemaHistory{}
-	require.NoError(t, json.Unmarshal(getResult.Data, &history))
-	require.Equal(t, int(1), len(history.QuerySchemaHistory))
-	require.Equal(t, history.QuerySchemaHistory[0].Schema, schema)
-
-	// this wait is necessary to make sure that the new schema is created atleast 1s after the old
-	// schema, ensuring that the new schema is reported first in the query.
-	time.Sleep(time.Second)
-	// Let's update a new schema and check the history.
-	newSchema := `
-	type B {
-		b: String!
-	}`
-	common.SafelyUpdateGQLSchema(t, groupOneHTTP, newSchema, nil)
-
-	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-	history = schemaHistory{}
-	require.NoError(t, json.Unmarshal(getResult.Data, &history))
-	require.Equal(t, int(2), len(history.QuerySchemaHistory))
-	require.Equal(t, newSchema, history.QuerySchemaHistory[0].Schema)
-	require.Equal(t, schema, history.QuerySchemaHistory[1].Schema)
-
-	// Check offset working properly or not.
-	get = &common.GraphQLParams{
-		Query: `query{
-			querySchemaHistory(first:10, offset:1){
-			  schema
-			  created_at
-			}
-		  }`,
-	}
-	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-	history = schemaHistory{}
-	require.NoError(t, json.Unmarshal(getResult.Data, &history))
-	require.Equal(t, int(1), len(history.QuerySchemaHistory))
-	require.Equal(t, history.QuerySchemaHistory[0].Schema, schema)
-
-	// Let's drop everything and see whether we get empty results or not.
-	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA, RunInBackground: false}))
-	getResult = get.ExecuteAsPost(t, groupOneAdminServer)
-	common.RequireNoGQLErrors(t, getResult)
-	require.JSONEq(t, `{
-		"querySchemaHistory": []
-	  }`, string(getResult.Data))
 }
 
 func TestGQLSchemaValidate(t *testing.T) {
@@ -537,7 +438,7 @@ func TestGQLSchemaValidate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify that we only validate the schema and not set it.
-		require.Empty(t, common.AssertGetGQLSchema(t, groupOneHTTP).Schema)
+		require.Empty(t, common.AssertGetGQLSchema(t, groupOneHTTP, nil).Schema)
 
 		if tcase.valid {
 			require.Equal(t, resp.StatusCode, http.StatusOK)

@@ -99,41 +99,43 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
+	neighbour := x.GalaxyAttr("neighbour")
 	edge := &pb.DirectedEdge{
 		ValueId: 23,
-		Attr:    "neighbour",
+		Attr:    neighbour,
 	}
 	edge.Entity = 10
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 10)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 10)))
 
 	edge.Entity = 11
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 11)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 11)))
 
 	edge.Entity = 12
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 12)))
 
 	edge.ValueId = 25
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 12)))
 
 	edge.ValueId = 26
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 12)))
 
 	edge.Entity = 10
 	edge.ValueId = 31
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 10)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 10)))
 
 	edge.Entity = 12
-	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 12)))
 
 	// add value edges: friend : with name
-	edge.Attr = "friend"
+	friend := x.GalaxyAttr("friend")
+	edge.Attr = neighbour
 	edge.Entity = 12
 	edge.Value = []byte("photon")
 	edge.ValueId = 0
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(x.DataKey(friend, 12)))
 
 	edge.Entity = 10
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	addEdge(t, edge, getOrCreate(x.DataKey(friend, 10)))
 }
 
 func populateClusterGraph(t *testing.T, dg *dgo.Dgraph) {

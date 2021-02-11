@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -462,14 +463,23 @@ func setupServer(closer *z.Closer) {
 	// Implementation for server exit:
 	// The global epoch is set to maxUint64 while exiting the server.
 	// By using this information polling goroutine terminates the subscription.
-	globalEpoch := uint64(0)
+	globalEpoch := make(map[uint64]*uint64)
+	e := new(uint64)
+	atomic.StoreUint64(e, 0)
+	globalEpoch[x.GalaxyNamespace] = e
 	var mainServer web.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
-	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection, &globalEpoch, closer)
-	baseMux.Handle("/graphql", mainServer.HTTPHandler())
-	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter,
-		r *http.Request) {
+	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
+		globalEpoch, closer)
+	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		namespace := x.ExtractNamespaceHTTP(r)
+		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
+		admin.LazyLoadSchema(namespace)
+		mainServer.HTTPHandler().ServeHTTP(w, r)
+	})
+
+	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
@@ -478,14 +488,25 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
+		e = globalEpoch[x.ExtractNamespaceHTTP(r)]
+		var counter uint64
+		if e != nil {
+			counter = atomic.LoadUint64(e)
+		}
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
-			healthStatus.StatusMsg, atomic.LoadUint64(&globalEpoch)))))
+			healthStatus.StatusMsg, counter))))
 	})
-	baseMux.Handle("/admin", allowedMethodsHandler(allowedMethods{
-		http.MethodGet:     true,
-		http.MethodPost:    true,
-		http.MethodOptions: true,
-	}, adminAuthHandler(adminServer.HTTPHandler())))
+	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("resolver", "0")
+		// We don't need to load the schema for all the admin operations.
+		// Only a few like getUser, queryGroup require this. So, this can be optimized.
+		admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r))
+		allowedMethodsHandler(allowedMethods{
+			http.MethodGet:     true,
+			http.MethodPost:    true,
+			http.MethodOptions: true,
+		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
+	})
 
 	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
 		w http.ResponseWriter,
@@ -559,7 +580,9 @@ func setupServer(closer *z.Closer) {
 		defer admin.ServerCloser.Done()
 
 		<-admin.ServerCloser.HasBeenClosed()
-		atomic.StoreUint64(&globalEpoch, math.MaxUint64)
+		// TODO - Verify why do we do this and does it have to be done for all namespaces.
+		e = globalEpoch[x.GalaxyNamespace]
+		atomic.StoreUint64(e, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {
