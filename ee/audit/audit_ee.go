@@ -68,7 +68,7 @@ func GetAuditConf(conf string) *AuditConf {
 	if conf == "" {
 		return nil
 	}
-	auditFlag := x.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
 	dir := auditFlag.GetString("dir")
 	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
@@ -80,7 +80,7 @@ func GetAuditConf(conf string) *AuditConf {
 	}
 }
 
-func readAuditEncKey(conf *x.SuperFlag) ([]byte, error) {
+func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 	encFile := conf.GetString("encrypt-file")
 	if encFile == "" {
 		return nil, nil

@@ -537,7 +537,7 @@ input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: CharacterHasFilter
+	has: [CharacterHasFilter]
 	and: [CharacterFilter]
 	or: [CharacterFilter]
 	not: CharacterFilter
@@ -564,7 +564,7 @@ input DroidFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: DroidHasFilter
+	has: [DroidHasFilter]
 	and: [DroidFilter]
 	or: [DroidFilter]
 	not: DroidFilter
@@ -602,7 +602,7 @@ input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
 	appearsIn: Episode_hash
-	has: HumanHasFilter
+	has: [HumanHasFilter]
 	and: [HumanFilter]
 	or: [HumanFilter]
 	not: HumanFilter
@@ -635,7 +635,7 @@ input HumanRef {
 
 input PlanetFilter {
 	id: [ID!]
-	has: PlanetHasFilter
+	has: [PlanetHasFilter]
 	and: [PlanetFilter]
 	or: [PlanetFilter]
 	not: PlanetFilter
@@ -674,7 +674,7 @@ input ResidentRef {
 input StarshipFilter {
 	id: [ID!]
 	name: StringTermFilter
-	has: StarshipHasFilter
+	has: [StarshipHasFilter]
 	and: [StarshipFilter]
 	or: [StarshipFilter]
 	not: StarshipFilter

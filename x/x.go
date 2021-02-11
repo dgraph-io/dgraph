@@ -1041,7 +1041,7 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	runGC := func() {
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.9)
+			err = store.RunValueLogGC(0.7)
 		}
 		_, sz := store.Size()
 		if abs(lastSz, sz) > 512<<20 {

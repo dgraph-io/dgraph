@@ -1021,6 +1021,20 @@
       queryUserSecret()
     }
 
+- name: "Query with null variable - top level"
+  gqlquery: |
+    query {
+      queryUserSecret {
+        id
+      }
+    }
+  jwtVar:
+    USER: null
+  dgquery: |-
+    query {
+      queryUserSecret()
+    }
+
 - name:  "Get with top level RBAC false"
   gqlquery: |
     query {
@@ -1046,6 +1060,29 @@
         }
       }
     }
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.username : User.username
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User3))
+      User3 as var(func: type(User))
+    }
+
+- name: "Query with null variable - deep query"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets {
+          id
+          title
+        }
+      }
+    }
+  jwtvar:
+    USER: null
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -1939,3 +1976,25 @@
       Astronaut3 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
     }
 
+-
+  name: "Query interface should return all the nodes of a type if rbac rules of type are true"
+  gqlquery: |
+    query {
+      queryVehicle{
+        owner
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user"
+  dgquery: |-
+    query {
+      queryVehicle(func: uid(VehicleRoot)) {
+        dgraph.type
+        Vehicle.owner : Vehicle.owner
+        dgraph.uid : uid
+      }
+      VehicleRoot as var(func: uid(Vehicle1)) @filter((uid(Car1)))
+      Vehicle1 as var(func: type(Vehicle))
+      Car1 as var(func: type(Car))
+    }
