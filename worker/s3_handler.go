@@ -210,12 +210,12 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
 func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
-		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
+		return LoadResult{Err: errors.Wrapf(err, "while retrieving manifests")}
 	}
 
 	mc, err := h.setup(uri)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return LoadResult{Err: err}
 	}
 
 	// since is returned with the max manifest Since value found.
@@ -224,7 +224,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup manifests for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	var maxUid uint64
+	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
@@ -235,35 +235,38 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to get %q", object)}
+				return LoadResult{Err: errors.Wrapf(err, "Failed to get %q", object)}
 			}
 			defer reader.Close()
 
 			st, err := reader.Stat()
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Stat failed %q", object)}
+				return LoadResult{Err: errors.Wrapf(err, "Stat failed %q", object)}
 			}
 			if st.Size <= 0 {
-				return LoadResult{0, 0,
-					errors.Errorf("Remote object is empty or inaccessible: %s", object)}
+				return LoadResult{Err: errors.Errorf("Remote object is empty or inaccessible: %s",
+					object)}
 			}
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(reader, gid, predSet, manifest.DropOperations)
+			groupMaxUid, groupMaxNsId, err := fn(reader, gid, predSet, manifest.DropOperations)
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return LoadResult{Err: err}
 			}
 			if groupMaxUid > maxUid {
 				maxUid = groupMaxUid
+			}
+			if groupMaxNsId > maxNsId {
+				maxNsId = groupMaxNsId
 			}
 		}
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
 // Verify performs basic checks to decide whether the specified backup can be restored

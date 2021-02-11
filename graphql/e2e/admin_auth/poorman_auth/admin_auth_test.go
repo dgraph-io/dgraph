@@ -61,10 +61,10 @@ func TestPoorManAuthOnAdminSchemaHttpEndpoint(t *testing.T) {
 	require.Contains(t, makeAdminSchemaRequest(t, wrongAuthToken), "Invalid X-Dgraph-AuthToken")
 
 	// setting correct value for the token should successfully update the schema
-	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP).SchemaUpdateCounter
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`, makeAdminSchemaRequest(t,
 		authToken))
-	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 }
 
 func assertAuthTokenError(t *testing.T, schema string, headers http.Header) {

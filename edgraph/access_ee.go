@@ -1043,6 +1043,9 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 // group in the galaxy namespace. This authorization is used for admin usages like creation and
 // deletion of a namespace, resetting passwords across namespaces etc.
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")

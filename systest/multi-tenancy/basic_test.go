@@ -71,8 +71,8 @@ func login(t *testing.T, userId, password string, namespace uint64) *testutil.Ht
 }
 
 func createNamespace(t *testing.T, token *testutil.HttpToken) (uint64, error) {
-	createNs := `query{
-					 getNewNamespace
+	createNs := `mutation {
+					 addNamespace
 					  {
 					    namespaceId
 					    message
@@ -84,16 +84,16 @@ func createNamespace(t *testing.T, token *testutil.HttpToken) (uint64, error) {
 	}
 	resp := makeRequest(t, token, params)
 	var result struct {
-		GetNewNamespace struct {
+		AddNamespace struct {
 			NamespaceId int    `json:"namespaceId"`
 			Message     string `json:"message"`
 		}
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &result))
-	if strings.Contains(result.GetNewNamespace.Message, "Created namespace successfully") {
-		return uint64(result.GetNewNamespace.NamespaceId), nil
+	if strings.Contains(result.AddNamespace.Message, "Created namespace successfully") {
+		return uint64(result.AddNamespace.NamespaceId), nil
 	}
-	return 0, errors.New(result.GetNewNamespace.Message)
+	return 0, errors.New(result.AddNamespace.Message)
 }
 
 func deleteNamespace(t *testing.T, token *testutil.HttpToken, nsID uint64) {

@@ -193,7 +193,7 @@ func admin(t *testing.T) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	addSchemaAndData(schema, data, client)
+	addSchemaAndData(schema, data, client, nil)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -225,7 +225,7 @@ func updateSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
-	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema)
+	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema, nil)
 
 	testutil.VerifySchema(t, client, testutil.SchemaOptions{
 		UserPreds:        adminSchemaEndptPreds,

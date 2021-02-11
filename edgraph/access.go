@@ -80,3 +80,11 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	// always allow access
 	return nil
 }
+
+func upsertGuardian(ctx context.Context) error {
+	return nil
+}
+
+func upsertGroot(ctx context.Context) error {
+	return nil
+}
