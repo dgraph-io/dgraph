@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -141,7 +140,6 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	} else {
 		key = typ.FieldOriginatedFrom(xidName) + xidName + xidVal
 	}
-	glog.Infof("\nkey-%s", key)
 	if varName, ok := v.xidVarNameMap[key]; ok {
 		return varName
 	}
@@ -1574,7 +1572,6 @@ func existenceQueries(
 					}
 				}
 				variable := varGen.Next(typ, xid.Name(), xidString, false)
-				glog.Infof("\n%s", variable)
 				if xidMetadata.variableObjMap[variable] != nil {
 					// if we already encountered an object with same xid earlier, and this object is
 					// considered a duplicate of the existing object, then return error.
