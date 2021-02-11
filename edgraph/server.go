@@ -1018,21 +1018,23 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 // Filter out the tablets that do not belong to the requester's namespace.
 func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
-	ns, err := x.ExtractJWTNamespace(ctx)
+	namespace, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
-	if ns == x.GalaxyNamespace {
+	if namespace == x.GalaxyNamespace {
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
-		for pred := range group.GetTablets() {
-			if x.ParseNamespace(pred) != ns {
-				delete(group.Tablets, pred)
-			} else {
-				group.Tablets[pred].Predicate = x.ParseAttr(pred)
+		tablets := make(map[string]*pb.Tablet)
+		for pred, tablet := range group.GetTablets() {
+			ns, attr := x.ParseNamespaceAttr(pred)
+			if namespace == ns {
+				tablets[attr] = tablet
+				tablets[attr].Predicate = attr
 			}
 		}
+		group.Tablets = tablets
 	}
 	return nil
 }
