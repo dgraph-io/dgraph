@@ -321,6 +321,20 @@ const (
 )
 
 var (
+	// guardianOfTheGalaxyQueryMWs are the middlewares which should be applied to queries served by
+	// admin server for guardian of galaxy unless some exceptional behaviour is required
+	guardianOfTheGalaxyQueryMWs = resolve.QueryMiddlewares{
+		resolve.IpWhitelistingMW4Query,
+		resolve.GuardianOfTheGalaxyAuthMW4Query,
+		resolve.LoggingMWQuery,
+	}
+	// guardianOfTheGalaxyMutationMWs are the middlewares which should be applied to mutations
+	// served by admin server for guardian of galaxy unless some exceptional behaviour is required
+	guardianOfTheGalaxyMutationMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation,
+		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
+		resolve.LoggingMWMutation,
+	}
 	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
 	// server unless some exceptional behaviour is required
 	commonAdminQueryMWs = resolve.QueryMiddlewares{
@@ -339,26 +353,29 @@ var (
 		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
 		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
 		"config":       commonAdminQueryMWs,
-		"listBackups":  commonAdminQueryMWs,
+		"listBackups":  guardianOfTheGalaxyQueryMWs,
 		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":          commonAdminMutationMWs,
-		"config":          commonAdminMutationMWs,
-		"draining":        commonAdminMutationMWs,
-		"export":          commonAdminMutationMWs,
+		"backup":          guardianOfTheGalaxyMutationMWs,
+		"config":          guardianOfTheGalaxyMutationMWs,
+		"draining":        guardianOfTheGalaxyMutationMWs,
+		"export":          commonAdminMutationMWs, // dgraph handles the export for other namespaces by guardian of galaxy
 		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"restore":         commonAdminMutationMWs,
-		"shutdown":        commonAdminMutationMWs,
+		"restore":         guardianOfTheGalaxyMutationMWs,
+		"shutdown":        guardianOfTheGalaxyMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
+
+		"addNamespace":    guardianOfTheGalaxyMutationMWs,
+		"deleteNamespace": guardianOfTheGalaxyMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
@@ -368,8 +385,6 @@ var (
 		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"addNamespace":              {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteNamespace":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}

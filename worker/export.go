@@ -590,10 +590,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
-	// TODO(Naman): Get this from token.
 	if in.Namespace != math.MaxUint64 {
 		// Export a specific namespace.
-		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(x.ExtractNamespace(ctx))...)
+		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(in.Namespace)...)
 	}
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -782,7 +781,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		// We don't need to iterate over all versions.
 		iopts := badger.DefaultIteratorOptions
 		iopts.Prefix = []byte{prefix}
-		// TODO(Naman): Remove this once we have ACL support. Get this from token.
 		if in.Namespace != math.MaxUint64 {
 			iopts.Prefix = append(iopts.Prefix, x.NamespaceToBytes(in.Namespace)...)
 		}
