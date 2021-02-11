@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/viper"
 )
 
@@ -20,7 +21,7 @@ func TestLoginOverTLS(t *testing.T) {
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	for i := 0; i < 30; i++ {
-		err = dg.Login(context.Background(), "groot", "password")
+		err = dg.Login(context.Background(), "groot", "password", x.GalaxyNamespace)
 		if err == nil {
 			return
 		}

@@ -163,9 +163,9 @@ func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
 	dg, closeClient := x.GetDgraphClient(conf, false)
 	err := x.GetPassAndLogin(dg, &x.CredOpt{
-		Conf:        conf,
-		UserID:      conf.GetString(gName),
-		PasswordOpt: gPassword,
+		UserID:   conf.GetString(gName),
+		Password: conf.GetString(gPassword),
+		// TODO(Ahsan): Which namespace do we need to pass here?
 	})
 	if err != nil {
 		return nil, nil, err

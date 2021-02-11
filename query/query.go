@@ -2859,10 +2859,13 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
-	// Filter the schema nodes for the given namespace.
-	er.SchemaNode = filterSchemaNodeForNamespace(namespace, er.SchemaNode)
-	// Filter the types for the given namespace.
-	er.Types = filterTypesForNamespace(namespace, er.Types)
+
+	if !x.IsGalaxyOperation(ctx) {
+		// Filter the schema nodes for the given namespace.
+		er.SchemaNode = filterSchemaNodeForNamespace(namespace, er.SchemaNode)
+		// Filter the types for the given namespace.
+		er.Types = filterTypesForNamespace(namespace, er.Types)
+	}
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
@@ -2875,7 +2878,7 @@ func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.Typ
 		// Type name doesn't have reverse.
 		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
-			panic("This should not happen")
+			continue
 		}
 		update.TypeName = typeName
 		fields := []*pb.SchemaUpdate{}
@@ -2898,7 +2901,7 @@ func filterSchemaNodeForNamespace(namespace uint64, nodes []*pb.SchemaNode) []*p
 	for _, node := range nodes {
 		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
-			panic("This should not happen")
+			continue
 		}
 		node.Predicate = attrName
 		out = append(out, node)
