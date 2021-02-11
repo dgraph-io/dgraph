@@ -179,10 +179,10 @@ func init() {
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
-	flag.Uint64("force-namespace", math.MaxUint64,
-		"Namespace onto which to load the data. If not set, will preserve the namespace."+
-			"Only guardian of galaxy should use this for loading data into multiple namespaces."+
-			"This flag will be ignored when not logging into galaxy namespace.")
+	flag.Int64("force-namespace", 0, "Namespace onto which to load the data."+
+		"This flag will be ignored when not logging into galaxy namespace."+
+		"Only guardian of galaxy should use this for loading data into multiple namespaces."+
+		"Setting it to negative value will preserve the namespace.")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -323,7 +323,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 		if len(nq.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			object := x.NamespaceAttr(nq.Namespace, nq.Subject)
+			object := x.NamespaceAttr(nq.Namespace, nq.ObjectId)
 			ids[object] = generateBlankNode(object)
 		}
 	}
@@ -338,6 +338,8 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 			continue
 		}
 
+		// Strip away the namespace from the query and mutation.
+		xid := x.ParseAttr(xid)
 		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
 		query.WriteRune('\n')
 		mutations = append(mutations, &api.NQuad{
@@ -645,10 +647,17 @@ func run() error {
 		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
-		namespaceToLoad: Live.Conf.GetUint64("force-namespace"),
 	}
 
-	if creds.GetUint64("namespace") != 0 {
+	switch creds.GetUint64("namespace") {
+	case x.GalaxyNamespace:
+		ns := Live.Conf.GetInt64("force-namespace")
+		if ns < 0 {
+			opt.namespaceToLoad = math.MaxUint64
+		} else {
+			opt.namespaceToLoad = uint64(ns)
+		}
+	default:
 		opt.namespaceToLoad = creds.GetUint64("namespace")
 	}
 
@@ -664,8 +673,7 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if len(creds.GetString("user")) > 0 && opt.namespaceToLoad == math.MaxUint64 &&
-		creds.GetUint64("namespace") == x.GalaxyNamespace {
+	if len(creds.GetString("user")) > 0 && opt.namespaceToLoad == math.MaxUint64 {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx)
