@@ -77,28 +77,18 @@ func TestExportSchemaToMinio(t *testing.T) {
 }
 
 var expectedSchema = `[0x0] <movie>:string .` + " " + `
-[0x0] <dgraph.cors>:[string] @index(exact) @upsert .` + " " + `
 [0x0] <dgraph.type>:[string] @index(exact) .` + " " + `
 [0x0] <dgraph.drop.op>:string .` + " " + `
 [0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
 [0x0] <dgraph.graphql.schema>:string .` + " " + `
 [0x0] <dgraph.graphql.p_query>:string .` + " " + `
 [0x0] <dgraph.graphql.p_sha256hash>:string @index(exact) .` + " " + `
-[0x0] <dgraph.graphql.schema_history>:string .` + " " + `
-[0x0] <dgraph.graphql.schema_created_at>:datetime .` + " " + `
 [0x0] type <Node> {
 	movie
 }
 [0x0] type <dgraph.graphql> {
 	dgraph.graphql.schema
 	dgraph.graphql.xid
-}
-[0x0] type <dgraph.type.cors> {
-	dgraph.cors
-}
-[0x0] type <dgraph.graphql.history> {
-	dgraph.graphql.schema_history
-	dgraph.graphql.schema_created_at
 }
 [0x0] type <dgraph.graphql.persisted_query> {
 	dgraph.graphql.p_query

@@ -67,10 +67,6 @@ const (
 		generatedSchema: String!
 	}
 
-	type Cors @dgraph(type: "dgraph.cors"){
-		acceptedOrigins: [String]
-	}
-
 	"""
 	A NodeState is the state of an individual node in the Dgraph cluster.
 	"""
@@ -279,7 +275,6 @@ const (
 		health: [NodeState]
 		state: MembershipState
 		config: Config
-		getAllowedCORSOrigins: Cors
 		` + adminQueries + `
 	}
 
@@ -313,8 +308,6 @@ const (
 		"""
 		config(input: ConfigInput!): ConfigPayload
 
-		replaceAllowedCORSOrigins(origins: [String]): Cors
-
 		` + adminMutations + `
 	}
  `
@@ -343,12 +336,11 @@ var (
 		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryGroup":            {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"queryUser":             {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getGroup":              {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getCurrentUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getUser":               {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getAllowedCORSOrigins": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryGroup":     {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":      {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getGroup":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getCurrentUser": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"getUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
 		"backup":          commonAdminMutationMWs,
@@ -361,15 +353,14 @@ var (
 		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":                   {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"addGroup":                  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteUser":                {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteGroup":               {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"replaceAllowedCORSOrigins": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"addNamespace":              {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteNamespace":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addUser":         {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addGroup":        {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateUser":      {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"updateGroup":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteUser":      {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteGroup":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addNamespace":    {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"deleteNamespace": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
@@ -609,20 +600,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 						false
 				})
 		}).
-		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(
-				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
-						false
-				})
-		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(
-				func(ctx context.Context, query schema.Query) *resolve.Resolved {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
-				})
-		}).
-		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
@@ -747,9 +725,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(qryRw, dgEx)
 			}).
-		WithQueryResolver("getAllowedCORSOrigins", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveGetCors)
-		}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewAddRewriter(), dgEx)
@@ -773,10 +748,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(resolve.NewDeleteRewriter(), dgEx)
-			}).
-		WithMutationResolver("replaceAllowedCORSOrigins", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveReplaceAllowedCORSOrigins)
-		})
+			})
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {

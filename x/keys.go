@@ -646,14 +646,11 @@ var aclPredicateMap = map[string]struct{}{
 // predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
 // by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
-	"dgraph.graphql.xid":               {},
-	"dgraph.graphql.schema":            {},
-	"dgraph.cors":                      {},
-	"dgraph.drop.op":                   {},
-	"dgraph.graphql.schema_history":    {},
-	"dgraph.graphql.schema_created_at": {},
-	"dgraph.graphql.p_query":           {},
-	"dgraph.graphql.p_sha256hash":      {},
+	"dgraph.graphql.xid":          {},
+	"dgraph.graphql.schema":       {},
+	"dgraph.drop.op":              {},
+	"dgraph.graphql.p_query":      {},
+	"dgraph.graphql.p_sha256hash": {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
@@ -669,9 +666,7 @@ var preDefinedTypeMap = map[string]struct{}{
 	"dgraph.type.User":               {},
 	"dgraph.type.Group":              {},
 	"dgraph.type.Rule":               {},
-	"dgraph.graphql.history":         {},
 	"dgraph.graphql.persisted_query": {},
-	"dgraph.type.cors":               {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.

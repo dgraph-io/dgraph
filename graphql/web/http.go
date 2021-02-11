@@ -384,7 +384,9 @@ func recoveryHandler(next http.Handler) http.Handler {
 // allow list we'll let them access /graphql endpoint.
 func addDynamicHeaders(origin string, w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
-	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
+	// TODO(abhimanyu): get allowed origins from schema
+	//allowList := x.AcceptedOrigins.Load().(map[string]struct{})
+	var allowList map[string]struct{}
 	_, ok := allowList[origin]
 	// Given origin is not in the allow list so let's not
 	// add any cors headers.
