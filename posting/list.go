@@ -567,6 +567,7 @@ func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 			r.Remove(p.Uid)
 		}
 	}
+	codec.RemoveRange(r, 0, opt.AfterUid)
 	return r, nil
 }
 
@@ -1230,9 +1231,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 	num := abs(opt.First)
 	for len(out.Uids) < num && itr.HasNext() {
-		if uid := itr.Next(); uid > opt.AfterUid {
-			out.Uids = append(out.Uids, uid)
-		}
+		out.Uids = append(out.Uids, itr.Next())
 	}
 	return out, nil
 

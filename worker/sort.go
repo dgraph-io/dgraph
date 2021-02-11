@@ -505,6 +505,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	}()
 
 	go func() {
+		// TODO(Ahsan): Revert this back to sortWithIndex after fixing multi-sort with index.
 		sr := sortWithoutIndex(cctx, ts)
 		resCh <- sr
 	}()

@@ -2170,12 +2170,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		hasNils := false
 		// Now apply the results from filter.
 		var bitmaps []*roaring64.Bitmap
 		for _, filter := range sg.Filters {
 			if filter.DestMap == nil {
-				bitmaps = append(bitmaps, roaring64.NewBitmap())
-				continue
+				hasNils = true
+				break
 			}
 			bitmaps = append(bitmaps, filter.DestMap)
 		}
@@ -2187,7 +2188,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			x.AssertTrue(len(sg.Filters) == 1)
 			sg.DestMap.AndNot(sg.Filters[0].DestMap)
 		case sg.FilterOp == "and":
-			sg.DestMap = roaring64.FastAnd(bitmaps...)
+			if hasNils {
+				sg.DestMap = roaring64.New()
+			} else {
+				sg.DestMap = roaring64.FastAnd(bitmaps...)
+			}
 		default:
 			// We need to also intersect the original dest uids in this case to get the final
 			// DestUIDs.
@@ -2195,8 +2200,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			// TODO - See if the server performing the filter can intersect with the srcUIDs before
 			// returning them in this case.
-			r := roaring64.FastAnd(bitmaps...)
-			sg.DestMap.And(r)
+			if hasNils {
+				sg.DestMap = roaring64.New()
+			} else {
+				r := roaring64.FastAnd(bitmaps...)
+				sg.DestMap.And(r)
+			}
 		}
 	}
 
