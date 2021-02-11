@@ -57,6 +57,9 @@ func ExtractUserName(jwtToken string) (string, error) {
 }
 
 func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
+	if !WorkerConfig.AclEnabled {
+		return GalaxyNamespace, nil
+	}
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
 		return 0, err
