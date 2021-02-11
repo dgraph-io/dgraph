@@ -15,9 +15,10 @@ package backup
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"os"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -37,13 +38,13 @@ var LsBackup x.SubCommand
 var ExportBackup x.SubCommand
 
 var opt struct {
-	backupId    string
-	location    string
-	pdir        string
-	zero        string
-	key         x.SensitiveByteSlice
-	forceZero   bool
-	format      string
+	backupId  string
+	location  string
+	pdir      string
+	zero      string
+	key       x.SensitiveByteSlice
+	forceZero bool
+	format    string
 }
 
 func init() {
@@ -257,7 +258,7 @@ func runLsbackupCmd() error {
 
 	fmt.Printf("Name\tSince\tGroups\tEncrypted\n")
 	for path, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted)
+		fmt.Printf("%v\t%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted, manifest.Type)
 	}
 
 	return nil
