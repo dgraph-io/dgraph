@@ -22,15 +22,16 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func (w *grpcWorker) DeleteNamespace(ctx context.Context,
 	req *pb.DeleteNsRequest) (*pb.Status, error) {
-	return nil, nil
+	return nil, x.ErrNotSupported
 }
 
 func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
-	return nil
+	return x.ErrNotSupported
 }
 
 func tryDeleteProposal(ctx context.Context, req *pb.DeleteNsRequest) error {

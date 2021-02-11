@@ -18,7 +18,10 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 func (w *grpcWorker) DeleteNamespace(ctx context.Context,
@@ -29,7 +32,8 @@ func (w *grpcWorker) DeleteNamespace(ctx context.Context,
 	}
 
 	if err := groups().Node.proposeAndWait(ctx, &pb.Proposal{DeleteNs: req}); err != nil {
-		return &emptyRes, errors.Wrapf(err, "Delete namespace error: ")
+		return &emptyRes, errors.Wrapf(err, "Delete namespace failed for namespace %d on group %d",
+			req.Namespace, req.GroupId)
 	}
 	return &emptyRes, nil
 }
@@ -41,38 +45,25 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 	}
 
 	state := GetMembershipState()
+	g := new(errgroup.Group)
 
-	errCh := make(chan error, len(state.Groups))
 	for gid, _ := range state.Groups {
 		req := &pb.DeleteNsRequest{Namespace: ns, GroupId: gid}
-		go func(req *pb.DeleteNsRequest) {
-			errCh <- tryDeleteProposal(ctx, req)
-		}(req)
+		g.Go(func() error {
+			return x.RetryUntilSuccess(100, 10*time.Second, func() error {
+				return proposeDeleteOrSend(ctx, req)
+			})
+		})
 	}
 
-	for range state.Groups {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return errors.Wrap(err, "Failed to process delete request")
 	}
 	return nil
 }
 
-// TODO - Currently there is no way by which we can prevent partial banning. It is possible
-// that if a group is behind a network partition then we might not be able to propose to it.
-func tryDeleteProposal(ctx context.Context, req *pb.DeleteNsRequest) error {
-	var err error
-	for i := 0; i < 100; i++ {
-		err = proposeDeleteOrSend(ctx, req)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(time.Second)
-	}
-	return err
-}
-
 func proposeDeleteOrSend(ctx context.Context, req *pb.DeleteNsRequest) error {
+	glog.V(2).Infof("Sending delete namespace request: %+v", req)
 	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
 		_, err := (&grpcWorker{}).DeleteNamespace(ctx, req)
 		return err
