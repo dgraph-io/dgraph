@@ -148,13 +148,20 @@ they form a Raft group and provide synchronous replication.
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
-	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
-		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
-		"Enterprise feature.")
-	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
-		"Enterprise feature.")
-	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
-		"Enterprise feature.")
+	flag.String("acl", worker.AclDefaults,
+		`ACL options:
+	secret_file="" The file that stores the HMAC secret, which is used for signing the JWT and
+		should have at least 32 ASCII characters.
+		(Enterprise feature)
+	access_ttl=duration The TTL for the access JWT.
+		The duration format used is the same as time.ParseDuration with two added duration suffixes:
+		"12h" means 12 hours, and "30d" means 30 days.
+		(Enterprise feature)
+	refresh_ttl=duration The TTL for the refresh JWT.
+		The duration format used is the same as time.ParseDuration with two added duration suffixes:
+		"12h" means 12 hours, and "30d" means 30 days.
+		(Enterprise feature)`)
+
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -635,7 +642,8 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	secretFile := Alpha.Conf.GetString("acl_secret_file")
+	acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
+	secretFile := acl.GetString("secret_file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
@@ -644,11 +652,9 @@ func run() {
 		if len(hmacSecret) < 32 {
 			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
 		}
-
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
-
+		opts.AccessJwtTtl = acl.GetDuration("access_ttl")
+		opts.RefreshJwtTtl = acl.GetDuration("refresh_ttl")
 		glog.Info("HMAC secret loaded successfully.")
 	}
 
