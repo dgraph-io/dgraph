@@ -212,7 +212,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
-	XIDField() FieldDefinition
+	XIDField() []FieldDefinition
 	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
@@ -2355,7 +2355,7 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 }
 
-func (t *astType) XIDField() FieldDefinition {
+func (t *astType) XIDField() []FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
@@ -2364,17 +2364,18 @@ func (t *astType) XIDField() FieldDefinition {
 	// If field is of ID type but it is an external field,
 	// then it is stored in Dgraph as string type with Hash index.
 	// So it should be returned as an XID Field.
+	var xids []FieldDefinition
 	for _, fd := range def.Fields {
 		if hasIDDirective(fd) || (hasExternal(fd) && isID(fd)) {
-			return &fieldDefinition{
+			xids = append(xids, &fieldDefinition{
 				fieldDef:   fd,
 				inSchema:   t.inSchema,
 				parentType: t,
-			}
+			})
 		}
 	}
 
-	return nil
+	return xids
 }
 
 // InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.

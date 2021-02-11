@@ -2386,7 +2386,7 @@
     }
   dgquery: |-
     query {
-      getEditor(func: uid(0x1)) @filter((eq(Editor.code, "tolstoy") AND type(Editor))) {
+      getEditor(func: uid(0x1)) @filter(((eq(Editor.code, "tolstoy")) AND type(Editor))) {
         Editor.name : Editor.name
         dgraph.uid : uid
       }
@@ -3272,10 +3272,10 @@
     }
   dgquery: |-
     query {
-      getBook(func: uid(0x1)) @filter(((eq(Book.title, "GraphQL") AND eq(Book.ISBN, "001HB")) AND type(Book))) {
-        id : uid
-        title : Book.title
-        ISBN : Book.ISBN
-        Author : Book.Author
+      getBook(func: uid(0x1)) @filter(((eq(Book.ISBN, "001HB") AND eq(Book.title, "GraphQL")) AND type(Book))) {
+        Book.id : uid
+        Book.title : Book.title
+        Book.ISBN : Book.ISBN
+        Book.Author : Book.Author
       }
     }

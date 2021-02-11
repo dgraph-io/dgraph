@@ -804,7 +804,7 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id nsw already exists for type State"
+      "message": "failed to rewrite mutation payload because id nsw already exists: field code, type State"
     }
 
 -
@@ -3328,3 +3328,45 @@
     message: |-
       failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
       failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
+
+-
+  name: "Add type with multiple Xid fields"
+  gqlmutation: |
+    mutation($input: [AddBookInput!]!){
+    addBook(input:$input) {
+      book{
+          title
+          ISBN
+          Author
+        }
+      }
+    }
+
+  gqlvariables: |
+    {
+      "input":[
+              {
+                "title":"Sapiens",
+                "ISBN":"2312SB",
+                "Author":"Yuval Noah Harari"
+              }
+            ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Book.Author": "Yuval Noah Harari",
+          "Book.ISBN": "2312SB",
+          "Book.title": "Sapiens",
+          "dgraph.type":["Book"],
+          "uid":"_:Book2"
+        }

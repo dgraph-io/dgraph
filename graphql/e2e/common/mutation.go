@@ -2918,7 +2918,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"because id cal already exists for type State")
+		" because id cal already exists: field xcode, type State")
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, 1, nil)
@@ -5342,7 +5342,7 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "adding worker with same reg_No will return error",
 			query: `mutation {
-                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E02"}]) {
+                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
 			        	worker {
 							name
 							reg_No
@@ -5350,17 +5350,20 @@ func mutationWithMultipleXids(t *testing.T) {
 				        }
 			         }
   					}`,
-			expected: `{
-					  "addWorker": {
-						"worker": [
-						  {
-							"name": "Alice",
-							"reg_No": "001",
-                            "emp_Id": "E01"
-						  }
-						]
-					  }
-					}`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
+		},
+		{
+			name: "adding worker with same emp_Id will return error",
+			query: `mutation {
+                     addWorker(input: [{name: "Alice",reg_No:"002",emp_Id:"E01"}]) {
+			        	worker {
+							name
+							reg_No
+							emp_Id
+				        }
+			         }
+  					}`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5373,6 +5376,30 @@ func mutationWithMultipleXids(t *testing.T) {
 				        }
 			         }
   					}`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
+		},
+		{
+			name: "adding worker with different reg_No and emp_id will succeed",
+			query: `mutation {
+                     addWorker(input: [{name: "Bob",reg_No:"002",emp_Id:"E02"}]) {
+			        	worker {
+							name
+							reg_No
+							emp_Id
+				        }
+			         }
+  					}`,
+			expected: `{
+					  "addWorker": {
+						"worker": [
+						  {
+							"name": "Bob",
+							"reg_No": "002",
+                            "emp_Id": "E02"
+						  }
+						]
+					  }
+					}`,
 		},
 	}
 
@@ -5389,9 +5416,12 @@ func mutationWithMultipleXids(t *testing.T) {
 			}
 			resp := params.ExecuteAsPost(t, GraphqlURL)
 			require.Equal(t, tcase.error, resp.Errors.Error())
-			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
-			filter := map[string]interface{}{"reg_No": map[string]interface{}{"eq": "001"}}
-			DeleteGqlType(t, "Worker", filter, 1, nil)
+			if tcase.error == "" {
+				testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			}
+
 		})
 	}
+	filter := map[string]interface{}{"reg_No": []string{"001", "002"}}
+	DeleteGqlType(t, "Worker", filter, 1, nil)
 }

@@ -595,14 +595,21 @@ func rewriteAsGet(
 		return dgQuery
 	}
 
+	xids := make([]string, len(xidArgToVal))
+	i := 0
+	for k := range xidArgToVal {
+		xids[i] = k
+		i++
+	}
+	sort.Strings(xids)
 	xidArgName := query.XIDArg()
 	var flt []*gql.FilterTree
-	for xid, val := range xidArgToVal {
+	for _, xid := range xids {
 		eqXidFuncTemp := &gql.Function{
 			Name: "eq",
 			Args: []gql.Arg{
 				{Value: xidArgName[xid]},
-				{Value: maybeQuoteArg("eq", *val)},
+				{Value: maybeQuoteArg("eq", *xidArgToVal[xid])},
 			},
 		}
 		flt = append(flt, &gql.FilterTree{
