@@ -1230,7 +1230,9 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 	num := abs(opt.First)
 	for len(out.Uids) < num && itr.HasNext() {
-		out.Uids = append(out.Uids, itr.Next())
+		if uid := itr.Next(); uid > opt.AfterUid {
+			out.Uids = append(out.Uids, uid)
+		}
 	}
 	return out, nil
 

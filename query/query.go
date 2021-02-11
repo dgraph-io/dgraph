@@ -2173,9 +2173,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Now apply the results from filter.
 		var bitmaps []*roaring64.Bitmap
 		for _, filter := range sg.Filters {
-			if filter.DestMap != nil {
-				bitmaps = append(bitmaps, filter.DestMap)
+			if filter.DestMap == nil {
+				bitmaps = append(bitmaps, roaring64.NewBitmap())
+				continue
 			}
+			bitmaps = append(bitmaps, filter.DestMap)
 		}
 
 		switch {

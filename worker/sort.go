@@ -505,7 +505,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	}()
 
 	go func() {
-		sr := sortWithIndex(cctx, ts)
+		sr := sortWithoutIndex(cctx, ts)
 		resCh <- sr
 	}()
 
