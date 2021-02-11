@@ -598,6 +598,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		"draining":        resolveDraining,
 		"export":          resolveExport,
 		"login":           resolveLogin,
+		"resetPassword":   resolveResetPassword,
 		"restore":         resolveRestore,
 		"shutdown":        resolveShutdown,
 	}
