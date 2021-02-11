@@ -67,7 +67,8 @@ func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) err
 	ctx = x.AttachNamespace(ctx, inp.Namespace)
 	resp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
-		return errors.Wrapf(err, "Reset password for user %s got error", inp.Namespace)
+		return errors.Wrapf(err, "Reset password for user %s in namespace %d, got error:",
+			inp.UserID, inp.Namespace)
 	}
 
 	type userNode struct {
