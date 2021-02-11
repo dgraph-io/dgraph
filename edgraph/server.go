@@ -165,9 +165,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 		return errors.Wrapf(err, "Deleting namespace, got error: ")
 	}
-	// TODO(Ahsan): We have to ban the pstore for all the groups.
-	ps := worker.State.Pstore
-	return ps.BanNamespace(namespace)
+	return worker.ProcessDeleteNsRequest(ctx, namespace)
 }
 
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.

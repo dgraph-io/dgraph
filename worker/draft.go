@@ -636,6 +636,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 				{StartTs: ts, CommitTs: ts},
 			},
 		})
+
+	case proposal.DeleteNs != nil:
+		n.elog.Printf("Deleting namespace: %d", proposal.DeleteNs.Namespace)
+		return State.Pstore.BanNamespace(proposal.DeleteNs.Namespace)
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
