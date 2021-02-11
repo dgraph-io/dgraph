@@ -109,7 +109,7 @@ func (mws MutationMiddlewares) Then(resolver MutationResolver) MutationResolver 
 }
 
 // resolveGuardianOfTheGalaxyAuth returns a Resolved with error if the context doesn't contain any
-// Guardian auth, otherwise it returns nil
+// Guardian of Galaxy auth, otherwise it returns nil
 func resolveGuardianOfTheGalaxyAuth(ctx context.Context, f schema.Field) *Resolved {
 	if err := edgraph.AuthGuardianOfTheGalaxy(ctx); err != nil {
 		return EmptyResult(f, err)
@@ -134,7 +134,7 @@ func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
 }
 
 // GuardianOfTheGalaxyAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian
-// auth present in context, otherwise it lets the resolverFunc resolve the query.
+// of Galaxy auth present in context, otherwise it lets the resolverFunc resolve the query.
 func GuardianOfTheGalaxyAuthMW4Query(resolver QueryResolver) QueryResolver {
 	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 		if resolved := resolveGuardianOfTheGalaxyAuth(ctx, query); resolved != nil {
@@ -144,8 +144,8 @@ func GuardianOfTheGalaxyAuthMW4Query(resolver QueryResolver) QueryResolver {
 	})
 }
 
-// GuardianOfTheGalaxyAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian
-// auth present in context, otherwise it lets the resolverFunc resolve the query.
+// GuardianAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian auth present
+// in context, otherwise it lets the resolverFunc resolve the query.
 func GuardianAuthMW4Query(resolver QueryResolver) QueryResolver {
 	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 		if resolved := resolveGuardianAuth(ctx, query); resolved != nil {
@@ -171,8 +171,8 @@ func LoggingMWQuery(resolver QueryResolver) QueryResolver {
 	})
 }
 
-// GuardianAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian auth
-// present in context, otherwise it lets the resolverFunc resolve the mutation.
+// GuardianOfTheGalaxyAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian
+// of Galaxy auth present in context, otherwise it lets the resolverFunc resolve the mutation.
 func GuardianOfTheGalaxyAuthMW4Mutation(resolver MutationResolver) MutationResolver {
 	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
 		if resolved := resolveGuardianOfTheGalaxyAuth(ctx, mutation); resolved != nil {

@@ -644,7 +644,6 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAuthToken(ctx, r)
 	ctx = x.AttachJWTNamespace(ctx)
 
-	// TODO(Pawan): Are we passing the correct namespace over here?
 	return adminServer.ResolveWithNs(ctx, x.GalaxyNamespace, gqlReq)
 }
 

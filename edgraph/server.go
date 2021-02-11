@@ -110,7 +110,7 @@ type existingGQLSchemaQryResp struct {
 }
 
 func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
-	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
+	glog.V(2).Info("Got create namespace request.")
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
 	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)

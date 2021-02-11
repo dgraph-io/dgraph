@@ -322,14 +322,14 @@ const (
 
 var (
 	// guardianOfTheGalaxyQueryMWs are the middlewares which should be applied to queries served by
-	// admin server unless some exceptional behaviour is required
+	// admin server for guardian of galaxy unless some exceptional behaviour is required
 	guardianOfTheGalaxyQueryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query,
 		resolve.GuardianOfTheGalaxyAuthMW4Query,
 		resolve.LoggingMWQuery,
 	}
 	// guardianOfTheGalaxyMutationMWs are the middlewares which should be applied to mutations
-	// served by admin server unless some exceptional behaviour is required
+	// served by admin server for guardian of galaxy unless some exceptional behaviour is required
 	guardianOfTheGalaxyMutationMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
