@@ -16,6 +16,11 @@
 
 package x
 
+type ExportedGQLSchema struct {
+	Namespace uint64
+	Schema    string
+}
+
 // SensitiveByteSlice implements the Stringer interface to redact its contents.
 // Use this type for sensitive info such as keys, passwords, or secrets so it doesn't leak
 // as output such as logs.
