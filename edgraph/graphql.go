@@ -179,40 +179,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	return corsLast.Uid, corsLast.DgraphCors, nil
 }
 
-// UpdateSchemaHistory updates graphql schema history.
-func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	req := &Request{
-		req: &api.Request{
-			Mutations: []*api.Mutation{
-				{
-					Set: []*api.NQuad{
-						{
-							Subject:     "_:a",
-							Predicate:   "dgraph.graphql.schema_history",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: schema}},
-						},
-						{
-							Subject:   "_:a",
-							Predicate: "dgraph.type",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{
-								StrVal: "dgraph.graphql.history"}},
-						},
-					},
-					SetNquads: []byte(fmt.Sprintf(`_:a <dgraph.graphql.schema_created_at> "%s" .`,
-						time.Now().Format(time.RFC3339))),
-				},
-			},
-			CommitNow: true,
-		},
-		doAuth: NoAuthorize,
-	}
-	//TODO(Pawan): Make this use right namespace.
-	ctx = context.WithValue(ctx, IsGraphql, true)
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	_, err := (&Server{}).doQuery(ctx, req)
-	return err
-}
-
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
 // 1. If sha256Hash is not provided process queries without persisting
 // 2. If sha256Hash is provided try retrieving persisted queries

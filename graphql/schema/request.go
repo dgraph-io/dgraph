@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"context"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -38,6 +39,7 @@ type Request struct {
 	Variables     map[string]interface{} `json:"variables"`
 	Extensions    RequestExtensions
 	Header        http.Header
+	Context       context.Context
 }
 
 // RequestExtensions represents extensions recieved in requests

@@ -482,12 +482,13 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if ts.Count < 0 {
 		return nil, errors.Errorf(
 			"We do not yet support negative or infinite count with sorting: %s %d. "+
-				"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
+				"Try flipping order and return first few elements instead.",
+			x.ParseAttr(ts.Order[0].Attr), ts.Count)
 	}
 	// TODO (pawan) - Why check only the first attribute, what if other attributes are of list type?
 	if schema.State().IsList(ts.Order[0].Attr) {
 		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]",
-			ts.Order[0].Attr)
+			x.ParseAttr(ts.Order[0].Attr))
 	}
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.

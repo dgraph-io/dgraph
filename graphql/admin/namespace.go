@@ -14,11 +14,11 @@ type namespaceInput struct {
 	NamespaceId int
 }
 
-func resolveGetNewNamespace(ctx context.Context, m schema.Query) *resolve.Resolved {
+func resolveAddNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	var ns uint64
 	var err error
 	if ns, err = (&edgraph.Server{}).CreateNamespace(ctx); err != nil {
-		return resolve.EmptyResult(m, err)
+		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
 		m,
@@ -27,7 +27,7 @@ func resolveGetNewNamespace(ctx context.Context, m schema.Query) *resolve.Resolv
 			"message":     "Created namespace successfully",
 		}},
 		nil,
-	)
+	), true
 }
 
 func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

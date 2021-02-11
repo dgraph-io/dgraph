@@ -268,6 +268,15 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
+// ExtractNamespaceHTTP parses the namespace value from the incoming HTTP request.
+func ExtractNamespaceHTTP(r *http.Request) uint64 {
+	ctx := AttachAccessJwt(context.Background(), r)
+	// Ignoring error because the default value is zero anyways.
+	namespace, _ := ExtractJWTNamespace(ctx)
+	return namespace
+}
+
+// ExtractNamespace parses the namespace value from the incoming gRPC context.
 func ExtractNamespace(ctx context.Context) uint64 {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -429,9 +438,13 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 		ns, err := ExtractJWTNamespace(ctx)
 		if err != nil {
 			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		} else {
+			// Attach the namespace only if we got one from JWT.
+			// This preserves any namespace directly present in the context which is needed for
+			// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+			// context is created by hand.
+			ctx = AttachNamespace(ctx, ns)
 		}
-		// TODO(Ahsan): Shouldn't we return an error from here?
-		ctx = AttachNamespace(ctx, ns)
 	} else {
 		ctx = AttachNamespace(ctx, GalaxyNamespace)
 	}
@@ -1317,7 +1330,7 @@ Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations
 
 	/*Additional Commands:{{range .Commands}}{{if (and .IsAvailableCommand (not .Annotations.group))}}
 	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}*/
-	`	
+	`
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
@@ -1333,7 +1346,7 @@ Usage:{{if .Runnable}}
 
 Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-  
+
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 

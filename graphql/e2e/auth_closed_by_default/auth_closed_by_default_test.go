@@ -17,12 +17,13 @@
 package auth_closed_by_default
 
 import (
+	"os"
+	"testing"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/stretchr/testify/require"
-	"os"
-	"testing"
 )
 
 type TestCase struct {
@@ -33,6 +34,7 @@ type TestCase struct {
 }
 
 func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{{
 		name: "Missing JWT from Mutation - type with auth directive",
 		query: `
@@ -82,6 +84,7 @@ func TestAuthRulesMutationWithClosedByDefaultFlag(t *testing.T) {
 }
 
 func TestAuthRulesQueryWithClosedByDefaultFlag(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{
 		{name: "Missing JWT from Query - type with auth field",
 			query: `
@@ -116,6 +119,7 @@ func TestAuthRulesQueryWithClosedByDefaultFlag(t *testing.T) {
 }
 
 func TestAuthRulesUpdateWithClosedByDefaultFlag(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{{
 		name: "Missing JWT from Update Mutation - type with auth field",
 		query: `
@@ -158,6 +162,7 @@ func TestAuthRulesUpdateWithClosedByDefaultFlag(t *testing.T) {
 }
 
 func TestDeleteOrRBACFilter(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{{
 		name: "Missing JWT from delete Mutation- type with auth field",
 		query: `
