@@ -109,65 +109,6 @@ type existingGQLSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
-func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
-	ctx = x.AttachJWTNamespace(ctx)
-	glog.V(2).Info("Got create namespace request from namespace: ", x.ExtractNamespace(ctx))
-
-	// Namespace creation is only allowed by the guardians of the galaxy group.
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return 0, errors.Wrapf(err, "Creating namespace, got error:")
-	}
-
-	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
-	ids, err := worker.AssignNsIdsOverNetwork(ctx, num)
-	if err != nil {
-		return 0, errors.Wrapf(err, "Creating namespace, got error:")
-	}
-
-	ns := ids.StartId
-	glog.V(2).Infof("Got a lease for NsID: %d", ns)
-
-	// Attach the newly leased NsID in the context in order to create guardians/groot for it.
-	ctx = x.AttachNamespace(ctx, ns)
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	m.Schema = schema.InitialSchema(ns)
-	m.Types = schema.InitialTypes(ns)
-	_, err = query.ApplyMutations(ctx, m)
-	if err != nil {
-		return 0, err
-	}
-
-	if err = worker.WaitForIndexing(ctx, true); err != nil {
-		return 0, errors.Wrap(err, "Creating namespace, got error: ")
-	}
-	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
-		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
-	}
-	glog.V(2).Infof("Created namespace: %d", ns)
-	return ns, nil
-}
-
-// This function is used while creating new namespace. New namespace creation is only allowed
-// by the guardians of the galaxy group.
-func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
-	if err := upsertGuardian(ctx); err != nil {
-		return errors.Wrap(err, "While creating Guardian")
-	}
-	if err := upsertGroot(ctx); err != nil {
-		return errors.Wrap(err, "While creating Groot")
-	}
-	return nil
-}
-
-func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
-	glog.Info("Deleting namespace", namespace)
-	ctx = x.AttachJWTNamespace(ctx)
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "Deleting namespace, got error: ")
-	}
-	return worker.ProcessDeleteNsRequest(ctx, namespace)
-}
-
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")

@@ -1039,6 +1039,9 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	return nil
 }
 
+// AuthGuardianOfTheGalaxy authorizes the operations for the users who belong to the guardians
+// group in the galaxy namespace. This authorization is used for admin usages like creation and
+// deletion of a namespace, resetting passwords across namespaces etc.
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
