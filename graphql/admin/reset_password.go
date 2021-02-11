@@ -27,18 +27,12 @@ import (
 	"github.com/golang/glog"
 )
 
-type passwordInput struct {
-	UserID    string
-	Password  string
-	Namespace uint64
-}
-
 func resolveResetPassword(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	glog.Info("Got reset password request")
-
-	in := getPasswordInput(m)
-	err := (&edgraph.Server{}).ResetPassword(ctx, in.Namespace, in.UserID, in.Password)
+	inp, err := getPasswordInput(m)
 	if err != nil {
+		glog.Error("Failed to parse the reset password input")
+	}
+	if err = (&edgraph.Server{}).ResetPassword(ctx, inp); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
@@ -46,9 +40,9 @@ func resolveResetPassword(ctx context.Context, m schema.Mutation) (*resolve.Reso
 		m,
 		map[string]interface{}{
 			m.Name(): map[string]interface{}{
-				"userId":    in.UserID,
+				"userId":    inp.UserID,
 				"message":   "Reset password is successful",
-				"namespace": json.Number(strconv.Itoa(int(in.Namespace))),
+				"namespace": json.Number(strconv.Itoa(int(inp.Namespace))),
 			},
 		},
 		nil,
@@ -56,19 +50,19 @@ func resolveResetPassword(ctx context.Context, m schema.Mutation) (*resolve.Reso
 
 }
 
-func getPasswordInput(m schema.Mutation) *passwordInput {
-	var input passwordInput
+func getPasswordInput(m schema.Mutation) (*edgraph.ResetPasswordInput, error) {
+	var input edgraph.ResetPasswordInput
 
-	input.UserID, _ = m.ArgValue("userId").(string)
-	input.Password, _ = m.ArgValue("password").(string)
+	inputArg := m.ArgValue(schema.InputArgName)
+	inputByts, err := json.Marshal(inputArg)
 
-	b, err := json.Marshal(m.ArgValue("namespace"))
 	if err != nil {
-		return nil
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
 
-	if err = json.Unmarshal(b, &input.Namespace); err != nil {
-		return nil
+	if err := json.Unmarshal(inputByts, &input); err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
-	return &input
+
+	return &input, nil
 }

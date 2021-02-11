@@ -423,6 +423,12 @@ const adminTypes = `
 		message: String
 	}
 
+	input ResetPasswordInput {
+		userId: String!
+		password: String!
+		namespace: Int!
+	}
+
 	type ResetPasswordPayload {
 		userId: String
 		message: String
@@ -489,7 +495,7 @@ const adminMutations = `
 	Reset password can only be used by the Guardians of the galaxy to reset password of
 	any user in any namespace.
 	"""
-	resetPassword(userId: String, password: String, namespace: Int): ResetPasswordPayload
+	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
 	`
 
 const adminQueries = `
