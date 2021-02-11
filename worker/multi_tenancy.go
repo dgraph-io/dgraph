@@ -34,10 +34,6 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 	return x.ErrNotSupported
 }
 
-func tryDeleteProposal(ctx context.Context, req *pb.DeleteNsRequest) error {
-	return nil
-}
-
 func proposeDeleteOrSend(ctx context.Context, req *pb.DeleteNsRequest) error {
 	return nil
 }
