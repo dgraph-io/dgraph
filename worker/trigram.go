@@ -39,7 +39,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		First:  int(arg.q.First),
 	}
 	// TODO: Unnecessary conversion here. Avoid if possible.
-	if intersect.GetCardinality() > 0 {
+	if !intersect.IsEmpty() {
 		opts.Intersect = &pb.List{
 			Uids: intersect.ToArray(),
 		}
@@ -69,7 +69,7 @@ func uidsForRegex(attr string, arg funcArgs,
 				results.And(trigramUids)
 			}
 
-			if results.GetCardinality() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
@@ -83,7 +83,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results.GetCardinality() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}

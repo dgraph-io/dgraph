@@ -438,9 +438,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	for i, ul := range r.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
-			idx := dest.Rank(uid)
-			x.AssertTrue(idx >= 0)
-			vals[j] = sortVals[idx]
+			vals[j] = sortVals[uid]
 		}
 		if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 			return err
@@ -505,8 +503,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	}()
 
 	go func() {
-		// TODO(Ahsan): Revert this back to sortWithIndex after fixing multi-sort with index.
-		sr := sortWithoutIndex(cctx, ts)
+		sr := sortWithIndex(cctx, ts)
 		resCh <- sr
 	}()
 

@@ -250,7 +250,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, subgraph := range exec {
-			if subgraph.DestMap.GetCardinality() == 0 {
+			if subgraph.DestMap.IsEmpty() {
 				continue
 			}
 			select {

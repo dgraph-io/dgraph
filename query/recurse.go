@@ -153,7 +153,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			if sg.UnknownAttr {
 				continue
 			}
-			if sg.DestMap.GetCardinality() == 0 {
+			if sg.DestMap.IsEmpty() {
 				continue
 			}
 			if exp, err = expandChildren(ctx, sg, startChildren); err != nil {

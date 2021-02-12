@@ -1435,6 +1435,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Vals:    make(map[uint64]types.Val),
 			path:    sgPath,
 			strList: sg.valueMatrix,
+			UidMap:  roaring64.New(),
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val := types.Val{
@@ -1452,6 +1453,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Vals:    make(map[uint64]types.Val),
 			path:    sgPath,
 			strList: sg.valueMatrix,
+			UidMap:  roaring64.New(),
 		}
 
 		// Because we are counting the number of UIDs in parent
@@ -1461,7 +1463,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
-	case sg.DestMap.GetCardinality() != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
+	case !sg.DestMap.IsEmpty() || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
 		//    me(func: (...)) {
@@ -1494,7 +1496,6 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			return nil
 		}
-
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
 		v.UidMap.Or(uids)
@@ -1534,6 +1535,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path:    sgPath,
 			Vals:    make(map[uint64]types.Val),
 			strList: sg.valueMatrix,
+			UidMap:  roaring64.NewBitmap(),
 		}
 	}
 	return nil
@@ -1645,7 +1647,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of from var(%s) should have already been populated",
 				fromVar)
 		}
-		if uidVar.UidMap != nil && uidVar.UidMap.GetCardinality() > 0 {
+		if !uidVar.UidMap.IsEmpty() {
 			if uidVar.UidMap.GetCardinality() > 1 {
 				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
 			}
@@ -1660,7 +1662,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of to var(%s) should have already been populated",
 				toVar)
 		}
-		if uidVar.UidMap != nil && uidVar.UidMap.GetCardinality() > 0 {
+		if !uidVar.UidMap.IsEmpty() {
 			if uidVar.UidMap.GetCardinality() > 1 {
 				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
 			}
@@ -1707,7 +1709,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			}
 			sg.SrcFunc.Args = srcFuncArgs
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.UidMap != nil:
+		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && !l.UidMap.IsEmpty():
 			out.Or(l.UidMap)
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
@@ -1721,7 +1723,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				out.Add(k)
 			}
 
-		case len(l.Vals) != 0 || l.UidMap != nil:
+		case len(l.Vals) != 0 || !l.UidMap.IsEmpty():
 			return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 		default:

@@ -567,7 +567,11 @@ func (l *List) bitmap(opt ListOptions) (*roaring64.Bitmap, error) {
 			r.Remove(p.Uid)
 		}
 	}
+
 	codec.RemoveRange(r, 0, opt.AfterUid)
+	if iw != nil {
+		r.And(iw)
+	}
 	return r, nil
 }
 
@@ -1605,10 +1609,10 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 	if err := codec.FromPostingList(r, plist); err != nil {
 		return false
 	}
-	if r.GetCardinality() > 0 {
-		return false
+	if r.IsEmpty() {
+		return true
 	}
-	return true
+	return false
 }
 
 // TODO: Remove this func.
