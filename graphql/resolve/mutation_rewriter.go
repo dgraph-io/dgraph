@@ -1260,9 +1260,9 @@ func rewriteObject(
 	}
 
 	xids := typ.XIDField()
-	var xidString string
 	if len(xids) != 0 {
 		for _, xid := range xids {
+			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				// TODO: Add a function for parsing idVal. This is repeatitive
 				switch xid.Type().Name() {
@@ -1325,7 +1325,7 @@ func rewriteObject(
 					// this node later easier.
 					idExistence[variable] = fmt.Sprintf("_:%s", variable)
 				}
-			} else {
+			} else if mutationType == Add || !atTopLevel {
 				// There are two possibilities here:
 				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
 				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
@@ -1334,11 +1334,9 @@ func rewriteObject(
 				//    In this case this is not an error as the UID at top level of Update Mutation is
 				//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 				//    with the function.
-				if mutationType == Add || !atTopLevel {
-					err := errors.Errorf("field %s cannot be empty", xid.Name())
-					retErrors = append(retErrors, err)
-					return nil, retErrors
-				}
+				err := errors.Errorf("field %s cannot be empty", xid.Name())
+				retErrors = append(retErrors, err)
+				return nil, retErrors
 			}
 		}
 	}
@@ -1561,8 +1559,6 @@ func existenceQueries(
 						return nil, retErrors
 					}
 					xidString = strconv.FormatFloat(val, 'f', -1, 64)
-				case "Int64":
-					fallthrough
 				default:
 					xidString, ok = xidVal.(string)
 					if !ok {

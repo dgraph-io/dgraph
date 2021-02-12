@@ -1908,7 +1908,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 					Name: fld.Name,
 					Type: &ast.Type{
 						NamedType: fld.Type.Name(),
-						NonNull:   !hasIDField && !(xidCount > 1),
+						NonNull:   !hasIDField && xidCount <= 1,
 					},
 				})
 			}
@@ -2558,15 +2558,6 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 
 func idTypeFor(defn *ast.Definition) string {
 	return "ID"
-}
-
-func xidTypeFor(defn *ast.Definition) (string, string) {
-	for _, fld := range nonExternalAndKeyFields(defn) {
-		if hasIDDirective(fld) {
-			return fld.Name, fld.Type.Name()
-		}
-	}
-	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
