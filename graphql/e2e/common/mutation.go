@@ -5318,13 +5318,13 @@ func inputCoerciontoList(t *testing.T) {
 	}{
 		{name: "Coercion of Scalar value at root to list ",
 			query: ` mutation {
-						addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
-							post1 {
-								title
-								commentsByMonth
-							}
-						}
-					}`,
+	                   addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
+	                   	post1 {
+	                   		title
+	                   		commentsByMonth
+	                   	}
+	                   }
+                    }`,
 			expected: `{
                          "addpost1": {
                              "post1": [
@@ -5340,13 +5340,14 @@ func inputCoerciontoList(t *testing.T) {
 		},
 		{name: "Coercion of Scalar value at root to list using variables",
 			query: ` mutation($post1: [Addpost1Input!]!) {
-						addpost1(input: $post1) {
-							post1 {
-								title
-								commentsByMonth
-							}
-						}
-					}`,
+                    	addpost1(input: $post1) {
+                    		post1 {
+                    			title
+                    			commentsByMonth
+                    		}
+                    	}
+}
+`,
 			expected: `{
                           "addpost1": {
                               "post1": [
@@ -5363,17 +5364,17 @@ func inputCoerciontoList(t *testing.T) {
 		},
 		{name: "Coercing nested scalar value to list ",
 			query: ` mutation {
-						addauthor1(
-							input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
-						) {
-							author1 {
-								name
-								posts {
-									title
-									commentsByMonth
-								}
-							}
-						}
+	                      addauthor1(
+	                      	input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
+	                      ) {
+	                      	author1 {
+	                      		name
+	                      		posts {
+	                      			title
+	                      			commentsByMonth
+	                      		}
+	                      	}
+	                      }
 					}`,
 			expected: `{
                          "addauthor1": {
@@ -5395,16 +5396,16 @@ func inputCoerciontoList(t *testing.T) {
 		},
 		{name: "Coercing nested scalar value to list using variables",
 			query: `mutation($author: [Addauthor1Input!]!) {
-						addauthor1(input: $author) {
-							author1 {
-								name
-								posts {
-									title
-									commentsByMonth
-								}
-							}
-						}
-					}`,
+	                    addauthor1(input: $author) {
+	                    	author1 {
+	                    		name
+	                    		posts {
+	                    			title
+	                    			commentsByMonth
+	                    		}
+	                    	}
+	                    }
+                     }`,
 			expected: `{
                          "addauthor1": {
                              "author1": [
@@ -5461,14 +5462,14 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "add worker with multiple xids",
 			query: `mutation {
-						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
-							worker {
-								name
-								reg_No
-								emp_Id
-							}
-						}
-					}`,
+	                  addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+	                  	worker {
+	                  		name
+	                  		reg_No
+	                  		emp_Id
+	                  	}
+	                  }
+                    }`,
 			expected: `{
                          "addWorker": {
                              "worker": [
@@ -5484,52 +5485,52 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "adding worker with same reg_No will return error",
 			query: `mutation {
-						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E012" }]) {
-							worker {
-								name
-								reg_No
-								emp_Id
-							}
-						}
-					}`,
+	                   addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E012" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
+                    }`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
 			query: `mutation {
-						addWorker(input: [{ name: "Alice", reg_No: "002", emp_Id: "E01" }]) {
-							worker {
-								name
-								reg_No
-								emp_Id
-							}
-						}
-					}`,
+	                   addWorker(input: [{ name: "Alice", reg_No: "002", emp_Id: "E01" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
+                    }`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
 			query: `mutation {
-						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
-							worker {
-								name
-								reg_No
-								emp_Id
-							}
-						}
-					}`,
+	                  addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+	                  	worker {
+	                  		name
+	                  		reg_No
+	                  		emp_Id
+	                  	}
+	                  }
+                  }`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
 			query: `mutation {
-						addWorker(input: [{ name: "Bob", reg_No: "002", emp_Id: "E02" }]) {
-							worker {
-								name
-								reg_No
-								emp_Id
-							}
-						}
+	                   addWorker(input: [{ name: "Bob", reg_No: "002", emp_Id: "E02" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
 					}`,
 			expected: `{
                          "addWorker": {
