@@ -23,9 +23,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/gql"
 	"sort"
 	"time"
+
+	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -42,36 +44,42 @@ func ResetCors(closer *z.Closer) {
 		closer.Done()
 	}()
 
-	req := &api.Request{
-		Query: `query{
+	req := &Request{
+		req: &api.Request{
+			Query: `query{
 			cors as var(func: has(dgraph.cors))
 		}`,
-		Mutations: []*api.Mutation{
-			{
-				Set: []*api.NQuad{
-					{
-						Subject:     "_:a",
-						Predicate:   "dgraph.cors",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
+			Mutations: []*api.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:     "_:a",
+							Predicate:   "dgraph.cors",
+							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
+						},
+						{
+							Subject:   "_:a",
+							Predicate: "dgraph.type",
+							ObjectValue: &api.Value{Val: &api.Value_StrVal{
+								StrVal: "dgraph.type.cors"}},
+						},
 					},
-					{
-						Subject:   "_:a",
-						Predicate: "dgraph.type",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{
-							StrVal: "dgraph.type.cors"}},
-					},
+					Cond: `@if(eq(len(cors), 0))`,
 				},
-				Cond: `@if(eq(len(cors), 0))`,
 			},
+			CommitNow: true,
 		},
-		CommitNow: true,
+		doAuth: NoAuthorize,
 	}
 
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
+		//TODO(Ahsan): I don't think this is namespace specific, we will have to reset cors for
+		// all the namespaces.
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -93,35 +101,48 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 	if err != nil {
 		return err
 	}
-	req := &api.Request{
-		Query: `query{
+	req := &Request{
+		req: &api.Request{
+			Query: `query{
 			cors as var(func: has(dgraph.cors))
 		}`,
-		Mutations: []*api.Mutation{
-			{
-				SetNquads: generateNquadsForCors(uid, origins),
-				Cond:      `@if(gt(len(cors), 0))`,
-				DelNquads: []byte(`<` + uid + `>` + ` <dgraph.cors> * .`),
+			Mutations: []*api.Mutation{
+				{
+					SetNquads: generateNquadsForCors(uid, origins),
+					Cond:      `@if(gt(len(cors), 0))`,
+					DelNquads: []byte(`<` + uid + `>` + ` <dgraph.cors> * .`),
+				},
 			},
+			CommitNow: true,
 		},
-		CommitNow: true,
+		doAuth: NoAuthorize,
 	}
-	_, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+	ctx = context.WithValue(ctx, IsGraphql, true)
+	// TODO(Ahsan): Is this namespace specific?
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	_, err = (&Server{}).doQuery(ctx, req)
 	return err
 }
 
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
-	req := &api.Request{
-		Query: `query{
+	ctx = x.AttachJWTNamespace(ctx)
+	req := &Request{
+		req: &api.Request{
+			Query: `query{
 			me(func: has(dgraph.cors)){
 				uid
 				dgraph.cors
 			}
 		}`,
-		ReadOnly: true,
+			ReadOnly: true,
+		},
+		doAuth: NoAuthorize,
 	}
-	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+	//TODO(Ahsan): Is this namespace specific?
+	ctx = context.WithValue(ctx, IsGraphql, true)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	res, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return "", nil, err
 	}
@@ -158,34 +179,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	return corsLast.Uid, corsLast.DgraphCors, nil
 }
 
-// UpdateSchemaHistory updates graphql schema history.
-func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	req := &api.Request{
-		Mutations: []*api.Mutation{
-			{
-				Set: []*api.NQuad{
-					{
-						Subject:     "_:a",
-						Predicate:   "dgraph.graphql.schema_history",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: schema}},
-					},
-					{
-						Subject:   "_:a",
-						Predicate: "dgraph.type",
-						ObjectValue: &api.Value{Val: &api.Value_StrVal{
-							StrVal: "dgraph.graphql.history"}},
-					},
-				},
-				SetNquads: []byte(fmt.Sprintf(`_:a <dgraph.graphql.schema_created_at> "%s" .`,
-					time.Now().Format(time.RFC3339))),
-			},
-		},
-		CommitNow: true,
-	}
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
-	return err
-}
-
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
 // 1. If sha256Hash is not provided process queries without persisting
 // 2. If sha256Hash is provided try retrieving persisted queries
@@ -213,13 +206,16 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	variables := map[string]string{
 		"$sha": sha256Hash,
 	}
-	req := &api.Request{
-		Query:    queryForSHA,
-		Vars:     variables,
-		ReadOnly: true,
+	req := &Request{
+		req: &api.Request{
+			Query:    queryForSHA,
+			Vars:     variables,
+			ReadOnly: true,
+		},
+		doAuth: NoAuthorize,
 	}
-
-	storedQuery, err := (&Server{}).doQuery(ctx, req, NoAuthorize)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
 		glog.Errorf("Error while querying sha %s", sha256Hash)
@@ -249,33 +245,38 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			return errors.New("provided sha does not match query")
 		}
 
-		req := &api.Request{
-			Mutations: []*api.Mutation{
-				{
-					Set: []*api.NQuad{
-						{
-							Subject:     "_:a",
-							Predicate:   "dgraph.graphql.p_query",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: query}},
-						},
-						{
-							Subject:     "_:a",
-							Predicate:   "dgraph.graphql.p_sha256hash",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: sha256Hash}},
-						},
-						{
-							Subject:   "_:a",
-							Predicate: "dgraph.type",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{
-								StrVal: "dgraph.graphql.persisted_query"}},
+		req = &Request{
+			req: &api.Request{
+				Mutations: []*api.Mutation{
+					{
+						Set: []*api.NQuad{
+							{
+								Subject:     "_:a",
+								Predicate:   "dgraph.graphql.p_query",
+								ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: query}},
+							},
+							{
+								Subject:     "_:a",
+								Predicate:   "dgraph.graphql.p_sha256hash",
+								ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: sha256Hash}},
+							},
+							{
+								Subject:   "_:a",
+								Predicate: "dgraph.type",
+								ObjectValue: &api.Value{Val: &api.Value_StrVal{
+									StrVal: "dgraph.graphql.persisted_query"}},
+							},
 						},
 					},
 				},
+				CommitNow: true,
 			},
-			CommitNow: true,
+			doAuth: NoAuthorize,
 		}
 
-		_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req, NoAuthorize)
+		ctx := context.WithValue(ctx, IsGraphql, true)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		_, err := (&Server{}).doQuery(ctx, req)
 		return err
 
 	}

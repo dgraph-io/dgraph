@@ -296,5 +296,9 @@
 	{"uid":"_:Question2","Question.answered":"true"},
 	{"uid":"_:Question3","Question.answered":"false"},
 	{"uid":"_:Answer1","Answer.markedUseful":"true"},
-	{"uid":"_:Answer2","Answer.markedUseful":"true"}
+	{"uid":"_:Answer2","Answer.markedUseful":"true"},
+	{"uid":"_:Car1","dgraph.type":"Vehicle"},
+	{"uid":"_:Car1","dgraph.type":"Car"},
+	{"uid":"_:Car1","Vehicle.owner":"Bob"},
+	{"uid":"_:Car1","Car.manufacturer":"Tesla"}
 ]

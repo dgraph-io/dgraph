@@ -18,10 +18,11 @@ package admin_auth
 
 import (
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/x"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +106,7 @@ func assertMissingAclError(t *testing.T, resp *common.GraphQLResponse) {
 
 func assertBadAclError(t *testing.T, resp *common.GraphQLResponse) {
 	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token:token contains an invalid number of segments",
+		Message: "resolving updateGQLSchema failed because rpc error: code = Unauthenticated desc = unable to parse jwt token: token contains an invalid number of segments",
 		Locations: []x.Location{{
 			Line:   2,
 			Column: 4,

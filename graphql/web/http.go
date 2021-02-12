@@ -53,42 +53,58 @@ const (
 type IServeGraphQL interface {
 
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
-	ServeGQL(resolver *resolve.RequestResolver)
+	ServeGQL(ns uint64, resolver *resolve.RequestResolver)
+
+	Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver)
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
 
 	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
 	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
+
+	// ResolveWithNs processes a GQL Request using the correct resolver and returns a GQL Response
+	ResolveWithNs(ctx context.Context, ns uint64, gqlReq *schema.Request) *schema.Response
 }
 
 type graphqlHandler struct {
-	resolver *resolve.RequestResolver
+	resolver map[uint64]*resolve.RequestResolver
 	handler  http.Handler
-	poller   *subscription.Poller
+	poller   map[uint64]*subscription.Poller
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver, admin bool) IServeGraphQL {
+func NewServer(admin bool) IServeGraphQL {
 	gh := &graphqlHandler{
-		resolver: resolver,
-		poller:   subscription.NewPoller(schemaEpoch, resolver),
+		resolver: make(map[uint64]*resolve.RequestResolver),
+		poller:   make(map[uint64]*subscription.Poller),
 	}
 	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
 	return gh
+}
+
+func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver) {
+	gh.resolver[ns] = resolver
+	gh.poller[ns] = subscription.NewPoller(schemaEpoch, resolver)
 }
 
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
 	return gh.handler
 }
 
-func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
-	gh.poller.UpdateResolver(resolver)
-	gh.resolver = resolver
+func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver) {
+	gh.poller[ns].UpdateResolver(resolver)
+	gh.resolver[ns] = resolver
 }
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
-	return gh.resolver.Resolve(ctx, gqlReq)
+	ns := x.ExtractNamespace(ctx)
+	return gh.resolver[ns].Resolve(ctx, gqlReq)
+}
+
+func (gh *graphqlHandler) ResolveWithNs(ctx context.Context, ns uint64,
+	gqlReq *schema.Request) *schema.Response {
+	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
@@ -134,7 +150,8 @@ func (gs *graphqlSubscription) Subscribe(
 		StandardClaims: jwt.StandardClaims{},
 	}
 	header, _ := ctx.Value("Header").(json.RawMessage)
-
+	var namespace uint64
+	newCtx := context.Background()
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
@@ -142,6 +159,15 @@ func (gs *graphqlSubscription) Subscribe(
 		}
 
 		name := authorization.GetHeader()
+		v, ok := payload["X-Dgraph-AccessToken"].(string)
+		if ok {
+			req := &http.Request{
+				Header: make(map[string][]string),
+			}
+			req.Header.Set("X-Dgraph-AccessToken", v)
+			newCtx = x.AttachAccessJwt(newCtx, req)
+			namespace, _ = x.ExtractJWTNamespace(newCtx)
+		}
 		for key, val := range payload {
 			if !strings.EqualFold(key, name) {
 				continue
@@ -168,9 +194,14 @@ func (gs *graphqlSubscription) Subscribe(
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
+		// We pass down the context because it contains the accessJWT which is used for the query
+		// Resolve method.
+		Context: newCtx,
 	}
-
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaims)
+	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
+		return nil, nil
+	}
+	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req, customClaims)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +210,7 @@ func (gs *graphqlSubscription) Subscribe(
 		// Context is cancelled when a client disconnects, so delete subscription after client
 		// disconnects.
 		<-ctx.Done()
-		gs.graphqlHandler.poller.TerminateSubscription(res.BucketID, res.SubscriptionID)
+		gs.graphqlHandler.poller[namespace].TerminateSubscription(res.BucketID, res.SubscriptionID)
 	}()
 	return res.UpdateCh, ctx.Err()
 }
@@ -211,9 +242,12 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
+	ctx = x.AttachJWTNamespace(ctx)
+	rs := r.Header.Get("resolver")
+	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
 	var res *schema.Response
-	gqlReq, err := getRequest(ctx, r)
+	gqlReq, err := getRequest(r)
 
 	if err != nil {
 		write(w, schema.ErrorResponse(err), strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
@@ -225,7 +259,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res = gh.resolver.Resolve(ctx, gqlReq)
+	res = gh.resolver[resolver].Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
@@ -246,7 +280,7 @@ func (gz gzreadCloser) Close() error {
 	return gz.Closer.Close()
 }
 
-func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
+func getRequest(r *http.Request) (*schema.Request, error) {
 	gqlReq := &schema.Request{}
 
 	if r.Header.Get("Content-Encoding") == "gzip" {

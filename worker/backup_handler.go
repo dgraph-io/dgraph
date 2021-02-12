@@ -149,7 +149,7 @@ func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) 
 // A reader, the backup groupId, and a map whose keys are the predicates to restore
 // are passed as arguments.
 type loadFn func(reader io.Reader, groupId uint32, preds predicateSet,
-	dropOperations []*pb.DropOperation) (uint64, error)
+	dropOperations []*pb.DropOperation) (uint64, uint64, error)
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
@@ -157,12 +157,12 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCrede
 	fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return LoadResult{Err: err}
 	}
 
 	h := getHandler(uri.Scheme, creds)
 	if h == nil {
-		return LoadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
+		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
 	return h.Load(uri, backupId, backupNum, fn)

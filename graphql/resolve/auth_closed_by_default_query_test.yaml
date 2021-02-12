@@ -7,14 +7,6 @@
         text
       }
     }
-  dgquery: |-
-    query {
-      queryRTodo(func: type(Todo)) {
-        owner : Todo.comment
-        text :  Todo.text
-        dgraph.uid : uid
-      }
-    }
   error:
     { "message": "a valid JWT is required but was not provided"}
 
@@ -25,14 +17,6 @@
         id
         owner
         text
-      }
-    }
-  dgquery: |-
-    query {
-      queryRTodo(func: type(Todo)) {
-        owner : Todo.comment
-        text :  Todo.text
-        dgraph.uid : uid
       }
     }
   error:

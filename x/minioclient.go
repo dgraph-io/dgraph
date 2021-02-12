@@ -145,7 +145,6 @@ func (*MinioClient) ParseBucketAndPrefix(path string) (string, string) {
 func (mc *MinioClient) ValidateBucket(uri *url.URL) (string, string, error) {
 	bucketName, objectPrefix := mc.ParseBucketAndPrefix(uri.Path)
 
-	glog.Info("Verifying Bucket Exists: ", bucketName)
 	// verify the requested bucket exists.
 	found, err := mc.BucketExists(bucketName)
 	if err != nil {

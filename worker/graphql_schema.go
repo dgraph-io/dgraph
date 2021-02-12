@@ -22,11 +22,14 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -62,6 +65,11 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
+	// pass on the incoming metadata to the group-1 leader
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	return c.UpdateGraphQLSchema(ctx, req)
 }
 
@@ -77,9 +85,11 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	schemaLock.Lock()
 	defer schemaLock.Unlock()
 
+	ctx = x.AttachJWTNamespace(ctx)
+	namespace := x.ExtractNamespace(ctx)
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
-		Attr:    GqlSchemaPred,
+		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),
 		SrcFunc: &pb.SrcFunction{Name: "has"},
 		ReadTs:  req.StartTs,
 		// there can only be one GraphQL schema node,
@@ -122,7 +132,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		Edges: []*pb.DirectedEdge{
 			{
 				Entity:    schemaNodeUid,
-				Attr:      GqlSchemaPred,
+				Attr:      x.NamespaceAttr(namespace, GqlSchemaPred),
 				Value:     []byte(req.GraphqlSchema),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
@@ -135,7 +145,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 				// directive on xid. So, this way we make sure that even in this rare case there can
 				// only be one server which is able to successfully update the GraphQL schema.
 				Entity:    schemaNodeUid,
-				Attr:      gqlSchemaXidPred,
+				Attr:      x.NamespaceAttr(namespace, gqlSchemaXidPred),
 				Value:     []byte(gqlSchemaXidVal),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
@@ -145,7 +155,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	if creatingNode {
 		m.Edges = append(m.Edges, &pb.DirectedEdge{
 			Entity:    schemaNodeUid,
-			Attr:      "dgraph.type",
+			Attr:      x.NamespaceAttr(namespace, "dgraph.type"),
 			Value:     []byte("dgraph.graphql"),
 			ValueType: pb.Posting_STRING,
 			Op:        pb.DirectedEdge_SET,
@@ -179,7 +189,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			return nil, errors.Wrap(err, ErrGraphQLSchemaAlterFailed)
 		}
 		// busy waiting for indexing to finish
-		if err = WaitForIndexingOrCtxError(ctx, true); err != nil {
+		if err = WaitForIndexing(ctx, true); err != nil {
 			return nil, err
 		}
 	}
@@ -188,10 +198,10 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	return &pb.UpdateGraphQLSchemaResponse{Uid: schemaNodeUid}, nil
 }
 
-// WaitForIndexingOrCtxError does a busy wait for indexing to finish or the context to error out,
+// WaitForIndexing does a busy wait for indexing to finish or the context to error out,
 // if the input flag shouldWait is true. Otherwise, it just returns nil straight away.
 // If the context errors, it returns that error.
-func WaitForIndexingOrCtxError(ctx context.Context, shouldWait bool) error {
+func WaitForIndexing(ctx context.Context, shouldWait bool) error {
 	for shouldWait {
 		if ctx.Err() != nil {
 			return ctx.Err()

@@ -21,6 +21,7 @@ type State {
         xcode: String! @id @search(by: [regexp])
         name: String!
         capital: String
+        region: Region
 	    country: Country @dgraph(pred: "inCountry")
 }
 
@@ -200,6 +201,7 @@ type post1{
     numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
+    author: author1 @hasInverse(field: posts)
 }
 
 type Person1 {
@@ -289,12 +291,14 @@ type Book {
     bookId: Int64! @id
     name: String!
     desc: String
+	summary: String @lambda
+	chapters: [Chapter] @hasInverse(field: book)
 }
 
 type Chapter {
     chapterId: Int! @id
     name: String!
-    bookId: Int64! @search
+	book: Book
 }
 
 type Section {
@@ -302,8 +306,6 @@ type Section {
     name: String!
     chapterId: Int! @search
 }
-
-# test for entities resolver
 
 type Mission @key(fields: "id") {
     id: String! @id
@@ -322,4 +324,40 @@ type Astronaut @key(fields: "id") @extends {
 type SpaceShip @key(fields: "id") @extends {
     id: String! @id @external
     missions: [Mission]
+}
+
+type Region {
+    id: String! @id
+    name: String!
+    district: District
+}
+
+type District {
+    id: String! @id
+    name: String!
+}
+
+type Owner {
+    username: String! @id
+    password: String!
+    projects: [Project!] @hasInverse(field: owner)
+}
+
+type Project {
+    id: String! @id
+    owner: Owner!
+    name: String! @search(by: [hash])
+    datasets: [Dataset!] @hasInverse(field: project)
+}
+
+type Dataset {
+    id: String! @id
+    owner: Owner!
+    project: Project!
+    name: String! @search(by: [hash])
+}
+
+type author1{
+    name:String! @id @search(by: [regexp])
+    posts:[post1] @hasInverse(field: author)
 }

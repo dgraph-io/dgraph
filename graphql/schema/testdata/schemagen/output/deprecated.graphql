@@ -319,7 +319,7 @@ input AddAtypeInput {
 }
 
 input AtypeFilter {
-	has: AtypeHasFilter
+	has: [AtypeHasFilter]
 	and: [AtypeFilter]
 	or: [AtypeFilter]
 	not: AtypeFilter

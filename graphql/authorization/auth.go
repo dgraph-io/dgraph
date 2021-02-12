@@ -43,7 +43,7 @@ type authVariablekey string
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
 	AuthVariables  = authVariablekey("authVariable")
-	AuthMetaHeader = "# Dgraph.Authorization "
+	AuthMetaHeader = "Dgraph.Authorization"
 )
 
 var (
@@ -152,6 +152,9 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, gqlerror.Errorf("JWT parsing failed: %v", err)
 	}
 
+	// authInfo with be like `Dgraph.Authorization ...`, we append prefix `# ` to authinfo
+	// to make it work with the regex matching algorithm.
+	authInfo = "# " + authInfo
 	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
 		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
@@ -278,8 +281,12 @@ type CustomClaims struct {
 	jwt.StandardClaims
 }
 
+// UnmarshalJSON unmarshalls the claims present in the JWT.
+// It also adds standard claims to the `AuthVariables`. If
+// there is an auth variable with name same as one of auth
+// variable then the auth variable supersedes the standard claim.
 func (c *CustomClaims) UnmarshalJSON(data []byte) error {
-	// Unmarshal the standard claims first.
+	// Unmarshal the standard claims first
 	if err := json.Unmarshal(data, &c.StandardClaims); err != nil {
 		return err
 	}
@@ -291,14 +298,26 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 
 	// Unmarshal the auth variables for a particular namespace.
 	if authValue, ok := result[authMeta.namespace()]; ok {
-		if authJson, ok := authValue.(string); ok {
-			if err := json.Unmarshal([]byte(authJson), &c.AuthVariables); err != nil {
+		if authJSON, ok := authValue.(string); ok {
+			if err := json.Unmarshal([]byte(authJSON), &c.AuthVariables); err != nil {
 				return err
 			}
 		} else {
 			c.AuthVariables, _ = authValue.(map[string]interface{})
 		}
 	}
+
+	// `result` contains all the cliams, delete the claim of the namespace mentioned
+	// in the Authorization Header.
+	delete(result, authMeta.namespace())
+	// add AuthVariables into the `result` map, Now it contains all the AuthVariables
+	// and other claims present in the token.
+	for k, v := range c.AuthVariables {
+		result[k] = v
+	}
+
+	// update `AuthVariables` with `result` map
+	c.AuthVariables = result
 	return nil
 }
 
@@ -330,17 +349,14 @@ func (c *CustomClaims) validateAudience() error {
 
 func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
+	md, _ := metadata.FromIncomingContext(ctx)
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) == 0 {
 		if authMeta.ClosedByDefault {
 			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
 		} else {
 			return &CustomClaims{}, nil
 		}
-	}
-	jwtToken := md.Get(string(AuthJwtCtxKey))
-	if len(jwtToken) == 0 {
-		return &CustomClaims{}, nil
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}

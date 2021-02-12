@@ -582,14 +582,7 @@ func TestSubstituteVarsInBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			var templatePtr *interface{}
-			if test.template == nil {
-				templatePtr = nil
-			} else {
-				templatePtr = &test.template
-			}
-			SubstituteVarsInBody(templatePtr, test.variables)
-			require.Equal(t, test.expected, test.template)
+			require.Equal(t, test.expected, SubstituteVarsInBody(test.template, test.variables))
 		})
 	}
 }
@@ -745,7 +738,7 @@ func TestParseBodyTemplate(t *testing.T) {
 				if b == nil {
 					require.Nil(t, test.expected)
 				} else {
-					require.Equal(t, test.expected, *b)
+					require.Equal(t, test.expected, b)
 				}
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
@@ -779,7 +772,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute query params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies?id=$ids&name=$names&check=$check",
 			"http://myapi.com/favMovies?check=1&check=3.14&check=test&id=1&id=2&name=M1&name=M2",
@@ -824,7 +817,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute path params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies/$ids/$names/$check",
 			"http://myapi.com/favMovies/1%2C2/M1%2CM2/1%2C3.14%2Ctest",
@@ -967,7 +960,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			require.NoError(t, err)
 
 			// Validate the generated query against the remote schema.
-			tmpl, ok := (*c.Template).(map[string]interface{})
+			tmpl, ok := (c.Template).(map[string]interface{})
 			require.True(t, ok)
 
 			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
@@ -1127,7 +1120,7 @@ func TestParseSecrets(t *testing.T) {
 
 			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
-			`,
+		`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
@@ -1144,7 +1137,7 @@ func TestParseSecrets(t *testing.T) {
 
 		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 		# random comment
-		`,
+	`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
@@ -1153,13 +1146,13 @@ func TestParseSecrets(t *testing.T) {
 		{
 			"should throw an error if the secret is not in the correct format",
 			`
-			type User {
-				id: ID!
-				name: String!
-			}
+		type User {
+			id: ID!
+			name: String!
+		}
 
-			# Dgraph.Secret RANDOM_TOKEN
-			`,
+		# Dgraph.Secret RANDOM_TOKEN
+		`,
 			nil,
 			"",
 			errors.New("incorrect format for specifying Dgraph secret found for " +
@@ -1228,6 +1221,20 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
+		},
+		{
+			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			#Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",

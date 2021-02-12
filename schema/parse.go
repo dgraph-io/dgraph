@@ -17,6 +17,8 @@
 package schema
 
 import (
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -87,7 +89,7 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, error) {
+func parseScalarPair(it *lex.ItemIterator, predicate string, ns uint64) (*pb.SchemaUpdate, error) {
 	it.Next()
 	next := it.Item()
 	switch {
@@ -107,7 +109,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 		return nil, next.Errorf("Invalid ending while trying to parse schema.")
 	}
 	next = it.Item()
-	schema := &pb.SchemaUpdate{Predicate: predicate}
+	schema := &pb.SchemaUpdate{Predicate: x.NamespaceAttr(ns, predicate)}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
 		schema.List = true
@@ -224,7 +226,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if tokenizerType != typ {
 			return tokenizers,
 				next.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
-					tokenizer.Name(), predicate, typ.Name())
+					tokenizer.Name(), x.ParseAttr(predicate), typ.Name())
 		}
 		if _, found := seen[tokenizer.Name()]; found {
 			return tokenizers, next.Errorf("Duplicate tokenizers defined for pred %v",
@@ -252,7 +254,7 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
 			schema.Directive == pb.SchemaUpdate_INDEX {
 			return errors.Errorf("Indexing not allowed on predicate %s of type %s",
-				schema.Predicate, typ.Name())
+				x.ParseAttr(schema.Predicate), typ.Name())
 		}
 
 		if typ == types.UidID {
@@ -263,7 +265,7 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			return errors.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
 				schema.Predicate, typ.Name())
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != pb.SchemaUpdate_INDEX {
-			return errors.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+			return errors.Errorf("Tokenizers present without indexing on attr %s", x.ParseAttr(schema.Predicate))
 		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
@@ -277,12 +279,13 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			x.AssertTrue(ok) // Type is validated during tokenizer loading.
 			if tokenizerType != typ {
 				return errors.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
-					tokenizer.Name(), schema.Predicate, typ.Name())
+					tokenizer.Name(), x.ParseAttr(schema.Predicate), typ.Name())
 			}
 			if _, ok := seen[tokenizer.Name()]; !ok {
 				seen[tokenizer.Name()] = true
 			} else {
-				return errors.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+				return errors.Errorf("Duplicate tokenizers present for attr %s",
+					x.ParseAttr(schema.Predicate))
 			}
 			if tokenizer.IsSortable() {
 				if seenSortableTok {
@@ -296,7 +299,7 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 	return nil
 }
 
-func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
+func parseTypeDeclaration(it *lex.ItemIterator, ns uint64) (*pb.TypeUpdate, error) {
 	// Iterator is currently on the token corresponding to the keyword type.
 	if it.Item().Typ != itemText || it.Item().Val != "type" {
 		return nil, it.Item().Errorf("Expected type keyword. Got %v", it.Item().Val)
@@ -306,7 +309,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	if it.Item().Typ != itemText {
 		return nil, it.Item().Errorf("Expected type name. Got %v", it.Item().Val)
 	}
-	typeUpdate := &pb.TypeUpdate{TypeName: it.Item().Val}
+	typeUpdate := &pb.TypeUpdate{TypeName: x.NamespaceAttr(ns, it.Item().Val)}
 
 	it.Next()
 	if it.Item().Typ != itemLeftCurl {
@@ -330,7 +333,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 			for _, field := range fields {
 				if _, ok := fieldSet[field.GetPredicate()]; ok {
 					return nil, it.Item().Errorf("Duplicate fields with name: %s",
-						field.GetPredicate())
+						x.ParseAttr(field.GetPredicate()))
 				}
 
 				fieldSet[field.GetPredicate()] = struct{}{}
@@ -339,7 +342,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 			typeUpdate.Fields = fields
 			return typeUpdate, nil
 		case itemText:
-			field, err := parseTypeField(it, typeUpdate.TypeName)
+			field, err := parseTypeField(it, typeUpdate.TypeName, ns)
 			if err != nil {
 				return nil, err
 			}
@@ -353,8 +356,8 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	return nil, errors.Errorf("Shouldn't reach here.")
 }
 
-func parseTypeField(it *lex.ItemIterator, typeName string) (*pb.SchemaUpdate, error) {
-	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
+func parseTypeField(it *lex.ItemIterator, typeName string, ns uint64) (*pb.SchemaUpdate, error) {
+	field := &pb.SchemaUpdate{Predicate: x.NamespaceAttr(ns, it.Item().Val)}
 	var list bool
 	it.Next()
 
@@ -403,8 +406,29 @@ func parseTypeField(it *lex.ItemIterator, typeName string) (*pb.SchemaUpdate, er
 	}
 
 	glog.Warningf("Type declaration for type %s includes deprecated information about field type "+
-		"for field %s which will be ignored.", typeName, field.Predicate)
+		"for field %s which will be ignored.", typeName, x.ParseAttr(field.Predicate))
 	return field, nil
+}
+
+func parseNamespace(it *lex.ItemIterator) (uint64, error) {
+	nextItems, err := it.Peek(2)
+	if err != nil {
+		return 0, errors.Errorf("Unable to peek: %v", err)
+	}
+	if nextItems[0].Typ != itemNumber || nextItems[1].Typ != itemRightSquare {
+		return 0, errors.Errorf("Typed oes not match the expected")
+	}
+	ns, err := strconv.ParseUint(nextItems[0].Val, 0, 64)
+	if err != nil {
+		return 0, err
+	}
+	it.Next()
+	it.Next()
+	// We have parsed the namespace. Now move to the next item.
+	if !it.Next() {
+		return 0, errors.Errorf("No schema found after namespace. Got: %v", nextItems[0])
+	}
+	return uint64(ns), nil
 }
 
 // ParsedSchema represents the parsed schema and type updates.
@@ -433,8 +457,17 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 	return true
 }
 
-// Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) (*ParsedSchema, error) {
+// parse parses a schema string and returns the schema representation for it.
+// If namespace == math.MaxUint64, then it preserves the namespace. Else it forces the passed
+// namespace on schema/types.
+
+// Example schema:
+// [ns1] name: string .
+// [ns2] age: string .
+// parse(schema, 0) --> All the schema fields go to namespace 0.
+// parse(schema, x) --> All the schema fields go to namespace x.
+// parse(schema, math.MaxUint64) --> name (ns1), age(ns2) // Preserve the namespace
+func parse(s string, namespace uint64) (*ParsedSchema, error) {
 	var result ParsedSchema
 
 	var l lex.Lexer
@@ -443,6 +476,25 @@ func Parse(s string) (*ParsedSchema, error) {
 	if err := l.ValidateResult(); err != nil {
 		return nil, err
 	}
+
+	parseTypeOrSchema := func(item lex.Item, it *lex.ItemIterator, ns uint64) error {
+		if isTypeDeclaration(item, it) {
+			typeUpdate, err := parseTypeDeclaration(it, ns)
+			if err != nil {
+				return err
+			}
+			result.Types = append(result.Types, typeUpdate)
+			return nil
+		}
+
+		schema, err := parseScalarPair(it, item.Val, ns)
+		if err != nil {
+			return err
+		}
+		result.Preds = append(result.Preds, schema)
+		return nil
+	}
+
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -454,20 +506,32 @@ func Parse(s string) (*ParsedSchema, error) {
 			return &result, nil
 
 		case itemText:
-			if isTypeDeclaration(item, it) {
-				typeUpdate, err := parseTypeDeclaration(it)
-				if err != nil {
-					return nil, err
-				}
-				result.Types = append(result.Types, typeUpdate)
-				continue
+			// For schema which does not contain the namespace information, use the default
+			// namespace, if namespace has to be preserved. Else, use the passed namespace.
+			ns := x.GalaxyNamespace
+			if namespace != math.MaxUint64 {
+				ns = uint64(namespace)
 			}
-
-			schema, err := parseScalarPair(it, item.Val)
-			if err != nil {
+			if err := parseTypeOrSchema(item, it, ns); err != nil {
 				return nil, err
 			}
-			result.Preds = append(result.Preds, schema)
+
+		case itemLeftSquare:
+			// We expect a namespace.
+			ns, err := parseNamespace(it)
+			if err != nil {
+				return nil, errors.Wrapf(err, "While parsing namespace:")
+			}
+			if namespace != math.MaxUint64 {
+				// Use the passed namespace, if we don't want to preserve the namespace.
+				ns = uint64(namespace)
+			}
+			// We have already called next in parseNamespace.
+			item := it.Item()
+			if err := parseTypeOrSchema(item, it, ns); err != nil {
+				return nil, err
+			}
+
 		case itemNewLine:
 			// pass empty line
 
@@ -476,4 +540,16 @@ func Parse(s string) (*ParsedSchema, error) {
 		}
 	}
 	return nil, errors.Errorf("Shouldn't reach here")
+}
+
+// Parse parses the schema with namespace preserved. For the types/predicates for which the
+// namespace is not specified, it uses default.
+func Parse(s string) (*ParsedSchema, error) {
+	return parse(s, math.MaxUint64)
+}
+
+// ParseWithNamespace parses the schema and forces the given namespace on each of the
+// type/predicate.
+func ParseWithNamespace(s string, namespace uint64) (*ParsedSchema, error) {
+	return parse(s, namespace)
 }

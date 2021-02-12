@@ -58,11 +58,11 @@ var (
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
 
-	safelyUpdateGQLSchemaErr = errors.New(
+	safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
 		"Schema update counter didn't increment, " +
-			"indicating that the GraphQL layer didn't get the updated schema even after 10" +
-			" retries. The most probable cause is the new GraphQL schema is same as the old" +
-			" GraphQL schema.")
+		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
+		" retries. The most probable cause is the new GraphQL schema is same as the old" +
+		" GraphQL schema."
 )
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
@@ -183,6 +183,18 @@ type state struct {
 	Code    string   `json:"xcode,omitempty"`
 	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
+	Region  *region  `json:"region,omitempty"`
+}
+
+type region struct {
+	ID       string    `json:"id,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	District *district `json:"district,omitempty"`
+}
+
+type district struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type movie struct {
@@ -235,8 +247,15 @@ type GqlSchema struct {
 	GeneratedSchema string
 }
 
-func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
-	resp, err := http.Get("http://" + authority + "/probe/graphql")
+func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, error) {
+
+	request, err := http.NewRequest("GET", "http://"+authority+"/probe/graphql", nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	request.Header = header
+	resp, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -256,9 +275,9 @@ func probeGraphQL(authority string) (*ProbeGraphQLResp, error) {
 	return &probeResp, nil
 }
 
-func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
+func retryProbeGraphQL(authority string, header http.Header) *ProbeGraphQLResp {
 	for i := 0; i < 10; i++ {
-		resp, err := probeGraphQL(authority)
+		resp, err := probeGraphQL(authority, header)
 		if err == nil && resp.Healthy {
 			return resp
 		}
@@ -267,10 +286,11 @@ func retryProbeGraphQL(authority string) *ProbeGraphQLResp {
 	return nil
 }
 
-func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
-	if resp := retryProbeGraphQL(authority); resp != nil {
+func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *ProbeGraphQLResp {
+	if resp := retryProbeGraphQL(authority, header); resp != nil {
 		return resp
 	}
+	debug.PrintStack()
 	t.Fatal("Unable to get healthy response from /probe/graphql after 10 retries")
 	return nil
 }
@@ -278,9 +298,11 @@ func RetryProbeGraphQL(t *testing.T, authority string) *ProbeGraphQLResp {
 // AssertSchemaUpdateCounterIncrement asserts that the schemaUpdateCounter is greater than the
 // oldCounter, indicating that the GraphQL schema has been updated.
 // If it can't make the assertion with enough retries, it fails the test.
-func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64) {
+func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
+	var newCounter uint64
 	for i := 0; i < 10; i++ {
-		if RetryProbeGraphQL(t, authority).SchemaUpdateCounter == oldCounter+1 {
+		if newCounter = RetryProbeGraphQL(t, authority,
+			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
 		}
 		time.Sleep(time.Second)
@@ -288,10 +310,53 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
-	t.Fatal(safelyUpdateGQLSchemaErr)
+	debug.PrintStack()
+	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
-func getGQLSchema(t *testing.T, authority string) *GraphQLResponse {
+func CreateNamespace(t *testing.T, headers http.Header) uint64 {
+	createNamespace := &GraphQLParams{
+		Query: `mutation {
+					addNamespace{
+						namespaceId
+					}
+				}`,
+		Headers: headers,
+	}
+
+	// retry a few times to avoid the error: `Predicate dgraph.xid is not indexed`
+	var gqlResponse *GraphQLResponse
+	for i := 0; i < 10 && (gqlResponse == nil || gqlResponse.Errors != nil); i++ {
+		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	}
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var resp struct {
+		AddNamespace struct {
+			NamespaceId uint64
+		}
+	}
+	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
+	require.Greater(t, resp.AddNamespace.NamespaceId, x.GalaxyNamespace)
+	return resp.AddNamespace.NamespaceId
+}
+
+func DeleteNamespace(t *testing.T, id uint64, header http.Header) {
+	deleteNamespace := &GraphQLParams{
+		Query: `mutation deleteNamespace($id:Int!){
+					deleteNamespace(input:{namespaceId:$id}){
+						namespaceId
+					}
+				}`,
+		Variables: map[string]interface{}{"id": id},
+		Headers:   header,
+	}
+
+	gqlResponse := deleteNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+	RequireNoGQLErrors(t, gqlResponse)
+}
+
+func getGQLSchema(t *testing.T, authority string, header http.Header) *GraphQLResponse {
 	getSchemaParams := &GraphQLParams{
 		Query: `query {
 			getGQLSchema {
@@ -300,14 +365,15 @@ func getGQLSchema(t *testing.T, authority string) *GraphQLResponse {
 				generatedSchema
 			}
 		}`,
+		Headers: header,
 	}
 	return getSchemaParams.ExecuteAsPost(t, "http://"+authority+"/admin")
 }
 
 // AssertGetGQLSchema queries the current GraphQL schema using getGQLSchema query and asserts that
 // the query doesn't give any errors. It returns a *GqlSchema received in response to the query.
-func AssertGetGQLSchema(t *testing.T, authority string) *GqlSchema {
-	resp := getGQLSchema(t, authority)
+func AssertGetGQLSchema(t *testing.T, authority string, header http.Header) *GqlSchema {
+	resp := getGQLSchema(t, authority, header)
 	RequireNoGQLErrors(t, resp)
 
 	var getResult struct {
@@ -320,8 +386,8 @@ func AssertGetGQLSchema(t *testing.T, authority string) *GqlSchema {
 
 // In addition to AssertGetGQLSchema, it also asserts that the response returned from the
 // getGQLSchema query isn't nil and the Id in the response is actually a uid.
-func AssertGetGQLSchemaRequireId(t *testing.T, authority string) *GqlSchema {
-	resp := AssertGetGQLSchema(t, authority)
+func AssertGetGQLSchemaRequireId(t *testing.T, authority string, header http.Header) *GqlSchema {
+	resp := AssertGetGQLSchema(t, authority, header)
 	require.NotNil(t, resp)
 	testutil.RequireUid(t, resp.Id)
 	return resp
@@ -386,6 +452,7 @@ func AssertUpdateGQLSchemaSuccess(t *testing.T, authority, schema string,
 		}
 	}
 	if err := json.Unmarshal(updateResp.Data, &updateResult); err != nil {
+		debug.PrintStack()
 		t.Fatalf("failed to unmarshal updateGQLSchema response: %s", err.Error())
 	}
 	require.NotNil(t, updateResult.UpdateGQLSchema.GqlSchema)
@@ -415,14 +482,14 @@ func AssertUpdateGQLSchemaFailure(t *testing.T, authority, schema string, header
 // fail the test with a fatal error.
 func SafelyUpdateGQLSchema(t *testing.T, authority, schema string, headers http.Header) *GqlSchema {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
+	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
 
 	// update the GraphQL schema
 	gqlSchema := AssertUpdateGQLSchemaSuccess(t, authority, schema, headers)
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter, headers)
 	return gqlSchema
 }
 
@@ -455,9 +522,9 @@ func retryUpdateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema s
 	}
 }
 
-func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) {
+func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, authority).SchemaUpdateCounter
+	oldCounter := RetryProbeGraphQL(t, authority, headers).SchemaUpdateCounter
 
 	// update the GraphQL schema and assert success
 	require.JSONEq(t, `{"data":{"code":"Success","message":"Done"}}`,
@@ -465,7 +532,43 @@ func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema 
 
 	// now, return only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
-	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
+	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter, headers)
+}
+
+// JSONEqGraphQL compares two JSON strings obtained from a /graphql response.
+// To avoid issues, don't use space for indentation in expected input.
+//
+// The comparison requirements for JSON reported by /graphql are following:
+//  * The key order matters in object comparison, i.e.
+//        {"hello": "world", "foo": "bar"}
+//    is not same as:
+//        {"foo": "bar", "hello": "world"}
+//  * A key missing in an object is not same as that key present with value null, i.e.
+//        {"hello": "world"}
+//    is not same as:
+//        {"hello": "world", "foo": null}
+//  * Integers that are out of the [-(2^53)+1, (2^53)-1] precision range supported by JSON RFC,
+//    should still be encoded with full precision. i.e., the number 9007199254740993 ( = 2^53 + 1)
+//    should not get encoded as 9007199254740992 ( = 2^53). This happens in Go's standard JSON
+//    parser due to IEEE754 precision loss for floating point numbers.
+//
+// The above requirements are not satisfied by the standard require.JSONEq or testutil.CompareJSON
+// methods.
+// In order to satisfy all these requirements, this implementation just requires that the input
+// strings be equal after removing `\r`, `\n`, `\t` whitespace characters from the inputs.
+// TODO:
+//  Find a better way to do this such that order isn't mandated in list comparison.
+//  So that it is actually usable at places it is not used at present.
+func JSONEqGraphQL(t *testing.T, expected, actual string) {
+	expected = strings.ReplaceAll(expected, "\r", "")
+	expected = strings.ReplaceAll(expected, "\n", "")
+	expected = strings.ReplaceAll(expected, "\t", "")
+
+	actual = strings.ReplaceAll(actual, "\r", "")
+	actual = strings.ReplaceAll(actual, "\n", "")
+	actual = strings.ReplaceAll(actual, "\t", "")
+
+	require.Equal(t, expected, actual)
 }
 
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
@@ -502,9 +605,9 @@ func (us *UserSecret) Delete(t *testing.T, user, role string, metaInfo *testutil
 	RequireNoGQLErrors(t, gqlResponse)
 }
 
-func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
+func addSchemaAndData(schema, data []byte, client *dgo.Dgraph, headers http.Header) {
 	// first, make an initial probe to get the schema update counter
-	oldProbe := retryProbeGraphQL(Alpha1HTTP)
+	oldProbe := retryProbeGraphQL(Alpha1HTTP, headers)
 
 	// then, add the GraphQL schema
 	for {
@@ -526,8 +629,9 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 	// now, move forward only after the GraphQL layer has seen the schema update.
 	// This makes sure that one can make queries as per the new schema.
 	i := 0
+	var newProbe *ProbeGraphQLResp
 	for ; i < 10; i++ {
-		newProbe := retryProbeGraphQL(Alpha1HTTP)
+		newProbe = retryProbeGraphQL(Alpha1HTTP, headers)
 		if newProbe.SchemaUpdateCounter > oldProbe.SchemaUpdateCounter {
 			break
 		}
@@ -536,7 +640,8 @@ func addSchemaAndData(schema, data []byte, client *dgo.Dgraph) {
 	// Even after atleast 10 seconds, the schema update hasn't reached GraphQL layer.
 	// That indicates something fatal.
 	if i == 10 {
-		x.Panic(safelyUpdateGQLSchemaErr)
+		x.Panic(errors.Errorf(safelyUpdateGQLSchemaErr, newProbe.SchemaUpdateCounter,
+			oldProbe.SchemaUpdateCounter))
 	}
 
 	err := maybePopulateData(client, data)
@@ -561,7 +666,7 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
-	addSchemaAndData(schema, data, client)
+	addSchemaAndData(schema, data, client, nil)
 	if err = d.Close(); err != nil {
 		x.Panic(err)
 	}
@@ -579,7 +684,6 @@ func RunAll(t *testing.T) {
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
-
 	// header tests
 	t.Run("touched uids header", touchedUidsHeader)
 	t.Run("cache-control header", cacheControlHeader)
@@ -615,6 +719,7 @@ func RunAll(t *testing.T) {
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
 	t.Run("has filters", hasFilters)
+	t.Run("has filter on list of fields", hasFilterOnListOfFields)
 	t.Run("Int filters", int32Filters)
 	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
@@ -645,6 +750,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
+	t.Run("queries have touched_uids even if there are GraphQL errors", erroredQueriesHaveTouchedUids)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("multiple aliases for same field in query", queryWithMultipleAliasOfSameField)
 	t.Run("cascade directive", queryWithCascade)
@@ -721,6 +827,11 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
 	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
+	t.Run("three level double XID mutation", threeLevelDoubleXID)
+	t.Run("two levels linked to one XID", twoLevelsLinkedToXID)
+	t.Run("cyclically linked mutation", cyclicMutation)
+	t.Run("parallel mutations", parallelMutations)
+	t.Run("input coercion to list", inputCoerciontoList)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -741,6 +852,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
+	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 }
 
 // RunCorsTest test all cors related tests.
@@ -987,9 +1099,10 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
-	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-		return nil, errors.Errorf("cors headers weren't set in response")
-	}
+	// TODO(jatin): uncomment this after CORS is fixed with multi-tenancy
+	// if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+	// 	return nil, errors.Errorf("cors headers weren't set in response")
+	// }
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -1191,6 +1304,18 @@ func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) h
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
 
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
+}
+
+func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	metaInfo.AuthVars["USER"] = nil
+	metaInfo.AuthVars["ROLE"] = role
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h

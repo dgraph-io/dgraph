@@ -80,7 +80,7 @@ func processToFastJSON(q string) string {
 		log.Fatal(err)
 	}
 
-	buf, err := query.ToJson(&l, qr.Subgraphs)
+	buf, err := query.ToJson(context.Background(), &l, qr.Subgraphs, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1380,7 +1380,7 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 
 	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dc.Login(context.Background(), x.GrootId, "password")
+	dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.GalaxyNamespace)
 	q := `schema {}`
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)
