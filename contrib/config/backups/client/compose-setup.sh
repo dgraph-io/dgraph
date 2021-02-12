@@ -216,7 +216,7 @@ config_compose() {
 
   ## configure if user specifies
   [[ $ACL_ENABLED == "true" ]] && \
-    echo "acl_secret_file = '/dgraph/acl/hmac_secret_file'" >> "$CFGPATH/config.toml"
+    echo "--acl \"secret-file=/dgraph/acl/hmac_secret_file\"" >> "$CFGPATH/config.toml"
   [[ $TOKEN_ENABLED == "true" ]] && \
     echo "auth_token = '$(cat ./data/token/auth_token_file)'" >> "$CFGPATH/config.toml"
   [[ $ENC_ENABLED == "true" ]] && \

@@ -149,10 +149,10 @@ they form a Raft group and provide synchronous replication.
 			" For Grpc, in auth-token key in the context.")
 
 	flag.String("acl", worker.AclDefaults,
-		`(Enterprise feature)
+		`This flag provides settings for Access Control Lists (Enterprise Feature)
 		ACL options:
-	secret-file="" The file that stores the HMAC secret, which is used for signing the JWT and
-		should have at least 32 ASCII characters.
+	secret-file=path The file that stores the HMAC secret, which is used for signing the JWT and
+		should have at least 32 ASCII characters. Required to enable ACLs.
 	access-ttl=duration The TTL for the access JWT.
 	refresh-ttl=duration The TTL for the refresh JWT.
 		The duration format is the same as time.ParseDuration with an added 'd' suffix for days.`)
