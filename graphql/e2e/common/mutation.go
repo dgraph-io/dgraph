@@ -5319,86 +5319,86 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "add worker with multiple xids",
 			query: `mutation {
-                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
-			        	worker {
-							name
-							reg_No
-							emp_Id
-				        }
-			         }
-  					}`,
+						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+							worker {
+								name
+								reg_No
+								emp_Id
+							}
+						}
+					}`,
 			expected: `{
-					  "addWorker": {
-						"worker": [
-						  {
-							"name": "Alice",
-							"reg_No": "001",
-                            "emp_Id": "E01"
-						  }
-						]
-					  }
+    					"addWorker": {
+        					"worker": [
+            					{
+                					"name": "Alice",
+                					"reg_No": "001",
+                					"emp_Id": "E01"
+            					}
+        					]
+    					}
 					}`,
 		},
 		{
 			name: "adding worker with same reg_No will return error",
 			query: `mutation {
-                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
-			        	worker {
-							name
-							reg_No
-							emp_Id
-				        }
-			         }
-  					}`,
+						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E012" }]) {
+							worker {
+								name
+								reg_No
+								emp_Id
+							}
+						}
+					}`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
 			query: `mutation {
-                     addWorker(input: [{name: "Alice",reg_No:"002",emp_Id:"E01"}]) {
-			        	worker {
-							name
-							reg_No
-							emp_Id
-				        }
-			         }
-  					}`,
+						addWorker(input: [{ name: "Alice", reg_No: "002", emp_Id: "E01" }]) {
+							worker {
+								name
+								reg_No
+								emp_Id
+							}
+						}
+					}`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
 			query: `mutation {
-                     addWorker(input: [{name: "Alice",reg_No:"001",emp_Id:"E01"}]) {
-			        	worker {
-							name
-							reg_No
-							emp_Id
-				        }
-			         }
-  					}`,
+						addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+							worker {
+								name
+								reg_No
+								emp_Id
+							}
+						}
+					}`,
 			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
 			query: `mutation {
-                     addWorker(input: [{name: "Bob",reg_No:"002",emp_Id:"E02"}]) {
-			        	worker {
-							name
-							reg_No
-							emp_Id
-				        }
-			         }
-  					}`,
+						addWorker(input: [{ name: "Bob", reg_No: "002", emp_Id: "E02" }]) {
+							worker {
+								name
+								reg_No
+								emp_Id
+							}
+						}
+					}`,
 			expected: `{
-					  "addWorker": {
-						"worker": [
-						  {
-							"name": "Bob",
-							"reg_No": "002",
-                            "emp_Id": "E02"
-						  }
-						]
-					  }
+    					"addWorker": {
+        					"worker": [
+            					{
+                					"name": "Bob",
+                					"reg_No": "002",
+                					"emp_Id": "E02"
+            					}
+        					]
+    					}
 					}`,
 		},
 	}

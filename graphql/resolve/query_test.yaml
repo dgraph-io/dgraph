@@ -3263,12 +3263,12 @@
   name: "get query with multiple @id and an ID field"
   gqlquery: |
     query {
-      getBook(id: "0x1",title:"GraphQL",ISBN:"001HB") {
-        id
-        title
-        ISBN
-        Author
-      }
+    	getBook(id: "0x1", title: "GraphQL", ISBN: "001HB") {
+    		id
+    		title
+    		ISBN
+    		Author
+    	}
     }
   dgquery: |-
     query {
@@ -3283,12 +3283,12 @@
   name: "get query with multiple @id fields "
   gqlquery: |
     query {
-      getBook(title:"GraphQL",ISBN:"001HB") {
-        id
-        title
-        ISBN
-        Author
-      }
+    	getBook(title: "GraphQL", ISBN: "001HB") {
+    		id
+    		title
+    		ISBN
+    		Author
+    	}
     }
   dgquery: |-
     query {

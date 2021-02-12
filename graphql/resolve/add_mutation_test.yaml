@@ -3332,25 +3332,24 @@
 -
   name: "Add type with multiple Xid fields"
   gqlmutation: |
-    mutation($input: [AddBookInput!]!){
-    addBook(input:$input) {
-      book{
-          title
-          ISBN
-          Author
-        }
-      }
+    mutation($input: [AddBookInput!]!) {
+    	addBook(input: $input) {
+    		book {
+    			title
+    			ISBN
+    			Author
+    		}
+    	}
     }
-
   gqlvariables: |
     {
-      "input":[
-              {
-                "title":"Sapiens",
-                "ISBN":"2312SB",
-                "Author":"Yuval Noah Harari"
-              }
-            ]
+        "input": [
+            {
+                "title": "Sapiens",
+                "ISBN": "2312SB",
+                "Author": "Yuval Noah Harari"
+            }
+        ]
     }
   dgquery: |-
     query {
@@ -3364,9 +3363,11 @@
   dgmutations:
     - setjson: |
         {
-          "Book.Author": "Yuval Noah Harari",
-          "Book.ISBN": "2312SB",
-          "Book.title": "Sapiens",
-          "dgraph.type":["Book"],
-          "uid":"_:Book2"
+            "Book.Author": "Yuval Noah Harari",
+            "Book.ISBN": "2312SB",
+            "Book.title": "Sapiens",
+            "dgraph.type": [
+                "Book"
+            ],
+            "uid": "_:Book2"
         }

@@ -1201,7 +1201,7 @@ func (f *field) HasLambdaDirective() bool {
 }
 
 func (f *field) XIDArgs() map[string]string {
-	var xidToDgraphPredicate = make(map[string]string, 0)
+	xidToDgraphPredicate := make(map[string]string)
 	passwordField := f.Type().PasswordField()
 
 	args := f.field.Definition.Arguments
