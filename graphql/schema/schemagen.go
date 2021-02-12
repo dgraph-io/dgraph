@@ -175,39 +175,41 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 
-		if strings.HasPrefix(text, "# Dgraph.Authorization") {
-			if authSecret != "" {
-				return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
-					"a schema, found second mention: %v", text)
+		if strings.HasPrefix(text, "#") {
+			header := strings.TrimSpace(text[1:])
+			if strings.HasPrefix(header, "Dgraph.Authorization") {
+				if authSecret != "" {
+					return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+						"a schema, found second mention: %v", text)
+				}
+				authSecret = text
+				continue
 			}
-			authSecret = text
-			continue
-		}
-		if !strings.HasPrefix(text, "# Dgraph.Secret") {
-			continue
-		}
-		parts := strings.Fields(text)
-		const doubleQuotesCode = 34
+			if !strings.HasPrefix(header, "Dgraph.Secret") {
+				continue
+			}
+			parts := strings.Fields(text)
+			const doubleQuotesCode = 34
 
-		if len(parts) < 4 {
-			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
-		}
-		val := strings.Join(parts[3:], " ")
-		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+			if len(parts) < 4 {
+				return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+			}
+			val := strings.Join(parts[3:], " ")
+			if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
+				return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+			}
+
+			val = strings.Trim(val, `"`)
+			key := strings.Trim(parts[2], `"`)
+			m[key] = val
 		}
 
-		val = strings.Trim(val, `"`)
-		key := strings.Trim(parts[2], `"`)
-		m[key] = val
+		if err := scanner.Err(); err != nil {
+			return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
-	}
-
 	if authSecret == "" {
 		return m, nil, nil
 	}

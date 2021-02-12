@@ -43,7 +43,7 @@ type authVariablekey string
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
 	AuthVariables  = authVariablekey("authVariable")
-	AuthMetaHeader = "# Dgraph.Authorization "
+	AuthMetaHeader = "Dgraph.Authorization"
 )
 
 var (
@@ -152,6 +152,9 @@ func Parse(schema string) (*AuthMeta, error) {
 		return nil, gqlerror.Errorf("JWT parsing failed: %v", err)
 	}
 
+	// authInfo with be like `Dgraph.Authorization ...`, we append prefix `# ` to authinfo
+	// to make it work with the regex matching algorithm.
+	authInfo = "# " + authInfo
 	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
 		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
