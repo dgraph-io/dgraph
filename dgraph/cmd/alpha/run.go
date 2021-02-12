@@ -606,7 +606,8 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	badger := x.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
+	badger := x.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))

@@ -39,7 +39,7 @@ var ExportBackup x.SubCommand
 
 var opt struct {
 	backupId    string
-	compression string
+	badger      string
 	location    string
 	pdir        string
 	zero        string
@@ -113,10 +113,10 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
-	flag.StringVar(&opt.compression, "badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
+	flag.StringVarP(&opt.badger, "badger", "b", "compression=snappy;",
+		"compression=[none, zstd:level, snappy] specifies the compression algorithm and the "+
+			"compression level (if applicable) for the postings directory. 'none' would disable "+
+			"compression, while 'zstd:1' would set zstd compression at level 1.")
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
@@ -222,7 +222,8 @@ func runRestoreCmd() error {
 		zc = pb.NewZeroClient(zero)
 	}
 
-	ctype, clevel := x.ParseCompression(opt.compression)
+	badger := x.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	start = time.Now()
 	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key, ctype, clevel)

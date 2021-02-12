@@ -221,7 +221,7 @@ Alternatively, starting with v20.07.0, the `vault_*` options can be used instead
 
 You can further configure Bulk Loader using the following options:
 
-`--badger.compression`: Configure the compression of data on disk. By default,
+`--badger "compression=snappy"`: Configure the compression of data on disk. By default,
 the Snappy compression format is used, but you can also use Zstandard
 compression. Or, you can choose no compression to minimize CPU usage. To learn
 more, see [Data Compression on Disk](/deploy/data-compression).

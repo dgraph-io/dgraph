@@ -129,7 +129,8 @@ func init() {
 }
 
 func run() {
-	badger := x.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(worker.BadgerDefaults)
+	badger := x.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
