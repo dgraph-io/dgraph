@@ -682,13 +682,9 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 
 func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 	var idFields []*ast.FieldDefinition
-	var idDirectiveFields []*ast.FieldDefinition
 	for _, field := range typ.Fields {
 		if isIDField(typ, field) {
 			idFields = append(idFields, field)
-		}
-		if d := field.Directives.ForName(idDirective); d != nil {
-			idDirectiveFields = append(idDirectiveFields, field)
 		}
 	}
 

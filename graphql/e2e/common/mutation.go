@@ -5422,6 +5422,6 @@ func mutationWithMultipleXids(t *testing.T) {
 
 		})
 	}
-	filter := map[string]interface{}{"reg_No": []string{"001", "002"}}
-	DeleteGqlType(t, "Worker", filter, 1, nil)
+	//filter := map[string]interface{}{"reg_No": []string{"001", "002"}}
+	//DeleteGqlType(t, "Worker", filter, 1, nil)
 }

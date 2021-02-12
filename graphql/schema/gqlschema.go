@@ -1602,19 +1602,15 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
-// fieldMulti returns true if multiple field in fields satisfies pred
-func fieldMulti(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
-	var flag bool
+// xidsCount returns count of fields which have @id directive
+func xidsCount(fields ast.FieldList) int64 {
+	var xidCount int64
 	for _, fld := range fields {
-		if pred(fld) {
-			if flag {
-				return true
-			} else {
-				flag = true
-			}
+		if hasIDDirective(fld) {
+			xidCount++
 		}
 	}
-	return false
+	return xidCount
 }
 
 func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
@@ -1882,7 +1878,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	hasMultipleXIDFields := fieldMulti(defn.Fields, hasIDDirective)
+	xidCount := xidsCount(defn.Fields)
 	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
@@ -1912,7 +1908,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 					Name: fld.Name,
 					Type: &ast.Type{
 						NamedType: fld.Type.Name(),
-						NonNull:   !hasIDField && !hasMultipleXIDFields,
+						NonNull:   !hasIDField && !(xidCount > 1),
 					},
 				})
 			}

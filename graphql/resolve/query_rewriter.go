@@ -556,7 +556,7 @@ func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 func rewriteAsGet(
 	query schema.Query,
 	uid uint64,
-	xidArgToVal map[string]*string,
+	xidArgToVal map[string]string,
 	auth *authRewriter) []*gql.GraphQuery {
 
 	var dgQuery []*gql.GraphQuery
@@ -602,14 +602,14 @@ func rewriteAsGet(
 		i++
 	}
 	sort.Strings(xids)
-	xidArgName := query.XIDArg()
+	xidArgNameToDgPredMap := query.XIDArgs()
 	var flt []*gql.FilterTree
 	for _, xid := range xids {
 		eqXidFuncTemp := &gql.Function{
 			Name: "eq",
 			Args: []gql.Arg{
-				{Value: xidArgName[xid]},
-				{Value: maybeQuoteArg("eq", *xidArgToVal[xid])},
+				{Value: xidArgNameToDgPredMap[xid]},
+				{Value: maybeQuoteArg("eq", xidArgToVal[xid])},
 			},
 		}
 		flt = append(flt, &gql.FilterTree{

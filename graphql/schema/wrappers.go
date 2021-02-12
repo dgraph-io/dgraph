@@ -123,8 +123,8 @@ type Field interface {
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
-	IDArgValue() (map[string]*string, uint64, error)
-	XIDArg() map[string]string
+	IDArgValue() (map[string]string, uint64, error)
+	XIDArgs() map[string]string
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
@@ -1200,7 +1200,7 @@ func (f *field) HasLambdaDirective() bool {
 	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
 }
 
-func (f *field) XIDArg() map[string]string {
+func (f *field) XIDArgs() map[string]string {
 	var xidToDgraphPredicate = make(map[string]string, 0)
 	passwordField := f.Type().PasswordField()
 
@@ -1221,11 +1221,11 @@ func (f *field) XIDArg() map[string]string {
 	return xidToDgraphPredicate
 }
 
-func (f *field) IDArgValue() (xids map[string]*string, uid uint64, err error) {
+func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 	idField := f.Type().IDField()
 	passwordField := f.Type().PasswordField()
 	xidArgName := ""
-	xidArgToVal := make(map[string]*string, 0)
+	xids = make(map[string]string)
 	// This method is only called for Get queries and check. These queries can accept ID, XID
 	// or Password. Therefore the non ID and Password field is an XID.
 	// TODO maybe there is a better way to do this.
@@ -1253,10 +1253,9 @@ func (f *field) IDArgValue() (xids map[string]*string, uid uint64, err error) {
 					return
 				}
 			}
-			xidArgToVal[xidArgName] = &xidArgVal
+			xids[xidArgName] = xidArgVal
 		}
 	}
-	xids = xidArgToVal
 	if idField == nil {
 		return
 	}
@@ -1634,12 +1633,12 @@ func (q *query) HasLambdaDirective() bool {
 	return (*field)(q).HasLambdaDirective()
 }
 
-func (q *query) IDArgValue() (map[string]*string, uint64, error) {
+func (q *query) IDArgValue() (map[string]string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
 
-func (q *query) XIDArg() map[string]string {
-	return (*field)(q).XIDArg()
+func (q *query) XIDArgs() map[string]string {
+	return (*field)(q).XIDArgs()
 }
 
 func (q *query) Type() Type {
@@ -1909,11 +1908,11 @@ func (m *mutation) AbstractType() bool {
 	return (*field)(m).AbstractType()
 }
 
-func (m *mutation) XIDArg() map[string]string {
-	return (*field)(m).XIDArg()
+func (m *mutation) XIDArgs() map[string]string {
+	return (*field)(m).XIDArgs()
 }
 
-func (m *mutation) IDArgValue() (map[string]*string, uint64, error) {
+func (m *mutation) IDArgValue() (map[string]string, uint64, error) {
 	return (*field)(m).IDArgValue()
 }
 

@@ -3260,7 +3260,7 @@
       }
     }
 -
-  name: "get query with multiple @id fields"
+  name: "get query with multiple @id and an ID field"
   gqlquery: |
     query {
       getBook(id: "0x1",title:"GraphQL",ISBN:"001HB") {
@@ -3273,6 +3273,26 @@
   dgquery: |-
     query {
       getBook(func: uid(0x1)) @filter(((eq(Book.ISBN, "001HB") AND eq(Book.title, "GraphQL")) AND type(Book))) {
+        Book.id : uid
+        Book.title : Book.title
+        Book.ISBN : Book.ISBN
+        Book.Author : Book.Author
+      }
+    }
+-
+  name: "get query with multiple @id fields "
+  gqlquery: |
+    query {
+      getBook(title:"GraphQL",ISBN:"001HB") {
+        id
+        title
+        ISBN
+        Author
+      }
+    }
+  dgquery: |-
+    query {
+      getBook(func: eq(Book.ISBN, "001HB")) @filter(((eq(Book.title, "GraphQL")) AND type(Book))) {
         Book.id : uid
         Book.title : Book.title
         Book.ISBN : Book.ISBN
