@@ -1272,10 +1272,8 @@ func rewriteObject(
 				case "Float":
 					val, _ := xidVal.(float64)
 					xidString = strconv.FormatFloat(val, 'f', -1, 64)
-				case "Int64":
-					fallthrough
 				default:
-					xidString, ok = xidVal.(string)
+					xidString, _ = xidVal.(string)
 				}
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 
