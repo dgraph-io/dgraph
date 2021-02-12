@@ -1299,7 +1299,7 @@ func rewriteObject(
 							err = x.GqlErrorf("id %s already exists: field %s, type %s", xidString, xid.Name(), typ.Name())
 						} else {
 							// This error will only be reported in debug mode.
-							err = x.GqlErrorf("id %s already exists: field %s, type %s", xidString, xid.Name(), typ.Name())
+							err = x.GqlErrorf("GraphQL debug: id %s already exists: field %s, type %s", xidString, xid.Name(), typ.Name())
 						}
 						retErrors = append(retErrors, err)
 						return nil, retErrors
