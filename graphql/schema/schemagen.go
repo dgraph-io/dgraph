@@ -425,7 +425,7 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string)
 		finalHeaders = append(finalHeaders, h)
 	}
 
-	// Add Auth Header to allowedCorsHeaders headers list
+	// Add Auth Header to allowedCorsHeaders list
 	if authHeader != "" {
 		finalHeaders = append(finalHeaders, authHeader)
 	}

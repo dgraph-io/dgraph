@@ -419,7 +419,7 @@ func dataTypeCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	if defn.Kind == ast.Scalar {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			defn.Position, "You can't add scalar definitions. "+
-				"Only type, interface, union, input and enums are allowedCorsHeaders in initial schema.")}
+				"Only type, interface, union, input and enums are allowed in initial schema.")}
 	}
 	return nil
 }
@@ -433,7 +433,7 @@ func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 				// If we find any query or mutation field defined without a @custom/@lambda
 				// directive, that is an error for us.
 				if !hasCustomOrLambda(fld) {
-					errMesg = "GraphQL Query and Mutation types are only allowedCorsHeaders to have fields " +
+					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
 						"with @custom/@lambda directive. Other fields are built automatically for" +
 						" you. Found " + defn.Name + " " + fld.Name + " without @custom/@lambda."
 					break
@@ -732,7 +732,7 @@ func hasAuthDirective(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.
 			continue
 		}
 		return []*gqlerror.Error{gqlerror.ErrorPosf(field.Position,
-			"Type %s; Field %s: @%s directive is not allowedCorsHeaders on fields",
+			"Type %s; Field %s: @%s directive is not allowed on fields",
 			typ.Name, field.Name, authDirective)}
 	}
 	return nil
@@ -743,8 +743,8 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) gqlerr
 		return nil
 	}
 
-	// ID and Boolean list are not allowedCorsHeaders.
-	// [Boolean] is not allowedCorsHeaders as dgraph schema doesn't support [bool] yet.
+	// ID and Boolean list are not allowed.
+	// [Boolean] is not allowed as dgraph schema doesn't support [bool] yet.
 	switch field.Type.Elem.Name() {
 	case
 		"ID",
@@ -801,7 +801,7 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 		return nil
 	}
 
-	// Nested lists are not allowedCorsHeaders.
+	// Nested lists are not allowed.
 	if field.Type.Elem.Elem != nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(field.Position,
 			"Type %s; Field %s: Nested lists are invalid.",
@@ -1124,7 +1124,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		if invDirective != nil {
 			errs = append(errs, gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s: @hasInverse directive is not allowedCorsHeaders when pred argument in "+
+				"Type %s; Field %s: @hasInverse directive is not allowed when pred argument in "+
 					"@dgraph directive starts with a ~.",
 				typ.Name, field.Name))
 			return errs
@@ -1191,7 +1191,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				if invDirective != nil {
 					errs = append(errs, gqlerror.ErrorPosf(
 						dir.Position,
-						"Type %s; Field %s: @hasInverse directive is not allowedCorsHeaders "+
+						"Type %s; Field %s: @hasInverse directive is not allowed "+
 							"because field is forward edge of another field with reverse directive.",
 						invType.Name, fld.Name))
 					return errs
@@ -1356,7 +1356,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	if search != nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s; custom directive not allowedCorsHeaders along with @search directive.",
+			"Type %s; Field %s; custom directive not allowed along with @search directive.",
 			typ.Name, field.Name))
 	}
 
@@ -1364,7 +1364,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	if dgraph != nil {
 		errs = append(errs, gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s; custom directive not allowedCorsHeaders along with @dgraph directive.",
+			"Type %s; Field %s; custom directive not allowed along with @dgraph directive.",
 			typ.Name, field.Name))
 	}
 
@@ -1375,7 +1375,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		if len(id) == 0 && len(xid) == 0 {
 			errs = append(errs, gqlerror.ErrorPosf(
 				dir.Position,
-				"Type %s; Field %s; @custom directive is only allowedCorsHeaders on fields where the type"+
+				"Type %s; Field %s; @custom directive is only allowed on fields where the type"+
 					" definition has a field with type ID! or a field with @id directive.",
 				typ.Name, field.Name))
 		}
@@ -1797,7 +1797,7 @@ func customDirectiveValidation(sch *ast.Schema,
 
 		if field.Name == idField || field.Name == xidField {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position,
-				"Type %s; Field %s; custom directive not allowedCorsHeaders on field of type ID! or field "+
+				"Type %s; Field %s; custom directive not allowed on field of type ID! or field "+
 					"with @id directive.", typ.Name, field.Name))
 		}
 
