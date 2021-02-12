@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -198,7 +199,7 @@ func runRestoreCmd() error {
 		zc = pb.NewZeroClient(zero)
 	}
 
-	badger := x.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
+	badger := z.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	start = time.Now()

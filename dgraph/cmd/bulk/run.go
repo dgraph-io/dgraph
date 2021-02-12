@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
@@ -131,7 +132,7 @@ func init() {
 }
 
 func run() {
-	badger := x.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
+	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
 		worker.BadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
