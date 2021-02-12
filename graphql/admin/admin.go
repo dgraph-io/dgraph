@@ -188,6 +188,9 @@ const (
 	}
 
 	input ExportInput {
+		"""
+		Data format for the export, e.g. "rdf" or "json" (default: "rdf")
+		"""
 		format: String
 	}
 
@@ -465,7 +468,13 @@ func newAdminResolver(
 			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
-
+		server.mux.Lock()
+		if newSchema.Schema == server.schema.Schema {
+			glog.Infof("Skipping GraphQL schema update as the new schema is the same as the current schema.")
+			server.mux.Unlock()
+			return
+		}
+		server.mux.Unlock()
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {

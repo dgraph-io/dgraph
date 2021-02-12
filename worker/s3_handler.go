@@ -362,7 +362,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(reader, gid, predSet)
+			groupMaxUid, err := fn(reader, gid, predSet, manifest.DropOperations)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}

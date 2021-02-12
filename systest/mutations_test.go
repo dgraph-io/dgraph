@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,6 +102,7 @@ func TestSystem(t *testing.T) {
 	t.Run("overwrite uid predicates across txns", wrap(OverwriteUidPredicatesMultipleTxn))
 	t.Run("overwrite uid predicates reverse index", wrap(OverwriteUidPredicatesReverse))
 	t.Run("delete and query same txn", wrap(DeleteAndQuerySameTxn))
+	t.Run("add and query zero datetime value", wrap(AddAndQueryZeroTimeValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -633,16 +633,9 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	michael := assigned.Uids["michael"]
 
-	resp, err := c.NewTxn().Query(ctx, `schema{}`)
-	require.NoError(t, err)
-	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+x.GraphqlPredicates+","+
-		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"married","type":"bool"},`+
-		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}],`+x.InitialTypes),
-		string(resp.Json))
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `{"predicate":"friend","type":"uid","list":true},` +
+		`{"predicate":"married","type":"bool"},` +
+		`{"predicate":"name","type":"default"}`})
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -655,20 +648,8 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	resp, err = c.NewTxn().Query(ctx, `schema{}`)
-	require.NoError(t, err)
-	testutil.CompareJSON(t, asJson(`[`+
-		x.AclPredicates+","+
-		x.GraphqlPredicates+","+
-		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}],`+x.InitialTypes),
-		string(resp.Json))
-}
-
-func asJson(schema string) string {
-	return fmt.Sprintf(`{"schema":%v}`, schema)
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `{"predicate":"friend","type":"uid","list":true},` +
+		`{"predicate":"name","type":"default"}`})
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
@@ -2442,4 +2423,38 @@ func DeleteAndQuerySameTxn(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))
+}
+
+func AddAndQueryZeroTimeValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `val: datetime .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:value <val> "0000-01-01T00:00:00Z" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const datetimeQuery = `
+	{
+		q(func: has(val)) {
+			val
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, datetimeQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{
+		"q": [
+		  {
+			"val": "0000-01-01T00:00:00Z"
+		  }
+		]
+	  }`, string(resp.Json))
 }

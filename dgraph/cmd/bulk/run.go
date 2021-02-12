@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/worker"
+
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -102,13 +104,13 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.Int("badger.compression_level", 1,
+	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
 	flag.Int64("badger.cache_mb", 0, "Total size of cache (in MB) per shard in reducer.")
 	flag.String("badger.cache_percentage", "0,100",
 		"Cache percentages summing up to 100 for various caches"+
 			" (FORMAT: BlockCacheSize, IndexCacheSize).")
-
+	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
@@ -166,6 +168,21 @@ func run() {
 	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
 		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)
+	}
+
+	if opt.EncryptionKey != nil && len(opt.EncryptionKey) > 0 {
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
+		x.WorkerConfig.TLSClientConfig = tlsConf
+		if !worker.EnterpriseEnabled() {
+			// Crash since the enterprise license is not enabled..
+			log.Fatal("Enterprise License needed for the Encryption feature.")
+		} else {
+			log.Printf("Encryption feature enabled.")
+		}
+
 	}
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")

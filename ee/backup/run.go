@@ -15,6 +15,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"os"
 	"time"
 
@@ -119,6 +120,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
+	x.RegisterClientTLSFlags(flag)
 	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
@@ -192,13 +194,19 @@ func runRestoreCmd() error {
 
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
-
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		zero, err := grpc.DialContext(ctx, opt.zero,
-			grpc.WithBlock(),
-			grpc.WithInsecure())
+		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
+		x.Checkf(err, "Unable to generate helper TLS config")
+		callOpts := []grpc.DialOption{grpc.WithBlock()}
+		if tlsConfig != nil {
+			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+		} else {
+			callOpts = append(callOpts, grpc.WithInsecure())
+		}
+
+		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
 		if err != nil {
 			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}

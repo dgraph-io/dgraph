@@ -63,11 +63,6 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 )
 
-const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
-)
-
 var (
 	bindall bool
 
@@ -192,12 +187,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("normalize_node_limit", 1e4,
 		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
 			"normalize directive.")
-
-	// TLS configurations
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
-	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
@@ -221,6 +210,8 @@ they form a Raft group and provide synchronous replication.
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WstoreBlockCache,WstoreIndexCache).
 		PostingListCache should be 0 and is a no-op.
 		`)
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -451,7 +442,7 @@ func setupServer(closer *z.Closer) {
 		laddr = "0.0.0.0"
 	}
 
-	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, x.TLSNodeCert, x.TLSNodeKey)
 	if err != nil {
 		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
@@ -695,6 +686,8 @@ func run() {
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
+	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
+	x.Check(err)
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -710,6 +703,10 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		TLSClientConfig:     tlsConf,
+		TLSDir:              Alpha.Conf.GetString("tls_dir"),
+		TLSInterNodeEnabled: Alpha.Conf.GetBool("tls_internal_port_enabled"),
+		TLSMinVersion:       Alpha.Conf.GetString("tls_min_version"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
