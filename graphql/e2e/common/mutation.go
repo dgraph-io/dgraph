@@ -5326,17 +5326,17 @@ func inputCoerciontoList(t *testing.T) {
 						}
 					}`,
 			expected: `{
-							"addpost1": {
-								"post1": [
-            						{
-										"title": "GraphQL",
-                						"commentsByMonth": [
-											1
-                						]
-            						}
-        						]
-    						}
-						}`,
+                         "addpost1": {
+                             "post1": [
+                                 {
+                                     "title": "GraphQL",
+                                     "commentsByMonth": [
+                                         1
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
 		},
 		{name: "Coercion of Scalar value at root to list using variables",
 			query: ` mutation($post1: [Addpost1Input!]!) {
@@ -5348,17 +5348,17 @@ func inputCoerciontoList(t *testing.T) {
 						}
 					}`,
 			expected: `{
-							"addpost1": {
-        						"post1": [
-            						{
-                						"title": "Dgraph",
-										"commentsByMonth": [
-											1
-										]
-									}
-        						]
-    						}
-						}`,
+                          "addpost1": {
+                              "post1": [
+                                  {
+                                      "title": "Dgraph",
+                                      "commentsByMonth": [
+                                          1
+                                      ]
+                                  }
+                              ]
+                          }
+                       }`,
 			variables: `{"post1": {"title":"Dgraph","commentsByMonth":1}}`,
 		},
 		{name: "Coercing nested scalar value to list ",
@@ -5391,7 +5391,7 @@ func inputCoerciontoList(t *testing.T) {
                                  }
                              ]
                          }
-                      }`,
+					}`,
 		},
 		{name: "Coercing nested scalar value to list using variables",
 			query: `mutation($author: [Addauthor1Input!]!) {
@@ -5406,22 +5406,22 @@ func inputCoerciontoList(t *testing.T) {
 						}
 					}`,
 			expected: `{
-    						"addauthor1": {
-        						"author1": [
-            						{
-                						"name": "Jackob",
-                						"posts": [
-                    						{
-                        						"title": "DB",
-                        						"commentsByMonth": [
-													1
-                        						]
-                    						}
-										]
-            						}
-        						]
-    						}
-						}`,
+                         "addauthor1": {
+                             "author1": [
+                                 {
+                                     "name": "Jackob",
+                                     "posts": [
+                                         {
+                                             "title": "DB",
+                                             "commentsByMonth": [
+                                                 1
+                                             ]
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
 			variables: `{"author": {"name": "Jackob","posts":{"title":"DB","commentsByMonth":1}}}`,
 		},
 	}
@@ -5470,16 +5470,16 @@ func mutationWithMultipleXids(t *testing.T) {
 						}
 					}`,
 			expected: `{
-    					"addWorker": {
-        					"worker": [
-								{
-									"name": "Alice",
-									"reg_No": "001",
-									"emp_Id": "E01"
-								}
-        					]
-    					}
-					}`,
+                         "addWorker": {
+                             "worker": [
+                                 {
+                                     "name": "Alice",
+                                     "reg_No": "001",
+                                     "emp_Id": "E01"
+                                 }
+                             ]
+                         }
+                      }`,
 		},
 		{
 			name: "adding worker with same reg_No will return error",
@@ -5532,16 +5532,16 @@ func mutationWithMultipleXids(t *testing.T) {
 						}
 					}`,
 			expected: `{
-    					"addWorker": {
-        					"worker": [
-								{
-									"name": "Bob",
-									"reg_No": "002",
-									"emp_Id": "E02"
-								}
-        					]
-    					}
-					}`,
+                         "addWorker": {
+                             "worker": [
+                                 {
+                                     "name": "Bob",
+                                     "reg_No": "002",
+                                     "emp_Id": "E02"
+                                 }
+                             ]
+                         }
+                    }`,
 		},
 	}
 
