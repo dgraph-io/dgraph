@@ -28,20 +28,6 @@
       "type": "uid"
     },
     {
-      "predicate": "Astronaut.id",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "hash"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate": "Astronaut.missions",
-      "type": "uid",
-      "list": true
-    },
-    {
       "predicate": "Author.country",
       "type": "uid"
     },

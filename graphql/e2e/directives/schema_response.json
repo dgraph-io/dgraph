@@ -23,45 +23,9 @@
       "upsert": true
     },
     {
-      "predicate": "Astronaut.id",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "hash"
-      ],
-      "upsert": true
-    },
-    {
       "list": true,
       "predicate": "author1.posts",
       "type": "uid"
-    },
-    {
-      "predicate": "Astronaut.missions",
-      "type": "uid",
-      "list": true
-    },
-    {
-      "predicate": "Book.bookId",
-      "type": "int",
-      "index": true,
-      "tokenizer": [
-        "int"
-      ],
-      "upsert": true
-    },
-    {
-      "predicate": "Book.chapters",
-      "type": "uid",
-      "list": true
-    },
-    {
-      "predicate": "Book.desc",
-      "type": "string"
-    },
-    {
-      "predicate": "Book.name",
-      "type": "string"
     },
     {
       "predicate": "Category.name",
