@@ -355,3 +355,10 @@ type Dataset {
     project: Project!
     name: String! @search(by: [hash])
 }
+
+# multiple fields with @id directive
+type Worker {
+    name: String!
+    reg_No: String! @id
+    emp_Id: String! @id
+}
