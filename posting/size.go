@@ -129,9 +129,6 @@ func calculatePostingSize(posting *pb.Posting) uint64 {
 	// Adding the size of each entry in LangTag array.
 	size += uint64(cap(posting.LangTag))
 
-	// Adding the size of each entry in Lables array.
-	size += uint64(len(posting.Label))
-
 	for _, f := range posting.Facets {
 		// Add the size of each facet.
 		size += calculateFacet(f)

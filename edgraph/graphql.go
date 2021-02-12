@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -75,6 +76,9 @@ func ResetCors(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = context.WithValue(ctx, IsGraphql, true)
+		//TODO(Ahsan): I don't think this is namespace specific, we will have to reset cors for
+		// all the namespaces.
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
 			glog.Infof("Unable to upsert cors. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -113,12 +117,16 @@ func AddCorsOrigins(ctx context.Context, origins []string) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	_, err = (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
+	ctx = context.WithValue(ctx, IsGraphql, true)
+	// TODO(Ahsan): Is this namespace specific?
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	_, err = (&Server{}).doQuery(ctx, req)
 	return err
 }
 
 // GetCorsOrigins retrieve all the cors origin from the database.
 func GetCorsOrigins(ctx context.Context) (string, []string, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	req := &Request{
 		req: &api.Request{
 			Query: `query{
@@ -131,7 +139,10 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 		},
 		doAuth: NoAuthorize,
 	}
-	res, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
+	//TODO(Ahsan): Is this namespace specific?
+	ctx = context.WithValue(ctx, IsGraphql, true)
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	res, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return "", nil, err
 	}
@@ -166,37 +177,6 @@ func GetCorsOrigins(ctx context.Context) (string, []string, error) {
 	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
 	corsLast := corsRes.Me[len(corsRes.Me)-1]
 	return corsLast.Uid, corsLast.DgraphCors, nil
-}
-
-// UpdateSchemaHistory updates graphql schema history.
-func UpdateSchemaHistory(ctx context.Context, schema string) error {
-	req := &Request{
-		req: &api.Request{
-			Mutations: []*api.Mutation{
-				{
-					Set: []*api.NQuad{
-						{
-							Subject:     "_:a",
-							Predicate:   "dgraph.graphql.schema_history",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: schema}},
-						},
-						{
-							Subject:   "_:a",
-							Predicate: "dgraph.type",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{
-								StrVal: "dgraph.graphql.history"}},
-						},
-					},
-					SetNquads: []byte(fmt.Sprintf(`_:a <dgraph.graphql.schema_created_at> "%s" .`,
-						time.Now().Format(time.RFC3339))),
-				},
-			},
-			CommitNow: true,
-		},
-		doAuth: NoAuthorize,
-	}
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
-	return err
 }
 
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
@@ -234,7 +214,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		},
 		doAuth: NoAuthorize,
 	}
-
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
@@ -294,7 +274,9 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			doAuth: NoAuthorize,
 		}
 
-		_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), req)
+		ctx := context.WithValue(ctx, IsGraphql, true)
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		_, err := (&Server{}).doQuery(ctx, req)
 		return err
 
 	}

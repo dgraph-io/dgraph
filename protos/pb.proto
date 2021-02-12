@@ -216,12 +216,12 @@ message Tablet {
 }
 
 message DirectedEdge {
+	reserved 6;  // This was used for label.
 	fixed64 entity             = 1;    // Subject or source node / UID.
 	string attr                = 2;       // Attribute or predicate. Labels the edge.
 	bytes value                = 3;       // Edge points to a value.
 	Posting.ValType value_type = 4;  // The type of the value
 	fixed64 value_id           = 5;   // Object or destination node / UID.
-	string label               = 6;
 	string lang                = 7;
 	enum Op {
 		SET = 0;
@@ -230,6 +230,7 @@ message DirectedEdge {
 	Op op = 8;
 	repeated api.Facet facets = 9;
 	repeated string allowedPreds = 10;
+	uint64 namespace = 11;
 }
 
 message Mutations {
@@ -319,6 +320,7 @@ message Proposal {
 	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
 	RestoreRequest restore 		= 12;
 	CDCState cdc_state 				= 13;
+	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
 }
 
 message CDCState {
@@ -338,6 +340,7 @@ message KVS {
 
 // Posting messages.
 message Posting {
+	reserved 6; // This was used for label.
 	fixed64 uid = 1;
 	bytes value = 2;
 	enum ValType {
@@ -361,7 +364,6 @@ message Posting {
 	}
 	PostingType posting_type = 4;
 	bytes lang_tag = 5; // Only set for VALUE_LANG
-	string label = 6;
 	repeated api.Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
@@ -565,6 +567,7 @@ service Worker {
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
 	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
+	rpc DeleteNamespace (DeleteNsRequest)              returns (Status) {}
 }
 
 message SubscriptionRequest {
@@ -655,6 +658,8 @@ message ExportRequest {
 	string secret_key = 7;
 	string session_token = 8;
 	bool anonymous = 9;
+
+	uint64 namespace = 10;
 }
 
 message ExportResponse {
@@ -683,6 +688,7 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
+	uint64 namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.
@@ -709,6 +715,11 @@ message UpdateGraphQLSchemaResponse {
 message BulkMeta {
 	int64 edge_count = 1;
 	map<string, SchemaUpdate> schema_map = 2;
+}
+
+message DeleteNsRequest {
+	uint32 group_id = 1;
+	uint64 namespace = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

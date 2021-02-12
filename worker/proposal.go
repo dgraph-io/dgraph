@@ -172,7 +172,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 					return errors.Errorf("Can't store predicate `%s` as it is prefixed with "+
 						"`dgraph.` which is reserved as the namespace for dgraph's internal "+
 						"types/predicates.",
-						edge.Attr)
+						x.ParseAttr(edge.Attr))
 				}
 				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {

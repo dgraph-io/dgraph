@@ -113,6 +113,8 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Uint64("force-namespace", math.MaxUint64,
+		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.compression", "snappy",
@@ -156,6 +158,8 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
+		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
+
 		// Badger options
 		BadgerCompression:      ctype,
 		BadgerCompressionLevel: clevel,
@@ -326,6 +330,7 @@ func run() {
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+		loader.leaseNamespaces()
 
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,

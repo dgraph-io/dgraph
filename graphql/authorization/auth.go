@@ -349,17 +349,14 @@ func (c *CustomClaims) validateAudience() error {
 
 func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
+	md, _ := metadata.FromIncomingContext(ctx)
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) == 0 {
 		if authMeta.ClosedByDefault {
 			return &CustomClaims{}, fmt.Errorf("a valid JWT is required but was not provided")
 		} else {
 			return &CustomClaims{}, nil
 		}
-	}
-	jwtToken := md.Get(string(AuthJwtCtxKey))
-	if len(jwtToken) == 0 {
-		return &CustomClaims{}, nil
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}

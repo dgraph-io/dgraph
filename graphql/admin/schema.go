@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -59,22 +59,9 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
-	usr.admin.mux.RLock()
-	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
-	usr.admin.mux.RUnlock()
-
-	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
-	updateHistory := oldSchemaHash != newSchemaHash
-
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
-	}
-
-	if updateHistory {
-		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
-			glog.Errorf("error while updating schema history %s", err.Error())
-		}
 	}
 
 	return resolve.DataResult(
@@ -95,14 +82,17 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 
-	if gsr.admin.schema.ID == "" {
+	ns := x.ExtractNamespace(ctx)
+
+	cs := gsr.admin.schema[ns]
+	if cs == nil || cs.ID == "" {
 		data = map[string]interface{}{q.Name(): nil}
 	} else {
 		data = map[string]interface{}{
 			q.Name(): map[string]interface{}{
-				"id":              gsr.admin.schema.ID,
-				"schema":          gsr.admin.schema.Schema,
-				"generatedSchema": gsr.admin.schema.GeneratedSchema,
+				"id":              cs.ID,
+				"schema":          cs.Schema,
+				"generatedSchema": cs.GeneratedSchema,
 			}}
 	}
 

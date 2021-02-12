@@ -168,14 +168,14 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
 func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
-		return LoadResult{0, 0, errors.Wrapf(err, "cannot retrieve manifests")}
+		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
 	var since uint64
-	var maxUid uint64
+	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
@@ -186,7 +186,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to open %q", file)}
+				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
 			}
 			defer fp.Close()
 
@@ -194,18 +194,17 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, gid, predSet, manifest.DropOperations)
+			groupMaxUid, groupMaxNsId, err := fn(fp, gid, predSet, manifest.DropOperations)
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return LoadResult{Err: err}
 			}
-			if groupMaxUid > maxUid {
-				maxUid = groupMaxUid
-			}
+			maxUid = x.Max(maxUid, groupMaxUid)
+			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
 // Verify performs basic checks to decide whether the specified backup can be restored
@@ -313,7 +312,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		_, err = loadFromBackup(db, gzReader, 0, preds, nil)
+		_, _, err = loadFromBackup(db, gzReader, 0, preds, nil)
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot load backup")
 		}
@@ -371,6 +370,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 				ReadTs:      manifest.Since,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
+				Namespace:   math.MaxUint64, // Export all the namespaces.
 				Destination: exportDir,
 			}
 

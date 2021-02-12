@@ -109,7 +109,8 @@ func (s *ServerState) initStorage() {
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
-			WithIndexCacheSize(Config.PIndexCacheSize)
+			WithIndexCacheSize(Config.PIndexCacheSize).
+			WithNamespaceOffset(1)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

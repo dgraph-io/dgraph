@@ -90,6 +90,7 @@ func TestBackupMinioE(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	client := testutil.GetHttpsClient(t)
+	tabletName := x.NamespaceAttr(x.GalaxyNamespace, "movie")
 	// Move tablet to group 1 to avoid messes later.
 	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
@@ -101,7 +102,7 @@ func TestBackupMinioE(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+		if _, ok := state.Groups["1"].Tablets[tabletName]; ok {
 			moveOk = true
 			break
 		}

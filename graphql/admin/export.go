@@ -19,17 +19,20 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"math"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
 type exportInput struct {
-	Format string
+	Format    string
+	Namespace uint64
 	DestinationFields
 }
 
@@ -50,8 +53,15 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
+	// For the request made from non-galaxy user, use the namespace from the context.
+	ns := x.ExtractNamespace(ctx)
+	if ns != x.GalaxyNamespace {
+		input.Namespace = ns
+	}
+
+	files, err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
 		Format:       format,
+		Namespace:    input.Namespace,
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
@@ -90,5 +100,12 @@ func getExportInput(m schema.Mutation) (*exportInput, error) {
 
 	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
+
+	// Export everything if namespace is not specified.
+	if v, ok := inputArg.(map[string]interface{}); ok {
+		if _, ok := v["namespace"]; !ok {
+			input.Namespace = math.MaxUint64
+		}
+	}
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }

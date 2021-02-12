@@ -142,8 +142,10 @@ func PeriodicallyPostTelemetry() {
 
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
-func GetGQLSchema() (uid, graphQLSchema string, err error) {
-	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
+	ctx := context.WithValue(context.Background(), Authorize, false)
+	ctx = x.AttachNamespace(ctx, namespace)
+	resp, err := (&Server{}).Query(ctx,
 		&api.Request{
 			Query: `
 			query {
@@ -197,13 +199,16 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	var err error
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
+	if !x.WorkerConfig.AclEnabled {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
 		op := &api.Operation{Schema: dgraphSchema}
 		if err = validateAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
-		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(ctx, op); err != nil {
 			return nil, err
 		}
 	}
@@ -250,13 +255,28 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 // parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
 // struct, and performs some checks to make sure that the schema is valid.
-func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
+func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*schema.ParsedSchema,
+	error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
 	}
 
-	result, err := schema.Parse(op.Schema)
+	var result *schema.ParsedSchema
+	var err error
+	if x.IsGalaxyOperation(ctx) {
+		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
+		// needed by live loader.
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+		}
+		// Parse the schema preserving the namespace.
+		result, err = schema.Parse(op.Schema)
+	} else {
+		namespace := x.ExtractNamespace(ctx)
+		result, err = schema.ParseWithNamespace(op.Schema, namespace)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -264,12 +284,9 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		//
-		// TODO: Should we allow Guardians to make this change? To fix up a broken index, for
-		// example?
 		if schema.IsPreDefPredChanged(update) {
 			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" modified", update.Predicate)
+				" modified", x.ParseAttr(update.Predicate))
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -283,7 +300,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
-				update.Predicate)
+				x.ParseAttr(update.Predicate))
 		}
 	}
 
@@ -292,7 +309,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		// if the update is equal to the existing one.
 		if schema.IsPreDefTypeChanged(typ) {
 			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 
 		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
@@ -300,7 +317,7 @@ func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, err
 		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
-				typ.TypeName)
+				x.ParseAttr(typ.TypeName))
 		}
 	}
 
@@ -333,6 +350,8 @@ func insertDropRecord(ctx context.Context, dropOp string) error {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
+
+	ctx = x.AttachJWTNamespace(ctx)
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -346,11 +365,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	empty := &api.Payload{}
+	namespace := x.ExtractNamespace(ctx)
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
+				" galaxy")
+		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
@@ -382,7 +406,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// query the GraphQL schema and keep it in memory, so it can be inserted again
-		_, graphQLSchema, err := GetGQLSchema()
+		_, graphQLSchema, err := GetGQLSchema(namespace)
 		if err != nil {
 			return empty, err
 		}
@@ -418,16 +442,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		} else {
 			attr = op.DropValue
 		}
-
+		attr = x.NamespaceAttr(namespace, attr)
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
-				" dropped", attr)
+				" dropped", x.ParseAttr(attr))
 		}
 
 		nq := &api.NQuad{
 			Subject:     x.Star,
-			Predicate:   attr,
+			Predicate:   x.ParseAttr(attr),
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
 		wnq := &gql.NQuad{NQuad: nq}
@@ -453,23 +477,22 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// Pre-defined types cannot be dropped.
-		if x.IsPreDefinedType(op.DropValue) {
+		dropPred := x.NamespaceAttr(namespace, op.DropValue)
+		if x.IsPreDefinedType(dropPred) {
 			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
 				op.DropValue)
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
+		m.DropValue = dropPred
 		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-
-	result, err := parseSchemaFromAlterOperation(op)
+	result, err := parseSchemaFromAlterOperation(ctx, op)
 	if err == errIndexingInProgress {
 		// Make the client wait a bit.
 		time.Sleep(time.Second)
 		return nil, err
-
 	} else if err != nil {
 		return nil, err
 	}
@@ -484,7 +507,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+	if err = worker.WaitForIndexing(ctx, !op.RunInBackground); err != nil {
 		return empty, err
 	}
 
@@ -535,6 +558,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
+			pred = x.NamespaceAttr(x.ExtractNamespace(ctx), pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}
@@ -1026,11 +1050,13 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	ctx = x.AttachJWTNamespace(ctx)
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
@@ -1096,8 +1122,21 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	qc := &queryContext{req: req.req, latency: l, span: span, graphql: isGraphQL,
-		gqlField: req.gqlField}
+	if x.IsGalaxyOperation(ctx) {
+		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
+		// needed by live loader.
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
+		}
+	}
+
+	qc := &queryContext{
+		req:      req.req,
+		latency:  l,
+		span:     span,
+		graphql:  isGraphQL,
+		gqlField: req.gqlField,
+	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
@@ -1140,6 +1179,10 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
 	}
+
+	// TODO(Ahsan): resp.Txn.Preds contain predicates of form gid-namespace|attr.
+	// Remove the namespace from the response.
+	// resp.Txn.Preds = x.ParseAttrList(resp.Txn.Preds)
 
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
 	// this separately since it involves modifying the API protos.
@@ -1209,6 +1252,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	// Core processing happens here.
 	er, err := qr.Process(ctx)
+
 	if err != nil {
 		return resp, errors.Wrap(err, "")
 	}

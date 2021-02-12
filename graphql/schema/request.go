@@ -17,8 +17,10 @@
 package schema
 
 import (
-	"github.com/pkg/errors"
+	"context"
 	"net/http"
+
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -33,6 +35,7 @@ type Request struct {
 	Variables     map[string]interface{} `json:"variables"`
 	Extensions    RequestExtensions
 	Header        http.Header
+	Context       context.Context
 }
 
 // RequestExtensions represents extensions recieved in requests

@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
@@ -256,7 +257,7 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		if !found {
 			continue
 		}
-		out = append(out, &typeUpdate)
+		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
 
 	return out, nil

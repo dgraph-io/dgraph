@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -72,10 +73,11 @@ var exportFormats = map[string]exportFormat{
 }
 
 type exporter struct {
-	pl     *posting.List
-	uid    uint64
-	attr   string
-	readTs uint64
+	pl        *posting.List
+	uid       uint64
+	attr      string
+	namespace uint64
+	readTs    uint64
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -93,8 +95,8 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
-var uidFmtStrRdf = "<0x%x>"
-var uidFmtStrJson = "\"0x%x\""
+var uidFmtStrRdf = "<%#x>"
+var uidFmtStrJson = "\"%#x\""
 
 // valToStr converts a posting value to a string.
 func valToStr(v types.Val) (string, error) {
@@ -142,7 +144,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	// Leaving it simple for now.
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
@@ -238,7 +240,8 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				fmt.Fprint(bp, "^^<"+rdfType+">")
 			}
 		}
-		// Let's skip labels. Dgraph doesn't support them for any functionality.
+		// Use label for storing namespace.
+		fmt.Fprintf(bp, " <%#x>", e.namespace)
 
 		// Facets.
 		if len(p.Facets) != 0 {
@@ -280,9 +283,12 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	return listWrap(kv), err
 }
 
-func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
+func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
+	ns, attr := x.ParseNamespaceAttr(attr)
 	var buf bytes.Buffer
+	x.Check2(buf.WriteString(fmt.Sprintf("[%#x]", ns)))
+	x.Check2(buf.WriteRune(' '))
 	x.Check2(buf.WriteRune('<'))
 	x.Check2(buf.WriteString(attr))
 	x.Check2(buf.WriteRune('>'))
@@ -312,40 +318,42 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 		x.Check2(buf.WriteString(" @upsert"))
 	}
 	x.Check2(buf.WriteString(" . \n"))
-	kv := &bpb.KV{
+	//TODO(Naman): We don't need the version anymore.
+	return &bpb.KV{
 		Value:   buf.Bytes(),
-		Version: 2, // Schema value
+		Version: 3, // Schema value
 	}
-	return listWrap(kv), nil
 }
 
-func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
+func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
+	ns, attr := x.ParseNamespaceAttr(attr)
+	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
 
 	x.Check2(buf.WriteString("}\n"))
 
-	kv := &bpb.KV{
+	return &bpb.KV{
 		Value:   buf.Bytes(),
-		Version: 2, // Type value
+		Version: 3, // Type value
 	}
-	return listWrap(kv), nil
 }
 
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
+	predicate := x.ParseAttr(update.Predicate)
 	x.Check2(builder.WriteString("\t"))
-	// While exporting type definitions, "<" and ">" brackets must be written around
-	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
-	if strings.HasPrefix(update.Predicate, "~") {
+	// We don't need the namespace information with the fields. We already have that with type.
+	if strings.HasPrefix(predicate, "~") {
+		// While exporting type definitions, "<" and ">" brackets must be written around
+		// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
 		x.Check2(builder.WriteString("<"))
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(predicate))
 		x.Check2(builder.WriteString(">"))
 	} else {
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(predicate))
 	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
@@ -536,7 +544,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
-	glog.Infof("Export requested at %d.", in.ReadTs)
+	glog.Infof("Export requested at %d for namespace %d.", in.ReadTs, in.Namespace)
 
 	// Let's wait for this server to catch up to all the updates until this ts.
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
@@ -550,6 +558,8 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 // exportInternal contains the core logic to export a Dgraph database. If skipZero is set to
 // false, the parts of this method that require to talk to zero will be skipped. This is useful
 // when exporting a p directory directly from disk without a running cluster.
+// It uses stream framework to export the data. While it uses an iterator for exporting the schema
+// and types.
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
 	uts := time.Unix(in.UnixTs, 0)
@@ -577,7 +587,13 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 
+	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
+	stream.Prefix = []byte{x.DefaultPrefix}
+	if in.Namespace != math.MaxUint64 {
+		// Export a specific namespace.
+		stream.Prefix = append(stream.Prefix, x.NamespaceToBytes(in.Namespace)...)
+	}
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		// Skip exporting delete data including Schema and Types.
@@ -591,12 +607,12 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
+		fmt.Println(pk)
 		// Do not pick keys storing parts of a multi-part list. They will be read
 		// from the main key.
 		if pk.HasStartUid {
 			return false
 		}
-
 		// _predicate_ is deprecated but leaving this here so that users with a
 		// binary with version >= 1.1 can export data from a version < 1.1 without
 		// this internal data showing up.
@@ -604,15 +620,12 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
-		if !pk.IsType() && !skipZero {
+		if !skipZero {
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}
 		}
-
-		// We need to ensure that schema keys are separately identifiable, so they can be
-		// written to a different file.
-		return pk.IsData() || pk.IsSchema() || pk.IsType()
+		return pk.IsData()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
@@ -626,50 +639,24 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			readTs: in.ReadTs,
 		}
 		e.uid = pk.Uid
-		e.attr = pk.Attr
+		e.namespace, e.attr = x.ParseNamespaceAttr(pk.Attr)
 
-		// Schema and type keys should be handled first because schema keys are also
-		// considered data keys.
 		switch {
-		case pk.IsSchema():
-			var update pb.SchemaUpdate
-			err := item.Value(func(val []byte) error {
-				return update.Unmarshal(val)
-			})
-			if err != nil {
-				// Let's not propagate this error. We just log this and continue onwards.
-				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
-				return nil, nil
-			}
-			return toSchema(pk.Attr, &update)
-
-		case pk.IsType():
-			var update pb.TypeUpdate
-			err := item.Value(func(val []byte) error {
-				return update.Unmarshal(val)
-			})
-			if err != nil {
-				// Let's not propagate this error. We just log this and continue onwards.
-				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
-				return nil, nil
-			}
-			return toType(pk.Attr, update)
-
-		case pk.Attr == "dgraph.graphql.xid":
+		case e.attr == "dgraph.graphql.xid":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.cors":
+		case e.attr == "dgraph.cors":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.drop.op":
+		case e.attr == "dgraph.drop.op":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.schema_created_at":
+		case e.attr == "dgraph.graphql.schema_created_at":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.schema_history":
+		case e.attr == "dgraph.graphql.schema_history":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.p_query":
+		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
-		case pk.Attr == "dgraph.graphql.p_sha256hash":
+		case e.attr == "dgraph.graphql.p_sha256hash":
 			// Ignore this predicate.
-		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
+		case pk.IsData() && e.attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
@@ -695,7 +682,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			kv := &bpb.KV{
 				Value:   val,
-				Version: 3, // GraphQL schema value
+				Version: 2, // GraphQL schema value
 			}
 			return listWrap(kv), nil
 
@@ -707,7 +694,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 
 			// The GraphQL layer will create a node of type "dgraph.graphql". That entry
 			// should not be exported.
-			if pk.Attr == "dgraph.type" {
+			if e.attr == "dgraph.type" {
 				vals, err := e.pl.AllValues(in.ReadTs)
 				if err != nil {
 					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
@@ -762,20 +749,16 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if len(kv.Value) == 0 {
 				return nil
 			}
-
 			var writer *fileWriter
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
-			case 2: // schema and types
-				writer = schemaWriter
-			case 3:
+			case 2: // graphQL schema
 				writer = gqlSchemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
-
-			if kv.Version == 1 { // only insert separator for data
+			if kv.Version == 1 {
 				if hasDataBefore {
 					if _, err := writer.gw.Write(separator); err != nil {
 						return err
@@ -791,6 +774,77 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		})
 	}
 
+	// This is used to export the schema and types.
+	writePrefix := func(prefix byte) error {
+		txn := db.NewTransactionAt(in.ReadTs, false)
+		defer txn.Discard()
+		// We don't need to iterate over all versions.
+		iopts := badger.DefaultIteratorOptions
+		iopts.Prefix = []byte{prefix}
+		if in.Namespace != math.MaxUint64 {
+			iopts.Prefix = append(iopts.Prefix, x.NamespaceToBytes(in.Namespace)...)
+		}
+
+		itr := txn.NewIterator(iopts)
+		defer itr.Close()
+		for itr.Rewind(); itr.Valid(); itr.Next() {
+			item := itr.Item()
+			// Don't export deleted items.
+			if item.IsDeletedOrExpired() {
+				continue
+			}
+			pk, err := x.Parse(item.Key())
+			if err != nil {
+				glog.Errorf("error %v while parsing key %v during export. Skip.", err,
+					hex.EncodeToString(item.Key()))
+				return err
+			}
+
+			var kv *bpb.KV
+			switch prefix {
+			case x.ByteSchema:
+				if !skipZero {
+					servesTablet, err := groups().ServesTablet(pk.Attr)
+					if err != nil || !servesTablet {
+						continue
+					}
+				}
+
+				var update pb.SchemaUpdate
+				err = item.Value(func(val []byte) error {
+					return update.Unmarshal(val)
+				})
+				if err != nil {
+					// Let's not propagate this error. We just log this and continue onwards.
+					glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
+					continue
+				}
+				kv = toSchema(pk.Attr, &update)
+
+			case x.ByteType:
+				var update pb.TypeUpdate
+				err := item.Value(func(val []byte) error {
+					return update.Unmarshal(val)
+				})
+				if err != nil {
+					// Let's not propagate this error. We just log this and continue onwards.
+					glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
+					return nil
+				}
+				kv = toType(pk.Attr, update)
+
+			default:
+				glog.Fatalf("Unhandled byte prefix: %v", prefix)
+			}
+
+			// Write to the appropriate writer.
+			if _, err := schemaWriter.gw.Write(kv.Value); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	// All prepwork done. Time to roll.
 	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
 		return nil, err
@@ -799,6 +853,13 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
+		return nil, err
+	}
+	// Write the schema and types.
+	if err := writePrefix(x.ByteSchema); err != nil {
+		return nil, err
+	}
+	if err := writePrefix(x.ByteType); err != nil {
 		return nil, err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
@@ -872,10 +933,11 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 	for _, gid := range gids {
 		go func(group uint32) {
 			req := &pb.ExportRequest{
-				GroupId: group,
-				ReadTs:  readTs,
-				UnixTs:  time.Now().Unix(),
-				Format:  input.Format,
+				GroupId:   group,
+				ReadTs:    readTs,
+				UnixTs:    time.Now().Unix(),
+				Format:    input.Format,
+				Namespace: input.Namespace,
 
 				Destination:  input.Destination,
 				AccessKey:    input.AccessKey,
