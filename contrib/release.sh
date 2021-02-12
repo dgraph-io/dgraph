@@ -43,8 +43,6 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-# TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
-
 check_command_exists strip
 check_command_exists make
 check_command_exists gcc
@@ -57,6 +55,24 @@ check_command_exists protoc
 check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
+check_command_exists nc
+
+# Check ports needed to run Ratel tests
+if nc -z 127.0.0.1 8000; then
+    exit_error "Port 8000 is already being used. Is Ratel running?"
+fi
+if nc -z 127.0.0.1 5080; then
+    exit_error "Port 5080 is already being used. Is Dgraph Zero running?"
+fi
+if nc -z 127.0.0.1 6080; then
+    exit_error "Port 6080 is already being used. Is Dgraph Zero running?"
+fi
+if nc -z 127.0.0.1 8080; then
+    exit_error "Port 8080 is already being used. Is Dgraph Alpha running?"
+fi
+if nc -z 127.0.0.1 9080; then
+    exit_error "Port 9080 is already being used. Is Dgraph Alpha running?"
+fi
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -159,6 +175,7 @@ popd
 pushd $basedir/ratel
   nvm install --lts
   (export GO111MODULE=off; ./scripts/build.prod.sh)
+  docker volume rm e2etests_dgraph || true
   ./scripts/test.sh
 popd
 
