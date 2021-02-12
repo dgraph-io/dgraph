@@ -126,8 +126,8 @@ github.com/dgraph-io/dgo/v200 v200.0.0-20210125093441-2ab429259580/go.mod h1:1LU
 github.com/dgraph-io/gqlgen v0.13.2 h1:TNhndk+eHKj5qE7BenKKSYdSIdOGhLqxR1rCiMso9KM=
 github.com/dgraph-io/gqlgen v0.13.2/go.mod h1:iCOrOv9lngN7KAo+jMgvUPVDlYHdf7qDwsTkQby2Sis=
 github.com/dgraph-io/gqlparser/v2 v2.1.1/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
-github.com/dgraph-io/gqlparser/v2 v2.1.4 h1:yMj5848fLCiJQX6/qEHtMl46i2mr7HzrD8fwHI86Svg=
-github.com/dgraph-io/gqlparser/v2 v2.1.4/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
+github.com/dgraph-io/gqlparser/v2 v2.1.5 h1:FNFSzyOEZ8gs97SLBtn2Pez9f12emvsQ6Vv6oNtg5rc=
+github.com/dgraph-io/gqlparser/v2 v2.1.5/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:PDEhlwHpkEQ5WBfOOKZCNZTXFDGyCEWTYDhxGQbyIpk=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1 h1:E+NH1+aTO3vgP/t01DvYbX8qnwBC0bPgPwK7y+y0vaE=

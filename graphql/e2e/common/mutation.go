@@ -5317,100 +5317,110 @@ func inputCoerciontoList(t *testing.T) {
 		expected  string
 	}{
 		{name: "Coercion of Scalar value at root to list ",
-			query: ` mutation{
-					 	addpost1(input:{title:"GraphQL",commentsByMonth:1}){
-							post1{
+			query: ` mutation {
+						addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
+							post1 {
 								title
 								commentsByMonth
 							}
 						}
-					 }`,
+					}`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-										{
-											"title":"GraphQL",
-											"commentsByMonth":[1]
-										}
-									]
-							}
+							"addpost1": {
+								"post1": [
+            						{
+               							 "title": "GraphQL",
+                						"commentsByMonth": [
+											1
+                						]
+            						}
+        						]
+    						}
 						}`,
 		},
 		{name: "Coercion of Scalar value at root to list using variables",
-			query: ` mutation($post1:[Addpost1Input!]!){
-					 	addpost1(input:$post1){
-							post1{
-									title
-									commentsByMonth
-								}
+			query: ` mutation($post1: [Addpost1Input!]!) {
+						addpost1(input: $post1) {
+							post1 {
+								title
+								commentsByMonth
 							}
-					 }`,
+						}
+					}`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-										{
-											"title":"Dgraph",
-											"commentsByMonth":[1]
-										}
-									]
-							  }
+							"addpost1": {
+        						"post1": [
+            						{
+                						"title": "Dgraph",
+										"commentsByMonth": [
+                    						1
+										]
+          							  }
+        						]
+    						}
 						}`,
 			variables: `{"post1": {"title":"Dgraph","commentsByMonth":1}}`,
 		},
 		{name: "Coercing nested scalar value to list ",
-			query: ` mutation{
-					 	addauthor1(input:{name:"Jack",posts:{title:"RDBMS",commentsByMonth:1}}){
-							author1{
+			query: ` mutation {
+						addauthor1(
+							input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
+						) {
+							author1 {
 								name
-								posts{
+								posts {
 									title
 									commentsByMonth
 								}
 							}
 						}
-					 }`,
+					}`,
 			expected: `{
-						  "addauthor1": {
-							"author1": [
-							  {
-								"name": "Jack",
-								"posts":[
-											{
-												"title":"RDBMS",
-												"commentsByMonth":[1]
-											}
-								]
-							  }
-							]
-						  }
+							"addauthor1": {
+       	 						"author1": [
+            						{
+                						"name": "Jack",
+                						"posts": [
+                    						{
+                        						"title": "RDBMS",
+                        						"commentsByMonth": [
+                            						1
+                        						]
+                    						}
+                						]
+            						}
+        						]
+    						}
 						}`,
 		},
 		{name: "Coercing nested scalar value to list using variables",
-			query: ` mutation($author:[Addauthor1Input!]!){
-					 	addauthor1(input:$author){
-							author1{
+			query: `mutation($author: [Addauthor1Input!]!) {
+						addauthor1(input: $author) {
+							author1 {
 								name
-								posts{
+								posts {
 									title
 									commentsByMonth
 								}
 							}
 						}
-					 }`,
+					}`,
 			expected: `{
-						  "addauthor1": {
-							"author1": [
-							  {
-								"name": "Jackob",
-								"posts": [
-											{
-												"title":"DB",
-												"commentsByMonth":[1]
-											}
+    						"addauthor1": {
+        						"author1": [
+            						{
+                						"name": "Jackob",
+                						"posts": [
+                    						{
+                        						"title": "DB",
+                        						"commentsByMonth": [
+                            						1
+                        						]
+                    						}
 										]
-							  }
-							]
-						  }
+            						}
+        						]
+    						}
 						}`,
 			variables: `{"author": {"name": "Jackob","posts":{"title":"DB","commentsByMonth":1}}}`,
 		},
