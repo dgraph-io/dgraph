@@ -19,7 +19,7 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2011.1
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
 	github.com/dgraph-io/gqlgen v0.13.2
-	github.com/dgraph-io/gqlparser/v2 v2.1.4
+	github.com/dgraph-io/gqlparser/v2 v2.1.5
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
 	github.com/dgraph-io/ristretto v0.0.4-0.20210122082011-bb5d392ed82d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
