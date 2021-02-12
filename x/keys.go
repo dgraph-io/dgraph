@@ -18,6 +18,7 @@ package x
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"math"
 	"strings"
 
@@ -526,6 +527,18 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+func IsDropOpKey(key []byte) (bool, error) {
+	pk, err := Parse(key)
+	if err != nil {
+		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+	}
+
+	if pk.IsData() && pk.Attr == "dgraph.drop.op" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // These predicates appear for queries that have * as predicate in them.
 var reservedPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
@@ -540,14 +553,19 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.acl.rule":        {},
 }
 
+// TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
+// predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
+// by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":    {},
 	"dgraph.graphql.schema": {},
+	"dgraph.drop.op":        {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
 // predicate is a predicate that has a special meaning in Dgraph and its query
-// language and should not be allowed as a user-defined  predicate.
+// language and should not be allowed either as a user-defined predicate or as a
+// predicate in initial internal schema.
 var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }

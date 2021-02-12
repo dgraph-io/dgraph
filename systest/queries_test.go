@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,6 +53,7 @@ func TestQuery(t *testing.T) {
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("eq with altering order of trigram and term index", wrap(EqWithAlteredIndexOrder))
 	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
@@ -330,32 +330,15 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
-	resp, err := txn.Query(ctx, `schema {}`)
-	require.NoError(t, err)
-	js := `
-  {
-    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "predicate": "dgraph.type",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ],
-		"list": true
-      },
-      {
+	testutil.VerifySchema(t, c, testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(resp.Json))
+      }`})
 }
 
 func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
@@ -388,6 +371,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	js := `
   {
     "schema": [
+	  {
+		"predicate": "dgraph.drop.op"
+	  },
       {
         "predicate": "dgraph.xid"
       },
@@ -424,7 +410,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "age"
       }
-    ],` + x.InitialTypes + `
+    ],
+	"types": [` + testutil.GetInternalTypes(false) + `
+	]
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -548,27 +536,15 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, json.Unmarshal(bb.Bytes(), &m))
 	require.NotNil(t, m["extensions"])
 
-	js := `
-  {
-    "schema": [` + x.AclPredicates + `,` + x.GraphqlPredicates + `,
-      {
-        "index": true,
-        "predicate": "dgraph.type",
-        "type": "string",
-        "tokenizer": ["exact"],
-		"list": true
-      },
-      {
+	testutil.CompareJSON(t, testutil.GetFullSchemaJSON(testutil.SchemaOptions{UserPreds: `
+	  {
         "predicate": "name",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
         ]
-      }
-    ],` + x.InitialTypes + `
-  }`
-	testutil.CompareJSON(t, js, string(m["data"]))
+      }`}), string(m["data"]))
 }
 
 func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
@@ -891,6 +867,41 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
+}
+
+func EqWithAlteredIndexOrder(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// first, let's set the schema with term before trigram
+	op := &api.Operation{Schema: `name: string @index(term, trigram) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// fill up some data
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "Alice" .
+      _:x2 <name> "Bob" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	// querying with eq should work
+	q := `{q(func: eq(name, "Alice")) {name}}`
+	expectedResult := `{"q":[{"name":"Alice"}]}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
+
+	// now, let's set the schema with trigram before term
+	op = &api.Operation{Schema: `name: string @index(trigram, term) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	// querying with eq should still work
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, expectedResult, string(resp.Json))
 }
 
 func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {

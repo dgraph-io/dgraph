@@ -44,7 +44,8 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId,
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		func(r io.Reader, groupId uint32, preds predicateSet,
+			dropOperations []*pb.DropOperation) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 			r, err := enc.GetReader(keyfile, r)
@@ -64,6 +65,8 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithCompression(options.ZSTD).
+				WithZSTDCompressionLevel(3).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
@@ -77,8 +80,7 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-
-			maxUid, err := loadFromBackup(db, gzReader, preds)
+			maxUid, err := loadFromBackup(db, gzReader, preds, dropOperations)
 			if err != nil {
 				return 0, err
 			}
@@ -89,9 +91,16 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
-func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, error) {
+func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet,
+	dropOperations []*pb.DropOperation) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
+
+	// if there were any DROP operations that need to be applied before loading the backup into
+	// the db, then apply them here
+	if err := applyDropOperationsBeforeRestore(db, dropOperations); err != nil {
+		return 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
+	}
 
 	// Delete schemas and types. Each backup file should have a complete copy of the schema.
 	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
@@ -213,6 +222,20 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 	}
 
 	return maxUid, nil
+}
+
+func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOperation) error {
+	for _, operation := range dropOperations {
+		switch operation.DropOp {
+		case pb.DropOperation_ALL:
+			return db.DropAll()
+		case pb.DropOperation_DATA:
+			return db.DropPrefix([]byte{x.DefaultPrefix})
+		case pb.DropOperation_ATTR:
+			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
+		}
+	}
+	return nil
 }
 
 func fromBackupKey(key []byte) ([]byte, error) {

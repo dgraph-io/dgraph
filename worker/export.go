@@ -318,7 +318,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) (*bpb.KVList, error) {
 
 func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(fmt.Sprintf("type %s {\n", attr)))
+	x.Check2(buf.WriteString(fmt.Sprintf("type <%s> {\n", attr)))
 	for _, field := range update.Fields {
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
@@ -531,6 +531,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return toType(pk.Attr, update)
 
 		case pk.Attr == "dgraph.graphql.xid":
+			// Ignore this predicate.
+		case pk.Attr == "dgraph.drop.op":
 			// Ignore this predicate.
 
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":

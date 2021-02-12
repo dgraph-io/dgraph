@@ -109,6 +109,9 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "dgraph.employee.en.ename",
 		"type": "string"
 	}, {
+		"predicate": "dgraph.drop.op",
+		"type": "string"
+	}, {
 		"predicate": "dgraph.graphql.schema",
 		"type": "string"
 	}, {

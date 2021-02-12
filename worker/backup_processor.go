@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
@@ -115,6 +117,9 @@ type Manifest struct {
 	Path string `json:"-"`
 	// Encrypted indicates whether this backup was encrypted or not.
 	Encrypted bool `json:"encrypted"`
+	// DropOperations lists the various DROP operations that took place since the last backup.
+	// These are used during restore to redo those operations before applying the backup.
+	DropOperations []*pb.DropOperation `json:"drop_operations"`
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -134,8 +139,8 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) {
-	var emptyRes pb.Status
+func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
+	var response pb.BackupResponse
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -143,16 +148,16 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	uri, err := url.Parse(pr.Request.Destination)
 	if err != nil {
-		return &emptyRes, err
+		return &response, err
 	}
 
 	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
-		return &emptyRes, err
+		return &response, err
 	}
 
 	if err := handler.CreateBackupFile(uri, pr.Request); err != nil {
-		return &emptyRes, err
+		return &response, err
 	}
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
@@ -166,14 +171,26 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	newhandler, err := enc.GetWriter(Config.BadgerKeyFile, handler)
 	if err != nil {
-		return &emptyRes, err
+		return &response, err
 	}
 	gzWriter := gzip.NewWriter(newhandler)
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.NumGo = backupNumGo
-	stream.KeyToList = pr.toBackupList
+
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		kvList, dropOp, err := pr.toBackupList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		// we don't want to append a nil value to the slice, so need to check.
+		if dropOp != nil {
+			response.DropOperations = append(response.DropOperations, dropOp)
+		}
+		return kvList, nil
+	}
+
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
@@ -212,7 +229,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		glog.Errorf("While taking backup: %v", err)
-		return &emptyRes, err
+		return &response, err
 	}
 
 	if maxVersion > pr.Request.ReadTs {
@@ -223,15 +240,15 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
 	if err = gzWriter.Close(); err != nil {
 		glog.Errorf("While closing gzipped writer: %v", err)
-		return &emptyRes, err
+		return &response, err
 	}
 
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
-		return &emptyRes, err
+		return &response, err
 	}
 	glog.Infof("Backup complete: group %d at %d", pr.Request.GroupId, pr.Request.ReadTs)
-	return &emptyRes, nil
+	return &response, nil
 }
 
 // CompleteBackup will finalize a backup by writing the manifest at the backup destination.
@@ -272,8 +289,9 @@ func (m *Manifest) GoString() string {
 }
 
 func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
-	*bpb.KVList, error) {
+	*bpb.KVList, *pb.DropOperation, error) {
 	list := &bpb.KVList{}
+	var dropOp *pb.DropOperation
 
 	item := itr.Item()
 	if item.UserMeta() != posting.BitSchemaPosting && (item.Version() < pr.Request.SinceTs ||
@@ -282,7 +300,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 		// the given key by returning an empty list.
 		// Do not do this for schema and type keys. Those keys always have a
 		// version of one so they would be incorrectly rejected by above check.
-		return list, nil
+		return list, nil, nil
 	}
 
 	kv := pr.kvPool.Get().(*bpb.KV)
@@ -292,35 +310,42 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "while reading posting list")
+			return nil, nil, errors.Wrapf(err, "while reading posting list")
 		}
 
 		err = l.SingleListRollup(kv)
 		if err != nil {
-			return nil, errors.Wrapf(err, "while rolling up list")
+			return nil, nil, errors.Wrapf(err, "while rolling up list")
 		}
 
 		backupKey, err := toBackupKey(kv.Key)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+
+		// check if this key was storing a DROP operation record. If yes, get the drop operation.
+		dropOp, err = checkAndGetDropOp(key, l, pr.Request.ReadTs)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		kv.Key = backupKey
 
 		backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		kv.Value = backupPl
 		list.Kv = append(list.Kv, kv)
 	case posting.BitSchemaPosting:
 		valCopy, err := item.ValueCopy(nil)
 		if err != nil {
-			return nil, errors.Wrapf(err, "while copying value")
+			return nil, nil, errors.Wrapf(err, "while copying value")
 		}
 
 		backupKey, err := toBackupKey(key)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		kv.Key = backupKey
@@ -330,10 +355,10 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 		kv.ExpiresAt = item.ExpiresAt()
 		list.Kv = append(list.Kv, kv)
 	default:
-		return nil, errors.Errorf(
+		return nil, nil, errors.Errorf(
 			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 	}
-	return list, nil
+	return list, dropOp, nil
 }
 
 func toBackupKey(key []byte) ([]byte, error) {
@@ -376,4 +401,52 @@ func writeKVList(list *bpb.KVList, w io.Writer) error {
 	}
 	_, err = w.Write(buf)
 	return err
+}
+
+func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOperation, error) {
+	isDropOpKey, err := x.IsDropOpKey(key)
+	if err != nil || !isDropOpKey {
+		return nil, err
+	}
+
+	vals, err := l.AllValues(readTs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot read value of dgraph.drop.op")
+	}
+	switch len(vals) {
+	case 0:
+		// do nothing, it means this one was deleted with S * * deletion.
+		// So, no need to consider it.
+		return nil, nil
+	case 1:
+		val, ok := vals[0].Value.([]byte)
+		if !ok {
+			return nil, errors.Errorf("cannot convert value of dgraph.drop.op to byte array, "+
+				"got type: %s, value: %v, tid: %v", reflect.TypeOf(vals[0].Value), vals[0].Value,
+				vals[0].Tid)
+		}
+		// A dgraph.drop.op record can have values in only one of the following formats:
+		// * DROP_ALL;
+		// * DROP_DATA;
+		// * DROP_ATTR;attrName
+		// So, accordingly construct the *pb.DropOperation.
+		dropOp := &pb.DropOperation{}
+		dropInfo := strings.Split(string(val), ";")
+		if len(dropInfo) != 2 {
+			return nil, errors.Errorf("Unexpected value: %s for dgraph.drop.op", val)
+		}
+		switch dropInfo[0] {
+		case "DROP_ALL":
+			dropOp.DropOp = pb.DropOperation_ALL
+		case "DROP_DATA":
+			dropOp.DropOp = pb.DropOperation_DATA
+		case "DROP_ATTR":
+			dropOp.DropOp = pb.DropOperation_ATTR
+			dropOp.DropValue = dropInfo[1]
+		}
+		return dropOp, nil
+	default:
+		// getting more than one values for a non-list predicate is an error
+		return nil, errors.Errorf("found multiple values for dgraph.drop.op: %v", vals)
+	}
 }
