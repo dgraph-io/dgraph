@@ -5346,8 +5346,7 @@ func inputCoerciontoList(t *testing.T) {
                     			commentsByMonth
                     		}
                     	}
-}
-`,
+                   }`,
 			expected: `{
                           "addpost1": {
                               "post1": [
