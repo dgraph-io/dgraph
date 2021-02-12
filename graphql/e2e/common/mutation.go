@@ -5329,7 +5329,7 @@ func inputCoerciontoList(t *testing.T) {
 							"addpost1": {
 								"post1": [
             						{
-               							 "title": "GraphQL",
+										"title": "GraphQL",
                 						"commentsByMonth": [
 											1
                 						]
@@ -5353,9 +5353,9 @@ func inputCoerciontoList(t *testing.T) {
             						{
                 						"title": "Dgraph",
 										"commentsByMonth": [
-                    						1
+											1
 										]
-          							  }
+									}
         						]
     						}
 						}`,
@@ -5376,22 +5376,22 @@ func inputCoerciontoList(t *testing.T) {
 						}
 					}`,
 			expected: `{
-							"addauthor1": {
-       	 						"author1": [
-            						{
-                						"name": "Jack",
-                						"posts": [
-                    						{
-                        						"title": "RDBMS",
-                        						"commentsByMonth": [
-                            						1
-                        						]
-                    						}
-                						]
-            						}
-        						]
-    						}
-						}`,
+                         "addauthor1": {
+                             "author1": [
+                                 {
+                                     "name": "Jack",
+                                     "posts": [
+                                         {
+                                             "title": "RDBMS",
+                                             "commentsByMonth": [
+                                                 1
+                                             ]
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
 		},
 		{name: "Coercing nested scalar value to list using variables",
 			query: `mutation($author: [Addauthor1Input!]!) {
@@ -5414,7 +5414,7 @@ func inputCoerciontoList(t *testing.T) {
                     						{
                         						"title": "DB",
                         						"commentsByMonth": [
-                            						1
+													1
                         						]
                     						}
 										]
