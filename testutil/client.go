@@ -119,7 +119,7 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, x.GrootId, "password", x.GalaxyNamespace)
+		err = dg.LoginIntoNamespace(ctx, x.GrootId, "password", x.GalaxyNamespace)
 		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
 			strings.Contains(err.Error(), "user not found")) {
 

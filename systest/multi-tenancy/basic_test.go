@@ -298,7 +298,7 @@ func dgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
-	err = userClient.Login(context.Background(), id, password, ns)
+	err = userClient.LoginIntoNamespace(context.Background(), id, password, ns)
 	require.NoError(t, err)
 	return userClient
 }
