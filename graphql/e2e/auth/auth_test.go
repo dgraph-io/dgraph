@@ -159,6 +159,7 @@ type TestCase struct {
 	ans           bool
 	result        string
 	name          string
+	jwt           string
 	filter        map[string]interface{}
 	variables     map[string]interface{}
 	query         string
@@ -494,6 +495,119 @@ func TestAuthOnInterfaces(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
+	testCases := []TestCase{
+		{
+			name: "Query with null value in jwt",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}
+			`,
+			result: `{"queryProject":[]}`,
+		},
+		{
+			name: "Query with null value in jwt: deep level",
+			query: `
+			query {
+				queryUser(order: {desc: username}, first: 1) {
+					username
+					issues {
+						msg
+					}
+				}
+			}
+			`,
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user8","issues":[]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: common.GetJWTWithNullUser(t, tcase.role, metaInfo),
+			Query:   tcase.query,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+  
+func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
+	getVehicleParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryVehicle{
+				owner
+			}
+		}`,
+		Headers: common.GetJWT(t, "Alice", "ADMIN", metaInfo),
+	}
+	gqlResponse := getVehicleParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	result := `
+	{
+		"queryVehicle": [
+		  {
+			"owner": "Bob"
+		  }
+		]
+	  }`
+
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
+func TestQueryWithStandardClaims(t *testing.T) {
+	if metaInfo.Algo == "RS256" {
+		t.Skip()
+	}
+	testCases := []TestCase{
+		{
+			query: `
+            query {
+                queryProject (order: {asc: name}) {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6IkFETUlOIn0.cH_EcC8Sd0pawJs96XPhpRsYVXuTybT1oUkluBDS8B4",
+			result: `{"queryProject":[{"name":"Project1"},{"name":"Project2"}]}`,
+		},
+		{
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.wabcAkINZ6ycbEuziTQTSpv8T875Ky7JQu68ynoyDQE",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: make(http.Header),
+			Query:   tcase.query,
+		}
+		queryParams.Headers.Set(metaInfo.Header, tcase.jwt)
+
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",

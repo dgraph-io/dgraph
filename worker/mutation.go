@@ -162,7 +162,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
 					return
 				}
-				if err := gr.Node.proposeSnapshot(1); err != nil {
+				if err := gr.Node.proposeSnapshot(); err != nil {
 					glog.Errorf("error in proposing snapshot: %v", err)
 				}
 			}
