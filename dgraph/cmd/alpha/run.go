@@ -149,18 +149,13 @@ they form a Raft group and provide synchronous replication.
 			" For Grpc, in auth-token key in the context.")
 
 	flag.String("acl", worker.AclDefaults,
-		`ACL options:
-	secret_file="" The file that stores the HMAC secret, which is used for signing the JWT and
+		`(Enterprise feature)
+		ACL options:
+	secret-file="" The file that stores the HMAC secret, which is used for signing the JWT and
 		should have at least 32 ASCII characters.
-		(Enterprise feature)
-	access_ttl=duration The TTL for the access JWT.
-		The duration format used is the same as time.ParseDuration with two added duration suffixes:
-		"12h" means 12 hours, and "30d" means 30 days.
-		(Enterprise feature)
-	refresh_ttl=duration The TTL for the refresh JWT.
-		The duration format used is the same as time.ParseDuration with two added duration suffixes:
-		"12h" means 12 hours, and "30d" means 30 days.
-		(Enterprise feature)`)
+	access-ttl=duration The TTL for the access JWT.
+	refresh-ttl=duration The TTL for the refresh JWT.
+		The duration format is the same as time.ParseDuration with an added 'd' suffix for days.`)
 
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
@@ -643,7 +638,7 @@ func run() {
 	}
 
 	acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
-	secretFile := acl.GetString("secret_file")
+	secretFile := acl.GetString("secret-file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
@@ -653,8 +648,8 @@ func run() {
 			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
 		}
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = acl.GetDuration("access_ttl")
-		opts.RefreshJwtTtl = acl.GetDuration("refresh_ttl")
+		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
+		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 		glog.Info("HMAC secret loaded successfully.")
 	}
 

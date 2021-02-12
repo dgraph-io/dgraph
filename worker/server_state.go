@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	AclDefaults = `secret_file=""; access_ttl=6; refresh_ttl=30;`
+	AclDefaults = `secret-file=""; access-ttl=6h; refresh-ttl=30d;`
 )
 
 // ServerState holds the state of the Dgraph server.

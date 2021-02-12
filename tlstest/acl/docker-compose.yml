@@ -25,7 +25,7 @@ services:
       --logtostderr -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
       --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha1.crt --tls_key /dgraph-tls/client.alpha1.key
-      --tls_client_auth VERIFYIFGIVEN --acl "secret_file=/dgraph-acl/hmac-secret;"
+      --tls_client_auth VERIFYIFGIVEN --acl "secret-file=/dgraph-acl/hmac-secret;"
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
