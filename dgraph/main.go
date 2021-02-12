@@ -32,7 +32,7 @@ func main() {
 	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
-	runtime.GOMAXPROCS(128)
+	  runtime.GOMAXPROCS(128)
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {
