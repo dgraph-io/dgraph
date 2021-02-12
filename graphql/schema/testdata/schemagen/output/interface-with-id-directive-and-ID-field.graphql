@@ -312,7 +312,7 @@ enum StudentOrderable {
 input StudentFilter {
 	rollNo: StringHashFilter
 	regNo: [ID!]
-	has: StudentHasFilter
+	has: [StudentHasFilter]
 	and: [StudentFilter]
 	or: [StudentFilter]
 	not: StudentFilter
@@ -330,7 +330,7 @@ input StudentPatch {
 
 input StudentRef {
 	regNo: ID
-	rollNo: String @id
+	rollNo: String
 }
 
 input UpdateStudentInput {

@@ -337,7 +337,7 @@ input ProductFilter {
 	price: FloatFilter
 	name: StringTermFilter
 	name2: StringTermFilter
-	has: ProductHasFilter
+	has: [ProductHasFilter]
 	and: [ProductFilter]
 	or: [ProductFilter]
 	not: ProductFilter

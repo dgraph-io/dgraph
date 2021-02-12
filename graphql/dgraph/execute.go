@@ -32,7 +32,9 @@ import (
 type DgraphEx struct{}
 
 // Execute is the underlying dgraph implementation of Dgraph execution.
-func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+// If field is nil, returned response has JSON in DQL form, otherwise it will be in GraphQL form.
+func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Execute")
@@ -53,12 +55,15 @@ func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.R
 	}
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
-	resp, err := (&edgraph.Server{}).Query(ctx, req)
+	resp, err := (&edgraph.Server{}).QueryGraphQL(ctx, req, field)
+	if !x.IsGqlErrorList(err) {
+		err = schema.GQLWrapf(err, "Dgraph execution failed")
+	}
 
-	return resp, schema.GQLWrapf(err, "Dgraph execution failed")
+	return resp, err
 }
 
-// CommitOrAbort is the underlying dgraph implementation for commiting a Dgraph transaction
+// CommitOrAbort is the underlying dgraph implementation for committing a Dgraph transaction
 func (dg *DgraphEx) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
 	_, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
 	return err

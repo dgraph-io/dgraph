@@ -137,6 +137,11 @@ type country struct {
 	States []*state `json:"states,omitempty"`
 }
 
+type mission struct {
+	ID          string `json:"id,omitempty"`
+	Designation string `json:"designation,omitempty"`
+}
+
 type author struct {
 	ID            string     `json:"id,omitempty"`
 	Name          string     `json:"name,omitempty"`
@@ -178,6 +183,18 @@ type state struct {
 	Code    string   `json:"xcode,omitempty"`
 	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
+	Region  *region  `json:"region,omitempty"`
+}
+
+type region struct {
+	ID       string    `json:"id,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	District *district `json:"district,omitempty"`
+}
+
+type district struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type movie struct {
@@ -463,6 +480,42 @@ func assertUpdateGqlSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema 
 	AssertSchemaUpdateCounterIncrement(t, authority, oldCounter)
 }
 
+// JSONEqGraphQL compares two JSON strings obtained from a /graphql response.
+// To avoid issues, don't use space for indentation in expected input.
+//
+// The comparison requirements for JSON reported by /graphql are following:
+//  * The key order matters in object comparison, i.e.
+//        {"hello": "world", "foo": "bar"}
+//    is not same as:
+//        {"foo": "bar", "hello": "world"}
+//  * A key missing in an object is not same as that key present with value null, i.e.
+//        {"hello": "world"}
+//    is not same as:
+//        {"hello": "world", "foo": null}
+//  * Integers that are out of the [-(2^53)+1, (2^53)-1] precision range supported by JSON RFC,
+//    should still be encoded with full precision. i.e., the number 9007199254740993 ( = 2^53 + 1)
+//    should not get encoded as 9007199254740992 ( = 2^53). This happens in Go's standard JSON
+//    parser due to IEEE754 precision loss for floating point numbers.
+//
+// The above requirements are not satisfied by the standard require.JSONEq or testutil.CompareJSON
+// methods.
+// In order to satisfy all these requirements, this implementation just requires that the input
+// strings be equal after removing `\r`, `\n`, `\t` whitespace characters from the inputs.
+// TODO:
+//  Find a better way to do this such that order isn't mandated in list comparison.
+//  So that it is actually usable at places it is not used at present.
+func JSONEqGraphQL(t *testing.T, expected, actual string) {
+	expected = strings.ReplaceAll(expected, "\r", "")
+	expected = strings.ReplaceAll(expected, "\n", "")
+	expected = strings.ReplaceAll(expected, "\t", "")
+
+	actual = strings.ReplaceAll(actual, "\r", "")
+	actual = strings.ReplaceAll(actual, "\n", "")
+	actual = strings.ReplaceAll(actual, "\t", "")
+
+	require.Equal(t, expected, actual)
+}
+
 func (twt *Tweets) DeleteByID(t *testing.T, user string, metaInfo *testutil.AuthMeta) {
 	getParams := &GraphQLParams{
 		Headers: GetJWT(t, user, "", metaInfo),
@@ -610,6 +663,7 @@ func RunAll(t *testing.T) {
 	t.Run("date filters", dateFilters)
 	t.Run("float filters", floatFilters)
 	t.Run("has filters", hasFilters)
+	t.Run("has filter on list of fields", hasFilterOnListOfFields)
 	t.Run("Int filters", int32Filters)
 	t.Run("Int64 filters", int64Filters)
 	t.Run("boolean filters", booleanFilters)
@@ -630,6 +684,7 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
+	t.Run("entitites Query on extended type", entitiesQuery)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -639,6 +694,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
+	t.Run("queries have touched_uids even if there are GraphQL errors", erroredQueriesHaveTouchedUids)
 	t.Run("alias works for queries", queryWithAlias)
 	t.Run("multiple aliases for same field in query", queryWithMultipleAliasOfSameField)
 	t.Run("cascade directive", queryWithCascade)
@@ -663,7 +719,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query id directive with float", idDirectiveWithFloat)
-	t.Run("query using single ID in a filter that will be coerced to list", queryFilterSingleIDListCoercion)
+	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -713,6 +769,12 @@ func RunAll(t *testing.T) {
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
 	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
+	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
+	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
+	t.Run("three level double XID mutation", threeLevelDoubleXID)
+	t.Run("two levels linked to one XID", twoLevelsLinkedToXID)
+	t.Run("cyclically linked mutation", cyclicMutation)
+	t.Run("parallel mutations", parallelMutations)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -733,6 +795,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
+	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 }
 
 // RunCorsTest test all cors related tests.
@@ -1183,6 +1246,18 @@ func GetJWT(t *testing.T, user, role interface{}, metaInfo *testutil.AuthMeta) h
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
 
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
+}
+
+func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	metaInfo.AuthVars["USER"] = nil
+	metaInfo.AuthVars["ROLE"] = role
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h

@@ -37,5 +37,11 @@ func GetEEFeaturesList() []string {
 	} else {
 		ee = append(ee, "backup_restore")
 	}
+	if x.WorkerConfig.Audit {
+		ee = append(ee, "audit")
+	}
+	if worker.Config.ChangeDataConf != "" {
+		ee = append(ee, "cdc")
+	}
 	return ee
 }

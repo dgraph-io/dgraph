@@ -14,8 +14,10 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -47,6 +49,7 @@ var opt struct {
 	forceZero   bool
 	destination string
 	format      string
+	verbose     bool
 }
 
 func init() {
@@ -58,7 +61,7 @@ func init() {
 func initRestore() {
 	Restore.Cmd = &cobra.Command{
 		Use:   "restore",
-		Short: "Run Dgraph (EE) Restore backup",
+		Short: "Restore backup from Dgraph Enterprise Edition",
 		Long: `
 Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
 
@@ -109,8 +112,9 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
-
+	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
 	flag.StringVar(&opt.compression, "badger.compression", "snappy",
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
@@ -136,37 +140,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 func initBackupLs() {
 	LsBackup.Cmd = &cobra.Command{
 		Use:   "lsbackup",
-		Short: "List info on backups in given location",
-		Long: `
-lsbackup looks at a location where backups are stored and prints information about them.
-
-Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
-command. Restore is intended to be used with new Dgraph clusters in offline state.
-
-The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
-the schemes used for backup.
-
-Source URI formats:
-  [scheme]://[host]/[path]?[args]
-  [scheme]:///[path]?[args]
-  /[path]?[args] (only for local or NFS)
-
-Source URI parts:
-  scheme - service handler, one of: "s3", "minio", "file"
-    host - remote address. ex: "dgraph.s3.amazonaws.com"
-    path - directory, bucket or container at target. ex: "/dgraph/backups/"
-    args - specific arguments that are ok to appear in logs.
-
-Dgraph backup creates a unique backup object for each node group, and restore will create
-a posting directory 'p' matching the backup group ID. Such that a backup file
-named '.../r32-g2.backup' will be loaded to posting dir 'p2'.
-
-Usage examples:
-
-# Run using location in S3:
-$ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
-		`,
-		Args: cobra.NoArgs,
+		Short: "List info on backups in a given location",
+		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Restore.Conf).Stop()
 			if err := runLsbackupCmd(); err != nil {
@@ -174,11 +149,14 @@ $ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
-
+	LsBackup.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := LsBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
+	flag.BoolVar(&opt.verbose, "verbose", false,
+		"Outputs additional info in backup list.")
 	_ = LsBackup.Cmd.MarkFlagRequired("location")
 }
 
@@ -246,7 +224,7 @@ func runRestoreCmd() error {
 		if result.MaxLeaseUid > 0 {
 			ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
 			defer cancelUid()
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid}); err != nil {
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: result.MaxLeaseUid, Type: pb.Num_UID}); err != nil {
 				fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
 				return err
 			}
@@ -258,24 +236,64 @@ func runRestoreCmd() error {
 }
 
 func runLsbackupCmd() error {
-	fmt.Println("Listing backups from:", opt.location)
 	manifests, err := worker.ListBackupManifests(opt.location, nil)
 	if err != nil {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tSince\tGroups\tEncrypted\n")
-	for path, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted)
+	var paths []string
+	for path, _ := range manifests {
+		paths = append(paths, path)
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		return paths[i] < paths[j]
+	})
+
+	type backupEntry struct {
+		Path           string              `json:"path"`
+		Since          uint64              `json:"since"`
+		BackupId       string              `json:"backup_id"`
+		BackupNum      uint64              `json:"backup_num"`
+		Encrypted      bool                `json:"encrypted"`
+		Type           string              `json:"type"`
+		Groups         map[uint32][]string `json:"groups,omitempty"`
+		DropOperations []*pb.DropOperation `json:"drop_operations,omitempty"`
 	}
 
+	type backupOutput []backupEntry
+
+	var output backupOutput
+	for i := 0; i < len(paths); i++ {
+		path := paths[i]
+		manifest := manifests[path]
+
+		be := backupEntry{
+			Path:      path,
+			Since:     manifest.Since,
+			BackupId:  manifest.BackupId,
+			BackupNum: manifest.BackupNum,
+			Encrypted: manifest.Encrypted,
+			Type:      manifest.Type,
+		}
+		if opt.verbose {
+			be.Groups = manifest.Groups
+			be.DropOperations = manifest.DropOperations
+		}
+		output = append(output, be)
+	}
+	b, err := json.MarshalIndent(output, "", "\t")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	os.Stdout.Write(b)
+	fmt.Println()
 	return nil
 }
 
 func initExportBackup() {
 	ExportBackup.Cmd = &cobra.Command{
 		Use:   "export_backup",
-		Short: "Export data inside single full or incremental backup.",
+		Short: "Export data inside single full or incremental backup",
 		Long:  ``,
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -285,6 +303,7 @@ func initExportBackup() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 
 	flag := ExportBackup.Cmd.Flags()

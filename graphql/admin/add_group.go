@@ -16,12 +16,25 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 	return &addGroupRewriter{}
 }
 
+// RewriteQueries generates and rewrites queries for schema.Mutation
+// into dql queries. These queries are used to check if there exist any
+// nodes with the ID or XID which we are going to be adding.
+// RewriteQueries on addGroupRewriter calls the corresponding function for
+// AddRewriter.
+func (mrw *addGroupRewriter) RewriteQueries(
+	ctx context.Context,
+	m schema.Mutation) ([]*gql.GraphQuery, error) {
+
+	return ((*resolve.AddRewriter)(mrw)).RewriteQueries(ctx, m)
+}
+
 // Rewrite rewrites schema.Mutation into dql upsert mutations only for Group type.
 // It ensures that only the last rule out of all duplicate rules in input is preserved.
 // A rule is duplicate if it has same predicate name as another rule.
 func (mrw *addGroupRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
+	m schema.Mutation,
+	idExistence map[string]string) ([]*resolve.UpsertMutation, error) {
 
 	addGroupInput, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
@@ -34,7 +47,7 @@ func (mrw *addGroupRewriter) Rewrite(
 
 	m.SetArgTo(schema.InputArgName, addGroupInput)
 
-	return ((*resolve.AddRewriter)(mrw)).Rewrite(ctx, m)
+	return ((*resolve.AddRewriter)(mrw)).Rewrite(ctx, m, idExistence)
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.

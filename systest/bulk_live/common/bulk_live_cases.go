@@ -47,6 +47,11 @@ func RunBulkCases(t *testing.T) {
 	testHelloWorld(t)
 	suite.cleanup(t)
 
+	// remote hello world only differs from hello world in setup
+	suite = remoteHelloWorldSetup(t, true)
+	testHelloWorld(t)
+	suite.cleanup(t)
+
 	suite = facetsSetup(t, true)
 	testFacets(t)
 	suite.cleanup(t)
@@ -78,6 +83,11 @@ func RunLiveCases(t *testing.T) {
 	testHelloWorld(t)
 	suite.cleanup(t)
 
+	// remote hello world only differs from hello world in setup
+	suite = remoteHelloWorldSetup(t, false)
+	testHelloWorld(t)
+	suite.cleanup(t)
+
 	suite = facetsSetup(t, false)
 	testFacets(t)
 	suite.cleanup(t)
@@ -95,24 +105,32 @@ func RunLiveCases(t *testing.T) {
 	suite.cleanup(t)
 }
 
+const helloWorldSchema string = `
+	name: string @index(term) .
+`
+const helloWorldData string = `
+	_:pj <name> "Peter Jackson" .
+	_:pp <name> "Peter Pan" .
+`
+
 func helloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
 	if isBulkLoader {
-		s := newBulkOnlySuite(t, `
-		name: string @index(term) .
-	`, `
-		_:pj <name> "Peter Jackson" .
-		_:pp <name> "Peter Pan" .
-	`, "")
+		s := newBulkOnlySuite(t, helloWorldSchema, helloWorldData, "")
 		return s
 	}
 
-	s := newLiveOnlySuite(t, `
-		name: string @index(term) .
-	`, `
-		_:pj <name> "Peter Jackson" .
-		_:pp <name> "Peter Pan" .
-	`, "")
+	s := newLiveOnlySuite(t, helloWorldSchema, helloWorldData, "")
 	return s
+}
+
+func remoteHelloWorldSetup(t *testing.T, isBulkLoader bool) *suite {
+	return newSuiteInternal(t, suiteOpts{
+		schema:    helloWorldSchema,
+		gqlSchema: "",
+		rdfs:      helloWorldData,
+		bulkSuite: isBulkLoader,
+		remote:    true,
+	})
 }
 
 func testHelloWorld(t *testing.T) {

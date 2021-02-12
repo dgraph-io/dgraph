@@ -108,23 +108,15 @@ func fragmentInQuery(t *testing.T) {
 	queryStarshipExpected := fmt.Sprintf(`
 	{
 		"queryStarship":[{
-			"id": "%s",
+			"id":"%s",
 			"name":"Millennium Falcon",
-			"length":2
+			"length":2.000000
 		}]
 	}`, newStarship.ID)
 
-	var expected, result struct {
-		QueryStarship []*starship
-	}
-	err := json.Unmarshal([]byte(queryStarshipExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
+	JSONEqGraphQL(t, queryStarshipExpected, string(gqlResponse.Data))
 
-	require.Equal(t, expected, result)
-
-	cleanupStarwars(t, result.QueryStarship[0].ID, "", "")
+	cleanupStarwars(t, newStarship.ID, "", "")
 }
 
 func fragmentInQueryOnInterface(t *testing.T) {
@@ -281,51 +273,51 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	{
 		"queryCharacter":[
 			{
-				"__typename": "Human",
-				"id": "%s",
-				"name": "Han",
-				"appearsIn": ["EMPIRE"],
-				"starships": [{
-					"__typename": "Starship",
-					"id": "%s",
-					"name": "Millennium Falcon",
-					"length": 2
+				"__typename":"Human",
+				"id":"%s",
+				"name":"Han",
+				"appearsIn":["EMPIRE"],
+				"starships":[{
+					"__typename":"Starship",
+					"id":"%s",
+					"name":"Millennium Falcon",
+					"length":2.000000
 				}],
-				"totalCredits": 10,
-				"ename": "Han_employee"
+				"totalCredits":10.000000,
+				"ename":"Han_employee"
 			},
 			{
-				"__typename": "Droid",
-				"id": "%s",
-				"name": "R2-D2",
-				"appearsIn": ["EMPIRE"],
-				"primaryFunction": "Robot"
+				"__typename":"Droid",
+				"id":"%s",
+				"name":"R2-D2",
+				"appearsIn":["EMPIRE"],
+				"primaryFunction":"Robot"
 			}
 		],
 		"qc":[
 			{
-				"__typename": "Human",
-				"id": "%s",
-				"name": "Han"
+				"__typename":"Human",
+				"id":"%s",
+				"name":"Han"
 			},
 			{
-				"__typename": "Droid",
-				"appearsIn": ["EMPIRE"]
+				"__typename":"Droid",
+				"appearsIn":["EMPIRE"]
 			}
 		],
 		"qc1":[
 			{
-				"__typename": "Human",
-				"id": "%s"
+				"__typename":"Human",
+				"id":"%s"
 			},
 			{
-				"id": "%s"
+				"id":"%s"
 			}
 		],
 		"qc2":[
 			{
-				"name": "Han",
-				"n": "Han"
+				"name":"Han",
+				"n":"Han"
 			},
 			{
 			}
@@ -341,69 +333,63 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"primaryFunction":"Robot"
 			}
 		],
-		"qcRep1": [
-            {
-				"name": "Han",
-                "totalCredits": 10
-            },
-            {
-                "name": "R2-D2",
-                "primaryFunction": "Robot"
-            }
+		"qcRep1":[
+			{
+				"name":"Han",
+				"totalCredits":10.000000
+			},
+			{
+				"name":"R2-D2",
+				"primaryFunction":"Robot"
+			}
 		],
-		"qcRep2": [
-            {
-                "totalCredits": 10,
-                "name": "Han"
-            },
-            {
-                "name": "R2-D2",
-                "primaryFunction": "Robot"
-            }
+		"qcRep2":[
+			{
+				"totalCredits":10.000000,
+				"name":"Han"
+			},
+			{
+				"name":"R2-D2",
+				"primaryFunction":"Robot"
+			}
 		],
-		"qcRep3": [
-            {
-                "name": "Han"
-            },
-            {
-                "name": "R2-D2"
-            }
+		"qcRep3":[
+			{
+				"name":"Han"
+			},
+			{
+				"name":"R2-D2"
+			}
 		],
 		"queryThing":[
 			{
-				"__typename": "ThingOne",
-				"id": "%s",
-				"name": "Thing-1",
-				"color": "White",
-				"usedBy": "me"
+				"__typename":"ThingOne",
+				"id":"%s",
+				"name":"Thing-1",
+				"color":"White",
+				"usedBy":"me"
 			},
 			{
-				"__typename": "ThingTwo",
-				"id": "%s",
-				"name": "Thing-2",
-				"color": "Black",
-				"owner": "someone"
+				"__typename":"ThingTwo",
+				"id":"%s",
+				"name":"Thing-2",
+				"color":"Black",
+				"owner":"someone"
 			}
 		],
 		"qt":[
 			{
-				"__typename": "ThingOne",
-				"id": "%s"
+				"__typename":"ThingOne",
+				"id":"%s"
 			},
 			{
-				"__typename": "ThingTwo"
+				"__typename":"ThingTwo"
 			}
 		]
 	}`, humanID, newStarship.ID, droidID, humanID, humanID, droidID, thingOneId, thingTwoId,
 		thingOneId)
 
-	var expected, result map[string]interface{}
-	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
-
-	require.Equal(t, expected, result)
+	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 	deleteThingOne(t, thingOneId)
@@ -564,31 +550,23 @@ func fragmentInQueryOnObject(t *testing.T) {
 	{
 		"queryHuman":[
 			{
-				"__typename": "Human",
-				"id": "%s",
-				"name": "Han",
-				"appearsIn": ["EMPIRE"],
-				"starships": [{
-					"__typename": "Starship",
-					"id": "%s",
-					"name": "Millennium Falcon",
-					"length": 2
+				"__typename":"Human",
+				"id":"%s",
+				"name":"Han",
+				"appearsIn":["EMPIRE"],
+				"starships":[{
+					"__typename":"Starship",
+					"id":"%s",
+					"name":"Millennium Falcon",
+					"length":2.000000
 				}],
-				"totalCredits": 10,
-				"ename": "Han_employee"
+				"totalCredits":10.000000,
+				"ename":"Han_employee"
 			}
 		]
 	}`, humanID, newStarship.ID)
 
-	var expected, result struct {
-		QueryHuman []map[string]interface{}
-	}
-	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
-
-	require.Equal(t, expected, result)
+	JSONEqGraphQL(t, queryCharacterExpected, string(gqlResponse.Data))
 
 	cleanupStarwars(t, newStarship.ID, humanID, "")
 }
