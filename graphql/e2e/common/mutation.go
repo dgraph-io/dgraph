@@ -5472,11 +5472,11 @@ func mutationWithMultipleXids(t *testing.T) {
 			expected: `{
     					"addWorker": {
         					"worker": [
-            					{
-                					"name": "Alice",
-                					"reg_No": "001",
-                					"emp_Id": "E01"
-            					}
+								{
+									"name": "Alice",
+									"reg_No": "001",
+									"emp_Id": "E01"
+								}
         					]
     					}
 					}`,
@@ -5534,11 +5534,11 @@ func mutationWithMultipleXids(t *testing.T) {
 			expected: `{
     					"addWorker": {
         					"worker": [
-            					{
-                					"name": "Bob",
-                					"reg_No": "002",
-                					"emp_Id": "E02"
-            					}
+								{
+									"name": "Bob",
+									"reg_No": "002",
+									"emp_Id": "E02"
+								}
         					]
     					}
 					}`,
