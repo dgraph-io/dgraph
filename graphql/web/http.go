@@ -26,21 +26,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 )
 
 type Headerkey string
@@ -51,10 +47,7 @@ const (
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
-
-	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
-	ServeGQL(ns uint64, resolver *resolve.RequestResolver)
-
+	// After Set is called, this IServeGraphQL serves the new resolvers for the given namespace ns.
 	Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver)
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
@@ -90,11 +83,6 @@ func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.
 
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
 	return gh.handler
-}
-
-func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver) {
-	gh.poller[ns].UpdateResolver(resolver)
-	gh.resolver[ns] = resolver
 }
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
@@ -144,64 +132,36 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
-	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
-	// And we are extracting the Auth JWT from those and passing them along.
-	customClaims := &authorization.CustomClaims{
-		StandardClaims: jwt.StandardClaims{},
-	}
+	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
+	// in the context. We are extracting those headers and passing them along.
 	header, _ := ctx.Value("Header").(json.RawMessage)
-	var namespace uint64
-	newCtx := context.Background()
+	reqHeader := http.Header{}
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
-		if err := json.Unmarshal(header, &payload); err != nil {
+		if err = json.Unmarshal(header, &payload); err != nil {
 			return nil, err
 		}
 
-		name := authorization.GetHeader()
-		v, ok := payload["X-Dgraph-AccessToken"].(string)
-		if ok {
-			req := &http.Request{
-				Header: make(map[string][]string),
+		for k, v := range payload {
+			if vStr, ok := v.(string); ok {
+				reqHeader.Set(k, vStr)
 			}
-			req.Header.Set("X-Dgraph-AccessToken", v)
-			newCtx = x.AttachAccessJwt(newCtx, req)
-			namespace, _ = x.ExtractJWTNamespace(newCtx)
 		}
-		for key, val := range payload {
-			if !strings.EqualFold(key, name) {
-				continue
-			}
-
-			md := metadata.New(map[string]string{
-				"authorizationJwt": val.(string),
-			})
-			ctx = metadata.NewIncomingContext(ctx, md)
-			customClaims, err = authorization.ExtractCustomClaims(ctx)
-			if err != nil {
-				return nil, err
-			}
-			break
-		}
-
 	}
-	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
-	// we set their expiry to zero time
-	if customClaims.StandardClaims.ExpiresAt == nil {
-		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
-	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
-		// We pass down the context because it contains the accessJWT which is used for the query
-		// Resolve method.
-		Context: newCtx,
+		Header:        reqHeader,
 	}
-	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
+	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
+	poller := gs.graphqlHandler.poller[namespace]
+	if poller == nil {
 		return nil, nil
 	}
-	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req, customClaims)
+
+	res, err := poller.AddSubscriber(req)
 	if err != nil {
 		return nil, err
 	}
@@ -236,8 +196,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
-	// Pass in GraphQL @auth information
-	ctx = authorization.AttachAuthorizationJwt(ctx, r)
 	// Pass in PoorMan's auth, ACL and IP information if present.
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
@@ -359,7 +317,8 @@ func commonHeaders(admin bool, next http.Handler) http.Handler {
 		}
 		// Overwrite the allowed headers after also including headers which are part of
 		// forwardHeaders.
-		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
+		// TODO: fix this
+		//w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
 
 		w.Header().Set("Content-Type", "application/json")
 

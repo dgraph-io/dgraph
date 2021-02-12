@@ -802,7 +802,7 @@ func expandSchemaWithApolloExtras(doc *ast.SchemaDocument) {
 }
 
 // preGQLValidation validates schema before GraphQL validation.  Validation
-// before GraphQL validation means the schema only has allowed structures, and
+// before GraphQL validation means the schema only has allowedCorsHeaders structures, and
 // means we can give better errors than GrqphQL validation would give if their
 // schema contains something that will fail because of the extras we inject into
 // the schema.

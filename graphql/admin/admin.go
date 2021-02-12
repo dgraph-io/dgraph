@@ -369,7 +369,7 @@ var (
 )
 
 func SchemaValidate(sch string) error {
-	schHandler, err := schema.NewHandler(sch, true, false)
+	schHandler, err := schema.NewHandler(sch, false)
 	if err != nil {
 		return err
 	}
@@ -629,7 +629,7 @@ func getCurrentGraphQLSchema(namespace uint64) (*gqlSchema, error) {
 }
 
 func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
-	schHandler, err := schema.NewHandler(sch.Schema, false, false)
+	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
@@ -638,6 +638,7 @@ func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	generatedSchema.SetMeta(schHandler.MetaInfo())
 
 	return generatedSchema, nil
 }
@@ -797,7 +798,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 					as.mux.RLock()
 					defer as.mux.RUnlock()
 					sch := as.schema[ns].Schema
-					handler, err := schema.NewHandler(sch, false, true)
+					handler, err := schema.NewHandler(sch, true)
 					if err != nil {
 						return resolve.EmptyResult(query, err)
 					}

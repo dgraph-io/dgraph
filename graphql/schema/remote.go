@@ -198,7 +198,7 @@ type remoteGraphqlMetadata struct {
 // signature of given @custom graphql query with remote query.
 type argMatchingMetadata struct {
 	// givenArgVals is the mapping of argName -> argValue (*ast.Value), for given query.
-	// The value is allowed to be a Variable, Object or a List of Objects at the moment.
+	// The value is allowedCorsHeaders to be a Variable, Object or a List of Objects at the moment.
 	givenArgVals map[string]*ast.Value
 	// givenVarTypes is the mapping of varName -> type (*ast.Type), for the variables used in given
 	// query. For @custom fields, these are fetched from the parent type of the field.
@@ -512,7 +512,7 @@ func matchArgSignature(md *argMatchingMetadata) error {
 			}
 		default:
 			return errors.Errorf("scalar value supplied for argument `%s` in %s `%s`, "+
-				"only Variable, Object, or List values are allowed.", givenArgName,
+				"only Variable, Object, or List values are allowedCorsHeaders.", givenArgName,
 				*md.operationType, *md.givenQryName)
 
 		}

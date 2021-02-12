@@ -27,7 +27,6 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -383,7 +382,7 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := mutation.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +436,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -584,7 +583,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := mutation.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +759,7 @@ func (drw *deleteRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1785,7 +1784,7 @@ func addDelete(
 	// then we need update permission on Author1
 
 	// grab the auth for Author1
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := qryFld.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		frag.check =
 			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))

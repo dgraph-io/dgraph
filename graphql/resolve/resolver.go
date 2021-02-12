@@ -365,6 +365,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}()
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
+	// Pass in GraphQL @auth information
+	ctx = r.schema.GetMeta().GetAuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
@@ -481,6 +483,10 @@ func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 		return err
 	}
 
+	if !op.IsSubscription() {
+		return errors.New("given GraphQL operation is not a subscription")
+	}
+
 	for _, q := range op.Queries() {
 		for _, field := range q.SelectionSet() {
 			if err := validateCustomFieldsRecursively(field); err != nil {
@@ -489,6 +495,10 @@ func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 		}
 	}
 	return nil
+}
+
+func (r *RequestResolver) GetSchema() schema.Schema {
+	return r.schema
 }
 
 // validateCustomFieldsRecursively will return err if the given field is custom or any of its
