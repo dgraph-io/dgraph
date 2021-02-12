@@ -16,12 +16,12 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210125092849-88bf5aab9f50
+	github.com/dgraph-io/badger/v3 v3.0.0-20210209201111-6c35ad6c28e0
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210125093441-2ab429259580
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.4
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
-	github.com/dgraph-io/ristretto v0.0.4-0.20210122082011-bb5d392ed82d
+	github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
@@ -38,7 +38,7 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
-	github.com/google/go-cmp v0.5.0
+	github.com/google/go-cmp v0.5.4
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
@@ -65,7 +65,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20210105210732-16f7687f5001
+	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
 	golang.org/x/text v0.3.3
 	golang.org/x/tools v0.0.0-20210106214847-113979e3529a
 	google.golang.org/grpc v1.23.0
