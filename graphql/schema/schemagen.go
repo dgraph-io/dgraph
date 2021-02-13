@@ -190,7 +190,15 @@ type metaInfo struct {
 	authMeta *authorization.AuthMeta
 }
 
-func (m *metaInfo) GetAuthMeta() *authorization.AuthMeta {
+func (m *metaInfo) AllowedCorsHeaders() string {
+	return m.allowedCorsHeaders
+}
+
+func (m *metaInfo) AllowedCorsOrigins() map[string]bool {
+	return m.allowedCorsOrigins
+}
+
+func (m *metaInfo) AuthMeta() *authorization.AuthMeta {
 	return m.authMeta
 }
 

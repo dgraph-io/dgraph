@@ -53,9 +53,6 @@ type IServeGraphQL interface {
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
 
-	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
-	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
-
 	// ResolveWithNs processes a GQL Request using the correct resolver and returns a GQL Response
 	ResolveWithNs(ctx context.Context, ns uint64, gqlReq *schema.Request) *schema.Response
 }
@@ -83,11 +80,6 @@ func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.
 
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
 	return gh.handler
-}
-
-func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
-	ns := x.ExtractNamespace(ctx)
-	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 
 func (gh *graphqlHandler) ResolveWithNs(ctx context.Context, ns uint64,
@@ -125,6 +117,11 @@ type graphqlSubscription struct {
 	graphqlHandler *graphqlHandler
 }
 
+func (gs *graphqlSubscription) isValid(namespace uint64) bool {
+	return !(gs == nil || !gs.graphqlHandler.isValid(namespace) || gs.graphqlHandler.
+		poller == nil || gs.graphqlHandler.poller[namespace] == nil)
+}
+
 func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
 	document,
@@ -134,15 +131,15 @@ func (gs *graphqlSubscription) Subscribe(
 
 	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
 	// in the context. We are extracting those headers and passing them along.
-	header, _ := ctx.Value("Header").(json.RawMessage)
+	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
 	reqHeader := http.Header{}
-	if len(header) > 0 {
-		payload := make(map[string]interface{})
-		if err = json.Unmarshal(header, &payload); err != nil {
+	if len(headerPayload) > 0 {
+		headers := make(map[string]interface{})
+		if err = json.Unmarshal(headerPayload, &headers); err != nil {
 			return nil, err
 		}
 
-		for k, v := range payload {
+		for k, v := range headers {
 			if vStr, ok := v.(string); ok {
 				reqHeader.Set(k, vStr)
 			}
@@ -156,12 +153,11 @@ func (gs *graphqlSubscription) Subscribe(
 		Header:        reqHeader,
 	}
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
-	poller := gs.graphqlHandler.poller[namespace]
-	if poller == nil {
-		return nil, nil
+	if !gs.isValid(namespace) {
+		return nil, errors.New(resolve.ErrInternal)
 	}
 
-	res, err := poller.AddSubscriber(req)
+	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req)
 	if err != nil {
 		return nil, err
 	}
@@ -185,15 +181,18 @@ func (gh *graphqlHandler) Handler() http.Handler {
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		return
-	}
-
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
 
-	if !gh.isValid() {
+	ns, _ := strconv.ParseUint(r.Header.Get("resolver"), 10, 64)
+	if !gh.isValid(ns) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
+	}
+
+	addDynamicHeaders(gh.resolver[ns], r.Header.Get("Origin"), w)
+	if r.Method == http.MethodOptions {
+		// for OPTIONS, we only need to send the headers
+		return
 	}
 
 	// Pass in PoorMan's auth, ACL and IP information if present.
@@ -201,8 +200,6 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
 	ctx = x.AttachJWTNamespace(ctx)
-	rs := r.Header.Get("resolver")
-	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(r)
@@ -217,12 +214,13 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res = gh.resolver[resolver].Resolve(ctx, gqlReq)
+	res = gh.resolver[ns].Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
-func (gh *graphqlHandler) isValid() bool {
-	return !(gh == nil || gh.resolver == nil)
+func (gh *graphqlHandler) isValid(namespace uint64) bool {
+	return !(gh == nil || gh.resolver == nil || gh.resolver[namespace] == nil || gh.
+		resolver[namespace].Schema() == nil)
 }
 
 type gzreadCloser struct {
@@ -309,19 +307,8 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 
 func commonHeaders(admin bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if admin {
-			x.AddCorsHeaders(w)
-		} else {
-			// /graphql endpoint is protected by allow listed origins.
-			addDynamicHeaders(r.Header.Get("Origin"), w)
-		}
-		// Overwrite the allowed headers after also including headers which are part of
-		// forwardHeaders.
-		// TODO: fix this
-		//w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
-
+		x.AddCorsHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
-
 		next.ServeHTTP(w, r)
 	})
 }
@@ -339,27 +326,28 @@ func recoveryHandler(next http.Handler) http.Handler {
 	})
 }
 
-// addCorsHeader checks the given origin is in allowlist or not. If it's in
-// allow list we'll let them access /graphql endpoint.
-func addDynamicHeaders(origin string, w http.ResponseWriter) {
-	w.Header().Set("Connection", "close")
-	// TODO(abhimanyu): get allowed origins from schema
-	//allowList := x.AcceptedOrigins.Load().(map[string]struct{})
-	var allowList map[string]struct{}
-	_, ok := allowList[origin]
-	// Given origin is not in the allow list so let's not
-	// add any cors headers.
-	if !ok && len(allowList) != 0 {
+// addDynamicHeaders adds any headers which are stored in the schema to the HTTP response.
+// At present, it handles following headers:
+//  * Access-Control-Allow-Headers
+//  * Access-Control-Allow-Origin
+func addDynamicHeaders(reqResolver *resolve.RequestResolver, origin string, w http.ResponseWriter) {
+	schemaMeta := reqResolver.Schema().Meta()
+	if schemaMeta == nil {
 		return
-	} else if ok && len(allowList) != 0 {
+	}
+
+	// Set allowed headers after also including headers which are part of forwardHeaders.
+	w.Header().Set("Access-Control-Allow-Headers", schemaMeta.AllowedCorsHeaders())
+
+	allowedOrigins := schemaMeta.AllowedCorsOrigins()
+	if len(allowedOrigins) == 0 {
+		// Since there is no allow-list to restrict, we'll allow everyone to access.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else if allowedOrigins[origin] {
 		// Let's set the respective origin address in the allow origin.
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else if len(allowList) == 0 {
-		// Since there is no allowlist to restrict we'll allow everyone
-		// to access.
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else {
+		// otherwise, Given origin is not in the allow list, so let's remove any allowed origin.
+		w.Header().Del("Access-Control-Allow-Origin")
 	}
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", x.AccessControlAllowedHeaders)
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }

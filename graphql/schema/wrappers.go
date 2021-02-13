@@ -102,7 +102,7 @@ type Schema interface {
 	Mutations(t MutationType) []string
 	IsFederated() bool
 	SetMeta(meta *metaInfo)
-	GetMeta() *metaInfo
+	Meta() *metaInfo
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -370,7 +370,7 @@ func (s *schema) SetMeta(meta *metaInfo) {
 	s.meta = meta
 }
 
-func (s *schema) GetMeta() *metaInfo {
+func (s *schema) Meta() *metaInfo {
 	return s.meta
 }
 
