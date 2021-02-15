@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -312,9 +313,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+		x.Check(err)
 		// Ensures nothing get written to disk due to commit proposals.
+		// TODO(Naman): Should we reset the pending transactions?
 		posting.Oracle().ResetTxns()
-		if err := posting.DeleteData(); err != nil {
+		if err := posting.DeleteData(ns); err != nil {
 			return err
 		}
 
@@ -776,7 +780,12 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}
 		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToDisk(writer, commit)
+			err := txn.CommitToDisk(writer, commit)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
 		})
 
 		if err != nil {

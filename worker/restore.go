@@ -22,6 +22,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
@@ -243,7 +244,9 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 		case pb.DropOperation_ALL:
 			return db.DropAll()
 		case pb.DropOperation_DATA:
-			return db.DropPrefix([]byte{x.DefaultPrefix})
+			ns, err := strconv.ParseUint(operation.DropValue, 0, 64)
+			x.Check(err)
+			return db.DropPrefix(x.DataPrefix(ns))
 		case pb.DropOperation_ATTR:
 			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
 		}

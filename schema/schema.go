@@ -433,7 +433,7 @@ func Load(predicate string) error {
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound || err == badger.ErrBannedKey {
 		return nil
 	}
 	if err != nil {

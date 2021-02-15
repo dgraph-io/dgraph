@@ -412,13 +412,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
+		// Set the namespace in the DropValue to make it persistant.
+		m.DropValue = fmt.Sprintf("%#x", x.ExtractNamespace(ctx))
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = insertDropRecord(ctx, "DROP_DATA;")
+		err = insertDropRecord(ctx, "DROP_DATA;"+m.DropValue)
 		if err != nil {
 			return empty, err
 		}

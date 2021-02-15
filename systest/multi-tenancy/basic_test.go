@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -90,6 +91,77 @@ func TestAclBasic(t *testing.T) {
 	resp = testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, string(resp))
 
+}
+
+func TestCreateNamespace(t *testing.T) {
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	require.NoError(t, err)
+
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	// Create a new namespace using guardian of other namespace.
+	_, err = testutil.CreateNamespace(t, token)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
+}
+
+func TestDeleteNamespace(t *testing.T) {
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+	time.Sleep(1 * time.Second)
+
+	dg := make(map[uint64]*dgo.Dgraph)
+	dg[x.GalaxyNamespace] = testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	// Create a new namespace
+	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	require.NoError(t, err)
+	require.Equal(t, 1, int(ns))
+	dg[ns] = testutil.DgClientWithLogin(t, "groot", "password", ns)
+
+	addData := func(ns uint64) {
+		mutation := &api.Mutation{
+			SetNquads: []byte(fmt.Sprintf(`
+			_:a <name> "%d" .
+		`, ns)),
+			CommitNow: true,
+		}
+		// TODO(Naman):  This should return and error.
+		_, err := dg[ns].NewTxn().Mutate(context.Background(), mutation)
+		require.NoError(t, err)
+	}
+	check := func(ns uint64, expected string) {
+		query := `
+		{
+			me(func: has(name)) {
+				name
+			}
+		}
+	`
+		resp := testutil.QueryData(t, dg[ns], query)
+		testutil.CompareJSON(t, expected, string(resp))
+	}
+
+	addData(x.GalaxyNamespace)
+	check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
+	addData(ns)
+	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
+
+	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
+
+	addData(x.GalaxyNamespace)
+	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
+	addData(ns)
+	check(ns, `{"me": []}`)
+
+	// No one should be able to delete the default namespace. Not even guardian of galaxy.
+	err = testutil.DeleteNamespace(t, galaxyToken, x.GalaxyNamespace)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot delete default namespace")
 }
 
 type liveOpts struct {

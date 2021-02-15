@@ -19,7 +19,6 @@ package testutil
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,6 +75,9 @@ func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
 		Query: createNs,
 	}
 	resp := MakeRequest(t, token, params)
+	if len(resp.Errors) > 0 {
+		return 0, errors.Errorf(resp.Errors.Error())
+	}
 	var result struct {
 		AddNamespace struct {
 			NamespaceId int    `json:"namespaceId"`
@@ -88,7 +91,7 @@ func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
 	return 0, errors.New(result.AddNamespace.Message)
 }
 
-func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) {
+func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) error {
 	deleteReq := `mutation deleteNamespace($namespaceId: Int!) {
 			deleteNamespace(input: {namespaceId: $namespaceId}){
     		namespaceId
@@ -103,6 +106,9 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) {
 		},
 	}
 	resp := MakeRequest(t, token, params)
+	if len(resp.Errors) > 0 {
+		return errors.Errorf(resp.Errors.Error())
+	}
 	var result struct {
 		DeleteNamespace struct {
 			NamespaceId int    `json:"namespaceId"`
@@ -112,6 +118,7 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) {
 	require.NoError(t, json.Unmarshal(resp.Data, &result))
 	require.Equal(t, int(nsID), result.DeleteNamespace.NamespaceId)
 	require.Contains(t, result.DeleteNamespace.Message, "Deleted namespace successfully")
+	return nil
 }
 
 func CreateUser(t *testing.T, token *HttpToken, username,
