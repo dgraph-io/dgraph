@@ -58,6 +58,10 @@ var (
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
 
+	retryableCreateNamespaceErrors = append(retryableUpdateGQLSchemaErrors,
+		"is not indexed",
+	)
+
 	safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
 		"Schema update counter didn't increment, " +
 		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
@@ -302,6 +306,19 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
+func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
+	if resp.Errors == nil {
+		return false
+	}
+	errStr := resp.Errors.Error()
+	for _, retryableErr := range retryableCreateNamespaceErrors {
+		if strings.Contains(errStr, retryableErr) {
+			return true
+		}
+	}
+	return false
+}
+
 func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
@@ -312,12 +329,16 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 		Headers: headers,
 	}
 
-	// retry a few times to avoid the error: `Predicate dgraph.xid is not indexed`
+	// keep retrying as long as we get a retryable error
 	var gqlResponse *GraphQLResponse
-	for i := 0; i < 10 && (gqlResponse == nil || gqlResponse.Errors != nil); i++ {
+	for {
 		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+		if containsRetryableCreateNamespaceError(gqlResponse) {
+			continue
+		}
+		RequireNoGQLErrors(t, gqlResponse)
+		break
 	}
-	RequireNoGQLErrors(t, gqlResponse)
 
 	var resp struct {
 		AddNamespace struct {

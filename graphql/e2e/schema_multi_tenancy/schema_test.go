@@ -46,7 +46,6 @@ var (
 // Whenever schema is updated in a dgraph alpha for one group for any namespace,
 // that update should also be propagated to alpha nodes in other groups.
 func TestSchemaSubscribe(t *testing.T) {
-	t.Skip()
 	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
