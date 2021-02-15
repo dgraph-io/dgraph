@@ -164,8 +164,8 @@ func TestStringCustomClaim(t *testing.T) {
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
-	test.LoadSchemaFromString(t, string(authSchema))
-	testutil.SetAuthMeta(string(authSchema))
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
 
 	// Token with string custom claim
 	// "https://xyz.io/jwt/claims": "{\"USER\": \"50950b40-262f-4b26-88a7-cbbb780b2176\", \"ROLE\": \"ADMIN\"}",
@@ -173,7 +173,7 @@ func TestStringCustomClaim(t *testing.T) {
 	md := metadata.New(map[string]string{"authorizationJwt": token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := schema.Meta().AuthMeta().ExtractCustomClaims(ctx)
 	require.NoError(t, err)
 	authVar := customClaims.AuthVariables
 	result := map[string]interface{}{
@@ -181,8 +181,6 @@ func TestStringCustomClaim(t *testing.T) {
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 	}
 	require.Equal(t, authVar, result)
-	// reset auth meta, so that it won't effect other tests
-	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestAudienceClaim(t *testing.T) {
@@ -192,11 +190,11 @@ func TestAudienceClaim(t *testing.T) {
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
-	test.LoadSchemaFromString(t, string(authSchema))
-	testutil.SetAuthMeta(string(authSchema))
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
 
 	// Verify that authorization information is set correctly.
-	metainfo := authorization.GetAuthMeta()
+	metainfo := schema.Meta().AuthMeta()
 	require.Equal(t, metainfo.Algo, jwt.SigningMethodHS256.Name)
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
@@ -232,7 +230,7 @@ func TestAudienceClaim(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			customClaims, err := metainfo.ExtractCustomClaims(ctx)
 			require.Equal(t, tcase.err, err)
 			if err != nil {
 				return
@@ -246,8 +244,6 @@ func TestAudienceClaim(t *testing.T) {
 			require.Equal(t, authVar, result)
 		})
 	}
-	// reset auth meta, so that it won't effect other tests
-	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestInvalidAuthInfo(t *testing.T) {
@@ -275,10 +271,12 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 
 	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
 	require.NoError(t, err)
-	test.LoadSchemaFromString(t, string(authSchema))
+
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
 
 	// Verify that authorization information is set correctly.
-	metainfo := authorization.GetAuthMeta()
+	metainfo := schema.Meta().AuthMeta()
 	require.Equal(t, metainfo.Algo, "")
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
@@ -296,9 +294,8 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	md := metadata.New(map[string]string{"authorizationJwt": testCase.token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
-	_, err = authorization.ExtractCustomClaims(ctx)
+	_, err = metainfo.ExtractCustomClaims(ctx)
 	require.True(t, strings.Contains(err.Error(), "unable to parse jwt token:token is unverifiable: Keyfunc returned an error"))
-
 }
 
 // TODO(arijit): Generate the JWT token instead of using pre generated token.
@@ -309,11 +306,11 @@ func TestJWTExpiry(t *testing.T) {
 	authSchema, err := testutil.AppendAuthInfo(sch, jwt.SigningMethodHS256.Name, "", false)
 	require.NoError(t, err)
 
-	test.LoadSchemaFromString(t, string(authSchema))
-	testutil.SetAuthMeta(string(authSchema))
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
 
 	// Verify that authorization information is set correctly.
-	metainfo := authorization.GetAuthMeta()
+	metainfo := schema.Meta().AuthMeta()
 	require.Equal(t, metainfo.Algo, jwt.SigningMethodHS256.Name)
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
@@ -340,7 +337,7 @@ func TestJWTExpiry(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			customClaims, err := metainfo.ExtractCustomClaims(ctx)
 			if tcase.invalid {
 				require.True(t, strings.Contains(err.Error(), "token is expired"))
 				return
@@ -354,9 +351,6 @@ func TestJWTExpiry(t *testing.T) {
 			require.Equal(t, authVar, result)
 		})
 	}
-
-	// reset auth meta, so that it won't effect other tests
-	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -759,7 +753,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 		strSchema := string(result)
 
 		authMeta, err := authorization.Parse(strSchema)
-		authorization.SetAuthMeta(authMeta)
+		require.NoError(t, err)
 
 		metaInfo := &testutil.AuthMeta{
 			PublicKey:       authMeta.VerificationKey,
@@ -768,7 +762,6 @@ func TestAuthQueryRewriting(t *testing.T) {
 			ClosedByDefault: authMeta.ClosedByDefault,
 		}
 
-		require.NoError(t, err)
 		b := read(t, "auth_query_test.yaml")
 		t.Run("Query Rewriting "+algo, func(t *testing.T) {
 			queryRewriting(t, strSchema, metaInfo, b)
@@ -793,8 +786,6 @@ func TestAuthQueryRewriting(t *testing.T) {
 			deleteQueryRewriting(t, strSchema, metaInfo, b)
 		})
 	}
-	// reset auth meta, so that it won't effect other tests
-	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
@@ -806,7 +797,7 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	strSchema := string(result)
 
 	authMeta, err := authorization.Parse(strSchema)
-	authorization.SetAuthMeta(authMeta)
+	require.NoError(t, err)
 
 	metaInfo := &testutil.AuthMeta{
 		PublicKey:       authMeta.VerificationKey,
@@ -814,7 +805,6 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 		Algo:            authMeta.Algo,
 		ClosedByDefault: authMeta.ClosedByDefault,
 	}
-	require.NoError(t, err)
 
 	b := read(t, "auth_closed_by_default_query_test.yaml")
 	t.Run("Query Rewriting "+algo, func(t *testing.T) {
@@ -835,8 +825,6 @@ func TestAuthQueryRewritingWithDefaultClosedByFlag(t *testing.T) {
 	t.Run("Delete Query Rewriting "+algo, func(t *testing.T) {
 		deleteQueryRewriting(t, strSchema, metaInfo, b)
 	})
-	// reset auth meta, so that it won't effect other tests
-	authorization.SetAuthMeta(&authorization.AuthMeta{})
 }
 
 func read(t *testing.T, file string) []byte {

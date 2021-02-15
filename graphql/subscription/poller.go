@@ -79,8 +79,8 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	// find out the custom claims for auth, if any. As,
 	// We also need to use authVariables in generating the hashed bucketID
 	authMeta := resolver.Schema().Meta().AuthMeta()
-	ctx := authMeta.AttachAuthorizationJwt(context.Background(), req.Header)
-	customClaims, err := authMeta.ExtractCustomClaims(ctx)
+	customClaims, err := authMeta.ExtractCustomClaims(authMeta.AttachAuthorizationJwt(context.
+		Background(), req.Header))
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +107,8 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	p.Lock()
 	defer p.Unlock()
 
-	ctx = x.AttachAccessJwt(ctx, &http.Request{Header: req.Header})
-	res := resolver.Resolve(ctx, req)
+	res := resolver.Resolve(x.AttachAccessJwt(context.Background(),
+		&http.Request{Header: req.Header}), req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}

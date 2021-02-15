@@ -159,9 +159,11 @@ func TestSubscription(t *testing.T) {
 }
 
 func TestSubscriptionAuth(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -280,9 +282,11 @@ func TestSubscriptionAuth(t *testing.T) {
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -374,9 +378,11 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 }
 
 func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -436,9 +442,11 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -589,9 +597,11 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -787,9 +797,11 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 }
 
 func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -852,9 +864,11 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 }
 
 func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, common.Alpha1HTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, common.Alpha1HTTP, oldCounter, nil)
 
 	// Upload schema
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)

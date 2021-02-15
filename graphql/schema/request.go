@@ -36,8 +36,8 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
-	Extensions    RequestExtensions      `json:"-"`
-	Header        http.Header            `json:"-"`
+	Extensions    RequestExtensions
+	Header        http.Header `json:"-"` // no need to marshal headers while generating poll hash
 }
 
 // RequestExtensions represents extensions recieved in requests

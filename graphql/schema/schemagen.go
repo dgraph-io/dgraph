@@ -191,6 +191,12 @@ type metaInfo struct {
 }
 
 func (m *metaInfo) AllowedCorsHeaders() string {
+	// in cases when fields of metaInfo aren't set like admin schema,
+	// or initial empty schema for the /graphql server,
+	// let's always return the correct allowed headers.
+	if m.allowedCorsHeaders == "" {
+		return x.AccessControlAllowedHeaders
+	}
 	return m.allowedCorsHeaders
 }
 

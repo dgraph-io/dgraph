@@ -169,9 +169,11 @@ func TestSchemaSubscribe(t *testing.T) {
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
 func TestConcurrentSchemaUpdates(t *testing.T) {
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	tcases := []struct {
 		graphQLSchema string
@@ -423,9 +425,11 @@ func TestGQLSchemaValidate(t *testing.T) {
 		},
 	}
 
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	validateUrl := groupOneAdminServer + "/schema/validate"
 	var response x.QueryResWithData

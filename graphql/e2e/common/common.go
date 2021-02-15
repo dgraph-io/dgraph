@@ -1081,10 +1081,9 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
-	// TODO(jatin): uncomment this after CORS is fixed with multi-tenancy
-	// if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-	// 	return nil, errors.Errorf("cors headers weren't set in response")
-	// }
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
+	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -1265,7 +1264,7 @@ func addSchema(url, schema string) error {
 		return errors.Errorf("%v", addResult.Errors)
 	}
 
-	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
+	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema != schema {
 		return errors.New("GraphQL schema mutation failed")
 	}
 

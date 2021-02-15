@@ -220,7 +220,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (gh *graphqlHandler) isValid(namespace uint64) bool {
 	return !(gh == nil || gh.resolver == nil || gh.resolver[namespace] == nil || gh.
-		resolver[namespace].Schema() == nil)
+		resolver[namespace].Schema() == nil || gh.resolver[namespace].Schema().Meta() == nil)
 }
 
 type gzreadCloser struct {
@@ -332,9 +332,6 @@ func recoveryHandler(next http.Handler) http.Handler {
 //  * Access-Control-Allow-Origin
 func addDynamicHeaders(reqResolver *resolve.RequestResolver, origin string, w http.ResponseWriter) {
 	schemaMeta := reqResolver.Schema().Meta()
-	if schemaMeta == nil {
-		return
-	}
 
 	// Set allowed headers after also including headers which are part of forwardHeaders.
 	w.Header().Set("Access-Control-Allow-Headers", schemaMeta.AllowedCorsHeaders())

@@ -292,16 +292,6 @@
             "type": "float"
         },
         {
-            "predicate": "dgraph.cors",
-            "type": "string",
-            "index": true,
-            "tokenizer": [
-                "exact"
-            ],
-            "list": true,
-            "upsert": true
-        },
-        {
             "predicate": "dgraph.drop.op",
             "type": "string"
         },
@@ -317,14 +307,6 @@
         },
         {
             "predicate": "dgraph.graphql.schema",
-            "type": "string"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_created_at",
-            "type": "datetime"
-        },
-        {
-            "predicate": "dgraph.graphql.schema_history",
             "type": "string"
         },
         {
@@ -994,17 +976,6 @@
         {
             "fields": [
                 {
-                    "name": "dgraph.graphql.schema_history"
-                },
-                {
-                    "name": "dgraph.graphql.schema_created_at"
-                }
-            ],
-            "name": "dgraph.graphql.history"
-        },
-        {
-            "fields": [
-                {
                     "name": "dgraph.graphql.p_query"
                 },
                 {
@@ -1177,14 +1148,6 @@
                 }
             ],
             "name": "Section"
-        },
-        {
-            "fields": [
-                {
-                    "name": "dgraph.cors"
-                }
-            ],
-            "name": "dgraph.type.cors"
         }
     ]
 }

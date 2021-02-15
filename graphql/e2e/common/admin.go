@@ -165,8 +165,10 @@ func admin(t *testing.T) {
 	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
+	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	testutil.DropAll(t, client)
+	AssertSchemaUpdateCounterIncrement(t, Alpha1HTTP, oldCounter, nil)
 
 	hasSchema, err := hasCurrentGraphQLSchema(GraphqlAdminURL)
 	require.NoError(t, err)
