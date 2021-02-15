@@ -169,13 +169,16 @@ func TestSchemaSubscribe(t *testing.T) {
 // This test ensures that even though different namespaces have the same GraphQL schema, if their
 // data is different the same should be reflected in the GraphQL responses.
 // In a way, it also tests lazy-loading of GraphQL schema.
-func TestSchemaNamespaceWithData(t *testing.T) {
+func TestMultiTenancy(t *testing.T) {
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
 	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, header)
 
-	header := http.Header{}
-	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 	schema := `
 	type Author {
 		id: ID!
@@ -192,65 +195,150 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
 
-	query := `
+	testMultiTenancyHelper(t, `
 	mutation {
 		addAuthor(input:{name: "Alice"}) {
 			author{
 				name
 			}
 		}
-	}`
-	expectedResult :=
+	}`, header,
 		`{
 			"addAuthor": {
 				"author":[{
 					"name":"Alice"
 				}]
 			}
-		}`
-	queryAuthor := &common.GraphQLParams{
-		Query:   query,
-		Headers: header,
-	}
-	queryResult := queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
-	Query1 := `
+	query := `
 	query {
 		queryAuthor {
 			name
 		}
 	}`
-	expectedResult =
+	testMultiTenancyHelper(t, query, header,
 		`{
 			"queryAuthor": [
 				{
 					"name":"Alice"
 				}
 			]
-		}`
-	queryAuthor.Query = Query1
-	queryAuthor.Headers = header
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
-	query2 := `
-	query {
-		queryAuthor {
-			name
-		}
-	}`
-	expectedResult =
+	testMultiTenancyHelper(t, query, header1,
 		`{
 			"queryAuthor": []
-		}`
-	queryAuthor.Query = query2
-	queryAuthor.Headers = header1
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
 	common.DeleteNamespace(t, ns, header)
+}
+
+func TestMultiTenancyWithAuth(t *testing.T) {
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+
+	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
+	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, header)
+
+	schema := `
+	type User @auth(
+		query: { rule: """
+			query($USER: String!) {
+				queryUser(filter: { username: { eq: $USER } }) {
+				__typename
+				}
+			}
+		"""}
+	) {
+		id: ID!
+		username: String! @id
+		isPublic: Boolean @search
+	}
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}`
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
+
+	ns := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	schema1 := `
+	type User @auth(
+		query: { rule: """
+			query {
+				queryUser(filter: { isPublic: true }) {
+					__typename
+				}
+			}
+		"""}
+	) {
+		id: ID!
+		username: String! @id
+		isPublic: Boolean @search
+	}
+	# Dgraph.Authorization  {"VerificationKey":"secret1","Header":"Authorization1","Namespace":"https://dgraph.io/jwt/claims1","Algo":"HS256"}`
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema1, header1)
+
+	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
+	require.Equal(t, schema1, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
+
+	addUserMutation := `mutation {
+		addUser(input:[
+			{username: "Alice", isPublic: false},
+			{username: "Bob", isPublic: true}
+		]) {
+			user {
+				username
+			}
+		}
+	}`
+
+	// for namespace 0, after adding multiple users, we should only get back the user "Alice"
+	header = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io/jwt/claims",
+		Algo:      "HS256",
+		Header:    "Authorization",
+	})
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	testMultiTenancyHelper(t, addUserMutation, header, `{
+		"addUser": {
+			"user":[{
+				"username":"Alice"
+			}]
+		}
+	}`)
+
+	// for namespace 1, after adding multiple users, we should only get back the public users
+	header1 = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
+		PublicKey: "secret1",
+		Namespace: "https://dgraph.io/jwt/claims1",
+		Algo:      "HS256",
+		Header:    "Authorization1",
+	})
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	testMultiTenancyHelper(t, addUserMutation, header1, `{
+		"addUser": {
+			"user":[{
+				"username":"Bob"
+			}]
+		}
+	}`)
+
+	common.DeleteNamespace(t, ns, header)
+}
+
+func testMultiTenancyHelper(t *testing.T, query string, headers http.Header,
+	expectedResult string) {
+	params := &common.GraphQLParams{
+		Query:   query,
+		Headers: headers,
+	}
+	queryResult := params.ExecuteAsPost(t, groupOneGraphQLServer)
+	common.RequireNoGQLErrors(t, queryResult)
+	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
 }
