@@ -179,10 +179,11 @@ type metaInfo struct {
 	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
 	// to requests which resolve custom queries/mutations. These are extracted from # Dgraph.Secret.
 	secrets map[string]x.SensitiveByteSlice
-	// comma separated list of allowedCorsHeaders. These are parsed from the forwardHeaders
-	// specified in the @custom directive. They are returned to the client as part of
-	// Access-Control-Allow-Headers.
-	allowedCorsHeaders string
+	// extraCorsHeaders are the allowed CORS Headers in addition to x.AccessControlAllowedHeaders.
+	// These are parsed from the forwardHeaders specified in the @custom directive.
+	// The header for Dgraph.Authorization is also part of this.
+	// They are returned to the client as part of Access-Control-Allow-Headers.
+	extraCorsHeaders []string
 	// allowedCorsOrigins stores allowed CORS origins extracted from # Dgraph.Allow-Origin.
 	// They are returned to the client as part of Access-Control-Allow-Origin.
 	allowedCorsOrigins map[string]bool
@@ -191,13 +192,7 @@ type metaInfo struct {
 }
 
 func (m *metaInfo) AllowedCorsHeaders() string {
-	// in cases when fields of metaInfo aren't set like admin schema,
-	// or initial empty schema for the /graphql server,
-	// let's always return the correct allowed headers.
-	if m.allowedCorsHeaders == "" {
-		return x.AccessControlAllowedHeaders
-	}
-	return m.allowedCorsHeaders
+	return strings.Join(append([]string{x.AccessControlAllowedHeaders}, m.extraCorsHeaders...), ",")
 }
 
 func (m *metaInfo) AllowedCorsOrigins() map[string]bool {
@@ -374,7 +369,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 		authHeader = metaInfo.authMeta.Header
 	}
 
-	metaInfo.allowedCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
+	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete, apolloServiceQuery)
 	cleanSchema(sch)
@@ -402,7 +397,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}, nil
 }
 
-func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) string {
+func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) []string {
 	headers := make(map[string]struct{})
 
 	setHeaders := func(dir *ast.Directive) {
@@ -439,18 +434,12 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string)
 		finalHeaders = append(finalHeaders, h)
 	}
 
-	// Add Auth Header to allowedCorsHeaders list
+	// Add Auth Header to finalHeaders list
 	if authHeader != "" {
 		finalHeaders = append(finalHeaders, authHeader)
 	}
 
-	allowed := x.AccessControlAllowedHeaders
-	customHeaders := strings.Join(finalHeaders, ",")
-	if len(customHeaders) > 0 {
-		allowed += "," + customHeaders
-	}
-
-	return allowed
+	return finalHeaders
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {

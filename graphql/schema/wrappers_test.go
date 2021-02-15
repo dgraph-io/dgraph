@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -993,7 +995,7 @@ func TestAllowedHeadersList(t *testing.T) {
 		expected  string
 	}{
 		{
-			"auth header present in allowedCorsHeaders headers list",
+			"auth header present in extraCorsHeaders headers list",
 			`
 	 type X @auth(
         query: {rule: """
@@ -1018,7 +1020,8 @@ func TestAllowedHeadersList(t *testing.T) {
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
-			require.True(t, strings.Contains(schHandler.MetaInfo().allowedCorsHeaders, test.expected))
+			require.Equal(t, strings.Join([]string{x.AccessControlAllowedHeaders, test.expected},
+				","), schHandler.MetaInfo().AllowedCorsHeaders())
 		})
 	}
 }

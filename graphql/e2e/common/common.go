@@ -837,11 +837,6 @@ func RunAll(t *testing.T) {
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 }
 
-// RunCorsTest test all cors related tests.
-func RunCorsTest(t *testing.T) {
-	testCors(t)
-}
-
 func gunzipData(data []byte) ([]byte, error) {
 	b := bytes.NewBuffer(data)
 
