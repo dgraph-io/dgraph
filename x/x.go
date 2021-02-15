@@ -42,6 +42,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bo "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v3/pb"
 	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -125,6 +126,9 @@ const (
 	// group the first time an Alpha comes up with data from a restored backup or a
 	// bulk load.
 	GroupIdFileName = "group_id"
+
+	// DefaultCreds is the default credentials for login via dgo client.
+	DefaultCreds = "user=; password=; namespace=0;"
 
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
@@ -269,6 +273,15 @@ func ExtractNamespace(ctx context.Context) uint64 {
 	namespace, err := strconv.ParseUint(ns[0], 10, 64)
 	Check(err)
 	return namespace
+}
+
+func IsGalaxyOperation(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		glog.Fatal("No metadata in the context")
+	}
+	ns := md.Get("galaxy-operation")
+	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
 }
 
 func ExtractJwt(ctx context.Context) ([]string, error) {
@@ -430,8 +443,17 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	}
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
-	ctx = metadata.NewIncomingContext(ctx, md)
-	return ctx
+	return metadata.NewIncomingContext(ctx, md)
+}
+
+// AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
+func AttachGalaxyOperation(ctx context.Context) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	md.Set("galaxy-operation", "true")
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
@@ -902,9 +924,9 @@ type CloseFunc func()
 
 // CredOpt stores the options for logging in, including the password and user.
 type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
+	UserID    string
+	Password  string
+	Namespace uint64
 }
 
 type authorizationCredentials struct {
@@ -984,12 +1006,13 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dg := dgo.NewDgraphClient(clients...)
-	user := conf.GetString("user")
+	creds := z.NewSuperFlag(conf.GetString("creds"))
+	user := creds.GetString("user")
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
-			Conf:        conf,
-			UserID:      user,
-			PasswordOpt: "password",
+			UserID:    user,
+			Password:  creds.GetString("password"),
+			Namespace: creds.GetUint64("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
@@ -1035,7 +1058,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 // GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
-	password := opt.Conf.GetString(opt.PasswordOpt)
+	password := opt.Password
 	if len(password) == 0 {
 		var err error
 		password, err = AskUserPassword(opt.UserID, "Current", 1)
@@ -1045,7 +1068,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password, GalaxyNamespace); err != nil {
+	if err := dg.LoginIntoNamespace(ctx, opt.UserID, password, opt.Namespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
@@ -1083,7 +1106,7 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	runGC := func() {
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
-			err = store.RunValueLogGC(0.9)
+			err = store.RunValueLogGC(0.7)
 		}
 		_, sz := store.Size()
 		if abs(lastSz, sz) > 512<<20 {
@@ -1325,4 +1348,16 @@ func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
 		}
 	}
 	return maxKv
+}
+
+// PrefixesToMatches converts the prefixes for subscription to a list of match.
+func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
+	matches := make([]*pb.Match, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		matches = append(matches, &pb.Match{
+			Prefix:      prefix,
+			IgnoreBytes: ignore,
+		})
+	}
+	return matches
 }

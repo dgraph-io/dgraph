@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -82,17 +83,17 @@ func add(t *testing.T, executeRequest requestExecutor) {
 func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($name: String!) {
-			addCountry(input: [{ name: $name }]) {
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            addCountry(input: [{ name: $name }]) {
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"name": "Testland"},
 	}
 	addCountryExpected := `
-		{ "addCountry": { "country": [{ "id": "_UID_", "name": "Testland" }] } }`
+        { "addCountry": { "country": [{ "id": "_UID_", "name": "Testland" }] } }`
 
 	gqlResponse := executeRequest(t, GraphqlURL, addCountryParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -127,16 +128,16 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country, includeS
 
 	params := &GraphQLParams{
 		Query: `query getCountry($id: ID!, $includeStates: Boolean!) {
-			getCountry(id: $id) {
-				id
-				name
-				states(order: { asc: xcode }) @include(if: $includeStates) {
-					id
-					xcode
-					name
-				}
-			}
-		}`,
+            getCountry(id: $id) {
+                id
+                name
+                states(order: { asc: xcode }) @include(if: $includeStates) {
+                    id
+                    xcode
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": uid, "includeStates": includeStates},
 	}
 	gqlResponse := executeRequest(t, GraphqlURL, params)
@@ -158,23 +159,23 @@ func addAuthor(t *testing.T, countryUID string,
 
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AddAuthorInput!) {
-			addAuthor(input: [$author]) {
-			  	author {
-					id
-					name
-					dob
-					reputation
-					country {
-						id
-				  		name
-					}
-					posts {
-						title
-						text
-					}
-			  	}
-			}
-		}`,
+            addAuthor(input: [$author]) {
+                  author {
+                    id
+                    name
+                    dob
+                    reputation
+                    country {
+                        id
+                          name
+                    }
+                    posts {
+                        title
+                        text
+                    }
+                  }
+            }
+        }`,
 		Variables: map[string]interface{}{"author": map[string]interface{}{
 			"name":       "Test Author",
 			"dob":        "2010-01-01T05:04:33Z",
@@ -184,18 +185,18 @@ func addAuthor(t *testing.T, countryUID string,
 	}
 
 	addAuthorExpected := fmt.Sprintf(`{ "addAuthor": {
-		"author": [{
-			"id": "_UID_",
-			"name": "Test Author",
-			"dob": "2010-01-01T05:04:33Z",
-			"reputation": 7.75,
-			"country": {
-				"id": "%s",
-				"name": "Testland"
-			},
-			"posts": []
-		}]
-	} }`, countryUID)
+        "author": [{
+            "id": "_UID_",
+            "name": "Test Author",
+            "dob": "2010-01-01T05:04:33Z",
+            "reputation": 7.75,
+            "country": {
+                "id": "%s",
+                "name": "Testland"
+            },
+            "posts": []
+        }]
+    } }`, countryUID)
 
 	gqlResponse := executeRequest(t, GraphqlURL, addAuthorParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -226,27 +227,27 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 
 	params := &GraphQLParams{
 		Query: `query getAuthor($id: ID!) {
-			getAuthor(id: $id) {
-				id
-				name
-				dob
-				reputation
-				country {
-					id
-					name
-				}
-				posts(order: { asc: title }) {
-					postID
-					title
-					text
-					tags
-					category {
-						id
-						name
-					}
-				}
-			}
-		}`,
+            getAuthor(id: $id) {
+                id
+                name
+                dob
+                reputation
+                country {
+                    id
+                    name
+                }
+                posts(order: { asc: title }) {
+                    postID
+                    title
+                    text
+                    tags
+                    category {
+                        id
+                        name
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": authorID},
 	}
 	gqlResponse := executeRequest(t, GraphqlURL, params)
@@ -266,17 +267,17 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 func addCategory(t *testing.T, executeRequest requestExecutor) *category {
 	addCategoryParams := &GraphQLParams{
 		Query: `mutation addCategory($name: String!) {
-			addCategory(input: [{ name: $name }]) {
-				category {
-					id
-					name
-				}
-			}
-		}`,
+            addCategory(input: [{ name: $name }]) {
+                category {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"name": "A Category"},
 	}
 	addCategoryExpected := `
-		{ "addCategory": { "category": [{ "id": "_UID_", "name": "A Category" }] } }`
+        { "addCategory": { "category": [{ "id": "_UID_", "name": "A Category" }] } }`
 
 	gqlResponse := executeRequest(t, GraphqlURL, addCategoryParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -366,33 +367,33 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 
 	updateAuthorParams := &GraphQLParams{
 		Query: `mutation updateAuthor($id: ID!, $set: AuthorPatch!, $remove: AuthorPatch!) {
-			updateAuthor(
-				input: {
-					filter: {id: [$id]},
-					set: $set,
-					remove: $remove
-				}
-			) {
-			  	author {
-					id
-					name
-					country {
-						id
-				  		name
-					}
-					posts {
-						postID
-						title
-						text
-						tags
-						category {
-							id
-							name
-						}
-					}
-			  	}
-			}
-		}`,
+            updateAuthor(
+                input: {
+                    filter: {id: [$id]},
+                    set: $set,
+                    remove: $remove
+                }
+            ) {
+                  author {
+                    id
+                    name
+                    country {
+                        id
+                          name
+                    }
+                    posts {
+                        postID
+                        title
+                        text
+                        tags
+                        category {
+                            id
+                            name
+                        }
+                    }
+                  }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id":     newAuth.ID,
 			"set":    patchSet,
@@ -511,29 +512,29 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 	executeRequest requestExecutor) []*author {
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: [AddAuthorInput!]!) {
-			addAuthor(input: $author) {
-			  	author {
-					id
-					name
-					qualification
-					reputation
-					country {
-						id
-				  		name
-					}
-					posts(order: { asc: title }) {
-						postID
-						title
-						text
-						tags
-						category {
-							id
-							name
-						}
-					}
-			  	}
-			}
-		}`,
+            addAuthor(input: $author) {
+                  author {
+                    id
+                    name
+                    qualification
+                    reputation
+                    country {
+                        id
+                          name
+                    }
+                    posts(order: { asc: title }) {
+                        postID
+                        title
+                        text
+                        tags
+                        category {
+                            id
+                            name
+                        }
+                    }
+                  }
+            }
+        }`,
 		Variables: map[string]interface{}{"author": newAuthor},
 	}
 
@@ -576,12 +577,12 @@ func addComments(t *testing.T, ids []string) {
 
 	params := &GraphQLParams{
 		Query: `mutation($input: [AddComment1Input!]!) {
-			addComment1(input: $input) {
-			  comment1 {
-				id
-			  }
-			}
-		  }`,
+            addComment1(input: $input) {
+              comment1 {
+                id
+              }
+            }
+          }`,
 		Variables: map[string]interface{}{
 			"input": input,
 		},
@@ -594,35 +595,35 @@ func addComments(t *testing.T, ids []string) {
 func testThreeLevelXID(t *testing.T) {
 
 	input := `{
-		"input": [
-			{
-				"id": "post1",
-				"comments": [
-					{
-						"id": "comment1",
-						"replies": [
-							{
-								"id": "reply1"
-							}
-						]
-					}
-				]
-			},
-			{
-				"id": "post2",
-				"comments": [
-					{
-						"id": "comment2",
-						"replies": [
-							{
-								"id": "reply1"
-							}
-						]
-					}
-				]
-			}
-		]
-	}`
+        "input": [
+            {
+                "id": "post1",
+                "comments": [
+                    {
+                        "id": "comment1",
+                        "replies": [
+                            {
+                                "id": "reply1"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "post2",
+                "comments": [
+                    {
+                        "id": "comment2",
+                        "replies": [
+                            {
+                                "id": "reply1"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }`
 
 	qinput := make(map[string]interface{})
 	err := json.Unmarshal([]byte(input), &qinput)
@@ -630,136 +631,136 @@ func testThreeLevelXID(t *testing.T) {
 
 	addPostParams := &GraphQLParams{
 		Query: ` mutation($input: [AddPost1Input!]!) {
-		addPost1(input: $input) {
-			post1(order: { asc: id }) {
-				id
-				comments {
-					id
-					replies {
-						id
-					}
-				}
-			}
-		}
-	}`,
+        addPost1(input: $input) {
+            post1(order: { asc: id }) {
+                id
+                comments {
+                    id
+                    replies {
+                        id
+                    }
+                }
+            }
+        }
+    }`,
 		Variables: qinput,
 	}
 
 	bothCommentsLinkedToReply := `{
-		"addPost1": {
-		  "post1": [
-			{
-			  "id": "post1",
-			  "comments": [
-				{
-				  "id": "comment1",
-				  "replies": [
-					{
-					  "id": "reply1"
-					}
-				  ]
-				}
-			  ]
-			},
-			{
-			  "id": "post2",
-			  "comments": [
-				{
-				  "id": "comment2",
-				  "replies": [
-					{
-					  "id": "reply1"
-					}
-				  ]
-				}
-			  ]
-			}
-		  ]
-		}
-	}`
+        "addPost1": {
+          "post1": [
+            {
+              "id": "post1",
+              "comments": [
+                {
+                  "id": "comment1",
+                  "replies": [
+                    {
+                      "id": "reply1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "post2",
+              "comments": [
+                {
+                  "id": "comment2",
+                  "replies": [
+                    {
+                      "id": "reply1"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+    }`
 
 	firstCommentLinkedToReply := `{
-		"addPost1": {
-		  "post1": [
-			{
-			  "id": "post1",
-			  "comments": [
-				{
-				  "id": "comment1",
-				  "replies": [
-					{
-					  "id": "reply1"
-					}
-				  ]
-				}
-			  ]
-			},
-			{
-			  "id": "post2",
-			  "comments": [
-				{
-				  "id": "comment2",
-				  "replies": []
-				}
-			  ]
-			}
-		  ]
-		}
-	}`
+        "addPost1": {
+          "post1": [
+            {
+              "id": "post1",
+              "comments": [
+                {
+                  "id": "comment1",
+                  "replies": [
+                    {
+                      "id": "reply1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "post2",
+              "comments": [
+                {
+                  "id": "comment2",
+                  "replies": []
+                }
+              ]
+            }
+          ]
+        }
+    }`
 
 	secondCommentLinkedToReply := `{
-		"addPost1": {
-		  "post1": [
-			{
-			  "id": "post1",
-			  "comments": [
-				{
-				  "id": "comment1",
-				  "replies": []
-				}
-			  ]
-			},
-			{
-			  "id": "post2",
-			  "comments": [
-				{
-				  "id": "comment2",
-				  "replies": [
-					{
-					  "id": "reply1"
-					}
-				  ]
-				}
-			  ]
-			}
-		  ]
-		}
-	}`
+        "addPost1": {
+          "post1": [
+            {
+              "id": "post1",
+              "comments": [
+                {
+                  "id": "comment1",
+                  "replies": []
+                }
+              ]
+            },
+            {
+              "id": "post2",
+              "comments": [
+                {
+                  "id": "comment2",
+                  "replies": [
+                    {
+                      "id": "reply1"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+    }`
 
 	noCommentsLinkedToReply := `{
-		"addPost1": {
-		  "post1": [
-			{
-			  "id": "post1",
-			  "comments": [
-				{
-				  "id": "comment1",
-				  "replies": []
-				}
-			  ]
-			},
-			{
-			  "id": "post2",
-			  "comments": [
-				{
-				  "id": "comment2",
-				  "replies": []
-				}
-			  ]
-			}
-		  ]
-		}
-	}`
+        "addPost1": {
+          "post1": [
+            {
+              "id": "post1",
+              "comments": [
+                {
+                  "id": "comment1",
+                  "replies": []
+                }
+              ]
+            },
+            {
+              "id": "post2",
+              "comments": [
+                {
+                  "id": "comment2",
+                  "replies": []
+                }
+              ]
+            }
+          ]
+        }
+    }`
 
 	cases := map[string]struct {
 		Comments                   []string
@@ -835,23 +836,23 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	// sets up the "XZY" xid that's used by the following mutation.
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($input: AddCountryInput!) {
-			addState(input: [{ xcode: "XYZ", name: "A State" }]) {
-				state { id xcode name }
-			}
+            addState(input: [{ xcode: "XYZ", name: "A State" }]) {
+                state { id xcode name }
+            }
 
-			addCountry(input: [$input])
-			{
-				country {
-					id
-					name
-					states(order: { asc: xcode }) {
-						id
-						xcode
-						name
-					}
-				}
-			}
-		}`,
+            addCountry(input: [$input])
+            {
+                country {
+                    id
+                    name
+                    states(order: { asc: xcode }) {
+                        id
+                        xcode
+                        name
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
@@ -896,28 +897,28 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 
 	updateCountryParams := &GraphQLParams{
 		Query: `mutation updateCountry($id: ID!, $set: CountryPatch!, $remove: CountryPatch!) {
-			addState(input: [{ xcode: "DEF", name: "Definitely A State" }]) {
-				state { id }
-			}
+            addState(input: [{ xcode: "DEF", name: "Definitely A State" }]) {
+                state { id }
+            }
 
-			updateCountry(
-				input: {
-					filter: {id: [$id]},
-					set: $set,
-					remove: $remove
-				}
-			) {
-				country {
-					id
-					name
-					states(order: { asc: xcode }) {
-						id
-						xcode
-						name
-					}
-				}
-			}
-		}`,
+            updateCountry(
+                input: {
+                    filter: {id: [$id]},
+                    set: $set,
+                    remove: $remove
+                }
+            ) {
+                country {
+                    id
+                    name
+                    states(order: { asc: xcode }) {
+                        id
+                        xcode
+                        name
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id":     addResult.AddCountry.Country[0].ID,
 			"set":    patchSet,
@@ -961,26 +962,26 @@ func addPost(t *testing.T, authorID, countryID string,
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: AddPostInput!) {
-			addPost(input: [$post]) {
-			  post {
-				postID
-				title
-				text
-				isPublished
-				tags
-				numLikes
-				numViews
-				author {
-					id
-					name
-					country {
-						id
-						name
-					}
-				}
-			  }
-			}
-		}`,
+            addPost(input: [$post]) {
+              post {
+                postID
+                title
+                text
+                isPublished
+                tags
+                numLikes
+                numViews
+                author {
+                    id
+                    name
+                    country {
+                        id
+                        name
+                    }
+                }
+              }
+            }
+        }`,
 		Variables: map[string]interface{}{"post": map[string]interface{}{
 			"title":       "Test Post",
 			"text":        "This post is just a test.",
@@ -993,24 +994,24 @@ func addPost(t *testing.T, authorID, countryID string,
 	}
 
 	addPostExpected := fmt.Sprintf(`{ "addPost": {
-		"post": [{
-			"postID": "_UID_",
-			"title": "Test Post",
-			"text": "This post is just a test.",
-			"isPublished": true,
-			"tags": ["example", "test"],
-			"numLikes": 1000,
-			"numViews": 9007199254740991,
-			"author": {
-				"id": "%s",
-				"name": "Test Author",
-				"country": {
-					"id": "%s",
-					"name": "Testland"
-				}
-			}
-		}]
-	} }`, authorID, countryID)
+        "post": [{
+            "postID": "_UID_",
+            "title": "Test Post",
+            "text": "This post is just a test.",
+            "isPublished": true,
+            "tags": ["example", "test"],
+            "numLikes": 1000,
+            "numViews": 9007199254740991,
+            "author": {
+                "id": "%s",
+                "name": "Test Author",
+                "country": {
+                    "id": "%s",
+                    "name": "Testland"
+                }
+            }
+        }]
+    } }`, authorID, countryID)
 
 	gqlResponse := executeRequest(t, GraphqlURL, addPostParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -1040,24 +1041,24 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: AddPostInput!) {
-			addPost(input: [$post]) {
-			  post( filter : {not :{has : text} }){
-				postID
-				title
-				text
-				isPublished
-				tags
-				author(filter: {has:country}) {
-					id
-					name
-					country {
-						id
-						name
-					}
-				}
-			  }
-			}
-		}`,
+            addPost(input: [$post]) {
+              post( filter : {not :{has : text} }){
+                postID
+                title
+                text
+                isPublished
+                tags
+                author(filter: {has:country}) {
+                    id
+                    name
+                    country {
+                        id
+                        name
+                    }
+                }
+              }
+            }
+        }`,
 		Variables: map[string]interface{}{"post": map[string]interface{}{
 			"title":       "No text",
 			"isPublished": false,
@@ -1068,23 +1069,23 @@ func addPostWithNullText(t *testing.T, authorID, countryID string,
 	}
 
 	addPostExpected := fmt.Sprintf(`{ "addPost": {
-		"post": [{
-			"postID": "_UID_",
-			"title": "No text",
-			"text": null,
-			"isPublished": false,
-			"tags": ["null","no text"],
-			"numLikes": 0,
-			"author": {
-				"id": "%s",
-				"name": "Test Author",
-				"country": {
-					"id": "%s",
-					"name": "Testland"
-				}
-			}
-		}]
-	} }`, authorID, countryID)
+        "post": [{
+            "postID": "_UID_",
+            "title": "No text",
+            "text": null,
+            "isPublished": false,
+            "tags": ["null","no text"],
+            "numLikes": 0,
+            "author": {
+                "id": "%s",
+                "name": "Test Author",
+                "country": {
+                    "id": "%s",
+                    "name": "Testland"
+                }
+            }
+        }]
+    } }`, authorID, countryID)
 
 	gqlResponse := executeRequest(t, GraphqlURL, addPostParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -1118,24 +1119,24 @@ func requirePost(
 
 	params := &GraphQLParams{
 		Query: `query getPost($id: ID!, $getAuthor: Boolean!)  {
-			getPost(postID: $id) {
-				postID
-				title
-				text
-				isPublished
-				tags
-				numLikes
-				numViews
-				author @include(if: $getAuthor) {
-					id
-					name
-					country {
-						id
-						name
-					}
-				}
-			}
-		}`,
+            getPost(postID: $id) {
+                postID
+                title
+                text
+                isPublished
+                tags
+                numLikes
+                numViews
+                author @include(if: $getAuthor) {
+                    id
+                    name
+                    country {
+                        id
+                        name
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id":        postID,
 			"getAuthor": getAuthor,
@@ -1244,15 +1245,15 @@ func updateRemove(t *testing.T) {
 
 	updateParams := &GraphQLParams{
 		Query: `mutation updPost($filter: PostFilter!, $rem: PostPatch!) {
-			updatePost(input: { filter: $filter, remove: $rem }) {
-				post {
-					text
-					isPublished
-					tags
-					numLikes
-				}
-			}
-		}`,
+            updatePost(input: { filter: $filter, remove: $rem }) {
+                post {
+                    text
+                    isPublished
+                    tags
+                    numLikes
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"filter": filter, "rem": remPatch},
 	}
 
@@ -1260,17 +1261,17 @@ func updateRemove(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{
-			"updatePost": {
-				"post": [
-					{
-						"text": null,
-						"isPublished": null,
-						"tags": ["example"],
-						"numLikes": 1000
-					}
-				]
-			}
-		}`,
+            "updatePost": {
+                "post": [
+                    {
+                        "text": null,
+                        "isPublished": null,
+                        "tags": ["example"],
+                        "numLikes": 1000
+                    }
+                ]
+            }
+        }`,
 		string([]byte(gqlResponse.Data)))
 
 	newPost.Text = ""                  // was deleted because the given val was correct
@@ -1285,13 +1286,13 @@ func updateRemove(t *testing.T) {
 func updateCountry(t *testing.T, filter map[string]interface{}, newName string, shouldUpdate bool) {
 	updateParams := &GraphQLParams{
 		Query: `mutation newName($filter: CountryFilter!, $newName: String!) {
-			updateCountry(input: { filter: $filter, set: { name: $newName } }) {
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            updateCountry(input: { filter: $filter, set: { name: $newName } }) {
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"filter": filter, "newName": newName},
 	}
 
@@ -1362,14 +1363,14 @@ func filterInUpdate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			updateParams := &GraphQLParams{
 				Query: `mutation newName($filter: CountryFilter!, $newName: String!,
-					 $filterCountries: CountryFilter!) {
-			updateCountry(input: { filter: $filter, set: { name: $newName } }) {
-				country(filter: $filterCountries) {
-					id
-					name
-				}
-			}
-		}`,
+                     $filterCountries: CountryFilter!) {
+            updateCountry(input: { filter: $filter, set: { name: $newName } }) {
+                country(filter: $filterCountries) {
+                    id
+                    name
+                }
+            }
+        }`,
 				Variables: map[string]interface{}{
 					"filter":          test.Filter,
 					"newName":         "updatedValue",
@@ -1473,10 +1474,10 @@ func addMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 	// post and the author it was originally linked to.
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: AddAuthorInput!) {
-			addAuthor(input: [$author]) {
-			  	author { id }
-			}
-		}`,
+            addAuthor(input: [$author]) {
+                  author { id }
+            }
+        }`,
 		Variables: map[string]interface{}{"author": map[string]interface{}{
 			"name":  "Test Author",
 			"posts": []interface{}{newPost},
@@ -1514,18 +1515,18 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 	// The addCountry2 mutation should also remove the state "ABC" from country1's states list
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($input: AddCountryInput!) {
-			addCountry1: addCountry(input: [$input]) {
-				country { id }
-			}
-			addCountry2: addCountry(input: [$input]) {
-				country {
-					id
-					states {
-						id
-					}
-				}
-			}
-		}`,
+            addCountry1: addCountry(input: [$input]) {
+                country { id }
+            }
+            addCountry2: addCountry(input: [$input]) {
+                country {
+                    id
+                    states {
+                        id
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
@@ -1574,15 +1575,15 @@ func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 	// from author1's post list
 	updateAuthorParams := &GraphQLParams{
 		Query: `mutation updateAuthor($id: ID!, $set: AuthorPatch!) {
-			updateAuthor(
-				input: {
-					filter: {id: [$id]},
-					set: $set
-				}
-			) {
-			  	author { id }
-			}
-		}`,
+            updateAuthor(
+                input: {
+                    filter: {id: [$id]},
+                    set: $set
+                }
+            ) {
+                  author { id }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id":  newAuthor2.ID,
 			"set": map[string]interface{}{"posts": []interface{}{newPost}},
@@ -1619,19 +1620,19 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 	// the only change should be in the post text
 	updateAuthorParams := &GraphQLParams{
 		Query: `mutation updatePost($id: ID!, $set: PostPatch!) {
-			updatePost(
-				input: {
-					filter: {postID: [$id]},
-					set: $set
-				}
-			) {
-			  	post {
-					postID
-					text
-					author { id }
-				}
-			}
-		}`,
+            updatePost(
+                input: {
+                    filter: {postID: [$id]},
+                    set: $set
+                }
+            ) {
+                  post {
+                    postID
+                    text
+                    author { id }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id": newPost.PostID,
 			"set": map[string]interface{}{
@@ -1646,13 +1647,13 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 	// The text is updated as expected
 	// The author is unchanged
 	expected := fmt.Sprintf(`
-		{ "updatePost": {  "post": [
-			{
-				"postID": "%s",
-				"text": "The Updated Text",
-				"author": { "id": "%s" }
-			}
-		] } }`, newPost.PostID, newAuthor.ID)
+        { "updatePost": {  "post": [
+            {
+                "postID": "%s",
+                "text": "The Updated Text",
+                "author": { "id": "%s" }
+            }
+        ] } }`, newPost.PostID, newAuthor.ID)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 
@@ -1670,10 +1671,10 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($input: AddCountryInput!) {
-			addCountry(input: [$input]) {
-				country { id }
-			}
-		}`,
+            addCountry(input: [$input]) {
+                country { id }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
@@ -1696,15 +1697,15 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 
 	updateCountryParams := &GraphQLParams{
 		Query: `mutation updateCountry($id: ID!, $set: CountryPatch!) {
-			updateCountry(
-				input: {
-					filter: {id: [$id]},
-					set: $set
-				}
-			) {
-				country { id }
-			}
-		}`,
+            updateCountry(
+                input: {
+                    filter: {id: [$id]},
+                    set: $set
+                }
+            ) {
+                country { id }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id":  newCountry2.ID,
 			"set": map[string]interface{}{"states": newCountry.States},
@@ -1743,15 +1744,15 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 
 	addCountryParams := &GraphQLParams{
 		Query: `mutation addCountry($input: AddCountryInput!) {
-			addCountry(input: [$input]) {
-				country {
-					id
-					states {
-						id
-					}
-				}
-			}
-		}`,
+            addCountry(input: [$input]) {
+                country {
+                    id
+                    states {
+                        id
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newCountry},
 	}
 
@@ -1773,10 +1774,10 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 	// the state doesn't belong to a country
 	getCatParams := &GraphQLParams{
 		Query: `query getState($id: ID!) {
-			getState(id: $id) {
-				country { id }
-			}
-		}`,
+            getState(id: $id) {
+                country { id }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": addResult.AddCountry.Country[0].States[0].ID},
 	}
 	gqlResponse = getCatParams.ExecuteAsPost(t, GraphqlURL)
@@ -1793,10 +1794,10 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 
 	updateParams := &GraphQLParams{
 		Query: `mutation updPost($filter: PostFilter!, $set: PostPatch!) {
-			updatePost(input: { filter: $filter, set: $set }) {
-				post { postID category { id } }
-			}
-		}`,
+            updatePost(input: { filter: $filter, set: $set }) {
+                post { postID category { id } }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"filter": map[string]interface{}{"postID": []string{newPost.PostID}},
 			"set":    map[string]interface{}{"category": newCategory}},
@@ -1824,10 +1825,10 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 	// the category doesn't have any posts
 	getCatParams := &GraphQLParams{
 		Query: `query getCategory($id: ID!) {
-			getCategory(id: $id) {
-				posts { postID }
-			}
-		}`,
+            getCategory(id: $id) {
+                posts { postID }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": newCategory.ID},
 	}
 	gqlResponse = getCatParams.ExecuteAsPost(t, GraphqlURL)
@@ -1869,18 +1870,18 @@ func deleteWrongID(t *testing.T) {
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	expectedData := `{ "deleteCountry": {
-		"msg": "No nodes were deleted",
-		"numUids": 0
-	} }`
+        "msg": "No nodes were deleted",
+        "numUids": 0
+    } }`
 
 	filter := map[string]interface{}{"id": []string{newAuthor.ID}}
 	deleteCountryParams := &GraphQLParams{
 		Query: `mutation deleteCountry($filter: CountryFilter!) {
-			deleteCountry(filter: $filter) {
-				msg
-				numUids
-			}
-		}`,
+            deleteCountry(filter: $filter) {
+                msg
+                numUids
+            }
+        }`,
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
@@ -1894,31 +1895,31 @@ func manyMutations(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation addCountries($name1: String!, $filter: CountryFilter!, $name2: String!) {
-			add1: addCountry(input: [{ name: $name1 }]) {
-				country {
-					id
-					name
-				}
-			}
+            add1: addCountry(input: [{ name: $name1 }]) {
+                country {
+                    id
+                    name
+                }
+            }
 
-			deleteCountry(filter: $filter) { msg }
+            deleteCountry(filter: $filter) { msg }
 
-			add2: addCountry(input: [{ name: $name2 }]) {
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            add2: addCountry(input: [{ name: $name2 }]) {
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"name1": "Testland1", "filter": map[string]interface{}{
 				"id": []string{newCountry.ID}}, "name2": "Testland2"},
 	}
 	multiMutationExpected := `{
-		"add1": { "country": [{ "id": "_UID_", "name": "Testland1" }] },
-		"deleteCountry" : { "msg": "Deleted" },
-		"add2": { "country": [{ "id": "_UID_", "name": "Testland2" }] }
-	}`
+        "add1": { "country": [{ "id": "_UID_", "name": "Testland1" }] },
+        "deleteCountry" : { "msg": "Deleted" },
+        "add2": { "country": [{ "id": "_UID_", "name": "Testland2" }] }
+    }`
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -2000,14 +2001,14 @@ func testSelectionInAddObject(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			addPostParams := &GraphQLParams{
 				Query: `mutation addPost($posts: [AddPostInput!]!, $filter:
-					PostFilter, $first: Int, $offset: Int, $sort: PostOrder) {
-				addPost(input: $posts) {
-				  post (first:$first, offset:$offset, filter:$filter, order:$sort){
-					postID
-					title
-				  }
-				}
-			}`,
+                    PostFilter, $first: Int, $offset: Int, $sort: PostOrder) {
+                addPost(input: $posts) {
+                  post (first:$first, offset:$offset, filter:$filter, order:$sort){
+                    postID
+                    title
+                  }
+                }
+            }`,
 				Variables: map[string]interface{}{
 					"posts":  []*post{post1, post2},
 					"first":  test.First,
@@ -2046,21 +2047,21 @@ func mutationEmptyDelete(t *testing.T) {
 	// Try to delete a node that doesn't exists.
 	updatePostParams := &GraphQLParams{
 		Query: `mutation{
-			updatePost(input:{
-				filter:{title:{allofterms:"Random"}},
-				remove:{author:{name:"Non Existent"}}
-		  }) {
-		    post {
-		    title
-		    }
-		  }
-		}`,
+            updatePost(input:{
+                filter:{title:{allofterms:"Random"}},
+                remove:{author:{name:"Non Existent"}}
+          }) {
+            post {
+            title
+            }
+          }
+        }`,
 	}
 
 	gqlResponse := updatePostParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, gqlResponse.Errors[0].Error(), "couldn't rewrite mutation updatePost"+
-		" because failed to rewrite mutation payload because id is not provided")
+	require.Equal(t, "couldn't rewrite mutation updatePost because failed to"+
+		" rewrite mutation payload because id is not provided", gqlResponse.Errors[0].Error())
 }
 
 // After a successful mutation, the following query is executed.  That query can
@@ -2079,17 +2080,17 @@ func mutationWithDeepFilter(t *testing.T) {
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($post: AddPostInput!) {
-			addPost(input: [$post]) {
-			  post {
-				postID
-				author {
-					posts(filter: { title: { allofterms: "find me" }}) {
-						title
-					}
-				}
-			  }
-			}
-		}`,
+            addPost(input: [$post]) {
+              post {
+                postID
+                author {
+                    posts(filter: { title: { allofterms: "find me" }}) {
+                        title
+                    }
+                }
+              }
+            }
+        }`,
 		Variables: map[string]interface{}{"post": map[string]interface{}{
 			"title":  "find me : a test of deep search after mutation",
 			"author": map[string]interface{}{"id": newAuthor.ID},
@@ -2098,13 +2099,13 @@ func mutationWithDeepFilter(t *testing.T) {
 
 	// Expect the filter to find just the new post, not any of the author's existing posts.
 	addPostExpected := `{ "addPost": {
-		"post": [{
-			"postID": "_UID_",
-			"author": {
-				"posts": [ { "title": "find me : a test of deep search after mutation" } ]
-			}
-		}]
-	} }`
+        "post": [{
+            "postID": "_UID_",
+            "author": {
+                "posts": [ { "title": "find me : a test of deep search after mutation" } ]
+            }
+        }]
+    } }`
 
 	gqlResponse := addPostParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -2159,46 +2160,46 @@ func manyMutationsWithQueryError(t *testing.T) {
 	// add3 - should succeed
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation addCountries($countryID: ID!) {
-			add1: addAuthor(input: [{ name: "A. N. Author", country: { id: $countryID }}]) {
-				author {
-					id
-					name
-					country {
-						id
-					}
-				}
-			}
+            add1: addAuthor(input: [{ name: "A. N. Author", country: { id: $countryID }}]) {
+                author {
+                    id
+                    name
+                    country {
+                        id
+                    }
+                }
+            }
 
-			add2: addAuthor(input: [{ name: "Ann Other Author", country: { id: $countryID }}]) {
-				author {
-					id
-					name
-					country {
-						id
-						name
-					}
-				}
-			}
+            add2: addAuthor(input: [{ name: "Ann Other Author", country: { id: $countryID }}]) {
+                author {
+                    id
+                    name
+                    country {
+                        id
+                        name
+                    }
+                }
+            }
 
-			add3: addCountry(input: [{ name: "abc" }]) {
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            add3: addCountry(input: [{ name: "abc" }]) {
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"countryID": newCountry.ID},
 	}
 	expectedData := fmt.Sprintf(`{
-		"add1": { "author": [{ "id": "_UID_", "name": "A. N. Author", "country": { "id": "%s" } }] },
-		"add2": { "author": [{ "id": "_UID_", "name": "Ann Other Author", "country": null }] },
-		"add3": { "country": [{ "id": "_UID_", "name": "abc" }] }
-	}`, newCountry.ID)
+        "add1": { "author": [{ "id": "_UID_", "name": "A. N. Author", "country": { "id": "%s" } }] },
+        "add2": { "author": [{ "id": "_UID_", "name": "Ann Other Author", "country": null }] },
+        "add3": { "country": [{ "id": "_UID_", "name": "abc" }] }
+    }`, newCountry.ID)
 
 	expectedErrors := x.GqlErrorList{
-		&x.GqlError{Message: "Non-nullable field 'name' (type String!) was not present " +
-			"in result from Dgraph.  GraphQL error propagation triggered.",
-			Locations: []x.Location{{Line: 18, Column: 7}},
+		&x.GqlError{Message: `Non-nullable field 'name' (type String!) was not present ` +
+			`in result from Dgraph.  GraphQL error propagation triggered.`,
+			Locations: []x.Location{{Line: 18, Column: 25}},
 			Path:      []interface{}{"add2", "author", float64(0), "country", "name"}}}
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
@@ -2262,14 +2263,14 @@ type starship struct {
 func addStarship(t *testing.T) *starship {
 	addStarshipParams := &GraphQLParams{
 		Query: `mutation addStarship($starship: AddStarshipInput!) {
-			addStarship(input: [$starship]) {
-				starship {
-					id
-					name
-					length
-			  	}
-			}
-		}`,
+            addStarship(input: [$starship]) {
+                starship {
+                    id
+                    name
+                    length
+                  }
+            }
+        }`,
 		Variables: map[string]interface{}{"starship": map[string]interface{}{
 			"name":   "Millennium Falcon",
 			"length": 2,
@@ -2280,11 +2281,11 @@ func addStarship(t *testing.T) *starship {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStarshipExpected := `{"addStarship":{
-		"starship":[{
-			"name":"Millennium Falcon",
-			"length":2
-		}]
-	}}`
+        "starship":[{
+            "name":"Millennium Falcon",
+            "length":2
+        }]
+    }}`
 
 	var expected, result struct {
 		AddStarship struct {
@@ -2309,12 +2310,12 @@ func addStarship(t *testing.T) *starship {
 func addHuman(t *testing.T, starshipID string) string {
 	addHumanParams := &GraphQLParams{
 		Query: `mutation addHuman($human: AddHumanInput!) {
-			addHuman(input: [$human]) {
-				human {
-					id
-			  	}
-			}
-		}`,
+            addHuman(input: [$human]) {
+                human {
+                    id
+                  }
+            }
+        }`,
 		Variables: map[string]interface{}{"human": map[string]interface{}{
 			"name":         "Han",
 			"ename":        "Han_employee",
@@ -2346,12 +2347,12 @@ func addHuman(t *testing.T, starshipID string) string {
 func addDroid(t *testing.T) string {
 	addDroidParams := &GraphQLParams{
 		Query: `mutation addDroid($droid: AddDroidInput!) {
-			addDroid(input: [$droid]) {
-				droid {
-					id
-				}
-			}
-		}`,
+            addDroid(input: [$droid]) {
+                droid {
+                    id
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"droid": map[string]interface{}{
 			"name":            "R2-D2",
 			"primaryFunction": "Robot",
@@ -2379,12 +2380,12 @@ func addDroid(t *testing.T) string {
 func addThingOne(t *testing.T) string {
 	addThingOneParams := &GraphQLParams{
 		Query: `mutation addThingOne($input: AddThingOneInput!) {
-			addThingOne(input: [$input]) {
-				thingOne {
-					id
-				}
-			}
-		}`,
+            addThingOne(input: [$input]) {
+                thingOne {
+                    id
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": map[string]interface{}{
 			"name":   "Thing-1",
 			"color":  "White",
@@ -2412,12 +2413,12 @@ func addThingOne(t *testing.T) string {
 func addThingTwo(t *testing.T) string {
 	addThingTwoParams := &GraphQLParams{
 		Query: `mutation addThingTwo($input: AddThingTwoInput!) {
-			addThingTwo(input: [$input]) {
-				thingTwo {
-					id
-				}
-			}
-		}`,
+            addThingTwo(input: [$input]) {
+                thingTwo {
+                    id
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": map[string]interface{}{
 			"name":  "Thing-2",
 			"color": "Black",
@@ -2445,24 +2446,24 @@ func addThingTwo(t *testing.T) string {
 func addHome(t *testing.T, humanId string) (string, string, string, string) {
 	addHomeParams := &GraphQLParams{
 		Query: `mutation addHome($input: AddHomeInput!) {
-			addHome(input: [$input]) {
-				home {
-					id
-					members {
-						__typename
-						... on Animal {
-							id
-						}
-						... on Human {
-							id
-						}
-						... on Plant {
-							id
-						}
-					}
-				}
-			}
-		}`,
+            addHome(input: [$input]) {
+                home {
+                    id
+                    members {
+                        __typename
+                        ... on Animal {
+                            id
+                        }
+                        ... on Human {
+                            id
+                        }
+                        ... on Plant {
+                            id
+                        }
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"input": map[string]interface{}{
 				"address": "Avenger Street",
@@ -2560,12 +2561,12 @@ func deleteThingTwo(t *testing.T, thingTwoId string) {
 func updateCharacter(t *testing.T, id string) {
 	updateCharacterParams := &GraphQLParams{
 		Query: `mutation updateCharacter($character: UpdateCharacterInput!) {
-			updateCharacter(input: $character) {
-				character {
-					name
-				}
-			}
-		}`,
+            updateCharacter(input: $character) {
+                character {
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"character": map[string]interface{}{
 			"filter": map[string]interface{}{
 				"id": []string{id},
@@ -2589,49 +2590,49 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 	t.Run("test query all characters", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
-			queryCharacter {
-			  id
-			  name
-			  appearsIn
-			  ... on Human {
-				starships {
-					name
-					length
-				}
-				totalCredits
-			  }
-			  ... on Droid {
-				primaryFunction
-			  }
-			}
-		  }`,
+            queryCharacter {
+              id
+              name
+              appearsIn
+              ... on Human {
+                starships {
+                    name
+                    length
+                }
+                totalCredits
+              }
+              ... on Droid {
+                primaryFunction
+              }
+            }
+          }`,
 		}
 
 		gqlResponse := queryCharacterParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
-			"queryCharacter": [
-			  {
-				"id": "%s",
-				"name": "Han Solo",
-				"appearsIn": ["EMPIRE"],
-				"starships": [
-				  {
-					"name": "Millennium Falcon",
-					"length": 2
-				  }
-				],
-				"totalCredits": 10
-			  },
-			  {
-				"id": "%s",
-				"name": "R2-D2",
-				"appearsIn": ["EMPIRE"],
-				"primaryFunction": "Robot"
-			  }
-			]
-		  }`, humanID, droidID)
+            "queryCharacter": [
+              {
+                "id": "%s",
+                "name": "Han Solo",
+                "appearsIn": ["EMPIRE"],
+                "starships": [
+                  {
+                    "name": "Millennium Falcon",
+                    "length": 2
+                  }
+                ],
+                "totalCredits": 10
+              },
+              {
+                "id": "%s",
+                "name": "R2-D2",
+                "appearsIn": ["EMPIRE"],
+                "primaryFunction": "Robot"
+              }
+            ]
+          }`, humanID, droidID)
 
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
@@ -2639,119 +2640,119 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 	t.Run("test query characters by name", func(t *testing.T) {
 		queryCharacterByNameParams := &GraphQLParams{
 			Query: `query {
-		queryCharacter(filter: { name: { eq: "Han Solo" } }) {
-		  id
-		  name
-		  appearsIn
-		  ... on Human {
-			starships {
-				name
-				length
-			}
-			totalCredits
-		  }
-		  ... on Droid {
-			primaryFunction
-		  }
-		}
-	  }`,
+        queryCharacter(filter: { name: { eq: "Han Solo" } }) {
+          id
+          name
+          appearsIn
+          ... on Human {
+            starships {
+                name
+                length
+            }
+            totalCredits
+          }
+          ... on Droid {
+            primaryFunction
+          }
+        }
+      }`,
 		}
 
 		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
-		"queryCharacter": [
-		  {
-			"id": "%s",
-			"name": "Han Solo",
-			"appearsIn": ["EMPIRE"],
-			"starships": [
-			  {
-				"name": "Millennium Falcon",
-				"length": 2
-			  }
-			],
-			"totalCredits": 10
-		  }
-		]
-	  }`, humanID)
+        "queryCharacter": [
+          {
+            "id": "%s",
+            "name": "Han Solo",
+            "appearsIn": ["EMPIRE"],
+            "starships": [
+              {
+                "name": "Millennium Falcon",
+                "length": 2
+              }
+            ],
+            "totalCredits": 10
+          }
+        ]
+      }`, humanID)
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
 	t.Run("test query all humans", func(t *testing.T) {
 		queryHumanParams := &GraphQLParams{
 			Query: `query {
-		queryHuman {
-		  id
-		  name
-		  appearsIn
-		  starships {
-			name
-			length
-		  }
-		  totalCredits
-		}
-	  }`,
+        queryHuman {
+          id
+          name
+          appearsIn
+          starships {
+            name
+            length
+          }
+          totalCredits
+        }
+      }`,
 		}
 
 		gqlResponse := queryHumanParams.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
-		"queryHuman": [
-		  {
-			"id": "%s",
-			"name": "Han Solo",
-			"appearsIn": ["EMPIRE"],
-			"starships": [
-			  {
-				"name": "Millennium Falcon",
-				"length": 2
-			  }
-			],
-			"totalCredits": 10
-		  }
-		]
-	  }`, humanID)
+        "queryHuman": [
+          {
+            "id": "%s",
+            "name": "Han Solo",
+            "appearsIn": ["EMPIRE"],
+            "starships": [
+              {
+                "name": "Millennium Falcon",
+                "length": 2
+              }
+            ],
+            "totalCredits": 10
+          }
+        ]
+      }`, humanID)
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
 
 	t.Run("test query humans by name", func(t *testing.T) {
 		queryHumanParamsByName := &GraphQLParams{
 			Query: `query {
-		queryHuman(filter: { name: { eq: "Han Solo" } }) {
-		  id
-		  name
-		  appearsIn
-		  starships {
-			name
-			length
-		  }
-		  totalCredits
-		}
-	  }`,
+        queryHuman(filter: { name: { eq: "Han Solo" } }) {
+          id
+          name
+          appearsIn
+          starships {
+            name
+            length
+          }
+          totalCredits
+        }
+      }`,
 		}
 
 		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, GraphqlURL)
 		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
-		"queryHuman": [
-		  {
-			"id": "%s",
-			"name": "Han Solo",
-			"appearsIn": ["EMPIRE"],
-			"starships": [
-			  {
-				"name": "Millennium Falcon",
-				"length": 2
-			  }
-			],
-			"totalCredits": 10
-		  }
-		]
-	  }`, humanID)
+        "queryHuman": [
+          {
+            "id": "%s",
+            "name": "Han Solo",
+            "appearsIn": ["EMPIRE"],
+            "starships": [
+              {
+                "name": "Millennium Falcon",
+                "length": 2
+              }
+            ],
+            "totalCredits": 10
+          }
+        ]
+      }`, humanID)
 
 		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	})
@@ -2780,16 +2781,16 @@ func requireState(t *testing.T, uid string, expectedState *state,
 
 	params := &GraphQLParams{
 		Query: `query getState($id: ID!) {
-			getState(id: $id) {
-				id
-				xcode
-				name
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            getState(id: $id) {
+                id
+                xcode
+                name
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": uid},
 	}
 	gqlResponse := executeRequest(t, GraphqlURL, params)
@@ -2809,18 +2810,18 @@ func requireState(t *testing.T, uid string, expectedState *state,
 func addState(t *testing.T, name string, executeRequest requestExecutor) *state {
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($xcode: String!, $name: String!) {
-			addState(input: [{ xcode: $xcode, name: $name }]) {
-				state {
-					id
-					xcode
-					name
-				}
-			}
-		}`,
+            addState(input: [{ xcode: $xcode, name: $name }]) {
+                state {
+                    id
+                    xcode
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"name": name, "xcode": "cal"},
 	}
 	addStateExpected := `
-		{ "addState": { "state": [{ "id": "_UID_", "name": "` + name + `", "xcode": "cal" } ]} }`
+        { "addState": { "state": [{ "id": "_UID_", "name": "` + name + `", "xcode": "cal" } ]} }`
 
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -2864,8 +2865,8 @@ func DeleteGqlType(
 
 	deleteTypeParams := &GraphQLParams{
 		Query: fmt.Sprintf(`mutation delete%s($filter: %sFilter!) {
-			delete%s(filter: $filter) { msg numUids }
-		}`, typeName, typeName, typeName),
+            delete%s(filter: $filter) { msg numUids }
+        }`, typeName, typeName, typeName),
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
@@ -2903,14 +2904,14 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	name := "Calgary"
 	addStateParams := &GraphQLParams{
 		Query: `mutation addState($xcode: String!, $name: String!) {
-			addState(input: [{ xcode: $xcode, name: $name }]) {
-				state {
-					id
-					xcode
-					name
-				}
-			}
-		}`,
+            addState(input: [{ xcode: $xcode, name: $name }]) {
+                state {
+                    id
+                    xcode
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"name": name, "xcode": "cal"},
 	}
 
@@ -2961,16 +2962,16 @@ func addMultipleMutationWithOneError(t *testing.T) {
 
 	addPostParams := &GraphQLParams{
 		Query: `mutation addPost($posts: [AddPostInput!]!) {
-			addPost(input: $posts) {
-			  post {
-				postID
-				title
-				author {
-					id
-				}
-			  }
-			}
-		}`,
+            addPost(input: $posts) {
+              post {
+                postID
+                title
+                author {
+                    id
+                }
+              }
+            }
+        }`,
 		Variables: map[string]interface{}{"posts": []*post{goodPost, badPost,
 			anotherGoodPost}},
 	}
@@ -2978,18 +2979,18 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	gqlResponse := postExecutor(t, GraphqlURL, addPostParams)
 
 	addPostExpected := fmt.Sprintf(`{ "addPost": {
-		"post": [{
-			"title": "Text Post",
-			"author": {
-				"id": "%s"
-			}
-		}, {
-			"title": "Another Test Post",
-			"author": {
-				"id": "%s"
-			}
-		}]
-	} }`, newAuth.ID, newAuth.ID)
+        "post": [{
+            "title": "Text Post",
+            "author": {
+                "id": "%s"
+            }
+        }, {
+            "title": "Another Test Post",
+            "author": {
+                "id": "%s"
+            }
+        }]
+    } }`, newAuth.ID, newAuth.ID)
 
 	var expected, result struct {
 		AddPost struct {
@@ -3002,7 +3003,7 @@ func addMultipleMutationWithOneError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		`couldn't rewrite query for mutation addPost because ID "0x0" isn't a Author`)
+		`because ID "0x0" isn't a Author`)
 
 	cleanUp(t, []*country{newCountry}, []*author{newAuth}, result.AddPost.Post)
 }
@@ -3010,20 +3011,20 @@ func addMultipleMutationWithOneError(t *testing.T) {
 func addMovie(t *testing.T, executeRequest requestExecutor) *movie {
 	addMovieParams := &GraphQLParams{
 		Query: `mutation addMovie($name: String!) {
-			addMovie(input: [{ name: $name }]) {
-				movie {
-					id
-					name
-					director {
-						name
-					}
-				}
-			}
-		}`,
+            addMovie(input: [{ name: $name }]) {
+                movie {
+                    id
+                    name
+                    director {
+                        name
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"name": "Testmovie"},
 	}
 	addMovieExpected := `
-		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
+        { "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
 
 	gqlResponse := executeRequest(t, GraphqlURL, addMovieParams)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -3055,9 +3056,9 @@ func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
 	// Delete everything
 	multiMutationParams := &GraphQLParams{
 		Query: `mutation cleanup($movieFilter: MovieFilter!, $dirFilter: MovieDirectorFilter!) {
-		deleteMovie(filter: $movieFilter) { msg }
-		deleteMovieDirector(filter: $dirFilter) { msg }
-	}`,
+        deleteMovie(filter: $movieFilter) { msg }
+        deleteMovieDirector(filter: $dirFilter) { msg }
+    }`,
 		Variables: map[string]interface{}{
 			"movieFilter": map[string]interface{}{
 				"id": []string{movieID},
@@ -3068,8 +3069,8 @@ func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
 		},
 	}
 	multiMutationExpected := `{
-	"deleteMovie": { "msg": "Deleted" },
-	"deleteMovieDirector" : { "msg": "Deleted" }
+    "deleteMovie": { "msg": "Deleted" },
+    "deleteMovieDirector" : { "msg": "Deleted" }
 }`
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, GraphqlURL)
@@ -3087,13 +3088,13 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 
 	addMovieDirectorParams := &GraphQLParams{
 		Query: `mutation addMovieDirector($dir: [AddMovieDirectorInput!]!) {
-			addMovieDirector(input: $dir) {
-			  movieDirector {
-				id
-				name
-			  }
-			}
-		}`,
+            addMovieDirector(input: $dir) {
+              movieDirector {
+                id
+                name
+              }
+            }
+        }`,
 		Variables: map[string]interface{}{"dir": []map[string]interface{}{{
 			"name":     "Spielberg",
 			"directed": []map[string]interface{}{{"id": newMovie.ID}},
@@ -3128,13 +3129,13 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 
 	getMovieParams := &GraphQLParams{
 		Query: `query getMovie($id: ID!) {
-			getMovie(id: $id) {
-				name
-				director {
-					name
-				}
-			}
-		}`,
+            getMovie(id: $id) {
+                name
+                director {
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"id": newMovie.ID,
 		},
@@ -3171,16 +3172,16 @@ func testNumUids(t *testing.T) {
 
 	addAuthorParams := &GraphQLParams{
 		Query: `mutation addAuthor($author: [AddAuthorInput!]!) {
-			addAuthor(input: $author) {
-				numUids
-				author {
-					id
-					posts {
-						postID
-					}
-				}
-			}
-		}`,
+            addAuthor(input: $author) {
+                numUids
+                author {
+                    id
+                    posts {
+                        postID
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"author": []*author{auth}},
 	}
 
@@ -3203,10 +3204,10 @@ func testNumUids(t *testing.T) {
 	t.Run("Test numUID in update", func(t *testing.T) {
 		updatePostParams := &GraphQLParams{
 			Query: `mutation updatePosts($posts: UpdatePostInput!) {
-			updatePost(input: $posts) {
-				numUids
-			}
-		}`,
+            updatePost(input: $posts) {
+                numUids
+            }
+        }`,
 			Variables: map[string]interface{}{"posts": map[string]interface{}{
 				"filter": map[string]interface{}{
 					"title": map[string]interface{}{
@@ -3237,17 +3238,17 @@ func testNumUids(t *testing.T) {
 	t.Run("Test numUID in delete", func(t *testing.T) {
 		deleteAuthorParams := &GraphQLParams{
 			Query: `mutation deleteItems($authorFilter: AuthorFilter!,
-			$postFilter: PostFilter!) {
+            $postFilter: PostFilter!) {
 
-			deleteAuthor(filter: $authorFilter) {
-				numUids
-			}
+            deleteAuthor(filter: $authorFilter) {
+                numUids
+            }
 
-			deletePost(filter: $postFilter) {
-				numUids
-				msg
-			}
-		}`,
+            deletePost(filter: $postFilter) {
+                numUids
+                msg
+            }
+        }`,
 			Variables: map[string]interface{}{
 				"postFilter": map[string]interface{}{
 					"title": map[string]interface{}{
@@ -3310,48 +3311,72 @@ func threeLevelDeepMutation(t *testing.T) {
 
 	addStudentParams := &GraphQLParams{
 		Query: `mutation addStudent($input: [AddStudentInput!]!) {
-			addStudent(input: $input) {
-				student {
-					xid
-					name
-					taughtBy {
-						id
-						xid
-						name
-						subject
-						teaches (order: {asc:xid}) {
-							xid
-							taughtBy {
-								name
-								xid
-								subject
-							}
-						}
-					}
-				}
-			}
-		}`,
+            addStudent(input: $input) {
+                student {
+                    xid
+                    name
+                    taughtBy {
+                        xid
+                        name
+                        subject
+                        teaches (order: {asc:xid}) {
+                            xid
+                            taughtBy {
+                                name
+                                xid
+                                subject
+                            }
+                        }
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newStudents},
 	}
 
 	gqlResponse := postExecutor(t, GraphqlURL, addStudentParams)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	var actualResult struct {
-		AddStudent struct {
-			Student []*student
-		}
-	}
-
-	err := json.Unmarshal(gqlResponse.Data, &actualResult)
-	require.NoError(t, err)
-
-	require.Equal(t, actualResult.AddStudent.Student[0].Xid, "HS1")
-	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Xid, "HT0")
-	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].Xid, "HS1")
-	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].TaughtBy[0].Xid, "HT0")
-	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].Xid, "HS2")
-	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].TaughtBy[0].Xid, "HT0")
+	addStudentExpected := `{
+        "addStudent": {
+          "student": [
+            {
+              "xid": "HS1",
+              "name": "Stud1",
+              "taughtBy": [
+                {
+                  "xid": "HT0",
+                  "name": "Teacher0",
+                  "subject": "English",
+                  "teaches": [
+                    {
+                      "xid": "HS1",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "subject": "English"
+                        }
+                      ]
+                    },
+                    {
+                      "xid": "HS2",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "subject": "English"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+    }`
+	testutil.CompareJSON(t, addStudentExpected, string(gqlResponse.Data))
 
 	// cleanup
 	filter := GetXidFilter("xid", []interface{}{"HS1", "HS2"})
@@ -3359,6 +3384,284 @@ func threeLevelDeepMutation(t *testing.T) {
 	filter = GetXidFilter("xid", []interface{}{"HT0"})
 	DeleteGqlType(t, "Teacher", filter, 1, nil)
 
+}
+
+func parallelMutations(t *testing.T) {
+	// Add 20 mutations simultaneously using go routine.
+	// Only one for each xcode should be added.
+	// Each goroutine adds num different new nodes.
+	executeMutation := func(wg *sync.WaitGroup, num int) {
+		defer wg.Done()
+		for i := 0; i < num; i++ {
+			addStateParams := &GraphQLParams{
+				Query: fmt.Sprintf(`mutation {
+            			addState(input: [{xcode: "NewS%d", name: "State%d"}]) {
+							state {
+                    			xcode
+                    			name
+                			}
+            			}
+        			}`, i, i),
+			}
+			_ = addStateParams.ExecuteAsPost(t, GraphqlURL)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	// Nodes to be added per each goroutine
+	num := 5
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go executeMutation(&wg, num)
+	}
+	wg.Wait()
+
+	for i := 0; i < num; i++ {
+		getStateParams := &GraphQLParams{
+			Query: fmt.Sprintf(`query {
+					queryState(filter: { xcode: { eq: "NewS%d"}}) {
+						name
+					}
+				}`, i),
+		}
+
+		// As we are using the same XID in all mutations. Only one should succeed.
+		gqlResponse := getStateParams.ExecuteAsPost(t, GraphqlURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, fmt.Sprintf(`{"queryState":[{"name":"State%d"}]}`, i), string(gqlResponse.Data))
+
+		filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": fmt.Sprintf("NewS%d", i)}}
+		deleteState(t, filter, 1, nil)
+	}
+}
+
+func cyclicMutation(t *testing.T) {
+	// Student HS1 -->taught by --> Teacher T0 --> teaches --> Student HS2 --> taught by --> Teacher T1 --> teaches --> Student HS1
+	newStudent := &student{
+		Xid:  "HS1",
+		Name: "Stud1",
+		TaughtBy: []*teacher{
+			{
+				Xid:  "HT0",
+				Name: "Teacher0",
+				Teaches: []*student{{
+					Xid:  "HS2",
+					Name: "Stud2",
+					TaughtBy: []*teacher{
+						{
+							Xid:  "HT1",
+							Name: "Teacher1",
+							Teaches: []*student{{
+								Xid: "HS1",
+							}},
+						},
+					},
+				}},
+			},
+		},
+	}
+
+	newStudents := []*student{newStudent}
+
+	addStudentParams := &GraphQLParams{
+		Query: `mutation addStudent($input: [AddStudentInput!]!) {
+            addStudent(input: $input) {
+                student {
+                    xid
+                    name
+                    taughtBy (order: {asc:xid}) {
+                        xid
+                        name
+                        teaches (order: {asc:xid}) {
+                            xid
+                            name
+                            taughtBy (order:{asc:xid}) {
+                                name
+                                xid
+                                teaches (order:{asc:xid}) {
+                                    xid
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{"input": newStudents},
+	}
+
+	gqlResponse := postExecutor(t, GraphqlURL, addStudentParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStudentExpected := `{
+        "addStudent": {
+          "student": [
+            {
+              "xid": "HS1",
+              "name": "Stud1",
+              "taughtBy": [
+                {
+                  "xid": "HT0",
+                  "name": "Teacher0",
+                  "teaches": [
+                    {
+                      "xid": "HS1",
+                      "name": "Stud1",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Teacher1",
+                          "xid": "HT1",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "xid": "HS2",
+                      "name": "Stud2",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Teacher1",
+                          "xid": "HT1",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "xid": "HT1",
+                  "name": "Teacher1",
+                  "teaches": [
+                    {
+                      "xid": "HS1",
+                      "name": "Stud1",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Teacher1",
+                          "xid": "HT1",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "xid": "HS2",
+                      "name": "Stud2",
+                      "taughtBy": [
+                        {
+                          "name": "Teacher0",
+                          "xid": "HT0",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Teacher1",
+                          "xid": "HT1",
+                          "teaches": [
+                            {
+                              "xid": "HS1",
+                              "name": "Stud1"
+                            },
+                            {
+                              "xid": "HS2",
+                              "name": "Stud2"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+    }`
+	testutil.CompareJSON(t, addStudentExpected, string(gqlResponse.Data))
+
+	// cleanup
+	filter := GetXidFilter("xid", []interface{}{"HS1", "HS2"})
+	DeleteGqlType(t, "Student", filter, 2, nil)
+	filter = GetXidFilter("xid", []interface{}{"HT0", "HT1"})
+	DeleteGqlType(t, "Teacher", filter, 2, nil)
 }
 
 func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
@@ -3394,19 +3697,19 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 
 	addStudentParams := &GraphQLParams{
 		Query: `mutation addStudent($input: [AddStudentInput!]!) {
-			addStudent(input: $input) {
-				student {
-					xid
-					name
-					taughtBy {
-						id
-						xid
-						name
-						subject
-					}
-				}
-			}
-		}`,
+            addStudent(input: $input) {
+                student {
+                    xid
+                    name
+                    taughtBy {
+                        id
+                        xid
+                        name
+                        subject
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"input": newStudents},
 	}
 
@@ -3487,33 +3790,33 @@ func queryTypenameInMutation(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
             __typename
-			a:__typename
-			addState(input: [{xcode: "S1", name: "State1"}]) {
-				state {
-					__typename
-					xcode
-					name
-				}
-				__typename
-			}
-		}`,
+            a:__typename
+            addState(input: [{xcode: "S1", name: "State1"}]) {
+                state {
+                    __typename
+                    xcode
+                    name
+                }
+                __typename
+            }
+        }`,
 	}
 
 	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
-		"__typename":"Mutation",
-		"a":"Mutation",
-		"addState": {
-			"state": [{
-				"__typename": "State",
-				"xcode": "S1",
-				"name": "State1"
-			}],
-			"__typename": "AddStatePayload"
-		}
-	}`
+        "__typename":"Mutation",
+        "a":"Mutation",
+        "addState": {
+            "state": [{
+                "__typename": "State",
+                "xcode": "S1",
+                "name": "State1"
+            }],
+            "__typename": "AddStatePayload"
+        }
+    }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
@@ -3524,28 +3827,28 @@ func ensureAliasInMutationPayload(t *testing.T) {
 	// querying __typename, numUids and state with alias
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
-			addState(input: [{xcode: "S1", name: "State1"}]) {
-				type: __typename
-				numUids
-				count: numUids
-				op: state {
-					xcode
-				}
-			}
-		}`,
+            addState(input: [{xcode: "S1", name: "State1"}]) {
+                type: __typename
+                numUids
+                count: numUids
+                op: state {
+                    xcode
+                }
+            }
+        }`,
 	}
 
 	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
-		"addState": {
-			"type": "AddStatePayload",
-			"numUids": 1,
-			"count": 1,
-			"op": [{"xcode":"S1"}]
-		}
-	}`
+        "addState": {
+            "type": "AddStatePayload",
+            "numUids": 1,
+            "count": 1,
+            "op": [{"xcode":"S1"}]
+        }
+    }`
 	require.JSONEq(t, addStateExpected, string(gqlResponse.Data))
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
@@ -3555,12 +3858,12 @@ func ensureAliasInMutationPayload(t *testing.T) {
 func mutationsHaveExtensions(t *testing.T) {
 	mutation := &GraphQLParams{
 		Query: `mutation {
-			addCategory(input: [{ name: "cat" }]) {
-				category {
-					id
-				}
-			}
-		}`,
+            addCategory(input: [{ name: "cat" }]) {
+                category {
+                    id
+                }
+            }
+        }`,
 	}
 
 	touchedUidskey := "touched_uids"
@@ -3586,28 +3889,28 @@ func mutationsWithAlias(t *testing.T) {
 	aliasMutationParams := &GraphQLParams{
 		Query: `mutation alias($filter: CountryFilter!) {
 
-			upd: updateCountry(input: {
-				filter: $filter
-				set: { name: "Testland Alias" }
-			}) {
-				updatedCountry: country {
-					name
-					theName: name
-				}
-			}
+            upd: updateCountry(input: {
+                filter: $filter
+                set: { name: "Testland Alias" }
+            }) {
+                updatedCountry: country {
+                    name
+                    theName: name
+                }
+            }
 
-			del: deleteCountry(filter: $filter) {
-				message: msg
-				uids: numUids
-			}
-		}`,
+            del: deleteCountry(filter: $filter) {
+                message: msg
+                uids: numUids
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
 	}
 	multiMutationExpected := `{
-		"upd": { "updatedCountry": [{ "name": "Testland Alias", "theName": "Testland Alias" }] },
-		"del" : { "message": "Deleted", "uids": 1 }
-	}`
+        "upd": { "updatedCountry": [{ "name": "Testland Alias", "theName": "Testland Alias" }] },
+        "del" : { "message": "Deleted", "uids": 1 }
+    }`
 
 	gqlResponse := aliasMutationParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -3620,25 +3923,25 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 
 	updateCountryParams := &GraphQLParams{
 		Query: `mutation updateCountry($id: ID!){
-			updateCountry(input: {filter: {id: [$id]}}) {
-				numUids
-				country {
-					id
-					name
-				}
-			}
-		}`,
+            updateCountry(input: {filter: {id: [$id]}}) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"id": country.ID},
 	}
 	gqlResponse := updateCountryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{
-		"updateCountry": {
-			"numUids": 0,
-			"country": []
-    	}
-	}`, string(gqlResponse.Data))
+        "updateCountry": {
+            "numUids": 0,
+            "country": []
+        }
+    }`, string(gqlResponse.Data))
 
 	// cleanup
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
@@ -3647,26 +3950,26 @@ func updateMutationWithoutSetRemove(t *testing.T) {
 func checkCascadeWithMutationWithoutIDField(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
-			addState(input: [{xcode: "S2", name: "State2"}]) @cascade(fields:["numUids"]) {
-				state @cascade(fields:["xcode"]) {
-					xcode
-					name
-				}
-			}
-		}`,
+            addState(input: [{xcode: "S2", name: "State2"}]) @cascade(fields:["numUids"]) {
+                state @cascade(fields:["xcode"]) {
+                    xcode
+                    name
+                }
+            }
+        }`,
 	}
 
 	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addStateExpected := `{
-		"addState": {
-			"state": [{
-				"xcode": "S2",
-				"name": "State2"
-			}]
-		}
-	}`
+        "addState": {
+            "state": [{
+                "xcode": "S2",
+                "name": "State2"
+            }]
+        }
+    }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}}
@@ -3678,30 +3981,30 @@ func int64BoundaryTesting(t *testing.T) {
 	//(2^63)=9223372036854775808
 	addPost1Params := &GraphQLParams{
 		Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
-				post1 {
-					title
-					numLikes
-				}
-			}
-		}`,
+            addpost1(input: [{title: "Dgraph", numLikes: 9223372036854775807 },{title: "Dgraph1", numLikes: -9223372036854775808 }]) {
+                post1 {
+                    title
+                    numLikes
+                }
+            }
+        }`,
 	}
 
 	gqlResponse := addPost1Params.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addPost1Expected := `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"numLikes": 9223372036854775807
+        "addpost1": {
+            "post1": [{
+                "title": "Dgraph",
+                "numLikes": 9223372036854775807
 
-			},{
-				"title": "Dgraph1",
-				"numLikes": -9223372036854775808
-			}]
-		}
-	}`
+            },{
+                "title": "Dgraph1",
+                "numLikes": -9223372036854775808
+            }]
+        }
+    }`
 	testutil.CompareJSON(t, addPost1Expected, string(gqlResponse.Data))
 	filter := map[string]interface{}{"title": map[string]interface{}{"regexp": "/Dgraph.*/"}}
 	DeleteGqlType(t, "post1", filter, 2, nil)
@@ -3716,45 +4019,45 @@ func intWithList(t *testing.T) {
 	}{{
 		name: "list of integers in mutation",
 		query: `mutation {
-			addpost1(input: [{title: "Dgraph",commentsByMonth:[2,33,11,6],likesByMonth:[4,33,1,66] }]) {
-				post1 {
-					title
+            addpost1(input: [{title: "Dgraph",commentsByMonth:[2,33,11,6],likesByMonth:[4,33,1,66] }]) {
+                post1 {
+                    title
                     commentsByMonth
                     likesByMonth
-				}
-			}
-		}`,
+                }
+            }
+        }`,
 		expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"commentsByMonth": [2,33,11,6],
+        "addpost1": {
+            "post1": [{
+                "title": "Dgraph",
+                "commentsByMonth": [2,33,11,6],
                 "likesByMonth": [4,33,1,66]
-			}]
-		}
-	}`,
+            }]
+        }
+    }`,
 	}, {
 		name: "list of integers in variable",
 		query: `mutation($post1:[Addpost1Input!]!) {
-			addpost1(input:$post1 ) {
-				post1 {
-					title
+            addpost1(input:$post1 ) {
+                post1 {
+                    title
                     commentsByMonth
                     likesByMonth
-				}
-			}
-		}`,
+                }
+            }
+        }`,
 		variables: map[string]interface{}{"post1": []interface{}{map[string]interface{}{"title": "Dgraph", "commentsByMonth": []int{2, 33, 11, 6}, "likesByMonth": []int64{4, 33, 1, 66}}}},
 
 		expected: `{
-		"addpost1": {
-			"post1": [{
-				"title": "Dgraph",
-				"commentsByMonth": [2,33,11,6],
+        "addpost1": {
+            "post1": [{
+                "title": "Dgraph",
+                "commentsByMonth": [2,33,11,6],
                 "likesByMonth": [4,33,1,66]
-			}]
-		}
-	}`,
+            }]
+        }
+    }`,
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -3775,18 +4078,18 @@ func intWithList(t *testing.T) {
 func nestedAddMutationWithHasInverse(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
-			addPerson1(input: $input) {
-				person1 {
-					name
-					friends {
-						name
-						friends {
-							name
-						}
-					}
-				}
-			}
-		}`,
+            addPerson1(input: $input) {
+                person1 {
+                    name
+                    friends {
+                        name
+                        friends {
+                            name
+                        }
+                    }
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{
 			"input": []interface{}{
 				map[string]interface{}{
@@ -3810,27 +4113,27 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	expected := `{
-		"addPerson1": {
-		  "person1": [
-			{
-			  "friends": [
-				{
-				  "friends": [
-					{
-					  "name": "Or"
-					},
-					{
-					  "name": "Justin"
-					}
-				  ],
-				  "name": "Michal"
-				}
-			  ],
-			  "name": "Or"
-			}
-		  ]
-		}
-	  }`
+        "addPerson1": {
+          "person1": [
+            {
+              "friends": [
+                {
+                  "friends": [
+                    {
+                      "name": "Or"
+                    },
+                    {
+                      "name": "Justin"
+                    }
+                  ],
+                  "name": "Michal"
+                }
+              ],
+              "name": "Or"
+            }
+          ]
+        }
+      }`
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 
 	// cleanup
@@ -3840,18 +4143,18 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
 func mutationPointType(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `
-		mutation addHotel($hotel: AddHotelInput!) {
-		  addHotel(input: [$hotel]) {
-			hotel {
-			  name
-			  location {
-				__typename
-				latitude
-				longitude
-			  }
-			}
-		  }
-		}`,
+        mutation addHotel($hotel: AddHotelInput!) {
+          addHotel(input: [$hotel]) {
+            hotel {
+              name
+              location {
+                __typename
+                latitude
+                longitude
+              }
+            }
+          }
+        }`,
 		Variables: map[string]interface{}{"hotel": map[string]interface{}{
 			"name": "Taj Hotel",
 			"location": map[string]interface{}{
@@ -3864,18 +4167,18 @@ func mutationPointType(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addHotelExpected := `
-	{
-		"addHotel": {
-			"hotel": [{
-				"name": "Taj Hotel",
-				"location": {
-					"__typename": "Point",
-					"latitude": 11.11,
-					"longitude": 22.22
-				}
-			}]
-		}
-	}`
+    {
+        "addHotel": {
+            "hotel": [{
+                "name": "Taj Hotel",
+                "location": {
+                    "__typename": "Point",
+                    "latitude": 11.11,
+                    "longitude": 22.22
+                }
+            }]
+        }
+    }`
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
@@ -3885,114 +4188,114 @@ func mutationPointType(t *testing.T) {
 func mutationPolygonType(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `
-		mutation addHotel {
-		  addHotel(input: [
-				{
-					name: "Taj Hotel"
-					area : {
-							coordinates: [{
-								points: [{
-									latitude: 11.11,
-									longitude: 22.22
-								}, {
-									latitude: 15.15,
-									longitude: 16.16
-								}, {
-									latitude: 20.20,
-									longitude: 21.21
-								},
- 								{
-									latitude: 11.11,
-									longitude: 22.22
-								}]
-							}, {
-								points: [{
-									latitude: 11.18,
-									longitude: 22.28
-								}, {
-									latitude: 15.18,
-									longitude: 16.18
-								}, {
-									latitude: 20.28,
-									longitude: 21.28
-								}, {
-									latitude: 11.18,
-									longitude: 22.28
-								}]
-							}]
-    					}
-					}
-					]) {
-			hotel {
-			  name
-			  area {
-				__typename
-				coordinates {
+        mutation addHotel {
+          addHotel(input: [
+                {
+                    name: "Taj Hotel"
+                    area : {
+                            coordinates: [{
+                                points: [{
+                                    latitude: 11.11,
+                                    longitude: 22.22
+                                }, {
+                                    latitude: 15.15,
+                                    longitude: 16.16
+                                }, {
+                                    latitude: 20.20,
+                                    longitude: 21.21
+                                },
+                                 {
+                                    latitude: 11.11,
+                                    longitude: 22.22
+                                }]
+                            }, {
+                                points: [{
+                                    latitude: 11.18,
+                                    longitude: 22.28
+                                }, {
+                                    latitude: 15.18,
+                                    longitude: 16.18
+                                }, {
+                                    latitude: 20.28,
+                                    longitude: 21.28
+                                }, {
+                                    latitude: 11.18,
+                                    longitude: 22.28
+                                }]
+                            }]
+                        }
+                    }
+                    ]) {
+            hotel {
+              name
+              area {
+                __typename
+                coordinates {
                   __typename
-				  points {
-					latitude
-					__typename
-					longitude
-				  }
-				}
-			  }
-			}
-		  }
-		}`,
+                  points {
+                    latitude
+                    __typename
+                    longitude
+                  }
+                }
+              }
+            }
+          }
+        }`,
 	}
 	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addHotelExpected := `
-	{
-		"addHotel": {
-			"hotel": [{
-				"name": "Taj Hotel",
-				"area": {
-				  "__typename": "Polygon",
-				  "coordinates": [{
-					"__typename": "PointList",
-					"points": [{
-					  "__typename": "Point",
-					  "latitude": 11.11,
-					  "longitude": 22.22
-					}, {
-					  "__typename": "Point",
-					  "latitude": 15.15,
-					  "longitude": 16.16
-					}, {
-					  "__typename": "Point",
-					  "latitude": 20.20,
-					  "longitude": 21.21
-					},{
-					  "__typename": "Point",
-					  "latitude": 11.11,
-					  "longitude": 22.22
-					}]
-				  }, {
-					  "__typename": "PointList",
-					  "points": [{
-					  	"__typename": "Point",
-						"latitude": 11.18,
-						"longitude": 22.28
-					  }, {
-					  	"__typename": "Point",
-						"latitude": 15.18,
-						"longitude": 16.18
-					  }, {
-					  	"__typename": "Point",
-						"latitude": 20.28,
-						"longitude": 21.28
-					  }, {
-					  	"__typename": "Point",
-						"latitude": 11.18,
-						"longitude": 22.28
-					  }]
-				  }]
-				}
-			}]
-		}
-	}`
+    {
+        "addHotel": {
+            "hotel": [{
+                "name": "Taj Hotel",
+                "area": {
+                  "__typename": "Polygon",
+                  "coordinates": [{
+                    "__typename": "PointList",
+                    "points": [{
+                      "__typename": "Point",
+                      "latitude": 11.11,
+                      "longitude": 22.22
+                    }, {
+                      "__typename": "Point",
+                      "latitude": 15.15,
+                      "longitude": 16.16
+                    }, {
+                      "__typename": "Point",
+                      "latitude": 20.20,
+                      "longitude": 21.21
+                    },{
+                      "__typename": "Point",
+                      "latitude": 11.11,
+                      "longitude": 22.22
+                    }]
+                  }, {
+                      "__typename": "PointList",
+                      "points": [{
+                          "__typename": "Point",
+                        "latitude": 11.18,
+                        "longitude": 22.28
+                      }, {
+                          "__typename": "Point",
+                        "latitude": 15.18,
+                        "longitude": 16.18
+                      }, {
+                          "__typename": "Point",
+                        "latitude": 20.28,
+                        "longitude": 21.28
+                      }, {
+                          "__typename": "Point",
+                        "latitude": 11.18,
+                        "longitude": 22.28
+                      }]
+                  }]
+                }
+            }]
+        }
+    }`
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
@@ -4002,190 +4305,190 @@ func mutationPolygonType(t *testing.T) {
 func mutationMultiPolygonType(t *testing.T) {
 	addHotelParams := &GraphQLParams{
 		Query: `
-		mutation addHotel {
-		  addHotel(input: [{
-			name: "Taj Hotel"
-			branches : {
-				polygons: [{
-					coordinates: [{
-						points: [{
-							latitude: 11.11,
-							longitude: 22.22
-						}, {
-							latitude: 15.15,
-							longitude: 16.16
-						}, {
-							latitude: 20.20,
-							longitude: 21.21
-						}, {
-							latitude: 11.11,
-							longitude: 22.22
-						}]
-					}, {
-						points: [{
-							latitude: 11.18,
-							longitude: 22.28
-						}, {
-							latitude: 15.18,
-							longitude: 16.18
-						}, {
-							latitude: 20.28,
-							longitude: 21.28
-						}, {
-							latitude: 11.18,
-							longitude: 22.28
-						}]
-					}]
-				}, {
-					coordinates: [{
-						points: [{
-							latitude: 91.11,
-							longitude: 92.22
-						}, {
-							latitude: 15.15,
-							longitude: 16.16
-						}, {
-							latitude: 20.20,
-							longitude: 21.21
-						}, {
-							latitude: 91.11,
-							longitude: 92.22
-						}]
-					}, {
-						points: [{
-							latitude: 11.18,
-							longitude: 22.28
-						}, {
-							latitude: 15.18,
-							longitude: 16.18
-						}, {
-							latitude: 20.28,
-							longitude: 21.28
-						}, {
-							latitude: 11.18,
-							longitude: 22.28
-						}]
-					}]
-				}]
-			}
-		  }]) {
-			hotel {
-			  name
-			  branches {
-				__typename
-				polygons {
-					__typename
-					coordinates {
-					  __typename
-					  points {
-						latitude
-						__typename
-						longitude
-					  }
-					}
-				}
-			  }
-			}
-		  }
-		}`,
+        mutation addHotel {
+          addHotel(input: [{
+            name: "Taj Hotel"
+            branches : {
+                polygons: [{
+                    coordinates: [{
+                        points: [{
+                            latitude: 11.11,
+                            longitude: 22.22
+                        }, {
+                            latitude: 15.15,
+                            longitude: 16.16
+                        }, {
+                            latitude: 20.20,
+                            longitude: 21.21
+                        }, {
+                            latitude: 11.11,
+                            longitude: 22.22
+                        }]
+                    }, {
+                        points: [{
+                            latitude: 11.18,
+                            longitude: 22.28
+                        }, {
+                            latitude: 15.18,
+                            longitude: 16.18
+                        }, {
+                            latitude: 20.28,
+                            longitude: 21.28
+                        }, {
+                            latitude: 11.18,
+                            longitude: 22.28
+                        }]
+                    }]
+                }, {
+                    coordinates: [{
+                        points: [{
+                            latitude: 91.11,
+                            longitude: 92.22
+                        }, {
+                            latitude: 15.15,
+                            longitude: 16.16
+                        }, {
+                            latitude: 20.20,
+                            longitude: 21.21
+                        }, {
+                            latitude: 91.11,
+                            longitude: 92.22
+                        }]
+                    }, {
+                        points: [{
+                            latitude: 11.18,
+                            longitude: 22.28
+                        }, {
+                            latitude: 15.18,
+                            longitude: 16.18
+                        }, {
+                            latitude: 20.28,
+                            longitude: 21.28
+                        }, {
+                            latitude: 11.18,
+                            longitude: 22.28
+                        }]
+                    }]
+                }]
+            }
+          }]) {
+            hotel {
+              name
+              branches {
+                __typename
+                polygons {
+                    __typename
+                    coordinates {
+                      __typename
+                      points {
+                        latitude
+                        __typename
+                        longitude
+                      }
+                    }
+                }
+              }
+            }
+          }
+        }`,
 	}
 	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	addHotelExpected := `
-	{
-		"addHotel": {
-			"hotel": [{
-				"name": "Taj Hotel",
-				"branches": {
-					"__typename": "MultiPolygon",
-					"polygons": [{
-					  "__typename": "Polygon",
-					  "coordinates": [{
-						"__typename": "PointList",
-						"points": [{
-						  "__typename": "Point",
-						  "latitude": 11.11,
-						  "longitude": 22.22
-						}, {
-						  "__typename": "Point",
-						  "latitude": 15.15,
-						  "longitude": 16.16
-						}, {
-						  "__typename": "Point",
-						  "latitude": 20.20,
-						  "longitude": 21.21
-						},{
-						  "__typename": "Point",
-						  "latitude": 11.11,
-						  "longitude": 22.22
-						}]
-					  }, {
-						  "__typename": "PointList",
-						  "points": [{
-							"__typename": "Point",
-							"latitude": 11.18,
-							"longitude": 22.28
-						  }, {
-							"__typename": "Point",
-							"latitude": 15.18,
-							"longitude": 16.18
-						  }, {
-							"__typename": "Point",
-							"latitude": 20.28,
-							"longitude": 21.28
-						  }, {
-							"__typename": "Point",
-							"latitude": 11.18,
-							"longitude": 22.28
-						  }]
-					  }]
-					}, {
-					  "__typename": "Polygon",
-					  "coordinates": [{
-						"__typename": "PointList",
-						"points": [{
-						  "__typename": "Point",
-						  "latitude": 91.11,
-						  "longitude": 92.22
-						}, {
-						  "__typename": "Point",
-						  "latitude": 15.15,
-						  "longitude": 16.16
-						}, {
-						  "__typename": "Point",
-						  "latitude": 20.20,
-						  "longitude": 21.21
-						},{
-						  "__typename": "Point",
-						  "latitude": 91.11,
-						  "longitude": 92.22
-						}]
-					  }, {
-						  "__typename": "PointList",
-						  "points": [{
-							"__typename": "Point",
-							"latitude": 11.18,
-							"longitude": 22.28
-						  }, {
-							"__typename": "Point",
-							"latitude": 15.18,
-							"longitude": 16.18
-						  }, {
-							"__typename": "Point",
-							"latitude": 20.28,
-							"longitude": 21.28
-						  }, {
-							"__typename": "Point",
-							"latitude": 11.18,
-							"longitude": 22.28
-						  }]
-					  }]
-					}]
-				}
-			}]
-		}
-	}`
+    {
+        "addHotel": {
+            "hotel": [{
+                "name": "Taj Hotel",
+                "branches": {
+                    "__typename": "MultiPolygon",
+                    "polygons": [{
+                      "__typename": "Polygon",
+                      "coordinates": [{
+                        "__typename": "PointList",
+                        "points": [{
+                          "__typename": "Point",
+                          "latitude": 11.11,
+                          "longitude": 22.22
+                        }, {
+                          "__typename": "Point",
+                          "latitude": 15.15,
+                          "longitude": 16.16
+                        }, {
+                          "__typename": "Point",
+                          "latitude": 20.20,
+                          "longitude": 21.21
+                        },{
+                          "__typename": "Point",
+                          "latitude": 11.11,
+                          "longitude": 22.22
+                        }]
+                      }, {
+                          "__typename": "PointList",
+                          "points": [{
+                            "__typename": "Point",
+                            "latitude": 11.18,
+                            "longitude": 22.28
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 15.18,
+                            "longitude": 16.18
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 20.28,
+                            "longitude": 21.28
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 11.18,
+                            "longitude": 22.28
+                          }]
+                      }]
+                    }, {
+                      "__typename": "Polygon",
+                      "coordinates": [{
+                        "__typename": "PointList",
+                        "points": [{
+                          "__typename": "Point",
+                          "latitude": 91.11,
+                          "longitude": 92.22
+                        }, {
+                          "__typename": "Point",
+                          "latitude": 15.15,
+                          "longitude": 16.16
+                        }, {
+                          "__typename": "Point",
+                          "latitude": 20.20,
+                          "longitude": 21.21
+                        },{
+                          "__typename": "Point",
+                          "latitude": 91.11,
+                          "longitude": 92.22
+                        }]
+                      }, {
+                          "__typename": "PointList",
+                          "points": [{
+                            "__typename": "Point",
+                            "latitude": 11.18,
+                            "longitude": 22.28
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 15.18,
+                            "longitude": 16.18
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 20.28,
+                            "longitude": 21.28
+                          }, {
+                            "__typename": "Point",
+                            "latitude": 11.18,
+                            "longitude": 22.28
+                          }]
+                      }]
+                    }]
+                }
+            }]
+        }
+    }`
 	testutil.CompareJSON(t, addHotelExpected, string(gqlResponse.Data))
 
 	// Cleanup
@@ -4195,19 +4498,19 @@ func mutationMultiPolygonType(t *testing.T) {
 func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addCountry($input: [AddCountryInput!]!) {
-			addCountry(input: $input) {
-			  country {
-				name
-				states{
-				  xcode
-				  name
-				  country{
-					name
-				  }
-				}
-			  }
-			}
-		  }`,
+            addCountry(input: $input) {
+              country {
+                name
+                states{
+                  xcode
+                  name
+                  country{
+                    name
+                  }
+                }
+              }
+            }
+          }`,
 
 		Variables: map[string]interface{}{
 			"input": []interface{}{
@@ -4235,30 +4538,30 @@ func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	expected := `{
-		"addCountry": {
-		  "country": [
-			{
-			  "name": "A country",
-			  "states": [
-				{
-				  "country": {
-					"name": "A country"
-				  },
-				  "name": "Alphabet",
-				  "xcode": "abc"
-				},
-				{
-				  "country": {
-					"name": "A country"
-				  },
-				  "name": "Vowel",
-				  "xcode": "def"
-				}
-			  ]
-			}
-		  ]
-		}
-	  }`
+        "addCountry": {
+          "country": [
+            {
+              "name": "A country",
+              "states": [
+                {
+                  "country": {
+                    "name": "A country"
+                  },
+                  "name": "Alphabet",
+                  "xcode": "abc"
+                },
+                {
+                  "country": {
+                    "name": "A country"
+                  },
+                  "name": "Vowel",
+                  "xcode": "def"
+                }
+              ]
+            }
+          ]
+        }
+      }`
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 	filter := map[string]interface{}{"name": map[string]interface{}{"eq": "A country"}}
 	deleteCountry(t, filter, 1, nil)
@@ -4271,13 +4574,13 @@ func addMutationWithHasInverseOverridesCorrectly(t *testing.T) {
 func addUniversity(t *testing.T) string {
 	addUniversityParams := &GraphQLParams{
 		Query: `mutation addUniversity($university: AddUniversityInput!) {
-			addUniversity(input: [$university]) {
-				university {
-					id
-					name
-				}
-			}
-		}`,
+            addUniversity(input: [$university]) {
+                university {
+                    id
+                    name
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"university": map[string]interface{}{
 			"name": "The Great University",
 		}},
@@ -4304,13 +4607,13 @@ func addUniversity(t *testing.T) string {
 func updateUniversity(t *testing.T, id string) {
 	updateUniversityParams := &GraphQLParams{
 		Query: `mutation updateUniversity($university: UpdateUniversityInput!) {
-			updateUniversity(input: $university) {
-				university {
-					name
-					numStudents
-				}
-			}
-		}`,
+            updateUniversity(input: $university) {
+                university {
+                    name
+                    numStudents
+                }
+            }
+        }`,
 		Variables: map[string]interface{}{"university": map[string]interface{}{
 			"filter": map[string]interface{}{
 				"id": []string{id},
@@ -4346,131 +4649,131 @@ func filterInMutationsWithArrayForAndOr(t *testing.T) {
 		{
 			name: "Filter with OR at top level in Mutation",
 			query: `mutation {
-			         addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-			        	post1(filter:{or:{title:{eq: "Dgraph"}}}) {
-							title
-							numLikes
-				        }
-			         }
-		          }`,
+                     addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                        post1(filter:{or:{title:{eq: "Dgraph"}}}) {
+                            title
+                            numLikes
+                        }
+                     }
+                  }`,
 			expected: `{
-					  "addpost1": {
-						"post1": [
-						  {
-							"title": "Dgraph",
-							"numLikes": 100
-						  }
-						]
-					  }
-					}`,
+                      "addpost1": {
+                        "post1": [
+                          {
+                            "title": "Dgraph",
+                            "numLikes": 100
+                          }
+                        ]
+                      }
+                    }`,
 		},
 		{
 			name: "Filter with OR at top level in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-							post1(filter:$filter) {
-								title
-								numLikes
-							}
-						}
-					}`,
+                        addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                            post1(filter:$filter) {
+                                title
+                                numLikes
+                            }
+                        }
+                    }`,
 			variables: `{"filter":{"or":{"title":{"eq": "Dgraph"}}}}`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
+                          "addpost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph",
+                                "numLikes": 100
+                              }
+                            ]
+                          }
+                        }`,
 		},
 		{
 			name: "Filter with AND at top level in Mutation",
 			query: `mutation {
-						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-							post1(filter:{and:{title:{eq: "Dgraph"}}}) {
-								title
-								numLikes
-							}
-						}
-					}`,
+                        addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                            post1(filter:{and:{title:{eq: "Dgraph"}}}) {
+                                title
+                                numLikes
+                            }
+                        }
+                    }`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
+                          "addpost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph",
+                                "numLikes": 100
+                              }
+                            ]
+                          }
+                        }`,
 		},
 		{
 			name: "Filter with AND at top level in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-							post1(filter:$filter) {
-								title
-								numLikes
-							}
-						}
-					}`,
+                        addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                            post1(filter:$filter) {
+                                title
+                                numLikes
+                            }
+                        }
+                    }`,
 			variables: `{"filter":{"and":{"title":{"eq": "Dgraph"}}}}`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
+                          "addpost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph",
+                                "numLikes": 100
+                              }
+                            ]
+                          }
+                        }`,
 		},
 		{
 			name: "Filter with Nested And-OR in Mutation",
 			query: `mutation {
-						addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-							post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
-								title 
-								numLikes
-							}
-						}
-						}`,
+                        addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                            post1(filter:{and:[{title:{eq: "Dgraph"}},{or:{numLikes:{eq: 100}}}]}) {
+                                title 
+                                numLikes
+                            }
+                        }
+                        }`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
+                          "addpost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph",
+                                "numLikes": 100
+                              }
+                            ]
+                          }
+                        }`,
 		},
 		{
 			name: "Filter with Nested And-OR in Mutation using variables",
 			query: `mutation($filter:post1Filter) {
-			          addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
-				        post1(filter:$filter) {
-					      title
+                      addpost1(input: [{title: "Dgraph", numLikes: 100}]) {
+                        post1(filter:$filter) {
+                          title
                           numLikes
-				        }
+                        }
                       }
-		           }`,
+                   }`,
 			variables: `{"filter": {"and": [{"title":{"eq": "Dgraph"}},{"or":{"numLikes":{"eq": 100}}}]}}`,
 			expected: `{
-						  "addpost1": {
-							"post1": [
-							  {
-								"title": "Dgraph",
-								"numLikes": 100
-							  }
-							]
-						  }
-						}`,
+                          "addpost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph",
+                                "numLikes": 100
+                              }
+                            ]
+                          }
+                        }`,
 		},
 	}
 
@@ -4498,13 +4801,13 @@ func filterInMutationsWithArrayForAndOr(t *testing.T) {
 
 func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	params := &GraphQLParams{Query: `mutation {
-			addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
-				post1(filter:{title:{eq:"Dgraph"}}) {
-					title
-					numLikes
-				}
-			}
-		}`}
+            addpost1(input: [{title: "Dgraph", numLikes: 100},{title: "Dgraph1", numLikes: 120}]) {
+                post1(filter:{title:{eq:"Dgraph"}}) {
+                    title
+                    numLikes
+                }
+            }
+        }`}
 	resp := params.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, resp)
 
@@ -4516,47 +4819,47 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 	}{
 		{name: "Filter with Nested OR-AND in Update Mutation",
 			query: `mutation updatepost1{
-                    	updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
-				    		post1{
-								title
-								numLikes
-							}
-						}
-					}`,
+                        updatepost1(input:{filter:{or:[{title:{eq:"Dgraph1"}},{and:{numLikes:{eq:130}}}]},set:{numLikes:200}}){
+                            post1{
+                                title
+                                numLikes
+                            }
+                        }
+                    }`,
 			expected: `{
-						  "updatepost1": {
-							"post1": [
-							  {
-								"title": "Dgraph1",
-								"numLikes": 200
-							  }
-							]
-						  }
-						}`,
+                          "updatepost1": {
+                            "post1": [
+                              {
+                                "title": "Dgraph1",
+                                "numLikes": 200
+                              }
+                            ]
+                          }
+                        }`,
 		},
 		{name: "Filter with Nested OR-AND in Update Mutation using variables",
 			query: `mutation updatepost1($post1:Updatepost1Input!) {
-		              updatepost1(input:$post1){
-					    post1{
-							 title
-							 numLikes
-					}
-				}
-			}`,
+                      updatepost1(input:$post1){
+                        post1{
+                             title
+                             numLikes
+                    }
+                }
+            }`,
 			variables: `{"post1": {"filter":{"or": [{"title":{"eq": "Dgraph1"}},{"and":{"numLikes":{"eq": 140}}}]},
-				"set":{
-					"numLikes": "200"
-				}
-			}
-			}`,
+                "set":{
+                    "numLikes": "200"
+                }
+            }
+            }`,
 			expected: `{
-			"updatepost1": {
-				"post1": [{
-					"title": "Dgraph1",
-					"numLikes": 200
-				}]
-			}
-		}`,
+            "updatepost1": {
+                "post1": [{
+                    "title": "Dgraph1",
+                    "numLikes": 200
+                }]
+            }
+        }`,
 		},
 	}
 
@@ -4584,25 +4887,25 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `mutation {
-		  addBook(input:[
-			{
-			  bookId: 1234567890123
-			  name: "Graphql"
-			  desc: "Graphql is the next big thing"
-			}
-		  ]) {
-			numUids
-		  }
-		}`,
+          addBook(input:[
+            {
+              bookId: 1234567890123
+              name: "Graphql"
+              desc: "Graphql is the next big thing"
+            }
+          ]) {
+            numUids
+          }
+        }`,
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	expected := `{
-		  	"addBook": {
-			  "numUids": 1
-			}
-		}`
+              "addBook": {
+              "numUids": 1
+            }
+        }`
 	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
@@ -4627,10 +4930,10 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	var expected = `{
-			"addChapter": {
-			  "numUids": 1
-			}
-		}`
+            "addChapter": {
+              "numUids": 1
+            }
+        }`
 	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
@@ -4643,28 +4946,28 @@ func idDirectiveWithIntMutation(t *testing.T) {
 func idDirectiveWithFloatMutation(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `mutation {
-		  addSection(input:[{
-			chapterId: 2
-			name: "Graphql: Introduction"
-			sectionId: 2.1
-		  },
-		  {
-			chapterId: 2
-			name: "Graphql Available Data Types"
-			sectionId: 2.2
-		  }]) {
-			numUids
-		  }
-		}`,
+          addSection(input:[{
+            chapterId: 2
+            name: "Graphql: Introduction"
+            sectionId: 2.1
+          },
+          {
+            chapterId: 2
+            name: "Graphql Available Data Types"
+            sectionId: 2.2
+          }]) {
+            numUids
+          }
+        }`,
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	var expected = `{
-			"addSection": {
-			  "numUids": 2
-			}
-		}`
+            "addSection": {
+              "numUids": 2
+            }
+        }`
 	require.JSONEq(t, expected, string(response.Data))
 
 	// adding same mutation again should result in error because of duplicate id
@@ -4818,4 +5121,189 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 
 	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2"}}}
 	DeleteGqlType(t, "Mission", missionDeleteFilter, 2, nil)
+}
+
+func threeLevelDoubleXID(t *testing.T) {
+	// Query added to test if the bug https://discuss.dgraph.io/t/mutation-fails-because-of-error-some-variables-are-defined-twice/9487
+	// has been fixed.
+	mutation := &GraphQLParams{
+		Query: `mutation {
+                      addCountry(input: [{
+                        name: "c1",
+                        states: [{
+                              xcode: "s11",
+                              name: "s11",
+                              region: {
+                                id: "r1",
+                                name: "r1",
+                                district: {
+                                      id: "d1",
+                                      name: "d1"
+                                }
+                              }
+                        }]
+                      }]) {
+                        country {
+                            id
+                              name
+                              states {
+                                xcode
+                                name
+                                region {
+                                      id
+                                      name 
+                                      district {
+                                        id
+                                        name
+                                      }
+                                }
+                              }
+                        }
+                    }
+                }`,
+	}
+	gqlResponse := mutation.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var addCountryExpected = `{
+    "addCountry": {
+      "country": [
+        {
+          "name": "c1",
+          "states": [
+            {
+              "xcode": "s11",
+              "name": "s11",
+              "region": {
+                "id": "r1",
+                "name": "r1",
+                "district": {
+                  "id": "d1",
+                  "name": "d1"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }`
+
+	var result, expected struct {
+		AddCountry struct {
+			Country []*country
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	err = json.Unmarshal([]byte(addCountryExpected), &expected)
+	require.NoError(t, err)
+
+	require.Equal(t, len(result.AddCountry.Country), 1)
+	countryID := result.AddCountry.Country[0].ID
+	requireUID(t, countryID)
+
+	opt := cmpopts.IgnoreFields(country{}, "ID")
+	if diff := cmp.Diff(expected, result, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	// Clean Up
+	filter := map[string]interface{}{"id": []string{countryID}}
+	deleteCountry(t, filter, 1, nil)
+	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "s11"}}
+	deleteState(t, filter, 1, nil)
+	DeleteGqlType(t, "Region", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "District", map[string]interface{}{}, 1, nil)
+}
+
+func twoLevelsLinkedToXID(t *testing.T) {
+	// Query added to test if the bug https://discuss.dgraph.io/t/create-child-nodes-with-addparent/11311/5
+	// has been fixed.
+
+	// Add Owner
+	query := &GraphQLParams{
+		Query: `mutation {
+                    addOwner(input: [{username: "user",    password: "password"}]) {
+                        owner {
+                              username
+                        }
+                    }
+                }`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+            "addOwner": {
+                "owner": [{
+                    "username": "user"
+                }]
+            }
+        }`
+	require.JSONEq(t, expected, string(response.Data))
+
+	// Add dataset and project
+	query = &GraphQLParams{
+		Query: `mutation {
+                      addProject(input:
+                      [
+                        {
+                              id: "p1",
+                              owner: {
+                                username: "user"
+                              },
+                              name: "project",
+                              datasets: [{
+                                id: "d1",
+                                  owner: {
+                                    username: "user"
+                                  }
+                                  name: "dataset"
+                            }]
+                        }
+                      ]
+            ) {
+                project  {
+                    id
+                    owner {
+                        username
+                    }
+                    name
+                    datasets {
+                        id
+                        owner {
+                            username
+                        }
+                        name
+                    }
+                }
+              }
+        }`,
+	}
+
+	response = query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	expected = `{
+            "addProject": {
+                "project": [{
+                    "id": "p1",
+                    "owner": {
+                        "username": "user"
+                    },
+                    "name": "project",
+                    "datasets": [{
+                        "id": "d1",
+                        "owner": {
+                            "username": "user"
+                        },
+                        "name": "dataset"
+                    }]
+                }]
+            }
+        }`
+	require.JSONEq(t, expected, string(response.Data))
+	DeleteGqlType(t, "Project", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Owner", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Dataset", map[string]interface{}{}, 1, nil)
 }

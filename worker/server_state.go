@@ -107,7 +107,6 @@ func (s *ServerState) initStorage() {
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
-			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
@@ -130,10 +129,11 @@ func (s *ServerState) initStorage() {
 	// Temp directory
 	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
 
-	s.gcCloser = z.NewCloser(2)
+	s.gcCloser = z.NewCloser(3)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	// Commenting this out because Badger is doing its own cache checks.
 	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
+	go x.MonitorDiskMetrics("postings_fs", Config.PostingDir, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.

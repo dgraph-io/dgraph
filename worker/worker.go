@@ -82,11 +82,16 @@ type grpcWorker struct {
 
 func (w *grpcWorker) Subscribe(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
+	// Subscribe on given prefixes.
 	var matches []badgerpb.Match
-	for _, prefix := range req.GetPrefixes() {
-		matches = append(matches, badgerpb.Match{Prefix: prefix, IgnoreBytes: req.Ignore})
+	for _, p := range req.GetPrefixes() {
+		matches = append(matches, badgerpb.Match{
+			Prefix: p,
+		})
 	}
-	// Subscribe on given prefixes with the ignore byte.
+	for _, m := range req.GetMatches() {
+		matches = append(matches, *m)
+	}
 	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
 		return stream.Send(kvs)
 	}, matches)
@@ -133,6 +138,8 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+
+	groups().Node.cdcTracker.Close()
 }
 
 // UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.

@@ -21,6 +21,7 @@ type State {
         xcode: String! @id @search(by: [regexp])
         name: String!
         capital: String
+        region: Region
 	    country: Country @dgraph(pred: "inCountry")
 }
 
@@ -305,8 +306,6 @@ type Section {
     chapterId: Int! @search
 }
 
-# test for entities resolver
-
 type Mission @key(fields: "id") {
     id: String! @id
     crew: [Astronaut] @hasInverse(field: missions)
@@ -324,4 +323,35 @@ type Astronaut @key(fields: "id") @extends {
 type SpaceShip @key(fields: "id") @extends {
     id: String! @id @external
     missions: [Mission]
+}
+
+type Region {
+    id: String! @id
+    name: String!
+    district: District
+}
+
+type District {
+    id: String! @id
+    name: String!
+}
+
+type Owner {
+    username: String! @id
+    password: String!
+    projects: [Project!] @hasInverse(field: owner)
+}
+
+type Project {
+    id: String! @id
+    owner: Owner!
+    name: String! @search(by: [hash])
+    datasets: [Dataset!] @hasInverse(field: project)
+}
+
+type Dataset {
+    id: String! @id
+    owner: Owner!
+    project: Project!
+    name: String! @search(by: [hash])
 }

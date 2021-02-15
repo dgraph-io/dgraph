@@ -60,11 +60,14 @@ prometheus:
       requests:
         memory: 400Mi
     enableAdminAPI: false
+
   additionalServiceMonitors:
     - name: zero-dgraph-io
       endpoints:
         - port: http-zero
           path: /debug/prometheus_metrics
+      namespaceSelector:
+        any: true
       selector:
         matchLabels:
           monitor: zero-dgraph-io
@@ -72,6 +75,8 @@ prometheus:
       endpoints:
         - port: http-alpha
           path: /debug/prometheus_metrics
+      namespaceSelector:
+        any: true
       selector:
         matchLabels:
           monitor: alpha-dgraph-io

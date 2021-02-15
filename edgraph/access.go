@@ -77,6 +77,7 @@ func AuthorizeGuardians(ctx context.Context) error {
 }
 
 func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	// always allow access
 	return nil
 }
 

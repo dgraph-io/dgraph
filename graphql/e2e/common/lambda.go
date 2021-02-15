@@ -220,7 +220,7 @@ func lambdaInMutationWithDuplicateId(t *testing.T) {
 
 	testutil.CompareJSON(t, `{
 		"addChapter": {
-		  "numUids": 4,
+		  "numUids": 6,
 		  "chapter": [
 			{
 			  "chapterId": 4,

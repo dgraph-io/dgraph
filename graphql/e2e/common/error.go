@@ -134,8 +134,8 @@ func deepMutationErrors(t *testing.T) {
 	}{
 		"missing ID and XID": {
 			set: &country{States: []*state{{Name: "NOT A VALID STATE"}}},
-			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation " +
-				"payload because type State requires a value for field xcode, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite" +
+				" mutation payload because field xcode cannot be empty",
 		},
 		"ID not valid": {
 			set: &country{States: []*state{{ID: "HI"}}},
@@ -144,13 +144,14 @@ func deepMutationErrors(t *testing.T) {
 		},
 		"ID not found": {
 			set: &country{States: []*state{{ID: "0x1"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because ID \"0x1\" isn't a State",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because ID \"0x1\" isn't a State",
 		},
 		"XID not found": {
 			set: &country{States: []*state{{Code: "NOT A VALID CODE"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because xid " +
-				"\"NOT A VALID CODE\" doesn't exist and input object not well formed because type " +
-				"State requires a value for field name, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because type State requires a value for field name, but no value" +
+				" present",
 		},
 	}
 

@@ -219,6 +219,10 @@ type CustomClaims struct {
 	jwt.StandardClaims
 }
 
+// UnmarshalJSON unmarshalls the claims present in the JWT.
+// It also adds standard claims to the `AuthVariables`. If
+// there is an auth variable with name same as one of auth
+// variable then the auth variable supersedes the standard claim.
 func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	// Unmarshal the standard claims first.
 	if err := json.Unmarshal(data, &c.StandardClaims); err != nil {
@@ -240,6 +244,18 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 			c.AuthVariables, _ = authValue.(map[string]interface{})
 		}
 	}
+
+	// `result` contains all the claims, delete the claim of the namespace mentioned
+	// in the Authorization Header.
+	delete(result, c.authMeta.Namespace)
+	// add AuthVariables into the `result` map, Now it contains all the AuthVariables
+	// and other claims present in the token.
+	for k, v := range c.AuthVariables {
+		result[k] = v
+	}
+
+	// update `AuthVariables` with `result` map
+	c.AuthVariables = result
 	return nil
 }
 

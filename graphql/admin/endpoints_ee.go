@@ -422,6 +422,18 @@ const adminTypes = `
 		namespaceId: Int
 		message: String
 	}
+
+	input ResetPasswordInput {
+		userId: String!
+		password: String!
+		namespace: Int!
+	}
+
+	type ResetPasswordPayload {
+		userId: String
+		message: String
+		namespace: Int
+	}
 	`
 
 const adminMutations = `
@@ -483,6 +495,12 @@ const adminMutations = `
 	Delete a namespace.
 	"""
 	deleteNamespace(input: NamespaceInput!): NamespacePayload
+
+	"""
+	Reset password can only be used by the Guardians of the galaxy to reset password of
+	any user in any namespace.
+	"""
+	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
 	`
 
 const adminQueries = `

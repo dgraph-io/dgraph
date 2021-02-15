@@ -19,10 +19,11 @@
 package enc
 
 import (
+	"io"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"io"
 )
 
 // Eebuild indicates if this is a Enterprise build.

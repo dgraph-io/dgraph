@@ -40,5 +40,8 @@ func GetEEFeaturesList() []string {
 	if x.WorkerConfig.Audit {
 		ee = append(ee, "audit")
 	}
+	if worker.Config.ChangeDataConf != "" {
+		ee = append(ee, "cdc")
+	}
 	return ee
 }
