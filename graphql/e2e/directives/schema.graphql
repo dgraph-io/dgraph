@@ -201,6 +201,7 @@ type post1{
     numLikes: Int64 @search
     commentsByMonth: [Int]
     likesByMonth: [Int64]
+    author: author1 @hasInverse(field: posts)
 }
 
 type Person1 {
@@ -354,4 +355,9 @@ type Dataset {
     owner: Owner!
     project: Project!
     name: String! @search(by: [hash])
+}
+
+type author1{
+    name:String! @id @search(by: [regexp])
+    posts:[post1] @hasInverse(field: author)
 }

@@ -9,6 +9,25 @@
       ]
     },
     {
+      "predicate": "post1.author",
+      "type": "uid"
+    },
+    {
+      "index": true,
+      "predicate": "author1.name",
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "author1.posts",
+      "type": "uid"
+    },
+    {
       "predicate": "Astronaut.id",
       "type": "string",
       "index": true,
@@ -1352,6 +1371,9 @@
     {
       "fields": [
         {
+          "name": "post1.author"
+        },
+        {
           "name": "post1.title"
         },
         {
@@ -1365,6 +1387,17 @@
         }
       ],
       "name": "post1"
+    },
+    {
+      "fields": [
+        {
+          "name": "author1.name"
+        },
+        {
+          "name": "author1.posts"
+        }
+      ],
+      "name": "author1"
     }
   ]
 }

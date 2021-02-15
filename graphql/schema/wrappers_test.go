@@ -1124,7 +1124,7 @@ func TestParseSecrets(t *testing.T) {
 
 			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
-			`,
+		`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
@@ -1142,7 +1142,7 @@ func TestParseSecrets(t *testing.T) {
 
 		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 		# random comment
-		`,
+	`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
@@ -1152,13 +1152,13 @@ func TestParseSecrets(t *testing.T) {
 		{
 			"should throw an error if the secret is not in the correct format",
 			`
-			type User {
-				id: ID!
-				name: String!
-			}
+		type User {
+			id: ID!
+			name: String!
+		}
 
-			# Dgraph.Secret RANDOM_TOKEN
-			`,
+		# Dgraph.Secret RANDOM_TOKEN
+		`,
 			nil,
 			"",
 			nil,
@@ -1232,6 +1232,21 @@ func TestParseSecrets(t *testing.T) {
 			"",
 			nil,
 			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
+		},
+		{
+			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			#Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+			nil,
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",

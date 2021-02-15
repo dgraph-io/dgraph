@@ -214,52 +214,55 @@ func parseMetaInfo(sch string) (*metaInfo, error) {
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 
-		if strings.HasPrefix(text, "# Dgraph.Authorization") {
-			if authSecret != "" {
-				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
-					"a schema, found second mention: %v", text)
+		if strings.HasPrefix(text, "#") {
+			header := strings.TrimSpace(text[1:])
+			if strings.HasPrefix(header, "Dgraph.Authorization") {
+				if authSecret != "" {
+					return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+						"a schema, found second mention: %v", text)
+				}
+				authSecret = text
+				continue
 			}
-			authSecret = text
-			continue
-		}
 
-		if strings.HasPrefix(text, "# Dgraph.Allow-Origin") {
+			if strings.HasPrefix(header, "Dgraph.Allow-Origin") {
+				parts := strings.Fields(text)
+				if len(parts) != 3 {
+					return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
+						" found for comment: `%s`, it should be `# Dgraph."+
+						"Allow-Origin \"http://example.com\"`", text)
+				}
+				var allowedOrigin string
+				if err = json.Unmarshal([]byte(parts[2]), &allowedOrigin); err != nil {
+					return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
+						" found for comment: `%s`, it should be `# Dgraph."+
+						"Allow-Origin \"http://example.com\"`", text)
+				}
+				schMetaInfo.allowedCorsOrigins[allowedOrigin] = true
+				continue
+			}
+
+			if !strings.HasPrefix(header, "Dgraph.Secret") {
+				continue
+			}
 			parts := strings.Fields(text)
-			if len(parts) != 3 {
-				return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
-					" found for comment: `%s`, it should be `# Dgraph."+
-					"Allow-Origin \"http://example.com\"`", text)
+			const doubleQuotesCode = 34
+
+			if len(parts) < 4 {
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 			}
-			var allowedOrigin string
-			if err = json.Unmarshal([]byte(parts[2]), &allowedOrigin); err != nil {
-				return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
-					" found for comment: `%s`, it should be `# Dgraph."+
-					"Allow-Origin \"http://example.com\"`", text)
+			val := strings.Join(parts[3:], " ")
+			if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 			}
-			schMetaInfo.allowedCorsOrigins[allowedOrigin] = true
-			continue
-		}
 
-		if !strings.HasPrefix(text, "# Dgraph.Secret") {
-			continue
+			val = strings.Trim(val, `"`)
+			key := strings.Trim(parts[2], `"`)
+			// lets obfuscate the value of the secrets from here on.
+			schMetaInfo.secrets[key] = x.SensitiveByteSlice(val)
 		}
-		parts := strings.Fields(text)
-		const doubleQuotesCode = 34
-
-		if len(parts) < 4 {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
-		}
-		val := strings.Join(parts[3:], " ")
-		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
-		}
-
-		val = strings.Trim(val, `"`)
-		key := strings.Trim(parts[2], `"`)
-		// lets obfuscate the value of the secrets from here on.
-		schMetaInfo.secrets[key] = x.SensitiveByteSlice(val)
 	}
 
 	if err = scanner.Err(); err != nil {

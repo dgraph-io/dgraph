@@ -5307,3 +5307,145 @@ func twoLevelsLinkedToXID(t *testing.T) {
 	DeleteGqlType(t, "Owner", map[string]interface{}{}, 1, nil)
 	DeleteGqlType(t, "Dataset", map[string]interface{}{}, 1, nil)
 }
+
+func inputCoerciontoList(t *testing.T) {
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		expected  string
+	}{
+		{name: "Coercion of Scalar value at root to list ",
+			query: ` mutation {
+						addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
+							post1 {
+								title
+								commentsByMonth
+							}
+						}
+					}`,
+			expected: `{
+							"addpost1": {
+								"post1": [
+            						{
+               							 "title": "GraphQL",
+                						"commentsByMonth": [
+											1
+                						]
+            						}
+        						]
+    						}
+						}`,
+		},
+		{name: "Coercion of Scalar value at root to list using variables",
+			query: ` mutation($post1: [Addpost1Input!]!) {
+						addpost1(input: $post1) {
+							post1 {
+								title
+								commentsByMonth
+							}
+						}
+					}`,
+			expected: `{
+							"addpost1": {
+        						"post1": [
+            						{
+                						"title": "Dgraph",
+										"commentsByMonth": [
+                    						1
+										]
+          							  }
+        						]
+    						}
+						}`,
+			variables: `{"post1": {"title":"Dgraph","commentsByMonth":1}}`,
+		},
+		{name: "Coercing nested scalar value to list ",
+			query: ` mutation {
+						addauthor1(
+							input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
+						) {
+							author1 {
+								name
+								posts {
+									title
+									commentsByMonth
+								}
+							}
+						}
+					}`,
+			expected: `{
+							"addauthor1": {
+       	 						"author1": [
+            						{
+                						"name": "Jack",
+                						"posts": [
+                    						{
+                        						"title": "RDBMS",
+                        						"commentsByMonth": [
+                            						1
+                        						]
+                    						}
+                						]
+            						}
+        						]
+    						}
+						}`,
+		},
+		{name: "Coercing nested scalar value to list using variables",
+			query: `mutation($author: [Addauthor1Input!]!) {
+						addauthor1(input: $author) {
+							author1 {
+								name
+								posts {
+									title
+									commentsByMonth
+								}
+							}
+						}
+					}`,
+			expected: `{
+    						"addauthor1": {
+        						"author1": [
+            						{
+                						"name": "Jackob",
+                						"posts": [
+                    						{
+                        						"title": "DB",
+                        						"commentsByMonth": [
+                            						1
+                        						]
+                    						}
+										]
+            						}
+        						]
+    						}
+						}`,
+			variables: `{"author": {"name": "Jackob","posts":{"title":"DB","commentsByMonth":1}}}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
+
+	author1DeleteFilter := map[string]interface{}{"name": map[string]interface{}{"in": []string{"Jack", "Jackob"}}}
+	DeleteGqlType(t, "author1", author1DeleteFilter, 2, nil)
+	posts1DeleteFilter := map[string]interface{}{"title": map[string]interface{}{"in": []string{"Dgraph", "GraphQL", "RDBMS", "DB"}}}
+	DeleteGqlType(t, "post1", posts1DeleteFilter, 4, nil)
+
+}
