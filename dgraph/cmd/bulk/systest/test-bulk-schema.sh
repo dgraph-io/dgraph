@@ -203,7 +203,6 @@ EOF
       1 dgraph.cors
       1 dgraph.drop.op
       1 dgraph.graphql.p_query
-      1 dgraph.graphql.p_sha256hash
       1 dgraph.graphql.schema
       1 dgraph.graphql.schema_created_at
       1 dgraph.graphql.schema_history

@@ -654,8 +654,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			// Ignore this predicate.
 		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.p_sha256hash":
-			// Ignore this predicate.
 		case pk.IsData() && e.attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)

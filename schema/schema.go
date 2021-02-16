@@ -583,9 +583,6 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 				{
 					Predicate: "dgraph.graphql.p_query",
 					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.p_sha256hash",
-					ValueType: pb.Posting_STRING,
 				},
 			},
 		}, &pb.TypeUpdate{
@@ -708,9 +705,6 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			ValueType: pb.Posting_DATETIME,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
-			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.p_sha256hash",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},

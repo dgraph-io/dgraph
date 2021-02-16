@@ -653,7 +653,6 @@ var graphqlReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.schema_history":    {},
 	"dgraph.graphql.schema_created_at": {},
 	"dgraph.graphql.p_query":           {},
-	"dgraph.graphql.p_sha256hash":      {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
