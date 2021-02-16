@@ -205,7 +205,7 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manif
 		g.Go(func() error {
 			var m Manifest
 			if err := h.ReadManifest(path, &m); err != nil {
-				return errors.Wrapf(err, "While reading %q", path)
+				return errors.Wrapf(err, "ReadManifest: path=%q", path)
 			}
 			m.Path = path
 			res.Lock()
