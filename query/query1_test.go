@@ -2128,6 +2128,100 @@ func TestSortWithNulls(t *testing.T) {
 	}
 }
 
+func TestMultiSortWithNulls(t *testing.T) {
+
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		result string
+	}{
+		{0, -1, -1, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{1, -1, 2, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"}]}}`,
+		},
+		{2, -1, 7, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{3, 2, 7, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"}]}}`,
+		},
+		{4, 2, 100, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{5, 5, 5, `{"data": {"me":[
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{0, 9, 5, `{"data": {"me":[
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{0, 12, 5, `{"data": {"me":[]}}`},
+	}
+	makeQuery := func(offset, first int32, index bool) string {
+		pred1 := "pred1"
+		pred2 := "pred2"
+		if index {
+			pred1 = "index-pred1"
+			pred2 = "index-pred2"
+		}
+		q := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: " + pred1 +
+			",orderdesc: " + pred2
+		if offset != -1 {
+			q += fmt.Sprintf(", offset: %d", offset)
+		}
+		if first != -1 {
+			q += fmt.Sprintf(", first: %d", first)
+		}
+		query := "{" + q + ") { pname pred1:" + pred1 + " pred2:" + pred2 + " } }"
+		return processQueryNoErr(t, query)
+	}
+
+	for _, tc := range tests {
+		// Case of sort with Index.
+		actual := makeQuery(tc.offset, tc.first, true)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
+	}
+}
+
 func TestMultiSortPaginateWithOffset(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
