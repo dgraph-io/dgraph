@@ -17,8 +17,14 @@
 package schema
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -33,7 +39,6 @@ var (
 	groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
 	groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
 	groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
-	groupOnegRPC   = testutil.SockAddr
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"
 	groupTwoGraphQLServer   = "http://" + groupTwoHTTP + "/graphql"
@@ -46,10 +51,6 @@ var (
 // Whenever schema is updated in a dgraph alpha for one group for any namespace,
 // that update should also be propagated to alpha nodes in other groups.
 func TestSchemaSubscribe(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 	schema := `
@@ -169,16 +170,11 @@ func TestSchemaSubscribe(t *testing.T) {
 // This test ensures that even though different namespaces have the same GraphQL schema, if their
 // data is different the same should be reflected in the GraphQL responses.
 // In a way, it also tests lazy-loading of GraphQL schema.
-func TestMultiTenancy(t *testing.T) {
+func TestGraphQLResponse(t *testing.T) {
+	common.SafelyDropAll(t)
+
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
-
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
-	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, header)
-
 	schema := `
 	type Author {
 		id: ID!
@@ -195,7 +191,7 @@ func TestMultiTenancy(t *testing.T) {
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
 
-	testMultiTenancyHelper(t, `
+	graphqlHelper(t, `
 	mutation {
 		addAuthor(input:{name: "Alice"}) {
 			author{
@@ -217,7 +213,7 @@ func TestMultiTenancy(t *testing.T) {
 			name
 		}
 	}`
-	testMultiTenancyHelper(t, query, header,
+	graphqlHelper(t, query, header,
 		`{
 			"queryAuthor": [
 				{
@@ -226,7 +222,7 @@ func TestMultiTenancy(t *testing.T) {
 			]
 		}`)
 
-	testMultiTenancyHelper(t, query, header1,
+	graphqlHelper(t, query, header1,
 		`{
 			"queryAuthor": []
 		}`)
@@ -234,16 +230,11 @@ func TestMultiTenancy(t *testing.T) {
 	common.DeleteNamespace(t, ns, header)
 }
 
-func TestMultiTenancyWithAuth(t *testing.T) {
+func TestAuth(t *testing.T) {
+	common.SafelyDropAll(t)
+
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
-
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, header).SchemaUpdateCounter
-	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, header)
-
 	schema := `
 	type User @auth(
 		query: { rule: """
@@ -304,7 +295,7 @@ func TestMultiTenancyWithAuth(t *testing.T) {
 		Header:    "Authorization",
 	})
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
-	testMultiTenancyHelper(t, addUserMutation, header, `{
+	graphqlHelper(t, addUserMutation, header, `{
 		"addUser": {
 			"user":[{
 				"username":"Alice"
@@ -321,7 +312,7 @@ func TestMultiTenancyWithAuth(t *testing.T) {
 	})
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns).AccessJwt)
-	testMultiTenancyHelper(t, addUserMutation, header1, `{
+	graphqlHelper(t, addUserMutation, header1, `{
 		"addUser": {
 			"user":[{
 				"username":"Bob"
@@ -332,7 +323,56 @@ func TestMultiTenancyWithAuth(t *testing.T) {
 	common.DeleteNamespace(t, ns, header)
 }
 
-func testMultiTenancyHelper(t *testing.T, query string, headers http.Header,
+// TestCORS checks that all the CORS headers are correctly set in the response for each namespace.
+func TestCORS(t *testing.T) {
+	t.Skip("its causing a panic internally in dgraph, needs deeper looking")
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS"]
+		})
+	}
+	# Dgraph.Allow-Origin "https://play.dgraph.io"
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	`, header)
+
+	ns := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS1"]
+		})
+	}
+	# Dgraph.Allow-Origin "https://play1.dgraph.io"
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph1","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	`, header1)
+
+	// testCORS for namespace 0
+	testCORS(t, 0, "https://play.dgraph.io", "https://play.dgraph.io",
+		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS", "X-Test-Dgraph"}, ","))
+
+	// testCORS for the new namespace
+	testCORS(t, ns, "https://play1.dgraph.io", "https://play1.dgraph.io",
+		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS1", "X-Test-Dgraph1"}, ","))
+
+	// cleanup
+	common.DeleteNamespace(t, ns, header)
+}
+
+func graphqlHelper(t *testing.T, query string, headers http.Header,
 	expectedResult string) {
 	params := &common.GraphQLParams{
 		Query:   query,
@@ -341,4 +381,41 @@ func testMultiTenancyHelper(t *testing.T, query string, headers http.Header,
 	queryResult := params.ExecuteAsPost(t, groupOneGraphQLServer)
 	common.RequireNoGQLErrors(t, queryResult)
 	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+}
+
+func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
+	expectedAllowedHeaders string) {
+	headers := http.Header{}
+	headers.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, namespace).AccessJwt)
+	params := &common.GraphQLParams{
+		Query: `query {	queryTestCORS { name } }`,
+		Headers: headers,
+	}
+	req, err := params.CreateGQLPost(groupOneGraphQLServer)
+	require.NoError(t, err)
+
+	if reqOrigin != "" {
+		req.Header.Set("Origin", reqOrigin)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// GraphQL server should always return OK and JSON content, even when there are errors
+	require.Equal(t, resp.StatusCode, http.StatusOK)
+	require.Equal(t, strings.ToLower(resp.Header.Get("Content-Type")), "application/json")
+	// assert that the CORS headers are there as expected
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), expectedAllowedOrigin)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), expectedAllowedHeaders)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+	gqlRes := &common.GraphQLResponse{}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(body, gqlRes))
+	common.RequireNoGQLErrors(t, gqlRes)
+	testutil.CompareJSON(t, `{"queryTestCORS":[]}`, string(gqlRes.Data))
 }

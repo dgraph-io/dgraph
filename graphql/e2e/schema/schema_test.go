@@ -170,11 +170,9 @@ func TestSchemaSubscribe(t *testing.T) {
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
 func TestConcurrentSchemaUpdates(t *testing.T) {
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
+	common.SafelyDropAll(t)
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	tcases := []struct {
 		graphQLSchema string
@@ -303,13 +301,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
 func TestIntrospectionQueryAfterDropAll(t *testing.T) {
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
-	// Then, Do the drop_all operation
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	// wait for the schema update to reach the GraphQL layer
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
+	common.SafelyDropAll(t)
 
 	introspectionQuery := `
 	query{
@@ -474,6 +466,8 @@ func testCORS(t *testing.T, schema, reqOrigin, expectedAllowedOrigin,
 }
 
 func TestGQLSchemaValidate(t *testing.T) {
+	common.SafelyDropAll(t)
+
 	testCases := []struct {
 		schema string
 		errors x.GqlErrorList
@@ -514,12 +508,6 @@ func TestGQLSchemaValidate(t *testing.T) {
 			valid:  false,
 		},
 	}
-
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
 
 	validateUrl := groupOneAdminServer + "/schema/validate"
 	var response x.QueryResWithData
