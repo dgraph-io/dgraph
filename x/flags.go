@@ -20,18 +20,25 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const (
+	TraceDefaults = `ratio=0.01;`
+)
+
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 
 	// OpenCensus flags.
-	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
-	// about the status of supporting annotation logs through the datadog exporter
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
-		" exporter does not support annotation logs and would discard them.")
+	//
+	// datadog: See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
+	//          about the status of supporting annotation logs through the datadog exporter
+	flag.String("trace", "",
+		`Trace options (defaults shown):
+	ratio=0.01; The ratio of queries to trace.
+	jaeger=; Send OpenCensus traces to Jaeger.
+	datadog=; Send OpenCensus traces to Datadog. As of now, the trace exporter does not support `+
+			`annotation logs and would discard them.`)
 
 	// Performance flags.
 	flag.String("survive", "process",

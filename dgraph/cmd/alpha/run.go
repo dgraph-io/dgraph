@@ -778,7 +778,7 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
+		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio")),
 		MaxAnnotationEventsPerSpan: 256,
 	})
 

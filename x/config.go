@@ -61,10 +61,14 @@ type WorkerOptions struct {
 	TmpDir string
 	// ExportPath indicates the folder to which exported data will be saved.
 	ExportPath string
-	// Tracing tells Dgraph to only sample a percentage of the traces equal to its value.
-	// The value of this option must be between 0 and 1.
-	// TODO: Get rid of this here.
-	Tracing float64
+	// Trace options:
+	//
+	// ratio float64 - the ratio of queries to trace (must be between 0 and 1)
+	// jaeger string - send OpenCensus traces to Jaeger
+	// datadog string - send OpenCensus traces to Datadog
+	//
+	// NOTE: jaeger and datadog options might be bools, not sure yet
+	Trace *z.SuperFlag
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string
 	// ZeroAddr stores the list of address:port for the zero instances associated with this alpha.
@@ -122,7 +126,7 @@ var WorkerConfig WorkerOptions
 
 func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
-	w.Tracing = conf.GetFloat64("trace")
+	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
 	if w.Ludicrous.GetBool("mode") {
 		w.HardSync = false
