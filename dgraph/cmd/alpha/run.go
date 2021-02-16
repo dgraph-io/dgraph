@@ -124,8 +124,6 @@ they form a Raft group and provide synchronous replication.
 			"wish to whitelist for performing admin actions (i.e., --whitelist 144.142.126.254,"+
 			"127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal)")
 	flag.String("export", "export", "Folder in which to store exports.")
-	flag.Int("pending_proposals", 256,
-		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
@@ -137,6 +135,7 @@ they form a Raft group and provide synchronous replication.
 		not participate in Raft elections. This can be used to achieve a read-only replica.
 	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
 		The lower this number, the more frequent snapshot creation would be.
+	pending-proposals=256 Number of pending mutation proposals. Useful for rate limiting.
 	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
@@ -712,7 +711,7 @@ func run() {
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
-		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
+		NumPendingProposals: int(raft.GetInt64("pending-proposals")),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
