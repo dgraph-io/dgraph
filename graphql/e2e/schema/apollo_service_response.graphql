@@ -514,13 +514,13 @@ type Query {
 #######################
 
 type Mutation {
-	addMission(input: [AddMissionInput!]!): AddMissionPayload
+	addMission(input: [AddMissionInput!]!, upsert: Boolean): AddMissionPayload
 	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
 	deleteMission(filter: MissionFilter!): DeleteMissionPayload
-	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
+	addAstronaut(input: [AddAstronautInput!]!, upsert: Boolean): AddAstronautPayload
 	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
 	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
-	addCar(input: [AddCarInput!]!): AddCarPayload
+	addCar(input: [AddCarInput!]!, upsert: Boolean): AddCarPayload
 	updateCar(input: UpdateCarInput!): UpdateCarPayload
 	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
