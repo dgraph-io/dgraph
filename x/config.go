@@ -39,12 +39,14 @@ type Options struct {
 	MutationsNQuadLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
+	// GraphQL options
+	GraphQL *z.SuperFlag
 	// GraphqlExtension will be set to see extensions in graphql results
-	GraphqlExtension bool
+	//GraphqlExtension bool
 	// GraphqlDebug will enable debug mode in GraphQL
-	GraphqlDebug bool
+	//GraphqlDebug bool
 	// GraphqlLambdaUrl stores the URL of lambda functions for custom GraphQL resolvers
-	GraphqlLambdaUrl string
+	//GraphqlLambdaUrl string
 }
 
 // Config stores the global instance of this package's options.
@@ -99,8 +101,6 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// Ludicrous options
 	Ludicrous *z.SuperFlag
-	// GraphQL options
-	GraphQL *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
