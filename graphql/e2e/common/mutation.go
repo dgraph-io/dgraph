@@ -5449,3 +5449,7 @@ func inputCoerciontoList(t *testing.T) {
 	DeleteGqlType(t, "post1", posts1DeleteFilter, 4, nil)
 
 }
+
+func upsertMutationTests(t *testing.T) {
+
+}

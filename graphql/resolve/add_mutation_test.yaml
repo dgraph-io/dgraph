@@ -842,17 +842,20 @@
     }
   dgquerysec: |-
     query {
-      var(func: uid(0x11)) {
+      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State1)) {
         Country3 as State.country @filter(NOT (uid(0x12)))
       }
     }
   dgmutations:
     - setjson: |
-        { "uid" : "0x11",
+        { "uid" : "uid(State1)",
           "State.name": "NSW",
           "State.country": {
             "uid": "0x12",
-            "Country.states": [ { "uid": "0x11" } ]
+            "Country.states": [ { "uid": "uid(State1)" } ]
           }
         }
       deletejson: |
@@ -862,7 +865,7 @@
             "Country.states":
               [
                 {
-                  "uid":"0x11"
+                  "uid":"uid(State1)"
                 }
               ]
           }

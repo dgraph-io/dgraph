@@ -1220,4 +1220,73 @@
     }
   error:
     {"message" : "mutation failed because authorization failed"}
-  
+
+- name: "Upsert Add Mutation with RBAC true"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets(func: uid(TweetsRoot)) {
+        uid
+      }
+      TweetsRoot as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(0x123)) @filter(type(Tweets))
+    }
+
+- name: "Upsert Add Mutation with RBAC false"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "not foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets()
+    }
