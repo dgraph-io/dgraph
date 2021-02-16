@@ -5456,7 +5456,10 @@ func TestParseCascadeWithPagination(t *testing.T) {
 		classes ( first: 3, offset: 10) {
 			standard
 			subjects
-			teacher
+			teachers ( first: 4, offset: 1) {
+				name
+				age
+			}
 		}
 
 	}
@@ -5470,6 +5473,9 @@ func TestParseCascadeWithPagination(t *testing.T) {
 	require.Equal(t, len(gq.Query[0].Children[2].Args), 0)
 	require.Equal(t, gq.Query[0].Children[2].Cascade.First, 3)
 	require.Equal(t, gq.Query[0].Children[2].Cascade.Offset, 10)
+	require.Equal(t, len(gq.Query[0].Children[2].Children[2].Args), 0)
+	require.Equal(t, gq.Query[0].Children[2].Children[2].Cascade.First, 4)
+	require.Equal(t, gq.Query[0].Children[2].Children[2].Cascade.Offset, 1)
 }
 
 func TestEmptyId(t *testing.T) {
