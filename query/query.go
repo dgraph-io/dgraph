@@ -571,6 +571,13 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			args.Cascade.Fields = gchild.Cascade.Fields
 		}
 
+		if len(args.Cascade.Fields) > 0 {
+			args.Cascade.First, _ = strconv.Atoi(gchild.Args["first"])
+			args.Cascade.Offset, _ = strconv.Atoi(gchild.Args["offset"])
+			delete(gchild.Args, "first")
+			delete(gchild.Args, "offset")
+		}
+
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
 				return errors.New("Node with count cannot have child attributes")
@@ -1353,10 +1360,10 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		// by other operations. So we need to apply it on the UidMatrix.
 		child.updateUidMatrix()
 
-		// for i := 0; i < len(child.uidMatrix); i++ {
-		// 	start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
-		// 	child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
-		// }
+		for i := 0; i < len(child.uidMatrix); i++ {
+			start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
+			child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
+		}
 	}
 
 	if len(sg.Params.Cascade.Fields) == 0 {
@@ -2815,10 +2822,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// first time at the root here.
 
-			for i := 0; i < len(sg.uidMatrix); i++ {
-				start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
-				sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
-			}
+			// for i := 0; i < len(sg.uidMatrix); i++ {
+			// 	start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
+			// 	sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+			// }
 
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
