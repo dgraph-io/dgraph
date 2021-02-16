@@ -142,7 +142,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("%+v", errors.Wrap(err, msg+". Got data: "+r.Data.String()))
+		glog.Errorf("%+v", errors.Wrap(err, msg))
 		js = []byte(fmt.Sprintf(
 			`{ "errors": [{"message": "%s"}], "data": null }`, msg))
 	}

@@ -18,10 +18,10 @@ package schema
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,6 +35,7 @@ import (
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
 // types and relationships
 type Handler interface {
+	MetaInfo() *metaInfo
 	DGSchema() string
 	GQLSchema() string
 	GQLSchemaWithoutApolloExtras() string
@@ -45,6 +46,7 @@ type handler struct {
 	originalDefs   []string
 	completeSchema *ast.Schema
 	dgraphSchema   string
+	schemaMeta     *metaInfo
 }
 
 // FromString builds a GraphQL Schema from input string, or returns any parsing
@@ -63,6 +65,10 @@ func FromString(schema string) (Schema, error) {
 	}
 
 	return AsSchema(gqlSchema)
+}
+
+func (s *handler) MetaInfo() *metaInfo {
+	return s.schemaMeta
 }
 
 func (s *handler) GQLSchema() string {
@@ -168,10 +174,43 @@ func (s *handler) GQLSchemaWithoutApolloExtras() string {
 	return Stringify(astSchemaCopy, s.originalDefs, true)
 }
 
-func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error) {
-	m := make(map[string]string)
+// metaInfo stores all the meta data extracted from a schema
+type metaInfo struct {
+	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
+	// to requests which resolve custom queries/mutations. These are extracted from # Dgraph.Secret.
+	secrets map[string]x.SensitiveByteSlice
+	// extraCorsHeaders are the allowed CORS Headers in addition to x.AccessControlAllowedHeaders.
+	// These are parsed from the forwardHeaders specified in the @custom directive.
+	// The header for Dgraph.Authorization is also part of this.
+	// They are returned to the client as part of Access-Control-Allow-Headers.
+	extraCorsHeaders []string
+	// allowedCorsOrigins stores allowed CORS origins extracted from # Dgraph.Allow-Origin.
+	// They are returned to the client as part of Access-Control-Allow-Origin.
+	allowedCorsOrigins map[string]bool
+	// authMeta stores the authorization meta info extracted from # Dgraph.Authorization
+	authMeta *authorization.AuthMeta
+}
+
+func (m *metaInfo) AllowedCorsHeaders() string {
+	return strings.Join(append([]string{x.AccessControlAllowedHeaders}, m.extraCorsHeaders...), ",")
+}
+
+func (m *metaInfo) AllowedCorsOrigins() map[string]bool {
+	return m.allowedCorsOrigins
+}
+
+func (m *metaInfo) AuthMeta() *authorization.AuthMeta {
+	return m.authMeta
+}
+
+func parseMetaInfo(sch string) (*metaInfo, error) {
 	scanner := bufio.NewScanner(strings.NewReader(sch))
 	authSecret := ""
+	schMetaInfo := &metaInfo{
+		secrets:            make(map[string]x.SensitiveByteSlice),
+		allowedCorsOrigins: make(map[string]bool),
+	}
+	var err error
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 
@@ -179,12 +218,30 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 			header := strings.TrimSpace(text[1:])
 			if strings.HasPrefix(header, "Dgraph.Authorization") {
 				if authSecret != "" {
-					return nil, nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+					return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
 						"a schema, found second mention: %v", text)
 				}
 				authSecret = text
 				continue
 			}
+
+			if strings.HasPrefix(header, "Dgraph.Allow-Origin") {
+				parts := strings.Fields(text)
+				if len(parts) != 3 {
+					return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
+						" found for comment: `%s`, it should be `# Dgraph."+
+						"Allow-Origin \"http://example.com\"`", text)
+				}
+				var allowedOrigin string
+				if err = json.Unmarshal([]byte(parts[2]), &allowedOrigin); err != nil {
+					return nil, errors.Errorf("incorrect format for specifying Dgraph.Allow-Origin"+
+						" found for comment: `%s`, it should be `# Dgraph."+
+						"Allow-Origin \"http://example.com\"`", text)
+				}
+				schMetaInfo.allowedCorsOrigins[allowedOrigin] = true
+				continue
+			}
+
 			if !strings.HasPrefix(header, "Dgraph.Secret") {
 				continue
 			}
@@ -192,50 +249,46 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 			const doubleQuotesCode = 34
 
 			if len(parts) < 4 {
-				return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 			}
 			val := strings.Join(parts[3:], " ")
 			if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-				return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 			}
 
 			val = strings.Trim(val, `"`)
 			key := strings.Trim(parts[2], `"`)
-			m[key] = val
-		}
-
-		if err := scanner.Err(); err != nil {
-			return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+			// lets obfuscate the value of the secrets from here on.
+			schMetaInfo.secrets[key] = x.SensitiveByteSlice(val)
 		}
 	}
-	if authSecret == "" {
-		return m, nil, nil
+
+	if err = scanner.Err(); err != nil {
+		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
 
-	metaInfo, err := authorization.ParseAuthMeta(authSecret)
-	if err != nil {
-		return nil, nil, err
+	if authSecret != "" {
+		schMetaInfo.authMeta, err = authorization.ParseAuthMeta(authSecret)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return m, metaInfo, nil
+
+	return schMetaInfo, nil
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
-func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handler, error) {
+func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	secrets, metaInfo, err := parseSecrets(input)
+	metaInfo, err := parseMetaInfo(input)
 	if err != nil {
 		return nil, err
-	}
-	// lets obfuscate the value of the secrets from here on.
-	schemaSecrets := make(map[string]x.SensitiveByteSlice, len(secrets))
-	for k, v := range secrets {
-		schemaSecrets[k] = x.SensitiveByteSlice([]byte(v))
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -309,17 +362,17 @@ func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handl
 		return nil, gqlerror.List{gqlErr}
 	}
 
-	gqlErrList = postGQLValidation(sch, defns, schemaSecrets)
+	gqlErrList = postGQLValidation(sch, defns, metaInfo.secrets)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
 
 	var authHeader string
-	if metaInfo != nil {
-		authHeader = metaInfo.Header
+	if metaInfo.authMeta != nil {
+		authHeader = metaInfo.authMeta.Header
 	}
 
-	headers := getAllowedHeaders(sch, defns, authHeader)
+	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete, apolloServiceQuery)
 	cleanSchema(sch)
@@ -330,53 +383,24 @@ func NewHandler(input string, validateOnly bool, apolloServiceQuery bool) (Handl
 
 	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
 	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo != nil && metaInfo.JWKUrl != "" {
-		metaInfo.InitHttpClient()
-		fetchErr := metaInfo.FetchJWKs()
+	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+		metaInfo.authMeta.InitHttpClient()
+		fetchErr := metaInfo.authMeta.FetchJWKs()
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
 	}
 
-	handler := &handler{
+	return &handler{
 		input:          input,
 		dgraphSchema:   dgSchema,
 		completeSchema: sch,
 		originalDefs:   defns,
-	}
-
-	// Return early since we are only validating the schema.
-	if validateOnly {
-		return handler, nil
-	}
-
-	hc.Lock()
-	hc.allowed = headers
-	hc.secrets = schemaSecrets
-	hc.Unlock()
-
-	if metaInfo != nil {
-		authorization.SetAuthMeta(metaInfo)
-	}
-	return handler, nil
+		schemaMeta:     metaInfo,
+	}, nil
 }
 
-type headersConfig struct {
-	// comma separated list of allowed headers. These are parsed from the forwardHeaders specified
-	// in the @custom directive. They are returned to the client as part of
-	// Access-Control-Allow-Headers.
-	allowed string
-	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
-	// to requests which resolve custom queries/mutations.
-	secrets map[string]x.SensitiveByteSlice
-	sync.RWMutex
-}
-
-var hc = headersConfig{
-	allowed: x.AccessControlAllowedHeaders,
-}
-
-func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) string {
+func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string) []string {
 	headers := make(map[string]struct{})
 
 	setHeaders := func(dir *ast.Directive) {
@@ -402,10 +426,7 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string)
 	}
 
 	for _, defn := range definitions {
-		typ := sch.Types[defn]
-		custom := typ.Directives.ForName(customDirective)
-		setHeaders(custom)
-		for _, field := range typ.Fields {
+		for _, field := range sch.Types[defn].Fields {
 			custom := field.Directives.ForName(customDirective)
 			setHeaders(custom)
 		}
@@ -416,24 +437,12 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string, authHeader string)
 		finalHeaders = append(finalHeaders, h)
 	}
 
-	// Add Auth Header to allowed headers list
+	// Add Auth Header to finalHeaders list
 	if authHeader != "" {
 		finalHeaders = append(finalHeaders, authHeader)
 	}
 
-	allowed := x.AccessControlAllowedHeaders
-	customHeaders := strings.Join(finalHeaders, ",")
-	if len(customHeaders) > 0 {
-		allowed += "," + customHeaders
-	}
-
-	return allowed
-}
-
-func AllowedHeaders() string {
-	hc.RLock()
-	defer hc.RUnlock()
-	return hc.allowed
+	return finalHeaders
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {

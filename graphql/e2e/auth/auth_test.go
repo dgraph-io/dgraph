@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1704,7 +1706,11 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		authMeta := testutil.SetAuthMeta(string(authSchema))
+		authMeta, err := authorization.Parse(string(authSchema))
+		if err != nil {
+			panic(err)
+		}
+
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
 			Namespace:      authMeta.Namespace,

@@ -189,10 +189,9 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Check the predicates and types in the schema are as expected.
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
-	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "name", "dgraph.graphql.xid",
-		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query", "dgraph.type.cors"}
+	preds := []string{"dgraph.graphql.schema", "name", "dgraph.graphql.xid", "dgraph.type",
+		"movie", "dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query"}
 	testutil.CheckSchema(t, preds, types)
 
 	verifyUids := func(count int) {
