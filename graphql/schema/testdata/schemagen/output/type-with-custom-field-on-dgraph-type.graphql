@@ -433,10 +433,10 @@ type Query {
 #######################
 
 type Mutation {
-	addCar(input: [AddCarInput!]!): AddCarPayload
+	addCar(input: [AddCarInput!]!, upsert: Boolean): AddCarPayload
 	updateCar(input: UpdateCarInput!): UpdateCarPayload
 	deleteCar(filter: CarFilter!): DeleteCarPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

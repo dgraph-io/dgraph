@@ -471,10 +471,10 @@ type Query {
 
 type Mutation {
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
+	addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
+	addLibrary(input: [AddLibraryInput!]!, upsert: Boolean): AddLibraryPayload
 	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
 	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
 }

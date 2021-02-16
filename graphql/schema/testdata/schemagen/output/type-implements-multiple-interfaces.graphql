@@ -520,7 +520,7 @@ type Mutation {
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
 	updateEmployee(input: UpdateEmployeeInput!): UpdateEmployeePayload
 	deleteEmployee(filter: EmployeeFilter!): DeleteEmployeePayload
-	addHuman(input: [AddHumanInput!]!): AddHumanPayload
+	addHuman(input: [AddHumanInput!]!, upsert: Boolean): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }

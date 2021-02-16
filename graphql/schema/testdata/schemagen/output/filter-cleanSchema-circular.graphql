@@ -463,13 +463,13 @@ type Query {
 #######################
 
 type Mutation {
-	addX(input: [AddXInput!]!): AddXPayload
+	addX(input: [AddXInput!]!, upsert: Boolean): AddXPayload
 	updateX(input: UpdateXInput!): UpdateXPayload
 	deleteX(filter: XFilter!): DeleteXPayload
-	addY(input: [AddYInput!]!): AddYPayload
+	addY(input: [AddYInput!]!, upsert: Boolean): AddYPayload
 	updateY(input: UpdateYInput!): UpdateYPayload
 	deleteY(filter: YFilter!): DeleteYPayload
-	addZ(input: [AddZInput!]!): AddZPayload
+	addZ(input: [AddZInput!]!, upsert: Boolean): AddZPayload
 	updateZ(input: UpdateZInput!): UpdateZPayload
 	deleteZ(filter: ZFilter!): DeleteZPayload
 }

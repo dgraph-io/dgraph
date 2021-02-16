@@ -624,15 +624,15 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!, upsert: Boolean): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
-	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
+	addQuestion(input: [AddQuestionInput!]!, upsert: Boolean): AddQuestionPayload
 	updateQuestion(input: UpdateQuestionInput!): UpdateQuestionPayload
 	deleteQuestion(filter: QuestionFilter!): DeleteQuestionPayload
-	addAnswer(input: [AddAnswerInput!]!): AddAnswerPayload
+	addAnswer(input: [AddAnswerInput!]!, upsert: Boolean): AddAnswerPayload
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
 }

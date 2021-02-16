@@ -461,7 +461,7 @@ type Query {
 type Mutation {
 	updateI(input: UpdateIInput!): UpdateIPayload
 	deleteI(filter: IFilter!): DeleteIPayload
-	addT(input: [AddTInput!]!): AddTPayload
+	addT(input: [AddTInput!]!, upsert: Boolean): AddTPayload
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 }

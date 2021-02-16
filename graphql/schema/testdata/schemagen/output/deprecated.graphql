@@ -361,7 +361,7 @@ type Query {
 #######################
 
 type Mutation {
-	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
+	addAtype(input: [AddAtypeInput!]!, upsert: Boolean): AddAtypePayload
 	updateAtype(input: UpdateAtypeInput!): UpdateAtypePayload
 	deleteAtype(filter: AtypeFilter!): DeleteAtypePayload
 }

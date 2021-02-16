@@ -390,7 +390,7 @@ type Query {
 #######################
 
 type Mutation {
-	addHotel(input: [AddHotelInput!]!): AddHotelPayload
+	addHotel(input: [AddHotelInput!]!, upsert: Boolean): AddHotelPayload
 	updateHotel(input: UpdateHotelInput!): UpdateHotelPayload
 	deleteHotel(filter: HotelFilter!): DeleteHotelPayload
 }

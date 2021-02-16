@@ -444,7 +444,7 @@ type Query {
 type Mutation {
 	updateAbstract(input: UpdateAbstractInput!): UpdateAbstractPayload
 	deleteAbstract(filter: AbstractFilter!): DeleteAbstractPayload
-	addMessage(input: [AddMessageInput!]!): AddMessagePayload
+	addMessage(input: [AddMessageInput!]!, upsert: Boolean): AddMessagePayload
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }

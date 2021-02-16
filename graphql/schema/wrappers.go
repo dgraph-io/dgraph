@@ -90,6 +90,7 @@ const (
 	NotSupportedMutation MutationType = "notsupported"
 	IDType                            = "ID"
 	InputArgName                      = "input"
+	UpsertArgName                     = "upsert"
 	FilterArgName                     = "filter"
 )
 

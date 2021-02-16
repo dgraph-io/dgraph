@@ -514,10 +514,10 @@ type Query {
 type Mutation {
 	updateMovie(input: UpdateMovieInput!): UpdateMoviePayload
 	deleteMovie(filter: MovieFilter!): DeleteMoviePayload
-	addOscarMovie(input: [AddOscarMovieInput!]!): AddOscarMoviePayload
+	addOscarMovie(input: [AddOscarMovieInput!]!, upsert: Boolean): AddOscarMoviePayload
 	updateOscarMovie(input: UpdateOscarMovieInput!): UpdateOscarMoviePayload
 	deleteOscarMovie(filter: OscarMovieFilter!): DeleteOscarMoviePayload
-	addDirector(input: [AddDirectorInput!]!): AddDirectorPayload
+	addDirector(input: [AddDirectorInput!]!, upsert: Boolean): AddDirectorPayload
 	updateDirector(input: UpdateDirectorInput!): UpdateDirectorPayload
 	deleteDirector(filter: DirectorFilter!): DeleteDirectorPayload
 }

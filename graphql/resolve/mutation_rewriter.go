@@ -46,6 +46,8 @@ type MutationType int
 const (
 	// Add Mutation
 	Add MutationType = iota
+	// Add Mutation with Upsert
+	AddWithUpsert
 	// Update Mutation used for to setting new nodes, edges.
 	UpdateWithSet
 	// Update Mutation used for removing edges.
@@ -393,8 +395,21 @@ func (mrw *AddRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation,
 	idExistence map[string]string) ([]*UpsertMutation, error) {
+
+	mutationType := Add
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
+
+	// Parse upsert parameter from addMutation input.
+	// If upsert is set to True, this add mutation will be carried as an Upsert Mutation.
+	upsert := false
+	upsertVal := m.ArgValue(schema.UpsertArgName)
+	if upsertVal != nil {
+		upsert = upsertVal.(bool)
+	}
+	if upsert {
+		mutationType = AddWithUpsert
+	}
 
 	varGen := mrw.VarGen
 	xidMetadata := mrw.XidMetadata
@@ -407,7 +422,7 @@ func (mrw *AddRewriter) Rewrite(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, Add)
+		fragment, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -1334,7 +1349,7 @@ func rewriteObject(
 			//    In this case this is not an error as the UID at top level of Update Mutation is
 			//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 			//    with the function.
-			if mutationType == Add || !atTopLevel {
+			if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
 				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
 				return nil, retErrors
@@ -1360,7 +1375,7 @@ func rewriteObject(
 	// Create newObj map. This map will be returned as part of mutationFragment.
 	newObj := make(map[string]interface{}, len(obj))
 
-	if mutationType != Add && atTopLevel {
+	if mutationType != Add && mutationType != AddWithUpsert && atTopLevel {
 		// It's an update and we are at top level. So, the UID of node(s) for which
 		// we are rewriting is/are referenced using "uid(x)" as part of mutations.
 		// We don't need to create a new blank node in this case.

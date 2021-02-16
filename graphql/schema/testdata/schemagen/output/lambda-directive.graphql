@@ -368,7 +368,7 @@ type Query {
 
 type Mutation {
 	createUser(firstName: String!, lastName: String!): User @lambda
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
