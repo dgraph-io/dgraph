@@ -39,14 +39,12 @@ type Options struct {
 	MutationsNQuadLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
-	// GraphQL options
+	// GraphQL options:
+	//
+	// extension bool - Will be set to see extensions in GraphQL results
+	// debug bool - Will enable debug mode in GraphQL.
+	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
 	GraphQL *z.SuperFlag
-	// GraphqlExtension will be set to see extensions in graphql results
-	//GraphqlExtension bool
-	// GraphqlDebug will enable debug mode in GraphQL
-	//GraphqlDebug bool
-	// GraphqlLambdaUrl stores the URL of lambda functions for custom GraphQL resolvers
-	//GraphqlLambdaUrl string
 }
 
 // Config stores the global instance of this package's options.
@@ -110,7 +108,6 @@ type WorkerOptions struct {
 	LogRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
-
 	// Audit contains the audit flags that enables the audit.
 	Audit bool
 }
