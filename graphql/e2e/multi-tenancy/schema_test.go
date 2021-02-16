@@ -171,7 +171,7 @@ func TestSchemaSubscribe(t *testing.T) {
 // data is different the same should be reflected in the GraphQL responses.
 // In a way, it also tests lazy-loading of GraphQL schema.
 func TestGraphQLResponse(t *testing.T) {
-	common.SafelyDropAll(t)
+	common.SafelyDropAllWithGroot(t)
 
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
@@ -231,7 +231,7 @@ func TestGraphQLResponse(t *testing.T) {
 }
 
 func TestAuth(t *testing.T) {
-	common.SafelyDropAll(t)
+	common.SafelyDropAllWithGroot(t)
 
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)

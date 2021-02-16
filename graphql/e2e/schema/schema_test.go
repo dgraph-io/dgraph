@@ -170,7 +170,7 @@ func TestSchemaSubscribe(t *testing.T) {
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
 func TestConcurrentSchemaUpdates(t *testing.T) {
-	common.SafelyDropAll(t)
+	common.SafelyDropAllWithGroot(t)
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 
@@ -301,7 +301,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
 func TestIntrospectionQueryAfterDropAll(t *testing.T) {
-	common.SafelyDropAll(t)
+	common.SafelyDropAllWithGroot(t)
 
 	introspectionQuery := `
 	query{
@@ -466,7 +466,7 @@ func testCORS(t *testing.T, schema, reqOrigin, expectedAllowedOrigin,
 }
 
 func TestGQLSchemaValidate(t *testing.T) {
-	common.SafelyDropAll(t)
+	common.SafelyDropAllWithGroot(t)
 
 	testCases := []struct {
 		schema string
