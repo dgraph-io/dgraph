@@ -68,7 +68,7 @@ type GraphQuery struct {
 	Recurse          bool
 	RecurseArgs      RecurseArgs
 	ShortestPathArgs ShortestPathArgs
-	Cascade          []string
+	Cascade          *CascadeArgs
 	IgnoreReflex     bool
 	Facets           *pb.FacetParams
 	FacetsFilter     *FilterTree
@@ -86,6 +86,14 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
+}
+
+// CascadeArgs stores the arguments needed to process @cascade directive.
+// It is introduced to ensure correct behaviour for cascade with pagination.
+type CascadeArgs struct {
+	Fields []string
+	First  int
+	Offset int
 }
 
 // RecurseArgs stores the arguments needed to process the @recurse directive.
@@ -2127,10 +2135,16 @@ func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 	// 2. @cascade }
 	// 3. @cascade @
 	// 4. @cascade\n someOtherPred
+	gq.Cascade = &CascadeArgs{}
+	gq.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
+	delete(gq.Args, "first")
+	gq.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
+	delete(gq.Args, "offset")
+
 	if items[0].Typ == itemLeftCurl || items[0].Typ == itemRightCurl || items[0].
 		Typ == itemAt || items[0].Typ == itemName {
 		// __all__ implies @cascade i.e.  implies values for all the children are mandatory.
-		gq.Cascade = append(gq.Cascade, "__all__")
+		gq.Cascade.Fields = append(gq.Cascade.Fields, "__all__")
 		return nil
 	}
 
@@ -2157,7 +2171,7 @@ loop:
 			if !expectArg {
 				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-			gq.Cascade = append(gq.Cascade, collectName(it, item.Val))
+			gq.Cascade.Fields = append(gq.Cascade.Fields, collectName(it, item.Val))
 			count++
 			expectArg = false
 		default:

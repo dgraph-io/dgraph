@@ -5371,7 +5371,7 @@ func TestCascade(t *testing.T) {
 		Str: query,
 	})
 	require.NoError(t, err)
-	require.Equal(t, gq.Query[0].Cascade[0], "__all__")
+	require.Equal(t, gq.Query[0].Cascade.Fields[0], "__all__")
 }
 
 func TestCascadeParameterized(t *testing.T) {
@@ -5386,8 +5386,8 @@ func TestCascadeParameterized(t *testing.T) {
 		Str: query,
 	})
 	require.NoError(t, err)
-	require.Equal(t, gq.Query[0].Cascade[0], "name")
-	require.Equal(t, gq.Query[0].Cascade[1], "age")
+	require.Equal(t, gq.Query[0].Cascade.Fields[0], "name")
+	require.Equal(t, gq.Query[0].Cascade.Fields[1], "age")
 }
 
 func TestBadCascadeParameterized(t *testing.T) {
@@ -5442,6 +5442,34 @@ func TestBadCascadeParameterized(t *testing.T) {
 		})
 		require.Error(t, err)
 	}
+}
+
+// __expand_all_
+// what if first = 0 and we do sort
+// add test of no top level cascade and cascade on children
+func TestParseCascadeWithPagination(t *testing.T) {
+	query := `
+{
+	query(func: type(Student), first: 2) @cascade{
+		name
+		age
+		classes ( first: 3, offset: 10) {
+			standard
+			subjects
+			teacher
+		}
+
+	}
+}	
+	`
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(gq.Query[0].Args), 0)
+	require.Equal(t, gq.Query[0].Cascade.First, 2)
+	require.Equal(t, gq.Query[0].Cascade.Offset, 0)
+	require.Equal(t, len(gq.Query[0].Children[2].Args), 0)
+	require.Equal(t, gq.Query[0].Children[2].Cascade.First, 3)
+	require.Equal(t, gq.Query[0].Children[2].Cascade.Offset, 10)
 }
 
 func TestEmptyId(t *testing.T) {

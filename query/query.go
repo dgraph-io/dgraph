@@ -159,7 +159,7 @@ type params struct {
 	// Cascade is the list of predicates to apply @cascade to.
 	// __all__ is special to mean @cascade i.e. all the children of this subgraph are mandatory
 	// and should have values otherwise the node will be excluded.
-	Cascade []string
+	Cascade *gql.CascadeArgs
 	// IgnoreReflex is true if the @ignorereflex directive is specified.
 	IgnoreReflex bool
 
@@ -559,15 +559,16 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
+			Cascade:      &gql.CascadeArgs{},
 		}
 
 		// Inherit from the parent.
-		if len(sg.Params.Cascade) > 0 {
-			args.Cascade = append(args.Cascade, sg.Params.Cascade...)
+		if sg.Params.Cascade != nil && (len(sg.Params.Cascade.Fields) > 0) {
+			args.Cascade.Fields = append(args.Cascade.Fields, sg.Params.Cascade.Fields...)
 		}
 		// Allow over-riding at this level.
-		if len(gchild.Cascade) > 0 {
-			args.Cascade = gchild.Cascade
+		if gchild.Cascade != nil && (len(gchild.Cascade.Fields) > 0) {
+			args.Cascade.Fields = gchild.Cascade.Fields
 		}
 
 		if gchild.IsCount {
@@ -793,6 +794,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
 		AllowedPreds:     gq.AllowedPreds,
+	}
+
+	if args.Cascade == nil {
+		args.Cascade = &gql.CascadeArgs{}
 	}
 
 	for argk := range gq.Args {
@@ -1320,7 +1325,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	cascadeArgMap := make(map[string]bool)
-	for _, pred := range sg.Params.Cascade {
+	for _, pred := range sg.Params.Cascade.Fields {
 		cascadeArgMap[pred] = true
 	}
 	cascadeAllPreds := cascadeArgMap["__all__"]
@@ -1340,16 +1345,21 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if len(child.Params.Cascade) == 0 {
+		if len(child.Params.Cascade.Fields) == 0 {
 			continue
 		}
 
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
 		child.updateUidMatrix()
+
+		// for i := 0; i < len(child.uidMatrix); i++ {
+		// 	start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
+		// 	child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
+		// }
 	}
 
-	if len(sg.Params.Cascade) == 0 {
+	if len(sg.Params.Cascade.Fields) == 0 {
 		goto AssignStep
 	}
 
@@ -2803,6 +2813,13 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
+			// first time at the root here.
+
+			for i := 0; i < len(sg.uidMatrix); i++ {
+				start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
+				sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+			}
+
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
