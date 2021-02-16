@@ -277,9 +277,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
-	var plen int
+	plen := l.Length(txn.StartTs, 0)
 	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-		plen++
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.

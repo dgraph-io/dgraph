@@ -288,7 +288,10 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestMap *roaring64.Bitmap
-	List    bool // whether predicate is of list type
+
+	// OrderedUIDs is used to store the UIDs in some order, used for shortest path.
+	OrderedUIDs *pb.List
+	List        bool // whether predicate is of list type
 
 	pathMeta *pathMetadata
 }
@@ -922,7 +925,10 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		First:        first,
 	}
 
-	if sg.SrcUIDs != nil {
+	// Use the orderedUIDs if present, it will only be present for the shortest path case.
+	if sg.OrderedUIDs != nil {
+		out.UidList = sg.OrderedUIDs
+	} else if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
 	return out, nil
@@ -976,7 +982,8 @@ type varValue struct {
 	path   []*SubGraph // This stores the subgraph path from root to var definition.
 	// strList stores the valueMatrix corresponding to a predicate and is later used in
 	// expand(val(x)) query.
-	strList []*pb.ValueList
+	strList     []*pb.ValueList
+	OrderedUIDs *pb.List
 }
 
 func evalLevelAgg(
@@ -1432,10 +1439,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
-			UidMap:  roaring64.New(),
+			OrderedUIDs: sg.OrderedUIDs,
+			Vals:        make(map[uint64]types.Val),
+			path:        sgPath,
+			strList:     sg.valueMatrix,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val := types.Val{
@@ -1450,10 +1457,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
 		// value.
 		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
-			UidMap:  roaring64.New(),
+			OrderedUIDs: sg.OrderedUIDs,
+			Vals:        make(map[uint64]types.Val),
+			path:        sgPath,
+			strList:     sg.valueMatrix,
 		}
 
 		// Because we are counting the number of UIDs in parent
@@ -1489,10 +1496,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				UidMap:  uids,
-				path:    sgPath,
-				Vals:    make(map[uint64]types.Val),
-				strList: sg.valueMatrix,
+				OrderedUIDs: sg.OrderedUIDs,
+				UidMap:      uids,
+				path:        sgPath,
+				Vals:        make(map[uint64]types.Val),
+				strList:     sg.valueMatrix,
 			}
 			return nil
 		}
@@ -1532,10 +1540,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
-			path:    sgPath,
-			Vals:    make(map[uint64]types.Val),
-			strList: sg.valueMatrix,
-			UidMap:  roaring64.NewBitmap(),
+			OrderedUIDs: sg.OrderedUIDs,
+			path:        sgPath,
+			Vals:        make(map[uint64]types.Val),
+			strList:     sg.valueMatrix,
+			UidMap:      roaring64.New(),
 		}
 	}
 	return nil
@@ -1699,7 +1708,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
 			srcFuncArgs := sg.SrcFunc.Args[:0]
-
 			itr := l.UidMap.Iterator()
 			for itr.HasNext() {
 				uid := itr.Next()
@@ -1710,6 +1718,12 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			sg.SrcFunc.Args = srcFuncArgs
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && !l.UidMap.IsEmpty():
+			if l.OrderedUIDs != nil {
+				// TODO(Ahsan): There should only be one shortest path block in a query. So, we can
+				// assume the below assertion to hold. Need to double-check this.
+				x.AssertTrue(sg.OrderedUIDs == nil)
+				sg.OrderedUIDs = l.OrderedUIDs
+			}
 			out.Or(l.UidMap)
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
@@ -2032,7 +2046,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestMap = codec.FromList(sg.SrcUIDs)
 		} else {
 			// Populated variable.
-			sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
+			if sg.OrderedUIDs != nil {
+				sg.uidMatrix = []*pb.List{sg.OrderedUIDs}
+			} else {
+				sg.uidMatrix = []*pb.List{codec.ToList(sg.DestMap)}
+			}
 		}
 		if sg.Params.AfterUID > 0 {
 			sg.DestMap.RemoveRange(0, sg.Params.AfterUID+1)
@@ -2188,7 +2206,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestMap = roaring64.ParOr(4, bitmaps...)
 		case sg.FilterOp == "not":
 			x.AssertTrue(len(sg.Filters) == 1)
-			sg.DestMap.AndNot(sg.Filters[0].DestMap)
+			if sg.Filters[0].DestMap == nil {
+				sg.DestMap.AndNot(roaring64.New())
+			} else {
+				sg.DestMap.AndNot(sg.Filters[0].DestMap)
+			}
 		case sg.FilterOp == "and":
 			if hasNils {
 				sg.DestMap = roaring64.New()
@@ -2728,6 +2750,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
+
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
 		for idx := 0; idx < len(req.Subgraphs); idx++ {

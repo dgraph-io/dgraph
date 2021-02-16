@@ -43,6 +43,8 @@ func uidsForRegex(attr string, arg funcArgs,
 		opts.Intersect = &pb.List{
 			Uids: intersect.ToArray(),
 		}
+	} else {
+		intersect = roaring64.New()
 	}
 
 	uidsForTrigram := func(trigram string) (*roaring64.Bitmap, error) {
@@ -54,7 +56,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		return pl.Bitmap(opts)
 	}
 
-	var results *roaring64.Bitmap
+	results := roaring64.New()
 	switch query.Op {
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
@@ -63,7 +65,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results == nil {
+			if results.IsEmpty() {
 				results = trigramUids
 			} else {
 				results.And(trigramUids)
@@ -74,7 +76,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			}
 		}
 		for _, sub := range query.Sub {
-			if results == nil {
+			if results.IsEmpty() {
 				results = intersect
 			}
 			// current list of result is passed for intersection
@@ -94,14 +96,14 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results == nil {
+			if results.IsEmpty() {
 				results = out
 			} else {
 				results.Or(out)
 			}
 		}
 		for _, sub := range query.Sub {
-			if results == nil {
+			if results.IsEmpty() {
 				results = intersect
 			}
 			// Looks like this won't take the results for intersect, but use the originally passed
@@ -110,7 +112,9 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			results.Or(subUids)
+			if subUids != nil {
+				results.Or(subUids)
+			}
 		}
 	default:
 		return nil, errRegexTooWide

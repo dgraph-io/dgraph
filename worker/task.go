@@ -630,6 +630,11 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
 	fn func(*pb.Posting)) error {
 
+	x.AssertTrue(facetsTree != nil)
+
+	// If facetsTree is nil, then we'd choose all the UIDs.
+	// If facetsTree is not nil, then we'd only choose UIDs with postings. So, iteration over
+	// pl.Postings makes sense.
 	return pl.Postings(opts, func(p *pb.Posting) error {
 		// If filterTree is nil, applyFacetsTree returns true and nil error.
 		pick, err := applyFacetsTree(p.Facets, facetsTree)
@@ -646,36 +651,45 @@ func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts p
 func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	opts posting.ListOptions) (int, error) {
 
+	if facetsTree == nil {
+		return pl.Length(opts.ReadTs, opts.AfterUid), nil
+	}
+
+	// We have a valid facetsTree. So, we'd do the filtering by iteration.
 	var filteredCount int
 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
 		filteredCount++
 	})
-	if err != nil {
-		return 0, err
-	}
-
-	return filteredCount, nil
+	return filteredCount, err
 }
 
 func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
 	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
 	q := args.q
 
+	uidList := &pb.List{}
 	var fcsList []*pb.Facets
-	uidList := &pb.List{
-		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
-	}
 
-	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
-		if q.FacetParam != nil {
+	// If q.FacetParam is nil, we pick all UIDs. Don't care about picking up facets.
+	// If facetsTree is nil, then we pick up all the UIDs.
+	if q.FacetParam == nil || facetsTree == nil {
+		bm, err := pl.Bitmap(opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		uidList = codec.ToList(bm)
+
+	} else {
+		// Both q.FacetParam and facetsTree are NOT nil. So, apply the filter.
+		err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+			uidList.Uids = append(uidList.Uids, p.Uid)
 			fcsList = append(fcsList, &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
 			})
+		})
+		if err != nil {
+			return nil, nil, err
 		}
-	})
-	if err != nil {
-		return nil, nil, err
 	}
 
 	return uidList, fcsList, nil
@@ -1125,7 +1139,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	var uids *roaring64.Bitmap
+	uids := roaring64.New()
 
 	// Here we determine the list of uids to match.
 	switch {

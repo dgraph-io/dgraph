@@ -429,11 +429,15 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		sg.DestMap = roaring64.New()
 		return nil, nil
 	}
+
+	var result []uint64
 	// TODO: The order would be wrong here for the path. Fix that later.
 	for _, it := range *kroutes[0].route {
+		result = append(result, it.uid)
 		sg.DestMap.Add(it.uid)
 	}
 	shortestSg := createkroutesubgraph(ctx, kroutes)
+	sg.OrderedUIDs = &pb.List{Uids: result}
 	return shortestSg, nil
 }
 
@@ -619,6 +623,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// Put the path in DestUIDs of the root.
 	// TODO: This would result in out of order Uids.
 	sg.DestMap.AddMany(result)
+	sg.OrderedUIDs = &pb.List{Uids: result}
 
 	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)
 	return []*SubGraph{shortestSg}, nil
