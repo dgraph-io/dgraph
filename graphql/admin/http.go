@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package web
+package admin
 
 import (
 	"compress/gzip"
@@ -153,6 +153,7 @@ func (gs *graphqlSubscription) Subscribe(
 		Header:        reqHeader,
 	}
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
+	LazyLoadSchema(namespace) // first load the schema, then do anything else
 	if !gs.isValid(namespace) {
 		return nil, errors.New(resolve.ErrInternal)
 	}

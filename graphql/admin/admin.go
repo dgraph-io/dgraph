@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
@@ -435,7 +434,7 @@ type adminServer struct {
 	mux sync.RWMutex
 
 	// The GraphQL server that's being admin'd
-	gqlServer web.IServeGraphQL
+	gqlServer IServeGraphQL
 
 	schema map[uint64]*gqlSchema
 
@@ -449,7 +448,7 @@ type adminServer struct {
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
-	closer *z.Closer) (web.IServeGraphQL, web.IServeGraphQL, *GraphQLHealthStore) {
+	closer *z.Closer) (IServeGraphQL, IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -457,7 +456,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
 	e := globalEpoch[x.GalaxyNamespace]
-	mainServer := web.NewServer()
+	mainServer := NewServer()
 	mainServer.Set(x.GalaxyNamespace, e, resolvers)
 
 	fns := &resolve.ResolverFns{
@@ -469,7 +468,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	e = globalEpoch[x.GalaxyNamespace]
-	adminServer := web.NewServer()
+	adminServer := NewServer()
 	adminServer.Set(x.GalaxyNamespace, e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
@@ -477,7 +476,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 
 // newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
 func newAdminResolver(
-	defaultGqlServer web.IServeGraphQL,
+	defaultGqlServer IServeGraphQL,
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
 	epoch map[uint64]*uint64,

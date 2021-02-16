@@ -42,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/graphql/admin"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -76,7 +75,7 @@ var (
 	Alpha x.SubCommand
 
 	// need this here to refer it in admin_backup.go
-	adminServer web.IServeGraphQL
+	adminServer admin.IServeGraphQL
 	initDone    uint32
 )
 
@@ -476,7 +475,7 @@ func setupServer(closer *z.Closer) {
 	e := new(uint64)
 	atomic.StoreUint64(e, 0)
 	globalEpoch[x.GalaxyNamespace] = e
-	var mainServer web.IServeGraphQL
+	var mainServer admin.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
