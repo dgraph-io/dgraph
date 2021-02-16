@@ -711,7 +711,6 @@ func run() {
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
-		NumPendingProposals: int(raft.GetInt64("pending-proposals")),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
