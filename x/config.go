@@ -37,13 +37,12 @@ type Options struct {
 	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
 	// mutation request.
 	MutationsNQuadLimit int
-	// PollInterval is the polling interval for graphql subscription.
-	PollInterval time.Duration
 	// GraphQL options:
 	//
 	// extension bool - Will be set to see extensions in GraphQL results
 	// debug bool - Will enable debug mode in GraphQL.
 	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
+	// poll-interval duration - The polling interval for graphql subscription.
 	GraphQL *z.SuperFlag
 }
 
