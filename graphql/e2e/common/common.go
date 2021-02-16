@@ -524,17 +524,7 @@ func SafelyUpdateGQLSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
 // Once the control returns from it, one can be sure that the DROP_ALL has reached
 // the GraphQL layer and the existing schema has been updated to an empty schema.
 func SafelyDropAllWithGroot(t *testing.T) {
-	// first, make an initial probe to get the schema update counter
-	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
-
-	// do DROP_ALL
-	dg, err := testutil.DgraphClientWithGroot(Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
-	// now, return only after the GraphQL layer has seen the schema update.
-	// This makes sure that one can make queries as per the new schema.
-	AssertSchemaUpdateCounterIncrement(t, Alpha1HTTP, oldCounter, nil)
+	safelyDropAll(t, true)
 }
 
 // SafelyDropAll can be used in tests for doing DROP_ALL when ACL is disabled.
@@ -542,11 +532,21 @@ func SafelyDropAllWithGroot(t *testing.T) {
 // Once the control returns from it, one can be sure that the DROP_ALL has reached
 // the GraphQL layer and the existing schema has been updated to an empty schema.
 func SafelyDropAll(t *testing.T) {
+	safelyDropAll(t, false)
+}
+
+func safelyDropAll(t *testing.T, withGroot bool) {
 	// first, make an initial probe to get the schema update counter
 	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
 
 	// do DROP_ALL
-	dg, err := testutil.DgraphClient(Alpha1gRPC)
+	var dg *dgo.Dgraph
+	var err error
+	if withGroot {
+		dg, err = testutil.DgraphClientWithGroot(Alpha1gRPC)
+	} else {
+		dg, err = testutil.DgraphClient(Alpha1gRPC)
+	}
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 

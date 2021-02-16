@@ -325,7 +325,6 @@ func TestAuth(t *testing.T) {
 
 // TestCORS checks that all the CORS headers are correctly set in the response for each namespace.
 func TestCORS(t *testing.T) {
-	t.Skip("its causing a panic internally in dgraph, needs deeper looking")
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 	common.SafelyUpdateGQLSchema(t, groupOneHTTP, `
@@ -385,11 +384,8 @@ func graphqlHelper(t *testing.T, query string, headers http.Header,
 
 func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
 	expectedAllowedHeaders string) {
-	headers := http.Header{}
-	headers.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, namespace).AccessJwt)
 	params := &common.GraphQLParams{
 		Query: `query {	queryTestCORS { name } }`,
-		Headers: headers,
 	}
 	req, err := params.CreateGQLPost(groupOneGraphQLServer)
 	require.NoError(t, err)
@@ -397,6 +393,7 @@ func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
 	if reqOrigin != "" {
 		req.Header.Set("Origin", reqOrigin)
 	}
+	req.Header.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, namespace).AccessJwt)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

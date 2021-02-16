@@ -488,6 +488,11 @@ func setupServer(closer *z.Closer) {
 	})
 
 	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
+		// lazy load the schema so that just by making a probe request,
+		// one can boot up GraphQL for their namespace
+		namespace := x.ExtractNamespaceHTTP(r)
+		admin.LazyLoadSchema(namespace)
+
 		healthStatus := gqlHealthStore.GetHealth()
 		httpStatusCode := http.StatusOK
 		if !healthStatus.Healthy {
@@ -496,7 +501,7 @@ func setupServer(closer *z.Closer) {
 		w.Header().Set("Content-Type", "application/json")
 		x.AddCorsHeaders(w)
 		w.WriteHeader(httpStatusCode)
-		e = globalEpoch[x.ExtractNamespaceHTTP(r)]
+		e = globalEpoch[namespace]
 		var counter uint64
 		if e != nil {
 			counter = atomic.LoadUint64(e)
