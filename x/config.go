@@ -94,7 +94,10 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
-	// Ludicrous options
+	// Ludicrous options:
+	//
+	// mode bool - turn Ludicrous mode on or off
+	// concurrency int - number of concurrent threads in Ludicrous mode
 	Ludicrous *z.SuperFlag
 	// Security options:
 	//
