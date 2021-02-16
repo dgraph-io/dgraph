@@ -2134,73 +2134,133 @@ func TestMultiSortWithNulls(t *testing.T) {
 		index  int32
 		offset int32
 		first  int32
+		desc   bool
 		result string
 	}{
-		{0, -1, -1, `{"data": {"me":[
-			{"pname":"nameC","pred1":"A"},
+		{0, -1, -1, true, `{"data": {"me":[
 			{"pname":"nameB","pred1":"A", "pred2":"J"},
 			{"pname":"nameA","pred1":"A", "pred2":"I"},
-			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameC","pred1":"A"},
 			{"pname":"nameE","pred1":"B", "pred2":"J"},
 			{"pname":"nameD","pred1":"B", "pred2":"I"},
-			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameF","pred1":"B"},
 			{"pname":"nameI","pred1":"C", "pred2":"K"},
 			{"pname":"nameH","pred1":"C", "pred2":"J"},
-			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
-		},
-		{1, -1, 2, `{"data": {"me":[
-			{"pname":"nameC","pred1":"A"},
-			{"pname":"nameB","pred1":"A", "pred2":"J"}]}}`,
-		},
-		{2, -1, 7, `{"data": {"me":[
-			{"pname":"nameC","pred1":"A"},
-			{"pname":"nameB","pred1":"A", "pred2":"J"},
-			{"pname":"nameA","pred1":"A", "pred2":"I"},
-			{"pname":"nameF","pred1":"B"},
-			{"pname":"nameE","pred1":"B", "pred2":"J"},
-			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
 			{"pname":"nameJ","pred1":"C"}]}}`,
 		},
-		{3, 2, 7, `{"data": {"me":[
+		{1, -1, -1, false, `{"data": {"me":[
 			{"pname":"nameA","pred1":"A", "pred2":"I"},
-			{"pname":"nameF","pred1":"B"},
-			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
 			{"pname":"nameD","pred1":"B", "pred2":"I"},
-			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
 			{"pname":"nameI","pred1":"C", "pred2":"K"},
-			{"pname":"nameH","pred1":"C", "pred2":"J"}]}}`,
+			{"pname":"nameJ","pred1":"C"}]}}`,
 		},
-		{4, 2, 100, `{"data": {"me":[
+		{2, -1, 2, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"}]}}`,
+		},
+		{3, -1, 2, false, `{"data": {"me":[
 			{"pname":"nameA","pred1":"A", "pred2":"I"},
-			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"}]}}`,
+		},
+		{4, -1, 7, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameC","pred1":"A"},
 			{"pname":"nameE","pred1":"B", "pred2":"J"},
 			{"pname":"nameD","pred1":"B", "pred2":"I"},
-			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{6, 2, 7, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
 			{"pname":"nameI","pred1":"C", "pred2":"K"},
 			{"pname":"nameH","pred1":"C", "pred2":"J"},
 			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
 		},
-		{5, 5, 5, `{"data": {"me":[
+		{7, 2, 7, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
 			{"pname":"nameD","pred1":"B", "pred2":"I"},
-			{"pname":"nameJ","pred1":"C"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{8, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
 			{"pname":"nameI","pred1":"C", "pred2":"K"},
 			{"pname":"nameH","pred1":"C", "pred2":"J"},
-			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
 		},
-		{0, 9, 5, `{"data": {"me":[
-			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
 		},
-		{0, 12, 5, `{"data": {"me":[]}}`},
+		{10, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{12, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{14, 12, 5, true, `{"data": {"me":[]}}`},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
 	}
-	makeQuery := func(offset, first int32, index bool) string {
+	makeQuery := func(offset, first int32, desc, index bool) string {
 		pred1 := "pred1"
 		pred2 := "pred2"
 		if index {
 			pred1 = "index-pred1"
 			pred2 = "index-pred2"
 		}
+		order := ",orderasc: "
+		if desc {
+			order = ",orderdesc: "
+		}
 		q := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: " + pred1 +
-			",orderdesc: " + pred2
+			order + pred2
 		if offset != -1 {
 			q += fmt.Sprintf(", offset: %d", offset)
 		}
@@ -2213,11 +2273,11 @@ func TestMultiSortWithNulls(t *testing.T) {
 
 	for _, tc := range tests {
 		// Case of sort with Index.
-		actual := makeQuery(tc.offset, tc.first, true)
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
 		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
 
 		// Case of sort without index
-		actual = makeQuery(tc.offset, tc.first, false)
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
 		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
 	}
 }
