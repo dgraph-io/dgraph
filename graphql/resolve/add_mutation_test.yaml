@@ -774,7 +774,7 @@
   explanation: "Error thrown as node with code nsw exists."
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
-      addState(input: [$input]) {
+      addState(input: [$input], upsert: false) {
         state {
           name
         }
@@ -806,6 +806,111 @@
     {
       "message": "failed to rewrite mutation payload because id nsw already exists for type State"
     }
+
+-
+  name: "Upsert Mutation 1"
+  explanation: "As the state exists the country of the state is updated"
+  gqlmutation: |
+    mutation addState($input: AddStateInput!) {
+      addState(input: [$input], upsert: true) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "nsw",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "State1": "0x11",
+      "Country2": "0x12"
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x11)) {
+        Country3 as State.country @filter(NOT (uid(0x12)))
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "0x11",
+          "State.name": "NSW",
+          "State.country": {
+            "uid": "0x12",
+            "Country.states": [ { "uid": "0x11" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country3)",
+            "Country.states":
+              [
+                {
+                  "uid":"0x11"
+                }
+              ]
+          }
+        ]
+
+-
+  name: "Upsert Mutation 2"
+  explanation: "As the state does not exist, this acts like an add mutation"
+  gqlmutation: |
+    mutation addState($input: AddStateInput!) {
+      addState(input: [$input], upsert: true) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "nsw",
+        "name": "NSW",
+        "country": { "id": "0x12" }
+      }
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "Country2": "0x12"
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "_:State1",
+          "dgraph.type": ["State"],
+          "State.name": "NSW",
+          "State.code": "nsw",
+          "State.country": {
+            "uid": "0x12",
+            "Country.states": [ { "uid": "_:State1" } ]
+          }
+        }
 
 -
   name: "Add mutation using code on type which also has an ID field"

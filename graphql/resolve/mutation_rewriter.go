@@ -1232,6 +1232,7 @@ func rewriteObject(
 	// Note that as similar traversal of input tree was carried with getExistenceQueries, we
 	// don't have to report the same errors.
 
+	isUpsert := false
 	atTopLevel := srcField == nil
 	var retErrors []error
 	variable := ""
@@ -1307,17 +1308,25 @@ func rewriteObject(
 				// node with XID exists. This is a reference.
 				// We return an error if this is at toplevel. Else, we return the ID reference
 				if atTopLevel {
-					// We need to conceal the error because we might be leaking information to the user if it
-					// tries to add duplicate data to the field with @id.
-					var err error
-					if queryAuthSelector(typ) == nil {
-						err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+					if mutationType == AddWithUpsert {
+						// TODO(Rajas): Handle Auth
+						isUpsert = true
+						srcUID = uid
+						// To ensure that xid is not added to the output json
+						delete(obj, xid.Name())
 					} else {
-						// This error will only be reported in debug mode.
-						err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+						// We need to conceal the error because we might be leaking information to the user if it
+						// tries to add duplicate data to the field with @id.
+						var err error
+						if queryAuthSelector(typ) == nil {
+							err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+						} else {
+							// This error will only be reported in debug mode.
+							err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+						}
+						retErrors = append(retErrors, err)
+						return nil, retErrors
 					}
-					retErrors = append(retErrors, err)
-					return nil, retErrors
 				} else {
 					return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
 				}
@@ -1375,7 +1384,7 @@ func rewriteObject(
 	// Create newObj map. This map will be returned as part of mutationFragment.
 	newObj := make(map[string]interface{}, len(obj))
 
-	if mutationType != Add && mutationType != AddWithUpsert && atTopLevel {
+	if (mutationType != Add && mutationType != AddWithUpsert && atTopLevel) || isUpsert {
 		// It's an update and we are at top level. So, the UID of node(s) for which
 		// we are rewriting is/are referenced using "uid(x)" as part of mutations.
 		// We don't need to create a new blank node in this case.
