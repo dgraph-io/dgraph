@@ -60,10 +60,9 @@ func (s byValue) Less(i, j int) bool {
 	}
 	for vidx := range first {
 		// Null values are appended at the end of the sort result for both ascending and descending.
-		// If both first and second has nil values, then we assume first to be less than second,
-		// this is done in order to maintain the order by UID in case both the values are nil.
+		// If both first and second has nil values, then maintain the order by UID.
 		if first[vidx].Value == nil && second[vidx].Value == nil {
-			return true
+			return s.desc[vidx]
 		}
 
 		if first[vidx].Value == nil {
