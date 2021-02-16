@@ -179,9 +179,11 @@ they form a Raft group and provide synchronous replication.
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
 
-	// Ludicrous mode
-	flag.Bool("ludicrous_mode", false, "Run Dgraph in ludicrous mode.")
-	flag.Int("ludicrous_concurrency", 2000, "Number of concurrent threads in ludicrous mode")
+	flag.String("ludicrous", worker.LudicrousDefaults,
+		`This flag provides settings for Ludicrous mode.
+		Ludicrous options:
+	mode=true/false Run Dgraph in Ludicrous mode.
+	concurrency=2000 Number of concurrent threads in Ludicrous mode.`)
 
 	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
@@ -702,25 +704,26 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
+	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
+		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
-		TmpDir:               Alpha.Conf.GetString("tmp"),
-		ExportPath:           Alpha.Conf.GetString("export"),
-		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
-		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
-		Raft:                 raft,
-		WhiteListedIPRanges:  ips,
-		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
-		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:           secretFile != "",
-		AbortOlderThan:       abortDur,
-		StartTime:            startTime,
-		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
-		LudicrousConcurrency: Alpha.Conf.GetInt("ludicrous_concurrency"),
-		TLSClientConfig:      tlsClientConf,
-		TLSServerConfig:      tlsServerConf,
-		HmacSecret:           opts.HmacSecret,
-		Audit:                opts.Audit != nil,
+		TmpDir:              Alpha.Conf.GetString("tmp"),
+		ExportPath:          Alpha.Conf.GetString("export"),
+		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
+		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
+		Raft:                raft,
+		WhiteListedIPRanges: ips,
+		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
+		AclEnabled:          secretFile != "",
+		AbortOlderThan:      abortDur,
+		StartTime:           startTime,
+		Ludicrous:           ludicrous,
+		TLSClientConfig:     tlsClientConf,
+		TLSServerConfig:     tlsServerConf,
+		HmacSecret:          opts.HmacSecret,
+		Audit:               opts.Audit != nil,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

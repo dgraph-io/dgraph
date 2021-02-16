@@ -97,10 +97,15 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
-	// LudicrousMode is super fast mode with fewer guarantees.
-	LudicrousMode bool
-	// Number of mutations that can be run together in ludicrous mode
-	LudicrousConcurrency int
+
+	// Ludicrous options
+	Ludicrous *z.SuperFlag
+
+	//	LudicrousMode is super fast mode with fewer guarantees.
+	//LudicrousMode bool
+	//	Number of mutations that can be run together in ludicrous mode
+	//LudicrousConcurrency int
+
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
@@ -122,7 +127,7 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
 	w.Tracing = conf.GetFloat64("trace")
 
-	if w.LudicrousMode {
+	if w.Ludicrous.GetBool("mode") {
 		w.HardSync = false
 
 	} else {

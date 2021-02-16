@@ -524,7 +524,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 			hex.EncodeToString(l.key), mpost)
 	}
 
-	if x.WorkerConfig.LudicrousMode {
+	if x.WorkerConfig.Ludicrous.GetBool("mode") {
 		// Conflict detection is not required for ludicrous mode.
 		return nil
 	}

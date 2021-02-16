@@ -30,6 +30,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	LudicrousDefaults = `mode=false; concurrency=2000;`
+)
+
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
