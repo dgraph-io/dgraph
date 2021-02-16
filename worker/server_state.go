@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	AuthDefaults      = `token=""; whitelist="";`
+	SecurityDefaults  = `token=""; whitelist="";`
 	RaftDefaults      = `idx=0; group=0; learner=false; snapshot-after=10000; pending-proposals=256;`
 	LudicrousDefaults = `mode=false; concurrency=2000;`
 	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url="";`

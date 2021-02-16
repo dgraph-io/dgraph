@@ -137,7 +137,7 @@ they form a Raft group and provide synchronous replication.
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
 
-	flag.String("auth", worker.AuthDefaults,
+	flag.String("security", worker.SecurityDefaults,
 		`Various auth options.
 	token="" If set, all Admin requests to Dgraph would need to have this token.
 		The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header.
@@ -659,7 +659,7 @@ func run() {
 		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
-		AuthToken:      x.WorkerConfig.Auth.GetString("token"),
+		AuthToken:      x.WorkerConfig.Security.GetString("token"),
 		Audit:          conf,
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
@@ -695,8 +695,9 @@ func run() {
 
 	worker.SetConfiguration(&opts)
 
-	auth := z.NewSuperFlag(Alpha.Conf.GetString("auth")).MergeAndCheckDefault(worker.AuthDefaults)
-	ips, err := getIPsFromString(auth.GetString("whitelist"))
+	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
+		worker.SecurityDefaults)
+	ips, err := getIPsFromString(security.GetString("whitelist"))
 	x.Check(err)
 
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
@@ -722,7 +723,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
-		Auth:                auth,
+		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,

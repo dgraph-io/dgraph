@@ -96,8 +96,11 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// Ludicrous options
 	Ludicrous *z.SuperFlag
-	// Auth
-	Auth *z.SuperFlag
+	// Security options:
+	//
+	// whitelist string - comma separated IP addresses
+	// token string - if set, all Admin requests to Dgraph will have this token.
+	Security *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
