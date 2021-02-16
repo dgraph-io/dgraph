@@ -32,6 +32,7 @@ import (
 
 const (
 	LudicrousDefaults = `mode=false; concurrency=2000;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url="";`
 )
 
 // ServerState holds the state of the Dgraph server.

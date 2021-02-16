@@ -176,19 +176,21 @@ they form a Raft group and provide synchronous replication.
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
-	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
-	flag.Bool("graphql_debug", false, "Enable debug mode in GraphQL. This returns auth errors to clients. We do not recommend turning it on for production.")
-
 	flag.String("ludicrous", worker.LudicrousDefaults,
 		`This flag provides settings for Ludicrous mode.
 		Ludicrous options:
 	mode=true/false Run Dgraph in Ludicrous mode.
 	concurrency=2000 Number of concurrent threads in Ludicrous mode.`)
 
-	flag.Bool("graphql_extensions", true, "Set to false if extensions not required in GraphQL response body")
-	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
-	flag.String("graphql_lambda_url", "",
-		"URL of lambda server that implements custom GraphQL JavaScript resolvers")
+	flag.String("graphql", worker.GraphQLDefaults,
+		`This flag provides settings for GraphQL.
+		GraphQL options:
+	introspection=true Set to false for no GraphQL schema introspection.
+	debug=false Enable debug mode in GraphQL. This returns auth errors to clients. We do not
+		recommend turning it on for production.
+	extensions=true/false Set to false if extensions not required in GraphQL response body.
+	poll-interval=1s Polling interval for GraphQL subscription.
+	lambda-url="" URL of lambda server that implements custom GraphQL JavaScript resolvers.`)
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",
