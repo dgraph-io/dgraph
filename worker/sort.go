@@ -338,8 +338,10 @@ BUCKETS:
 		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullNodes[:canAppend]...)
 
 		// The value list also need to contain null values for the appended uids.
-		nullVals := make([]types.Val, canAppend)
-		values[i] = append(values[i], nullVals...)
+		if len(ts.Order) > 1 {
+			nullVals := make([]types.Val, canAppend)
+			values[i] = append(values[i], nullVals...)
+		}
 	}
 
 	select {
