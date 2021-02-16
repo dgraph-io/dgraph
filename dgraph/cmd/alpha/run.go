@@ -119,10 +119,6 @@ they form a Raft group and provide synchronous replication.
 			" transaction is determined by its last mutation.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
-	flag.String("whitelist", "",
-		"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you "+
-			"wish to whitelist for performing admin actions (i.e., --whitelist 144.142.126.254,"+
-			"127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal)")
 	flag.String("export", "export", "Folder in which to store exports.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
@@ -140,10 +136,15 @@ they form a Raft group and provide synchronous replication.
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
-	flag.String("auth_token", "",
-		"If set, all Admin requests to Dgraph would need to have this token."+
-			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
-			" For Grpc, in auth-token key in the context.")
+
+	flag.String("auth", worker.AuthDefaults,
+		`Various auth options.
+	token="" If set, all Admin requests to Dgraph would need to have this token.
+		The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header.
+		For Grpc, in auth-token key in the context.
+	whitelist="" A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you 
+		wish to whitelist for performing admin actions (i.e., --whitelist "144.142.126.254,
+		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")`)
 
 	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
@@ -658,7 +659,7 @@ func run() {
 		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		AuthToken:      x.WorkerConfig.Auth.GetString("token"),
 		Audit:          conf,
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
@@ -694,7 +695,8 @@ func run() {
 
 	worker.SetConfiguration(&opts)
 
-	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
+	auth := z.NewSuperFlag(Alpha.Conf.GetString("auth")).MergeAndCheckDefault(worker.AuthDefaults)
+	ips, err := getIPsFromString(auth.GetString("whitelist"))
 	x.Check(err)
 
 	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
@@ -720,6 +722,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
+		Auth:                auth,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,
