@@ -64,12 +64,12 @@ type graphqlHandler struct {
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(admin bool) IServeGraphQL {
+func NewServer() IServeGraphQL {
 	gh := &graphqlHandler{
 		resolver: make(map[uint64]*resolve.RequestResolver),
 		poller:   make(map[uint64]*subscription.Poller),
 	}
-	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
+	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
 	return gh
 }
 
@@ -305,7 +305,7 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 	return gqlReq, nil
 }
 
-func commonHeaders(admin bool, next http.Handler) http.Handler {
+func commonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x.AddCorsHeaders(w)
 		w.Header().Set("Content-Type", "application/json")

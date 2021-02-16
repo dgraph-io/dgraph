@@ -289,7 +289,7 @@ func panicCatcher(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(true)
+	server := web.NewServer()
 	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
@@ -350,7 +350,7 @@ func clientInfoLogin(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(true)
+	server := web.NewServer()
 	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())

@@ -457,7 +457,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
 	e := globalEpoch[x.GalaxyNamespace]
-	mainServer := web.NewServer(false)
+	mainServer := web.NewServer()
 	mainServer.Set(x.GalaxyNamespace, e, resolvers)
 
 	fns := &resolve.ResolverFns{
@@ -469,7 +469,7 @@ func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	e = globalEpoch[x.GalaxyNamespace]
-	adminServer := web.NewServer(true)
+	adminServer := web.NewServer()
 	adminServer.Set(x.GalaxyNamespace, e, adminResolvers)
 
 	return mainServer, adminServer, mainHealthStore
