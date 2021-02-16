@@ -135,7 +135,7 @@ they form a Raft group and provide synchronous replication.
 		not participate in Raft elections. This can be used to achieve a read-only replica.
 	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
 		The lower this number, the more frequent snapshot creation would be.
-	pending-proposals=256 Number of pending mutation proposals. Useful for rate limiting.
+	pending-proposals=N Number of pending mutation proposals. Useful for rate limiting.
 	`)
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+

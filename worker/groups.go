@@ -60,8 +60,6 @@ var gr = &groupi{
 	tablets:      make(map[string]*pb.Tablet),
 }
 
-var RaftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
-
 func groups() *groupi {
 	return gr
 }
