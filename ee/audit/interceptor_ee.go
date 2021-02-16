@@ -100,12 +100,15 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		clientHost = p.Addr.String()
 	}
 
-	userId := ""
+	var user string
+	var ns uint64
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if t := md.Get("accessJwt"); len(t) > 0 {
-			userId = getUserId(t[0], false)
+			user, ns = getUserAndNamespace(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {
-			userId = getUserId(t[0], true)
+			user, ns = getUserAndNamespace(t[0], true)
+		} else {
+			user, ns = getUserAndNamespace("", false)
 		}
 	}
 
@@ -114,7 +117,8 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		cd = serr.Code()
 	}
 	auditor.Audit(&AuditEvent{
-		User:       userId,
+		User:       user,
+		Namespace:  ns,
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
@@ -130,16 +134,18 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		rb = []byte(err.Error())
 	}
 
-	userId := ""
+	var user string
+	var ns uint64
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
-		userId = getUserId(token, false)
+		user, ns = getUserAndNamespace(token, false)
 	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
-		userId = getUserId(token, true)
+		user, ns = getUserAndNamespace(token, true)
 	} else {
-		userId = getUserId("", false)
+		user, ns = getUserAndNamespace("", false)
 	}
 	auditor.Audit(&AuditEvent{
-		User:        userId,
+		User:        user,
+		Namespace:   ns,
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
@@ -150,22 +156,25 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	})
 }
 
-func getUserId(token string, poorman bool) string {
+func getUserAndNamespace(token string, poorman bool) (string, uint64) {
 	if poorman {
-		return PoorManAuth
+		return PoorManAuth, x.GalaxyNamespace
 	}
-	var userId string
+	var user string
+	ns := x.GalaxyNamespace
 	var err error
 	if token == "" {
 		if x.WorkerConfig.AclEnabled {
-			userId = UnauthorisedUser
+			user = UnauthorisedUser
+			ns = UnknownNamespace
 		}
 	} else {
-		if userId, err = x.ExtractUserName(token); err != nil {
-			userId = UnknownUser
+		if user, err = x.ExtractUserName(token); err != nil {
+			user = UnknownUser
+			ns = UnknownNamespace
 		}
 	}
-	return userId
+	return user, ns
 }
 
 type ResponseWriter struct {

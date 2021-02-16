@@ -181,7 +181,7 @@ func (cdc *CDC) processCDCEvents() {
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
 				},
-				Key:   []byte(defaultEventKey),
+				Key:   e.Meta.Namespace,
 				Value: b,
 			}
 		}
@@ -333,6 +333,7 @@ type CDCEvent struct {
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
+	Namespace []byte `json:"-"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
@@ -383,6 +384,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if x.IsReservedPredicate(edge.Attr) {
 			continue
 		}
+		ns, attr := x.ParseNamespaceBytes(edge.Attr)
 		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
@@ -390,10 +392,11 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 					Type: EventTypeDrop,
 					Event: &DropEvent{
 						Operation: OpDropPred,
-						Pred:      edge.Attr,
+						Pred:      attr,
 					},
 					Meta: &EventMeta{
 						RaftIndex: index,
+						Namespace: ns,
 					},
 				},
 			}
@@ -417,12 +420,13 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
 				RaftIndex: index,
+				Namespace: ns,
 			},
 			Type: EventTypeMutation,
 			Event: &MutationEvent{
 				Operation: strings.ToLower(edge.Op.String()),
 				Uid:       edge.Entity,
-				Attr:      edge.Attr,
+				Attr:      attr,
 				Value:     val,
 				ValueType: posting.TypeID(edge).Name(),
 			},

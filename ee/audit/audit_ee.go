@@ -39,6 +39,7 @@ type AuditConf struct {
 
 type AuditEvent struct {
 	User        string
+	Namespace   uint64
 	ServerHost  string
 	ClientHost  string
 	Endpoint    string
@@ -50,6 +51,7 @@ type AuditEvent struct {
 
 const (
 	UnauthorisedUser = "UnauthorisedUser"
+	UnknownNamespace = -1
 	UnknownUser      = "UnknownUser"
 	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
@@ -179,6 +181,7 @@ func Close() {
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
 		"user", event.User,
+		"namespace", event.Namespace,
 		"server", event.ServerHost,
 		"client", event.ClientHost,
 		"req_type", event.ReqType,
