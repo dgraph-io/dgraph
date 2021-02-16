@@ -17,9 +17,11 @@ import (
 	"io"
 	"net/url"
 	"sort"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pkg/errors"
 )
@@ -201,17 +203,32 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manif
 		return nil, err
 	}
 
-	listedManifests := make(map[string]*Manifest)
-	for _, path := range paths {
-		var m Manifest
-		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, errors.Wrapf(err, "While reading %q", path)
-		}
-		m.Path = path
-		listedManifests[path] = &m
+	res := struct {
+		sync.Mutex
+		listedManifests map[string]*Manifest
+	}{
+		listedManifests: make(map[string]*Manifest),
 	}
 
-	return listedManifests, nil
+	var g errgroup.Group
+	for _, path := range paths {
+		path := path // https://golang.org/doc/faq#closures_and_goroutines
+		g.Go(func() error {
+			var m Manifest
+			if err := h.ReadManifest(path, &m); err != nil {
+				return errors.Wrapf(err, "While reading %q", path)
+			}
+			m.Path = path
+			res.Lock()
+			res.listedManifests[path] = &m
+			res.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return res.listedManifests, nil
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests
