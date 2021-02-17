@@ -1764,21 +1764,6 @@ func TestUseVarsMultiCascade(t *testing.T) {
 		js)
 }
 
-func TestCascadeWithPagination(t *testing.T) {
-	query := `
-		{
-			query(func: type(Student), first: 2) @cascade {
-				name
-				age
-				class(first: 3, offset: 10) {
-					standard
-					subjects
-				}
-			}
-		}
-	`
-	_ = processQueryNoErr(t, query)
-}
 func TestUseVarsMultiOrder(t *testing.T) {
 
 	query := `

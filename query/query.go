@@ -159,7 +159,7 @@ type params struct {
 	// Cascade is the list of predicates to apply @cascade to.
 	// __all__ is special to mean @cascade i.e. all the children of this subgraph are mandatory
 	// and should have values otherwise the node will be excluded.
-	Cascade *gql.CascadeArgs
+	Cascade *CascadeArgs
 	// IgnoreReflex is true if the @ignorereflex directive is specified.
 	IgnoreReflex bool
 
@@ -204,6 +204,14 @@ type params struct {
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
 	// For OSS this should remain nil.
 	AllowedPreds []string
+}
+
+// CascadeArgs stores the arguments needed to process @cascade directive.
+// It is introduced to ensure correct behaviour for cascade with pagination.
+type CascadeArgs struct {
+	Fields []string
+	First  int
+	Offset int
 }
 
 type pathMetadata struct {
@@ -559,16 +567,16 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
-			Cascade:      &gql.CascadeArgs{},
+			Cascade:      &CascadeArgs{},
 		}
 
 		// Inherit from the parent.
-		if sg.Params.Cascade != nil && (len(sg.Params.Cascade.Fields) > 0) {
+		if len(sg.Params.Cascade.Fields) > 0 {
 			args.Cascade.Fields = append(args.Cascade.Fields, sg.Params.Cascade.Fields...)
 		}
 		// Allow over-riding at this level.
-		if gchild.Cascade != nil && (len(gchild.Cascade.Fields) > 0) {
-			args.Cascade.Fields = gchild.Cascade.Fields
+		if len(gchild.Cascade) > 0 {
+			args.Cascade.Fields = gchild.Cascade
 		}
 
 		if len(args.Cascade.Fields) > 0 {
@@ -785,7 +793,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
 		Alias:            gq.Alias,
-		Cascade:          gq.Cascade,
+		Cascade:          &CascadeArgs{Fields: gq.Cascade},
 		GetUid:           isDebug(ctx),
 		IgnoreReflex:     gq.IgnoreReflex,
 		IsEmpty:          gq.IsEmpty,
@@ -803,8 +811,11 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		AllowedPreds:     gq.AllowedPreds,
 	}
 
-	if args.Cascade == nil {
-		args.Cascade = &gql.CascadeArgs{}
+	if len(args.Cascade.Fields) != 0 {
+		args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
+		delete(gq.Args, "first")
+		args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
+		delete(gq.Args, "offset")
 	}
 
 	for argk := range gq.Args {

@@ -1029,7 +1029,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1[0].Var = varName
 		r1[0].Attr = "var"
-		r1[0].Cascade.Fields = append(r1[0].Cascade.Fields, "__all__")
+		r1[0].Cascade = append(r1[0].Cascade, "__all__")
 
 		return []*gql.GraphQuery{r1[0]}, &gql.FilterTree{
 			Func: &gql.Function{
@@ -1536,17 +1536,7 @@ func addPagination(q *gql.GraphQuery, field schema.Field) {
 }
 
 func addCascadeDirective(q *gql.GraphQuery, field schema.Field) {
-
-	if len(field.Cascade()) > 0 {
-		first, _ := strconv.Atoi(q.Args["first"])
-		delete(q.Args, "first")
-		offset, _ := strconv.Atoi(q.Args["offset"])
-		delete(q.Args, "offset")
-		q.Cascade = &gql.CascadeArgs{Fields: field.Cascade(),
-			First:  first,
-			Offset: offset,
-		}
-	}
+	q.Cascade = field.Cascade()
 }
 
 func convertIDs(idsSlice []interface{}) []uint64 {
