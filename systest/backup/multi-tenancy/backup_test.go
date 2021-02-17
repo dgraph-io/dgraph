@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,36 +49,6 @@ var (
 		"alpha3",
 	}
 )
-
-func sendRestoreRequest(t *testing.T, location string) {
-	if location == "" {
-		location = "/data/backup"
-	}
-	params := testutil.GraphQLParams{
-		Query: `mutation restore($location: String!) {
-			restore(input: {location: $location}) {
-				code
-				message
-			}
-		}`,
-		Variables: map[string]interface{}{
-			"location": location,
-		},
-	}
-	resp := testutil.MakeGQLRequestWithTLS(t, &params, testutil.GetAlphaClientConfig(t))
-	resp.RequireNoGraphQLErrors(t)
-
-	var restoreResp struct {
-		Restore struct {
-			Code    string
-			Message string
-		}
-	}
-
-	require.NoError(t, json.Unmarshal(resp.Data, &restoreResp))
-	require.Equal(t, restoreResp.Restore.Code, "Success")
-	return
-}
 
 func TestBackupMultiTenancy(t *testing.T) {
 	ctx := context.Background()
@@ -138,19 +109,18 @@ func TestBackupMultiTenancy(t *testing.T) {
 	original[ns] = addData(dg1, "ns")
 
 	// Setup test directories.
-	dirSetup(t)
+	common.DirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, galaxyToken, 3, 1)
 	restored := runRestore(t, copyBackupDir, "", math.MaxUint64, []uint64{x.GalaxyNamespace, ns})
 
-	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "name", "dgraph.graphql.xid",
-		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op",
-		"dgraph.xid", "dgraph.acl.rule", "dgraph.password", "dgraph.user.group", "dgraph.rule.predicate", "dgraph.rule.permission"} // ACL
+	preds := []string{"dgraph.graphql.schema", "name", "dgraph.graphql.xid", "dgraph.type", "movie",
+		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op", "dgraph.xid",
+		"dgraph.acl.rule", "dgraph.password", "dgraph.user.group", "dgraph.rule.predicate",
+		"dgraph.rule.permission"} // ACL
 	preds = append(preds, preds...)
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history",
-		"dgraph.graphql.persisted_query", "dgraph.type.cors",
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query",
 		"dgraph.type.Rule", "dgraph.type.User", "dgraph.type.Group"} // ACL
 	types = append(types, types...)
 	testutil.CheckSchema(t, preds, types)
@@ -401,10 +371,10 @@ func TestBackupMultiTenancy(t *testing.T) {
 	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, copyBackupDir, "", incr4.Txn.CommitTs)
+	common.RunFailingRestore(t, copyBackupDir, "", incr4.Txn.CommitTs)
 
 	// Clean up test directories.
-	dirCleanup(t)
+	common.DirCleanup(t)
 }
 
 func runBackup(t *testing.T, token *testutil.HttpToken, numExpectedFiles, numExpectedDirs int) []string {
@@ -441,7 +411,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	require.Contains(t, result.Backup.Response.Message, "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
-	copyToLocalFs(t)
+	common.CopyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
@@ -487,61 +457,4 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64,
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored
-}
-
-// runFailingRestore is like runRestore but expects an error during restore.
-func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) {
-	// Recreate the restore directory to make sure there's no previous data when
-	// calling restore.
-	require.NoError(t, os.RemoveAll(restoreDir))
-
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
-	require.Error(t, result.Err)
-	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
-}
-
-func dirSetup(t *testing.T) {
-	// Clean up data from previous runs.
-	dirCleanup(t)
-
-	for _, dir := range testDirs {
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			t.Fatalf("Error creating directory: %s", err.Error())
-		}
-	}
-
-	for _, alpha := range alphaContainers {
-		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		if err := testutil.DockerExec(alpha, cmd...); err != nil {
-			t.Fatalf("Error executing command in docker container: %s", err.Error())
-		}
-	}
-}
-
-func dirCleanup(t *testing.T) {
-	if err := os.RemoveAll(restoreDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-
-	if err := os.RemoveAll(copyBackupDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-
-	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
-	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
-		t.Fatalf("Error executing command in docker container: %s", err.Error())
-	}
-}
-
-func copyToLocalFs(t *testing.T) {
-	// The original backup files are not accessible because docker creates all files in
-	// the shared volume as the root user. This restriction is circumvented by using
-	// "docker cp" to create a copy that is not owned by the root user.
-	if err := os.RemoveAll(copyBackupDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
-	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
-		t.Fatalf("Error copying files from docker container: %s", err.Error())
-	}
 }
