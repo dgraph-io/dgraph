@@ -46,7 +46,7 @@ const (
 
 // RegisterServerTLSFlags registers the required flags to set up a TLS server.
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", "",
+	flag.String("tls", TLSServerDefaults,
 		`TLS Server options (defaults shown):
 	cacert=; The CA cert file used to verify server certificates. Required for enabling TLS.
 	use-system-ca=true; Includes System CA into CA Certs.
@@ -57,19 +57,21 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 	cert=; (Optional) The client Cert file which is needed to connect as a client with the other `+
 			`nodes in the cluster.`+`
 	key=; (Optional) The private client key file which is needed to connect as a client with the `+
-			`other nodes in the cluster.`)
+			`other nodes in the cluster.
+	`)
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", "",
+	flag.String("tls", TLSClientDefaults,
 		`TLS Client options (defaults shown):
 	cacert=; The CA cert file used to verify server certificates. Required for enabling TLS.
 	use-system-ca=true; Include System CA into CA Certs.
 	server-name=; Used to verify the server hostname.
 	cert=; (Optional) The Cert file provided by the client to the server.
 	key=; (Optional) The private key file provided by the clients to the server.
-	internal-port-enabled=false; Enable inter-node TLS encryption between cluster nodes.`)
+	internal-port-enabled=false; Enable inter-node TLS encryption between cluster nodes.
+	`)
 }
 
 // LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster

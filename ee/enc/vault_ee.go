@@ -31,21 +31,21 @@ import (
 )
 
 const (
-	VaultDefaults = `addr=http://localhost:8200; path=secret/data/dgraph; field=enc_key; 
-		format=base64;`
+	VaultDefaults = `addr=http://localhost:8200; path=secret/data/dgraph; field=enc_key; format=base64;`
 )
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.
 func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
-	flag.String("vault", "",
+	flag.String("vault", VaultDefaults,
 		`Vault options (defaults shown):
-	addr=http://localhost:8200; Vault server's address in the form http://ip:port.
+	addr=http://localhost:8200; Vault server address in the form of http://ip:port.
 	role-id-file=; File containing Vault role-id used for approle auth.
 	secret-id-file=; File containing Vault secret-id used for approle auth.
 	path=secret/data/dgraph; Vault kv store path. e.g. secret/data/dgraph for kv-v2, kv/dgraph for kv-v1.
 	field=enc_key; Vault kv store field whose value is the Base64 encoded encryption key.
-	format=base64; Vault field format: raw or base64.`)
+	format=base64; Vault field format: raw or base64.
+	`)
 }
 
 // vaultKeyReader implements the KeyReader interface. It reads the key from vault server.

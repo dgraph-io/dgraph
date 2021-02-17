@@ -132,6 +132,7 @@ they form a Raft group and provide synchronous replication.
 		The lower this number, the more frequent snapshot creation would be.
 	pending-proposals=N Number of pending mutation proposals. Useful for rate limiting.
 	`)
+
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -143,9 +144,10 @@ they form a Raft group and provide synchronous replication.
 		For Grpc, in auth-token key in the context.
 	whitelist="" A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you 
 		wish to whitelist for performing admin actions (i.e., --whitelist "144.142.126.254,
-		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")`)
+		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")
+	`)
 
-	flag.String("acl", "",
+	flag.String("acl", worker.AclDefaults,
 		`This flag provides settings for Access Control Lists (Enterprise Feature)
 		ACL options (defaults shown):
 	secret-file=; The file that stores the HMAC secret, which is used for signing the JWT and `+
@@ -153,20 +155,22 @@ they form a Raft group and provide synchronous replication.
 	access-ttl=6h; The TTL for the access JWT.
 	refresh-ttl=30d; The TTL for the refresh JWT.
 		The duration format for TTLs is the same as time.ParseDuration with an added 'd' suffix `+
-			`for days.`)
+			`for days.
+	`)
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.String("limit", "",
+	flag.String("limit", worker.LimitDefaults,
 		`Limit options (defaults shown):
 	query-edge=1000000; Limit for the maximum number of edges that can be returned in a query. `+
 			`This applies to shortest path and recursive queries.`+`
 	normalize-node=10000; Limit for the maximum number of nodes that can be returned in a query `+
 			`that uses the normalize directive.`+`
 	mutations-nquad=1000000; Limit for the maximum number of nquads that can be inserted in a `+
-			`mutation request.`)
+			`mutation request.
+	`)
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -179,7 +183,8 @@ they form a Raft group and provide synchronous replication.
 		`This flag provides settings for Ludicrous mode.
 		Ludicrous options (defaults shown):
 	enabled=false; Run Dgraph in Ludicrous mode.
-	concurrency=2000; Number of concurrent threads in Ludicrous mode.`)
+	concurrency=2000; Number of concurrent threads in Ludicrous mode.
+	`)
 
 	flag.String("graphql", worker.GraphQLDefaults,
 		`This flag provides settings for GraphQL.
@@ -189,7 +194,8 @@ they form a Raft group and provide synchronous replication.
 		recommend turning it on for production.
 	extensions=true/false Set to false if extensions not required in GraphQL response body.
 	poll-interval=1s Polling interval for GraphQL subscription.
-	lambda-url="" URL of lambda server that implements custom GraphQL JavaScript resolvers.`)
+	lambda-url="" URL of lambda server that implements custom GraphQL JavaScript resolvers.
+	`)
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",

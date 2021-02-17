@@ -33,12 +33,13 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	//
 	// datadog: See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
 	//          about the status of supporting annotation logs through the datadog exporter
-	flag.String("trace", "",
+	flag.String("trace", TraceDefaults,
 		`Trace options (defaults shown):
 	ratio=0.01; The ratio of queries to trace.
 	jaeger=; Send OpenCensus traces to Jaeger.
 	datadog=; Send OpenCensus traces to Datadog. As of now, the trace exporter does not support `+
-			`annotation logs and would discard them.`)
+			`annotation logs and would discard them.
+	`)
 
 	// Performance flags.
 	flag.String("survive", "process",

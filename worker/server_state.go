@@ -33,10 +33,10 @@ import (
 const (
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
-	SecurityDefaults  = `token=""; whitelist="";`
+	SecurityDefaults  = ``
 	RaftDefaults      = `idx=0; group=0; learner=false; snapshot-after=10000; pending-proposals=256;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url="";`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
 )
 
 // ServerState holds the state of the Dgraph server.
