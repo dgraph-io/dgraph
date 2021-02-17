@@ -639,23 +639,24 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			//   so that whenever a custom field in encountered in the selection set,
 			//   just use the map to find out the fastJson node for that field.
 			// The last option seems better.
+
+			// the results slice keeps all the customFieldResults in memory as is, until all the
+			// custom fields aren't resolved. Once the channel is closed, it would update the
+			// fastJson tree serially, so that there are no race conditions.
+			results := make([]customFieldResult, 0)
 			for res := range genc.customFieldResultCh {
+				results = append(results, res)
+			}
+			for _, res := range results {
 				childAttr := genc.idForAttr(res.childField.DgraphAlias())
 				for _, parent := range res.parents {
-					// TODO: Single Write - multiple Read race for arena
 					childNode, err := genc.makeCustomNode(childAttr, res.childVal)
 					if err != nil {
 						genc.errCh <- x.GqlErrorList{res.childField.GqlErrorf(nil, err.Error())}
 						continue
 					}
 					childNode.next = parent.child
-					parent.child = childNode // this line may lead to a race condition between
-					// this write and multiple simultaneous reads during custom field resolution.
-					// But, the way reads are done, it doesn't matter whether they get the
-					// previous value or the new value after the write as they just keep iterating
-					// as long as they don't find a fastJson node returned for a required field
-					// from Dgraph.
-					// So, it seems fine to ignore this race condition.
+					parent.child = childNode
 				}
 			}
 			wg.Done()
