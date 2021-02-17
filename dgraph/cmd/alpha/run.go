@@ -178,9 +178,9 @@ they form a Raft group and provide synchronous replication.
 
 	flag.String("ludicrous", worker.LudicrousDefaults,
 		`This flag provides settings for Ludicrous mode.
-		Ludicrous options:
-	mode=true/false Run Dgraph in Ludicrous mode.
-	concurrency=2000 Number of concurrent threads in Ludicrous mode.`)
+		Ludicrous options (defaults shown):
+	enabled=false; Run Dgraph in Ludicrous mode.
+	concurrency=2000; Number of concurrent threads in Ludicrous mode.`)
 
 	flag.String("graphql", worker.GraphQLDefaults,
 		`This flag provides settings for GraphQL.

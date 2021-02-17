@@ -100,7 +100,7 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// Ludicrous options:
 	//
-	// mode bool - turn Ludicrous mode on or off
+	// enabled bool - turn Ludicrous mode on or off
 	// concurrency int - number of concurrent threads in Ludicrous mode
 	Ludicrous *z.SuperFlag
 	// Security options:
@@ -128,7 +128,7 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
 	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
-	if w.Ludicrous.GetBool("mode") {
+	if w.Ludicrous.GetBool("enabled") {
 		w.HardSync = false
 
 	} else {
