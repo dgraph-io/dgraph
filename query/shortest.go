@@ -238,10 +238,10 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 			}
 		}
 
-		if numEdges > x.Config.QueryEdgeLimit {
+		if numEdges > x.Config.Limit.GetUint64("query-edge") {
 			// If we've seen too many edges, stop the query.
 			rch <- errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
-				x.Config.QueryEdgeLimit, numEdges)
+				x.Config.Limit.GetUint64("query-edge"), numEdges)
 			return
 		}
 

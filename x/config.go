@@ -29,14 +29,13 @@ import (
 type Options struct {
 	// PortOffset will be used to determine the ports to use (port = default port + offset).
 	PortOffset int
-	// QueryEdgeLimit is the maximum number of edges that will be traversed during
-	// recurse and shortest-path queries.
-	QueryEdgeLimit uint64
-	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
-	NormalizeNodeLimit int
-	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
-	// mutation request.
-	MutationsNQuadLimit int
+	// Limit options:
+	//
+	// query-edge uint64 - maximum number of edges that can be returned in a query
+	// normalize-node int - maximum number of nodes that can be returned in a query that uses the
+	//                      normalize directive
+	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
+	Limit *z.SuperFlag
 	// GraphQL options:
 	//
 	// extension bool - Will be set to see extensions in GraphQL results

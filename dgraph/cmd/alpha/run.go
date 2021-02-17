@@ -50,7 +50,6 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -160,14 +159,14 @@ they form a Raft group and provide synchronous replication.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.Uint64("query_edge_limit", 1e6,
-		"Limit for the maximum number of edges that can be returned in a query."+
-			" This applies to shortest path and recursive queries.")
-	flag.Uint64("normalize_node_limit", 1e4,
-		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
-			"normalize directive.")
-	flag.Uint64("mutations_nquad_limit", 1e6,
-		"Limit for the maximum number of nquads that can be inserted in a mutation request")
+	flag.String("limit", "",
+		`Limit options (defaults shown):
+	query-edge=1000000; Limit for the maximum number of edges that can be returned in a query. `+
+			`This applies to shortest path and recursive queries.`+`
+	normalize-node=10000; Limit for the maximum number of nodes that can be returned in a query `+
+			`that uses the normalize directive.`+`
+	mutations-nquad=1000000; Limit for the maximum number of nquads that can be inserted in a `+
+			`mutation request.`)
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -743,9 +742,8 @@ func run() {
 	setupCustomTokenizers()
 	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
-	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
-	x.Config.MutationsNQuadLimit = cast.ToInt(Alpha.Conf.GetString("mutations_nquad_limit"))
+	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.LimitDefaults)
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
