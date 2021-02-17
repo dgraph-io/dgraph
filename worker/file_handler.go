@@ -307,7 +307,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			WithSyncWrites(false).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithEncryptionKey(key).
-			WithNamespaceOffset(1))
+			WithNamespaceOffset(x.NamespaceOffset))
 
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)

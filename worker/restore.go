@@ -73,7 +73,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key).
-				WithNamespaceOffset(1))
+				WithNamespaceOffset(x.NamespaceOffset))
 			if err != nil {
 				return 0, 0, err
 			}

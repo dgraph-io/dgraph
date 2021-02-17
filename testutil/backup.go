@@ -59,7 +59,7 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
 		WithEncryptionKey(k).
-		WithNamespaceOffset(1)
+		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }
 

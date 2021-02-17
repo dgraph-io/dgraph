@@ -54,6 +54,8 @@ const (
 	GalaxyNamespace = uint64(0)
 	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
 	IgnoreBytes = "1-8"
+	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
+	NamespaceOffset = 1
 )
 
 func NamespaceToBytes(ns uint64) []byte {
