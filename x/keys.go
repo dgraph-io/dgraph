@@ -507,7 +507,7 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// DataPrefix returns the prefix for all data keys belongin to this namespace.
+// DataPrefix returns the prefix for all data keys belonging to this namespace.
 func DataPrefix(ns uint64) []byte {
 	buf := make([]byte, 1+8)
 	buf[0] = DefaultPrefix
