@@ -262,21 +262,21 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		return nil, errIndexingInProgress
 	}
 
-	var result *schema.ParsedSchema
-	var err error
+	namespace := x.ExtractNamespace(ctx)
 	if x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
 		}
-		// Parse the schema preserving the namespace.
-		result, err = schema.Parse(op.Schema)
-	} else {
-		namespace := x.ExtractNamespace(ctx)
-		result, err = schema.ParseWithNamespace(op.Schema, namespace)
+		var err error
+		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Valid force namespace not found in metadata")
+		}
 	}
 
+	result, err := schema.ParseWithNamespace(op.Schema, namespace)
 	if err != nil {
 		return nil, err
 	}
