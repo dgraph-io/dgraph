@@ -38,7 +38,6 @@ import (
 func TestAclBasic(t *testing.T) {
 	galaxyToken := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-	time.Sleep(1 * time.Second)
 
 	// Create a new namespace
 	ns, err := testutil.CreateNamespace(t, galaxyToken)
@@ -113,7 +112,6 @@ func TestCreateNamespace(t *testing.T) {
 func TestDeleteNamespace(t *testing.T) {
 	galaxyToken := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
-	time.Sleep(1 * time.Second)
 
 	dg := make(map[uint64]*dgo.Dgraph)
 	dg[x.GalaxyNamespace] = testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
