@@ -327,14 +327,14 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 	return result, nil
 }
 
-// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// InsertDropRecord is used to insert a helper record when a DROP operation is performed.
 // This helper record lets us know during backup that a DROP operation was performed and that we
 // need to write this information in backup manifest. So that while restoring from a backup series,
 // we can create an exact replica of the system which existed at the time the last backup was taken.
 // Note that if the server crashes after the DROP operation & before this helper record is inserted,
 // then restoring from the incremental backup of such a DB would restore even the dropped
-// data back.
-func insertDropRecord(ctx context.Context, dropOp string) error {
+// data back. This is also used to capture the delete namespace operation during backup.
+func InsertDropRecord(ctx context.Context, dropOp string) error {
 	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &Request{
 		req: &api.Request{
 			Mutations: []*api.Mutation{{
@@ -392,7 +392,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_all was done
-		err = insertDropRecord(ctx, "DROP_ALL;")
+		err = InsertDropRecord(ctx, "DROP_ALL;")
 		if err != nil {
 			return empty, err
 		}
@@ -418,7 +418,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		// Set the namespace in the DropValue to re-apply it during backup/restore.
 		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
@@ -426,7 +425,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = insertDropRecord(ctx, "DROP_DATA;"+m.DropValue)
+		err = InsertDropRecord(ctx, "DROP_DATA;"+m.DropValue)
 		if err != nil {
 			return empty, err
 		}
@@ -475,7 +474,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_attr was done
-		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
+		err = InsertDropRecord(ctx, "DROP_ATTR;"+attr)
 		return empty, err
 	}
 

@@ -377,6 +377,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 
 	// Check that the newly added data is the only data for the movie predicate
 	require.Len(t, restored[x.GalaxyNamespace], 2)
+	require.Len(t, restored[ns], 2)
 	for ns, orig := range original {
 		for _, check := range checksUpdated {
 			require.EqualValues(t, check.expected, restored[ns][orig.Uids[check.blank]])
@@ -386,6 +387,17 @@ func TestBackupMultiTenancy(t *testing.T) {
 	// Verify that there is no data for predicate `name`
 	verifyUids(dg, "galaxy", 0)
 	verifyUids(dg1, "ns", 0)
+
+	// After deleting a namespace in incremental backup, we should not be able to get the data from
+	// banned namespace.
+	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
+	dirs = runBackup(t, galaxyToken, 21, 7)
+	restored = runRestore(t, copyBackupDir, "", math.MaxUint64, []uint64{x.GalaxyNamespace, ns})
+
+	// Check that we do not restore the data from ns namespace.
+	require.Len(t, restored[x.GalaxyNamespace], 2)
+	require.Len(t, restored[ns], 0)
+
 	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))

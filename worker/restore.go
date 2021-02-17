@@ -72,7 +72,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 				WithBlockCacheSize(100 * (1 << 20)).
 				WithIndexCacheSize(100 * (1 << 20)).
 				WithNumVersionsToKeep(math.MaxInt32).
-				WithEncryptionKey(key))
+				WithEncryptionKey(key).
+				WithNamespaceOffset(1))
 			if err != nil {
 				return 0, 0, err
 			}
@@ -249,6 +250,10 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 			return db.DropPrefix(x.DataPrefix(ns))
 		case pb.DropOperation_ATTR:
 			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
+		case pb.DropOperation_NS:
+			ns, err := strconv.ParseUint(operation.DropValue, 0, 64)
+			x.Check(err)
+			return db.BanNamespace(ns)
 		}
 	}
 	return nil

@@ -642,6 +642,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		})
 
 	case proposal.DeleteNs != nil:
+		x.AssertTrue(proposal.DeleteNs.Namespace != x.GalaxyNamespace)
 		n.elog.Printf("Deleting namespace: %d", proposal.DeleteNs.Namespace)
 		return State.Pstore.BanNamespace(proposal.DeleteNs.Namespace)
 
