@@ -446,7 +446,9 @@ func (mrw *AddRewriter) Rewrite(
 				parentVarName: m.MutatedType().Name() + "Root",
 			}
 			authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
-			upsertQuery = RewriteUpsertQueryFromMutation(m, authRw, upsertVar, idExistence[upsertVar])
+			upsertQuery = append(upsertQuery, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, idExistence[upsertVar])...)
+			// Add upsert condition
+			fragment.conditions = append(fragment.conditions, fmt.Sprintf("gt(len(%s), 0)", upsertVar))
 		}
 		if fragment != nil {
 			fragments = append(fragments, fragment)
@@ -708,7 +710,28 @@ func (mrw *AddRewriter) FromMutationResult(
 		uids = append(uids, uid)
 	}
 
-	if len(assigned) == 0 && errs == nil {
+	mutated := extractMutated(result, mutation.Name())
+
+	if len(mutated) > 0 {
+		// This is the case of a conditional upsert where we should get uids from mutated.
+		for _, id := range mutated {
+			uid, err := strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				return nil, schema.GQLWrapf(err,
+					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
+						"uint64", id)
+			}
+			uids = append(uids, uid)
+		}
+	}
+
+	upsert := false
+	upsertVal := mutation.ArgValue(schema.UpsertArgName)
+	if upsertVal != nil {
+		upsert = upsertVal.(bool)
+	}
+
+	if len(uids) == 0 && errs == nil && !upsert {
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
@@ -1442,6 +1465,7 @@ func rewriteObject(
 	addInverseLink(newObj, srcField, srcUID)
 
 	frag := newFragment(newObj)
+	// TODO(Rajas)L Check if newNodes only needs to be set in case new nodes have been added.
 	frag.newNodes[variable] = typ
 
 	updateFromChildren := func(parentFragment, childFragment *mutationFragment) {

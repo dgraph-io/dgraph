@@ -808,11 +808,11 @@
     }
 
 -
-  name: "Upsert Mutation 1"
-  explanation: "As the state exists the country of the state is updated"
+  name: "Multiple Upsert Mutation 1"
+  explanation: "As both states exist, the countries of the states are updated"
   gqlmutation: |
-    mutation addState($input: AddStateInput!) {
-      addState(input: [$input], upsert: true) {
+    mutation addState($input: [AddStateInput!]!) {
+      addState(input: $input, upsert: true) {
         state {
           name
         }
@@ -820,11 +820,18 @@
     }
   gqlvariables: |
     { "input":
-      {
-        "code": "nsw",
-        "name": "NSW",
-        "country": { "id": "0x12" }
-      }
+      [
+        {
+          "code": "nsw",
+          "name": "NSW",
+          "country": { "id": "0x12" }
+        },
+        {
+          "code": "mh",
+          "name": "Maharashtra",
+          "country": { "id": "0x14" }
+        }
+      ]
     }
   dgquery: |-
     query {
@@ -834,19 +841,33 @@
       Country2(func: uid(0x12)) @filter(type(Country)) {
         uid
       }
+      State3(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
+      Country4(func: uid(0x14)) @filter(type(Country)) {
+        uid
+      }
     }
   qnametouid: |-
     {
       "State1": "0x11",
-      "Country2": "0x12"
+      "Country2": "0x12",
+      "State3": "0x13",
+      "Country4": "0x14"
     }
   dgquerysec: |-
     query {
       State1 as addState(func: uid(0x11)) @filter(type(State)) {
         uid
       }
+      State3 as addState(func: uid(0x13)) @filter(type(State)) {
+        uid
+      }
       var(func: uid(State1)) {
-        Country3 as State.country @filter(NOT (uid(0x12)))
+        Country5 as State.country @filter(NOT (uid(0x12)))
+      }
+      var(func: uid(State3)) {
+        Country7 as State.country @filter(NOT (uid(0x14)))
       }
     }
   dgmutations:
@@ -861,7 +882,7 @@
       deletejson: |
         [
           {
-            "uid":"uid(Country3)",
+            "uid":"uid(Country5)",
             "Country.states":
               [
                 {
@@ -870,13 +891,36 @@
               ]
           }
         ]
+      cond: "@if(gt(len(State1), 0))"
+    - setjson: |
+        { "uid" : "uid(State3)",
+          "State.name": "Maharashtra",
+          "State.country": {
+            "uid": "0x14",
+            "Country.states": [ { "uid": "uid(State3)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country7)",
+            "Country.states":
+              [
+                {
+                  "uid":"uid(State3)"
+                }
+              ]
+          }
+        ]
+      cond: "@if(gt(len(State3), 0))"
 
 -
-  name: "Upsert Mutation 2"
-  explanation: "As the state does not exist, this acts like an add mutation"
+  name: "Multiple Upsert Mutation 2"
+  explanation: "The first state exists and is updated. Second is created. Country
+    is also created in second"
   gqlmutation: |
-    mutation addState($input: AddStateInput!) {
-      addState(input: [$input], upsert: true) {
+    mutation addState($input: [AddStateInput!]!) {
+      addState(input: $input, upsert: true) {
         state {
           name
         }
@@ -884,11 +928,18 @@
     }
   gqlvariables: |
     { "input":
-      {
-        "code": "nsw",
-        "name": "NSW",
-        "country": { "id": "0x12" }
-      }
+      [
+        {
+          "code": "nsw",
+          "name": "NSW",
+          "country": { "id": "0x12" }
+        },
+        {
+          "code": "mh",
+          "name": "Maharashtra",
+          "country": { "name": "India" }
+        }
+      ]
     }
   dgquery: |-
     query {
@@ -898,20 +949,56 @@
       Country2(func: uid(0x12)) @filter(type(Country)) {
         uid
       }
+      State3(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
     }
   qnametouid: |-
     {
+      "State1": "0x11",
       "Country2": "0x12"
+    }
+  dgquerysec: |-
+    query {
+      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State1)) {
+        Country4 as State.country @filter(NOT (uid(0x12)))
+      }
     }
   dgmutations:
     - setjson: |
-        { "uid" : "_:State1",
-          "dgraph.type": ["State"],
+        { "uid" : "uid(State1)",
           "State.name": "NSW",
-          "State.code": "nsw",
           "State.country": {
             "uid": "0x12",
-            "Country.states": [ { "uid": "_:State1" } ]
+            "Country.states": [ { "uid": "uid(State1)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country4)",
+            "Country.states":
+              [
+                {
+                  "uid":"uid(State1)"
+                }
+              ]
+          }
+        ]
+      cond: "@if(gt(len(State1), 0))"
+    - setjson: |
+        { "uid" : "_:State3",
+          "dgraph.type": ["State"],
+          "State.name": "Maharashtra",
+          "State.code": "mh",
+          "State.country": {
+            "uid": "_:Country6",
+            "dgraph.type": ["Country"],
+            "Country.name": "India",
+            "Country.states": [ { "uid": "_:State3" } ]
           }
         }
 
