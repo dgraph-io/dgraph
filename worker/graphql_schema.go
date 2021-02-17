@@ -86,7 +86,10 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	defer schemaLock.Unlock()
 
 	ctx = x.AttachJWTNamespace(ctx)
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While updating gql schema")
+	}
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),

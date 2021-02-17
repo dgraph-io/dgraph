@@ -278,21 +278,23 @@ func ExtractNamespaceHTTP(r *http.Request) uint64 {
 }
 
 // ExtractNamespace parses the namespace value from the incoming gRPC context.
-func ExtractNamespace(ctx context.Context) uint64 {
+func ExtractNamespace(ctx context.Context) (uint64, error) {
 	if !WorkerConfig.AclEnabled {
-		return GalaxyNamespace
+		return GalaxyNamespace, nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return 0, errors.New("No metadata in the context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		glog.Fatal("No namespace in the metadata of context")
+		return 0, errors.New("No namespace in the metadata of context")
 	}
-	namespace, err := strconv.ParseUint(ns[0], 10, 64)
-	Check(err)
-	return namespace
+	namespace, err := strconv.ParseUint(ns[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Error while parsing namespace from metadata")
+	}
+	return namespace, nil
 }
 
 func IsGalaxyOperation(ctx context.Context) bool {

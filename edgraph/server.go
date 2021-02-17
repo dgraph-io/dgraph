@@ -273,7 +273,10 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		// Parse the schema preserving the namespace.
 		result, err = schema.Parse(op.Schema)
 	} else {
-		namespace := x.ExtractNamespace(ctx)
+		namespace, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
 		result, err = schema.ParseWithNamespace(op.Schema, namespace)
 	}
 
@@ -365,7 +368,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	empty := &api.Payload{}
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While altering")
+	}
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -412,8 +418,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		// Set the namespace in the DropValue to make it persistant.
-		m.DropValue = fmt.Sprintf("%#x", x.ExtractNamespace(ctx))
+		// Set the namespace in the DropValue to re-apply it during backup/restore.
+		m.DropValue = fmt.Sprintf("%#x", namespace)
 		_, err = query.ApplyMutations(ctx, m)
 		if err != nil {
 			return empty, err
@@ -556,11 +562,14 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if err != nil {
 		return err
 	}
-
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While doing mutations:")
+	}
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
-			pred = x.NamespaceAttr(x.ExtractNamespace(ctx), pred)
+			pred = x.NamespaceAttr(ns, pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}

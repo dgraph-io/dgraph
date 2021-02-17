@@ -82,7 +82,10 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
+	}
 
 	cs := gsr.admin.schema[ns]
 	if cs == nil || cs.ID == "" {

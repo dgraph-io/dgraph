@@ -98,7 +98,10 @@ func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver)
 }
 
 func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return schema.ErrorResponse(err)
+	}
 	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 

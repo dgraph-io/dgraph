@@ -488,7 +488,8 @@ func upsertGuardian(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansUidStr)
 	}
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	x.Check(err)
 	x.GuardiansUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted the guardian of namespace: %d\n", ns)
 	return nil
@@ -561,7 +562,8 @@ func upsertGroot(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 	}
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	x.Check(err)
 	x.GrootUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted groot account for namespace %d\n", ns)
 	return nil
@@ -579,7 +581,8 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 func authorizePreds(ctx context.Context, userData, preds []string,
 	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
-	ns := x.ExtractNamespace(ctx)
+	// TODO(Naman): Do error handling here.
+	ns, _ := x.ExtractNamespace(ctx)
 	userId := userData[0]
 	groupIds := userData[1:]
 	blockedPreds := make(map[string]struct{})
