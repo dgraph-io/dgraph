@@ -39,6 +39,10 @@ func resolveAddNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resol
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
+	if req.Password == "" {
+		// Use the default password, if the user does not specify.
+		req.Password = "password"
+	}
 	var ns uint64
 	if ns, err = (&edgraph.Server{}).CreateNamespace(ctx, req.Password); err != nil {
 		return resolve.EmptyResult(m, err), false

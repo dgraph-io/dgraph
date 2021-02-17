@@ -415,7 +415,7 @@ const adminTypes = `
 	}
 
 	input AddNamespaceInput {
-		password: String!
+		password: String
 	}
 
 	input DeleteNamespaceInput {
@@ -493,7 +493,7 @@ const adminMutations = `
 	"""
 	Add a new namespace.
 	"""
-	addNamespace(input: AddNamespaceInput!): NamespacePayload
+	addNamespace(input: AddNamespaceInput): NamespacePayload
 
 	"""
 	Delete a namespace.
