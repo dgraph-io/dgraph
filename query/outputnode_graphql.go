@@ -599,8 +599,18 @@ func (genc *graphQLEncoder) writeCustomField(curSelection gqlSchema.Field,
 	return false
 }
 
+func (genc *graphQLEncoder) initChildAttrId(field gqlSchema.Field) {
+	for _, f := range field.SelectionSet() {
+		_ = genc.idForAttr(f.DgraphAlias())
+		genc.initChildAttrId(f)
+	}
+}
+
 func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJsonNode) {
 	if field.HasCustomHTTPChild() {
+		// initially, create attr ids for all the descendents of this field,
+		// so that they don't result in race-conditions later
+		genc.initChildAttrId(field)
 		// TODO(abhimanyu):
 		//  * benchmark the approach of using channels vs mutex to update the fastJson tree.
 		//  * benchmark and find how much load should be put on HttpClient concurrently.
@@ -632,6 +642,7 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			for res := range genc.customFieldResultCh {
 				childAttr := genc.idForAttr(res.childField.DgraphAlias())
 				for _, parent := range res.parents {
+					// TODO: Single Write - multiple Read race for arena
 					childNode, err := genc.makeCustomNode(childAttr, res.childVal)
 					if err != nil {
 						genc.errCh <- x.GqlErrorList{res.childField.GqlErrorf(nil, err.Error())}
@@ -826,6 +837,7 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 					}
 				} else {
 					// for REST requests, we need to correctly construct both URL & body
+					var err error
 					url, err = gqlSchema.SubstituteVarsInURL(url,
 						uniqueParents[idx].(map[string]interface{}))
 					if err != nil {
