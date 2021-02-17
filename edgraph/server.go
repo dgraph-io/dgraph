@@ -1016,7 +1016,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	return &api.Response{Json: jsonOut}, nil
 }
 
-// Filter out the tablets that do not belong to the requester's namespace.
+// Filter out the tablets that do not belong to the requestor's namespace.
 func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	namespace, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
