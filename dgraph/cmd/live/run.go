@@ -673,7 +673,8 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == 0 {
+	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
+		opt.namespaceToLoad != x.GalaxyNamespace {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
