@@ -115,7 +115,7 @@ func newKeyReader(cfg *viper.Viper) (keyReader, error) {
 		keyReaders++
 	}
 	if roleID != "" || secretID != "" {
-		keyReader, err = newVaultKeyReader(vaultFlag, cfg)
+		keyReader, err = newVaultKeyReader(vaultFlag)
 		if err != nil {
 			return nil, err
 		}

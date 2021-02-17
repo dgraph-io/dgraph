@@ -75,11 +75,11 @@ func (r *Response) WithError(err error) {
 		return
 	}
 
-	if !x.Config.GraphQL.GetBool("debug") && strings.Contains(err.Error(), "authorization failed") {
+	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "authorization failed") {
 		return
 	}
 
-	if !x.Config.GraphQL.GetBool("debug") && strings.Contains(err.Error(), "GraphQL debug:") {
+	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "GraphQL debug:") {
 		return
 	}
 

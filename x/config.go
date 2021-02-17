@@ -35,14 +35,16 @@ type Options struct {
 	// normalize-node int - maximum number of nodes that can be returned in a query that uses the
 	//                      normalize directive
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
-	Limit *z.SuperFlag
+	Limit               *z.SuperFlag
+	LimitMutationsNquad int
 	// GraphQL options:
 	//
 	// extension bool - Will be set to see extensions in GraphQL results
 	// debug bool - Will enable debug mode in GraphQL.
 	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
 	// poll-interval duration - The polling interval for graphql subscription.
-	GraphQL *z.SuperFlag
+	GraphQL      *z.SuperFlag
+	GraphQLDebug bool
 }
 
 // Config stores the global instance of this package's options.
@@ -102,6 +104,9 @@ type WorkerOptions struct {
 	// enabled bool - turn Ludicrous mode on or off
 	// concurrency int - number of concurrent threads in Ludicrous mode
 	Ludicrous *z.SuperFlag
+	// LudicrousEnabled mirrors the "enabled" flag of the Ludicrous SuperFlag for usage in critical
+	// paths.
+	LudicrousEnabled bool
 	// Security options:
 	//
 	// whitelist string - comma separated IP addresses

@@ -723,6 +723,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
+		LudicrousEnabled:    ludicrous.GetBool("enabled"),
 		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
@@ -744,9 +745,11 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
+	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
+	x.Config.GraphQLDebug = x.Config.GraphQL.GetBool("debug")
 	if x.Config.GraphQL.GetString("lambda-url") != "" {
 		graphqlLambdaUrl, err := url.Parse(x.Config.GraphQL.GetString("lambda-url"))
 		if err != nil {

@@ -575,7 +575,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.Ludicrous.GetBool("enabled") {
+	if x.WorkerConfig.LudicrousEnabled {
 		// Mutations are automatically committed in case of ludicrous mode, so we don't
 		// need to manually commit.
 		if resp.Txn == nil {
@@ -835,7 +835,7 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
-	if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
+	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
 			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
 	}

@@ -28,7 +28,6 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -59,7 +58,7 @@ type vaultKeyReader struct {
 	format   string
 }
 
-func newVaultKeyReader(vaultFlag *z.SuperFlag, cfg *viper.Viper) (*vaultKeyReader, error) {
+func newVaultKeyReader(vaultFlag *z.SuperFlag) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
 		addr:     vaultFlag.GetString("addr"),
 		roleID:   vaultFlag.GetString("role-id-file"),
