@@ -911,7 +911,7 @@ func run() {
 		WithEncryptionKey(opt.key).
 		WithBlockCacheSize(1 << 30).
 		WithIndexCacheSize(1 << 30).
-		WithNamespaceOffset(1) // We don't want to see the banned data.
+		WithNamespaceOffset(x.NamespaceOffset) // We don't want to see the banned data.
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
