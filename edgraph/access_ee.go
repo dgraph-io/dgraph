@@ -582,11 +582,18 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-func authorizePreds(ctx context.Context, userData, preds []string,
-	aclOp *acl.Operation) (map[string]struct{}, []string) {
+type authPredResult struct {
+	allowed []string
+	blocked map[string]struct{}
+}
 
-	// TODO(Naman): Do error handling here.
-	ns, _ := x.ExtractNamespace(ctx)
+func authorizePreds(ctx context.Context, userData, preds []string,
+	aclOp *acl.Operation) (*authPredResult, error) {
+
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While authorizing preds")
+	}
 	userId := userData[0]
 	groupIds := userData[1:]
 	blockedPreds := make(map[string]struct{})
@@ -614,7 +621,7 @@ func authorizePreds(ctx context.Context, userData, preds []string,
 		}
 	}
 	aclCachePtr.RUnlock()
-	return blockedPreds, allowedPreds
+	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -669,10 +676,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds, _ := authorizePreds(ctx, userData, preds, acl.Modify)
-		if len(blockedPreds) > 0 {
+		result, err := authorizePreds(ctx, userData, preds, acl.Modify)
+		if err != nil {
+			return nil
+		}
+		if len(result.blocked) > 0 {
 			var msg strings.Builder
-			for key := range blockedPreds {
+			for key := range result.blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
@@ -780,17 +790,20 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			}
 			return nil
 		}
-		blockedPreds, allowedPreds := authorizePreds(ctx, userData, preds, acl.Write)
-		if len(blockedPreds) > 0 {
+		result, err := authorizePreds(ctx, userData, preds, acl.Write)
+		if err != nil {
+			return err
+		}
+		if len(result.blocked) > 0 {
 			var msg strings.Builder
-			for key := range blockedPreds {
+			for key := range result.blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-		gmu.AllowedPreds = allowedPreds
+		gmu.AllowedPreds = result.allowed
 		return nil
 	}
 
@@ -924,11 +937,14 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			return nil, nil, nil
 		}
 
-		blockedPreds, allowedPreds := authorizePreds(ctx, userData, preds, acl.Read)
-		return blockedPreds, allowedPreds, nil
+		result, err := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, result.allowed, err
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
+	if err != nil {
+		return err
+	}
 
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -938,10 +954,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			operation: acl.Read,
 			allowed:   err == nil,
 		}).String())
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if len(blockedPreds) != 0 {
@@ -1011,9 +1023,8 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
-		blockedPreds, _ := authorizePreds(ctx, userData, preds, acl.Read)
-
-		return blockedPreds, nil
+		result, err := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, err
 	}
 
 	// find the predicates which are blocked for the schema query
