@@ -147,12 +147,12 @@ they form a Raft group and provide synchronous replication.
 		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")`)
 
 	flag.String("acl", "",
-		`(Enterprise feature)
+		`This flag provides settings for Access Control Lists (Enterprise Feature)
 		ACL options (defaults shown):
 	secret-file=; The file that stores the HMAC secret, which is used for signing the JWT and `+
 			`should have at least 32 ASCII characters. Required to enable ACLs.`+`
-	access-ttl=; The TTL for the access JWT.
-	refresh-ttl=; The TTL for the refresh JWT.
+	access-ttl=6h; The TTL for the access JWT.
+	refresh-ttl=30d; The TTL for the refresh JWT.
 		The duration format for TTLs is the same as time.ParseDuration with an added 'd' suffix `+
 			`for days.`)
 
