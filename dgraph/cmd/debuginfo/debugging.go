@@ -39,6 +39,12 @@ var pprofProfileTypes = []string{
 	"trace",
 }
 
+var metricTypes = []string{
+	"jemalloc",
+	"state",
+	"health",
+}
+
 func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []string) {
 	u, err := url.Parse(addr)
 	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
@@ -54,7 +60,7 @@ func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []st
 			profileType, int(duration.Seconds()))
 		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, profileType)
 
-		if err := saveProfile(source, savePath, duration); err != nil {
+		if err := saveDebug(source, savePath, duration); err != nil {
 			glog.Errorf("error while saving pprof profile from %s: %s", source, err)
 			continue
 		}
@@ -63,13 +69,37 @@ func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []st
 	}
 }
 
-// saveProfile writes the profile specified in the argument fetching it from the host
+func saveMetrics(addr, pathPrefix string, duration time.Duration, metrics []string) {
+	u, err := url.Parse(addr)
+	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
+		u, err = url.Parse("http://" + addr)
+	}
+	if err != nil || u.Host == "" {
+		glog.Errorf("error while parsing address %s: %s", addr, err)
+		return
+	}
+
+	for _, metricType := range metrics {
+		source := fmt.Sprintf("%s/%s", u.String(),
+			metricType)
+		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, metricType)
+
+		if err := saveDebug(source, savePath, duration); err != nil {
+			glog.Errorf("error while saving metric from %s: %s", source, err)
+			continue
+		}
+
+		glog.Infof("saving %s metric in %s", metricType, savePath)
+	}
+}
+
+// saveDebug writes the debug specified in the argument fetching it from the host
 // provided in the configuration
-func saveProfile(sourceURL, filePath string, duration time.Duration) error {
+func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 	var err error
 	var resp io.ReadCloser
 
-	glog.Infof("fetching profile over HTTP from %s", sourceURL)
+	glog.Infof("fetching information over HTTP from %s", sourceURL)
 	if duration > 0 {
 		glog.Info(fmt.Sprintf("please wait... (%v)", duration))
 	}
@@ -83,7 +113,7 @@ func saveProfile(sourceURL, filePath string, duration time.Duration) error {
 	defer resp.Close()
 	out, err := os.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("error while creating profile dump file: %s", err)
+		return fmt.Errorf("error while creating dump file: %s", err)
 	}
 	_, err = io.Copy(out, resp)
 	return err

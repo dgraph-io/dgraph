@@ -36,6 +36,7 @@ type debugInfoCmdOpts struct {
 	duration  uint32
 
 	pprofProfiles []string
+	metricTypes   []string
 }
 
 var (
@@ -70,6 +71,8 @@ func init() {
 		"Duration for time-based profile collection.")
 	flags.StringSliceVarP(&debugInfoCmd.pprofProfiles, "profiles", "p", pprofProfileTypes,
 		"List of pprof profiles to dump in the report.")
+	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricTypes,
+		"List of metrics profiles to dump in the report.")
 }
 
 func collectDebugInfo() (err error) {
@@ -100,11 +103,13 @@ func collectPProfProfiles() {
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
 		saveProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.metricTypes)
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
 		saveProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.metricTypes)
 	}
 }
 
