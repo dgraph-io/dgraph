@@ -273,11 +273,12 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		// Parse the schema preserving the namespace.
 		result, err = schema.Parse(op.Schema)
 	} else {
-		namespace, err := x.ExtractNamespace(ctx)
+		var ns uint64
+		ns, err = x.ExtractNamespace(ctx)
 		if err != nil {
 			return nil, err
 		}
-		result, err = schema.ParseWithNamespace(op.Schema, namespace)
+		result, err = schema.ParseWithNamespace(op.Schema, ns)
 	}
 
 	if err != nil {
