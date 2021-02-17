@@ -314,7 +314,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
-		x.Check(err)
+		if err != nil {
+			return errors.Wrapf(err, "While apply drop data mutation ")
+		}
 		// Ensures nothing get written to disk due to commit proposals.
 		// TODO(Naman): Should we reset the pending transactions?
 		posting.Oracle().ResetTxns()

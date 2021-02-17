@@ -489,7 +489,9 @@ func upsertGuardian(ctx context.Context) error {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansUidStr)
 	}
 	ns, err := x.ExtractNamespace(ctx)
-	x.Check(err)
+	if err != nil {
+		return errors.Wrapf(err, "While upserting group with id %s", x.GuardiansId)
+	}
 	x.GuardiansUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted the guardian of namespace: %d\n", ns)
 	return nil
@@ -563,7 +565,9 @@ func upsertGroot(ctx context.Context) error {
 		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
 	}
 	ns, err := x.ExtractNamespace(ctx)
-	x.Check(err)
+	if err != nil {
+		return errors.Wrapf(err, "While upserting user with id %s", x.GrootId)
+	}
 	x.GrootUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted groot account for namespace %d\n", ns)
 	return nil
