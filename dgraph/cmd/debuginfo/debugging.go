@@ -43,6 +43,8 @@ var metricTypes = []string{
 	"jemalloc",
 	"state",
 	"health",
+	"debug/vars",
+	"debug/prometheus_metrics",
 }
 
 func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []string) {
@@ -82,8 +84,7 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metrics []stri
 	for _, metricType := range metrics {
 		source := fmt.Sprintf("%s/%s", u.String(),
 			metricType)
-		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, metricType)
-
+		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, strings.ReplaceAll(metricType, "/", "_"))
 		if err := saveDebug(source, savePath, duration); err != nil {
 			glog.Errorf("error while saving metric from %s: %s", source, err)
 			continue
