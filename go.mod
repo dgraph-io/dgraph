@@ -18,7 +18,7 @@ require (
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.5
-	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
+	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210215165829-1ea6c958d0a3
 	github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -40,7 +40,7 @@ require (
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
-	github.com/graph-gophers/graphql-transport-ws v0.0.0-20200904065757-c681d7e1b135 // indirect
+	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
