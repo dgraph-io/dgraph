@@ -419,7 +419,7 @@ func ResetAcl(closer *z.Closer) {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
 		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if err := upsertGroot(ctx); err != nil {
+		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -495,7 +495,7 @@ func upsertGuardian(ctx context.Context) error {
 }
 
 // upsertGroot must be called after setting the namespace in the context.
-func upsertGroot(ctx context.Context) error {
+func upsertGroot(ctx context.Context, passwd string) error {
 	// groot is the default user of guardians group.
 	query := fmt.Sprintf(`
 			{
@@ -505,7 +505,7 @@ func upsertGroot(ctx context.Context) error {
 				guid as var(func: eq(dgraph.xid, "%s"))
 			}
 		`, x.GrootId, x.GuardiansId)
-	userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
+	userNQuads := acl.CreateUserNQuads(x.GrootId, passwd)
 	userNQuads = append(userNQuads, &api.NQuad{
 		Subject:   "_:newuser",
 		Predicate: "dgraph.user.group",
