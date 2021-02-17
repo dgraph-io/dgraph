@@ -811,7 +811,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		AllowedPreds:     gq.AllowedPreds,
 	}
 
-	if len(args.Cascade.Fields) != 0 {
+	if len(args.Cascade.Fields) >= 0 {
 		args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
 		delete(gq.Args, "first")
 		args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
