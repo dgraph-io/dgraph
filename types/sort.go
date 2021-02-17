@@ -59,14 +59,18 @@ func (s byValue) Less(i, j int) bool {
 		return false
 	}
 	for vidx := range first {
-		// Null value is considered greatest hence comes at first place while doing descending sort
-		// and at last place while doing ascending sort.
-		if first[vidx].Value == nil {
+		// Null values are appended at the end of the sort result for both ascending and descending.
+		// If both first and second has nil values, then maintain the order by UID.
+		if first[vidx].Value == nil && second[vidx].Value == nil {
 			return s.desc[vidx]
 		}
 
+		if first[vidx].Value == nil {
+			return false
+		}
+
 		if second[vidx].Value == nil {
-			return !s.desc[vidx]
+			return true
 		}
 
 		// We have to look at next value to decide.
