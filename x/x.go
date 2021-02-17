@@ -260,11 +260,9 @@ func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	return namespace
 }
 
-// ExtractNamespace parses the namespace value from the incoming gRPC context.
+// ExtractNamespace parses the namespace value from the incoming gRPC context. For the non-ACL mode,
+// it is caller's responsibility to set the galaxy namespace.
 func ExtractNamespace(ctx context.Context) (uint64, error) {
-	if !WorkerConfig.AclEnabled {
-		return GalaxyNamespace, nil
-	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return 0, errors.New("No metadata in the context")
