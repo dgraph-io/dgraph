@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -114,18 +113,13 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
 
-	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
-
-	if authVariables == nil {
-		customClaims, err := authorization.ExtractCustomClaims(ctx)
-		if err != nil {
-			return nil, err
-		}
-		authVariables = customClaims.AuthVariables
+	customClaims, err := gqlQuery.GetAuthMeta().ExtractCustomClaims(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      getAuthSelector(gqlQuery.QueryType()),
 		parentVarName: gqlQuery.ConstructedFor().Name() + "Root",

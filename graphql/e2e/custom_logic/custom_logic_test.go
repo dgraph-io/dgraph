@@ -1065,9 +1065,8 @@ func TestCustomFieldsShouldSkipNonEmptyVariable(t *testing.T) {
 }
 
 func TestCustomFieldsShouldPassBody(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
+
 	schema := `
     type User {
 		id: String! @id @search(by: [hash, regexp])
@@ -2571,9 +2570,7 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 
 func TestCustomDQL(t *testing.T) {
 	t.Skipf("enable after fixing @custom(dql: ...)")
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	schema := `
 	type Tweets {

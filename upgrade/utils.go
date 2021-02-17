@@ -49,7 +49,7 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 		defer cancel()
 		// login to cluster
 		//TODO(Ahsan): What should be the namespace here?
-		if err = dg.Login(ctx, userName, password, x.GalaxyNamespace); err != nil {
+		if err = dg.LoginIntoNamespace(ctx, userName, password, x.GalaxyNamespace); err != nil {
 			x.Check(conn.Close())
 			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
 		}

@@ -196,12 +196,18 @@ type Comment1 {
       replies: [Comment1]
 }
 
+type author1{
+      name:String! @id @search(by: [regexp])
+      posts:[post1] @hasInverse(field: author)
+}
+
 type post1{
         id: ID
         title: String! @id @search(by: [regexp])
         numLikes: Int64 @search
         commentsByMonth: [Int]
         likesByMonth: [Int64]
+        author:author1 @hasInverse(field: posts)
 }
 
 type Person1 {

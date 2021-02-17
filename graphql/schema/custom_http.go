@@ -167,7 +167,7 @@ func GetBodyForLambda(ctx context.Context, field Field, parents,
 	body := make(map[string]interface{})
 	body["resolver"] = field.GetObjectName() + "." + field.Name()
 	body["authHeader"] = map[string]interface{}{
-		"key":   authorization.GetHeader(),
+		"key":   field.GetAuthMeta().GetHeader(),
 		"value": authorization.GetJwtToken(ctx),
 	}
 	if parents != nil {

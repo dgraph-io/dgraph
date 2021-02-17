@@ -644,13 +644,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		switch {
 		case e.attr == "dgraph.graphql.xid":
 			// Ignore this predicate.
-		case e.attr == "dgraph.cors":
-			// Ignore this predicate.
 		case e.attr == "dgraph.drop.op":
-			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.schema_created_at":
-			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.schema_history":
 			// Ignore this predicate.
 		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
@@ -685,6 +679,14 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				Version: 2, // GraphQL schema value
 			}
 			return listWrap(kv), nil
+
+		// below predicates no longer exist internally starting v21.03 but leaving them here
+		// so that users with a binary with version >= 21.03 can export data from a version < 21.03
+		// without this internal data showing up.
+		case e.attr == "dgraph.cors":
+		case e.attr == "dgraph.graphql.schema_created_at":
+		case e.attr == "dgraph.graphql.schema_history":
+			// Ignore these predicates.
 
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)

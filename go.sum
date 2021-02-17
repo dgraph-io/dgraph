@@ -120,13 +120,13 @@ github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Ev
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgraph-io/badger/v3 v3.0.0-20210209201111-6c35ad6c28e0 h1:7jQ7NVsBWFeyCOg25gVmCI1qM1WdHvu9fRLdozVn/BU=
 github.com/dgraph-io/badger/v3 v3.0.0-20210209201111-6c35ad6c28e0/go.mod h1:m0D1mIoSHk/Ph/5nUU1Ft3raZHHQ3M7VBs5Iu1qbdHw=
-github.com/dgraph-io/dgo/v200 v200.0.0-20210208110130-c589adec3d8f h1:XZRsTllGQWUu0SpAb8mGW9motF0KmD7f6UEKa7y2grE=
-github.com/dgraph-io/dgo/v200 v200.0.0-20210208110130-c589adec3d8f/go.mod h1:ky1IOcEAlOxmk89KxXGECgRAEkdJrNHVymvCmixaVuM=
+github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2 h1:3STgJCaLdsBynA0FDLqocwk/OdlnrQ5MGbR74C4NvUs=
+github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2/go.mod h1:zCfS4R3E/UC/PhETXJYq/Blia0eCH1EQqKrWDvvimxE=
 github.com/dgraph-io/gqlgen v0.13.2 h1:TNhndk+eHKj5qE7BenKKSYdSIdOGhLqxR1rCiMso9KM=
 github.com/dgraph-io/gqlgen v0.13.2/go.mod h1:iCOrOv9lngN7KAo+jMgvUPVDlYHdf7qDwsTkQby2Sis=
 github.com/dgraph-io/gqlparser/v2 v2.1.1/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
-github.com/dgraph-io/gqlparser/v2 v2.1.4 h1:yMj5848fLCiJQX6/qEHtMl46i2mr7HzrD8fwHI86Svg=
-github.com/dgraph-io/gqlparser/v2 v2.1.4/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
+github.com/dgraph-io/gqlparser/v2 v2.1.5 h1:FNFSzyOEZ8gs97SLBtn2Pez9f12emvsQ6Vv6oNtg5rc=
+github.com/dgraph-io/gqlparser/v2 v2.1.5/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:PDEhlwHpkEQ5WBfOOKZCNZTXFDGyCEWTYDhxGQbyIpk=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1 h1:E+NH1+aTO3vgP/t01DvYbX8qnwBC0bPgPwK7y+y0vaE=
@@ -893,3 +893,5 @@ rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8
 rsc.io/pdf v0.1.1/go.mod h1:n8OzWcQ6Sp37PL01nO98y4iUCRdTGarVfzxY20ICaU4=
 sourcegraph.com/sourcegraph/appdash v0.0.0-20180110180208-2cc67fd64755/go.mod h1:hI742Nqp5OhwiqlzhgfbWU4mW4yO10fP+LoT9WOswdU=
 sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67/go.mod h1:L5q+DGLGOQFpo1snNEkLOJT2d1YTW66rWNzatr3He1k=
+src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14 h1:e8P02bjvCTmi33s1MoinoTwMwrCq7+omCS3/3+GZWXA=
+src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14/go.mod h1:31CE1YKtDOrKTk9PSnjTpe6YbO6W/0LTYZ1VskL09oU=

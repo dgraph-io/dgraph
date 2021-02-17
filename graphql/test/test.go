@@ -56,10 +56,13 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 }
 
 func LoadSchemaFromString(t *testing.T, sch string) schema.Schema {
-	handler, err := schema.NewHandler(string(sch), false, false)
+	handler, err := schema.NewHandler(sch, false)
 	requireNoGQLErrors(t, err)
 
-	return LoadSchema(t, handler.GQLSchema())
+	schema := LoadSchema(t, handler.GQLSchema())
+	schema.SetMeta(handler.MetaInfo())
+
+	return schema
 }
 
 // GetMutation gets a single schema.Mutation from a schema.Operation.
