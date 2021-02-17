@@ -31,6 +31,7 @@ import (
 )
 
 const (
+	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
 	SecurityDefaults  = `token=""; whitelist="";`
 	RaftDefaults      = `idx=0; group=0; learner=false; snapshot-after=10000; pending-proposals=256;`
 	LudicrousDefaults = `mode=false; concurrency=2000;`

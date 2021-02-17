@@ -146,15 +146,15 @@ they form a Raft group and provide synchronous replication.
 		wish to whitelist for performing admin actions (i.e., --whitelist "144.142.126.254,
 		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")`)
 
-	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
-		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
-		"Enterprise feature.")
-	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
-		"Enterprise feature.")
-	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
-		"Enterprise feature.")
-	flag.String("mutations", "allow",
-		"Set mutation mode to allow, disallow, or strict.")
+	flag.String("acl", "",
+		`(Enterprise feature)
+		ACL options (defaults shown):
+	secret-file=; The file that stores the HMAC secret, which is used for signing the JWT and `+
+			`should have at least 32 ASCII characters. Required to enable ACLs.`+`
+	access-ttl=; The TTL for the access JWT.
+	refresh-ttl=; The TTL for the refresh JWT.
+		The duration format for TTLs is the same as time.ParseDuration with an added 'd' suffix `+
+			`for days.`)
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -664,7 +664,8 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	secretFile := Alpha.Conf.GetString("acl_secret_file")
+	acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
+	secretFile := acl.GetString("secret-file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
@@ -675,8 +676,8 @@ func run() {
 		}
 
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
+		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
+		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}

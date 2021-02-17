@@ -296,7 +296,7 @@ function test::manual_start_acl() {
   local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
-  dgraph::start_alphas "$n_alphas" --acl_secret_file "$ACL_SECRET_PATH"
+  dgraph::start_alphas "$n_alphas" --acl "secret-file=$ACL_SECRET_PATH;"
 
   for i in $(seq "$n_zeros"); do
     dgraph::healthcheck_zero "$i"
@@ -407,7 +407,7 @@ function test::manual_start_encryption_acl_tls() {
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" \
-    --acl_secret_file "$ACL_SECRET_PATH" \
+    --acl "secret-file=$ACL_SECRET_PATH;" \
     --encryption_key_file "$ENCRYPTION_KEY_PATH" \
     --tls_cacert "$TLS_PATH"/ca.crt --tls_node_cert "$TLS_PATH"/node.crt --tls_node_key "$TLS_PATH"/node.key
 
