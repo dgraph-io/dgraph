@@ -599,8 +599,18 @@ func (genc *graphQLEncoder) writeCustomField(curSelection gqlSchema.Field,
 	return false
 }
 
+func (genc *graphQLEncoder) initChildAttrId(field gqlSchema.Field) {
+	for _, f := range field.SelectionSet() {
+		_ = genc.idForAttr(f.DgraphAlias())
+		genc.initChildAttrId(f)
+	}
+}
+
 func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJsonNode) {
 	if field.HasCustomHTTPChild() {
+		// initially, create attr ids for all the descendents of this field,
+		// so that they don't result in race-conditions later
+		genc.initChildAttrId(field)
 		// TODO(abhimanyu):
 		//  * benchmark the approach of using channels vs mutex to update the fastJson tree.
 		//  * benchmark and find how much load should be put on HttpClient concurrently.
@@ -629,7 +639,15 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			//   so that whenever a custom field in encountered in the selection set,
 			//   just use the map to find out the fastJson node for that field.
 			// The last option seems better.
+
+			// the results slice keeps all the customFieldResults in memory as is, until all the
+			// custom fields aren't resolved. Once the channel is closed, it would update the
+			// fastJson tree serially, so that there are no race conditions.
+			results := make([]customFieldResult, 0)
 			for res := range genc.customFieldResultCh {
+				results = append(results, res)
+			}
+			for _, res := range results {
 				childAttr := genc.idForAttr(res.childField.DgraphAlias())
 				for _, parent := range res.parents {
 					childNode, err := genc.makeCustomNode(childAttr, res.childVal)
@@ -638,13 +656,7 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 						continue
 					}
 					childNode.next = parent.child
-					parent.child = childNode // this line may lead to a race condition between
-					// this write and multiple simultaneous reads during custom field resolution.
-					// But, the way reads are done, it doesn't matter whether they get the
-					// previous value or the new value after the write as they just keep iterating
-					// as long as they don't find a fastJson node returned for a required field
-					// from Dgraph.
-					// So, it seems fine to ignore this race condition.
+					parent.child = childNode
 				}
 			}
 			wg.Done()
@@ -826,6 +838,7 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 					}
 				} else {
 					// for REST requests, we need to correctly construct both URL & body
+					var err error
 					url, err = gqlSchema.SubstituteVarsInURL(url,
 						uniqueParents[idx].(map[string]interface{}))
 					if err != nil {
