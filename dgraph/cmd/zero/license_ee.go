@@ -72,12 +72,20 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 
 	intervalsInDay := int64(24*time.Hour) / int64(interval)
 	var counter int64
+	crashLeaner := func() {
+		if n.RaftContext.IsLearner {
+			glog.Errorf("Enterprise License missing or expired. " +
+				"Read replicas need an Enterprise License.")
+			n.server.closer.Signal()
+		}
+	}
 	for {
 		select {
 		case <-ticker.C:
 			counter++
 			license := n.server.license()
 			if !license.GetEnabled() {
+				crashLeaner()
 				continue
 			}
 
@@ -94,9 +102,11 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 			if !active {
 				n.server.expireLicense()
 				audit.Close()
+
 				glog.Warningf("Your enterprise license has expired and enterprise features are " +
 					"disabled. To continue using enterprise features, apply a valid license. To receive " +
 					"a new license, contact us at https://dgraph.io/contact.")
+				crashLeaner()
 			}
 		case <-closer.HasBeenClosed():
 			return

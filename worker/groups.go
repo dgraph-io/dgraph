@@ -312,6 +312,14 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
+
+	invalid := state.License != nil && !state.License.Enabled
+	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
+		glog.Errorf("License Expired. Cannot run read replicas.")
+		x.ServerCloser.Signal()
+		return
+	}
+
 	oldState := g.state
 	g.state = state
 

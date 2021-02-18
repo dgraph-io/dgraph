@@ -441,6 +441,12 @@ func (s *Server) Connect(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+
+	if m.Learner && !ms.License.GetEnabled() {
+		// Update the "ShouldCrash" function in zero.go if you change the error message here.
+		return nil, errors.New("Missing or expired Enterpise License. Cannot add Learner Node.")
+	}
+
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
