@@ -929,7 +929,7 @@ func TestNquadsFromJsonFacets5(t *testing.T) {
 			"friend": [
 				{
 					"name": "Dave",
-					"friend|close": "true",
+					"friend|close": true,
 					"friend": [
 						{
 							"name": "Emily",
