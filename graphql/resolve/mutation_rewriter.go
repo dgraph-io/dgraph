@@ -1610,7 +1610,7 @@ func existenceQueries(
 				}
 			} else {
 
-				// if not encountered till now, add it to the map
+				// if not encountered till now, add it to the map,
 				xidMetadata.variableObjMap[variable] = obj
 
 				// save if this node was seen at top level.
