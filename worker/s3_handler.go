@@ -368,7 +368,6 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
 				return
 			}
-			defer db.Close()
 
 			gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
 			if err != nil {
@@ -376,12 +375,14 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 			}
 			req := &pb.ExportRequest{
 				GroupId:     uint32(gid),
+				ReadTs:      restore.MaxLeaseUid,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
 				Destination: exportDir,
 			}
 
 			_, err = exportInternal(context.Background(), req, db, true)
+			db.Close()
 			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 		}(f)
 	}
