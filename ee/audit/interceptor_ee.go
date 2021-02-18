@@ -19,6 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -100,9 +101,10 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
-
 	var user string
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
+	var namespace uint64
+
+	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {
@@ -112,13 +114,29 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		}
 	}
 
+	extractNamespace := func(md metadata.MD) {
+		ns := md.Get("namespace")
+		if len(ns) == 0 {
+			namespace = UnknownNamespace
+		} else {
+			if namespace, err = strconv.ParseUint(ns[0], 10, 64); err != nil {
+				namespace = UnknownNamespace
+			}
+		}
+	}
+
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		extractUser(md)
+		extractNamespace(md)
+	}
+
 	cd := codes.Unknown
 	if serr, ok := status.FromError(err); ok {
 		cd = serr.Code()
 	}
 	auditor.Audit(&AuditEvent{
 		User:       user,
-		Namespace:  x.ExtractNamespace(ctx),
+		Namespace:  namespace,
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
