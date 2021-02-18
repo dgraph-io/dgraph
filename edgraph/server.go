@@ -1014,6 +1014,32 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	return &api.Response{Json: jsonOut}, nil
 }
 
+// Filter out the tablets that do not belong to the requestor's namespace.
+func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+	namespace, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return errors.Errorf("Namespace not found in JWT.")
+	}
+	if namespace == x.GalaxyNamespace {
+		// For galaxy namespace, we don't want to filter out the predicates.
+		return nil
+	}
+	for _, group := range ms.GetGroups() {
+		tablets := make(map[string]*pb.Tablet)
+		for pred, tablet := range group.GetTablets() {
+			if ns, attr := x.ParseNamespaceAttr(pred); namespace == ns {
+				tablets[attr] = tablet
+				tablets[attr].Predicate = attr
+			}
+		}
+		group.Tablets = tablets
+	}
+	return nil
+}
+
 // State handles state requests
 func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
@@ -1027,6 +1053,10 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	ms := worker.GetMembershipState()
 	if ms == nil {
 		return nil, errors.Errorf("No membership state found")
+	}
+
+	if err := filterTablets(ctx, ms); err != nil {
+		return nil, err
 	}
 
 	m := jsonpb.Marshaler{EmitDefaults: true}
