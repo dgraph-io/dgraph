@@ -13,6 +13,7 @@ package audit
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -129,11 +130,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 }
 
 func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		rb = []byte(err.Error())
-	}
-
+	rb := getRequestBody(r)
 	var user string
 	var ns uint64
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
@@ -154,6 +151,28 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
 	})
+}
+
+func getRequestBody(r *http.Request) []byte {
+	var in io.Reader = r.Body
+	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		if enc == "gzip" {
+			gz, err := gzip.NewReader(r.Body)
+			if err != nil {
+				return []byte(err.Error())
+			}
+			defer gz.Close()
+			in = gz
+		} else {
+			return []byte("unknown encoding")
+		}
+	}
+
+	body, err := ioutil.ReadAll(in)
+	if err != nil {
+		return []byte(err.Error())
+	}
+	return body
 }
 
 func getUserAndNamespace(token string, poorman bool) (string, uint64) {

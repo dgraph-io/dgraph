@@ -34,7 +34,6 @@ import (
 const (
 	defaultCDCConfig  = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 	defaultEventTopic = "dgraph-cdc"
-	defaultEventKey   = "dgraph-cdc-event"
 )
 
 // CDC struct is being used to send out change data capture events. There are two ways to do this:
@@ -176,7 +175,6 @@ func (cdc *CDC) processCDCEvents() {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
-			// todo(aman bansal): use namespace for key.
 			batch[i] = SinkMessage{
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
@@ -364,6 +362,8 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
+	// todo (aman): right now drop operations are still cluster wide.
+	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
 		return []CDCEvent{
 			{
