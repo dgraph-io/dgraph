@@ -1139,7 +1139,6 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
-			edge.Label = pp.Label
 
 			for {
 				// we only need to build reverse index here.
@@ -1170,7 +1169,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", rb.CurrentSchema.Predicate)
+			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
 	}
 
 	return false, nil
@@ -1220,7 +1219,6 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
-			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
 		return pl.addMutation(ctx, txn, newEdge)

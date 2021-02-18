@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -37,17 +36,18 @@ import (
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	// In expandEdges, for non * type prredicates, we prepend the namespace directly and for
+	// * type predicates, we fetch the predicates and prepend the namespace.
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
 	m.Edges = edges
 
-	err = checkIfDeletingAclOperation(m.Edges)
+	err = checkIfDeletingAclOperation(ctx, m.Edges)
 	if err != nil {
 		return nil, err
 	}
-
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -59,12 +59,27 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
+	namespace := x.ExtractNamespace(ctx)
+	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+
+	// Reset the namespace to the original.
+	defer func(ns uint64) {
+		x.AttachNamespace(ctx, ns)
+	}(namespace)
+
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
+		if isGalaxyQuery {
+			// The caller should make sure that the directed edges contain the namespace we want
+			// to insert into. Now, attach the namespace in the context, so that further query
+			// proceeds as if made from the user of 'namespace'.
+			namespace = edge.GetNamespace()
+			x.AttachNamespace(ctx, namespace)
+		}
 
 		var preds []string
 		if edge.Attr != x.Star {
-			preds = []string{edge.Attr}
+			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
@@ -73,8 +88,8 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.StarAllPredicates()...)
+			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
+			preds = append(preds, x.StarAllPredicates(namespace)...)
 			// AllowedPreds are used only with ACL. Do not delete all predicates but
 			// delete predicates to which the mutation has access
 			if edge.AllowedPreds != nil {
@@ -241,24 +256,33 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 	return edges, nil
 }
 
-func checkIfDeletingAclOperation(edges []*pb.DirectedEdge) error {
+func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) error {
 	// Don't need to make any checks if ACL is not enabled
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
+	namespace := x.ExtractNamespace(ctx)
 
-	guardianGroupUid := atomic.LoadUint64(&x.GuardiansGroupUid)
-	grootUserUid := atomic.LoadUint64(&x.GrootUserUid)
+	// If the guardian or groot node is not present, then the request cannot be a delete operation
+	// on guardian or groot node.
+	guardianUid, ok := x.GuardiansUid.Load(namespace)
+	if !ok {
+		return nil
+	}
+	grootsUid, ok := x.GrootUid.Load(namespace)
+	if !ok {
+		return nil
+	}
 
 	isDeleteAclOperation := false
 	for _, edge := range edges {
 		// Disallow deleting of guardians group
-		if edge.Entity == guardianGroupUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == guardianUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}
 		// Disallow deleting of groot user
-		if edge.Entity == grootUserUid && edge.Op == pb.DirectedEdge_DEL {
+		if edge.Entity == grootsUid && edge.Op == pb.DirectedEdge_DEL {
 			isDeleteAclOperation = true
 			break
 		}

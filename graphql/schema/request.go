@@ -17,8 +17,9 @@
 package schema
 
 import (
-	"github.com/pkg/errors"
 	"net/http"
+
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -32,7 +33,7 @@ type Request struct {
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
 	Extensions    RequestExtensions
-	Header        http.Header
+	Header        http.Header `json:"-"` // no need to marshal headers while generating poll hash
 }
 
 // RequestExtensions represents extensions recieved in requests

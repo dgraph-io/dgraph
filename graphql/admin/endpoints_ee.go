@@ -412,7 +412,33 @@ const adminTypes = `
 	type DeleteGroupPayload {
 		msg: String
 		numUids: Int
-	}`
+	}
+
+	input AddNamespaceInput {
+		password: String
+	}
+
+	input DeleteNamespaceInput {
+		namespaceId: Int!
+	}
+
+	type NamespacePayload {
+		namespaceId: Int
+		message: String
+	}
+
+	input ResetPasswordInput {
+		userId: String!
+		password: String!
+		namespace: Int!
+	}
+
+	type ResetPasswordPayload {
+		userId: String
+		message: String
+		namespace: Int
+	}
+	`
 
 const adminMutations = `
 
@@ -431,7 +457,7 @@ const adminMutations = `
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
 	If login is not successful an error is returned.
 	"""
-	login(userId: String, password: String, refreshToken: String): LoginPayload
+	login(userId: String, password: String, namespace: Int, refreshToken: String): LoginPayload
 
 	"""
 	Add a user.  When linking to groups: if the group doesn't exist it is created; if the group
@@ -462,7 +488,24 @@ const adminMutations = `
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload`
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+
+	"""
+	Add a new namespace.
+	"""
+	addNamespace(input: AddNamespaceInput): NamespacePayload
+
+	"""
+	Delete a namespace.
+	"""
+	deleteNamespace(input: DeleteNamespaceInput!): NamespacePayload
+
+	"""
+	Reset password can only be used by the Guardians of the galaxy to reset password of
+	any user in any namespace.
+	"""
+	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
+	`
 
 const adminQueries = `
 	getUser(name: String!): User
@@ -479,4 +522,5 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+	`

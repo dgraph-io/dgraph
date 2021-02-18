@@ -18,6 +18,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -29,6 +30,7 @@ import (
 type loginInput struct {
 	UserId       string
 	Password     string
+	Namespace    uint64
 	RefreshToken string
 }
 
@@ -39,6 +41,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
+		Namespace:    input.Namespace,
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
@@ -65,13 +68,21 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 func getLoginInput(m schema.Mutation) *loginInput {
 	// We should be able to convert these to string as GraphQL schema validation should ensure this.
 	// If the input wasn't specified, then the arg value would be nil and the string value empty.
-	userID, _ := m.ArgValue("userId").(string)
-	password, _ := m.ArgValue("password").(string)
-	refreshToken, _ := m.ArgValue("refreshToken").(string)
 
-	return &loginInput{
-		userID,
-		password,
-		refreshToken,
+	var input loginInput
+
+	input.UserId, _ = m.ArgValue("userId").(string)
+	input.Password, _ = m.ArgValue("password").(string)
+	input.RefreshToken, _ = m.ArgValue("refreshToken").(string)
+
+	b, err := json.Marshal(m.ArgValue("namespace"))
+	if err != nil {
+		return nil
 	}
+
+	err = json.Unmarshal(b, &input.Namespace)
+	if err != nil {
+		return nil
+	}
+	return &input
 }

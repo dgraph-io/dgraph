@@ -1947,7 +1947,7 @@ func TestMultiSort5(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	// Null value for third Alice comes at first.
-	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
 
 func TestMultiSort6Paginate(t *testing.T) {
@@ -2114,6 +2114,160 @@ func TestSortWithNulls(t *testing.T) {
 			qfunc += fmt.Sprintf(", first: %d", first)
 		}
 		query := "{" + qfunc + ") { pname pred:" + pred + " } }"
+		return processQueryNoErr(t, query)
+	}
+
+	for _, tc := range tests {
+		// Case of sort with Index.
+		actual := makeQuery(tc.offset, tc.first, tc.desc, true)
+		require.JSONEqf(t, tc.result, actual, "Failed on index-testcase: %d\n", tc.index)
+
+		// Case of sort without index
+		actual = makeQuery(tc.offset, tc.first, tc.desc, false)
+		require.JSONEqf(t, tc.result, actual, "Failed on testcase: %d\n", tc.index)
+	}
+}
+
+func TestMultiSortWithNulls(t *testing.T) {
+
+	tests := []struct {
+		index  int32
+		offset int32
+		first  int32
+		desc   bool
+		result string
+	}{
+		{0, -1, -1, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{1, -1, -1, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{2, -1, 2, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"}]}}`,
+		},
+		{3, -1, 2, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"}]}}`,
+		},
+		{4, -1, 7, true, `{"data": {"me":[
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{5, -1, 7, false, `{"data": {"me":[
+			{"pname":"nameA","pred1":"A", "pred2":"I"},
+			{"pname":"nameB","pred1":"A", "pred2":"J"},
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{6, 2, 7, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"}]}}`,
+		},
+		{7, 2, 7, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"}]}}`,
+		},
+		{8, 2, 100, true, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{9, 2, 100, false, `{"data": {"me":[
+			{"pname":"nameC","pred1":"A"},
+			{"pname":"nameD","pred1":"B", "pred2":"I"},
+			{"pname":"nameE","pred1":"B", "pred2":"J"},
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{10, 5, 5, true, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{11, 5, 5, false, `{"data": {"me":[
+			{"pname":"nameF","pred1":"B"},
+			{"pname":"nameG","pred1":"C", "pred2":"I"},
+			{"pname":"nameH","pred1":"C", "pred2":"J"},
+			{"pname":"nameI","pred1":"C", "pred2":"K"},
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{12, 9, 5, true, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{13, 9, 5, false, `{"data": {"me":[
+			{"pname":"nameJ","pred1":"C"}]}}`,
+		},
+		{14, 12, 5, true, `{"data": {"me":[]}}`},
+		{15, 12, 5, false, `{"data": {"me":[]}}`},
+	}
+	makeQuery := func(offset, first int32, desc, index bool) string {
+		pred1 := "pred1"
+		pred2 := "pred2"
+		if index {
+			pred1 = "index-pred1"
+			pred2 = "index-pred2"
+		}
+		order := ",orderasc: "
+		if desc {
+			order = ",orderdesc: "
+		}
+		q := "me(func: uid(61, 62, 63, 64, 65, 66, 67, 68, 69, 70), orderasc: " + pred1 +
+			order + pred2
+		if offset != -1 {
+			q += fmt.Sprintf(", offset: %d", offset)
+		}
+		if first != -1 {
+			q += fmt.Sprintf(", first: %d", first)
+		}
+		query := "{" + q + ") { pname pred1:" + pred1 + " pred2:" + pred2 + " } }"
 		return processQueryNoErr(t, query)
 	}
 
