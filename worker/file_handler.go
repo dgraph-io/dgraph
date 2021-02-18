@@ -194,7 +194,9 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, groupMaxNsId, err := fn(fp, gid, predSet, manifest.DropOperations)
+			groupMaxUid, groupMaxNsId, err := fn(gid,
+				&loadBackupInput{r: fp, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
 			if err != nil {
 				return LoadResult{Err: err}
 			}
@@ -285,7 +287,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	}
 
 	// Function to load the a single backup file.
-	loadFn := func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+	loadFn := func(r io.Reader, groupId uint32, preds predicateSet, isOld bool) (uint64, error) {
 		dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", groupId))
 
 		r, err := enc.GetReader(key, r)
@@ -313,7 +315,10 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		_, _, err = loadFromBackup(db, gzReader, 0, preds, nil)
+		_, _, err = loadFromBackup(db, &loadBackupInput{
+			// TODO(Naman): Why is drop operations nil here?
+			r: gzReader, restoreTs: 0, preds: preds, dropOperations: nil, isOld: isOld,
+		})
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot load backup")
 		}
@@ -344,7 +349,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		// of the last backup.
 		predSet := manifest.getPredsInGroup(gid)
 
-		_, err = loadFn(fp, gid, predSet)
+		_, err = loadFn(fp, gid, predSet, manifest.Version == 0)
 		if err != nil {
 			return err
 		}
