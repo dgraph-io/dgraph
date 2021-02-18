@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -51,7 +50,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return nil
 	}
 
-	join := query + "|" + sha256Hash
+	join := sha256Hash + query
 
 	queryForSHA := `query Me($join: string){
 						me(func: eq(dgraph.graphql.p_query, $join)){
@@ -136,9 +135,9 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	}
 
 	gotQuery := ""
-	s := strings.Split(shaQueryRes.Me[0].PersistedQuery, "|")
-	if len(s) == 2 {
-		gotQuery = s[0]
+	fmt.Printf("%+v\n", shaQueryRes.Me[0])
+	if len(shaQueryRes.Me[0].PersistedQuery) >= 64 {
+		gotQuery = shaQueryRes.Me[0].PersistedQuery[64:]
 	}
 
 	if len(query) > 0 && gotQuery != query {

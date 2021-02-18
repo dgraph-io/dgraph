@@ -496,7 +496,7 @@
       "type": "string",
       "index": true,
       "tokenizer": [
-        "sha"
+        "sha256"
       ]
     },
     {

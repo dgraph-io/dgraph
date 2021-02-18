@@ -100,7 +100,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
-	registerTokenizer(ShaTokenizer{})
+	registerTokenizer(Sha256Tokenizer{})
 	setupBleve()
 }
 
@@ -378,25 +378,26 @@ func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
-// ShaTokenizer generates tokens for the sha256 hash part from string data.
-type ShaTokenizer struct{ text string }
+// Sha256Tokenizer generates tokens for the sha256 hash part from string data.
+type Sha256Tokenizer struct{ text string }
 
-func (t ShaTokenizer) Name() string { return "sha" }
-func (t ShaTokenizer) Type() string { return "string" }
-func (t ShaTokenizer) Tokens(v interface{}) ([]string, error) {
+func (t Sha256Tokenizer) Name() string { return "sha256" }
+func (t Sha256Tokenizer) Type() string { return "string" }
+func (t Sha256Tokenizer) Tokens(v interface{}) ([]string, error) {
 	str, ok := v.(string)
 	if !ok || str == "" {
 		return []string{}, nil
 	}
-	tokens := strings.Split(str, "|")
-	if len(tokens) != 2 {
-		return []string{}, nil
+	// The first 32 characters contain the sha256 for a query in hex format so
+	// lets extract and index that part.
+	if len(str) >= 64 {
+		return []string{str[:64]}, nil
 	}
-	return []string{tokens[1]}, nil
+	return []string{}, nil
 }
-func (t ShaTokenizer) Identifier() byte { return IdentSha }
-func (t ShaTokenizer) IsSortable() bool { return false }
-func (t ShaTokenizer) IsLossy() bool    { return false }
+func (t Sha256Tokenizer) Identifier() byte { return IdentSha }
+func (t Sha256Tokenizer) IsSortable() bool { return false }
+func (t Sha256Tokenizer) IsLossy() bool    { return false }
 
 // BoolTokenizer returns tokens from boolean data.
 type BoolTokenizer struct{}

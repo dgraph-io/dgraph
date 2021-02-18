@@ -675,7 +675,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"sha"},
+			Tokenizer: []string{"sha256"},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {

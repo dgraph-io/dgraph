@@ -2173,7 +2173,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 		"predicate":"dgraph.graphql.p_query",
 		"type":"string",
 		"index":true,
-		"tokenizer":["sha"]
+		"tokenizer":["sha256"]
 	},
     {
       "predicate": "dgraph.graphql.schema",
