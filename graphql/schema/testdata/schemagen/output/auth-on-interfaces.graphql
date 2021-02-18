@@ -409,7 +409,7 @@ input AddQuestionInput {
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
-	has: AuthorHasFilter
+	has: [AuthorHasFilter]
 	and: [AuthorFilter]
 	or: [AuthorFilter]
 	not: AuthorFilter
@@ -436,7 +436,7 @@ input PostFilter {
 	id: [ID!]
 	text: StringExactFilter
 	datePublished: DateTimeFilter
-	has: PostHasFilter
+	has: [PostHasFilter]
 	and: [PostFilter]
 	or: [PostFilter]
 	not: PostFilter
@@ -464,7 +464,7 @@ input QuestionFilter {
 	text: StringExactFilter
 	datePublished: DateTimeFilter
 	answered: Boolean
-	has: QuestionHasFilter
+	has: [QuestionHasFilter]
 	and: [QuestionFilter]
 	or: [QuestionFilter]
 	not: QuestionFilter

@@ -366,7 +366,7 @@ input AddTInput {
 }
 
 input BFilter {
-	has: BHasFilter
+	has: [BHasFilter]
 	and: [BFilter]
 	or: [BFilter]
 	not: BFilter
@@ -397,7 +397,7 @@ input IRef {
 
 input TFilter {
 	id: [ID!]
-	has: THasFilter
+	has: [THasFilter]
 	and: [TFilter]
 	or: [TFilter]
 	not: TFilter

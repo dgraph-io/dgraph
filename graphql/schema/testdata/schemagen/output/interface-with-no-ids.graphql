@@ -386,7 +386,7 @@ input AddUserInput {
 }
 
 input MessageFilter {
-	has: MessageHasFilter
+	has: [MessageHasFilter]
 	and: [MessageFilter]
 	or: [MessageFilter]
 	not: MessageFilter
@@ -403,7 +403,7 @@ input MessagePatch {
 }
 
 input QuestionFilter {
-	has: QuestionHasFilter
+	has: [QuestionHasFilter]
 	and: [QuestionFilter]
 	or: [QuestionFilter]
 	not: QuestionFilter
@@ -444,7 +444,7 @@ input UpdateUserInput {
 }
 
 input UserFilter {
-	has: UserHasFilter
+	has: [UserHasFilter]
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter

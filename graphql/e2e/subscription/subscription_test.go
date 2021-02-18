@@ -104,9 +104,6 @@ const (
 )
 
 func TestSubscription(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
 	var subscriptionResp common.GraphQLResponse
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, sch)
@@ -186,9 +183,7 @@ func TestSubscription(t *testing.T) {
 }
 
 func TestSubscriptionAuth(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -307,9 +302,7 @@ func TestSubscriptionAuth(t *testing.T) {
 }
 
 func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -401,9 +394,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 }
 
 func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -463,9 +454,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 }
 
 func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -616,9 +605,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 }
 
 func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -814,9 +801,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 }
 
 func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
@@ -879,9 +864,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 }
 
 func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 
 	// Upload schema
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)

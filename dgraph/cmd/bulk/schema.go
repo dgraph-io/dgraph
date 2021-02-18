@@ -47,21 +47,11 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 		state:     state,
 	}
 
-	// Load all initial predicates. Some predicates that might not be used when
-	// the alpha is started (e.g ACL predicates) might be included but it's
-	// better to include them in case the input data contains triples with these
-	// predicates.
-	for _, update := range schema.CompleteInitialSchema() {
-		s.schemaMap[update.Predicate] = update
-	}
+	// Initialize only for the default namespace. Initialization for other namespaces will be done
+	// whenever we see data for a new namespace.
+	s.checkAndSetInitialSchema(x.GalaxyNamespace)
 
-	if opt.StoreXids {
-		s.schemaMap["xid"] = &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			Tokenizer: []string{"hash"},
-		}
-	}
-
+	// This is from the schema read from the schema file.
 	for _, sch := range initial.Preds {
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
@@ -69,6 +59,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 			fmt.Printf("Predicate %q already exists in schema\n", p)
 			continue
 		}
+		s.checkAndSetInitialSchema(x.ParseNamespace(p))
 		s.schemaMap[p] = sch
 	}
 
@@ -93,23 +84,53 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 	sch.List = true
 }
 
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
+// checkAndSetInitialSchema initializes the schema for namespace if it does not already exist.
+func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+
+	if _, ok := s.namespaces.Load(namespace); ok {
+		return
+	}
+	// Load all initial predicates. Some predicates that might not be used when
+	// the alpha is started (e.g ACL predicates) might be included but it's
+	// better to include them in case the input data contains triples with these
+	// predicates.
+	for _, update := range schema.CompleteInitialSchema(namespace) {
+		s.schemaMap[update.Predicate] = update
+	}
+
+	if s.opt.StoreXids {
+		s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
+			Tokenizer: []string{"hash"},
+		}
+	}
+	s.namespaces.Store(namespace, struct{}{})
+	return
+}
+
+func (s *schemaStore) validateType(de *pb.DirectedEdge, namespace uint64, objectIsUID bool) {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
 	}
 
+	attr := x.NamespaceAttr(namespace, de.Attr)
 	s.RLock()
-	sch, ok := s.schemaMap[de.Attr]
+	sch, ok := s.schemaMap[attr]
 	s.RUnlock()
 	if !ok {
 		s.Lock()
-		sch, ok = s.schemaMap[de.Attr]
+		sch, ok = s.schemaMap[attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
 			if objectIsUID {
 				sch.List = true
 			}
-			s.schemaMap[de.Attr] = sch
+			s.schemaMap[attr] = sch
 		}
 		s.Unlock()
 	}

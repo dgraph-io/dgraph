@@ -1070,6 +1070,18 @@ func hasFilters(t *testing.T) {
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
+func hasFilterOnListOfFields(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+	Filter := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{"text", "numViews"}}}
+	Expected := []*post{
+		{Title: "No text"},
+	}
+	postTest(t, Filter, Expected)
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
+}
+
 func int64Filters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -494,6 +496,75 @@ func TestAuthOnInterfaces(t *testing.T) {
 			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
+}
+
+func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
+	testCases := []TestCase{
+		{
+			name: "Query with null value in jwt",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}
+			`,
+			result: `{"queryProject":[]}`,
+		},
+		{
+			name: "Query with null value in jwt: deep level",
+			query: `
+			query {
+				queryUser(order: {desc: username}, first: 1) {
+					username
+					issues {
+						msg
+					}
+				}
+			}
+			`,
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user8","issues":[]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: common.GetJWTWithNullUser(t, tcase.role, metaInfo),
+			Query:   tcase.query,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+  
+func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
+	getVehicleParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryVehicle{
+				owner
+			}
+		}`,
+		Headers: common.GetJWT(t, "Alice", "ADMIN", metaInfo),
+	}
+	gqlResponse := getVehicleParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	result := `
+	{
+		"queryVehicle": [
+		  {
+			"owner": "Bob"
+		  }
+		]
+	  }`
+
+	require.JSONEq(t, result, string(gqlResponse.Data))
 }
 
 func TestQueryWithStandardClaims(t *testing.T) {
@@ -1635,7 +1706,11 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		authMeta := testutil.SetAuthMeta(string(authSchema))
+		authMeta, err := authorization.Parse(string(authSchema))
+		if err != nil {
+			panic(err)
+		}
+
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
 			Namespace:      authMeta.Namespace,

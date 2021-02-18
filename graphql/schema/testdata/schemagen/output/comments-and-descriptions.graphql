@@ -386,7 +386,7 @@ input AddTInput {
 }
 
 input IFilter {
-	has: IHasFilter
+	has: [IHasFilter]
 	and: [IFilter]
 	or: [IFilter]
 	not: IFilter
@@ -405,7 +405,7 @@ input IPatch {
 
 input TFilter {
 	id: [ID!]
-	has: THasFilter
+	has: [THasFilter]
 	and: [TFilter]
 	or: [TFilter]
 	not: TFilter

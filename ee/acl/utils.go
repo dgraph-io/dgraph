@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -162,10 +163,11 @@ func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 // options, and then login using groot id and password
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
 	dg, closeClient := x.GetDgraphClient(conf, false)
+	creds := z.NewSuperFlag(conf.GetString("guardian-creds"))
 	err := x.GetPassAndLogin(dg, &x.CredOpt{
-		Conf:        conf,
-		UserID:      conf.GetString(gName),
-		PasswordOpt: gPassword,
+		UserID:    creds.GetString("user"),
+		Password:  creds.GetString("password"),
+		Namespace: creds.GetUint64("namespace"),
 	})
 	if err != nil {
 		return nil, nil, err

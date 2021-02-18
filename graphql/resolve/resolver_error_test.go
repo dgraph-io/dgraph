@@ -42,9 +42,14 @@ import (
 // to see what the test is actually doing.
 
 type executor struct {
-	resp     string
-	assigned map[string]string
-	result   map[string]interface{}
+	// existenceQueriesResp stores JSON response of the existence queries in case of Add
+	// or Update mutations and is returned for every third Execute call.
+	// counter is used to count how many times Execute function has been called.
+	existenceQueriesResp string
+	counter              int
+	resp                 string
+	assigned             map[string]string
+	result               map[string]interface{}
 
 	queryTouched    uint64
 	mutationTouched uint64
@@ -84,6 +89,15 @@ type Post {
 
 func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 	field schema.Field) (*dgoapi.Response, error) {
+	// In case ex.existenceQueriesResp is non empty, its an Add or an Update mutation. In this case,
+	// every third call to Execute
+	// query is an existence query and existenceQueriesResp is returned.
+	ex.counter++
+	if ex.existenceQueriesResp != "" && ex.counter%3 == 1 {
+		return &dgoapi.Response{
+			Json: []byte(ex.existenceQueriesResp),
+		}, nil
+	}
 	if len(req.Mutations) == 0 {
 		ex.failQuery--
 		if ex.failQuery == 0 {
@@ -239,9 +253,10 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
 				&executor{
-					resp:     tcase.queryResponse,
-					assigned: tcase.mutResponse,
-					result:   tcase.mutQryResp,
+					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+					resp:                 tcase.queryResponse,
+					assigned:             tcase.mutResponse,
+					result:               tcase.mutQryResp,
 				})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
@@ -335,7 +350,6 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 // So this mocks a failing mutation and tests that we behave correctly in the case
 // of multiple mutations.
 func TestManyMutationsWithError(t *testing.T) {
-
 	// add1 - should succeed
 	// add2 - should fail
 	// add3 - is never executed
@@ -416,9 +430,10 @@ func TestManyMutationsWithError(t *testing.T) {
 				multiMutation,
 				map[string]interface{}{"id": tcase.idValue},
 				&executor{
-					resp:         tcase.queryResponse,
-					assigned:     tcase.mutResponse,
-					failMutation: 2})
+					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+					resp:                 tcase.queryResponse,
+					assigned:             tcase.mutResponse,
+					failMutation:         2})
 
 			if diff := cmp.Diff(tcase.errors, resp.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
