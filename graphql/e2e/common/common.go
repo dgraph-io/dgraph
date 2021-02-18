@@ -776,7 +776,7 @@ func RunAll(t *testing.T) {
 	t.Run("cyclically linked mutation", cyclicMutation)
 	t.Run("parallel mutations", parallelMutations)
 	t.Run("input coercion to list", inputCoerciontoList)
-	t.Run("mutation with multiple external Ids", mutationWithMultipleXids)
+	t.Run("multiple external Id's tests", multipleXidsTests)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

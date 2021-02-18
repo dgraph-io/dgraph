@@ -5450,7 +5450,7 @@ func inputCoerciontoList(t *testing.T) {
 
 }
 
-func mutationWithMultipleXids(t *testing.T) {
+func multipleXidsTests(t *testing.T) {
 	tcases := []struct {
 		name      string
 		query     string
@@ -5818,6 +5818,6 @@ func mutationWithMultipleXids(t *testing.T) {
 
 		})
 	}
-	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3}}}
-	DeleteGqlType(t, "Worker", filter, 3, nil)
+	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3, 6}}}
+	DeleteGqlType(t, "Worker", filter, 6, nil)
 }
