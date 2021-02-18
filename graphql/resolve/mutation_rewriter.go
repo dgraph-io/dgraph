@@ -1601,23 +1601,27 @@ func existenceQueries(
 				// In this case, as obj is the correct definition of the object, we update variableObjMap
 				oldObj := xidMetadata.variableObjMap[variable]
 				if len(oldObj) == 1 && len(obj) > 1 {
+					// Continue execution to perform dfs in this case. There may be more nodes
+					// in the subtree of this node.
 					xidMetadata.variableObjMap[variable] = obj
+				} else {
+					// This is just a node reference. No need to proceed further.
+					return ret, retErrors
 				}
-				return ret, retErrors
-			}
+			} else {
 
-			// if not encountered till now, add it to the map
-			xidMetadata.variableObjMap[variable] = obj
+				// if not encountered till now, add it to the map
+				xidMetadata.variableObjMap[variable] = obj
 
-			// save if this node was seen at top level.
-			if !xidMetadata.seenAtTopLevel[variable] {
+				// save if this node was seen at top level.
 				xidMetadata.seenAtTopLevel[variable] = atTopLevel
+
+				// Add the corresponding existence query. As this is the first time we have
+				// encountered this variable, the query is added only once per variable.
+				query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+				ret = append(ret, query)
+				// Don't return just over here as there maybe more nodes in the children tree.
 			}
-
-			query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
-
-			ret = append(ret, query)
-			// Don't return just over here as there maybe more nodes in the children tree.
 		}
 	}
 
