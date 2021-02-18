@@ -316,8 +316,13 @@ type Section {
 # multiple fields with @id directive
 type Worker {
         name: String!
-        reg_No: String! @id
+        reg_No: Int! @id
         emp_Id: String! @id
+}
+
+type Employer {
+        company: String! @id
+        worker: [Worker]
 }
 
 type Mission @key(fields: "id") {

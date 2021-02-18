@@ -1261,7 +1261,7 @@ func rewriteObject(
 
 	xids := typ.XIDField()
 	if len(xids) != 0 {
-		for _, xid := range xids {
+		for index, xid := range xids {
 			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				// TODO: Add a function for parsing idVal. This is repeatitive
@@ -1304,8 +1304,9 @@ func rewriteObject(
 					} else {
 						return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
 					}
-				} else {
-					// Node with XID does not exist. It means this is a new node.
+				} else if index == len(xids)-1 {
+
+					// Node with XIDs does not exist. It means this is a new node.
 					// This node will be created later.
 					exclude := ""
 					if srcField != nil {
@@ -1323,7 +1324,7 @@ func rewriteObject(
 					// this node later easier.
 					idExistence[variable] = fmt.Sprintf("_:%s", variable)
 				}
-			} else if mutationType == Add || !atTopLevel {
+			} else if (mutationType == Add || !atTopLevel) && (index == len(xids)-1) {
 				// There are two possibilities here:
 				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
 				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation

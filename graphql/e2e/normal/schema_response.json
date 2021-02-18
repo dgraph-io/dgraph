@@ -9,6 +9,15 @@
       ]
     },
     {
+      "index": true,
+      "predicate": "Employer.company",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "predicate": "post1.author",
       "type": "uid"
     },
@@ -342,9 +351,9 @@
       "index": true,
       "predicate": "Worker.reg_No",
       "tokenizer": [
-        "hash"
+        "int"
       ],
-      "type": "string",
+      "type": "int",
       "upsert": true
     },
     {
@@ -622,6 +631,11 @@
       "predicate": "Student.taughtBy",
       "type": "uid",
       "list": true
+    },
+    {
+      "list": true,
+      "predicate": "Employer.worker",
+      "type": "uid"
     },
     {
       "predicate": "Teacher.subject",
@@ -1434,6 +1448,17 @@
         }
       ],
       "name": "author1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employer.company"
+        },
+        {
+          "name": "Employer.worker"
+        }
+      ],
+      "name": "Employer"
     }
   ]
 }

@@ -380,14 +380,20 @@ type Node {
     name: String!
 }
 
-type Book{
+type Book {
     id: ID!
+    publisher: String
     title: String! @id
     ISBN: String! @id
-    Author: String
+    author: author
 
 }
 
+type author {
+    id: ID!
+    name: String!
+    book: [Book] @hasInverse(field: author)
+}
 # test for entities resolver
 
 type Mission @key(fields: "id") {

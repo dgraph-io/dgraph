@@ -3337,37 +3337,112 @@
     		book {
     			title
     			ISBN
-    			Author
+    			author {
+    				name
+    			}
     		}
     	}
     }
+
   gqlvariables: |
     {
         "input": [
             {
                 "title": "Sapiens",
                 "ISBN": "2312SB",
-                "Author": "Yuval Noah Harari"
+                "author": {
+                    "name": "Yuval Noah Harari"
+                }
             }
         ]
     }
   dgquery: |-
     query {
-      Book1(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
         uid
       }
-      Book2(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
         uid
       }
     }
   dgmutations:
     - setjson: |
         {
-            "Book.Author": "Yuval Noah Harari",
+            "Book.author": {
+                "author.name": "Yuval Noah Harari",
+                "author.book": [
+                    {
+                        "uid": "_:Book2"
+                    }
+                ],
+                "dgraph.type": [
+                    "author"
+                ],
+                "uid": "_:author3"
+            },
             "Book.ISBN": "2312SB",
             "Book.title": "Sapiens",
             "dgraph.type": [
                 "Book"
             ],
             "uid": "_:Book2"
+        }
+
+-
+  name: "Add type with multiple Xid fields at deep level"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.ISBN": "2312SB",
+                    "Book.title": "Sapiens",
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "dgraph.type": [
+                        "Book"
+                    ],
+                    "uid": "_:Book2"
+                }
+            ]
         }

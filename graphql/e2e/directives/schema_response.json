@@ -9,6 +9,15 @@
       ]
     },
     {
+      "index": true,
+      "predicate": "Employer.company",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "predicate": "post1.author",
       "type": "uid"
     },
@@ -39,9 +48,9 @@
       "index": true,
       "predicate": "Worker.reg_No",
       "tokenizer": [
-        "hash"
+        "int"
       ],
-      "type": "string",
+      "type": "int",
       "upsert": true
     },
     {
@@ -71,6 +80,11 @@
         "int"
       ],
       "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "Employer.worker",
+      "type": "uid"
     },
     {
       "predicate": "Book.chapters",
@@ -1434,6 +1448,17 @@
         }
       ],
       "name": "test.dgraph.employee.en"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employer.company"
+        },
+        {
+          "name": "Employer.worker"
+        }
+      ],
+      "name": "Employer"
     }
   ]
 }

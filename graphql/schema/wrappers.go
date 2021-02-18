@@ -2373,7 +2373,7 @@ func (t *astType) XIDField() []FieldDefinition {
 			})
 		}
 	}
-
+	sort.Slice(xids, func(i, j int) bool { return xids[i].Name() < xids[j].Name() })
 	return xids
 }
 

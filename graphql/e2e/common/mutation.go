@@ -5461,7 +5461,7 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "add worker with multiple xids",
 			query: `mutation {
-	                  addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
 	                  	worker {
 	                  		name
 	                  		reg_No
@@ -5474,7 +5474,7 @@ func mutationWithMultipleXids(t *testing.T) {
                              "worker": [
                                  {
                                      "name": "Alice",
-                                     "reg_No": "001",
+                                     "reg_No": 1,
                                      "emp_Id": "E01"
                                  }
                              ]
@@ -5484,7 +5484,7 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "adding worker with same reg_No will return error",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E012" }]) {
+	                   addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E012" }]) {
 	                   	worker {
 	                   		name
 	                   		reg_No
@@ -5492,12 +5492,12 @@ func mutationWithMultipleXids(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists: field reg_No, type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Alice", reg_No: "002", emp_Id: "E01" }]) {
+	                   addWorker(input: [{ name: "Alice", reg_No: 2, emp_Id: "E01" }]) {
 	                   	worker {
 	                   		name
 	                   		reg_No
@@ -5510,7 +5510,7 @@ func mutationWithMultipleXids(t *testing.T) {
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
 			query: `mutation {
-	                  addWorker(input: [{ name: "Alice", reg_No: "001", emp_Id: "E01" }]) {
+	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
 	                  	worker {
 	                  		name
 	                  		reg_No
@@ -5518,12 +5518,12 @@ func mutationWithMultipleXids(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 001 already exists: field reg_No, type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
 			query: `mutation {
-	                   addWorker(input: [{ name: "Bob", reg_No: "002", emp_Id: "E02" }]) {
+	                   addWorker(input: [{ name: "Bob", reg_No: 2, emp_Id: "E02" }]) {
 	                   	worker {
 	                   		name
 	                   		reg_No
@@ -5536,12 +5536,266 @@ func mutationWithMultipleXids(t *testing.T) {
                              "worker": [
                                  {
                                      "name": "Bob",
-                                     "reg_No": "002",
+                                     "reg_No": 2,
                                      "emp_Id": "E02"
                                  }
                              ]
                          }
                     }`,
+		},
+		{
+			name: "adding worker with same reg_No and emp_id at deeper level will add reference",
+			query: `mutation {
+	                    addEmployer(
+	                    	input: [
+	                    		{ company: "Dgraph", worker: { name: "Bob", reg_No: 2, emp_Id: "E02" } }
+	                    	]
+	                    ) {
+	                    	employer {
+	                    		company
+	                    		worker {
+	                    			name
+	                    			reg_No
+	                    			emp_Id
+	                    		}
+	                    	}
+	                    }
+                     }`,
+			expected: `{
+                          "addEmployer": {
+                              "employer": [
+                                  {
+                                      "company": "Dgraph",
+                                      "worker": [
+                                          {
+                                              "name": "Bob",
+                                              "reg_No": 2,
+                                              "emp_Id": "E02"
+                                          }
+                                      ]
+                                  }
+                              ]
+                          }
+                       }`,
+		},
+		{
+			name: "adding worker with different reg_No and emp_id at deep level will add new node",
+			query: `mutation {
+	                  addEmployer(input: [{ company: "GraphQL", worker: { name: "Jack", reg_No: 3, emp_Id: "E03" } }]) {
+	                  	employer {
+							company
+	                  		worker {
+	                  			name
+	                  			reg_No
+	                  			emp_Id
+	                  		}
+	                  	}
+	                  }
+					}`,
+			expected: `{
+                         "addEmployer": {
+                             "employer": [
+                                 {   "company": "GraphQL",
+                                     "worker": [
+                                         {
+                                             "name": "Jack",
+                                             "reg_No": 3,
+                                             "emp_Id": "E03"
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
+		},
+		{
+			name: "adding worker with same reg_No but different emp_id at deep level will add reference",
+			query: `mutation {
+	                  addEmployer(input: [{ company: "Slash", worker: { reg_No: 3, emp_Id: "E04" } }]) {
+	                  	employer {
+							company	
+	                  		worker {
+	                  			name
+	                  			reg_No
+	                  			emp_Id
+	                  		}
+	                  	}
+	                  }
+					}`,
+			expected: `{
+                         "addEmployer": {
+                             "employer": [
+                                 {   "company":"Slash",
+                                     "worker": [
+                                         {
+                                             "name": "Jack",
+                                             "reg_No": 3,
+                                             "emp_Id": "E03"
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
+		},
+		{
+			name: "get query with multiple Id's",
+			query: `query {
+	                  getWorker(reg_No: 2, emp_Id: "E02") {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with reg_no",
+			query: `query {
+	                  getWorker(reg_No: 2) {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with emp_Id",
+			query: `query {
+	                  getWorker(emp_Id: "E02") {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with multiple Id's using filters",
+			query: `query {
+	                   queryWorker(
+	                   	filter: { or: [{ reg_No: { in: 2 } }, { emp_Id: { in: "E01" } }] }
+	                   ) {
+	                   	name
+	                   	reg_No
+	                   	emp_Id
+	                   }
+					}`,
+			expected: `{
+                         "queryWorker": [
+                             {
+                                 "emp_Id": "E02",
+                                 "name": "Bob",
+                                 "reg_No": 2
+                             },
+                             {
+                                 "emp_Id": "E01",
+                                 "name": "Alice",
+                                 "reg_No": 1
+                             }
+                         ]
+						}`,
+		},
+		{
+			name: "single level update mutation with multiple Id's",
+			query: `mutation updateWorker($patch: UpdateWorkerInput!) {
+	                  updateWorker(input: $patch) {
+	                  	worker {
+	                  		emp_Id
+	                  		name
+	                  		reg_No
+	                  	}
+	                  }
+                   }`,
+			expected: `{
+                        "updateWorker": {
+                            "worker": [
+                                {
+                                    "emp_Id": "E01",
+                                    "name": "Jacob",
+                                    "reg_No": 1
+                                },
+                                {
+                                    "emp_Id": "E02",
+                                    "name": "Jacob",
+                                    "reg_No": 2
+                                }
+                            ]
+                        }
+                     }`,
+			variables: `{
+                          "patch": {
+                              "filter": {"or": [
+                                      {
+                                          "reg_No": {"in": 1
+                                          }
+                                      },
+                                      {
+                                          "emp_Id": {"in": "E02"
+                                          }
+                                      }
+                                  ]
+                              },
+                              "set": {
+                                  "name": "Jacob"
+                              }
+                          }
+                        }`,
+		},
+		{
+			name: "Deep level update mutation with multiple Id's",
+			query: `mutation{
+		             updateEmployer(input: { filter: {company:{in:"GraphQL"}},set: { worker: {name:"Leo",emp_Id: "E06",reg_No: 6}}})
+                       {
+		             	employer {
+							company	
+							worker{
+		             		emp_Id
+		             		name
+		             		reg_No
+		             		}
+						}
+		             }
+		          }`,
+			expected: `{
+                  "updateEmployer": {
+                      "employer": [
+                          {   "company":"GraphQL",
+                              "worker": [
+                                  {
+                                      "emp_Id": "E06",
+                                      "name": "Leo",
+                                      "reg_No": 6
+                                  },
+                                  {
+                                      "emp_Id": "E03",
+                                      "name": "Jack",
+                                      "reg_No": 3
+                                  }
+                              ]
+                          }
+                      ]
+                  }
+               }`,
 		},
 	}
 
@@ -5564,6 +5818,6 @@ func mutationWithMultipleXids(t *testing.T) {
 
 		})
 	}
-	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []string{"001", "002"}}}
-	DeleteGqlType(t, "Worker", filter, 2, nil)
+	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3}}}
+	DeleteGqlType(t, "Worker", filter, 3, nil)
 }
