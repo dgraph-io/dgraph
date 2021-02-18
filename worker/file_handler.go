@@ -44,7 +44,8 @@ type fileHandler struct {
 // BackupExporter is an alias of fileHandler so that this struct can be used
 // by the export_backup command.
 type BackupExporter struct {
-	fileHandler
+	File fileHandler
+	S3   s3Handler
 }
 
 // readManifest reads a manifest file at path using the handler.

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -335,5 +336,8 @@ func runExportBackup() error {
 	}
 
 	exporter := worker.BackupExporter{}
-	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+	if strings.HasPrefix(opt.location, "s3://") {
+		return exporter.S3.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+	}
+	return exporter.File.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }
