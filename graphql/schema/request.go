@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -34,8 +33,7 @@ type Request struct {
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
 	Extensions    RequestExtensions
-	Header        http.Header
-	Context       context.Context
+	Header        http.Header `json:"-"` // no need to marshal headers while generating poll hash
 }
 
 // RequestExtensions represents extensions recieved in requests

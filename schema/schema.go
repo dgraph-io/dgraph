@@ -567,29 +567,10 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: "dgraph.graphql.history",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.graphql.schema_history",
-					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.schema_created_at",
-					ValueType: pb.Posting_DATETIME,
-				},
-			},
-		}, &pb.TypeUpdate{
 			TypeName: "dgraph.graphql.persisted_query",
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.graphql.p_query",
-					ValueType: pb.Posting_STRING,
-				},
-			},
-		}, &pb.TypeUpdate{
-			TypeName: "dgraph.type.cors",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.cors",
 					ValueType: pb.Posting_STRING,
 				},
 			},
@@ -673,13 +654,6 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
-			Predicate: "dgraph.cors",
-			ValueType: pb.Posting_STRING,
-			List:      true,
-			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
-			Upsert:    true,
-		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
@@ -697,12 +671,6 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_history",
-			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_created_at",
-			ValueType: pb.Posting_DATETIME,
 		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,

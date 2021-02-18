@@ -47,7 +47,7 @@ const (
 	resolverFailed    = false
 	resolverSucceeded = true
 
-	errInternal = "Internal error"
+	ErrInternal = "Internal error"
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -341,12 +341,12 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 	if r == nil {
 		glog.Errorf("Call to Resolve with nil RequestResolver")
-		return schema.ErrorResponse(errors.New(errInternal))
+		return schema.ErrorResponse(errors.New(ErrInternal))
 	}
 
 	if r.schema == nil {
 		glog.Errorf("Call to Resolve with no schema")
-		return schema.ErrorResponse(errors.New(errInternal))
+		return schema.ErrorResponse(errors.New(ErrInternal))
 	}
 
 	startTime := time.Now()
@@ -365,6 +365,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}()
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
+	// Pass in GraphQL @auth information
+	ctx = r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
@@ -471,14 +473,13 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
-	if r.schema == nil {
-		glog.Errorf("Call to ValidateSubscription with no schema")
-		return errors.New(errInternal)
-	}
-
 	op, err := r.schema.Operation(req)
 	if err != nil {
 		return err
+	}
+
+	if !op.IsSubscription() {
+		return errors.New("given GraphQL operation is not a subscription")
 	}
 
 	for _, q := range op.Queries() {
@@ -489,6 +490,10 @@ func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 		}
 	}
 	return nil
+}
+
+func (r *RequestResolver) Schema() schema.Schema {
+	return r.schema
 }
 
 // validateCustomFieldsRecursively will return err if the given field is custom or any of its

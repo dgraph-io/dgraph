@@ -786,6 +786,48 @@ func populateCluster() {
 		<69> <pname> "nameI" .
 		<70> <pname> "nameJ" .
 
+		<61> <pred1> "A" .
+		<62> <pred1> "A" .
+		<63> <pred1> "A" .
+		<64> <pred1> "B" .
+		<65> <pred1> "B" .
+		<66> <pred1> "B" .
+		<67> <pred1> "C" .
+		<68> <pred1> "C" .
+		<69> <pred1> "C" .
+		<70> <pred1> "C" .
+
+		<61> <pred2> "I" .
+		<62> <pred2> "J" .
+
+		<64> <pred2> "I" .
+		<65> <pred2> "J" .
+
+		<67> <pred2> "I" .
+		<68> <pred2> "J" .
+		<69> <pred2> "K" .
+
+
+		<61> <index-pred1> "A" .
+		<62> <index-pred1> "A" .
+		<63> <index-pred1> "A" .
+		<64> <index-pred1> "B" .
+		<65> <index-pred1> "B" .
+		<66> <index-pred1> "B" .
+		<67> <index-pred1> "C" .
+		<68> <index-pred1> "C" .
+		<69> <index-pred1> "C" .
+		<70> <index-pred1> "C" .
+
+		<61> <index-pred2> "I" .
+		<62> <index-pred2> "J" .
+
+		<64> <index-pred2> "I" .
+		<65> <index-pred2> "J" .
+
+		<67> <index-pred2> "I" .
+		<68> <index-pred2> "J" .
+		<69> <index-pred2> "K" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

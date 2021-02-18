@@ -35,7 +35,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -144,8 +143,6 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
-	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
-	AcceptedOrigins = atomic.Value{}
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid = &sync.Map{}
 	// GrootUser Uid is a map from namespace to the Uid of groot user node.
@@ -153,23 +150,9 @@ var (
 )
 
 func init() {
-	AcceptedOrigins.Store(map[string]struct{}{})
 	GuardiansUid.Store(GalaxyNamespace, 0)
 	GrootUid.Store(GalaxyNamespace, 0)
 
-}
-
-// UpdateCorsOrigins updates the cors allowlist with the given origins.
-func UpdateCorsOrigins(origins []string) {
-	if len(origins) == 1 && origins[0] == "*" {
-		AcceptedOrigins.Store(map[string]struct{}{})
-		return
-	}
-	allowList := make(map[string]struct{}, len(origins))
-	for _, origin := range origins {
-		allowList[origin] = struct{}{}
-	}
-	AcceptedOrigins.Store(allowList)
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.

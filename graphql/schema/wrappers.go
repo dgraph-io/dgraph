@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -99,6 +101,8 @@ type Schema interface {
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
 	IsFederated() bool
+	SetMeta(meta *metaInfo)
+	Meta() *metaInfo
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -183,6 +187,8 @@ type Field interface {
 	NullResponse() []byte
 	// CompleteAlias applies GraphQL alias completion for field to the input buffer buf.
 	CompleteAlias(buf *bytes.Buffer)
+	// GetAuthMeta returns the Dgraph.Authorization meta information stored in schema
+	GetAuthMeta() *authorization.AuthMeta
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -252,6 +258,8 @@ type FieldDefinition interface {
 	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
 	ForwardEdge() FieldDefinition
+	// GetAuthMeta returns the Dgraph.Authorization meta information stored in schema
+	GetAuthMeta() *authorization.AuthMeta
 }
 
 type astType struct {
@@ -285,6 +293,8 @@ type schema struct {
 	lambdaDirectives map[string]map[string]bool
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
+	// meta is the meta information extracted from input schema
+	meta *metaInfo
 }
 
 type operation struct {
@@ -354,6 +364,14 @@ func (s *schema) Mutations(t MutationType) []string {
 
 func (s *schema) IsFederated() bool {
 	return s.schema.Types["_Entity"] != nil
+}
+
+func (s *schema) SetMeta(meta *metaInfo) {
+	s.meta = meta
+}
+
+func (s *schema) Meta() *metaInfo {
+	return s.meta
 }
 
 func (o *operation) IsQuery() bool {
@@ -860,6 +878,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
 		authRules:        authRules,
+		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -991,6 +1010,10 @@ func (f *field) CompleteAlias(buf *bytes.Buffer) {
 	x.Check2(buf.WriteRune('"'))
 	x.Check2(buf.WriteString(f.ResponseName()))
 	x.Check2(buf.WriteString(`":`))
+}
+
+func (f *field) GetAuthMeta() *authorization.AuthMeta {
+	return f.op.inSchema.meta.authMeta
 }
 
 func (f *field) Arguments() map[string]interface{} {
@@ -1367,16 +1390,14 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (*FieldHTTPConfig, er
 	fconf.ForwardHeaders.Set("Content-Type", "application/json")
 	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 	if secretHeaders != nil {
-		hc.RLock()
 		for _, h := range secretHeaders.Children {
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
 			}
-			val := string(hc.secrets[key[1]])
+			val := string(f.op.inSchema.meta.secrets[key[1]])
 			fconf.ForwardHeaders.Set(key[0], val)
 		}
-		hc.RUnlock()
 	}
 
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
@@ -1554,6 +1575,10 @@ func (q *query) NullResponse() []byte {
 
 func (q *query) CompleteAlias(buf *bytes.Buffer) {
 	(*field)(q).CompleteAlias(buf)
+}
+
+func (q *query) GetAuthMeta() *authorization.AuthMeta {
+	return (*field)(q).GetAuthMeta()
 }
 
 func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
@@ -2042,6 +2067,10 @@ func (m *mutation) CompleteAlias(buf *bytes.Buffer) {
 	(*field)(m).CompleteAlias(buf)
 }
 
+func (m *mutation) GetAuthMeta() *authorization.AuthMeta {
+	return (*field)(m).GetAuthMeta()
+}
+
 func (t *astType) AuthRules() *TypeAuth {
 	return t.inSchema.authRules[t.DgraphName()]
 }
@@ -2216,6 +2245,10 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 		dgraphPredicate: fd.dgraphPredicate,
 		parentType:      typeWrapper,
 	}
+}
+
+func (fd *fieldDefinition) GetAuthMeta() *authorization.AuthMeta {
+	return fd.inSchema.meta.authMeta
 }
 
 func (t *astType) Name() string {

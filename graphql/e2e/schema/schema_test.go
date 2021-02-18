@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -169,9 +170,9 @@ func TestSchemaSubscribe(t *testing.T) {
 // It also tests that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
 func TestConcurrentSchemaUpdates(t *testing.T) {
+	common.SafelyDropAll(t)
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
-	testutil.DropAll(t, dg)
 
 	tcases := []struct {
 		graphQLSchema string
@@ -300,13 +301,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 
 // TestIntrospectionQueryAfterDropAll make sure that Introspection query after drop_all doesn't give any internal error
 func TestIntrospectionQueryAfterDropAll(t *testing.T) {
-	oldCounter := common.RetryProbeGraphQL(t, groupOneHTTP, nil).SchemaUpdateCounter
-	// Then, Do the drop_all operation
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-	// wait for the schema update to reach the GraphQL layer
-	common.AssertSchemaUpdateCounterIncrement(t, groupOneHTTP, oldCounter, nil)
+	common.SafelyDropAll(t)
 
 	introspectionQuery := `
 	query{
@@ -381,7 +376,98 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 
 }
 
+// TestCORS checks that all the CORS headers are correctly set in the response.
+func TestCORS(t *testing.T) {
+	// initially setting a schema without any Dgraph.Allow-Origin and forwardHeaders
+	testCORS(t, `
+	type TestCORS {
+		name: String
+	}`, "", "*", x.AccessControlAllowedHeaders)
+
+	// forwardHeaders should be part of allowed CORS headers
+	testCORS(t, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS"]
+		})
+	}`, "", "*", strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS"}, ","))
+
+	// setting Dgraph.Allow-Origin and sending request from correct Origin should return the
+	// same origin back
+	testCORS(t, `
+	type TestCORS {
+		name: String
+	}
+	# Dgraph.Allow-Origin "https://play.dgraph.io"
+	`, "https://play.dgraph.io", "https://play.dgraph.io", x.AccessControlAllowedHeaders)
+
+	// setting Dgraph.Allow-Origin and sending request from incorrect Origin should not return any
+	// origin back
+	testCORS(t, `
+	type TestCORS {
+		name: String
+	}
+	# Dgraph.Allow-Origin "https://dgraph.io"
+	`, "https://play.dgraph.io", "", x.AccessControlAllowedHeaders)
+
+	// setting auth, forwardHeaders and Dgraph.Allow-Origin should work as expected
+	testCORS(t, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS"]
+		})
+	}
+	# Dgraph.Allow-Origin "https://play.dgraph.io"
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	`, "https://play.dgraph.io", "https://play.dgraph.io",
+		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS", "X-Test-Dgraph"}, ","))
+}
+
+func testCORS(t *testing.T, schema, reqOrigin, expectedAllowedOrigin,
+	expectedAllowedHeaders string) {
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
+
+	params := &common.GraphQLParams{Query: `query {	queryTestCORS { name } }`}
+	req, err := params.CreateGQLPost(groupOneGraphQLServer)
+	require.NoError(t, err)
+
+	if reqOrigin != "" {
+		req.Header.Set("Origin", reqOrigin)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// GraphQL server should always return OK and JSON content, even when there are errors
+	require.Equal(t, resp.StatusCode, http.StatusOK)
+	require.Equal(t, strings.ToLower(resp.Header.Get("Content-Type")), "application/json")
+	// assert that the CORS headers are there as expected
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), expectedAllowedOrigin)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), expectedAllowedHeaders)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+	gqlRes := &common.GraphQLResponse{}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(body, gqlRes))
+	common.RequireNoGQLErrors(t, gqlRes)
+	testutil.CompareJSON(t, `{"queryTestCORS":[]}`, string(gqlRes.Data))
+}
+
 func TestGQLSchemaValidate(t *testing.T) {
+	common.SafelyDropAll(t)
+
 	testCases := []struct {
 		schema string
 		errors x.GqlErrorList
@@ -423,10 +509,6 @@ func TestGQLSchemaValidate(t *testing.T) {
 		},
 	}
 
-	dg, err := testutil.DgraphClient(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
 	validateUrl := groupOneAdminServer + "/schema/validate"
 	var response x.QueryResWithData
 	for _, tcase := range testCases {
@@ -453,6 +535,8 @@ func TestGQLSchemaValidate(t *testing.T) {
 	}
 }
 
+// TestUpdateGQLSchemaFields makes sure that all the fields in the updateGQLSchema mutation response
+// are correctly set.
 func TestUpdateGQLSchemaFields(t *testing.T) {
 	schema := `
 	type Author {
