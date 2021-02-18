@@ -507,6 +507,14 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
+// DataPrefix returns the prefix for all data keys belonging to this namespace.
+func DataPrefix(ns uint64) []byte {
+	buf := make([]byte, 1+8)
+	buf[0] = DefaultPrefix
+	binary.BigEndian.PutUint64(buf[1:], ns)
+	return buf
+}
+
 // SplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
 func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)

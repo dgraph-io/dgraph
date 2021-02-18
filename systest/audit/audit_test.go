@@ -68,10 +68,10 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			"--data-raw", `'{"query":"query {\n  __schema {\n    __typename\n  }\n}","variables":{}}'`},
 
 		"/alter": []string{"-X", "POST", fmt.Sprintf("%s/alter", testutil.SockAddrHttp), "-d",
-			`'name: string @index(term) .
+			`name: string @index(term) .
 			type Person {
 			  name
-			}'`},
+			}`},
 		"/query": []string{"-H", "'Content-Type: application/dql'", "-X", "POST", fmt.Sprintf("%s/query", testutil.SockAddrHttp),
 			"-d", `$'
 			{

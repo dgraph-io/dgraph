@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -88,8 +89,8 @@ func sendRestoreRequest(t *testing.T, location string) {
 // Next, cleans up the cluster and tries restoring the backups above.
 // Regression test for DGRAPH-2775
 func TestBackupOfOldRestore(t *testing.T) {
-	dirSetup(t)
-	copyOldBackupDir(t)
+	common.DirSetup(t)
+	common.CopyOldBackupDir(t)
 
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
@@ -181,7 +182,7 @@ func TestBackupFilesystem(t *testing.T) {
 
 	require.True(t, moveOk)
 	// Setup test directories.
-	dirSetup(t)
+	common.DirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
@@ -355,10 +356,10 @@ func TestBackupFilesystem(t *testing.T) {
 	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, copyBackupDir, "", incr4.Txn.CommitTs)
+	common.RunFailingRestore(t, copyBackupDir, "", incr4.Txn.CommitTs)
 
 	// Clean up test directories.
-	dirCleanup(t)
+	common.DirCleanup(t)
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
@@ -396,7 +397,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.Contains(t, string(buf), "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
-	copyToLocalFs(t)
+	common.CopyToLocalFs(t)
 
 	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
@@ -433,75 +434,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	}
 
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored
-}
-
-// runFailingRestore is like runRestore but expects an error during restore.
-func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) {
-	// Recreate the restore directory to make sure there's no previous data when
-	// calling restore.
-	require.NoError(t, os.RemoveAll(restoreDir))
-
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
-	require.Error(t, result.Err)
-	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
-}
-
-func dirSetup(t *testing.T) {
-	// Clean up data from previous runs.
-	dirCleanup(t)
-
-	for _, dir := range testDirs {
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			t.Fatalf("Error creating directory: %s", err.Error())
-		}
-	}
-
-	for _, alpha := range alphaContainers {
-		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		if err := testutil.DockerExec(alpha, cmd...); err != nil {
-			t.Fatalf("Error executing command in docker container: %s", err.Error())
-		}
-	}
-}
-
-func dirCleanup(t *testing.T) {
-	if err := os.RemoveAll(restoreDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-
-	if err := os.RemoveAll(copyBackupDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-
-	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
-	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
-		t.Fatalf("Error executing command in docker container: %s", err.Error())
-	}
-}
-
-func copyOldBackupDir(t *testing.T) {
-	for i := 1; i < 4; i++ {
-		destPath := fmt.Sprintf("%s_alpha%d_1:/data", testutil.DockerPrefix, i)
-		srchPath := "." + oldBackupDir
-		if err := testutil.DockerCp(srchPath, destPath); err != nil {
-			t.Fatalf("Error copying files from docker container: %s", err.Error())
-		}
-	}
-}
-
-func copyToLocalFs(t *testing.T) {
-	// The original backup files are not accessible because docker creates all files in
-	// the shared volume as the root user. This restriction is circumvented by using
-	// "docker cp" to create a copy that is not owned by the root user.
-	if err := os.RemoveAll(copyBackupDir); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-	srcPath := testutil.DockerPrefix + "_alpha1_1:/data/backups"
-	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
-		t.Fatalf("Error copying files from docker container: %s", err.Error())
-	}
 }

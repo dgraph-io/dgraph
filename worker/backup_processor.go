@@ -449,6 +449,9 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		case "DROP_ATTR":
 			dropOp.DropOp = pb.DropOperation_ATTR
 			dropOp.DropValue = dropInfo[1]
+		case "DROP_NS":
+			dropOp.DropOp = pb.DropOperation_NS
+			dropOp.DropValue = dropInfo[1] // contains namespace.
 		}
 		return dropOp, nil
 	default:

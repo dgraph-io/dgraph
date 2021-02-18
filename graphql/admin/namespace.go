@@ -19,11 +19,14 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type addNamespaceInput struct {
@@ -62,7 +65,15 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
+	// No one can delete the galaxy(default) namespace.
+	if uint64(req.NamespaceId) == x.GalaxyNamespace {
+		return resolve.EmptyResult(m, errors.New("Cannot delete default namespace.")), false
+	}
 	if err = (&edgraph.Server{}).DeleteNamespace(ctx, uint64(req.NamespaceId)); err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
+	dropOp := "DROP_NS;" + fmt.Sprintf("%#x", req.NamespaceId)
+	if err = edgraph.InsertDropRecord(ctx, dropOp); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(

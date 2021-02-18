@@ -66,7 +66,8 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
-	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrNoJwt is returned when JWT is not present in the context.
+	ErrNoJwt = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
 	// ErrConflict is returned when commit couldn't succeed due to conflicts.
@@ -260,19 +261,22 @@ func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	return namespace
 }
 
-// ExtractNamespace parses the namespace value from the incoming gRPC context.
-func ExtractNamespace(ctx context.Context) uint64 {
+// ExtractNamespace parses the namespace value from the incoming gRPC context. For the non-ACL mode,
+// it is caller's responsibility to set the galaxy namespace.
+func ExtractNamespace(ctx context.Context) (uint64, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return 0, errors.New("No metadata in the context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		glog.Fatal("No namespace in the metadata of context")
+		return 0, errors.New("No namespace in the metadata of context")
 	}
-	namespace, err := strconv.ParseUint(ns[0], 10, 64)
-	Check(err)
-	return namespace
+	namespace, err := strconv.ParseUint(ns[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Error while parsing namespace from metadata")
+	}
+	return namespace, nil
 }
 
 func IsGalaxyOperation(ctx context.Context) bool {
