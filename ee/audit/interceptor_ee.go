@@ -13,11 +13,13 @@ package audit
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -99,14 +101,33 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
+	var user string
+	var namespace uint64
 
-	userId := ""
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
+	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
-			userId = getUserId(t[0], false)
+			user = getUser(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {
-			userId = getUserId(t[0], true)
+			user = getUser(t[0], true)
+		} else {
+			user = getUser("", false)
 		}
+	}
+
+	extractNamespace := func(md metadata.MD) {
+		ns := md.Get("namespace")
+		if len(ns) == 0 {
+			namespace = UnknownNamespace
+		} else {
+			if namespace, err = strconv.ParseUint(ns[0], 10, 64); err != nil {
+				namespace = UnknownNamespace
+			}
+		}
+	}
+
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		extractUser(md)
+		extractNamespace(md)
 	}
 
 	cd := codes.Unknown
@@ -114,7 +135,8 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		cd = serr.Code()
 	}
 	auditor.Audit(&AuditEvent{
-		User:       userId,
+		User:       user,
+		Namespace:  namespace,
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
@@ -125,21 +147,18 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 }
 
 func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		rb = []byte(err.Error())
-	}
-
-	userId := ""
+	rb := getRequestBody(r)
+	var user string
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
-		userId = getUserId(token, false)
+		user = getUser(token, false)
 	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
-		userId = getUserId(token, true)
+		user = getUser(token, true)
 	} else {
-		userId = getUserId("", false)
+		user = getUser("", false)
 	}
 	auditor.Audit(&AuditEvent{
-		User:        userId,
+		User:        user,
+		Namespace:   x.ExtractNamespaceHTTP(r),
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
@@ -150,22 +169,44 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	})
 }
 
-func getUserId(token string, poorman bool) string {
+func getRequestBody(r *http.Request) []byte {
+	var in io.Reader = r.Body
+	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		if enc == "gzip" {
+			gz, err := gzip.NewReader(r.Body)
+			if err != nil {
+				return []byte(err.Error())
+			}
+			defer gz.Close()
+			in = gz
+		} else {
+			return []byte("unknown encoding")
+		}
+	}
+
+	body, err := ioutil.ReadAll(in)
+	if err != nil {
+		return []byte(err.Error())
+	}
+	return body
+}
+
+func getUser(token string, poorman bool) string {
 	if poorman {
 		return PoorManAuth
 	}
-	var userId string
+	var user string
 	var err error
 	if token == "" {
 		if x.WorkerConfig.AclEnabled {
-			userId = UnauthorisedUser
+			user = UnauthorisedUser
 		}
 	} else {
-		if userId, err = x.ExtractUserName(token); err != nil {
-			userId = UnknownUser
+		if user, err = x.ExtractUserName(token); err != nil {
+			user = UnknownUser
 		}
 	}
-	return userId
+	return user
 }
 
 type ResponseWriter struct {
