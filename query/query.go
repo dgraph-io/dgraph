@@ -1371,9 +1371,11 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		// by other operations. So we need to apply it on the UidMatrix.
 		child.updateUidMatrix()
 
-		for i := 0; i < len(child.uidMatrix); i++ {
-			start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
-			child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
+		if child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
+			for i := 0; i < len(child.uidMatrix); i++ {
+				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
+				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
+			}
 		}
 	}
 
@@ -2160,7 +2162,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
-				sg.uidMatrix = []*pb.List{sg.DestUIDs}
+				newDestUidList := &pb.List{Uids: make([]uint64, 0, len(sg.DestUIDs.Uids))}
+				for _, uid := range sg.DestUIDs.GetUids() {
+					newDestUidList.Uids = append(newDestUidList.Uids, uid)
+				}
+				sg.uidMatrix = []*pb.List{newDestUidList}
 			}
 		}
 	}
@@ -2833,10 +2839,12 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// first time at the root here.
 
-			sg.updateUidMatrix()
-			for i := 0; i < len(sg.uidMatrix); i++ {
-				start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
-				sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+			if len(sg.Params.Cascade.Fields) > 0 {
+				sg.updateUidMatrix()
+				for i := 0; i < len(sg.uidMatrix); i++ {
+					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
+					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+				}
 			}
 
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
