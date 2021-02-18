@@ -102,14 +102,13 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	}
 
 	var user string
-	var ns uint64
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if t := md.Get("accessJwt"); len(t) > 0 {
-			user, ns = getUserAndNamespace(t[0], false)
+			user = getUser(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {
-			user, ns = getUserAndNamespace(t[0], true)
+			user = getUser(t[0], true)
 		} else {
-			user, ns = getUserAndNamespace("", false)
+			user = getUser("", false)
 		}
 	}
 
@@ -119,7 +118,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	}
 	auditor.Audit(&AuditEvent{
 		User:       user,
-		Namespace:  ns,
+		Namespace:  x.ExtractNamespace(ctx),
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
@@ -132,17 +131,16 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 func auditHttp(w *ResponseWriter, r *http.Request) {
 	rb := getRequestBody(r)
 	var user string
-	var ns uint64
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
-		user, ns = getUserAndNamespace(token, false)
+		user = getUser(token, false)
 	} else if token := r.Header.Get("X-Dgraph-AuthToken"); token != "" {
-		user, ns = getUserAndNamespace(token, true)
+		user = getUser(token, true)
 	} else {
-		user, ns = getUserAndNamespace("", false)
+		user = getUser("", false)
 	}
 	auditor.Audit(&AuditEvent{
 		User:        user,
-		Namespace:   ns,
+		Namespace:   x.ExtractNamespaceHTTP(r),
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
@@ -175,25 +173,22 @@ func getRequestBody(r *http.Request) []byte {
 	return body
 }
 
-func getUserAndNamespace(token string, poorman bool) (string, uint64) {
+func getUser(token string, poorman bool) string {
 	if poorman {
-		return PoorManAuth, x.GalaxyNamespace
+		return PoorManAuth
 	}
 	var user string
-	ns := x.GalaxyNamespace
 	var err error
 	if token == "" {
 		if x.WorkerConfig.AclEnabled {
 			user = UnauthorisedUser
-			ns = UnknownNamespace
 		}
 	} else {
 		if user, err = x.ExtractUserName(token); err != nil {
 			user = UnknownUser
-			ns = UnknownNamespace
 		}
 	}
-	return user, ns
+	return user
 }
 
 type ResponseWriter struct {
