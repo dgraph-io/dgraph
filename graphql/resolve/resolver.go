@@ -236,7 +236,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, q := range s.Queries(schema.DQLQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			// DQL queries don't need any QueryRewriter
-			return NewQueryResolver(nil, fns.Ex)
+			return NewCustomDQLQueryResolver(fns.Ex)
 		})
 	}
 
