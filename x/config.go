@@ -65,10 +65,8 @@ type WorkerOptions struct {
 	// Trace options:
 	//
 	// ratio float64 - the ratio of queries to trace (must be between 0 and 1)
-	// jaeger string - send OpenCensus traces to Jaeger
-	// datadog string - send OpenCensus traces to Datadog
-	//
-	// NOTE: jaeger and datadog options might be bools, not sure yet
+	// jaeger string - URL of Jaeger to send OpenCensus traces
+	// datadog string - URL of Datadog to to send OpenCensus traces
 	Trace *z.SuperFlag
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string

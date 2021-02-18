@@ -17,6 +17,7 @@
 package x
 
 import (
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/pflag"
 )
 
@@ -33,13 +34,16 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	//
 	// datadog: See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
 	//          about the status of supporting annotation logs through the datadog exporter
-	flag.String("trace", TraceDefaults,
-		`Trace options (defaults shown):
-	ratio=0.01; The ratio of queries to trace.
-	jaeger=; Send OpenCensus traces to Jaeger.
-	datadog=; Send OpenCensus traces to Datadog. As of now, the trace exporter does not support `+
-			`annotation logs and would discard them.
-	`)
+	flag.String("trace", "", z.NewSuperFlagHelp(TraceDefaults).
+		Head("Trace options (defaults shown):").
+		Flag("ratio",
+			"The ratio of queries to trace.").
+		Flag("jaeger",
+			"URL of Jaeger to send OpenCensus traces.").
+		Flag("datadog",
+			"URL of Datadog to send OpenCensus traces. As of now, the trace exporter does not "+
+				"support annotation logs and discards them.").
+		String())
 
 	// Performance flags.
 	flag.String("survive", "process",
