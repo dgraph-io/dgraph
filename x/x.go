@@ -282,10 +282,22 @@ func ExtractNamespace(ctx context.Context) (uint64, error) {
 func IsGalaxyOperation(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return false
 	}
 	ns := md.Get("galaxy-operation")
 	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
+}
+
+func GetForceNamespace(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	ns := md.Get("force-namespace")
+	if len(ns) == 0 {
+		return ""
+	}
+	return ns[0]
 }
 
 func ExtractJwt(ctx context.Context) ([]string, error) {
@@ -451,12 +463,13 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 }
 
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
-func AttachGalaxyOperation(ctx context.Context) context.Context {
+func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
 	md.Set("galaxy-operation", "true")
+	md.Set("force-namespace", strconv.FormatUint(ns, 10))
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
