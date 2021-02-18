@@ -139,6 +139,8 @@ github.com/dgraph-io/ristretto v0.0.4-0.20210217232649-8576bbb984e1 h1:x2XhguQcy
 github.com/dgraph-io/ristretto v0.0.4-0.20210217232649-8576bbb984e1/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/ristretto v0.0.4-0.20210218213111-024fba86f371 h1:Hz2b9Wo42/ZWwhJ7KJrpE7dXvhQzDZvn0LvWRNUv7kk=
 github.com/dgraph-io/ristretto v0.0.4-0.20210218213111-024fba86f371/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
+github.com/dgraph-io/ristretto v0.0.4-0.20210218220528-61bbb40bff18 h1:PlYMH2eAuM0LtJFoSEAt8AIxorp+ra82NVgmzWauwAc=
+github.com/dgraph-io/ristretto v0.0.4-0.20210218220528-61bbb40bff18/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
 github.com/dgraph-io/simdjson-go v0.3.0/go.mod h1:Otpysdjaxj9OGaJusn4pgQV7OFh2bELuHANq0I78uvY=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=

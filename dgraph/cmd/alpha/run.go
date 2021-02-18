@@ -122,16 +122,21 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
-	flag.String("raft", worker.RaftDefaults,
-		`Various raft options.
-	idx=N provides an optional Raft ID that this Dgraph Alpha would use to join Raft groups.
-	group=N provides an optional Raft Group ID that this Alpha would indicate to Zero to join.
-	learner=true would make this Alpha a "learner" node. In learner mode, the Alpha would
-		not participate in Raft elections. This can be used to achieve a read-only replica.
-	snapshot-after=N would create a new Raft snapshot after N number of Raft entries.
-		The lower this number, the more frequent snapshot creation would be.
-	pending-proposals=N Number of pending mutation proposals. Useful for rate limiting.
-	`)
+	flag.String("raft", "", z.NewSuperFlagHelp(worker.RaftDefaults).
+		Head("Raft options (defaults shown):").
+		Flag("idx",
+			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
+		Flag("group",
+			"Provides an optional Raft Group ID that this Alpha would indicate to Zero to join.").
+		Flag("learner",
+			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
+				`in Raft elections. This can be used to achieve a read-only replica.`).
+		Flag("snapshot-after",
+			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
+				"the more frequent snapshot creation will be.").
+		Flag("pending-proposals",
+			"Number of pending mutation proposals. Useful for rate limiting.").
+		String())
 
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
