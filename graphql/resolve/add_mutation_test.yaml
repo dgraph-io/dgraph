@@ -3328,3 +3328,85 @@
     message: |-
       failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
       failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
+
+-
+  name: "Add mutation for type Person1 referencing same node as closeFriends and friends"
+  explanation: "The mutation adds same node as friends and closeFriends. It should
+    work irrespective of the order in which the node is referenced."
+  gqlmutation: |
+    mutation($input: [AddPerson1Input!]!) {
+      addPerson1(input: $input) {
+        person1 {
+          id
+          name
+          friends {
+            id
+            name
+          }
+          closeFriends {
+            id
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "1",
+          "name": "First Person",
+          "friends": [{
+            "id": "2",
+            "name": "Second Person"
+           }],
+          "closeFriends": [{
+            "id": "2"
+           }]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Person11(func: eq(Person1.id, "1")) @filter(type(Person1)) {
+        uid
+      }
+      Person12(func: eq(Person1.id, "2")) @filter(type(Person1)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person1.closeFriends": [
+            {
+              "Person1.closeFriends": [
+                {
+                  "uid": "_:Person11"
+                }
+              ],
+              "Person1.name": "Second Person",
+              "Person1.id": "2",
+              "dgraph.type": [
+                "Person1"
+              ],
+              "uid": "_:Person12"
+            }
+          ],
+          "Person1.friends": [
+            {
+              "uid": "_:Person12",
+              "Person1.friends": [
+                {
+                  "uid": "_:Person11"
+                }
+              ]
+            }
+          ],
+          "Person1.name": "First Person",
+          "Person1.id": "1",
+          "dgraph.type": [
+            "Person1"
+          ],
+          "uid": "_:Person11"
+        }

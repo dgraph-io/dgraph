@@ -600,15 +600,15 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 					"name":"Michael",
 					"friend":[
 						{
-							"name":"Charlie"
-						},
-						{
 							"name":"Alice",
 							"friend|since":"2014-01-02T00:00:00Z"
 						},
 						{
 							"name":"Sang Hyun",
 							"friend|since":"2012-01-02T00:00:00Z"
+						},
+						{
+							"name":"Charlie"
 						}
 					]
 				}

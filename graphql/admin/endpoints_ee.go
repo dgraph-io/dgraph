@@ -414,7 +414,11 @@ const adminTypes = `
 		numUids: Int
 	}
 
-	input NamespaceInput {
+	input AddNamespaceInput {
+		password: String
+	}
+
+	input DeleteNamespaceInput {
 		namespaceId: Int!
 	}
 
@@ -489,12 +493,12 @@ const adminMutations = `
 	"""
 	Add a new namespace.
 	"""
-	addNamespace: NamespacePayload
+	addNamespace(input: AddNamespaceInput): NamespacePayload
 
 	"""
 	Delete a namespace.
 	"""
-	deleteNamespace(input: NamespaceInput!): NamespacePayload
+	deleteNamespace(input: DeleteNamespaceInput!): NamespacePayload
 
 	"""
 	Reset password can only be used by the Guardians of the galaxy to reset password of
