@@ -282,7 +282,7 @@ func ExtractNamespace(ctx context.Context) (uint64, error) {
 func IsGalaxyOperation(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return false
 	}
 	ns := md.Get("galaxy-operation")
 	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
@@ -291,7 +291,7 @@ func IsGalaxyOperation(ctx context.Context) bool {
 func GetForceNamespace(ctx context.Context) string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return ""
 	}
 	ns := md.Get("force-namespace")
 	if len(ns) == 0 {

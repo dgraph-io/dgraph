@@ -33,9 +33,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func prepare(t *testing.T) {
+	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
+}
+
 // TODO(Ahsan): This is just a basic test, for the purpose of development. The functions used in
 // this file can me made common to the other acl tests as well. Needs some refactoring as well.
 func TestAclBasic(t *testing.T) {
+	prepare(t)
 	galaxyToken := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
@@ -93,6 +99,7 @@ func TestAclBasic(t *testing.T) {
 }
 
 func TestCreateNamespace(t *testing.T) {
+	prepare(t)
 	galaxyToken := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
@@ -110,6 +117,7 @@ func TestCreateNamespace(t *testing.T) {
 }
 
 func TestDeleteNamespace(t *testing.T) {
+	prepare(t)
 	galaxyToken := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
@@ -127,7 +135,6 @@ func TestDeleteNamespace(t *testing.T) {
 		`, ns)),
 			CommitNow: true,
 		}
-		// TODO(Naman):  This should return and error.
 		_, err := dg[ns].NewTxn().Mutate(context.Background(), mutation)
 		require.NoError(t, err)
 	}
@@ -194,8 +201,8 @@ func liveLoadData(t *testing.T, opts *liveOpts) error {
 }
 
 func TestLiveLoadMulti(t *testing.T) {
+	prepare(t)
 	dc0 := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
-	require.NoError(t, dc0.Alter(context.Background(), &api.Operation{DropAll: true}))
 	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
 	galaxyToken := testutil.Login(t, galaxyCreds)
 
