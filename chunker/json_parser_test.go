@@ -925,15 +925,15 @@ func TestNquadsFromJsonFacets5(t *testing.T) {
 	// AND Emily has uid facets which should go on the edge between Dave and Emily
 	json := `[
 		{
-			"name":"Alice",
-			"friend":[
+			"name": "Alice",
+			"friend": [
 				{
-					"name":"Dave",
-					"friend|close":"true",
-					"friend":[
+					"name": "Dave",
+					"friend|close": "true",
+					"friend": [
 						{
-							"name":"Emily",
-							"friend|close":true
+							"name": "Emily",
+							"friend|close": true
 						}
 					]
 				}
@@ -943,13 +943,13 @@ func TestNquadsFromJsonFacets5(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(nq))
-	checkCount(t, nq, "friend", 2)
+	require.Equal(t, 5, len(nq))
+	checkCount(t, nq, "friend", 1)
 
 	fastNQ, err := FastParse([]byte(json), SetNquads)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(fastNQ))
-	checkCount(t, fastNQ, "friend", 2)
+	require.Equal(t, 5, len(fastNQ))
+	checkCount(t, fastNQ, "friend", 1)
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {
