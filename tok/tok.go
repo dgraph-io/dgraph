@@ -52,6 +52,7 @@ const (
 	IdentBool      = 0x9
 	IdentTrigram   = 0xA
 	IdentHash      = 0xB
+	IdentSha       = 0xC
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit seperator
 )
@@ -99,6 +100,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
+	registerTokenizer(ShaTokenizer{})
 	setupBleve()
 }
 
@@ -375,6 +377,26 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
+
+// ShaTokenizer generates tokens for the sha256 hash part from string data.
+type ShaTokenizer struct{ text string }
+
+func (t ShaTokenizer) Name() string { return "sha" }
+func (t ShaTokenizer) Type() string { return "string" }
+func (t ShaTokenizer) Tokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	tokens := strings.Split(str, "|")
+	if len(tokens) != 2 {
+		return []string{}, nil
+	}
+	return []string{tokens[1]}, nil
+}
+func (t ShaTokenizer) Identifier() byte { return IdentSha }
+func (t ShaTokenizer) IsSortable() bool { return false }
+func (t ShaTokenizer) IsLossy() bool    { return false }
 
 // BoolTokenizer returns tokens from boolean data.
 type BoolTokenizer struct{}

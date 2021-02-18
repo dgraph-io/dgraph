@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -282,11 +283,17 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return fmt.Errorf("same sha returned %d queries", len(shaQueryRes.Me))
 	}
 
-	if len(query) > 0 && shaQueryRes.Me[0].PersistedQuery != query {
+	gotQuery := ""
+	s := strings.Split(shaQueryRes.Me[0].PersistedQuery, "|")
+	if len(s) == 2 {
+		gotQuery = s[0]
+	}
+
+	if len(query) > 0 && gotQuery != query {
 		return errors.New("query does not match persisted query")
 	}
 
-	gqlReq.Query = shaQueryRes.Me[0].PersistedQuery
+	gqlReq.Query = gotQuery
 	return nil
 
 }

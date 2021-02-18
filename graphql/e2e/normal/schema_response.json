@@ -679,7 +679,7 @@
       "type": "string",
       "index": true,
       "tokenizer": [
-        "exact"
+        "sha"
       ]
     },
     {

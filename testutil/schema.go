@@ -38,7 +38,7 @@ const (
 {"predicate":"dgraph.type","type":"string","index":true,"tokenizer":["exact"],"list":true},
 {"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.drop.op", "type": "string"},
-{"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["exact"]},
+{"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["sha"]},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
 {"predicate":"dgraph.graphql.schema_history", "type": "string"},
 {"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
