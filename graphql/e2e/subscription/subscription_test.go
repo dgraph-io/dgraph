@@ -972,9 +972,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 }
 
 func TestSubscriptionWithCustomDQL(t *testing.T) {
-	dg, err := testutil.DgraphClient(common.Alpha1gRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+	common.SafelyDropAll(t)
 	var subscriptionResp common.GraphQLResponse
 
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schCustomDQL)
