@@ -1608,17 +1608,18 @@ func existenceQueries(
 					}
 				} else {
 
-				// if not encountered till now, add it to the map,
-				xidMetadata.variableObjMap[variable] = obj
+					// if not encountered till now, add it to the map,
+					xidMetadata.variableObjMap[variable] = obj
 
-				// save if this node was seen at top level.
-				xidMetadata.seenAtTopLevel[variable] = atTopLevel
+					// save if this node was seen at top level.
+					xidMetadata.seenAtTopLevel[variable] = atTopLevel
 
-				// Add the corresponding existence query. As this is the first time we have
-				// encountered this variable, the query is added only once per variable.
-				query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
-				ret = append(ret, query)
-				// Don't return just over here as there maybe more nodes in the children tree.
+					// Add the corresponding existence query. As this is the first time we have
+					// encountered this variable, the query is added only once per variable.
+					query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+					ret = append(ret, query)
+					// Don't return just over here as there maybe more nodes in the children tree.
+				}
 			}
 		}
 	}
