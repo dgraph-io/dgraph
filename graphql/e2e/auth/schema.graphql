@@ -818,3 +818,61 @@ type Car implements Vehicle {
     id: ID!
     manufacturer: String!
 }
+
+# union testing - start
+enum AnimalCategory {
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
+}
+
+interface Animal {
+    id: ID!
+    category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+    breed: String @search
+}
+
+type Parrot implements Animal {
+    repeatsWords: [String]
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Plant
+
+type Home @auth(
+    # only return homes with a Dog or Plant member
+    query: { rule: """
+    query {
+        queryHome {
+            members {
+                ... on Dog {
+                    breed
+                }
+                ... on Plant {
+                    breed
+                }
+            }
+        }
+    }
+    """}
+) {
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
+}
+# union testing - end
