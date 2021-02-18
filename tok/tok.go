@@ -385,15 +385,12 @@ func (t Sha256Tokenizer) Name() string { return "sha256" }
 func (t Sha256Tokenizer) Type() string { return "string" }
 func (t Sha256Tokenizer) Tokens(v interface{}) ([]string, error) {
 	str, ok := v.(string)
-	if !ok || str == "" {
+	if !ok || len(str) < 64 {
 		return []string{}, nil
 	}
-	// The first 32 characters contain the sha256 for a query in hex format so
+	// The first 64 characters contain the sha256 for a query in hex format so
 	// lets extract and index that part.
-	if len(str) >= 64 {
-		return []string{str[:64]}, nil
-	}
-	return []string{}, nil
+	return []string{str[:64]}, nil
 }
 func (t Sha256Tokenizer) Identifier() byte { return IdentSha }
 func (t Sha256Tokenizer) IsSortable() bool { return false }

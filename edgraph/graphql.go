@@ -135,7 +135,6 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 	}
 
 	gotQuery := ""
-	fmt.Printf("%+v\n", shaQueryRes.Me[0])
 	if len(shaQueryRes.Me[0].PersistedQuery) >= 64 {
 		gotQuery = shaQueryRes.Me[0].PersistedQuery[64:]
 	}
