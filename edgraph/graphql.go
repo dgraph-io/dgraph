@@ -17,167 +17,19 @@
 package edgraph
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"time"
 
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
-
-// ResetCors make the dgraph to accept all the origins if no origins were given
-// by the users.
-func ResetCors(closer *z.Closer) {
-	defer func() {
-		glog.Infof("ResetCors closed")
-		closer.Done()
-	}()
-
-	req := &Request{
-		req: &api.Request{
-			Query: `query{
-			cors as var(func: has(dgraph.cors))
-		}`,
-			Mutations: []*api.Mutation{
-				{
-					Set: []*api.NQuad{
-						{
-							Subject:     "_:a",
-							Predicate:   "dgraph.cors",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "*"}},
-						},
-						{
-							Subject:   "_:a",
-							Predicate: "dgraph.type",
-							ObjectValue: &api.Value{Val: &api.Value_StrVal{
-								StrVal: "dgraph.type.cors"}},
-						},
-					},
-					Cond: `@if(eq(len(cors), 0))`,
-				},
-			},
-			CommitNow: true,
-		},
-		doAuth: NoAuthorize,
-	}
-
-	for closer.Ctx().Err() == nil {
-		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
-		ctx = context.WithValue(ctx, IsGraphql, true)
-		//TODO(Ahsan): I don't think this is namespace specific, we will have to reset cors for
-		// all the namespaces.
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-		if _, err := (&Server{}).doQuery(ctx, req); err != nil {
-			glog.Infof("Unable to upsert cors. Error: %v", err)
-			time.Sleep(100 * time.Millisecond)
-		}
-		break
-	}
-}
-
-func generateNquadsForCors(uid string, origins []string) []byte {
-	out := &bytes.Buffer{}
-	for _, origin := range origins {
-		out.Write([]byte(fmt.Sprintf("<%s> <dgraph.cors> \"%s\" . \n", uid, origin)))
-	}
-	return out.Bytes()
-}
-
-// AddCorsOrigins Adds the cors origins to the Dgraph.
-func AddCorsOrigins(ctx context.Context, origins []string) error {
-	uid, _, err := GetCorsOrigins(ctx)
-	if err != nil {
-		return err
-	}
-	req := &Request{
-		req: &api.Request{
-			Query: `query{
-			cors as var(func: has(dgraph.cors))
-		}`,
-			Mutations: []*api.Mutation{
-				{
-					SetNquads: generateNquadsForCors(uid, origins),
-					Cond:      `@if(gt(len(cors), 0))`,
-					DelNquads: []byte(`<` + uid + `>` + ` <dgraph.cors> * .`),
-				},
-			},
-			CommitNow: true,
-		},
-		doAuth: NoAuthorize,
-	}
-	ctx = context.WithValue(ctx, IsGraphql, true)
-	// TODO(Ahsan): Is this namespace specific?
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	_, err = (&Server{}).doQuery(ctx, req)
-	return err
-}
-
-// GetCorsOrigins retrieve all the cors origin from the database.
-func GetCorsOrigins(ctx context.Context) (string, []string, error) {
-	ctx = x.AttachJWTNamespace(ctx)
-	req := &Request{
-		req: &api.Request{
-			Query: `query{
-			me(func: has(dgraph.cors)){
-				uid
-				dgraph.cors
-			}
-		}`,
-			ReadOnly: true,
-		},
-		doAuth: NoAuthorize,
-	}
-	//TODO(Ahsan): Is this namespace specific?
-	ctx = context.WithValue(ctx, IsGraphql, true)
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
-	res, err := (&Server{}).doQuery(ctx, req)
-	if err != nil {
-		return "", nil, err
-	}
-
-	type corsResponse struct {
-		Me []struct {
-			Uid        string `json:"uid"`
-			UidInt     uint64
-			DgraphCors []string `json:"dgraph.cors"`
-		} `json:"me"`
-	}
-	corsRes := &corsResponse{}
-	if err = json.Unmarshal(res.Json, corsRes); err != nil {
-		return "", nil, err
-	}
-	if len(corsRes.Me) == 0 {
-		return "", []string{}, fmt.Errorf("GetCorsOrigins returned 0 results")
-	} else if len(corsRes.Me) == 1 {
-		return corsRes.Me[0].Uid, corsRes.Me[0].DgraphCors, nil
-	}
-	// Multiple nodes for cors found, returning the one that is added last
-	for i := range corsRes.Me {
-		iUid, err := gql.ParseUid(corsRes.Me[i].Uid)
-		if err != nil {
-			return "", nil, err
-		}
-		corsRes.Me[i].UidInt = iUid
-	}
-	sort.Slice(corsRes.Me, func(i, j int) bool {
-		return corsRes.Me[i].UidInt < corsRes.Me[j].UidInt
-	})
-	glog.Errorf("Multiple nodes of type dgraph.type.cors found, using the latest one.")
-	corsLast := corsRes.Me[len(corsRes.Me)-1]
-	return corsLast.Uid, corsLast.DgraphCors, nil
-}
 
 // ProcessPersistedQuery stores and retrieves persisted queries by following waterfall logic:
 // 1. If sha256Hash is not provided process queries without persisting

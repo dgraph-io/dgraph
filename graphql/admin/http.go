@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package web
+package admin
 
 import (
 	"compress/gzip"
@@ -26,21 +26,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-	"google.golang.org/grpc/metadata"
 )
 
 type Headerkey string
@@ -51,17 +47,11 @@ const (
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
-
-	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
-	ServeGQL(ns uint64, resolver *resolve.RequestResolver)
-
+	// After Set is called, this IServeGraphQL serves the new resolvers for the given namespace ns.
 	Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver)
 
 	// HTTPHandler returns a http.Handler that serves GraphQL.
 	HTTPHandler() http.Handler
-
-	// Resolve processes a GQL Request using the correct resolver and returns a GQL Response
-	Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response
 
 	// ResolveWithNs processes a GQL Request using the correct resolver and returns a GQL Response
 	ResolveWithNs(ctx context.Context, ns uint64, gqlReq *schema.Request) *schema.Response
@@ -74,12 +64,12 @@ type graphqlHandler struct {
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(admin bool) IServeGraphQL {
+func NewServer() IServeGraphQL {
 	gh := &graphqlHandler{
 		resolver: make(map[uint64]*resolve.RequestResolver),
 		poller:   make(map[uint64]*subscription.Poller),
 	}
-	gh.handler = recoveryHandler(commonHeaders(admin, gh.Handler()))
+	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
 	return gh
 }
 
@@ -90,16 +80,6 @@ func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.
 
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
 	return gh.handler
-}
-
-func (gh *graphqlHandler) ServeGQL(ns uint64, resolver *resolve.RequestResolver) {
-	gh.poller[ns].UpdateResolver(resolver)
-	gh.resolver[ns] = resolver
-}
-
-func (gh *graphqlHandler) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
-	ns := x.ExtractNamespace(ctx)
-	return gh.resolver[ns].Resolve(ctx, gqlReq)
 }
 
 func (gh *graphqlHandler) ResolveWithNs(ctx context.Context, ns uint64,
@@ -137,6 +117,11 @@ type graphqlSubscription struct {
 	graphqlHandler *graphqlHandler
 }
 
+func (gs *graphqlSubscription) isValid(namespace uint64) bool {
+	return !(gs == nil || !gs.graphqlHandler.isValid(namespace) || gs.graphqlHandler.
+		poller == nil || gs.graphqlHandler.poller[namespace] == nil)
+}
+
 func (gs *graphqlSubscription) Subscribe(
 	ctx context.Context,
 	document,
@@ -144,64 +129,36 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
-	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
-	// And we are extracting the Auth JWT from those and passing them along.
-	customClaims := &authorization.CustomClaims{
-		StandardClaims: jwt.StandardClaims{},
-	}
-	header, _ := ctx.Value("Header").(json.RawMessage)
-	var namespace uint64
-	newCtx := context.Background()
-	if len(header) > 0 {
-		payload := make(map[string]interface{})
-		if err := json.Unmarshal(header, &payload); err != nil {
+	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us
+	// in the context. We are extracting those headers and passing them along.
+	headerPayload, _ := ctx.Value("Header").(json.RawMessage)
+	reqHeader := http.Header{}
+	if len(headerPayload) > 0 {
+		headers := make(map[string]interface{})
+		if err = json.Unmarshal(headerPayload, &headers); err != nil {
 			return nil, err
 		}
 
-		name := authorization.GetHeader()
-		v, ok := payload["X-Dgraph-AccessToken"].(string)
-		if ok {
-			req := &http.Request{
-				Header: make(map[string][]string),
+		for k, v := range headers {
+			if vStr, ok := v.(string); ok {
+				reqHeader.Set(k, vStr)
 			}
-			req.Header.Set("X-Dgraph-AccessToken", v)
-			newCtx = x.AttachAccessJwt(newCtx, req)
-			namespace, _ = x.ExtractJWTNamespace(newCtx)
 		}
-		for key, val := range payload {
-			if !strings.EqualFold(key, name) {
-				continue
-			}
-
-			md := metadata.New(map[string]string{
-				"authorizationJwt": val.(string),
-			})
-			ctx = metadata.NewIncomingContext(ctx, md)
-			customClaims, err = authorization.ExtractCustomClaims(ctx)
-			if err != nil {
-				return nil, err
-			}
-			break
-		}
-
 	}
-	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
-	// we set their expiry to zero time
-	if customClaims.StandardClaims.ExpiresAt == nil {
-		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
-	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
-		// We pass down the context because it contains the accessJWT which is used for the query
-		// Resolve method.
-		Context: newCtx,
+		Header:        reqHeader,
 	}
-	if ns := gs.graphqlHandler.poller[namespace]; ns == nil {
-		return nil, nil
+	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
+	LazyLoadSchema(namespace) // first load the schema, then do anything else
+	if !gs.isValid(namespace) {
+		return nil, errors.New(resolve.ErrInternal)
 	}
-	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req, customClaims)
+
+	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req)
 	if err != nil {
 		return nil, err
 	}
@@ -225,26 +182,25 @@ func (gh *graphqlHandler) Handler() http.Handler {
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		return
-	}
-
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
 
-	if !gh.isValid() {
+	ns, _ := strconv.ParseUint(r.Header.Get("resolver"), 10, 64)
+	if !gh.isValid(ns) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
-	// Pass in GraphQL @auth information
-	ctx = authorization.AttachAuthorizationJwt(ctx, r)
+	addDynamicHeaders(gh.resolver[ns], r.Header.Get("Origin"), w)
+	if r.Method == http.MethodOptions {
+		// for OPTIONS, we only need to send the headers
+		return
+	}
+
 	// Pass in PoorMan's auth, ACL and IP information if present.
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
 	ctx = x.AttachJWTNamespace(ctx)
-	rs := r.Header.Get("resolver")
-	resolver, _ := strconv.ParseUint(rs, 10, 64)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(r)
@@ -259,12 +215,13 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res = gh.resolver[resolver].Resolve(ctx, gqlReq)
+	res = gh.resolver[ns].Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
-func (gh *graphqlHandler) isValid() bool {
-	return !(gh == nil || gh.resolver == nil)
+func (gh *graphqlHandler) isValid(namespace uint64) bool {
+	return !(gh == nil || gh.resolver == nil || gh.resolver[namespace] == nil || gh.
+		resolver[namespace].Schema() == nil || gh.resolver[namespace].Schema().Meta() == nil)
 }
 
 type gzreadCloser struct {
@@ -349,20 +306,10 @@ func getRequest(r *http.Request) (*schema.Request, error) {
 	return gqlReq, nil
 }
 
-func commonHeaders(admin bool, next http.Handler) http.Handler {
+func commonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if admin {
-			x.AddCorsHeaders(w)
-		} else {
-			// /graphql endpoint is protected by allow listed origins.
-			addDynamicHeaders(r.Header.Get("Origin"), w)
-		}
-		// Overwrite the allowed headers after also including headers which are part of
-		// forwardHeaders.
-		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
-
+		x.AddCorsHeaders(w)
 		w.Header().Set("Content-Type", "application/json")
-
 		next.ServeHTTP(w, r)
 	})
 }
@@ -380,25 +327,25 @@ func recoveryHandler(next http.Handler) http.Handler {
 	})
 }
 
-// addCorsHeader checks the given origin is in allowlist or not. If it's in
-// allow list we'll let them access /graphql endpoint.
-func addDynamicHeaders(origin string, w http.ResponseWriter) {
-	w.Header().Set("Connection", "close")
-	allowList := x.AcceptedOrigins.Load().(map[string]struct{})
-	_, ok := allowList[origin]
-	// Given origin is not in the allow list so let's not
-	// add any cors headers.
-	if !ok && len(allowList) != 0 {
-		return
-	} else if ok && len(allowList) != 0 {
+// addDynamicHeaders adds any headers which are stored in the schema to the HTTP response.
+// At present, it handles following headers:
+//  * Access-Control-Allow-Headers
+//  * Access-Control-Allow-Origin
+func addDynamicHeaders(reqResolver *resolve.RequestResolver, origin string, w http.ResponseWriter) {
+	schemaMeta := reqResolver.Schema().Meta()
+
+	// Set allowed headers after also including headers which are part of forwardHeaders.
+	w.Header().Set("Access-Control-Allow-Headers", schemaMeta.AllowedCorsHeaders())
+
+	allowedOrigins := schemaMeta.AllowedCorsOrigins()
+	if len(allowedOrigins) == 0 {
+		// Since there is no allow-list to restrict, we'll allow everyone to access.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else if allowedOrigins[origin] {
 		// Let's set the respective origin address in the allow origin.
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else if len(allowList) == 0 {
-		// Since there is no allowlist to restrict we'll allow everyone
-		// to access.
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else {
+		// otherwise, Given origin is not in the allow list, so let's remove any allowed origin.
+		w.Header().Del("Access-Control-Allow-Origin")
 	}
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", x.AccessControlAllowedHeaders)
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }

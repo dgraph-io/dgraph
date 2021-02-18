@@ -270,7 +270,9 @@ type Post1 {
 
 type Person1 {
   id: String! @id
-  name: String
+  friends: [Person1] @hasInverse(field: friends)
+  closeFriends: [Person1] @hasInverse(field: closeFriends)
+  name: String!
 }
 
 type Comment1 {

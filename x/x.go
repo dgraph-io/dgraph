@@ -35,7 +35,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -67,7 +66,8 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
-	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrNoJwt is returned when JWT is not present in the context.
+	ErrNoJwt = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login
 	ErrorInvalidLogin = errors.New("invalid username or password")
 	// ErrConflict is returned when commit couldn't succeed due to conflicts.
@@ -144,8 +144,6 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
-	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
-	AcceptedOrigins = atomic.Value{}
 	// GuardiansUid is a map from namespace to the Uid of guardians group node.
 	GuardiansUid = &sync.Map{}
 	// GrootUser Uid is a map from namespace to the Uid of groot user node.
@@ -153,23 +151,9 @@ var (
 )
 
 func init() {
-	AcceptedOrigins.Store(map[string]struct{}{})
 	GuardiansUid.Store(GalaxyNamespace, 0)
 	GrootUid.Store(GalaxyNamespace, 0)
 
-}
-
-// UpdateCorsOrigins updates the cors allowlist with the given origins.
-func UpdateCorsOrigins(origins []string) {
-	if len(origins) == 1 && origins[0] == "*" {
-		AcceptedOrigins.Store(map[string]struct{}{})
-		return
-	}
-	allowList := make(map[string]struct{}, len(origins))
-	for _, origin := range origins {
-		allowList[origin] = struct{}{}
-	}
-	AcceptedOrigins.Store(allowList)
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -277,28 +261,43 @@ func ExtractNamespaceHTTP(r *http.Request) uint64 {
 	return namespace
 }
 
-// ExtractNamespace parses the namespace value from the incoming gRPC context.
-func ExtractNamespace(ctx context.Context) uint64 {
+// ExtractNamespace parses the namespace value from the incoming gRPC context. For the non-ACL mode,
+// it is caller's responsibility to set the galaxy namespace.
+func ExtractNamespace(ctx context.Context) (uint64, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return 0, errors.New("No metadata in the context")
 	}
 	ns := md.Get("namespace")
 	if len(ns) == 0 {
-		glog.Fatal("No namespace in the metadata of context")
+		return 0, errors.New("No namespace in the metadata of context")
 	}
-	namespace, err := strconv.ParseUint(ns[0], 10, 64)
-	Check(err)
-	return namespace
+	namespace, err := strconv.ParseUint(ns[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Error while parsing namespace from metadata")
+	}
+	return namespace, nil
 }
 
 func IsGalaxyOperation(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		glog.Fatal("No metadata in the context")
+		return false
 	}
 	ns := md.Get("galaxy-operation")
 	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
+}
+
+func GetForceNamespace(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	ns := md.Get("force-namespace")
+	if len(ns) == 0 {
+		return ""
+	}
+	return ns[0]
 }
 
 func ExtractJwt(ctx context.Context) ([]string, error) {
@@ -464,12 +463,13 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 }
 
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
-func AttachGalaxyOperation(ctx context.Context) context.Context {
+func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
 	md.Set("galaxy-operation", "true")
+	md.Set("force-namespace", strconv.FormatUint(ns, 10))
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
@@ -1085,7 +1085,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password, opt.Namespace); err != nil {
+	if err := dg.LoginIntoNamespace(ctx, opt.UserID, password, opt.Namespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")

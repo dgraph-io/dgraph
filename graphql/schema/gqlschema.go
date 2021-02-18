@@ -273,7 +273,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -297,7 +297,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -933,10 +933,21 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 	}
 
 	for _, key := range definitions {
+		defn := sch.Types[key]
+		if key == "Query" {
+			for _, q := range defn.Fields {
+				subsDir := q.Directives.ForName(subscriptionDirective)
+				customDir := q.Directives.ForName(customDirective)
+				if subsDir != nil && customDir != nil {
+					sch.Subscription.Fields = append(sch.Subscription.Fields, q)
+				}
+			}
+			continue
+		}
 		if isQueryOrMutation(key) {
 			continue
 		}
-		defn := sch.Types[key]
+
 		if defn.Kind == ast.Union {
 			// TODO: properly check the case of reverse predicates (~) with union members and clean
 			// them from unionRef or unionFilter as required.

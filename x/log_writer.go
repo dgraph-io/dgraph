@@ -47,7 +47,7 @@ var _ io.WriteCloser = (*LogWriter)(nil)
 type LogWriter struct {
 	FilePath      string
 	MaxSize       int64
-	MaxAge        int // number of days
+	MaxAge        int64 // number of days
 	Compress      bool
 	EncryptionKey []byte
 

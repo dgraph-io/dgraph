@@ -638,6 +638,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		})
 
 	case proposal.DeleteNs != nil:
+		x.AssertTrue(proposal.DeleteNs.Namespace != x.GalaxyNamespace)
 		n.elog.Printf("Deleting namespace: %d", proposal.DeleteNs.Namespace)
 		return State.Pstore.BanNamespace(proposal.DeleteNs.Namespace)
 
@@ -776,7 +777,12 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}
 		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToDisk(writer, commit)
+			err := txn.CommitToDisk(writer, commit)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
 		})
 
 		if err != nil {
@@ -1259,11 +1265,14 @@ func (n *node) Run() {
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
-			if x.WorkerConfig.HardSync && rd.MustSync {
+			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
+					time.Sleep(10 * time.Millisecond)
+					continue
 				}
 				timer.Record("sync")
+				break
 			}
 
 			// Now schedule or apply committed entries.

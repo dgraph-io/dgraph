@@ -58,7 +58,8 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
-		WithEncryptionKey(k)
+		WithEncryptionKey(k).
+		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }
 
@@ -117,7 +118,6 @@ func GetPredicateValues(pdir, attr string, readTs uint64) (map[string]string, er
 	}
 	defer db.Close()
 
-	attr = x.GalaxyAttr(attr)
 	values := make(map[string]string)
 
 	txn := db.NewTransactionAt(readTs, false)

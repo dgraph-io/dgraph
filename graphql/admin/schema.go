@@ -50,7 +50,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 
 	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
 	// is returned from badger.
-	schHandler, err := schema.NewHandler(input.Set.Schema, true, false)
+	schHandler, err := schema.NewHandler(input.Set.Schema, false)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -82,7 +82,10 @@ func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *reso
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
 
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
+	}
 
 	cs := gsr.admin.schema[ns]
 	if cs == nil || cs.ID == "" {

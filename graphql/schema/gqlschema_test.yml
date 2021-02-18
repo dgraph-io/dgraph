@@ -2761,6 +2761,36 @@ invalid_schemas:
 
     
 
+  - name: "@withSubscription on custom http query"
+    input: |
+      type TwitterUser @remote {
+          id: ID!
+          name: String
+          screen_name: String
+      }
+      type Query{
+            getCustomTwitterUser(name: String!): TwitterUser @withSubscription @custom(http:{
+                url: "https://api.twitter.com/1.1/users/show.json?screen_name=$name"
+                method: "GET",
+                forwardHeaders: ["Authorization"]
+            })
+      }
+    errlist: [
+        { "message": "Type Query; Field getCustomTwitterUser: custom query should have dql argument if @withSubscription directive is set",
+          "locations": [ { "line": 7, "column": 7 } ] },
+      ]
+
+  - name: "@withSubscription on field of type other than Query"
+    input: |
+        type TwitterUser @remote {
+            id: ID!
+            name: String @withSubscription
+            screen_name: String
+        }
+    errlist: [
+        { "message": "Type TwitterUser; Field name: @withSubscription directive is applicable only on types and custom dql queries",
+          "locations": [ { "line": 3, "column": 5 } ] },
+      ]
 
 valid_schemas:
   - name: "Type implements from two interfaces where both have ID"

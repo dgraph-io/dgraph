@@ -9,6 +9,25 @@
       ]
     },
     {
+      "predicate": "post1.author",
+      "type": "uid"
+    },
+    {
+      "index": true,
+      "predicate": "author1.name",
+      "tokenizer": [
+        "hash",
+        "trigram"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "author1.posts",
+      "type": "uid"
+    },
+    {
       "predicate": "Astronaut.id",
       "type": "string",
       "index": true,
@@ -642,16 +661,6 @@
       "type": "string"
     },
     {
-      "predicate": "dgraph.cors",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "list": true,
-      "upsert": true
-    },
-    {
       "predicate": "dgraph.drop.op",
       "type": "string"
     },
@@ -669,14 +678,6 @@
     },
     {
       "predicate": "dgraph.graphql.schema",
-      "type": "string"
-    },
-    {
-      "predicate": "dgraph.graphql.schema_created_at",
-      "type": "datetime"
-    },
-    {
-      "predicate": "dgraph.graphql.schema_history",
       "type": "string"
     },
     {
@@ -1322,17 +1323,6 @@
     {
       "fields": [
         {
-          "name": "dgraph.graphql.schema_history"
-        },
-        {
-          "name": "dgraph.graphql.schema_created_at"
-        }
-      ],
-      "name": "dgraph.graphql.history"
-    },
-    {
-      "fields": [
-        {
           "name": "dgraph.graphql.p_query"
         },
         {
@@ -1344,13 +1334,8 @@
     {
       "fields": [
         {
-          "name": "dgraph.cors"
-        }
-      ],
-      "name": "dgraph.type.cors"
-    },
-    {
-      "fields": [
+          "name": "post1.author"
+        },
         {
           "name": "post1.title"
         },
@@ -1365,6 +1350,17 @@
         }
       ],
       "name": "post1"
+    },
+    {
+      "fields": [
+        {
+          "name": "author1.name"
+        },
+        {
+          "name": "author1.posts"
+        }
+      ],
+      "name": "author1"
     }
   ]
 }

@@ -262,21 +262,25 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		return nil, errIndexingInProgress
 	}
 
-	var result *schema.ParsedSchema
-	var err error
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While parsing schema")
+	}
+
 	if x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return nil, errors.Wrap(err, "Non guardian of galaxy user cannot bypass namespaces.")
 		}
-		// Parse the schema preserving the namespace.
-		result, err = schema.Parse(op.Schema)
-	} else {
-		namespace := x.ExtractNamespace(ctx)
-		result, err = schema.ParseWithNamespace(op.Schema, namespace)
+		var err error
+		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Valid force namespace not found in metadata")
+		}
 	}
 
+	result, err := schema.ParseWithNamespace(op.Schema, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -324,14 +328,14 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 	return result, nil
 }
 
-// insertDropRecord is used to insert a helper record when a DROP operation is performed.
+// InsertDropRecord is used to insert a helper record when a DROP operation is performed.
 // This helper record lets us know during backup that a DROP operation was performed and that we
 // need to write this information in backup manifest. So that while restoring from a backup series,
 // we can create an exact replica of the system which existed at the time the last backup was taken.
 // Note that if the server crashes after the DROP operation & before this helper record is inserted,
 // then restoring from the incremental backup of such a DB would restore even the dropped
-// data back.
-func insertDropRecord(ctx context.Context, dropOp string) error {
+// data back. This is also used to capture the delete namespace operation during backup.
+func InsertDropRecord(ctx context.Context, dropOp string) error {
 	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &Request{
 		req: &api.Request{
 			Mutations: []*api.Mutation{{
@@ -365,7 +369,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	empty := &api.Payload{}
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While altering")
+	}
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -386,7 +393,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_all was done
-		err = insertDropRecord(ctx, "DROP_ALL;")
+		err = InsertDropRecord(ctx, "DROP_ALL;")
 		if err != nil {
 			return empty, err
 		}
@@ -396,11 +403,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl(nil)
-		ResetCors(nil)
 		return empty, err
 	}
 
 	if op.DropOp == api.Operation_DATA {
+		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
+				" galaxy")
+		}
 		if len(op.DropValue) > 0 {
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
@@ -418,7 +428,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_data was done
-		err = insertDropRecord(ctx, "DROP_DATA;")
+		err = InsertDropRecord(ctx, "DROP_DATA;")
 		if err != nil {
 			return empty, err
 		}
@@ -427,7 +437,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
 		ResetAcl(nil)
-		ResetCors(nil)
 		return empty, err
 	}
 
@@ -467,7 +476,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// insert a helper record for backup & restore, indicating that drop_attr was done
-		err = insertDropRecord(ctx, "DROP_ATTR;"+attr)
+		err = InsertDropRecord(ctx, "DROP_ATTR;"+attr)
 		return empty, err
 	}
 
@@ -554,11 +563,14 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if err != nil {
 		return err
 	}
-
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While doing mutations:")
+	}
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
-			pred = x.NamespaceAttr(x.ExtractNamespace(ctx), pred)
+			pred = x.NamespaceAttr(ns, pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}
@@ -1016,6 +1028,32 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	return &api.Response{Json: jsonOut}, nil
 }
 
+// Filter out the tablets that do not belong to the requestor's namespace.
+func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+	namespace, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return errors.Errorf("Namespace not found in JWT.")
+	}
+	if namespace == x.GalaxyNamespace {
+		// For galaxy namespace, we don't want to filter out the predicates.
+		return nil
+	}
+	for _, group := range ms.GetGroups() {
+		tablets := make(map[string]*pb.Tablet)
+		for pred, tablet := range group.GetTablets() {
+			if ns, attr := x.ParseNamespaceAttr(pred); namespace == ns {
+				tablets[attr] = tablet
+				tablets[attr].Predicate = attr
+			}
+		}
+		group.Tablets = tablets
+	}
+	return nil
+}
+
 // State handles state requests
 func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
@@ -1029,6 +1067,10 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 	ms := worker.GetMembershipState()
 	if ms == nil {
 		return nil, errors.Errorf("No membership state found")
+	}
+
+	if err := filterTablets(ctx, ms); err != nil {
+		return nil, err
 	}
 
 	m := jsonpb.Marshaler{EmitDefaults: true}
@@ -1050,7 +1092,7 @@ func getAuthMode(ctx context.Context) AuthMode {
 // QueryGraphQL handles only GraphQL queries, neither mutations nor DQL.
 func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 	field gqlSchema.Field) (*api.Response, error) {
-	ctx = x.AttachJWTNamespace(ctx)
+	// no need to attach namespace here, it is already done by GraphQL layer
 	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 

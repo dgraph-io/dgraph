@@ -58,6 +58,10 @@ var (
 		"Unavailable: Server not ready",    // given by GraphQL layer, during init on admin server
 	}
 
+	retryableCreateNamespaceErrors = append(retryableUpdateGQLSchemaErrors,
+		"is not indexed",
+	)
+
 	safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
 		"Schema update counter didn't increment, " +
 		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
@@ -300,7 +304,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 // If it can't make the assertion with enough retries, it fails the test.
 func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
 	var newCounter uint64
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if newCounter = RetryProbeGraphQL(t, authority,
 			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
@@ -314,6 +318,19 @@ func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCount
 	t.Fatalf(safelyUpdateGQLSchemaErr, newCounter, oldCounter)
 }
 
+func containsRetryableCreateNamespaceError(resp *GraphQLResponse) bool {
+	if resp.Errors == nil {
+		return false
+	}
+	errStr := resp.Errors.Error()
+	for _, retryableErr := range retryableCreateNamespaceErrors {
+		if strings.Contains(errStr, retryableErr) {
+			return true
+		}
+	}
+	return false
+}
+
 func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 	createNamespace := &GraphQLParams{
 		Query: `mutation {
@@ -324,12 +341,16 @@ func CreateNamespace(t *testing.T, headers http.Header) uint64 {
 		Headers: headers,
 	}
 
-	// retry a few times to avoid the error: `Predicate dgraph.xid is not indexed`
+	// keep retrying as long as we get a retryable error
 	var gqlResponse *GraphQLResponse
-	for i := 0; i < 10 && (gqlResponse == nil || gqlResponse.Errors != nil); i++ {
+	for {
 		gqlResponse = createNamespace.ExecuteAsPost(t, GraphqlAdminURL)
+		if containsRetryableCreateNamespaceError(gqlResponse) {
+			continue
+		}
+		RequireNoGQLErrors(t, gqlResponse)
+		break
 	}
-	RequireNoGQLErrors(t, gqlResponse)
 
 	var resp struct {
 		AddNamespace struct {
@@ -496,6 +517,42 @@ func SafelyUpdateGQLSchema(t *testing.T, authority, schema string, headers http.
 // SafelyUpdateGQLSchemaOnAlpha1 is SafelyUpdateGQLSchema for alpha1 test container.
 func SafelyUpdateGQLSchemaOnAlpha1(t *testing.T, schema string) *GqlSchema {
 	return SafelyUpdateGQLSchema(t, Alpha1HTTP, schema, nil)
+}
+
+// SafelyDropAllWithGroot can be used in tests for doing DROP_ALL when ACL is enabled.
+// This should be used after at least one schema update operation has succeeded.
+// Once the control returns from it, one can be sure that the DROP_ALL has reached
+// the GraphQL layer and the existing schema has been updated to an empty schema.
+func SafelyDropAllWithGroot(t *testing.T) {
+	safelyDropAll(t, true)
+}
+
+// SafelyDropAll can be used in tests for doing DROP_ALL when ACL is disabled.
+// This should be used after at least one schema update operation has succeeded.
+// Once the control returns from it, one can be sure that the DROP_ALL has reached
+// the GraphQL layer and the existing schema has been updated to an empty schema.
+func SafelyDropAll(t *testing.T) {
+	safelyDropAll(t, false)
+}
+
+func safelyDropAll(t *testing.T, withGroot bool) {
+	// first, make an initial probe to get the schema update counter
+	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
+
+	// do DROP_ALL
+	var dg *dgo.Dgraph
+	var err error
+	if withGroot {
+		dg, err = testutil.DgraphClientWithGroot(Alpha1gRPC)
+	} else {
+		dg, err = testutil.DgraphClient(Alpha1gRPC)
+	}
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	// now, return only after the GraphQL layer has seen the schema update.
+	// This makes sure that one can make queries as per the new schema.
+	AssertSchemaUpdateCounterIncrement(t, Alpha1HTTP, oldCounter, nil)
 }
 
 func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
@@ -831,6 +888,7 @@ func RunAll(t *testing.T) {
 	t.Run("two levels linked to one XID", twoLevelsLinkedToXID)
 	t.Run("cyclically linked mutation", cyclicMutation)
 	t.Run("parallel mutations", parallelMutations)
+	t.Run("input coercion to list", inputCoerciontoList)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -852,11 +910,6 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
-}
-
-// RunCorsTest test all cors related tests.
-func RunCorsTest(t *testing.T) {
-	testCors(t)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -1098,10 +1151,9 @@ func RunGQLRequest(req *http.Request) ([]byte, error) {
 		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
 	}
 
-	// TODO(jatin): uncomment this after CORS is fixed with multi-tenancy
-	// if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-	// 	return nil, errors.Errorf("cors headers weren't set in response")
-	// }
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
+	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -1282,7 +1334,7 @@ func addSchema(url, schema string) error {
 		return errors.Errorf("%v", addResult.Errors)
 	}
 
-	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
+	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema != schema {
 		return errors.New("GraphQL schema mutation failed")
 	}
 

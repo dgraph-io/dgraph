@@ -35,6 +35,8 @@ type LiveOpts struct {
 	Dir        string
 	Ludicrous  bool
 	Env        []string
+	Creds      *LoginParams
+	ForceNs    int64
 }
 
 func LiveLoad(opts LiveOpts) error {
@@ -44,9 +46,15 @@ func LiveLoad(opts LiveOpts) error {
 		"--schema", opts.SchemaFile,
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
+		"--force-namespace", strconv.FormatInt(opts.ForceNs, 10),
 	}
 	if opts.Ludicrous {
 		args = append(args, "--ludicrous_mode")
+	}
+	if opts.Creds != nil {
+		args = append(args, "--creds")
+		args = append(args, fmt.Sprintf("user=%s;password=%s;namespace=%d",
+			opts.Creds.UserID, opts.Creds.Passwd, opts.Creds.Namespace))
 	}
 	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 

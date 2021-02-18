@@ -21,7 +21,6 @@ import (
 	"time"
 
 	bo "github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -71,7 +70,7 @@ type Options struct {
 	// CacheMb is the total memory allocated between all the caches.
 	CacheMb int64
 
-	Audit *audit.AuditConf
+	Audit *x.LoggerConf
 
 	// Define different ChangeDataCapture configurations
 	ChangeDataConf string

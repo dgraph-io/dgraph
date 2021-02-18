@@ -306,7 +306,8 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 			WithSyncWrites(false).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key))
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
 
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
@@ -363,7 +364,6 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
 				return
 			}
-			defer db.Close()
 
 			req := &pb.ExportRequest{
 				GroupId:     group,
@@ -375,6 +375,9 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			}
 
 			_, err = exportInternal(context.Background(), req, db, true)
+			// It is important to close the db before sending err to ch. Else, we will see a memory
+			// leak.
+			db.Close()
 			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 		}(gid)
 	}

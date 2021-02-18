@@ -47,7 +47,7 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 	state := GetMembershipState()
 	g := new(errgroup.Group)
 
-	for gid, _ := range state.Groups {
+	for gid := range state.Groups {
 		req := &pb.DeleteNsRequest{Namespace: ns, GroupId: gid}
 		g.Go(func() error {
 			return x.RetryUntilSuccess(100, 10*time.Second, func() error {

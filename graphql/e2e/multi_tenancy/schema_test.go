@@ -17,8 +17,14 @@
 package schema
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -33,7 +39,6 @@ var (
 	groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
 	groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
 	groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
-	groupOnegRPC   = testutil.SockAddr
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"
 	groupTwoGraphQLServer   = "http://" + groupTwoHTTP + "/graphql"
@@ -46,11 +51,6 @@ var (
 // Whenever schema is updated in a dgraph alpha for one group for any namespace,
 // that update should also be propagated to alpha nodes in other groups.
 func TestSchemaSubscribe(t *testing.T) {
-	t.Skip()
-	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
-
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
 	schema := `
@@ -170,10 +170,8 @@ func TestSchemaSubscribe(t *testing.T) {
 // This test ensures that even though different namespaces have the same GraphQL schema, if their
 // data is different the same should be reflected in the GraphQL responses.
 // In a way, it also tests lazy-loading of GraphQL schema.
-func TestSchemaNamespaceWithData(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(groupOnegRPC)
-	require.NoError(t, err)
-	testutil.DropAll(t, dg)
+func TestGraphQLResponse(t *testing.T) {
+	common.SafelyDropAllWithGroot(t)
 
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
@@ -193,65 +191,228 @@ func TestSchemaNamespaceWithData(t *testing.T) {
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
 
-	query := `
+	graphqlHelper(t, `
 	mutation {
 		addAuthor(input:{name: "Alice"}) {
 			author{
 				name
 			}
 		}
-	}`
-	expectedResult :=
+	}`, header,
 		`{
 			"addAuthor": {
 				"author":[{
 					"name":"Alice"
 				}]
 			}
-		}`
-	queryAuthor := &common.GraphQLParams{
-		Query:   query,
-		Headers: header,
-	}
-	queryResult := queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
-	Query1 := `
+	query := `
 	query {
 		queryAuthor {
 			name
 		}
 	}`
-	expectedResult =
+	graphqlHelper(t, query, header,
 		`{
 			"queryAuthor": [
 				{
 					"name":"Alice"
 				}
 			]
-		}`
-	queryAuthor.Query = Query1
-	queryAuthor.Headers = header
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
-	query2 := `
-	query {
-		queryAuthor {
-			name
-		}
-	}`
-	expectedResult =
+	graphqlHelper(t, query, header1,
 		`{
 			"queryAuthor": []
-		}`
-	queryAuthor.Query = query2
-	queryAuthor.Headers = header1
-	queryResult = queryAuthor.ExecuteAsPost(t, groupOneGraphQLServer)
-	common.RequireNoGQLErrors(t, queryResult)
-	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+		}`)
 
 	common.DeleteNamespace(t, ns, header)
+}
+
+func TestAuth(t *testing.T) {
+	common.SafelyDropAllWithGroot(t)
+
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	schema := `
+	type User @auth(
+		query: { rule: """
+			query($USER: String!) {
+				queryUser(filter: { username: { eq: $USER } }) {
+				__typename
+				}
+			}
+		"""}
+	) {
+		id: ID!
+		username: String! @id
+		isPublic: Boolean @search
+	}
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}`
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
+
+	ns := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	schema1 := `
+	type User @auth(
+		query: { rule: """
+			query {
+				queryUser(filter: { isPublic: true }) {
+					__typename
+				}
+			}
+		"""}
+	) {
+		id: ID!
+		username: String! @id
+		isPublic: Boolean @search
+	}
+	# Dgraph.Authorization  {"VerificationKey":"secret1","Header":"Authorization1","Namespace":"https://dgraph.io/jwt/claims1","Algo":"HS256"}`
+	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema1, header1)
+
+	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
+	require.Equal(t, schema1, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header1).Schema)
+
+	addUserMutation := `mutation {
+		addUser(input:[
+			{username: "Alice", isPublic: false},
+			{username: "Bob", isPublic: true}
+		]) {
+			user {
+				username
+			}
+		}
+	}`
+
+	// for namespace 0, after adding multiple users, we should only get back the user "Alice"
+	header = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io/jwt/claims",
+		Algo:      "HS256",
+		Header:    "Authorization",
+	})
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	graphqlHelper(t, addUserMutation, header, `{
+		"addUser": {
+			"user":[{
+				"username":"Alice"
+			}]
+		}
+	}`)
+
+	// for namespace 1, after adding multiple users, we should only get back the public users
+	header1 = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
+		PublicKey: "secret1",
+		Namespace: "https://dgraph.io/jwt/claims1",
+		Algo:      "HS256",
+		Header:    "Authorization1",
+	})
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	graphqlHelper(t, addUserMutation, header1, `{
+		"addUser": {
+			"user":[{
+				"username":"Bob"
+			}]
+		}
+	}`)
+
+	common.DeleteNamespace(t, ns, header)
+}
+
+// TestCORS checks that all the CORS headers are correctly set in the response for each namespace.
+func TestCORS(t *testing.T) {
+	header := http.Header{}
+	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS"]
+		})
+	}
+	# Dgraph.Allow-Origin "https://play.dgraph.io"
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	`, header)
+
+	ns := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, `
+	type TestCORS {
+		id: ID!
+		name: String
+		cf: String @custom(http:{
+			url: "https://play.dgraph.io",
+			method: GET,
+			forwardHeaders: ["Test-CORS1"]
+		})
+	}
+	# Dgraph.Allow-Origin "https://play1.dgraph.io"
+	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph1","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	`, header1)
+
+	// testCORS for namespace 0
+	testCORS(t, 0, "https://play.dgraph.io", "https://play.dgraph.io",
+		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS", "X-Test-Dgraph"}, ","))
+
+	// testCORS for the new namespace
+	testCORS(t, ns, "https://play1.dgraph.io", "https://play1.dgraph.io",
+		strings.Join([]string{x.AccessControlAllowedHeaders, "Test-CORS1", "X-Test-Dgraph1"}, ","))
+
+	// cleanup
+	common.DeleteNamespace(t, ns, header)
+}
+
+func graphqlHelper(t *testing.T, query string, headers http.Header,
+	expectedResult string) {
+	params := &common.GraphQLParams{
+		Query:   query,
+		Headers: headers,
+	}
+	queryResult := params.ExecuteAsPost(t, groupOneGraphQLServer)
+	common.RequireNoGQLErrors(t, queryResult)
+	testutil.CompareJSON(t, expectedResult, string(queryResult.Data))
+}
+
+func testCORS(t *testing.T, namespace uint64, reqOrigin, expectedAllowedOrigin,
+	expectedAllowedHeaders string) {
+	params := &common.GraphQLParams{
+		Query: `query {	queryTestCORS { name } }`,
+	}
+	req, err := params.CreateGQLPost(groupOneGraphQLServer)
+	require.NoError(t, err)
+
+	if reqOrigin != "" {
+		req.Header.Set("Origin", reqOrigin)
+	}
+	req.Header.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer, namespace).AccessJwt)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// GraphQL server should always return OK and JSON content, even when there are errors
+	require.Equal(t, resp.StatusCode, http.StatusOK)
+	require.Equal(t, strings.ToLower(resp.Header.Get("Content-Type")), "application/json")
+	// assert that the CORS headers are there as expected
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), expectedAllowedOrigin)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), expectedAllowedHeaders)
+	require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+	gqlRes := &common.GraphQLResponse{}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(body, gqlRes))
+	common.RequireNoGQLErrors(t, gqlRes)
+	testutil.CompareJSON(t, `{"queryTestCORS":[]}`, string(gqlRes.Data))
 }
