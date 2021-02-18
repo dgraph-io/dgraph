@@ -639,6 +639,7 @@ message DropOperation {
 		ALL = 0;
 		DATA = 1;
 		ATTR = 2;
+		NS = 3;
 	}
 	DropOp drop_op    = 1;
 	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.

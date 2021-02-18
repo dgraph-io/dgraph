@@ -54,6 +54,8 @@ const (
 	GalaxyNamespace = uint64(0)
 	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
 	IgnoreBytes = "1-8"
+	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
+	NamespaceOffset = 1
 )
 
 func NamespaceToBytes(ns uint64) []byte {
@@ -502,6 +504,14 @@ func PredicatePrefix(predicate string) []byte {
 	AssertTrue(copy(buf[1:], ns) == 8)
 	k := writeAttr(buf[9:], predicate)
 	AssertTrue(len(k) == 0)
+	return buf
+}
+
+// DataPrefix returns the prefix for all data keys belonging to this namespace.
+func DataPrefix(ns uint64) []byte {
+	buf := make([]byte, 1+8)
+	buf[0] = DefaultPrefix
+	binary.BigEndian.PutUint64(buf[1:], ns)
 	return buf
 }
 

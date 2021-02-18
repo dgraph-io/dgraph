@@ -306,7 +306,8 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 			WithSyncWrites(false).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key))
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
 
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)

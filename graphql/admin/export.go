@@ -54,7 +54,10 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	}
 
 	// For the request made from non-galaxy user, use the namespace from the context.
-	ns := x.ExtractNamespace(ctx)
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
 	if ns != x.GalaxyNamespace {
 		input.Namespace = ns
 	}
