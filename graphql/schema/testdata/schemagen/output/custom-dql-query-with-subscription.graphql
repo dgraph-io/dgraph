@@ -381,7 +381,7 @@ input TweetsFilter {
 	id: [ID!]
 	text: StringFullTextFilter
 	timestamp: DateTimeFilter
-	has: TweetsHasFilter
+	has: [TweetsHasFilter]
 	and: [TweetsFilter]
 	or: [TweetsFilter]
 	not: TweetsFilter
@@ -421,7 +421,7 @@ input UpdateUserInput {
 input UserFilter {
 	screen_name: StringHashFilter
 	followers: IntFilter
-	has: UserHasFilter
+	has: [UserHasFilter]
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter
