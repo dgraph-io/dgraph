@@ -5763,39 +5763,65 @@ func multipleXidsTests(t *testing.T) {
 		},
 		{
 			name: "Deep level update mutation with multiple Id's",
-			query: `mutation{
-		             updateEmployer(input: { filter: {company:{in:"GraphQL"}},set: { worker: {name:"Leo",emp_Id: "E06",reg_No: 6}}})
-                       {
-		             	employer {
-							company	
-							worker{
-		             		emp_Id
-		             		name
-		             		reg_No
-		             		}
-						}
-		             }
-		          }`,
+			query: `mutation {
+	                   updateEmployer(
+	                   	input: {
+	                   		filter: { company: { in: "GraphQL" } }
+	                   		set: { worker: { name: "Leo", emp_Id: "E06", reg_No: 6 } }
+	                   	}
+	                   ) {
+	                   	employer {
+	                   		company
+	                   		worker {
+	                   			emp_Id
+	                   			name
+	                   			reg_No
+	                   		}
+	                   	}
+	                   }
+                    }`,
 			expected: `{
-                  "updateEmployer": {
-                      "employer": [
-                          {   "company":"GraphQL",
-                              "worker": [
-                                  {
-                                      "emp_Id": "E06",
-                                      "name": "Leo",
-                                      "reg_No": 6
-                                  },
-                                  {
-                                      "emp_Id": "E03",
-                                      "name": "Jack",
-                                      "reg_No": 3
-                                  }
-                              ]
-                          }
-                      ]
-                  }
-               }`,
+                     "updateEmployer": {
+                         "employer": [
+                             {
+                                 "company": "GraphQL",
+                                 "worker": [
+                                     {
+                                         "emp_Id": "E06",
+                                         "name": "Leo",
+                                         "reg_No": 6
+                                     },
+                                     {
+                                         "emp_Id": "E03",
+                                         "name": "Jack",
+                                         "reg_No": 3
+                                     }
+                                 ]
+                             }
+                         ]
+                     }
+                  }`,
+		},
+		{
+			name: "Deep level update mutation return error when some xids are missing while creating new node using set",
+			query: `mutation {
+	                   updateEmployer(
+	                   	input: {
+	                   		filter: { company: { in: "GraphQL" } }
+	                   		set: { worker: { name: "Leo", emp_Id: "E07" } }
+	                   	}
+	                   ) {
+	                   	employer {
+	                   		company
+	                   		worker {
+	                   			emp_Id
+	                   			name
+	                   			reg_No
+	                   		}
+	                   	}
+	                   }
+                     }`,
+			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
 		},
 	}
 

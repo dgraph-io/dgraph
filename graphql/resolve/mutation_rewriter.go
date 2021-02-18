@@ -1265,7 +1265,9 @@ func rewriteObject(
 
 	xids := typ.XIDFields()
 	if len(xids) != 0 {
-		for index, xid := range xids {
+		var xidsWithoutNodes int
+		var missingXid bool
+		for _, xid := range xids {
 			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				// TODO: Add a function for parsing idVal. This is repeatitive
@@ -1308,31 +1310,35 @@ func rewriteObject(
 					} else {
 						return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
 					}
-				} else if index == len(xids)-1 {
+				} else {
 
 					// Node with XIDs does not exist. It means this is a new node.
 					// This node will be created later.
-					exclude := ""
-					if srcField != nil {
-						invField := srcField.Inverse()
-						if invField != nil {
-							exclude = invField.Name()
+					if xidsWithoutNodes == len(xids)-1 {
+						exclude := ""
+						if srcField != nil {
+							invField := srcField.Inverse()
+							if invField != nil {
+								exclude = invField.Name()
+							}
 						}
+						// We replace obj with xidMetadata.variableObjMap[variable] in this case.
+						// This is done to ensure that the first time we encounter an XID node, we use
+						// its definition and later times, we just use its reference.
+						obj = xidMetadata.variableObjMap[variable]
+						if err := typ.EnsureNonNulls(obj, exclude); err != nil {
+							// This object does not contain XID. This is an error.
+							retErrors = append(retErrors, err)
+							return nil, retErrors
+						}
+						// Set existenceQueryResult to _:variable. This is to make referencing to
+						// this node later easier.
+						idExistence[variable] = fmt.Sprintf("_:%s", variable)
 					}
-					// We replace obj with xidMetadata.variableObjMap[variable] in this case.
-					// This is done to ensure that the first time we encounter an XID node, we use
-					// its definition and later times, we just use its reference.
-					obj = xidMetadata.variableObjMap[variable]
-					if err := typ.EnsureNonNulls(obj, exclude); err != nil {
-						// This object does not contain XID. This is an error.
-						retErrors = append(retErrors, err)
-						return nil, retErrors
-					}
-					// Set existenceQueryResult to _:variable. This is to make referencing to
-					// this node later easier.
-					idExistence[variable] = fmt.Sprintf("_:%s", variable)
+					xidsWithoutNodes++
+
 				}
-			} else if (mutationType == Add || !atTopLevel) && (index == len(xids)-1) {
+			} else if (mutationType == Add || !atTopLevel) && !missingXid {
 				// There are two possibilities here:
 				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
 				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
@@ -1343,8 +1349,11 @@ func rewriteObject(
 				//    with the function.
 				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
-				return nil, retErrors
+				missingXid = true
 			}
+		}
+		if retErrors != nil {
+			return nil, retErrors
 		}
 	}
 
