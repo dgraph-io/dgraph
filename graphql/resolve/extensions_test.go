@@ -133,8 +133,10 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
+			assigned:             map[string]string{"Post1": "0x2"},
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+			queryTouched:         2,
+			mutationTouched:      5,
 		})
 
 	require.NotNil(t, resp)
@@ -187,8 +189,10 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			queryTouched:    2,
-			mutationTouched: 5,
+			assigned:             map[string]string{"Post1": "0x2"},
+			existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+			queryTouched:         2,
+			mutationTouched:      5,
 		})
 
 	require.NotNil(t, resp)

@@ -8,7 +8,7 @@
     { }
   errors:
     [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean
-       \"getAuthor\"?",
+       \"getAuthor\" or \"getauthor1\"?",
       "locations": [ { "line": 2, "column": 3 } ] } ]
     
 -
@@ -349,3 +349,17 @@
   errors:
     [ { "message": "Out of range value '2147483648', for type `Int`",
         "locations": [ { "line": 2, "column": 53 } ] } ]
+
+- name: "Error when multiple filter functions are used"
+  gqlrequest: |
+    query {
+      querypost1(filter:{numLikes: {eq:2 le:2}})
+         {
+          numLikes
+        }
+      }
+  gqlvariables: |
+    { }
+  errors:
+    [ { "message": "Int64Filter filter expects only one filter function, got: 2",
+        "locations": [ { "line": 2, "column": 32 } ] } ]

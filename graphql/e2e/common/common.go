@@ -178,6 +178,18 @@ type state struct {
 	Code    string   `json:"xcode,omitempty"`
 	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
+	Region  *region  `json:"region,omitempty"`
+}
+
+type region struct {
+	ID       string    `json:"id,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	District *district `json:"district,omitempty"`
+}
+
+type district struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type movie struct {
@@ -702,6 +714,11 @@ func RunAll(t *testing.T) {
 	t.Run("Geo - MultiPolygon type", mutationMultiPolygonType)
 	t.Run("filter in mutations with array for AND/OR", filterInMutationsWithArrayForAndOr)
 	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
+	t.Run("three level double XID mutation", threeLevelDoubleXID)
+	t.Run("two levels linked to one XID", twoLevelsLinkedToXID)
+	t.Run("cyclically linked mutation", cyclicMutation)
+	t.Run("parallel mutations", parallelMutations)
+	t.Run("input coercion to list", inputCoerciontoList)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -1172,6 +1189,18 @@ func GetJWT(t *testing.T, user, role string, metaInfo *testutil.AuthMeta) http.H
 	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
 	require.NoError(t, err)
 
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
+}
+
+func GetJWTWithNullUser(t *testing.T, role interface{}, metaInfo *testutil.AuthMeta) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	metaInfo.AuthVars["USER"] = nil
+	metaInfo.AuthVars["ROLE"] = role
+	require.NotNil(t, metaInfo.PrivateKeyPath)
+	jwtToken, err := metaInfo.GetSignedToken(metaInfo.PrivateKeyPath, 300*time.Second)
+	require.NoError(t, err)
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
