@@ -283,95 +283,29 @@ func TestBackupMultiTenancy(t *testing.T) {
 	verifyUids(dg, "galaxy", 10000)
 	verifyUids(dg1, "ns", 10000)
 
-	// Do a DROP_DATA
-	require.NoError(t, dg.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
-	verifyUids(dg, "galaxy", 0)
+	// Do a DROP_DATA. This will return an error.
+	err = dg1.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Drop data can only be called by the guardian of the galaxy")
+	verifyUids(dg, "galaxy", 10000)
 	verifyUids(dg1, "ns", 10000)
-
-	// add some data in galaxy namespace.
-	incr4, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-				<_:x1> <movie> "El laberinto del fauno" .
-				<_:x2> <movie> "Black Panther 2" .
-			`),
-	})
-	require.NoError(t, err)
-	original[x.GalaxyNamespace] = incr4
-
-	// perform an incremental backup and then restore
-	dirs := runBackup(t, galaxyToken, 15, 5)
-	restored = runRestore(t, copyBackupDir, "", incr4.Txn.CommitTs, []uint64{x.GalaxyNamespace, ns})
-	testutil.CheckSchema(t, preds, types)
-
-	// Check that the newly added data is the only data for the movie predicate
-	require.Len(t, restored[x.GalaxyNamespace], 2)
-	checksUpdated := []struct {
-		blank, expected string
-	}{
-		{blank: "x1", expected: "El laberinto del fauno"},
-		{blank: "x2", expected: "Black Panther 2"},
-	}
-	for _, check := range checksUpdated {
-		require.EqualValues(t, check.expected, restored[x.GalaxyNamespace][original[x.GalaxyNamespace].Uids[check.blank]])
-	}
-	require.Len(t, restored[ns], 5)
-	for _, check := range checks {
-		require.EqualValues(t, check.expected, restored[ns][original[ns].Uids[check.blank]])
-	}
-
-	// Verify that there is no data for predicate `name`
-	verifyUids(dg, "galaxy", 0)
-	verifyUids(dg1, "ns", 10000)
-
-	// Do a DROP_DATA on namespace ns.
-	require.NoError(t, dg1.Alter(ctx, &api.Operation{DropOp: api.Operation_DATA}))
-	verifyUids(dg, "galaxy", 0)
-	verifyUids(dg1, "ns", 0)
-
-	// add some data in galaxy namespace.
-	incr4, err = dg1.NewTxn().Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-				<_:x1> <movie> "El laberinto del fauno" .
-				<_:x2> <movie> "Black Panther 2" .
-			`),
-	})
-	require.NoError(t, err)
-	original[ns] = incr4
-
-	// perform an incremental backup and then restore
-	dirs = runBackup(t, galaxyToken, 18, 6)
-	restored = runRestore(t, copyBackupDir, "", incr4.Txn.CommitTs, []uint64{x.GalaxyNamespace, ns})
-	testutil.CheckSchema(t, preds, types)
-
-	// Check that the newly added data is the only data for the movie predicate
-	require.Len(t, restored[x.GalaxyNamespace], 2)
-	require.Len(t, restored[ns], 2)
-	for ns, orig := range original {
-		for _, check := range checksUpdated {
-			require.EqualValues(t, check.expected, restored[ns][orig.Uids[check.blank]])
-		}
-	}
-
-	// Verify that there is no data for predicate `name`
-	verifyUids(dg, "galaxy", 0)
-	verifyUids(dg1, "ns", 0)
 
 	// After deleting a namespace in incremental backup, we should not be able to get the data from
 	// banned namespace.
 	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
-	dirs = runBackup(t, galaxyToken, 21, 7)
+	dirs := runBackup(t, galaxyToken, 15, 5)
 	restored = runRestore(t, copyBackupDir, "", math.MaxUint64, []uint64{x.GalaxyNamespace, ns})
 
 	// Check that we do not restore the data from ns namespace.
-	require.Len(t, restored[x.GalaxyNamespace], 2)
+	require.Len(t, restored[x.GalaxyNamespace], 5)
 	require.Len(t, restored[ns], 0)
+	verifyUids(dg, "galaxy", 10000)
 
 	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	common.RunFailingRestore(t, copyBackupDir, "", incr4.Txn.CommitTs)
+	common.RunFailingRestore(t, copyBackupDir, "",
+		x.Max(incr3[x.GalaxyNamespace].Txn.CommitTs, incr3[ns].Txn.CommitTs))
 
 	// Clean up test directories.
 	common.DirCleanup(t)

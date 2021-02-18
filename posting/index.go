@@ -1232,8 +1232,8 @@ func DeleteAll() error {
 }
 
 // DeleteData deletes all data but leaves types and schema intact.
-func DeleteData(ns uint64) error {
-	return pstore.DropPrefix(x.DataPrefix(ns))
+func DeleteData() error {
+	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.

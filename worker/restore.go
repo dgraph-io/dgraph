@@ -245,9 +245,7 @@ func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOp
 		case pb.DropOperation_ALL:
 			return db.DropAll()
 		case pb.DropOperation_DATA:
-			ns, err := strconv.ParseUint(operation.DropValue, 0, 64)
-			x.Check(err)
-			return db.DropPrefix(x.DataPrefix(ns))
+			return db.DropPrefix([]byte{x.DefaultPrefix})
 		case pb.DropOperation_ATTR:
 			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
 		case pb.DropOperation_NS:
