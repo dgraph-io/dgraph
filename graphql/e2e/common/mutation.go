@@ -5492,7 +5492,7 @@ func mutationWithMultipleXids(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists: field reg_No, type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
@@ -5505,7 +5505,7 @@ func mutationWithMultipleXids(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5518,7 +5518,7 @@ func mutationWithMultipleXids(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists: field emp_Id, type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",

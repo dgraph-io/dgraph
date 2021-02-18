@@ -212,7 +212,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
-	XIDField() []FieldDefinition
+	XIDFields() []FieldDefinition
 	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
@@ -2354,7 +2354,7 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 }
 
-func (t *astType) XIDField() []FieldDefinition {
+func (t *astType) XIDFields() []FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil

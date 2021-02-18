@@ -3267,7 +3267,9 @@
     		id
     		title
     		ISBN
-    		Author
+    		author {
+              name
+            }
     	}
     }
   dgquery: |-
@@ -3276,7 +3278,10 @@
         Book.id : uid
         Book.title : Book.title
         Book.ISBN : Book.ISBN
-        Book.Author : Book.Author
+        Book.author : Book.author {
+          author.name : author.name
+          dgraph.uid : uid
+        }
       }
     }
 -
@@ -3287,7 +3292,9 @@
     		id
     		title
     		ISBN
-    		Author
+    		author {
+              name
+            }
     	}
     }
   dgquery: |-
@@ -3296,6 +3303,9 @@
         Book.id : uid
         Book.title : Book.title
         Book.ISBN : Book.ISBN
-        Book.Author : Book.Author
+        Book.author : Book.author {
+          author.name : author.name
+          dgraph.uid : uid
+        }
       }
     }

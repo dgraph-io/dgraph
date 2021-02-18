@@ -1259,7 +1259,7 @@ func rewriteObject(
 		}
 	}
 
-	xids := typ.XIDField()
+	xids := typ.XIDFields()
 	if len(xids) != 0 {
 		for index, xid := range xids {
 			var xidString string
@@ -1294,10 +1294,10 @@ func rewriteObject(
 						// tries to add duplicate data to the field with @id.
 						var err error
 						if queryAuthSelector(typ) == nil {
-							err = x.GqlErrorf("id %s already exists: field %s, type %s", xidString, xid.Name(), typ.Name())
+							err = x.GqlErrorf("id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
 						} else {
 							// This error will only be reported in debug mode.
-							err = x.GqlErrorf("GraphQL debug: id %s already exists: field %s, type %s", xidString, xid.Name(), typ.Name())
+							err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
 						}
 						retErrors = append(retErrors, err)
 						return nil, retErrors
@@ -1536,7 +1536,7 @@ func existenceQueries(
 		}
 	}
 
-	xids := typ.XIDField()
+	xids := typ.XIDFields()
 	var xidString string
 	if len(xids) != 0 {
 		for _, xid := range xids {
