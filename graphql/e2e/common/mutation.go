@@ -5819,5 +5819,5 @@ func multipleXidsTests(t *testing.T) {
 		})
 	}
 	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3, 6}}}
-	DeleteGqlType(t, "Worker", filter, 6, nil)
+	DeleteGqlType(t, "Worker", filter, 4, nil)
 }
