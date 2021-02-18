@@ -118,7 +118,6 @@ func TestDeleteNamespace(t *testing.T) {
 	// Create a new namespace
 	ns, err := testutil.CreateNamespace(t, galaxyToken)
 	require.NoError(t, err)
-	require.Equal(t, 1, int(ns))
 	dg[ns] = testutil.DgClientWithLogin(t, "groot", "password", ns)
 
 	addData := func(ns uint64) {
@@ -258,12 +257,32 @@ func TestLiveLoadMulti(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name is not indexed")
 
-	// Load data by non-galaxy user.
+	// live load data into namespace ns using the guardian of galaxy.
 	require.NoError(t, liveLoadData(t, &liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "ns chew" .
 		_:b <name> "ns dan" <%#x> .
 		_:c <name> "ns eon" <%#x> .
+`, ns, 0x100),
+		schema: `
+		name: string @index(term) .
+`,
+		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
+			Namespace: x.GalaxyNamespace},
+		forceNs: int64(ns),
+	}))
+
+	resp = testutil.QueryData(t, dc1, query3)
+	testutil.CompareJSON(t,
+		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
+		{"name": "ns dan"},{"name":"ns eon"}]}`, string(resp))
+
+	// Load data by non-galaxy user.
+	require.NoError(t, liveLoadData(t, &liveOpts{
+		rdfs: fmt.Sprintf(`
+		_:a <name> "ns free" .
+		_:b <name> "ns gary" <%#x> .
+		_:c <name> "ns hola" <%#x> .
 `, ns, 0x100),
 		schema: `
 		name: string @index(term) .
@@ -275,7 +294,9 @@ func TestLiveLoadMulti(t *testing.T) {
 	resp = testutil.QueryData(t, dc1, query3)
 	testutil.CompareJSON(t,
 		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
-		{"name": "ns dan"},{"name":"ns eon"}]}`, string(resp))
+		{"name": "ns dan"},{"name":"ns eon"}, {"name": "ns free"},{"name":"ns gary"},
+		{"name": "ns hola"}]}`, string(resp))
+
 }
 
 func TestMain(m *testing.M) {
