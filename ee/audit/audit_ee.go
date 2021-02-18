@@ -14,7 +14,6 @@ package audit
 
 import (
 	"io/ioutil"
-	"math"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -46,7 +45,6 @@ type AuditEvent struct {
 
 const (
 	UnauthorisedUser = "UnauthorisedUser"
-	UnknownNamespace = math.MaxUint64
 	UnknownUser      = "UnknownUser"
 	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
