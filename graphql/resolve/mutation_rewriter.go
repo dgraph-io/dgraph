@@ -205,7 +205,12 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 		}
 	}
 
-	if len(newXidObj) > 1 && !reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj) {
+	// We return an error if both occurrences of xid contain more than one values
+	// and are not equal.
+	// XID should be defined with all its values at one of the places and references with its
+	// XID from other places.
+	if len(newXidObj) > 1 && len(xidMetadata.variableObjMap[xidVar]) > 1 &&
+		!reflect.DeepEqual(xidMetadata.variableObjMap[xidVar], newXidObj) {
 		return true
 	}
 
@@ -1315,6 +1320,10 @@ func rewriteObject(
 						exclude = invField.Name()
 					}
 				}
+				// We replace obj with xidMetadata.variableObjMap[variable] in this case.
+				// This is done to ensure that the first time we encounter an XID node, we use
+				// its definition and later times, we just use its reference.
+				obj = xidMetadata.variableObjMap[variable]
 				if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 					// This object does not contain XID. This is an error.
 					retErrors = append(retErrors, err)
@@ -1571,30 +1580,48 @@ func existenceQueries(
 			variable := varGen.Next(typ, xid.Name(), xidString, false)
 
 			if xidMetadata.variableObjMap[variable] != nil {
-				// if we already encountered an object with same xid earlier, and this object is
-				// considered a duplicate of the existing object, then return error.
+				// There are two cases:
+				// Case 1: We are at top level:
+				// 	       We return an error if the same node is referenced twice at top level.
+				// Case 2: We are not at top level:
+				//         We don't return an error if one of the occurrences of XID is a reference
+				//         and other is definition.
+				//         We return an error if both occurrences contain values other than XID and are
+				//         not equal.
 				if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
 					err := errors.Errorf("duplicate XID found: %s", xidString)
 					retErrors = append(retErrors, err)
 					return nil, retErrors
 				}
-				// In the other case it is not duplicate. In this case we don't move ahead and
-				// stop processing.
-				return ret, retErrors
-			}
+				// In the other case it is not duplicate, we update variableObjMap in case the new
+				// occurrence of XID is its description and the old occurrence was a reference.
+				// Example:
+				// obj = { "id": "1", "name": "name1"}
+				// xidMetadata.variableObjMap[variable] = { "id": "1" }
+				// In this case, as obj is the correct definition of the object, we update variableObjMap
+				oldObj := xidMetadata.variableObjMap[variable]
+				if len(oldObj) == 1 && len(obj) > 1 {
+					// Continue execution to perform dfs in this case. There may be more nodes
+					// in the subtree of this node.
+					xidMetadata.variableObjMap[variable] = obj
+				} else {
+					// This is just a node reference. No need to proceed further.
+					return ret, retErrors
+				}
+			} else {
 
-			// if not encountered till now, add it to the map
-			xidMetadata.variableObjMap[variable] = obj
+				// if not encountered till now, add it to the map,
+				xidMetadata.variableObjMap[variable] = obj
 
-			// save if this node was seen at top level.
-			if !xidMetadata.seenAtTopLevel[variable] {
+				// save if this node was seen at top level.
 				xidMetadata.seenAtTopLevel[variable] = atTopLevel
+
+				// Add the corresponding existence query. As this is the first time we have
+				// encountered this variable, the query is added only once per variable.
+				query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+				ret = append(ret, query)
+				// Don't return just over here as there maybe more nodes in the children tree.
 			}
-
-			query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
-
-			ret = append(ret, query)
-			// Don't return just over here as there maybe more nodes in the children tree.
 		}
 	}
 
