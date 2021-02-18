@@ -34,10 +34,6 @@ type ResetPasswordInput struct {
 }
 
 func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) error {
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
-		return errors.Wrapf(err, "Reset password got error:")
-	}
-
 	query := fmt.Sprintf(`{
 			x as updateUser(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.User)) {
 				uid
@@ -91,7 +87,7 @@ func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) err
 
 // CreateNamespace creates a new namespace. Only guardian of galaxy is authorized to do so.
 // Authorization is handled by middlewares.
-func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
+func (s *Server) CreateNamespace(ctx context.Context, passwd string) (uint64, error) {
 	glog.V(2).Info("Got create namespace request.")
 
 	num := &pb.Num{Val: 1, Type: pb.Num_NS_ID}
@@ -116,7 +112,7 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 	if err = worker.WaitForIndexing(ctx, true); err != nil {
 		return 0, errors.Wrap(err, "Creating namespace, got error: ")
 	}
-	if err := createGuardianAndGroot(ctx, ids.StartId); err != nil {
+	if err := createGuardianAndGroot(ctx, ids.StartId, passwd); err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
 	}
 	glog.V(2).Infof("Created namespace: %d", ns)
@@ -125,11 +121,11 @@ func (s *Server) CreateNamespace(ctx context.Context) (uint64, error) {
 
 // This function is used while creating new namespace. New namespace creation is only allowed
 // by the guardians of the galaxy group.
-func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
+func createGuardianAndGroot(ctx context.Context, namespace uint64, passwd string) error {
 	if err := upsertGuardian(ctx); err != nil {
 		return errors.Wrap(err, "While creating Guardian")
 	}
-	if err := upsertGroot(ctx); err != nil {
+	if err := upsertGroot(ctx, passwd); err != nil {
 		return errors.Wrap(err, "While creating Groot")
 	}
 	return nil

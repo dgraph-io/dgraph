@@ -26,14 +26,25 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
-type namespaceInput struct {
+type addNamespaceInput struct {
+	Password string
+}
+
+type deleteNamespaceInput struct {
 	NamespaceId int
 }
 
 func resolveAddNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+	req, err := getAddNamespaceInput(m)
+	if err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
+	if req.Password == "" {
+		// Use the default password, if the user does not specify.
+		req.Password = "password"
+	}
 	var ns uint64
-	var err error
-	if ns, err = (&edgraph.Server{}).CreateNamespace(ctx); err != nil {
+	if ns, err = (&edgraph.Server{}).CreateNamespace(ctx, req.Password); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 	return resolve.DataResult(
@@ -47,7 +58,7 @@ func resolveAddNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resol
 }
 
 func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	req, err := getNamespaceInput(m)
+	req, err := getDeleteNamespaceInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -64,14 +75,26 @@ func resolveDeleteNamespace(ctx context.Context, m schema.Mutation) (*resolve.Re
 	), true
 }
 
-func getNamespaceInput(m schema.Mutation) (*namespaceInput, error) {
+func getAddNamespaceInput(m schema.Mutation) (*addNamespaceInput, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
 	inputByts, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
 
-	var input namespaceInput
+	var input addNamespaceInput
+	err = json.Unmarshal(inputByts, &input)
+	return &input, schema.GQLWrapf(err, "couldn't get input argument")
+}
+
+func getDeleteNamespaceInput(m schema.Mutation) (*deleteNamespaceInput, error) {
+	inputArg := m.ArgValue(schema.InputArgName)
+	inputByts, err := json.Marshal(inputArg)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	var input deleteNamespaceInput
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }
