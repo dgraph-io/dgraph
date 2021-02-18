@@ -2918,7 +2918,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		" because id cal already exists: field xcode, type State")
+		" because id cal already exists for field xcode inside type State")
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, 1, nil)
