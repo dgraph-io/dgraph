@@ -71,5 +71,4 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.4
-	src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14
 )
