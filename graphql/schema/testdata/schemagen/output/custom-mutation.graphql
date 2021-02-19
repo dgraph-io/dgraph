@@ -362,7 +362,7 @@ type Query {
 
 type Mutation {
 	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
-	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

@@ -438,6 +438,8 @@ func (mrw *AddRewriter) Rewrite(
 			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
 				"failed to rewrite mutation payload"))
 		}
+		// TODO: Do RBAC authorization along with RewriteQueries. This will save some time and queries need
+		// not be executed in case RBAC is Negative.
 		// upsertVar is non-empty in case this is an upsert Mutation and the XID at
 		// top level exists. upsertVar in this case contains variable name of the node
 		// which is going to be updated. Eg. State3 .

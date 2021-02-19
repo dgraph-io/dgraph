@@ -383,7 +383,7 @@ type Query {
 #######################
 
 type Mutation {
-	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
+	addProduct(input: [AddProductInput!]!): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }

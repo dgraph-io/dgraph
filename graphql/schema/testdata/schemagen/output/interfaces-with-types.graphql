@@ -643,13 +643,13 @@ type Query {
 type Mutation {
 	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
 	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [AddHumanInput!]!, upsert: Boolean): AddHumanPayload
+	addHuman(input: [AddHumanInput!]!): AddHumanPayload
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	addDroid(input: [AddDroidInput!]!, upsert: Boolean): AddDroidPayload
+	addDroid(input: [AddDroidInput!]!): AddDroidPayload
 	updateDroid(input: UpdateDroidInput!): UpdateDroidPayload
 	deleteDroid(filter: DroidFilter!): DeleteDroidPayload
-	addStarship(input: [AddStarshipInput!]!, upsert: Boolean): AddStarshipPayload
+	addStarship(input: [AddStarshipInput!]!): AddStarshipPayload
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }

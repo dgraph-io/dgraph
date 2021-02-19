@@ -508,10 +508,10 @@ type Query {
 #######################
 
 type Mutation {
-	addObject(input: [AddObjectInput!]!, upsert: Boolean): AddObjectPayload
+	addObject(input: [AddObjectInput!]!): AddObjectPayload
 	updateObject(input: UpdateObjectInput!): UpdateObjectPayload
 	deleteObject(filter: ObjectFilter!): DeleteObjectPayload
-	addBusinessMan(input: [AddBusinessManInput!]!, upsert: Boolean): AddBusinessManPayload
+	addBusinessMan(input: [AddBusinessManInput!]!): AddBusinessManPayload
 	updateBusinessMan(input: UpdateBusinessManInput!): UpdateBusinessManPayload
 	deleteBusinessMan(filter: BusinessManFilter!): DeleteBusinessManPayload
 	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload

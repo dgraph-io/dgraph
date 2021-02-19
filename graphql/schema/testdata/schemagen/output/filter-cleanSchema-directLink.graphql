@@ -426,7 +426,7 @@ type Query {
 #######################
 
 type Mutation {
-	addX(input: [AddXInput!]!, upsert: Boolean): AddXPayload
+	addX(input: [AddXInput!]!): AddXPayload
 	updateX(input: UpdateXInput!): UpdateXPayload
 	deleteX(filter: XFilter!): DeleteXPayload
 	deleteY(filter: YFilter!): DeleteYPayload

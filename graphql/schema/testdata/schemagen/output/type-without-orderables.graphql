@@ -355,7 +355,7 @@ type Query {
 #######################
 
 type Mutation {
-	addData(input: [AddDataInput!]!, upsert: Boolean): AddDataPayload
+	addData(input: [AddDataInput!]!): AddDataPayload
 	updateData(input: UpdateDataInput!): UpdateDataPayload
 	deleteData(filter: DataFilter!): DeleteDataPayload
 }

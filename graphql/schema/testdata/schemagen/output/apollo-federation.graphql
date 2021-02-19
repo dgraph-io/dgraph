@@ -741,19 +741,19 @@ type Query {
 #######################
 
 type Mutation {
-	addReviews(input: [AddReviewsInput!]!, upsert: Boolean): AddReviewsPayload
+	addReviews(input: [AddReviewsInput!]!): AddReviewsPayload
 	updateReviews(input: UpdateReviewsInput!): UpdateReviewsPayload
 	deleteReviews(filter: ReviewsFilter!): DeleteReviewsPayload
-	addStudent(input: [AddStudentInput!]!, upsert: Boolean): AddStudentPayload
+	addStudent(input: [AddStudentInput!]!): AddStudentPayload
 	updateStudent(input: UpdateStudentInput!): UpdateStudentPayload
 	deleteStudent(filter: StudentFilter!): DeleteStudentPayload
-	addSchool(input: [AddSchoolInput!]!, upsert: Boolean): AddSchoolPayload
+	addSchool(input: [AddSchoolInput!]!): AddSchoolPayload
 	updateSchool(input: UpdateSchoolInput!): UpdateSchoolPayload
 	deleteSchool(filter: SchoolFilter!): DeleteSchoolPayload
 	addCountry(input: [AddCountryInput!]!, upsert: Boolean): AddCountryPayload
 	updateCountry(input: UpdateCountryInput!): UpdateCountryPayload
 	deleteCountry(filter: CountryFilter!): DeleteCountryPayload
-	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
+	addProduct(input: [AddProductInput!]!): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload

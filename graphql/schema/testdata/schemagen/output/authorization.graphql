@@ -477,7 +477,7 @@ type Query {
 #######################
 
 type Mutation {
-	addTodo(input: [AddTodoInput!]!, upsert: Boolean): AddTodoPayload
+	addTodo(input: [AddTodoInput!]!): AddTodoPayload
 	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
 	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
 	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload

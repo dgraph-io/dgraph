@@ -383,7 +383,7 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: [AddMessageInput!]!, upsert: Boolean): AddMessagePayload
+	addMessage(input: [AddMessageInput!]!): AddMessagePayload
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }

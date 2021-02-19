@@ -1329,7 +1329,7 @@
     }
   queryjson: |
     {
-      "State1": [ { "uid": "0x123" } ],
+      "State1": [ { "uid": "0x123" } ]
     }
   dgquerysec: |-
     query {
@@ -1342,12 +1342,12 @@
     }
   uids: |
     {
-      "Country1": "0x123"
+      "Country2": "0x456"
     }
   json: |
     {
-      "Column4":  [ { "uid": "0x799" } ],
-      "Column4.auth": [ { "uid": "0x799" } ]
+      "Country2":  [ { "uid": "0x456" } ],
+      "Country2.auth": [ { "uid": "0x456" } ]
     }
   authquery: |-
     query {

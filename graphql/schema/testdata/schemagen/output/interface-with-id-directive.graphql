@@ -474,7 +474,7 @@ type Mutation {
 	addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [AddLibraryInput!]!, upsert: Boolean): AddLibraryPayload
+	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
 	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
 }

@@ -367,7 +367,7 @@ type Query {
 #######################
 
 type Mutation {
-	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

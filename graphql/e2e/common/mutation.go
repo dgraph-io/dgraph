@@ -5534,6 +5534,6 @@ func upsertMutationTests(t *testing.T) {
 	// Clean Up
 	filter := map[string]interface{}{"id": []string{newCountry.ID}}
 	deleteCountry(t, filter, 1, nil)
-	filter = map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	filter = GetXidFilter("xcode", []interface{}{"S1"})
 	deleteState(t, filter, 1, nil)
 }

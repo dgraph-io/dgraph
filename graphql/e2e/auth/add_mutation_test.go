@@ -1052,7 +1052,8 @@ func TestUpsertMutationsWithRBAC(t *testing.T) {
 
 func TestUpsertWithDeepAuth(t *testing.T) {
 	testCases := []TestCase{{
-		// Initial Mutation. Should succeed.
+		// Should succeed
+		name: "Initial Mutation",
 		user: "user",
 		variables: map[string]interface{}{"state": &State{
 			Code:    "UK",
@@ -1071,7 +1072,8 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 						}
 				}`,
 	}, {
-		// Upsert with wrong user. Should Fail with no error.
+		// Should Fail with no error
+		name: "Upsert with wrong user",
 		user: "wrong user",
 		variables: map[string]interface{}{"state": &State{
 			Code: "UK",
@@ -1084,8 +1086,8 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 		}},
 		result: `{"addState": { "state": [] } }`,
 	}, {
-		// Upsert with correct user. Should succeed and add Country, also update
-		// country of state.
+		// Should succeed and add Country, also update country of state
+		name: " Upsert with correct user",
 		user: "user",
 		variables: map[string]interface{}{"state": &State{
 			Code: "UK",
@@ -1132,15 +1134,16 @@ func TestUpsertWithDeepAuth(t *testing.T) {
 	`
 
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
-			Query:     query,
-			Variables: tcase.variables,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
-		common.RequireNoGQLErrors(t, gqlResponse)
-		require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:     query,
+				Variables: tcase.variables,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
 	}
 
 	// Clean Up
