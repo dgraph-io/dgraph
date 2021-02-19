@@ -2171,13 +2171,9 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	},
 	{
 		"predicate":"dgraph.graphql.p_query",
-		"type":"string"
-	},
-	{
-		"predicate":"dgraph.graphql.p_sha256hash",
 		"type":"string",
 		"index":true,
-		"tokenizer":["exact"]
+		"tokenizer":["sha256"]
 	},
     {
       "predicate": "dgraph.graphql.schema",
@@ -2250,9 +2246,6 @@ func TestSchemaQueryWithACL(t *testing.T) {
 		"fields": [
 			{
 				"name": "dgraph.graphql.p_query"
-			},
-			{
-				"name": "dgraph.graphql.p_sha256hash"
 			}
 		],
 		"name": "dgraph.graphql.persisted_query"
