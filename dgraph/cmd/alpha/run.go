@@ -102,6 +102,10 @@ they form a Raft group and provide synchronous replication.
 	flag := Alpha.Cmd.Flags()
 	x.FillCommonFlags(flag)
 
+	flag.String("cache_percentage", "0,65,35,0",
+		`Cache percentages summing up to 100 for various caches (FORMAT:
+		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
@@ -122,25 +126,36 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
+	flag.Int("max_retries", -1,
+		"Commits to disk will give up after these number of retries to prevent locking the worker"+
+			" in a failed state. Use -1 to retry infinitely.")
+
+	// Useful for running multiple servers on the same machine.
+	flag.IntP("port_offset", "o", 0,
+		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
+
+	//Custom plugins.
+	flag.String("custom_tokenizers", "",
+		"Comma separated list of tokenizer plugins")
+
+	// By default Go GRPC traces all requests.
+	grpc.EnableTracing = false
+
 	flag.String("raft", "", z.NewSuperFlagHelp(worker.RaftDefaults).
 		Head("Raft options (defaults shown):").
 		Flag("idx",
-			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
+			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
 		Flag("group",
-			"Provides an optional Raft Group ID that this Alpha would indicate to Zero to join.").
+			`Provides an optional Raft Group ID that this Alpha would indicate to Zero to join.`).
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
 				`in Raft elections. This can be used to achieve a read-only replica.`).
 		Flag("snapshot-after",
-			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
-				"the more frequent snapshot creation will be.").
+			`Create a new Raft snapshot after N number of Raft entries. The lower this number, `+
+				`the more frequent snapshot creation will be.`).
 		Flag("pending-proposals",
-			"Number of pending mutation proposals. Useful for rate limiting.").
+			`Number of pending mutation proposals. Useful for rate limiting.`).
 		String())
-
-	flag.Int("max_retries", -1,
-		"Commits to disk will give up after these number of retries to prevent locking the worker"+
-			" in a failed state. Use -1 to retry infinitely.")
 
 	flag.String("security", "", z.NewSuperFlagHelp(worker.SecurityDefaults).
 		Head("Security options (defaults shown):").
@@ -165,79 +180,62 @@ they form a Raft group and provide synchronous replication.
 			`The TTL for the refresh JWT.`).
 		String())
 
-	// Useful for running multiple servers on the same machine.
-	flag.IntP("port_offset", "o", 0,
-		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
-
 	flag.String("limit", "", z.NewSuperFlagHelp(worker.LimitDefaults).
 		Head("Limit options (defaults shown):").
 		Flag("query-edge",
-			"The maximum number of edges that can be returned in a query. This applies to shortest "+
-				"path and recursive queries.").
+			`The maximum number of edges that can be returned in a query. This applies to shortest `+
+				`path and recursive queries.`).
 		Flag("normalize-node",
-			"The maximum number of nodes that can be returned in a query that uses the normalize "+
-				"directive.").
+			`The maximum number of nodes that can be returned in a query that uses the normalize `+
+				`directive.`).
 		Flag("mutations-nquad",
-			"The maximum number of nquads that can be inserted in a mutation request.").
+			`The maximum number of nquads that can be inserted in a mutation request.`).
 		String())
-
-	//Custom plugins.
-	flag.String("custom_tokenizers", "",
-		"Comma separated list of tokenizer plugins")
-
-	// By default Go GRPC traces all requests.
-	grpc.EnableTracing = false
 
 	flag.String("ludicrous", "", z.NewSuperFlagHelp(worker.LudicrousDefaults).
 		Head("Ludicrous options (defaults shown):").
 		Flag("enabled",
-			"Run Dgraph in Ludicrous mode.").
+			`Run Dgraph in Ludicrous mode.`).
 		Flag("concurrency",
-			"The number of concurrent threads to use in Ludicrous mode.").
+			`The number of concurrent threads to use in Ludicrous mode.`).
 		String())
 
 	flag.String("graphql", "", z.NewSuperFlagHelp(worker.GraphQLDefaults).
 		Head("GraphQL options (defaults shown):").
 		Flag("introspection",
-			"Enables GraphQL schema introspection.").
+			`Enables GraphQL schema introspection.`).
 		Flag("debug",
-			"Enables debug mode in GraphQL. This returns auth errors to clients, and we do not "+
-				"recommend turning it on for production.").
+			`Enables debug mode in GraphQL. This returns auth errors to clients, and we do not `+
+				`recommend turning it on for production.`).
 		Flag("extensions",
-			"Enables extensions in GraphQL response body.").
+			`Enables extensions in GraphQL response body.`).
 		Flag("poll-interval",
-			"The polling interval for GraphQL subscription.").
+			`The polling interval for GraphQL subscription.`).
 		Flag("lambda-url",
-			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
+			`The URL of a lambda server that implements custom GraphQL Javascript resolvers.`).
 		String())
 
-	// Cache flags
-	flag.String("cache_percentage", "0,65,35,0",
-		`Cache percentages summing up to 100 for various caches (FORMAT:
-		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
-
-	// NOTE: using "compress=false;" default to show bool type, need a better way of showing types
-	flag.String("audit", "", z.NewSuperFlagHelp("compress=false;").
+	flag.String("audit", "", z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options (defaults shown):").
 		Flag("dir",
-			"The path where audit logs should be stored.").
+			`The path where audit logs will be stored.`).
 		Flag("compress",
-			"Enables the compression of old audit logs.").
+			`Enables the compression of old audit logs.`).
 		// TODO: use dash
 		Flag("encrypt_file",
-			"The path to the key file to be used for audit log encryption.").
+			`The path to the key file to be used for audit log encryption.`).
 		String())
 
 	flag.String("cdc", "",
 		`Various change data capture options.
-	file=/path/to/directory where audit logs will be stored.
-	kafka=host1,host2 to define comma separated list of host.
-	sasl-user=username to define sasl username for kafka.
-	sasl-password=password to define sasl password for kafka.
-	ca-cert=/path/to/ca/crt/file to define ca cert for tls encryption.
-	client-cert=/path/to/client/cert/file to define the client certificate for tls encryption.
-	client-key=/path/to/client/key/file to define the client key for tls encryption.
-	`)
+		file=/path/to/directory where audit logs will be stored.
+		kafka=host1,host2 to define comma separated list of host.
+		sasl-user=username to define sasl username for kafka.
+		sasl-password=password to define sasl password for kafka.
+		ca-cert=/path/to/ca/crt/file to define ca cert for tls encryption.
+		client-cert=/path/to/client/cert/file to define the client certificate for tls encryption.
+		client-key=/path/to/client/key/file to define the client key for tls encryption.
+		`)
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)

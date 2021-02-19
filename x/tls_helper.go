@@ -49,23 +49,23 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls", "", z.NewSuperFlagHelp(TLSServerDefaults).
 		Head("TLS Server options (defaults shown):").
 		Flag("cacert",
-			"The CA cert file used to verify server certificates. Required for enabling TLS.").
+			`The CA cert file used to verify server certificates. Required for enabling TLS.`).
 		Flag("use-system-ca",
-			"Includes System CA into CA Certs.").
+			`Includes System CA into CA Certs.`).
 		Flag("client-auth",
-			"Enable TLS client authentication.").
+			`Enable TLS client authentication.`).
 		Flag("node-cert",
-			"The node Cert file which is needed to initiate the server in the cluster.").
+			`The node Cert file which is needed to initiate the server in the cluster.`).
 		Flag("node-key",
-			"The node Key file which is needed to initiate the server in the cluster.").
+			`The node Key file which is needed to initiate the server in the cluster.`).
 		Flag("internal-port-enabled",
-			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
+			`(Optional) Enable inter-node TLS encryption between cluster nodes.`).
 		Flag("cert",
-			"(Optional) The client Cert file which is needed to connect as a client with the other "+
-				"nodes in the cluster.").
+			`(Optional) The client Cert file which is needed to connect as a client with the other `+
+				`nodes in the cluster.`).
 		Flag("key",
-			"(Optional) The private client Key file which is needed to connect as a client with the "+
-				"other nodes in the cluster.").
+			`(Optional) The private client Key file which is needed to connect as a client with the `+
+				`other nodes in the cluster.`).
 		String())
 }
 
@@ -74,17 +74,17 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls", "", z.NewSuperFlagHelp(TLSClientDefaults).
 		Head("TLS Client options (defaults shown):").
 		Flag("cacert",
-			"The CA cert file used to verify server certificates. Required for enabling TLS.").
+			`The CA cert file used to verify server certificates. Required for enabling TLS.`).
 		Flag("use-system-ca",
-			"Includes System CA into CA Certs.").
+			`Includes System CA into CA Certs.`).
 		Flag("server-name",
-			"Used to verify the server hostname.").
+			`Used to verify the server hostname.`).
 		Flag("internal-port-enabled",
-			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
+			`(Optional) Enable inter-node TLS encryption between cluster nodes.`).
 		Flag("cert",
-			"(Optional) The Cert file provided by the client to the server.").
+			`(Optional) The Cert file provided by the client to the server.`).
 		Flag("key",
-			"(Optional) The private Key file provided by the clients to the server.").
+			`(Optional) The private Key file provided by the clients to the server.`).
 		String())
 }
 
