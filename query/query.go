@@ -2846,7 +2846,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 
 			sg.updateUidMatrix()
 			//Apply pagination at the root after @cascade.
-			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.First != 0 {
+			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.Offset != 0 {
 				for i := 0; i < len(sg.uidMatrix); i++ {
 					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
 					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
