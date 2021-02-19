@@ -1320,9 +1320,9 @@ func rewriteObject(
 					// This node will be created later.
 					obj = xidMetadata.variableObjMap[variable]
 					xidVariables = append(xidVariables, variable)
-					// We add a new node after only if
+					// We add a new node only if
 					// 1. All the xids are present and
-					// 2. No node exist for any  of the xid
+					// 2. No node exist for any of the xid
 					if nonExistingXIDs == len(xids)-1 {
 						exclude := ""
 						if srcField != nil {
