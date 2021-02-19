@@ -504,7 +504,7 @@ func TestCascadeWithPaginationDeep(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require,JSONEq(t,`{"data":{"me":[{"name":"Rick Grimes","friend":[{"name": "Michonne","friend":[{"name":"Daryl Dixon","alive":false},{"name": "Andrea","alive": false}]}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Rick Grimes","friend":[{"name": "Michonne","friend":[{"name":"Daryl Dixon","alive":false},{"name": "Andrea","alive": false}]}]}]}}`, js)
 }
 
 func TestCascadeWithPaginationAtRoot(t *testing.T) {
