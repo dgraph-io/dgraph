@@ -215,7 +215,7 @@ func initService(basename string, idx, grpcPort int) service {
 	}
 	svc.Command += " " + basename
 	if opts.Jaeger {
-		svc.Command += " --jaeger.collector=http://jaeger:14268"
+		svc.Command += ` --trace "jaeger=http://jaeger:14268;"`
 	}
 	return svc
 }
@@ -314,8 +314,7 @@ func getAlpha(idx int, raft string) service {
 	if opts.SnapshotAfter != "" {
 		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
 	}
-	// TODO(karl)
-	svc.Command += fmt.Sprintf(` --raft='%s'`, raft)
+	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
 
 	// Don't assign idx, let it auto-assign.
 	// svc.Command += fmt.Sprintf(" --raft='idx=%d'", idx)
