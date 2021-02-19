@@ -587,6 +587,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 
+	corsVals := make([]types.Val, 0)
+
 	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
@@ -683,6 +685,20 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		// so that users with a binary with version >= 21.03 can export data from a version < 21.03
 		// without this internal data showing up.
 		case e.attr == "dgraph.cors":
+			// add all cors to the graphql schema
+			pl, err := posting.ReadPostingList(key, itr)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read posting list for dgraph cors")
+			}
+			vals, err := pl.AllValues(in.ReadTs)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read value of dgraph cors")
+			}
+			if len(vals) == 0 {
+				return nil, nil
+			}
+			corsVals = append(corsVals, vals...)
+			return nil, nil
 		case e.attr == "dgraph.graphql.schema_created_at":
 		case e.attr == "dgraph.graphql.schema_history":
 			// Ignore these predicates.
@@ -862,6 +878,23 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 	if err := writePrefix(x.ByteType); err != nil {
 		return nil, err
+	}
+
+	if len(corsVals) > 0 {
+		_, err := gqlSchemaWriter.gw.Write([]byte(
+			"\n\n\n# Below schema elements will only work for dgraph" +
+				" versions greater than 21.03. " +
+				"Below this information will be ignored in older versions. "))
+		if err != nil {
+			return nil, err
+		}
+		for _, val := range corsVals {
+			if _, err := gqlSchemaWriter.gw.Write([]byte(
+				fmt.Sprintf("\n# Dgraph.Allow-Origin \"%s\"",
+					string(val.Value.([]byte))))); err != nil {
+				return nil, nil
+			}
+		}
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
