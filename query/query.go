@@ -579,6 +579,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			args.Cascade.Fields = gchild.Cascade
 		}
 
+		// Remove pagination arguments from the query if @cascade is mentioned since
+		// pagination will be applied post processing the data.
 		if len(args.Cascade.Fields) > 0 {
 			args.Cascade.First, _ = strconv.Atoi(gchild.Args["first"])
 			args.Cascade.Offset, _ = strconv.Atoi(gchild.Args["offset"])
@@ -811,6 +813,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		AllowedPreds:     gq.AllowedPreds,
 	}
 
+	// Remove pagination arguments from the query if @cascade is mentioned since
+	// pagination will be applied post processing the data.
 	if len(args.Cascade.Fields) > 0 {
 		args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
 		delete(gq.Args, "first")
@@ -1371,7 +1375,8 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		// by other operations. So we need to apply it on the UidMatrix.
 		child.updateUidMatrix()
 
-		if child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
+		// Apply pagination after the @cascade.
+		if len(child.Params.Cascade.Fields) > 0 && child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
 				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
@@ -2839,8 +2844,9 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// first time at the root here.
 
-			if len(sg.Params.Cascade.Fields) > 0 {
-				sg.updateUidMatrix()
+			sg.updateUidMatrix()
+			//Apply pagination at the root after @cascade.
+			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.First != 0 {
 				for i := 0; i < len(sg.uidMatrix); i++ {
 					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
 					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
