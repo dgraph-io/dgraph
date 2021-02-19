@@ -106,7 +106,7 @@ instances to achieve high-availability.
 				`in Raft elections. This can be used to achieve a read-only replica.`).
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp(audit.FlagDefaults).
+	flag.String("audit", "", z.NewSuperFlagHelp("compress=false;").
 		Head("Audit options (defaults shown):").
 		Flag("dir",
 			`The path where audit logs will be stored.`).
