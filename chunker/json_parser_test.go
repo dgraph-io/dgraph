@@ -754,11 +754,6 @@ func TestNquadsFromJsonFacets5(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
 	checkCount(t, nq, "friend", 1)
-
-	fastNQ, err := FastParse([]byte(json), SetNquads)
-	require.NoError(t, err)
-	require.Equal(t, 5, len(fastNQ))
-	checkCount(t, fastNQ, "friend", 1)
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {
