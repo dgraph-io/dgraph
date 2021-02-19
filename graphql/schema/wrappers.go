@@ -2406,6 +2406,7 @@ func (t *astType) XIDFields() []FieldDefinition {
 			})
 		}
 	}
+	// XIDs are sorted by name to ensure consistency.
 	sort.Slice(xids, func(i, j int) bool { return xids[i].Name() < xids[j].Name() })
 	return xids
 }

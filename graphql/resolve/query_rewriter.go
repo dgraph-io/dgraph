@@ -588,7 +588,7 @@ func rewriteAsGet(
 
 		return dgQuery
 	}
-
+	// iterate over map in sorted order to ensure consistency
 	xids := make([]string, len(xidArgToVal))
 	i := 0
 	for k := range xidArgToVal {

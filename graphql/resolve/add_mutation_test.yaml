@@ -3528,3 +3528,154 @@
           ],
           "uid": "_:Person11"
         }
+
+-
+  name: "Add type with multiple Xid fields at deep level when deep node already exist for all existence queries"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x117)) {
+        author4 as Book.author
+      }
+    }
+  qnametouid: |
+    {
+      "Book1": "0x117",
+      "Book2": "0x116"
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "uid": "0x117"
+                }
+            ]
+        }
+      deletejson: |
+        [
+            {
+                "author.book": [
+                    {
+                        "uid": "0x117"
+                    }
+                ],
+                "uid": "uid(author4)"
+            }
+        ]
+
+-
+  name: "Add type with multiple Xid fields at deep level when deep node already exist for one existence query"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x119)) {
+        author4 as Book.author
+      }
+    }
+  qnametouid: |
+    {
+      "Book1": "0x119"
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "uid": "0x119"
+                }
+            ]
+        }
+      deletejson: |
+        [
+            {
+                "author.book": [
+                    {
+                        "uid": "0x119"
+                    }
+                ],
+                "uid": "uid(author4)"
+            }
+        ]

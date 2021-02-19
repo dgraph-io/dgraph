@@ -1265,7 +1265,9 @@ func rewriteObject(
 
 	xids := typ.XIDFields()
 	if len(xids) != 0 {
-		var xidsWithoutNodes int
+		// nonExistingXIDs stores number of uids for which there exist no nodes
+		var nonExistingXIDs int
+		// missingXid stores number of xids that are not present in mutation object
 		var missingXid bool
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
@@ -1316,8 +1318,12 @@ func rewriteObject(
 
 					// Node with XIDs does not exist. It means this is a new node.
 					// This node will be created later.
+					obj = xidMetadata.variableObjMap[variable]
 					xidVariables = append(xidVariables, variable)
-					if xidsWithoutNodes == len(xids)-1 {
+					// We add a new node after only if
+					// 1. All the xids are present and
+					// 2. No node exist for any  of the xid
+					if nonExistingXIDs == len(xids)-1 {
 						exclude := ""
 						if srcField != nil {
 							invField := srcField.Inverse()
@@ -1328,7 +1334,7 @@ func rewriteObject(
 						// We replace obj with xidMetadata.variableObjMap[variable] in this case.
 						// This is done to ensure that the first time we encounter an XID node, we use
 						// its definition and later times, we just use its reference.
-						obj = xidMetadata.variableObjMap[variable]
+
 						if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 							// This object does not contain XID. This is an error.
 							retErrors = append(retErrors, err)
@@ -1338,20 +1344,25 @@ func rewriteObject(
 						// this node later easier.
 						// Set idExistence for all variables which are referencing this node to
 						// the blank node _:variable.
-						// Example:
-						// TODO(Jatin): Add example of idExistence of Employee1 and Employee2 variables getting set to same blank node
+						// Example: if We have multiple xids inside a type say person, then
+						// we create a single blank node e.g. _:person1
+						// and also two different query variables for xids say person1,person2 and assign
+						// _:person1 to both of them in idExistence map
+						// i.e. idExistence[person1]= _:person1
+						// idExistence[person2]= _:person1
 						for _, xidVariable := range xidVariables {
 							idExistence[xidVariable] = fmt.Sprintf("_:%s", variable)
 						}
 					}
-					xidsWithoutNodes++
+					nonExistingXIDs++
 
 				}
 			} else if (mutationType == Add || !atTopLevel) && !missingXid {
 				// There are two possibilities here:
 				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
 				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
-				//    or at deeper levels in Update Mutation has to be present.
+				//    or at deeper levels in Update Mutation has to be present. If multiple xids are not present
+				//    then we return error for only one.
 				// 2. This is an Update Mutation and we are at top level:
 				//    In this case this is not an error as the UID at top level of Update Mutation is
 				//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
