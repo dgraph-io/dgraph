@@ -466,7 +466,7 @@ type Mutation {
 	addTweets(input: [AddTweetsInput!]!): AddTweetsPayload
 	updateTweets(input: UpdateTweetsInput!): UpdateTweetsPayload
 	deleteTweets(filter: TweetsFilter!): DeleteTweetsPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
