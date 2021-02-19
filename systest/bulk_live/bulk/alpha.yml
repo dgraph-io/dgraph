@@ -17,4 +17,5 @@ services:
         source: ./data/out/0/p
         target: /posting
         read_only: false
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --whitelist=0.0.0.0/0 -p=/posting
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 -p=/posting
+      --security "whitelist=0.0.0.0/0;"
