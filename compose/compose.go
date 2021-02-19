@@ -104,7 +104,6 @@ type options struct {
 	Ratel          bool
 	RatelPort      int
 	MemLimit       string
-	TlsDir         string
 	ExposePorts    bool
 	Encryption     bool
 	LudicrousMode  bool
@@ -353,16 +352,6 @@ func getAlpha(idx int, raft string) service {
 			Type:     "bind",
 			Source:   "./enc-secret",
 			Target:   "/secret/enc_key",
-			ReadOnly: true,
-		})
-	}
-	if opts.TlsDir != "" {
-		// TODO(karl)
-		svc.Command += " --tls_dir=/secret/tls"
-		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
-			Source:   opts.TlsDir,
-			Target:   "/secret/tls",
 			ReadOnly: true,
 		})
 	}
