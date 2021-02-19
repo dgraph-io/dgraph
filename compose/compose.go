@@ -308,12 +308,13 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.LudicrousMode {
-		svc.Command += " --ludicrous_mode=true"
+		svc.Command += ` --ludicrous "enabled=true;"`
 	}
 
 	if opts.SnapshotAfter != "" {
 		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
 	}
+	// TODO(karl)
 	svc.Command += fmt.Sprintf(` --raft='%s'`, raft)
 
 	// Don't assign idx, let it auto-assign.
@@ -322,6 +323,7 @@ func getAlpha(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
+		// TODO(karl)
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
 	if opts.Acl {
@@ -357,6 +359,7 @@ func getAlpha(idx int, raft string) service {
 		})
 	}
 	if opts.TlsDir != "" {
+		// TODO(karl)
 		svc.Command += " --tls_dir=/secret/tls"
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
@@ -596,7 +599,7 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous_mode", false,
+	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
 		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")

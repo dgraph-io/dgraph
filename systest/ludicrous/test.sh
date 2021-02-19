@@ -16,7 +16,7 @@ function DockerCompose {
     docker-compose -p dgraph "$@"
 }
 function DgraphLive {
-    dgraph live --ludicrous_mode "$@"
+    dgraph live --ludicrous "$@"
 }
 
 HELP= CLEANUP= SAVEDIR= LOAD_ONLY= QUIET=

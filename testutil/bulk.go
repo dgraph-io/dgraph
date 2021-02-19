@@ -46,7 +46,7 @@ func LiveLoad(opts LiveOpts) error {
 		"--zero", opts.Zero,
 	}
 	if opts.Ludicrous {
-		args = append(args, "--ludicrous_mode")
+		args = append(args, "--ludicrous")
 	}
 	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 

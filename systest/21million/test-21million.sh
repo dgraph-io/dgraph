@@ -81,7 +81,7 @@ if [[ $MODE == ludicrous ]]; then
         docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
     }
     function DgraphLive {
-        dgraph live --ludicrous_mode "$@"
+        dgraph live --ludicrous "$@"
     }
 fi
 
@@ -142,7 +142,7 @@ sleep 10
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
     DgraphLive --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --ludicrous_mode
+                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --ludicrous
     if [[ $MODE == ludicrous ]]; then
         sleep 300
     fi

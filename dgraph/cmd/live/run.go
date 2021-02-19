@@ -174,7 +174,7 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
+	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
