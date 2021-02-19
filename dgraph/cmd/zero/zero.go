@@ -443,7 +443,7 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	if m.Learner && !ms.License.GetEnabled() {
-		// Update the "ShouldCrash" function in zero.go if you change the error message here.
+		// Update the "ShouldCrash" function in x/x.go if you change the error message here.
 		return nil, errors.New("Missing or expired Enterpise License. Cannot add Learner Node.")
 	}
 
