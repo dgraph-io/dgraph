@@ -75,7 +75,8 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 	crashLearner := func() {
 		if n.RaftContext.IsLearner {
 			glog.Errorf("Enterprise License missing or expired. " +
-				"Read replicas need an Enterprise License.")
+				"Learner nodes need an Enterprise License.")
+			// Signal the zero node to stop.
 			n.server.closer.Signal()
 		}
 	}
@@ -104,8 +105,8 @@ func (n *node) updateEnterpriseState(closer *z.Closer) {
 				audit.Close()
 
 				glog.Warningf("Your enterprise license has expired and enterprise features are " +
-					"disabled. To continue using enterprise features, apply a valid license. To receive " +
-					"a new license, contact us at https://dgraph.io/contact.")
+					"disabled. To continue using enterprise features, apply a valid license. " +
+					"To receive a new license, contact us at https://dgraph.io/contact.")
 				crashLearner()
 			}
 		case <-closer.HasBeenClosed():

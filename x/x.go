@@ -182,7 +182,7 @@ func ShouldCrash(err error) bool {
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
 		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED") ||
-		strings.Contains(errStr, "Cannot add Learner Node.")
+		strings.Contains(errStr, "ENTERPRISE_ONLY_LEARNER")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.

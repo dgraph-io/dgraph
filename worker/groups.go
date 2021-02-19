@@ -315,7 +315,7 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 
 	invalid := state.License != nil && !state.License.Enabled
 	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
-		glog.Errorf("License Expired. Cannot run read replicas.")
+		glog.Errorf("ENTERPRISE_ONLY_LEARNER: License Expired. Cannot run learner nodes.")
 		x.ServerCloser.Signal()
 		return
 	}
