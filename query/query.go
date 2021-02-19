@@ -877,7 +877,10 @@ func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 
 // createTaskQuery generates the query buffer.
 func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While creating query task")
+	}
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -1884,7 +1887,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
 	defer stop()
 
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While expanding subgraph")
+	}
 	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
@@ -2359,8 +2365,13 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While ordering and paginating")
+	}
+	order := sg.createOrderForTask(ns)
 	sortMsg := &pb.SortMessage{
-		Order:     sg.createOrderForTask(ctx),
+		Order:     order,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2395,12 +2406,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 }
 
 // createOrderForTask creates namespaced aware order for the task.
-func (sg *SubGraph) createOrderForTask(ctx context.Context) []*pb.Order {
-	namespace := x.ExtractNamespace(ctx)
+func (sg *SubGraph) createOrderForTask(ns uint64) []*pb.Order {
 	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
 		oc := &pb.Order{
-			Attr:  x.NamespaceAttr(namespace, o.Attr),
+			Attr:  x.NamespaceAttr(ns, o.Attr),
 			Desc:  o.Desc,
 			Langs: o.Langs,
 		}
@@ -2845,7 +2855,10 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		calculateMetrics(sg, metrics)
 	}
 	er.Metrics = metrics
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return er, errors.Wrapf(err, "While processing query")
+	}
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
 		preds := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Predicates)

@@ -41,7 +41,7 @@ func init() {
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
 		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
-		fieldNameCheck, isValidFieldForList, hasAuthDirective)
+		fieldNameCheck, isValidFieldForList, hasAuthDirective, fieldDirectiveCheck)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
@@ -774,6 +774,29 @@ func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerro
 				typ.Name, field.Name, arg.Name)}
 		}
 	}
+	return nil
+}
+
+func fieldDirectiveCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List {
+	// field name cannot be a reserved word
+	subsDir := field.Directives.ForName(subscriptionDirective)
+	customDir := field.Directives.ForName(customDirective)
+	if subsDir != nil && typ.Name != "Query" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: @withSubscription directive is applicable only on types "+
+				"and custom dql queries",
+			typ.Name, field.Name)}
+	}
+
+	if subsDir != nil && typ.Name == "Query" && customDir != nil {
+		if customDir.Arguments.ForName("dql") == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				field.Position, "Type %s; Field %s: custom query should have dql argument if @withSubscription "+
+					"directive is set",
+				typ.Name, field.Name)}
+		}
+	}
+
 	return nil
 }
 

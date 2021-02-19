@@ -34,7 +34,6 @@ import (
 const (
 	defaultCDCConfig  = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 	defaultEventTopic = "dgraph-cdc"
-	defaultEventKey   = "dgraph-cdc-event"
 )
 
 // CDC struct is being used to send out change data capture events. There are two ways to do this:
@@ -176,12 +175,11 @@ func (cdc *CDC) processCDCEvents() {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
-			// todo(aman bansal): use namespace for key.
 			batch[i] = SinkMessage{
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
 				},
-				Key:   []byte(defaultEventKey),
+				Key:   e.Meta.Namespace,
 				Value: b,
 			}
 		}
@@ -333,6 +331,7 @@ type CDCEvent struct {
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
+	Namespace []byte `json:"-"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
@@ -363,6 +362,8 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
+	// todo (aman): right now drop operations are still cluster wide.
+	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
 		return []CDCEvent{
 			{
@@ -383,6 +384,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if x.IsReservedPredicate(edge.Attr) {
 			continue
 		}
+		ns, attr := x.ParseNamespaceBytes(edge.Attr)
 		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
@@ -390,10 +392,11 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 					Type: EventTypeDrop,
 					Event: &DropEvent{
 						Operation: OpDropPred,
-						Pred:      edge.Attr,
+						Pred:      attr,
 					},
 					Meta: &EventMeta{
 						RaftIndex: index,
+						Namespace: ns,
 					},
 				},
 			}
@@ -417,12 +420,13 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		cdcEvents = append(cdcEvents, CDCEvent{
 			Meta: &EventMeta{
 				RaftIndex: index,
+				Namespace: ns,
 			},
 			Type: EventTypeMutation,
 			Event: &MutationEvent{
 				Operation: strings.ToLower(edge.Op.String()),
 				Uid:       edge.Entity,
-				Attr:      edge.Attr,
+				Attr:      attr,
 				Value:     val,
 				ValueType: posting.TypeID(edge).Name(),
 			},

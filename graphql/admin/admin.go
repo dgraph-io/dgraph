@@ -366,6 +366,7 @@ var (
 		"updateGQLSchema": commonAdminMutationMWs,
 		"addNamespace":    guardianOfTheGalaxyMutationMWs,
 		"deleteNamespace": guardianOfTheGalaxyMutationMWs,
+		"resetPassword":   guardianOfTheGalaxyMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},

@@ -57,7 +57,7 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
-	audit             *audit.AuditConf
+	audit             *x.LoggerConf
 }
 
 var opts options
@@ -119,6 +119,9 @@ instances to achieve high-availability.
 		Flag("size",
 			`The audit log max size in MB after which it will be rolled over.`).
 		String())
+
+	// TLS configurations
+	x.RegisterServerTLSFlags(flag)
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

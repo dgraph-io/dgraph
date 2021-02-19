@@ -123,7 +123,7 @@ func TestBackupMinio(t *testing.T) {
 	// Check the predicates and types in the schema are as expected.
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
 	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
+		"dgraph.graphql.p_query", "dgraph.drop.op"}
 	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query"}
 	testutil.CheckSchema(t, preds, types)
 
@@ -348,7 +348,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored

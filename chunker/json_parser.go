@@ -564,14 +564,22 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
 			buf.PushPredHint(pred, pb.Metadata_LIST)
-			// TODO(Ashish): We need to call this only in case of scalarlist, for other lists
-			// this can be avoided.
-			facetsMapSlice, err := parseMapFacets(mf, prefix)
-			if err != nil {
-				return mr, err
-			}
 
+			// NOTE: facetsMapSlice should be empty unless this is a scalar list
+			var facetsMapSlice []map[int]*api.Facet
 			for idx, item := range v {
+				if idx == 0 {
+					switch item.(type) {
+					case string, float64, json.Number, int64:
+						var err error
+						facetsMapSlice, err = parseMapFacets(mf, prefix)
+						if err != nil {
+							return mr, err
+						}
+					default:
+					}
+				}
+
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
