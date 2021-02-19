@@ -142,40 +142,44 @@ they form a Raft group and provide synchronous replication.
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
 
-	flag.String("security", worker.SecurityDefaults,
-		`Various auth options.
-	token="" If set, all Admin requests to Dgraph would need to have this token.
-		The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header.
-		For Grpc, in auth-token key in the context.
-	whitelist="" A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you 
-		wish to whitelist for performing admin actions (i.e., --whitelist "144.142.126.254,
-		127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal")
-	`)
+	flag.String("security", "", z.NewSuperFlagHelp(worker.SecurityDefaults).
+		Head("Security options (defaults shown):").
+		Flag("token",
+			`If set, all Admin requests to Dgraph will need to have this token. The token can be `+
+				`passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, `+
+				`in auth-token key in the context.`).
+		Flag("whitelist",
+			`A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish `+
+				`to whitelist for performing admin actions (i.e., --security `+
+				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal").`).
+		String())
 
-	flag.String("acl", worker.AclDefaults,
-		`This flag provides settings for Access Control Lists (Enterprise Feature)
-		ACL options (defaults shown):
-	secret-file=; The file that stores the HMAC secret, which is used for signing the JWT and `+
-			`should have at least 32 ASCII characters. Required to enable ACLs.`+`
-	access-ttl=6h; The TTL for the access JWT.
-	refresh-ttl=30d; The TTL for the refresh JWT.
-		The duration format for TTLs is the same as time.ParseDuration with an added 'd' suffix `+
-			`for days.
-	`)
+	flag.String("acl", "", z.NewSuperFlagHelp(worker.AclDefaults).
+		Head("Enterprise Feature: ACL options (defaults shown):").
+		Flag("secret-file",
+			`The file that stores the HMAC secret, which is used for signing the JWT and `+
+				`should have at least 32 ASCII characters. Required to enable ACLs.`).
+		Flag("access-ttl",
+			`The TTL for the access JWT.`).
+		Flag("refresh-ttl",
+			`The TTL for the refresh JWT.`).
+		String())
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.String("limit", worker.LimitDefaults,
-		`Limit options (defaults shown):
-	query-edge=1000000; Limit for the maximum number of edges that can be returned in a query. `+
-			`This applies to shortest path and recursive queries.`+`
-	normalize-node=10000; Limit for the maximum number of nodes that can be returned in a query `+
-			`that uses the normalize directive.`+`
-	mutations-nquad=1000000; Limit for the maximum number of nquads that can be inserted in a `+
-			`mutation request.
-	`)
+	flag.String("limit", "", z.NewSuperFlagHelp(worker.LimitDefaults).
+		Head("Limit options (defaults shown):").
+		Flag("query-edge",
+			"The maximum number of edges that can be returned in a query. This applies to shortest "+
+				"path and recursive queries.").
+		Flag("normalize-node",
+			"The maximum number of nodes that can be returned in a query that uses the normalize "+
+				"directive.").
+		Flag("mutations-nquad",
+			"The maximum number of nquads that can be inserted in a mutation request.").
+		String())
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -184,36 +188,45 @@ they form a Raft group and provide synchronous replication.
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
-	flag.String("ludicrous", worker.LudicrousDefaults,
-		`This flag provides settings for Ludicrous mode.
-		Ludicrous options (defaults shown):
-	enabled=false; Run Dgraph in Ludicrous mode.
-	concurrency=2000; Number of concurrent threads in Ludicrous mode.
-	`)
+	flag.String("ludicrous", "", z.NewSuperFlagHelp(worker.LudicrousDefaults).
+		Head("Ludicrous options (defaults shown):").
+		Flag("enabled",
+			"Run Dgraph in Ludicrous mode.").
+		Flag("concurrency",
+			"The number of concurrent threads to use in Ludicrous mode.").
+		String())
 
-	flag.String("graphql", worker.GraphQLDefaults,
-		`This flag provides settings for GraphQL.
-		GraphQL options:
-	introspection=true Set to false for no GraphQL schema introspection.
-	debug=false Enable debug mode in GraphQL. This returns auth errors to clients. We do not
-		recommend turning it on for production.
-	extensions=true/false Set to false if extensions not required in GraphQL response body.
-	poll-interval=1s Polling interval for GraphQL subscription.
-	lambda-url="" URL of lambda server that implements custom GraphQL JavaScript resolvers.
-	`)
+	flag.String("graphql", "", z.NewSuperFlagHelp(worker.GraphQLDefaults).
+		Head("GraphQL options (defaults shown):").
+		Flag("introspection",
+			"Enables GraphQL schema introspection.").
+		Flag("debug",
+			"Enables debug mode in GraphQL. This returns auth errors to clients, and we do not "+
+				"recommend turning it on for production.").
+		Flag("extensions",
+			"Enables extensions in GraphQL response body.").
+		Flag("poll-interval",
+			"The polling interval for GraphQL subscription.").
+		Flag("lambda-url",
+			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
+		String())
 
 	// Cache flags
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
 		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
 
-	flag.String("audit", "",
-		`Various audit options.
-	dir=/path/to/audits to define the path where to store the audit logs.
-	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
-	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
-	flag.
-	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+	// NOTE: using "compress=false;" default to show bool type, need a better way of showing types
+	flag.String("audit", "", z.NewSuperFlagHelp("compress=false;").
+		Head("Audit options (defaults shown):").
+		Flag("dir",
+			"The path where audit logs should be stored.").
+		Flag("compress",
+			"Enables the compression of old audit logs.").
+		// TODO: use dash
+		Flag("encrypt_file",
+			"The path to the key file to be used for audit log encryption.").
+		String())
 
 	flag.String("cdc", "",
 		`Various change data capture options.
