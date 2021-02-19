@@ -223,7 +223,6 @@ config_compose() {
     echo "encryption_key_file = '/dgraph/enc/enc_key_file'" >> "$CFGPATH/config.toml"
   [[ $TLS_ENABLED == "true" ]] &&
     cat <<-TLS_CONFIG >> $CFGPATH/config.toml
-tls_dir = '/dgraph/tls'
 tls_client_auth = '$TLS_CLIENT_AUTH'
 TLS_CONFIG
 
