@@ -5903,8 +5903,8 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload "+
-		"because id S1 already exists for type State", gqlResponse.Errors[0].Error())
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
+		gqlResponse.Errors[0].Error())
 
 	// Add Mutation with upsert true should succeed. It should link the state to
 	// existing country

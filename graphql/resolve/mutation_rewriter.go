@@ -1479,26 +1479,27 @@ func rewriteObject(
 				}
 			}
 		}
-
-		for _, xid := range xids {
-			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-				// This is handled in the for loop above
-				continue
-			} else if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
-				// When we reach this stage we are absoulutely sure that this is not a reference and is
-				// a new node and one of the XIDs is missing.
-				// There are two possibilities here:
-				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
-				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
-				//    or at deeper levels in Update Mutation has to be present. If multiple xids are not present
-				//    then we return error for only one.
-				// 2. This is an Update Mutation and we are at top level:
-				//    In this case this is not an error as the UID at top level of Update Mutation is
-				//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
-				//    with the function.
-				err := errors.Errorf("field %s cannot be empty", xid.Name())
-				retErrors = append(retErrors, err)
-				return nil, upsertVar, retErrors
+		if upsertVar == "" {
+			for _, xid := range xids {
+				if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+					// This is handled in the for loop above
+					continue
+				} else if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
+					// When we reach this stage we are absoulutely sure that this is not a reference and is
+					// a new node and one of the XIDs is missing.
+					// There are two possibilities here:
+					// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
+					//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
+					//    or at deeper levels in Update Mutation has to be present. If multiple xids are not present
+					//    then we return error for only one.
+					// 2. This is an Update Mutation and we are at top level:
+					//    In this case this is not an error as the UID at top level of Update Mutation is
+					//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
+					//    with the function.
+					err := errors.Errorf("field %s cannot be empty", xid.Name())
+					retErrors = append(retErrors, err)
+					return nil, upsertVar, retErrors
+				}
 			}
 		}
 	}
