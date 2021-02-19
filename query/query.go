@@ -2175,9 +2175,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					// So to avoid that we make a copy.
 					newDestUIDList := &pb.List{Uids: make([]uint64, 0, len(sg.DestUIDs.Uids))}
 					for _, uid := range sg.DestUIDs.GetUids() {
-						newDestUidList.Uids = append(newDestUIDList.Uids, uid)
+						newDestUIDList.Uids = append(newDestUIDList.Uids, uid)
 					}
-					sg.uidMatrix = []*pb.List{newDestUidList}
+					sg.uidMatrix = []*pb.List{newDestUIDList}
 				} else {
 					sg.uidMatrix = []*pb.List{sg.DestUIDs}
 				}
