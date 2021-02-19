@@ -140,6 +140,11 @@ func init() {
 	Live.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Live.Cmd.Flags()
+	// --vault SuperFlag and encryption flags
+	enc.RegisterFlags(flag)
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
@@ -183,11 +188,6 @@ func init() {
 		"This flag will be ignored when not logging into galaxy namespace."+
 		"Only guardian of galaxy should use this for loading data into multiple namespaces."+
 		"Setting it to negative value will preserve the namespace.")
-
-	// Encryption and Vault options
-	enc.RegisterFlags(flag)
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {

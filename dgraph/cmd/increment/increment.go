@@ -51,6 +51,9 @@ func init() {
 	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
@@ -70,8 +73,6 @@ func init() {
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
 	flag.String("jaeger", "", "Send opencensus traces to Jaeger.")
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
 }
 
 // Counter stores information about the value being incremented by this tool.

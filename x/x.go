@@ -999,7 +999,6 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dialOpts := []grpc.DialOption{}
-	// TODO(karl): not sure where these dialOpts end up... do we need to use the --auth superflag?
 	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
 		dialOpts = append(dialOpts, WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
