@@ -378,7 +378,7 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 			}
 			req := &pb.ExportRequest{
 				GroupId:     uint32(gid),
-				ReadTs:      restore.MaxLeaseUid,
+				ReadTs:      restore.Version,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
 				Destination: exportDir,
