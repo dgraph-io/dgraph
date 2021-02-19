@@ -1267,8 +1267,6 @@ func rewriteObject(
 	if len(xids) != 0 {
 		// nonExistingXIDs stores number of uids for which there exist no nodes
 		var nonExistingXIDs int
-		// missingXid stores number of xids that are not present in mutation object
-		var missingXid bool
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
 		for _, xid := range xids {
@@ -1357,7 +1355,16 @@ func rewriteObject(
 					nonExistingXIDs++
 
 				}
-			} else if (mutationType == Add || !atTopLevel) && !missingXid {
+			}
+		}
+
+		for _, xid := range xids {
+			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+				// This is handled in the for loop above
+				continue
+			} else if mutationType == Add || !atTopLevel {
+				// When we reach this stage we are absoulutely sure that this is not a reference and is
+				// a new node and one of the XIDs is missing.
 				// There are two possibilities here:
 				// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
 				//    In this case this is an error as XID field if referenced anywhere inside Add Mutation
@@ -1369,11 +1376,8 @@ func rewriteObject(
 				//    with the function.
 				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
-				missingXid = true
+				return nil, retErrors
 			}
-		}
-		if retErrors != nil {
-			return nil, retErrors
 		}
 	}
 
