@@ -173,7 +173,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls cacert="..."; option is specified, the connection will be set up using TLS
 	// instead of plaintext. However the client cert files are optional, depending on whether the
 	// server requires a client certificate.
-	caCert := tlsFlag.GetString("tls_cacert")
+	caCert := tlsFlag.GetString("cacert")
 	if caCert != "" {
 		tlsCfg := tls.Config{}
 
