@@ -85,16 +85,11 @@ instances to achieve high-availability.
 
 	flag := Zero.Cmd.Flags()
 	x.FillCommonFlags(flag)
+	// --tls SuperFlag
+	x.RegisterServerTLSFlags(flag)
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.String("raft", raftDefault,
-		`Raft options for group zero.
-		idx=N provides the Raft ID that this server would use to join the Zero group.
-			N cannot be 0.
-		learner=true would make this Zero a "learner" node. In learner node, the Zero would not
-			participate in Raft elections. This can be used to achieve a read-only replica.
-		`)
 	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
@@ -102,16 +97,28 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
-	flag.String("audit", "",
-		`Various audit options.
-	dir=/path/to/audits to define the path where to store the audit logs.
-	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
-	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
-	flag.
-	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+	flag.String("raft", "", z.NewSuperFlagHelp(raftDefaults).
+		Head("Raft options (defaults shown):").
+		Flag("idx",
+			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
+		Flag("learner",
+			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
+				`in Raft elections. This can be used to achieve a read-only replica.`).
+		String())
 
-	// TLS configurations
-	x.RegisterServerTLSFlags(flag)
+	flag.String("audit", "", z.NewSuperFlagHelp(audit.FlagDefaults).
+		Head("Audit options (defaults shown):").
+		Flag("dir",
+			`The path where audit logs will be stored.`).
+		Flag("compress",
+			`Enables the compression of old audit logs.`).
+		Flag("encrypt-file",
+			`The path to the key file to be used for audit log encryption.`).
+		Flag("days",
+			`The number of days audit logs will be preserved.`).
+		Flag("size",
+			`The audit log max size in MB after which it will be rolled over.`).
+		String())
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -201,7 +208,7 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
+	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefaults)
 	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),

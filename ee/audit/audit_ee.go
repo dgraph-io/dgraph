@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	defaultAuditConf     = "dir=; compress=false; encrypt-file="
+	FlagDefaults         = "compress=false; days=10; size=100;"
 	defaultAuditFilename = "dgraph_audit.log"
 )
 
@@ -68,7 +68,7 @@ func GetAuditConf(conf string) *AuditConf {
 	if conf == "" {
 		return nil
 	}
-	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(defaultAuditConf)
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
 	dir := auditFlag.GetString("dir")
 	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)

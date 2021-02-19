@@ -34,7 +34,7 @@ const (
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
 	SecurityDefaults  = ``
-	RaftDefaults      = `snapshot-after=10000; pending-proposals=256;`
+	RaftDefaults      = `snapshot-after=10000; pending-proposals=256; learner=false;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
 	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
 )
