@@ -827,7 +827,12 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	m *pb.Mutations) error {
 	if x.WorkerConfig.StrictMutations {
 		for _, edge := range m.Edges {
-			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
+			// Trim the "~" from the attr because we never store reverse edges in the schema.
+			attr := edge.Attr
+			if len(edge.Attr) > 0 && edge.Attr[0] == '~' {
+				attr = attr[1:]
+			}
+			if _, err := schema.State().TypeOf(attr); err != nil {
 				return err
 			}
 		}
