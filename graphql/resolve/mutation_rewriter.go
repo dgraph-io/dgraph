@@ -449,7 +449,7 @@ func (mrw *AddRewriter) Rewrite(
 		// which is going to be updated. Eg. State3 .
 		if upsertVar != "" {
 			// Add auth queries for upsert mutation.
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
 			if err != nil {
 				return ret, err
 			}
