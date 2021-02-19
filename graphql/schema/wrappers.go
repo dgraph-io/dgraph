@@ -208,7 +208,7 @@ type Query interface {
 	Rename(newName string)
 	KeyField(typeName string) (string, bool, error)
 	BuildType(typeName string) Type
-	AuthFor(typ Type, jwtVars map[string]interface{}) Query
+	AuthFor(jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -1580,7 +1580,7 @@ func (q *query) GetAuthMeta() *authorization.AuthMeta {
 	return (*field)(q).GetAuthMeta()
 }
 
-func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
+func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
 		field: (*field)(q).field,

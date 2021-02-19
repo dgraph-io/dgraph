@@ -1015,7 +1015,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		}
 
 		// create a copy of the auth query that's specialized for the values from the JWT
-		qry := rn.Rule.AuthFor(typ, authRw.authVariables)
+		qry := rn.Rule.AuthFor(authRw.authVariables)
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
