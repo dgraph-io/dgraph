@@ -176,7 +176,7 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	flag.String("acl", "", z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("Enterprise Feature: ACL options (defaults shown):").
+		Head("[Enterprise Feature] ACL options (defaults shown):").
 		Flag("secret-file",
 			`The file that stores the HMAC secret, which is used for signing the JWT and `+
 				`should have at least 32 ASCII characters. Required to enable ACLs.`).
@@ -221,18 +221,25 @@ they form a Raft group and provide synchronous replication.
 			`The URL of a lambda server that implements custom GraphQL Javascript resolvers.`).
 		String())
 
-	flag.String("cdc", "",
-		`Various change data capture options.
-		file=/path/to/directory where audit logs will be stored.
-		kafka=host1,host2 to define comma separated list of host.
-		sasl-user=username to define sasl username for kafka.
-		sasl-password=password to define sasl password for kafka.
-		ca-cert=/path/to/ca/crt/file to define ca cert for tls encryption.
-		client-cert=/path/to/client/cert/file to define the client certificate for tls encryption.
-		client-key=/path/to/client/key/file to define the client key for tls encryption.
-		`)
+	flag.String("cdc", "", z.NewSuperFlagHelp("").
+		Head("Change Data Capture options (defaults shown):").
+		Flag("file",
+			`The path where audit logs will be stored.`).
+		Flag("kafka",
+			`A comma separated list of Kafka hosts.`).
+		Flag("sasl-user",
+			`The SASL username for Kafka.`).
+		Flag("sasl-password",
+			`The SASL password for Kafka.`).
+		Flag("ca-cert",
+			`The path to CA cert file for TLS encryption.`).
+		Flag("client-cert",
+			`The path to client cert file for TLS encryption.`).
+		Flag("client-key",
+			`The path to client key file for TLS encryption.`).
+		String())
 
-	/* NOTE: unused
+	// NOTE: currently unused
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options (defaults shown):").
 		Flag("dir",
@@ -242,7 +249,6 @@ they form a Raft group and provide synchronous replication.
 		Flag("encrypt-file",
 			`The path to the key file to be used for audit log encryption.`).
 		String())
-	*/
 }
 
 func setupCustomTokenizers() {
