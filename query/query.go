@@ -582,10 +582,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		// Remove pagination arguments from the query if @cascade is mentioned since
 		// pagination will be applied post processing the data.
 		if len(args.Cascade.Fields) > 0 {
-			args.Cascade.First, _ = strconv.Atoi(gchild.Args["first"])
-			args.Cascade.Offset, _ = strconv.Atoi(gchild.Args["offset"])
-			delete(gchild.Args, "first")
-			delete(gchild.Args, "offset")
+			args.addCascadePaginationArguments(gchild)
 		}
 
 		if gchild.IsCount {
@@ -662,6 +659,13 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 	}
 	return nil
+}
+
+func (args *params) addCascadePaginationArguments(gq *gql.GraphQuery) {
+	args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
+	delete(gq.Args, "first")
+	args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
+	delete(gq.Args, "offset")
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
@@ -816,10 +820,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// Remove pagination arguments from the query if @cascade is mentioned since
 	// pagination will be applied post processing the data.
 	if len(args.Cascade.Fields) > 0 {
-		args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
-		delete(gq.Args, "first")
-		args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
-		delete(gq.Args, "offset")
+		args.addCascadePaginationArguments(gq)
 	}
 
 	for argk := range gq.Args {
@@ -2167,11 +2168,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
-				newDestUidList := &pb.List{Uids: make([]uint64, 0, len(sg.DestUIDs.Uids))}
-				for _, uid := range sg.DestUIDs.GetUids() {
-					newDestUidList.Uids = append(newDestUidList.Uids, uid)
+
+				if len(sg.Params.Cascade.Fields) >= 0 {
+					// DesitUIDs for this level becomes the sourceUIDs for the next level. In updateUidMatrix with cascade,
+					// we end up modifying the first list from the uidMatrix which ends up modifying the srcUids of the next level.
+					// So to avoid that we make a copy.
+					newDestUIDList := &pb.List{Uids: make([]uint64, 0, len(sg.DestUIDs.Uids))}
+					for _, uid := range sg.DestUIDs.GetUids() {
+						newDestUidList.Uids = append(newDestUIDList.Uids, uid)
+					}
+					sg.uidMatrix = []*pb.List{newDestUidList}
+				} else {
+					sg.uidMatrix = []*pb.List{sg.DestUIDs}
 				}
-				sg.uidMatrix = []*pb.List{newDestUidList}
 			}
 		}
 	}
@@ -2844,7 +2853,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// first time at the root here.
 
-			//Apply pagination at the root after @cascade.
+			// Apply pagination at the root after @cascade.
 			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.Offset != 0 {
 				sg.updateUidMatrix()
 				for i := 0; i < len(sg.uidMatrix); i++ {
