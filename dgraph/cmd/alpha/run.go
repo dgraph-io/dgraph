@@ -100,7 +100,13 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
+
+	// common
 	x.FillCommonFlags(flag)
+	// --tls SuperFlag
+	x.RegisterServerTLSFlags(flag)
+	// --encryption_key_file
+	enc.RegisterFlags(flag)
 
 	flag.String("cache_percentage", "0,65,35,0",
 		`Cache percentages summing up to 100 for various caches (FORMAT:
@@ -114,7 +120,6 @@ they form a Raft group and provide synchronous replication.
 		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
 			"level (if applicable) for the postings directory. none would disable compression,"+
 			" while zstd:1 would set zstd compression at level 1.")
-	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
 	flag.String("abort_older_than", "5m",
@@ -166,7 +171,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("whitelist",
 			`A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish `+
 				`to whitelist for performing admin actions (i.e., --security `+
-				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal").`).
+				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.`+
+				`internal").`).
 		String())
 
 	flag.String("acl", "", z.NewSuperFlagHelp(worker.AclDefaults).
@@ -215,17 +221,6 @@ they form a Raft group and provide synchronous replication.
 			`The URL of a lambda server that implements custom GraphQL Javascript resolvers.`).
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp(worker.AuditDefaults).
-		Head("Audit options (defaults shown):").
-		Flag("dir",
-			`The path where audit logs will be stored.`).
-		Flag("compress",
-			`Enables the compression of old audit logs.`).
-		// TODO: use dash
-		Flag("encrypt_file",
-			`The path to the key file to be used for audit log encryption.`).
-		String())
-
 	flag.String("cdc", "",
 		`Various change data capture options.
 		file=/path/to/directory where audit logs will be stored.
@@ -237,8 +232,17 @@ they form a Raft group and provide synchronous replication.
 		client-key=/path/to/client/key/file to define the client key for tls encryption.
 		`)
 
-	// TLS configurations
-	x.RegisterServerTLSFlags(flag)
+	/* NOTE: unused
+	flag.String("audit", "", z.NewSuperFlagHelp("").
+		Head("Audit options (defaults shown):").
+		Flag("dir",
+			`The path where audit logs will be stored.`).
+		Flag("compress",
+			`Enables the compression of old audit logs.`).
+		Flag("encrypt-file",
+			`The path to the key file to be used for audit log encryption.`).
+		String())
+	*/
 }
 
 func setupCustomTokenizers() {

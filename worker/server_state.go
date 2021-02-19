@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	AuditDefaults     = `compress=false;`
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
 	SecurityDefaults  = ``
