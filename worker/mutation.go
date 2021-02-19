@@ -825,8 +825,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	m *pb.Mutations) error {
-	if x.WorkerConfig.StrictMutations {
-		for _, edge := range m.Edges {
+	for _, edge := range m.Edges {
+		// Reverse edges should not be directly mutated. They will be modified
+		// depending on the state of the original forward edge.
+		if len(edge.Attr) > 0 && edge.Attr[0] == '~' {
+			return errors.Errorf("mutations shouldn't contain any reverse edges. Found %q", edge.Attr)
+		}
+		if x.WorkerConfig.StrictMutations {
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
 				return err
 			}
