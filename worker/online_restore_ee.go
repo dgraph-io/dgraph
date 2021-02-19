@@ -16,7 +16,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 	"sync"
