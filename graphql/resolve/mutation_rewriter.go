@@ -1267,6 +1267,8 @@ func rewriteObject(
 	if len(xids) != 0 {
 		var xidsWithoutNodes int
 		var missingXid bool
+		// xidVariables stores the variable names for each XID.
+		var xidVariables []string
 		for _, xid := range xids {
 			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
@@ -1314,6 +1316,7 @@ func rewriteObject(
 
 					// Node with XIDs does not exist. It means this is a new node.
 					// This node will be created later.
+					xidVariables = append(xidVariables, variable)
 					if xidsWithoutNodes == len(xids)-1 {
 						exclude := ""
 						if srcField != nil {
@@ -1333,7 +1336,13 @@ func rewriteObject(
 						}
 						// Set existenceQueryResult to _:variable. This is to make referencing to
 						// this node later easier.
-						idExistence[variable] = fmt.Sprintf("_:%s", variable)
+						// Set idExistence for all variables which are referencing this node to
+						// the blank node _:variable.
+						// Example:
+						// TODO(Jatin): Add example of idExistence of Employee1 and Employee2 variables getting set to same blank node
+						for _, xidVariable := range xidVariables {
+							idExistence[xidVariable] = fmt.Sprintf("_:%s", variable)
+						}
 					}
 					xidsWithoutNodes++
 
