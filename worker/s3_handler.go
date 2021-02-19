@@ -349,6 +349,9 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 	}
 
 	files, err := ioutil.ReadDir(tmpDir)
+	if err != nil {
+		return err
+	}
 	// Export the data from the p directories produced by the last step.
 	ch := make(chan error, len(files))
 	for _, f := range files {
