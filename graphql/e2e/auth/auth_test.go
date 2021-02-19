@@ -541,7 +541,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 		}
 	}
 }
-  
+
 func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
 	getVehicleParams := &common.GraphQLParams{
 		Query: `
@@ -2100,4 +2100,44 @@ func TestAuthRBACEvaluation(t *testing.T) {
 		})
 
 	}
+}
+
+func TestFragmentInAuthRules(t *testing.T) {
+	addHomeParams := &common.GraphQLParams{
+		Query: `mutation {
+			addHome(input: [
+				{address: "Home1", members: [{dogRef: {breed: "German Shepherd"}}]},
+				{address: "Home2", members: [{parrotRef: {repeatsWords: ["Hi", "Morning!"]}}]},
+				{address: "Home3", members: [{plantRef: {breed: "Flower"}}]}
+			]) {
+				numUids
+			}
+		}`,
+	}
+	gqlResponse := addHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	t.Log(string(gqlResponse.Data))
+
+	queryHomeParams := &common.GraphQLParams{
+		Query: `query {
+			queryHome {
+				address
+			}
+		}`,
+		Headers: common.GetJWT(t, "", "", metaInfo),
+	}
+	gqlResponse = queryHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	testutil.CompareJSON(t, `{"queryHome": [
+		{"address": "Home1"},
+		{"address": "Home3"}
+	]}`, string(gqlResponse.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "Home", map[string]interface{}{}, 3, nil)
+	common.DeleteGqlType(t, "Dog", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Parrot", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Plant", map[string]interface{}{}, 1, nil)
 }
