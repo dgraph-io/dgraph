@@ -239,7 +239,6 @@ they form a Raft group and provide synchronous replication.
 			`The path to client key file for TLS encryption.`).
 		String())
 
-	// NOTE: currently unused
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options (defaults shown):").
 		Flag("dir",
@@ -249,9 +248,6 @@ they form a Raft group and provide synchronous replication.
 		Flag("encrypt-file",
 			`The path to the key file to be used for audit log encryption.`).
 		String())
-
-	// TLS configurations
-	x.RegisterServerTLSFlags(flag)
 }
 
 func setupCustomTokenizers() {
