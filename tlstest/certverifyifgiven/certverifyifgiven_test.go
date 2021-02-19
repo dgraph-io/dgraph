@@ -2,6 +2,7 @@ package certverifyifgiven
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -12,8 +13,11 @@ import (
 
 func TestAccessWithoutClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s;",
+		// cacert
+		"../tls/ca.crt",
+		// server-name
+		"node"))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
@@ -23,10 +27,15 @@ func TestAccessWithoutClientCert(t *testing.T) {
 
 func TestAccessWithClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
-	conf.Set("tls_cert", "../tls/client.acl.crt")
-	conf.Set("tls_key", "../tls/client.acl.key")
+	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; cert=%s; key=%s;",
+		// cacert
+		"../tls/ca.crt",
+		// server-name
+		"node",
+		// cert
+		"../tls/client.acl.crt",
+		// key
+		"../tls/client.acl.key"))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
