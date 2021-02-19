@@ -69,7 +69,7 @@ func init() {
 		"Read-only. Read the counter value without updating it.")
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
+	flag.String("jaeger", "", "Send opencensus traces to Jaeger.")
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
 }
