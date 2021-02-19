@@ -2031,6 +2031,14 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
+	if hasXID(defn) {
+		add.Arguments = append(add.Arguments,
+			&ast.ArgumentDefinition{
+				Name: "upsert",
+				Type: &ast.Type{NamedType: "Boolean"},
+			})
+	}
+
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
 
 }

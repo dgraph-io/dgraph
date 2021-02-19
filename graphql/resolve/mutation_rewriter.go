@@ -45,6 +45,8 @@ type MutationType int
 const (
 	// Add Mutation
 	Add MutationType = iota
+	// Add Mutation with Upsert
+	AddWithUpsert
 	// Update Mutation used for to setting new nodes, edges.
 	UpdateWithSet
 	// Update Mutation used for removing edges.
@@ -397,6 +399,8 @@ func (mrw *AddRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation,
 	idExistence map[string]string) ([]*UpsertMutation, error) {
+
+	mutationType := Add
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
@@ -407,11 +411,29 @@ func (mrw *AddRewriter) Rewrite(
 	// fragments stores a slice of mutationFragments. This is used in constructing mutationsAll which is returned back to the caller
 	// of this function as UpsertMutation.mutation
 	var fragments []*mutationFragment
+	// upsertQuery stores a list of queries of the form
+	// State1 as addState(func: uid(0x11)) @filter(type(State)) {
+	// 		uid
+	// }
+	// These are formed while doing Upserts with Add Mutations. These also contain
+	// any related auth queries. These are prepended to other queries formed during rewriteObject.
+	var upsertQuery []*gql.GraphQuery
 	var retErrors error
+
+	// Parse upsert parameter from addMutation input.
+	// If upsert is set to True, this add mutation will be carried as an Upsert Mutation.
+	upsert := false
+	upsertVal := m.ArgValue(schema.UpsertArgName)
+	if upsertVal != nil {
+		upsert = upsertVal.(bool)
+	}
+	if upsert {
+		mutationType = AddWithUpsert
+	}
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, Add)
+		fragment, upsertVar, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -419,6 +441,35 @@ func (mrw *AddRewriter) Rewrite(
 			}
 			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
 				"failed to rewrite mutation payload"))
+		}
+		// TODO: Do RBAC authorization along with RewriteQueries. This will save some time and queries need
+		// not be executed in case RBAC is Negative.
+		// upsertVar is non-empty in case this is an upsert Mutation and the XID at
+		// top level exists. upsertVar in this case contains variable name of the node
+		// which is going to be updated. Eg. State3 .
+		if upsertVar != "" {
+			// Add auth queries for upsert mutation.
+			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			if err != nil {
+				return ret, err
+			}
+
+			authRw := &authRewriter{
+				authVariables: customClaims.AuthVariables,
+				varGen:        varGen,
+				selector:      updateAuthSelector,
+				parentVarName: m.MutatedType().Name() + "Root",
+			}
+			authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
+			// Get upsert query of the form,
+			// State1 as addState(func: uid(0x11)) @filter(type(State)) {
+			// 		uid
+			// }
+			upsertQuery = append(upsertQuery, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, idExistence[upsertVar])...)
+			// Add upsert condition to ensure that the upsert takes place only when the node
+			// exists and has proper auth permission.
+			// Example condition:  cond: "@if(gt(len(State1), 0))"
+			fragment.conditions = append(fragment.conditions, fmt.Sprintf("gt(len(%s), 0)", upsertVar))
 		}
 		if fragment != nil {
 			fragments = append(fragments, fragment)
@@ -428,6 +479,7 @@ func (mrw *AddRewriter) Rewrite(
 
 	mutationsAll := []*dgoapi.Mutation{}
 	queries := &gql.GraphQuery{}
+	queries.Children = upsertQuery
 
 	buildMutations := func(mutationsAll []*dgoapi.Mutation, queries *gql.GraphQuery,
 		frag []*mutationFragment) []*dgoapi.Mutation {
@@ -534,7 +586,7 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
+	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, "")
 	srcUID := MutationQueryVarUID
 
 	if setArg == nil && delArg == nil {
@@ -543,7 +595,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		obj := setArg.(map[string]interface{})
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithSet)
+		fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithSet)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -561,7 +613,7 @@ func (urw *UpdateRewriter) Rewrite(
 	if delArg != nil {
 		obj := delArg.(map[string]interface{})
 		// Set additional deletes to false
-		fragment, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithRemove)
+		fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithRemove)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -653,8 +705,10 @@ func (mrw *AddRewriter) FromMutationResult(
 
 	var errs error
 
+	// This stores a list of added or updated uids.
 	uids := make([]uint64, 0)
 
+	// Add any newly added uids.
 	for _, frag := range mrw.frags {
 		err := checkResult(frag, result)
 		errs = schema.AppendGQLErrs(errs, err)
@@ -679,7 +733,34 @@ func (mrw *AddRewriter) FromMutationResult(
 		uids = append(uids, uid)
 	}
 
-	if len(assigned) == 0 && errs == nil {
+	// Extract and add any updated uids. This is done for upsert With Add Mutation.
+	// In this case, it may happen that no new node is created, but there may still
+	// be some updated nodes. We get these nodes over here and add to uid list.
+	mutated := extractMutated(result, mutation.Name())
+	if len(mutated) > 0 {
+		// This is the case of a conditional upsert where we should get uids from mutated.
+		for _, id := range mutated {
+			uid, err := strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				return nil, schema.GQLWrapf(err,
+					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
+						"uint64", id)
+			}
+			uids = append(uids, uid)
+		}
+	}
+
+	// Find out if its an upsert with Add mutation.
+	upsert := false
+	upsertVal := mutation.ArgValue(schema.UpsertArgName)
+	if upsertVal != nil {
+		upsert = upsertVal.(bool)
+	}
+
+	// This error is only relevant in case this is not an Upsert with Add Mutation.
+	// During upsert with Add mutation, it may happen that no new nodes are created and
+	// everything is perfectly alright.
+	if len(uids) == 0 && errs == nil && !upsert {
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
@@ -808,10 +889,12 @@ func extractMutationFilter(m schema.Mutation) map[string]interface{} {
 
 func RewriteUpsertQueryFromMutation(
 	m schema.Mutation,
-	authRw *authRewriter) []*gql.GraphQuery {
+	authRw *authRewriter,
+	mutationQueryVar string,
+	nodeID string) []*gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := []*gql.GraphQuery{{
-		Var:  MutationQueryVar,
+		Var:  mutationQueryVar,
 		Attr: m.Name(),
 	}}
 
@@ -844,15 +927,35 @@ func RewriteUpsertQueryFromMutation(
 	})
 
 	// TODO - Cache this instead of this being a loop to find the IDField.
-	filter := extractMutationFilter(m)
-	if ids := idFilter(filter, m.MutatedType().IDField()); ids != nil {
-		addUIDFunc(dgQuery[0], ids)
+	// nodeID is contains upsertVar in case this is an upsert with Add Mutation.
+	// In all other cases nodeID is set to empty.
+	// If it is set to empty, this is either a delete or update mutation.
+	// In that case, we extract the IDs on which to apply this mutation using
+	// extractMutationFilter.
+	if nodeID == "" {
+		filter := extractMutationFilter(m)
+		if ids := idFilter(filter, m.MutatedType().IDField()); ids != nil {
+			addUIDFunc(dgQuery[0], ids)
+		} else {
+			addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
+		}
+
+		_ = addFilter(dgQuery[0], m.MutatedType(), filter)
 	} else {
-		addTypeFunc(dgQuery[0], m.MutatedType().DgraphName())
+		// It means this is called from upsert with Add mutation.
+		// nodeID will be uid of the node to be upserted. We add UID func
+		// and type filter to generate query like
+		// State3 as addState(func: uid(0x13)) @filter(type(State)) {
+		//  	uid
+		// }
+		uid, err := strconv.ParseUint(nodeID, 0, 64)
+		if err != nil {
+			dgQuery[0].Attr = m.ResponseName() + "()"
+			return dgQuery
+		}
+		addUIDFunc(dgQuery[0], []uint64{uid})
+		addTypeFilter(dgQuery[0], m.MutatedType())
 	}
-
-	_ = addFilter(dgQuery[0], m.MutatedType(), filter)
-
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 
 	return dgQuery
@@ -919,7 +1022,7 @@ func (drw *deleteRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
+	dgQry := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, "")
 	qry := dgQry[0]
 
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
@@ -1202,6 +1305,10 @@ func asIDReference(
 // rewriteObject builds a set of mutations. Using the argument idExistence, it is decided
 // whether to create new nodes or link to existing nodes. Mutations are built recursively
 // in a dfs like algorithm.
+// In addition to returning the mutationFragment and any errors. It also returns upsertVar.
+// In case this is an upsert Add mutation and top level node exists with XID, upsertVar stores
+// the variable name of the top level node. Eg. State1
+// In all other cases, upsertVar is "".
 func rewriteObject(
 	ctx context.Context,
 	typ schema.Type,
@@ -1211,7 +1318,7 @@ func rewriteObject(
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
 	idExistence map[string]string,
-	mutationType MutationType) (*mutationFragment, []error) {
+	mutationType MutationType) (*mutationFragment, string, []error) {
 
 	// There could be the following cases:
 	// 1. We need to create a new node.
@@ -1221,6 +1328,7 @@ func rewriteObject(
 	// Note that as similar traversal of input tree was carried with getExistenceQueries, we
 	// don't have to report the same errors.
 
+	upsertVar := ""
 	atTopLevel := srcField == nil
 	var retErrors []error
 	variable := ""
@@ -1251,15 +1359,15 @@ func rewriteObject(
 						err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
 					}
 					retErrors = append(retErrors, err)
-					return nil, retErrors
+					return nil, upsertVar, retErrors
 				} else {
-					return asIDReference(ctx, idVal, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
+					return asIDReference(ctx, idVal, srcField, srcUID, varGen, mutationType == UpdateWithRemove), upsertVar, nil
 				}
 			} else {
 				// Reference UID does not exist. This is an error.
 				err := errors.Errorf("ID \"%s\" isn't a %s", idVal.(string), srcField.Type().Name())
 				retErrors = append(retErrors, err)
-				return nil, retErrors
+				return nil, upsertVar, retErrors
 			}
 		}
 	}
@@ -1294,21 +1402,34 @@ func rewriteObject(
 			// Get whether node with XID exists or not from existenceQueriesResult
 			if uid, ok := idExistence[variable]; ok {
 				// node with XID exists. This is a reference.
-				// We return an error if this is at toplevel. Else, we return the ID reference
 				if atTopLevel {
-					// We need to conceal the error because we might be leaking information to the user if it
-					// tries to add duplicate data to the field with @id.
-					var err error
-					if queryAuthSelector(typ) == nil {
-						err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+					if mutationType == AddWithUpsert {
+						// This means we are in Add Mutation with upsert: true.
+						// In this case, we don't return an error and continue updating this node.
+						// upsertVar is set to variable and srcUID is set to uid(variable) to continue
+						// updating this node.
+						upsertVar = variable
+						srcUID = fmt.Sprintf("uid(%s)", variable)
+						// To ensure that xid is not added to the output json
+						delete(obj, xid.Name())
 					} else {
-						// This error will only be reported in debug mode.
-						err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+						// We return an error as we are at top level of non-upsert mutation and the XID exists.
+						// We need to conceal the error because we might be leaking information to the user if it
+						// tries to add duplicate data to the field with @id.
+						var err error
+						if queryAuthSelector(typ) == nil {
+							err = x.GqlErrorf("id %s already exists for type %s", xidString, typ.Name())
+						} else {
+							// This error will only be reported in debug mode.
+							err = x.GqlErrorf("GraphQL debug: id already exists for type %s", typ.Name())
+						}
+						retErrors = append(retErrors, err)
+						return nil, upsertVar, retErrors
 					}
-					retErrors = append(retErrors, err)
-					return nil, retErrors
 				} else {
-					return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), nil
+					// As we are not at top level, we return the XID reference. We don't update this node
+					// further.
+					return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), upsertVar, nil
 				}
 			} else {
 				// Node with XID does not exist. It means this is a new node.
@@ -1327,7 +1448,7 @@ func rewriteObject(
 				if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 					// This object does not contain XID. This is an error.
 					retErrors = append(retErrors, err)
-					return nil, retErrors
+					return nil, upsertVar, retErrors
 				}
 				// Set existenceQueryResult to _:variable. This is to make referencing to
 				// this node later easier.
@@ -1342,10 +1463,10 @@ func rewriteObject(
 			//    In this case this is not an error as the UID at top level of Update Mutation is
 			//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 			//    with the function.
-			if mutationType == Add || !atTopLevel {
+			if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
 				err := errors.Errorf("field %s cannot be empty", xid.Name())
 				retErrors = append(retErrors, err)
-				return nil, retErrors
+				return nil, upsertVar, retErrors
 			}
 		}
 	}
@@ -1368,11 +1489,18 @@ func rewriteObject(
 	// Create newObj map. This map will be returned as part of mutationFragment.
 	newObj := make(map[string]interface{}, len(obj))
 
-	if mutationType != Add && atTopLevel {
+	if (mutationType != Add && mutationType != AddWithUpsert && atTopLevel) || upsertVar != "" {
+		// Two Cases
+		// Case 1:
 		// It's an update and we are at top level. So, the UID of node(s) for which
 		// we are rewriting is/are referenced using "uid(x)" as part of mutations.
 		// We don't need to create a new blank node in this case.
 		// srcUID is equal to uid(x) in this case.
+		// Case 2:
+		// This is an upsert with Add Mutation and upsertVar is non-empty (which means
+		// the XID at top level exists and this is an upsert).
+		// We continue updating in this case and no new node is created. srcUID will be
+		// equal to uid(variable) in this case. Eg. uid(State1)
 		newObj["uid"] = srcUID
 		myUID = srcUID
 	} else if mutationType == UpdateWithRemove {
@@ -1383,7 +1511,7 @@ func rewriteObject(
 		// to ID or XID exists. In that case, we throw an error.
 		err := errors.Errorf("id is not provided")
 		retErrors = append(retErrors, err)
-		return nil, retErrors
+		return nil, upsertVar, retErrors
 	} else {
 		// We are in Add Mutation or at a deeper level in Update Mutation set.
 		// If we have reached this stage, we can be sure that we need to create a new
@@ -1398,6 +1526,7 @@ func rewriteObject(
 	addInverseLink(newObj, srcField, srcUID)
 
 	frag := newFragment(newObj)
+	// TODO(Rajas)L Check if newNodes only needs to be set in case new nodes have been added.
 	frag.newNodes[variable] = typ
 
 	updateFromChildren := func(parentFragment, childFragment *mutationFragment) {
@@ -1434,7 +1563,7 @@ func rewriteObject(
 		switch val := val.(type) {
 		case map[string]interface{}:
 			if fieldDef.Type().IsUnion() {
-				fieldMutationFragment, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteUnionField(ctx, fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1447,7 +1576,7 @@ func rewriteObject(
 						"coordinates": rewriteGeoObject(val, fieldDef.Type()),
 					}
 			} else {
-				fieldMutationFragment, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
+				fieldMutationFragment, _, err := rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, val, xidMetadata, idExistence, mutationType)
 				if fieldMutationFragment != nil {
 					newObj[fieldName] = fieldMutationFragment.fragment
 					updateFromChildren(frag, fieldMutationFragment)
@@ -1462,7 +1591,7 @@ func rewriteObject(
 				switch object := object.(type) {
 				case map[string]interface{}:
 					if fieldDef.Type().IsUnion() {
-						fieldMutationFragment, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteUnionField(ctx, fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
 					} else if fieldDef.Type().IsGeo() {
 						fieldMutationFragment = newFragment(
 							map[string]interface{}{
@@ -1471,7 +1600,7 @@ func rewriteObject(
 							},
 						)
 					} else {
-						fieldMutationFragment, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
+						fieldMutationFragment, _, err = rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen, object, xidMetadata, idExistence, mutationType)
 					}
 					if fieldMutationFragment != nil {
 						mutationFragments = append(mutationFragments, fieldMutationFragment.fragment)
@@ -1495,7 +1624,7 @@ func rewriteObject(
 		}
 	}
 
-	return frag, retErrors
+	return frag, upsertVar, retErrors
 }
 
 // existenceQueries takes a GraphQL JSON object as obj and creates queries to find
@@ -1738,7 +1867,7 @@ func rewriteUnionField(
 	obj map[string]interface{},
 	xidMetadata *xidMetadata,
 	existenceQueriesResult map[string]string,
-	mutationType MutationType) (*mutationFragment, []error) {
+	mutationType MutationType) (*mutationFragment, string, []error) {
 
 	var newtyp schema.Type
 	for memberRef, memberRefVal := range obj {

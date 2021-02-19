@@ -5449,3 +5449,91 @@ func inputCoerciontoList(t *testing.T) {
 	DeleteGqlType(t, "post1", posts1DeleteFilter, 4, nil)
 
 }
+
+func upsertMutationTests(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	// State should get added.
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($xcode: String!, $upsert: Boolean, $name: String!) {
+            addState(input: [{ xcode: $xcode, name: $name }], upsert: $upsert) {
+                state {
+                    xcode
+                    name
+					country {
+						name
+					}
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"name":   "State1",
+			"xcode":  "S1",
+			"upsert": true},
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+        "addState": {
+            "state": [{
+                "xcode": "S1",
+                "name": "State1",
+				"country": null
+            }]
+        }
+    }`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	// Add Mutation with Upsert: false should fail.
+	addStateParams.Query = `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $countryID: ID) {
+            addState(input: [{ xcode: $xcode, name: $name, country: {id: $countryID }}], upsert: $upsert) {
+                state {
+                    xcode
+                    name
+					country {
+						name
+					}
+                }
+            }
+        }`
+	addStateParams.Variables = map[string]interface{}{
+		"upsert":    false,
+		"name":      "State2",
+		"xcode":     "S1",
+		"countryID": newCountry.ID,
+	}
+	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload "+
+		"because id S1 already exists for type State", gqlResponse.Errors[0].Error())
+
+	// Add Mutation with upsert true should succeed. It should link the state to
+	// existing country
+	addStateParams.Variables = map[string]interface{}{
+		"upsert":    true,
+		"name":      "State2",
+		"xcode":     "S1",
+		"countryID": newCountry.ID,
+	}
+	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	addStateExpected = `{
+        "addState": {
+            "state": [{
+                "xcode": "S1",
+                "name": "State2",
+				"country": {
+					"name": "Testland"
+				}
+            }]
+        }
+    }`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	// Clean Up
+	filter := map[string]interface{}{"id": []string{newCountry.ID}}
+	deleteCountry(t, filter, 1, nil)
+	filter = GetXidFilter("xcode", []interface{}{"S1"})
+	deleteState(t, filter, 1, nil)
+}

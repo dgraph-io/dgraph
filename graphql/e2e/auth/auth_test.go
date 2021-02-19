@@ -130,6 +130,20 @@ type Column struct {
 	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
+type Country struct {
+	Id      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	States  []*State `json:"states,omitempty"`
+}
+
+type State struct {
+	Code    string   `json:"code,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	Country *Country `json:"country,omitempty"`
+}
+
 type Project struct {
 	ProjID  string    `json:"projID,omitempty"`
 	Name    string    `json:"name,omitempty"`
@@ -541,7 +555,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 		}
 	}
 }
-  
+
 func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
 	getVehicleParams := &common.GraphQLParams{
 		Query: `
