@@ -131,14 +131,6 @@ github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b h1:
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1 h1:E+NH1+aTO3vgP/t01DvYbX8qnwBC0bPgPwK7y+y0vaE=
 github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
-github.com/dgraph-io/ristretto v0.0.4-0.20210215133513-9c8fa18c5639 h1:haH0B+BBXy02fEbJhzttCssesbdVbidf9+FNFvzsGuA=
-github.com/dgraph-io/ristretto v0.0.4-0.20210215133513-9c8fa18c5639/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
-github.com/dgraph-io/ristretto v0.0.4-0.20210217231031-edf56442ee1e h1:k50O03UiPrIDf7kOrV+9WXQpTcbDERQG8YOApu4J52c=
-github.com/dgraph-io/ristretto v0.0.4-0.20210217231031-edf56442ee1e/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
-github.com/dgraph-io/ristretto v0.0.4-0.20210217232649-8576bbb984e1 h1:x2XhguQcywBIacCsas/mWl1pO2ihA8fp2pAqeV1zt60=
-github.com/dgraph-io/ristretto v0.0.4-0.20210217232649-8576bbb984e1/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
-github.com/dgraph-io/ristretto v0.0.4-0.20210218213111-024fba86f371 h1:Hz2b9Wo42/ZWwhJ7KJrpE7dXvhQzDZvn0LvWRNUv7kk=
-github.com/dgraph-io/ristretto v0.0.4-0.20210218213111-024fba86f371/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/ristretto v0.0.4-0.20210218220528-61bbb40bff18 h1:PlYMH2eAuM0LtJFoSEAt8AIxorp+ra82NVgmzWauwAc=
 github.com/dgraph-io/ristretto v0.0.4-0.20210218220528-61bbb40bff18/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
