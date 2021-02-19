@@ -487,6 +487,41 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestCascadeWithPagination(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x01)) @cascade {
+			name
+			gender
+			friend(first: 2, offset: 1) {
+				name
+				friend{
+					name
+					dob
+					age
+				}
+			}
+		}
+	}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
+		js)
+}
+
+func TestCascadeWithPaginationAtRoot(t *testing.T) {
+	query := `
+	{
+		me(func: type(Person), first: 2, offset: 2) @cascade{
+		  name
+		  alive
+		}
+	  }
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Andrea","alive":false}]}}`)
+}
 func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	query := `
 		{
