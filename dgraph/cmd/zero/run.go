@@ -57,7 +57,7 @@ type options struct {
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
-	audit             *audit.AuditConf
+	audit             *x.LoggerConf
 }
 
 var opts options
@@ -106,9 +106,11 @@ instances to achieve high-availability.
 		`Various audit options.
 	dir=/path/to/audits to define the path where to store the audit logs.
 	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
-	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	encrypt-file=enc/key/file enables the audit log encryption with the key path provided with the
 	flag.
-	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+	days=10 is the number of days audit logs will be preserved (default 10).
+	size=100 is the size of each file in mb after which it will be rolled over (default 100).
+	Sample flag would be --audit dir=aa;encrypt-file=/filepath;compress=true;days=10;size=100`)
 
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)

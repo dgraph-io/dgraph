@@ -59,7 +59,10 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While expanding edges")
+	}
 	isGalaxyQuery := x.IsGalaxyOperation(ctx)
 
 	// Reset the namespace to the original.
@@ -261,7 +264,10 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
-	namespace := x.ExtractNamespace(ctx)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While checking ACL delete operation")
+	}
 
 	// If the guardian or groot node is not present, then the request cannot be a delete operation
 	// on guardian or groot node.

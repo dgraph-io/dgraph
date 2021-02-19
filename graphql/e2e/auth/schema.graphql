@@ -818,3 +818,31 @@ type Car implements Vehicle {
     id: ID!
     manufacturer: String!
 }
+
+type Country @auth(
+    add: { rule: """
+        query($USER: String!) {
+            queryCountry(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """} ) {
+    id: String! @id
+    name: String!
+    ownedBy: String @search(by: [hash])
+    states: [State] @hasInverse(field: country)
+}
+
+type State @auth(
+    update: { rule: """
+        query($USER: String!) {
+            queryState(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """} ) {
+    code: String! @id
+    name: String!
+    ownedBy: String @search(by: [hash])
+    country: Country
+}

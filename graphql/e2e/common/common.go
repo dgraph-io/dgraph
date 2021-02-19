@@ -890,6 +890,7 @@ func RunAll(t *testing.T) {
 	t.Run("parallel mutations", parallelMutations)
 	t.Run("input coercion to list", inputCoerciontoList)
 	t.Run("multiple external Id's tests", multipleXidsTests)
+	t.Run("Upsert Mutation Tests", upsertMutationTests)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

@@ -24,24 +24,32 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func InitLogger(dir string, filename string, key []byte, compress bool) (*Logger, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+type LoggerConf struct {
+	Compress      bool
+	Dir           string
+	EncryptionKey SensitiveByteSlice
+	Size          int64
+	Days          int64
+}
+
+func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
+	if err := os.MkdirAll(conf.Dir, 0700); err != nil {
 		return nil, err
 	}
-	if key != nil {
+	if conf.EncryptionKey != nil {
 		filename = filename + ".enc"
 	}
 
-	path, err := filepath.Abs(filepath.Join(dir, filename))
+	path, err := filepath.Abs(filepath.Join(conf.Dir, filename))
 	if err != nil {
 		return nil, err
 	}
 	w := &LogWriter{
 		FilePath:      path,
-		MaxSize:       100,
-		MaxAge:        10,
-		EncryptionKey: key,
-		Compress:      compress,
+		MaxSize:       conf.Size,
+		MaxAge:        conf.Days,
+		EncryptionKey: conf.EncryptionKey,
+		Compress:      conf.Compress,
 	}
 	if w, err = w.Init(); err != nil {
 		return nil, err

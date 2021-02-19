@@ -379,9 +379,9 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Dgraph fail": {
 			explanation: "a Dgraph, network or error in rewritten query failed the mutation",
 			idValue:     "0x1",
-			mutResponse: map[string]string{"Post1": "0x2"},
+			mutResponse: map[string]string{"Post2": "0x2"},
 			mutQryResp: map[string]interface{}{
-				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
+				"Author1": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
@@ -400,9 +400,9 @@ func TestManyMutationsWithError(t *testing.T) {
 		"Rewriting error": {
 			explanation: "The reference ID is not a uint64, so can't be converted to a uid",
 			idValue:     "hi",
-			mutResponse: map[string]string{"Post1": "0x2"},
+			mutResponse: map[string]string{"Post2": "0x2"},
 			mutQryResp: map[string]interface{}{
-				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
+				"Author1": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{"post": [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
