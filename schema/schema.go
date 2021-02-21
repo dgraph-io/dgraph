@@ -138,6 +138,25 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
+// DeleteNamespace deletes the predicate information for the namespace from the schema.
+func (s *state) DeleteNamespace(namespace uint64) {
+	if s == nil {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+	for pred := range s.predicate {
+		ns := x.ParseNamespace(pred)
+		if ns == namespace {
+			delete(s.predicate, pred)
+			delete(s.mutSchema, pred)
+		}
+	}
+	for typ := range s.types {
+		delete(s.types, typ)
+	}
+}
+
 func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 	if schema == nil {
 		return ""

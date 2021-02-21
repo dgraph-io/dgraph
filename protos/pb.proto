@@ -165,6 +165,7 @@ message ZeroProposal {
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
 	// 12 has already been used.
+	DeleteNsRequest delete_ns = 13; // Used to delete namespace.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -551,6 +552,7 @@ service Zero {
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
+	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
 }
 
 service Worker {

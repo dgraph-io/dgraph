@@ -26,6 +26,7 @@ import (
 	"time"
 
 	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -589,6 +590,46 @@ func (s *Server) Connect(ctx context.Context,
 		Member: m,
 	}
 	return resp, nil
+}
+
+// DeleteNamespace removes the tablets for deleted namespace from the membership state.
+func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*pb.Status, error) {
+	state, err := s.latestMembershipState(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Propose the change within zero group.
+	if err := s.Node.proposeAndWait(ctx, &pb.ZeroProposal{DeleteNs: in}); err != nil {
+		return nil, err
+	}
+
+	// Send out the delete namespace request to the leaders of alpha groups.
+	g := new(errgroup.Group)
+	for gid := range state.Groups {
+		if gid == 0 {
+			continue
+		}
+		g.Go(func() error {
+			return x.RetryUntilSuccess(10, 10*time.Second, func() error {
+				pl := s.Leader(gid)
+				if pl == nil {
+					return errors.Errorf("Unable to reach leader of group: %d", gid)
+				}
+				wc := pb.NewWorkerClient(pl.Get())
+				req := &pb.DeleteNsRequest{GroupId: gid, Namespace: in.Namespace}
+				if _, err := wc.DeleteNamespace(ctx, req); err != nil {
+					return err
+				}
+				return nil
+			})
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, errors.Wrapf(err, "Failed to process delete request")
+	}
+	return &pb.Status{Code: 0, Msg: "Delete successful"}, nil
 }
 
 // ShouldServe returns the tablet serving the predicate passed in the request.
