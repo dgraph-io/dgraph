@@ -115,16 +115,6 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
-	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
-		Head("Badger options").
-		Flag("compression",
-			"Specifies the compression algorithm and compression level (if applicable) for the "+
-				`postings directory. "none" would disable compression, while "zstd:1" would set `+
-				"zstd compression at level 1.").
-		Flag("goroutines",
-			"The number of goroutines to use in badger.Stream.").
-		String())
-
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -151,6 +141,16 @@ they form a Raft group and provide synchronous replication.
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
+
+	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
+		Head("Badger options").
+		Flag("compression",
+			"Specifies the compression algorithm and compression level (if applicable) for the "+
+				`postings directory. "none" would disable compression, while "zstd:1" would set `+
+				"zstd compression at level 1.").
+		Flag("goroutines",
+			"The number of goroutines to use in badger.Stream.").
+		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
 		Head("Raft options").
