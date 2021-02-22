@@ -117,15 +117,25 @@ func init() {
 	flag.Uint64("force-namespace", math.MaxUint64,
 		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
-	// Options around how to set up Badger.
-	flag.String("badger", worker.BadgerDefaults,
-		`Various badger options.
-	compression=[none, zstd:level, snappy] specifies the compression algorithm and the compression
-		level (if applicable) for the postings directory. "none" would disable compression, while
-		"zstd:1" would set zstd compression at level 1.
-	cache_mb=N total size of cache (in MB) per shard in the reducer.
-	cache_percentage=N cache percentages summing up to 100 for various caches.
-		(FORMAT: BlockCacheSize, IndexCacheSize)`)
+	// Bulk has some extra defaults for Badger SuperFlag. These should only be applied in this
+	// package.
+	const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
+	flag.String("badger", worker.BadgerDefaults+bulkBadgerDefaults,
+		z.NewSuperFlagHelp(worker.BadgerDefaults+bulkBadgerDefaults).
+			Head("Badger options").
+			Flag("compression",
+				"Specifies the compression algorithm and compression level (if applicable) for the "+
+					`postings directory. "none" would disable compression, while "zstd:1" would set `+
+					"zstd compression at level 1.").
+			Flag("goroutines",
+				"The number of goroutines to use in badger.Stream.").
+			Flag("cache_mb",
+				"Total size of cache (in MB) per shard in the reducer.").
+			Flag("cache_percentage",
+				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
+					"IndexCacheSize)").
+			String())
+
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)

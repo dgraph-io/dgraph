@@ -117,10 +117,18 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
-	flag.StringVarP(&opt.badger, "badger", "b", "compression=snappy;",
-		"compression=[none, zstd:level, snappy] specifies the compression algorithm and the "+
-			"compression level (if applicable) for the postings directory. 'none' would disable "+
-			"compression, while 'zstd:1' would set zstd compression at level 1.")
+
+	flag.StringVarP(&opt.badger, "badger", "b", worker.BadgerDefaults,
+		z.NewSuperFlagHelp(worker.BadgerDefaults).
+			Head("Badger options").
+			Flag("compression",
+				"Specifies the compression algorithm and compression level (if applicable) for the "+
+					`postings directory. "none" would disable compression, while "zstd:1" would set `+
+					"zstd compression at level 1.").
+			Flag("goroutines",
+				"The number of goroutines to use in badger.Stream.").
+			String())
+
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
