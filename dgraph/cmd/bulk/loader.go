@@ -312,18 +312,13 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
-func parseGqlSchema(s string) map[uint64]string {
-	mp := make(map[uint64]string)
+func parseGqlSchema(s string) []x.ExportedGQLSchema {
 	var schemas []x.ExportedGQLSchema
 	if err := json.Unmarshal([]byte(s), &schemas); err != nil {
 		fmt.Println("Error while decoding the graphql schema. Assuming it to be in old format.")
-		mp[x.GalaxyNamespace] = s
-		return mp
+		return append(schemas, x.ExportedGQLSchema{Namespace: x.GalaxyNamespace, Schema: s})
 	}
-	for _, schema := range schemas {
-		mp[schema.Namespace] = schema.Schema
-	}
-	return mp
+	return schemas
 }
 
 func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
@@ -361,19 +356,14 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		"dgraph.graphql.schema": %s
 	}`
 
-	schemas := parseGqlSchema(string(buf))
-
-	for ns, schema := range schemas {
-		if ld.opt.Namespace != math.MaxUint64 {
-			ns = ld.opt.Namespace
-		}
+	process := func(ns uint64, schema string) {
 		// Ignore the schema if the namespace is not already seen.
 		if _, ok := ld.schema.namespaces.Load(ns); !ok {
 			fmt.Printf("No data exist for namespace: %d. Cannot load the graphql schema.", ns)
-			continue
+			return
 		}
 		gqlBuf := &bytes.Buffer{}
-		schema := strconv.Quote(schema)
+		schema = strconv.Quote(schema)
 		switch loadType {
 		case chunker.RdfFormat:
 			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, schema, ns))))
@@ -381,6 +371,22 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, schema))))
 		}
 		ld.readerChunkCh <- gqlBuf
+	}
+
+	schemas := parseGqlSchema(string(buf))
+	if ld.opt.Namespace != math.MaxUint64 && len(schemas) > 1 {
+		fmt.Printf("Found multiple GraphQL schemas.")
+		process(ld.opt.Namespace, schemas[0].Schema)
+	}
+
+	seen := make(map[uint64]struct{})
+	for _, schema := range schemas {
+		if _, ok := seen[schema.Namespace]; ok {
+			fmt.Printf("WARN: Already processed GraphQL schema for namespace %d.", schema.Namespace)
+			continue
+		}
+		seen[schema.Namespace] = struct{}{}
+		process(schema.Namespace, schema.Schema)
 	}
 }
 

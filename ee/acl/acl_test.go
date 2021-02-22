@@ -233,7 +233,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	resp := createUser(t, token, userid, userpassword)
 	require.Equal(t, 1, len(resp.Errors))
 	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
-		" alice already exists for type User", resp.Errors[0].Message)
+		" alice already exists for field name inside type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
@@ -2171,13 +2171,9 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	},
 	{
 		"predicate":"dgraph.graphql.p_query",
-		"type":"string"
-	},
-	{
-		"predicate":"dgraph.graphql.p_sha256hash",
 		"type":"string",
 		"index":true,
-		"tokenizer":["exact"]
+		"tokenizer":["sha256"]
 	},
     {
       "predicate": "dgraph.graphql.schema",
@@ -2250,9 +2246,6 @@ func TestSchemaQueryWithACL(t *testing.T) {
 		"fields": [
 			{
 				"name": "dgraph.graphql.p_query"
-			},
-			{
-				"name": "dgraph.graphql.p_sha256hash"
 			}
 		],
 		"name": "dgraph.graphql.persisted_query"

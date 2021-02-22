@@ -2,9 +2,23 @@
 # Input Schema
 #######################
 
-type Author @secret(field: "pwd") {
+type Post {
+	postID: ID
+	content: String!
+	author(filter: AuthorFilter): Author!
+	genre(filter: GenreFilter): Genre
+}
+
+type Author {
+	id: ID
+	name: String! @id @search(by: [regexp])
+	pen_name: String! @id
+	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	postsAggregate(filter: PostFilter): PostAggregateResult
+}
+
+type Genre {
 	name: String! @id
-	token: String
 }
 
 #######################
@@ -276,12 +290,22 @@ type AddAuthorPayload {
 	numUids: Int
 }
 
+type AddGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	numUids: Int
+}
+
+type AddPostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
+}
+
 type AuthorAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
-	tokenMin: String
-	tokenMax: String
+	pen_nameMin: String
+	pen_nameMax: String
 }
 
 type DeleteAuthorPayload {
@@ -290,8 +314,37 @@ type DeleteAuthorPayload {
 	numUids: Int
 }
 
+type DeleteGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	msg: String
+	numUids: Int
+}
+
+type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	msg: String
+	numUids: Int
+}
+
+type GenreAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+type PostAggregateResult {
+	count: Int
+	contentMin: String
+	contentMax: String
+}
+
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
@@ -301,12 +354,31 @@ type UpdateAuthorPayload {
 
 enum AuthorHasFilter {
 	name
-	token
+	pen_name
+	posts
 }
 
 enum AuthorOrderable {
 	name
-	token
+	pen_name
+}
+
+enum GenreHasFilter {
+	name
+}
+
+enum GenreOrderable {
+	name
+}
+
+enum PostHasFilter {
+	content
+	author
+	genre
+}
+
+enum PostOrderable {
+	content
 }
 
 #######################
@@ -315,12 +387,24 @@ enum AuthorOrderable {
 
 input AddAuthorInput {
 	name: String!
-	token: String
-	pwd: String!
+	pen_name: String!
+	posts: [PostRef]
+}
+
+input AddGenreInput {
+	name: String!
+}
+
+input AddPostInput {
+	content: String!
+	author: AuthorRef!
+	genre: GenreRef
 }
 
 input AuthorFilter {
-	name: StringHashFilter
+	id: [ID!]
+	name: StringHashFilter_StringRegExpFilter
+	pen_name: StringHashFilter
 	has: [AuthorHasFilter]
 	and: [AuthorFilter]
 	or: [AuthorFilter]
@@ -334,14 +418,65 @@ input AuthorOrder {
 }
 
 input AuthorPatch {
-	token: String
-	pwd: String
+	posts: [PostRef]
 }
 
 input AuthorRef {
+	id: ID
 	name: String
-	token: String
-	pwd: String
+	pen_name: String
+	posts: [PostRef]
+}
+
+input GenreFilter {
+	name: StringHashFilter
+	has: [GenreHasFilter]
+	and: [GenreFilter]
+	or: [GenreFilter]
+	not: GenreFilter
+}
+
+input GenreOrder {
+	asc: GenreOrderable
+	desc: GenreOrderable
+	then: GenreOrder
+}
+
+input GenreRef {
+	name: String!
+}
+
+input PostFilter {
+	postID: [ID!]
+	has: [PostHasFilter]
+	and: [PostFilter]
+	or: [PostFilter]
+	not: PostFilter
+}
+
+input PostOrder {
+	asc: PostOrderable
+	desc: PostOrderable
+	then: PostOrder
+}
+
+input PostPatch {
+	content: String
+	author: AuthorRef
+	genre: GenreRef
+}
+
+input PostRef {
+	postID: ID
+	content: String
+	author: AuthorRef
+	genre: GenreRef
+}
+
+input StringHashFilter_StringRegExpFilter {
+	eq: String
+	in: [String]
+	regexp: String
 }
 
 input UpdateAuthorInput {
@@ -350,15 +485,26 @@ input UpdateAuthorInput {
 	remove: AuthorPatch
 }
 
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PostPatch
+	remove: PostPatch
+}
+
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getAuthor(name: String!): Author
-	checkAuthorPassword(name: String!, pwd: String!): Author
+	getPost(postID: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	aggregatePost(filter: PostFilter): PostAggregateResult
+	getAuthor(id: ID, name: String, pen_name: String): Author
 	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	aggregateAuthor(filter: AuthorFilter): AuthorAggregateResult
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	aggregateGenre(filter: GenreFilter): GenreAggregateResult
 }
 
 #######################
@@ -366,8 +512,13 @@ type Query {
 #######################
 
 type Mutation {
+	addPost(input: [AddPostInput!]!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
 	addAuthor(input: [AddAuthorInput!]!, upsert: Boolean): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addGenre(input: [AddGenreInput!]!, upsert: Boolean): AddGenrePayload
+	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 

@@ -278,3 +278,50 @@
     - deletejson: |
         [{ "uid": "uid(x)"}]
 
+-
+  name: "delete with multiple id's"
+  gqlmutation: |
+    mutation deleteBook($filter: BookFilter!) {
+    	deleteBook(filter: $filter) {
+    		msg
+    	}
+    }
+  gqlvariables: |
+    {
+        "filter": {
+            "or": [
+                {
+                    "title": {
+                        "in": "Sapiens"
+                    }
+                },
+                {
+                    "ISBN": {
+                        "in": "2SB1Q"
+                    }
+                }
+            ]
+        }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+            {
+                "uid": "uid(x)"
+            },
+            {
+                "uid": "uid(author2)",
+                "author.book": [
+                    {
+                        "uid": "uid(x)"
+                    }
+                ]
+            }
+        ]
+  dgquery: |-
+    query {
+      x as deleteBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2SB1Q"))) {
+        uid
+        author2 as Book.author
+      }
+    }

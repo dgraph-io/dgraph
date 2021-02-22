@@ -648,8 +648,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			// Ignore this predicate.
 		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.p_sha256hash":
-			// Ignore this predicate.
 		case pk.IsData() && e.attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
@@ -679,8 +677,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				Namespace: e.namespace,
 				Schema:    string(val),
 			}
-
-			val, _ = json.Marshal(exported)
+			if val, err = json.Marshal(exported); err != nil {
+				return nil, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
+			}
 
 			kv := &bpb.KV{
 				Value:   val,
@@ -694,6 +693,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		case e.attr == "dgraph.cors":
 		case e.attr == "dgraph.graphql.schema_created_at":
 		case e.attr == "dgraph.graphql.schema_history":
+		case e.attr == "dgraph.graphql.p_sha256hash":
 			// Ignore these predicates.
 
 		case pk.IsData():
@@ -767,7 +767,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				separator = dataSeparator
 			case 2: // graphQL schema
 				writer = gqlSchemaWriter
-				separator = []byte(",\n")
+				separator = []byte(",\n") // use json separator.
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
@@ -873,6 +873,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
 		return nil, err
 	}
+
 	// Write the schema and types.
 	if err := writePrefix(x.ByteSchema); err != nil {
 		return nil, err

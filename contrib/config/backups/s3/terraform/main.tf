@@ -12,7 +12,7 @@ variable "create_dgraph_secrets" { default = true }
 # Bucket Module
 #####################################################################
 module "bucket" {
-  source       = "github.com/darkn3rd/s3-bucket"
+  source       = "github.com/darkn3rd/s3-bucket?ref=v1.0.0"
   name         = var.name
   user_enabled = var.user_enabled
 }

@@ -272,7 +272,7 @@ type Person1 {
   id: String! @id
   friends: [Person1] @hasInverse(field: friends)
   closeFriends: [Person1] @hasInverse(field: closeFriends)
-  name: String!
+  name: String! @id
 }
 
 type Comment1 {
@@ -382,6 +382,20 @@ type Node {
     name: String!
 }
 
+type Book {
+    id: ID!
+    publisher: String
+    title: String! @id
+    ISBN: String! @id
+    author: author
+
+}
+
+type author {
+    id: ID!
+    name: String!
+    book: [Book] @hasInverse(field: author)
+}
 # test for entities resolver
 
 type Mission @key(fields: "id") {

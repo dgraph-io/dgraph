@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -37,7 +38,8 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype options.CompressionType, clevel int) LoadResult {
+func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
+	ctype options.CompressionType, clevel int) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
 		return LoadResult{Err: err}
@@ -46,11 +48,10 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
-		func(r io.Reader, groupId uint32, preds predicateSet,
-			dropOperations []*pb.DropOperation) (uint64, uint64, error) {
+		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-			r, err := enc.GetReader(key, r)
+			r, err := enc.GetReader(key, in.r)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -81,12 +82,22 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-			maxUid, maxNsId, err := loadFromBackup(db, gzReader, 0, preds, dropOperations)
+			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
+				r: gzReader, restoreTs: 0, preds: in.preds, dropOperations: in.dropOperations,
+			})
 			if err != nil {
 				return 0, 0, err
 			}
 			return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
+}
+
+type loadBackupInput struct {
+	r              io.Reader
+	restoreTs      uint64
+	preds          predicateSet
+	dropOperations []*pb.DropOperation
+	isOld          bool
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
@@ -95,14 +106,13 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice, ctype
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet,
-	dropOperations []*pb.DropOperation) (uint64, uint64, error) {
-	br := bufio.NewReaderSize(r, 16<<10)
+func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) {
+	br := bufio.NewReaderSize(in.r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
 	// if there were any DROP operations that need to be applied before loading the backup into
 	// the db, then apply them here
-	if err := applyDropOperationsBeforeRestore(db, dropOperations); err != nil {
+	if err := applyDropOperationsBeforeRestore(db, in.dropOperations); err != nil {
 		return 0, 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
 	}
 
@@ -156,7 +166,7 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
-			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
 
@@ -170,8 +180,8 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.
-			if restoreTs > 0 && !parsedKey.IsSchema() && !parsedKey.IsType() {
-				kv.Version = restoreTs
+			if in.restoreTs > 0 && !parsedKey.IsSchema() && !parsedKey.IsType() {
+				kv.Version = in.restoreTs
 			}
 
 			switch kv.GetUserMeta()[0] {
@@ -218,6 +228,25 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				}
 
 			case posting.BitSchemaPosting:
+				appendNamespace := func() error {
+					// If the backup was taken on old version, we need to append the namespace to
+					// the fields of TypeUpdate.
+					var update pb.TypeUpdate
+					if err := update.Unmarshal(kv.Value); err != nil {
+						return err
+					}
+					for _, sch := range update.Fields {
+						sch.Predicate = x.GalaxyAttr(sch.Predicate)
+					}
+					kv.Value, err = update.Marshal()
+					return err
+				}
+				if in.isOld && parsedKey.IsType() {
+					if err := appendNamespace(); err != nil {
+						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
+						continue
+					}
+				}
 				// Schema and type keys are not stored in an intermediate format so their
 				// value can be written as is.
 				kv.Key = restoreKey
