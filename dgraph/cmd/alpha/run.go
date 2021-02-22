@@ -137,6 +137,9 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
+	flag.String("mutations", "allow",
+		"Set mutation mode to allow, disallow, or strict.")
+
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
