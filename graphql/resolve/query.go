@@ -112,37 +112,16 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		}
 	}
 
-	var qry string
-	vars := make(map[string]string)
-
-	// DQL queries don't need any rewriting, as they are already in DQL form
-	if query.QueryType() == schema.DQLQuery {
-		qry = query.DQLQuery()
-		args := query.Arguments()
-		for k, v := range args {
-			// dgoapi.Request{}.Vars accepts only string values for variables,
-			// so need to convert all variable values to string
-			vStr, err := convertScalarToString(v)
-			if err != nil {
-				return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string",
-					k))
-			}
-			// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
-			vars["$"+k] = vStr
-		}
-	} else {
-		dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
-		if err != nil {
-			return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
-				query.ResponseName()))
-		}
-		qry = dgraph.AsString(dgQuery)
+	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
+			query.ResponseName()))
 	}
+	qry := dgraph.AsString(dgQuery)
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, Vars: vars,
-		ReadOnly: true}, query)
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, ReadOnly: true}, query)
 	queryTimer.Stop()
 
 	if err != nil && !x.IsGqlErrorList(err) {
@@ -158,6 +137,89 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		Extensions: ext,
 	}
 
+	return resolved
+}
+
+func NewCustomDQLQueryResolver(ex DgraphExecutor) QueryResolver {
+	return &customDQLQueryResolver{executor: ex}
+}
+
+type customDQLQueryResolver struct {
+	executor DgraphExecutor
+}
+
+func (qr *customDQLQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveCustomDQLQuery")
+	defer stop()
+
+	resolverTrace := &schema.ResolverTrace{
+		Path:       []interface{}{query.ResponseName()},
+		ParentType: "Query",
+		FieldName:  query.ResponseName(),
+		ReturnType: query.Type().String(),
+	}
+	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
+	timer.Start()
+	defer timer.Stop()
+
+	resolved := qr.rewriteAndExecute(ctx, query)
+	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
+	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
+	return resolved
+}
+
+func (qr *customDQLQueryResolver) rewriteAndExecute(ctx context.Context,
+	query schema.Query) *Resolved {
+	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	ext := &schema.Extensions{
+		Tracing: &schema.Trace{
+			Execution: &schema.ExecutionTrace{
+				Resolvers: []*schema.ResolverTrace{
+					{Dgraph: []*schema.LabeledOffsetDuration{dgraphQueryDuration}},
+				},
+			},
+		},
+	}
+
+	emptyResult := func(err error) *Resolved {
+		resolved := EmptyResult(query, err)
+		resolved.Extensions = ext
+		return resolved
+	}
+
+	dgQuery := query.DQLQuery()
+	args := query.Arguments()
+	vars := make(map[string]string)
+	for k, v := range args {
+		// dgoapi.Request{}.Vars accepts only string values for variables,
+		// so need to convert all variable values to string
+		vStr, err := convertScalarToString(v)
+		if err != nil {
+			return emptyResult(schema.GQLWrapf(err, "couldn't convert argument %s to string", k))
+		}
+		// the keys in dgoapi.Request{}.Vars are assumed to be prefixed with $
+		vars["$"+k] = vStr
+	}
+
+	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+	queryTimer.Start()
+	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgQuery, Vars: vars,
+		ReadOnly: true}, nil)
+	queryTimer.Stop()
+
+	if err != nil {
+		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
+	}
+	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
+
+	var respJson map[string]interface{}
+	if err = schema.Unmarshal(resp.Json, &respJson); err != nil {
+		return emptyResult(schema.GQLWrapf(err, "couldn't unmarshal Dgraph result"))
+	}
+
+	resolved := DataResult(query, respJson, nil)
+	resolved.Extensions = ext
 	return resolved
 }
 

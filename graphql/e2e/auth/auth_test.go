@@ -130,6 +130,20 @@ type Column struct {
 	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
+type Country struct {
+	Id      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	States  []*State `json:"states,omitempty"`
+}
+
+type State struct {
+	Code    string   `json:"code,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	Country *Country `json:"country,omitempty"`
+}
+
 type Project struct {
 	ProjID  string    `json:"projID,omitempty"`
 	Name    string    `json:"name,omitempty"`
@@ -337,7 +351,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	require.Error(t, gqlResponse.Errors)
 	require.Equal(t, len(gqlResponse.Errors), 1)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"GraphQL debug: id already exists for type Tweets")
+		"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)

@@ -37,8 +37,7 @@ const (
 	otherInternalPreds = `
 {"predicate":"dgraph.type","type":"string","index":true,"tokenizer":["exact"],"list":true},
 {"predicate":"dgraph.drop.op", "type": "string"},
-{"predicate":"dgraph.graphql.p_query","type":"string"},
-{"predicate":"dgraph.graphql.p_sha256hash","type":"string","index":true,"tokenizer":["exact"]},
+{"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["sha256"]},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
@@ -59,7 +58,7 @@ const (
 	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
 	"name": "dgraph.graphql"
 },{
-	"fields": [{"name": "dgraph.graphql.p_query"},{"name": "dgraph.graphql.p_sha256hash"}],
+	"fields": [{"name": "dgraph.graphql.p_query"}],
 	"name": "dgraph.graphql.persisted_query"
 }
 `

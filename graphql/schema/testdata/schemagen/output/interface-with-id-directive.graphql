@@ -190,7 +190,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -471,7 +471,7 @@ type Query {
 
 type Mutation {
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [AddBookInput!]!): AddBookPayload
+	addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload

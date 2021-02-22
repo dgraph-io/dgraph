@@ -138,7 +138,7 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
-		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
+		if !pk.IsData() || !strings.HasPrefix(x.ParseAttr(pk.Attr), prefix) {
 			continue
 		}
 		if pk.IsSchema() {
@@ -280,7 +280,8 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		var acc *account
-		if strings.HasPrefix(pk.Attr, "key_") || strings.HasPrefix(pk.Attr, "amount_") {
+		attr := x.ParseAttr(pk.Attr)
+		if strings.HasPrefix(attr, "key_") || strings.HasPrefix(attr, "amount_") {
 			var has bool
 			acc, has = keys[pk.Uid]
 			if !has {
@@ -302,9 +303,9 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 		if num > 0 && acc != nil {
 			switch {
-			case strings.HasPrefix(pk.Attr, "key_"):
+			case strings.HasPrefix(attr, "key_"):
 				acc.Key = num
-			case strings.HasPrefix(pk.Attr, "amount_"):
+			case strings.HasPrefix(attr, "amount_"):
 				acc.Amt = num
 			}
 		}
@@ -909,7 +910,8 @@ func run() {
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key).
 		WithBlockCacheSize(1 << 30).
-		WithIndexCacheSize(1 << 30)
+		WithIndexCacheSize(1 << 30).
+		WithNamespaceOffset(x.NamespaceOffset) // We don't want to see the banned data.
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)

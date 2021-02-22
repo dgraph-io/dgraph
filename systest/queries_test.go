@@ -378,9 +378,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	  {
 		"predicate": "dgraph.graphql.p_query"
 	  },
-	  {
-		"predicate": "dgraph.graphql.p_sha256hash"
-	  },
       {
         "predicate": "dgraph.xid"
 	  },

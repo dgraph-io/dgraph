@@ -2569,7 +2569,6 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 }
 
 func TestCustomDQL(t *testing.T) {
-	t.Skipf("enable after fixing @custom(dql: ...)")
 	common.SafelyDropAll(t)
 
 	schema := `

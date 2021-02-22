@@ -304,7 +304,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 // If it can't make the assertion with enough retries, it fails the test.
 func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
 	var newCounter uint64
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if newCounter = RetryProbeGraphQL(t, authority,
 			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
@@ -889,6 +889,8 @@ func RunAll(t *testing.T) {
 	t.Run("cyclically linked mutation", cyclicMutation)
 	t.Run("parallel mutations", parallelMutations)
 	t.Run("input coercion to list", inputCoerciontoList)
+	t.Run("multiple external Id's tests", multipleXidsTests)
+	t.Run("Upsert Mutation Tests", upsertMutationTests)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
