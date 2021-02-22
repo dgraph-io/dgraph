@@ -9,6 +9,15 @@
       ]
     },
     {
+      "index": true,
+      "predicate": "Employer.company",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "predicate": "post1.author",
       "type": "uid"
     },
@@ -20,6 +29,28 @@
         "trigram"
       ],
       "type": "string",
+      "upsert": true
+    },
+    {
+      "predicate": "Worker.name",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Worker.emp_Id",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Worker.reg_No",
+      "tokenizer": [
+        "int"
+      ],
+      "type": "int",
       "upsert": true
     },
     {
@@ -49,6 +80,11 @@
         "int"
       ],
       "upsert": true
+    },
+    {
+      "list": true,
+      "predicate": "Employer.worker",
+      "type": "uid"
     },
     {
       "predicate": "Book.chapters",
@@ -874,6 +910,20 @@
     {
       "fields": [
         {
+          "name": "Worker.emp_Id"
+        },
+        {
+          "name": "Worker.reg_No"
+        },
+        {
+          "name": "Worker.name"
+        }
+      ],
+      "name": "Worker"
+    },
+    {
+      "fields": [
+        {
           "name": "Hotel.name"
         },
         {
@@ -1354,6 +1404,17 @@
         }
       ],
       "name": "test.dgraph.employee.en"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employer.company"
+        },
+        {
+          "name": "Employer.worker"
+        }
+      ],
+      "name": "Employer"
     }
   ]
 }

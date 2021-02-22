@@ -9,6 +9,15 @@
       ]
     },
     {
+      "index": true,
+      "predicate": "Employer.company",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "predicate": "post1.author",
       "type": "uid"
     },
@@ -326,6 +335,28 @@
       "list": true
     },
     {
+      "predicate": "Worker.name",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Worker.emp_Id",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Worker.reg_No",
+      "tokenizer": [
+        "int"
+      ],
+      "type": "int",
+      "upsert": true
+    },
+    {
       "predicate": "Movie.name",
       "type": "string"
     },
@@ -602,6 +633,11 @@
       "list": true
     },
     {
+      "list": true,
+      "predicate": "Employer.worker",
+      "type": "uid"
+    },
+    {
       "predicate": "Teacher.subject",
       "type": "string"
     },
@@ -829,6 +865,20 @@
         }
       ],
       "name": "Cheetah"
+    },
+    {
+      "fields": [
+        {
+          "name": "Worker.emp_Id"
+        },
+        {
+          "name": "Worker.reg_No"
+        },
+        {
+          "name": "Worker.name"
+        }
+      ],
+      "name": "Worker"
     },
     {
       "fields": [
@@ -1354,6 +1404,17 @@
         }
       ],
       "name": "author1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employer.company"
+        },
+        {
+          "name": "Employer.worker"
+        }
+      ],
+      "name": "Employer"
     }
   ]
 }

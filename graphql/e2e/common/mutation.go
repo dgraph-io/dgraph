@@ -2918,7 +2918,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"because id cal already exists for type State")
+		" because id cal already exists for field xcode inside type State")
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, 1, nil)
@@ -5318,110 +5318,110 @@ func inputCoerciontoList(t *testing.T) {
 	}{
 		{name: "Coercion of Scalar value at root to list ",
 			query: ` mutation {
-						addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
-							post1 {
-								title
-								commentsByMonth
-							}
-						}
-					}`,
+	                   addpost1(input: { title: "GraphQL", commentsByMonth: 1 }) {
+	                   	post1 {
+	                   		title
+	                   		commentsByMonth
+	                   	}
+	                   }
+                    }`,
 			expected: `{
-							"addpost1": {
-								"post1": [
-            						{
-               							 "title": "GraphQL",
-                						"commentsByMonth": [
-											1
-                						]
-            						}
-        						]
-    						}
-						}`,
+                         "addpost1": {
+                             "post1": [
+                                 {
+                                     "title": "GraphQL",
+                                     "commentsByMonth": [
+                                         1
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
 		},
 		{name: "Coercion of Scalar value at root to list using variables",
 			query: ` mutation($post1: [Addpost1Input!]!) {
-						addpost1(input: $post1) {
-							post1 {
-								title
-								commentsByMonth
-							}
-						}
-					}`,
+                    	addpost1(input: $post1) {
+                    		post1 {
+                    			title
+                    			commentsByMonth
+                    		}
+                    	}
+                   }`,
 			expected: `{
-							"addpost1": {
-        						"post1": [
-            						{
-                						"title": "Dgraph",
-										"commentsByMonth": [
-                    						1
-										]
-          							  }
-        						]
-    						}
-						}`,
+                          "addpost1": {
+                              "post1": [
+                                  {
+                                      "title": "Dgraph",
+                                      "commentsByMonth": [
+                                          1
+                                      ]
+                                  }
+                              ]
+                          }
+                       }`,
 			variables: `{"post1": {"title":"Dgraph","commentsByMonth":1}}`,
 		},
 		{name: "Coercing nested scalar value to list ",
 			query: ` mutation {
-						addauthor1(
-							input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
-						) {
-							author1 {
-								name
-								posts {
-									title
-									commentsByMonth
-								}
-							}
-						}
+	                      addauthor1(
+	                      	input: { name: "Jack", posts: { title: "RDBMS", commentsByMonth: 1 } }
+	                      ) {
+	                      	author1 {
+	                      		name
+	                      		posts {
+	                      			title
+	                      			commentsByMonth
+	                      		}
+	                      	}
+	                      }
 					}`,
 			expected: `{
-							"addauthor1": {
-       	 						"author1": [
-            						{
-                						"name": "Jack",
-                						"posts": [
-                    						{
-                        						"title": "RDBMS",
-                        						"commentsByMonth": [
-                            						1
-                        						]
-                    						}
-                						]
-            						}
-        						]
-    						}
-						}`,
+                         "addauthor1": {
+                             "author1": [
+                                 {
+                                     "name": "Jack",
+                                     "posts": [
+                                         {
+                                             "title": "RDBMS",
+                                             "commentsByMonth": [
+                                                 1
+                                             ]
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+					}`,
 		},
 		{name: "Coercing nested scalar value to list using variables",
 			query: `mutation($author: [Addauthor1Input!]!) {
-						addauthor1(input: $author) {
-							author1 {
-								name
-								posts {
-									title
-									commentsByMonth
-								}
-							}
-						}
-					}`,
+	                    addauthor1(input: $author) {
+	                    	author1 {
+	                    		name
+	                    		posts {
+	                    			title
+	                    			commentsByMonth
+	                    		}
+	                    	}
+	                    }
+                     }`,
 			expected: `{
-    						"addauthor1": {
-        						"author1": [
-            						{
-                						"name": "Jackob",
-                						"posts": [
-                    						{
-                        						"title": "DB",
-                        						"commentsByMonth": [
-                            						1
-                        						]
-                    						}
-										]
-            						}
-        						]
-    						}
-						}`,
+                         "addauthor1": {
+                             "author1": [
+                                 {
+                                     "name": "Jackob",
+                                     "posts": [
+                                         {
+                                             "title": "DB",
+                                             "commentsByMonth": [
+                                                 1
+                                             ]
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
 			variables: `{"author": {"name": "Jackob","posts":{"title":"DB","commentsByMonth":1}}}`,
 		},
 	}
@@ -5448,6 +5448,404 @@ func inputCoerciontoList(t *testing.T) {
 	posts1DeleteFilter := map[string]interface{}{"title": map[string]interface{}{"in": []string{"Dgraph", "GraphQL", "RDBMS", "DB"}}}
 	DeleteGqlType(t, "post1", posts1DeleteFilter, 4, nil)
 
+}
+
+func multipleXidsTests(t *testing.T) {
+	tcases := []struct {
+		name      string
+		query     string
+		expected  string
+		variables string
+		error     string
+	}{
+		{
+			name: "add worker with multiple xids",
+			query: `mutation {
+	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
+	                  	worker {
+	                  		name
+	                  		reg_No
+	                  		emp_Id
+	                  	}
+	                  }
+                    }`,
+			expected: `{
+                         "addWorker": {
+                             "worker": [
+                                 {
+                                     "name": "Alice",
+                                     "reg_No": 1,
+                                     "emp_Id": "E01"
+                                 }
+                             ]
+                         }
+                      }`,
+		},
+		{
+			name: "adding worker with same reg_No will return error",
+			query: `mutation {
+	                   addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E012" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
+                    }`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
+		},
+		{
+			name: "adding worker with same emp_Id will return error",
+			query: `mutation {
+	                   addWorker(input: [{ name: "Alice", reg_No: 2, emp_Id: "E01" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
+                    }`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+		},
+		{
+			name: "adding worker with same reg_No and emp_id will return error",
+			query: `mutation {
+	                  addWorker(input: [{ name: "Alice", reg_No: 1, emp_Id: "E01" }]) {
+	                  	worker {
+	                  		name
+	                  		reg_No
+	                  		emp_Id
+	                  	}
+	                  }
+                  }`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+		},
+		{
+			name: "adding worker with different reg_No and emp_id will succeed",
+			query: `mutation {
+	                   addWorker(input: [{ name: "Bob", reg_No: 2, emp_Id: "E02" }]) {
+	                   	worker {
+	                   		name
+	                   		reg_No
+	                   		emp_Id
+	                   	}
+	                   }
+					}`,
+			expected: `{
+                         "addWorker": {
+                             "worker": [
+                                 {
+                                     "name": "Bob",
+                                     "reg_No": 2,
+                                     "emp_Id": "E02"
+                                 }
+                             ]
+                         }
+                    }`,
+		},
+		{
+			name: "adding worker with same reg_No and emp_id at deeper level will add reference",
+			query: `mutation {
+	                    addEmployer(
+	                    	input: [
+	                    		{ company: "Dgraph", worker: { name: "Bob", reg_No: 2, emp_Id: "E02" } }
+	                    	]
+	                    ) {
+	                    	employer {
+	                    		company
+	                    		worker {
+	                    			name
+	                    			reg_No
+	                    			emp_Id
+	                    		}
+	                    	}
+	                    }
+                     }`,
+			expected: `{
+                          "addEmployer": {
+                              "employer": [
+                                  {
+                                      "company": "Dgraph",
+                                      "worker": [
+                                          {
+                                              "name": "Bob",
+                                              "reg_No": 2,
+                                              "emp_Id": "E02"
+                                          }
+                                      ]
+                                  }
+                              ]
+                          }
+                       }`,
+		},
+		{
+			name: "adding worker with different reg_No and emp_id at deep level will add new node",
+			query: `mutation {
+	                  addEmployer(input: [{ company: "GraphQL", worker: { name: "Jack", reg_No: 3, emp_Id: "E03" } }]) {
+	                  	employer {
+							company
+	                  		worker {
+	                  			name
+	                  			reg_No
+	                  			emp_Id
+	                  		}
+	                  	}
+	                  }
+					}`,
+			expected: `{
+                         "addEmployer": {
+                             "employer": [
+                                 {   "company": "GraphQL",
+                                     "worker": [
+                                         {
+                                             "name": "Jack",
+                                             "reg_No": 3,
+                                             "emp_Id": "E03"
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
+		},
+		{
+			name: "adding worker with same reg_No but different emp_id at deep level will add reference",
+			query: `mutation {
+	                  addEmployer(input: [{ company: "Slash", worker: { reg_No: 3, emp_Id: "E04" } }]) {
+	                  	employer {
+							company	
+	                  		worker {
+	                  			name
+	                  			reg_No
+	                  			emp_Id
+	                  		}
+	                  	}
+	                  }
+					}`,
+			expected: `{
+                         "addEmployer": {
+                             "employer": [
+                                 {   "company":"Slash",
+                                     "worker": [
+                                         {
+                                             "name": "Jack",
+                                             "reg_No": 3,
+                                             "emp_Id": "E03"
+                                         }
+                                     ]
+                                 }
+                             ]
+                         }
+                      }`,
+		},
+		{
+			name: "get query with multiple Id's",
+			query: `query {
+	                  getWorker(reg_No: 2, emp_Id: "E02") {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with reg_no",
+			query: `query {
+	                  getWorker(reg_No: 2) {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with emp_Id",
+			query: `query {
+	                  getWorker(emp_Id: "E02") {
+	                  	name
+	                  	reg_No
+	                  	emp_Id
+	                  }
+                   }`,
+			expected: `{
+                          "getWorker": {
+                              "emp_Id": "E02",
+                              "name": "Bob",
+                              "reg_No": 2
+                          }
+                      }`,
+		},
+		{
+			name: "query with multiple Id's using filters",
+			query: `query {
+	                   queryWorker(
+	                   	filter: { or: [{ reg_No: { in: 2 } }, { emp_Id: { in: "E01" } }] }
+	                   ) {
+	                   	name
+	                   	reg_No
+	                   	emp_Id
+	                   }
+					}`,
+			expected: `{
+                         "queryWorker": [
+                             {
+                                 "emp_Id": "E02",
+                                 "name": "Bob",
+                                 "reg_No": 2
+                             },
+                             {
+                                 "emp_Id": "E01",
+                                 "name": "Alice",
+                                 "reg_No": 1
+                             }
+                         ]
+						}`,
+		},
+		{
+			name: "single level update mutation with multiple Id's",
+			query: `mutation updateWorker($patch: UpdateWorkerInput!) {
+	                  updateWorker(input: $patch) {
+	                  	worker {
+	                  		emp_Id
+	                  		name
+	                  		reg_No
+	                  	}
+	                  }
+                   }`,
+			expected: `{
+                        "updateWorker": {
+                            "worker": [
+                                {
+                                    "emp_Id": "E01",
+                                    "name": "Jacob",
+                                    "reg_No": 1
+                                },
+                                {
+                                    "emp_Id": "E02",
+                                    "name": "Jacob",
+                                    "reg_No": 2
+                                }
+                            ]
+                        }
+                     }`,
+			variables: `{
+                          "patch": {
+                              "filter": {"or": [
+                                      {
+                                          "reg_No": {"in": 1
+                                          }
+                                      },
+                                      {
+                                          "emp_Id": {"in": "E02"
+                                          }
+                                      }
+                                  ]
+                              },
+                              "set": {
+                                  "name": "Jacob"
+                              }
+                          }
+                        }`,
+		},
+		{
+			name: "Deep level update mutation with multiple Id's",
+			query: `mutation {
+	                   updateEmployer(
+	                   	input: {
+	                   		filter: { company: { in: "GraphQL" } }
+	                   		set: { worker: { name: "Leo", emp_Id: "E06", reg_No: 6 } }
+	                   	}
+	                   ) {
+	                   	employer {
+	                   		company
+	                   		worker {
+	                   			emp_Id
+	                   			name
+	                   			reg_No
+	                   		}
+	                   	}
+	                   }
+                    }`,
+			expected: `{
+                     "updateEmployer": {
+                         "employer": [
+                             {
+                                 "company": "GraphQL",
+                                 "worker": [
+                                     {
+                                         "emp_Id": "E06",
+                                         "name": "Leo",
+                                         "reg_No": 6
+                                     },
+                                     {
+                                         "emp_Id": "E03",
+                                         "name": "Jack",
+                                         "reg_No": 3
+                                     }
+                                 ]
+                             }
+                         ]
+                     }
+                  }`,
+		},
+		{
+			name: "Deep level update mutation return error when some xids are missing while creating new node using set",
+			query: `mutation {
+	                   updateEmployer(
+	                   	input: {
+	                   		filter: { company: { in: "GraphQL" } }
+	                   		set: { worker: { name: "Leo", emp_Id: "E07" } }
+	                   	}
+	                   ) {
+	                   	employer {
+	                   		company
+	                   		worker {
+	                   			emp_Id
+	                   			name
+	                   			reg_No
+	                   		}
+	                   	}
+	                   }
+                     }`,
+			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			require.Equal(t, tcase.error, resp.Errors.Error())
+			if tcase.error == "" {
+				testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+			}
+
+		})
+	}
+	filter := map[string]interface{}{"reg_No": map[string]interface{}{"in": []int{1, 2, 3, 6}}}
+	DeleteGqlType(t, "Worker", filter, 4, nil)
 }
 
 func upsertMutationTests(t *testing.T) {
@@ -5505,8 +5903,8 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload "+
-		"because id S1 already exists for type State", gqlResponse.Errors[0].Error())
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
+		gqlResponse.Errors[0].Error())
 
 	// Add Mutation with upsert true should succeed. It should link the state to
 	// existing country

@@ -233,7 +233,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	resp := createUser(t, token, userid, userpassword)
 	require.Equal(t, 1, len(resp.Errors))
 	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
-		" alice already exists for type User", resp.Errors[0].Message)
+		" alice already exists for field name inside type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
