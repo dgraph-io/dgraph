@@ -375,6 +375,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 
 	schemas := parseGqlSchema(string(buf))
 	if ld.opt.Namespace != math.MaxUint64 && len(schemas) > 1 {
+		// We expect only a single GraphQL schema when loading into specfic namespace.
 		fmt.Printf("Found multiple GraphQL schemas.")
 		process(ld.opt.Namespace, schemas[0].Schema)
 	}
