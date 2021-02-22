@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dgraph-io/dgraph/worker"
 	"go.uber.org/zap"
 	"log"
 	"math"
