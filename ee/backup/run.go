@@ -16,9 +16,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -335,9 +335,15 @@ func runExportBackup() error {
 		return err
 	}
 
-	exporter := worker.BackupExporter{}
-	if strings.HasPrefix(opt.location, "s3://") {
-		return exporter.S3.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+	uri, err := url.Parse(opt.location)
+	if err != nil {
+		return err
 	}
-	return exporter.File.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+
+	exporter, err := worker.NewUriHandler(uri, nil)
+	if err != nil {
+		return err
+	}
+
+	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }

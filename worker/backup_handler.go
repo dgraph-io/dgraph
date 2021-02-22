@@ -98,6 +98,10 @@ type UriHandler interface {
 	// ReadManifest will read the manifest at the given location and load it into the given
 	// Manifest object.
 	ReadManifest(string, *Manifest) error
+
+	// ExportBackup takes the backup location and then export the data into the specified format
+	// in the exportDir.
+	ExportBackup(location, exportDir, format string, key x.SensitiveByteSlice) error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.

@@ -41,13 +41,6 @@ type fileHandler struct {
 	fp *os.File
 }
 
-// BackupExporter is an alias of fileHandler so that this struct can be used
-// by the export_backup command.
-type BackupExporter struct {
-	File fileHandler
-	S3   s3Handler
-}
-
 // readManifest reads a manifest file at path using the handler.
 // Returns nil on success, otherwise an error.
 func (h *fileHandler) readManifest(path string, m *Manifest) error {
