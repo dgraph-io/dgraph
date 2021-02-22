@@ -2633,10 +2633,6 @@ func getPredicatesFromTypes(namespace uint64, typeNames []string) []string {
 		}
 
 		for _, field := range typeDef.Fields {
-			// Do not return reverse edges.
-			if len(field.Predicate) > 0 && field.Predicate[0] == '~' {
-				continue
-			}
 			preds = append(preds, field.Predicate)
 		}
 	}
