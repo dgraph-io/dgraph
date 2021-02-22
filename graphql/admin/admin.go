@@ -327,6 +327,14 @@ var (
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
+	// guardianOfTheGalaxyMutaionWithAclMWs are the middlewares which should be applied to mutations
+	// served by the admin server for guardian of galaxy with ACL enabled.
+	guardianOfTheGalaxyMutaionWithAclMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation,
+		resolve.AclOnlyMW4Mutation,
+		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
+		resolve.LoggingMWMutation,
+	}
 	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
 	// server unless some exceptional behaviour is required
 	commonAdminQueryMWs = resolve.QueryMiddlewares{
@@ -364,9 +372,9 @@ var (
 		"restore":         guardianOfTheGalaxyMutationMWs,
 		"shutdown":        guardianOfTheGalaxyMutationMWs,
 		"updateGQLSchema": commonAdminMutationMWs,
-		"addNamespace":    guardianOfTheGalaxyMutationMWs,
-		"deleteNamespace": guardianOfTheGalaxyMutationMWs,
-		"resetPassword":   guardianOfTheGalaxyMutationMWs,
+		"addNamespace":    guardianOfTheGalaxyMutaionWithAclMWs,
+		"deleteNamespace": guardianOfTheGalaxyMutaionWithAclMWs,
+		"resetPassword":   guardianOfTheGalaxyMutaionWithAclMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
