@@ -112,6 +112,10 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 		}
 
 		for _, pred := range preds {
+			// Do not return reverse edges.
+			if x.ParseAttr(pred)[0] == '~' {
+				continue
+			}
 			edgeCopy := *edge
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)
