@@ -165,7 +165,8 @@ func ShouldCrash(err error) bool {
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
-		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED")
+		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED") ||
+		strings.Contains(errStr, "ENTERPRISE_ONLY_LEARNER")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.

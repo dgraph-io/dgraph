@@ -583,18 +583,18 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the servers.
-	admin.ServerCloser.AddRunning(3)
-	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
+	x.ServerCloser.AddRunning(3)
+	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	go func() {
-		defer admin.ServerCloser.Done()
+		defer x.ServerCloser.Done()
 
-		<-admin.ServerCloser.HasBeenClosed()
+		<-x.ServerCloser.HasBeenClosed()
 		// TODO - Verify why do we do this and does it have to be done for all namespaces.
 		e = globalEpoch[x.GalaxyNamespace]
 		atomic.StoreUint64(e, math.MaxUint64)
@@ -612,7 +612,7 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
-	admin.ServerCloser.Wait()
+	x.ServerCloser.Wait()
 }
 
 func run() {
@@ -797,7 +797,7 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
-			closer := admin.ServerCloser
+			closer := x.ServerCloser
 			select {
 			case <-closer.HasBeenClosed():
 			default:
