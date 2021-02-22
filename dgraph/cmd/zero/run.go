@@ -100,24 +100,25 @@ instances to achieve high-availability.
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options (defaults shown):").
 		Flag("idx",
-			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
+			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
-				`in Raft elections. This can be used to achieve a read-only replica.`).
+				"in Raft elections. This can be used to achieve a read-only replica.").
 		String())
 
-	flag.String("audit", "compress=false;", z.NewSuperFlagHelp("compress=false;").
-		Head("Audit options (defaults shown):").
+	const auditDefaults = "compress=false;"
+	flag.String("audit", auditDefaults, z.NewSuperFlagHelp(auditDefaults).
+		Head("Audit options").
 		Flag("dir",
-			`The path where audit logs will be stored.`).
+			"The path where audit logs will be stored.").
 		Flag("compress",
-			`Enables the compression of old audit logs.`).
+			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
-			`The path to the key file to be used for audit log encryption.`).
+			"The path to the key file to be used for audit log encryption.").
 		Flag("days",
-			`The number of days audit logs will be preserved.`).
+			"The number of days audit logs will be preserved.").
 		Flag("size",
-			`The audit log max size in MB after which it will be rolled over.`).
+			"The audit log max size in MB after which it will be rolled over.").
 		String())
 }
 

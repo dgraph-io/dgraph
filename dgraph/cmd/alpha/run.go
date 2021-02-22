@@ -149,28 +149,28 @@ they form a Raft group and provide synchronous replication.
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
 		Head("Raft options").
 		Flag("idx",
-			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
+			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
 		Flag("group",
-			`Provides an optional Raft Group ID that this Alpha would indicate to Zero to join.`).
+			"Provides an optional Raft Group ID that this Alpha would indicate to Zero to join.").
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
-				`in Raft elections. This can be used to achieve a read-only replica.`).
+				"in Raft elections. This can be used to achieve a read-only replica.").
 		Flag("snapshot-after",
-			`Create a new Raft snapshot after N number of Raft entries. The lower this number, `+
-				`the more frequent snapshot creation will be.`).
+			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
+				"the more frequent snapshot creation will be.").
 		Flag("pending-proposals",
-			`Number of pending mutation proposals. Useful for rate limiting.`).
+			"Number of pending mutation proposals. Useful for rate limiting.").
 		String())
 
 	flag.String("security", worker.SecurityDefaults, z.NewSuperFlagHelp(worker.SecurityDefaults).
 		Head("Security options").
 		Flag("token",
-			`If set, all Admin requests to Dgraph will need to have this token. The token can be `+
-				`passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, `+
-				`in auth-token key in the context.`).
+			"If set, all Admin requests to Dgraph will need to have this token. The token can be "+
+				"passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, "+
+				"in auth-token key in the context.").
 		Flag("whitelist",
-			`A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish `+
-				`to whitelist for performing admin actions (i.e., --security `+
+			"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish "+
+				"to whitelist for performing admin actions (i.e., --security "+
 				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.`+
 				`internal").`).
 		String())
@@ -178,75 +178,75 @@ they form a Raft group and provide synchronous replication.
 	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
 		Head("[Enterprise Feature] ACL options").
 		Flag("secret-file",
-			`The file that stores the HMAC secret, which is used for signing the JWT and `+
-				`should have at least 32 ASCII characters. Required to enable ACLs.`).
+			"The file that stores the HMAC secret, which is used for signing the JWT and "+
+				"should have at least 32 ASCII characters. Required to enable ACLs.").
 		Flag("access-ttl",
-			`The TTL for the access JWT.`).
+			"The TTL for the access JWT.").
 		Flag("refresh-ttl",
-			`The TTL for the refresh JWT.`).
+			"The TTL for the refresh JWT.").
 		String())
 
 	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
 		Head("Limit options").
 		Flag("query-edge",
-			`The maximum number of edges that can be returned in a query. This applies to shortest `+
-				`path and recursive queries.`).
+			"The maximum number of edges that can be returned in a query. This applies to shortest "+
+				"path and recursive queries.").
 		Flag("normalize-node",
-			`The maximum number of nodes that can be returned in a query that uses the normalize `+
-				`directive.`).
+			"The maximum number of nodes that can be returned in a query that uses the normalize "+
+				"directive.").
 		Flag("mutations-nquad",
-			`The maximum number of nquads that can be inserted in a mutation request.`).
+			"The maximum number of nquads that can be inserted in a mutation request.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
 		Head("Ludicrous options").
 		Flag("enabled",
-			`Run Dgraph in Ludicrous mode.`).
+			"Run Dgraph in Ludicrous mode.").
 		Flag("concurrency",
-			`The number of concurrent threads to use in Ludicrous mode.`).
+			"The number of concurrent threads to use in Ludicrous mode.").
 		String())
 
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
 		Head("GraphQL options").
 		Flag("introspection",
-			`Enables GraphQL schema introspection.`).
+			"Enables GraphQL schema introspection.").
 		Flag("debug",
-			`Enables debug mode in GraphQL. This returns auth errors to clients, and we do not `+
-				`recommend turning it on for production.`).
+			"Enables debug mode in GraphQL. This returns auth errors to clients, and we do not "+
+				"recommend turning it on for production.").
 		Flag("extensions",
-			`Enables extensions in GraphQL response body.`).
+			"Enables extensions in GraphQL response body.").
 		Flag("poll-interval",
-			`The polling interval for GraphQL subscription.`).
+			"The polling interval for GraphQL subscription.").
 		Flag("lambda-url",
-			`The URL of a lambda server that implements custom GraphQL Javascript resolvers.`).
+			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
 		String())
 
 	flag.String("cdc", "", z.NewSuperFlagHelp("").
 		Head("Change Data Capture options").
 		Flag("file",
-			`The path where audit logs will be stored.`).
+			"The path where audit logs will be stored.").
 		Flag("kafka",
-			`A comma separated list of Kafka hosts.`).
+			"A comma separated list of Kafka hosts.").
 		Flag("sasl-user",
-			`The SASL username for Kafka.`).
+			"The SASL username for Kafka.").
 		Flag("sasl-password",
-			`The SASL password for Kafka.`).
+			"The SASL password for Kafka.").
 		Flag("ca-cert",
-			`The path to CA cert file for TLS encryption.`).
+			"The path to CA cert file for TLS encryption.").
 		Flag("client-cert",
-			`The path to client cert file for TLS encryption.`).
+			"The path to client cert file for TLS encryption.").
 		Flag("client-key",
-			`The path to client key file for TLS encryption.`).
+			"The path to client key file for TLS encryption.").
 		String())
 
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
 		Flag("dir",
-			`The path where audit logs will be stored.`).
+			"The path where audit logs will be stored.").
 		Flag("compress",
-			`Enables the compression of old audit logs.`).
+			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
-			`The path to the key file to be used for audit log encryption.`).
+			"The path to the key file to be used for audit log encryption.").
 		String())
 }
 
