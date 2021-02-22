@@ -618,10 +618,8 @@ func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*
 				}
 				wc := pb.NewWorkerClient(pl.Get())
 				req := &pb.DeleteNsRequest{GroupId: gid, Namespace: in.Namespace}
-				if _, err := wc.DeleteNamespace(ctx, req); err != nil {
-					return err
-				}
-				return nil
+				_, err := wc.DeleteNamespace(ctx, req)
+				return err
 			})
 		})
 	}

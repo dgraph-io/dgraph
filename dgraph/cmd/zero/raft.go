@@ -322,16 +322,16 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
-func (n *node) deleteNamespace(namespace uint64) error {
+func (n *node) deleteNamespace(delNs uint64) error {
 	n.server.AssertLock()
 	state := n.server.state
-	glog.Infof("Deleting namespace %d", namespace)
+	glog.Infof("Deleting namespace %d", delNs)
 	defer n.regenerateChecksum()
 
 	for _, group := range state.Groups {
 		for pred := range group.Tablets {
 			ns := x.ParseNamespace(pred)
-			if ns == namespace {
+			if ns == delNs {
 				delete(group.Tablets, pred)
 			}
 		}

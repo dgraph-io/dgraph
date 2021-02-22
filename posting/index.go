@@ -1249,6 +1249,6 @@ func DeletePredicate(ctx context.Context, attr string) error {
 
 // DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
 func DeleteNamespace(ns uint64) error {
-	schema.State().DeleteNamespace(ns)
+	schema.State().DeletePredsForNs(ns)
 	return pstore.BanNamespace(ns)
 }

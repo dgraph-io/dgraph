@@ -40,8 +40,6 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 		return conn.ErrNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
-	if _, err := zc.DeleteNamespace(gr.Ctx(), &pb.DeleteNsRequest{Namespace: ns}); err != nil {
-		return err
-	}
-	return nil
+	_, err := zc.DeleteNamespace(gr.Ctx(), &pb.DeleteNsRequest{Namespace: ns})
+	return err
 }
