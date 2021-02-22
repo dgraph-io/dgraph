@@ -1194,7 +1194,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.Ludicrous.GetBool("enabled") {
+		if x.WorkerConfig.LudicrousEnabled {
 			req.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			start := time.Now()
@@ -1252,7 +1252,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
-	if x.WorkerConfig.Ludicrous.GetBool("enabled") {
+	if x.WorkerConfig.LudicrousEnabled {
 		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{

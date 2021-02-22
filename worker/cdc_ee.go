@@ -67,7 +67,7 @@ func newCDC() *CDC {
 	if Config.ChangeDataConf == "" {
 		return nil
 	}
-	if x.WorkerConfig.Ludicrous.GetBool("enabled") {
+	if x.WorkerConfig.LudicrousEnabled {
 		x.Fatalf("cdc is not supported in ludicrous mode")
 	}
 

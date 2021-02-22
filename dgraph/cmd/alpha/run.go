@@ -163,7 +163,7 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	flag.String("security", "", z.NewSuperFlagHelp(worker.SecurityDefaults).
-		Head("Security options (defaults shown):").
+		Head("Security options (defaults shown)").
 		Flag("token",
 			`If set, all Admin requests to Dgraph will need to have this token. The token can be `+
 				`passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, `+
@@ -175,8 +175,8 @@ they form a Raft group and provide synchronous replication.
 				`internal").`).
 		String())
 
-	flag.String("acl", "", z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("[Enterprise Feature] ACL options (defaults shown):").
+	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
+		Head("[Enterprise Feature] ACL options (defaults shown)").
 		Flag("secret-file",
 			`The file that stores the HMAC secret, which is used for signing the JWT and `+
 				`should have at least 32 ASCII characters. Required to enable ACLs.`).

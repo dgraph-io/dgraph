@@ -130,9 +130,8 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
 	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
-	if w.Ludicrous.GetBool("enabled") {
+	if w.LudicrousEnabled {
 		w.HardSync = false
-
 	} else {
 		survive := conf.GetString("survive")
 		AssertTruef(survive == "process" || survive == "filesystem",
