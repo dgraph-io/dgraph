@@ -146,8 +146,8 @@ they form a Raft group and provide synchronous replication.
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
-	flag.String("raft", "", z.NewSuperFlagHelp(worker.RaftDefaults).
-		Head("Raft options (defaults shown):").
+	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
+		Head("Raft options").
 		Flag("idx",
 			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
 		Flag("group",
@@ -162,8 +162,8 @@ they form a Raft group and provide synchronous replication.
 			`Number of pending mutation proposals. Useful for rate limiting.`).
 		String())
 
-	flag.String("security", "", z.NewSuperFlagHelp(worker.SecurityDefaults).
-		Head("Security options (defaults shown)").
+	flag.String("security", worker.SecurityDefaults, z.NewSuperFlagHelp(worker.SecurityDefaults).
+		Head("Security options").
 		Flag("token",
 			`If set, all Admin requests to Dgraph will need to have this token. The token can be `+
 				`passed as follows: for HTTP requests, in the X-Dgraph-AuthToken header. For Grpc, `+
@@ -176,7 +176,7 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("[Enterprise Feature] ACL options (defaults shown)").
+		Head("[Enterprise Feature] ACL options").
 		Flag("secret-file",
 			`The file that stores the HMAC secret, which is used for signing the JWT and `+
 				`should have at least 32 ASCII characters. Required to enable ACLs.`).
@@ -186,8 +186,8 @@ they form a Raft group and provide synchronous replication.
 			`The TTL for the refresh JWT.`).
 		String())
 
-	flag.String("limit", "", z.NewSuperFlagHelp(worker.LimitDefaults).
-		Head("Limit options (defaults shown):").
+	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
+		Head("Limit options").
 		Flag("query-edge",
 			`The maximum number of edges that can be returned in a query. This applies to shortest `+
 				`path and recursive queries.`).
@@ -198,16 +198,16 @@ they form a Raft group and provide synchronous replication.
 			`The maximum number of nquads that can be inserted in a mutation request.`).
 		String())
 
-	flag.String("ludicrous", "", z.NewSuperFlagHelp(worker.LudicrousDefaults).
-		Head("Ludicrous options (defaults shown):").
+	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
+		Head("Ludicrous options").
 		Flag("enabled",
 			`Run Dgraph in Ludicrous mode.`).
 		Flag("concurrency",
 			`The number of concurrent threads to use in Ludicrous mode.`).
 		String())
 
-	flag.String("graphql", "", z.NewSuperFlagHelp(worker.GraphQLDefaults).
-		Head("GraphQL options (defaults shown):").
+	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
+		Head("GraphQL options").
 		Flag("introspection",
 			`Enables GraphQL schema introspection.`).
 		Flag("debug",
@@ -222,7 +222,7 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	flag.String("cdc", "", z.NewSuperFlagHelp("").
-		Head("Change Data Capture options (defaults shown):").
+		Head("Change Data Capture options").
 		Flag("file",
 			`The path where audit logs will be stored.`).
 		Flag("kafka",
@@ -240,7 +240,7 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	flag.String("audit", "", z.NewSuperFlagHelp("").
-		Head("Audit options (defaults shown):").
+		Head("Audit options").
 		Flag("dir",
 			`The path where audit logs will be stored.`).
 		Flag("compress",

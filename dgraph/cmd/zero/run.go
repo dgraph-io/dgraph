@@ -97,7 +97,7 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
-	flag.String("raft", "", z.NewSuperFlagHelp(raftDefaults).
+	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options (defaults shown):").
 		Flag("idx",
 			`Provides an optional Raft ID that this Alpha would use to join Raft groups.`).
@@ -106,7 +106,7 @@ instances to achieve high-availability.
 				`in Raft elections. This can be used to achieve a read-only replica.`).
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp("compress=false;").
+	flag.String("audit", "compress=false;", z.NewSuperFlagHelp("compress=false;").
 		Head("Audit options (defaults shown):").
 		Flag("dir",
 			`The path where audit logs will be stored.`).

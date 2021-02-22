@@ -46,7 +46,7 @@ const (
 
 // RegisterServerTLSFlags registers the required flags to set up a TLS server.
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", "", z.NewSuperFlagHelp(TLSServerDefaults).
+	flag.String("tls", TLSServerDefaults, z.NewSuperFlagHelp(TLSServerDefaults).
 		Head("TLS Server options (defaults shown):").
 		Flag("cacert",
 			`The CA cert file used to verify server certificates. Required for enabling TLS.`).
@@ -71,7 +71,7 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", "", z.NewSuperFlagHelp(TLSClientDefaults).
+	flag.String("tls", TLSClientDefaults, z.NewSuperFlagHelp(TLSClientDefaults).
 		Head("TLS Client options (defaults shown):").
 		Flag("cacert",
 			`The CA cert file used to verify server certificates. Required for enabling TLS.`).

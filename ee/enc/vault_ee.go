@@ -37,7 +37,7 @@ const (
 // RegisterVaultFlags registers the required flags to integrate with Vault.
 func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
-	flag.String("vault", "", z.NewSuperFlagHelp(VaultDefaults).
+	flag.String("vault", VaultDefaults, z.NewSuperFlagHelp(VaultDefaults).
 		Head("Vault options (defaults shown):").
 		Flag("addr",
 			"Vault server address in the form of http://ip:port").

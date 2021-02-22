@@ -34,7 +34,7 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	//
 	// datadog: See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
 	//          about the status of supporting annotation logs through the datadog exporter
-	flag.String("trace", "", z.NewSuperFlagHelp(TraceDefaults).
+	flag.String("trace", TraceDefaults, z.NewSuperFlagHelp(TraceDefaults).
 		Head("Trace options (defaults shown):").
 		Flag("ratio",
 			"The ratio of queries to trace.").
