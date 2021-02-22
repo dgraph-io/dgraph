@@ -898,8 +898,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 					return nil, nil
 				}
 			}
-		} else {
-			glog.Info("skipping slash star")
 		}
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
