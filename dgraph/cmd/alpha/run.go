@@ -115,8 +115,6 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
-	enc.RegisterFlags(flag)
-
 	// Snapshot and Transactions.
 	flag.String("abort_older_than", "5m",
 		"Abort any pending transactions older than this duration. The liveness of a"+
