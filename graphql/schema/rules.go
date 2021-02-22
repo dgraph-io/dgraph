@@ -682,13 +682,9 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 
 func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 	var idFields []*ast.FieldDefinition
-	var idDirectiveFields []*ast.FieldDefinition
 	for _, field := range typ.Fields {
 		if isIDField(typ, field) {
 			idFields = append(idFields, field)
-		}
-		if d := field.Directives.ForName(idDirective); d != nil {
-			idDirectiveFields = append(idDirectiveFields, field)
 		}
 	}
 
@@ -700,21 +696,6 @@ func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 				"but a type can have only one ID field. "+
 				"Pick a single field as the ID for type %s.",
 			fieldNamesString, typ.Name, typ.Name,
-		)
-
-		errs = append(errs, &gqlerror.Error{
-			Message:   errMessage,
-			Locations: errLocations,
-		})
-	}
-
-	if len(idDirectiveFields) > 1 {
-		fieldNamesString, errLocations := collectFieldNames(idDirectiveFields)
-		errMessage := fmt.Sprintf(
-			"Type %s: fields %s have the @id directive, "+
-				"but a type can have only one field with @id. "+
-				"Pick a single field with @id for type %s.",
-			typ.Name, fieldNamesString, typ.Name,
 		)
 
 		errs = append(errs, &gqlerror.Error{

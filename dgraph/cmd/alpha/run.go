@@ -115,11 +115,17 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
-	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
+	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
+		Head("Badger options").
+		Flag("compression",
+			"Specifies the compression algorithm and compression level (if applicable) for the "+
+				`postings directory. "none" would disable compression, while "zstd:1" would set `+
+				"zstd compression at level 1.").
+		Flag("goroutines",
+			"The number of goroutines to use in badger.Stream.").
+		String())
+
+	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
 	flag.String("abort_older_than", "5m",
@@ -615,18 +621,18 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the servers.
-	admin.ServerCloser.AddRunning(3)
-	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
+	x.ServerCloser.AddRunning(3)
+	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	go func() {
-		defer admin.ServerCloser.Done()
+		defer x.ServerCloser.Done()
 
-		<-admin.ServerCloser.HasBeenClosed()
+		<-x.ServerCloser.HasBeenClosed()
 		// TODO - Verify why do we do this and does it have to be done for all namespaces.
 		e = globalEpoch[x.GalaxyNamespace]
 		atomic.StoreUint64(e, math.MaxUint64)
@@ -644,7 +650,7 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
-	admin.ServerCloser.Wait()
+	x.ServerCloser.Wait()
 }
 
 func run() {
@@ -675,7 +681,9 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
@@ -760,6 +768,7 @@ func run() {
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
+		Badger:              badger,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -835,7 +844,7 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
-			closer := admin.ServerCloser
+			closer := x.ServerCloser
 			select {
 			case <-closer.HasBeenClosed():
 			default:

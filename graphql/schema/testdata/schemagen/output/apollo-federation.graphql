@@ -750,13 +750,13 @@ type Mutation {
 	addSchool(input: [AddSchoolInput!]!): AddSchoolPayload
 	updateSchool(input: UpdateSchoolInput!): UpdateSchoolPayload
 	deleteSchool(filter: SchoolFilter!): DeleteSchoolPayload
-	addCountry(input: [AddCountryInput!]!): AddCountryPayload
+	addCountry(input: [AddCountryInput!]!, upsert: Boolean): AddCountryPayload
 	updateCountry(input: UpdateCountryInput!): UpdateCountryPayload
 	deleteCountry(filter: CountryFilter!): DeleteCountryPayload
 	addProduct(input: [AddProductInput!]!): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

@@ -116,9 +116,8 @@ func TestBackupMultiTenancy(t *testing.T) {
 	restored := runRestore(t, copyBackupDir, "", math.MaxUint64, []uint64{x.GalaxyNamespace, ns})
 
 	preds := []string{"dgraph.graphql.schema", "name", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op", "dgraph.xid",
-		"dgraph.acl.rule", "dgraph.password", "dgraph.user.group", "dgraph.rule.predicate",
-		"dgraph.rule.permission"} // ACL
+		"dgraph.graphql.p_query", "dgraph.drop.op", "dgraph.xid", "dgraph.acl.rule",
+		"dgraph.password", "dgraph.user.group", "dgraph.rule.predicate", "dgraph.rule.permission"}
 	preds = append(preds, preds...)
 	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query",
 		"dgraph.type.Rule", "dgraph.type.User", "dgraph.type.Group"} // ACL

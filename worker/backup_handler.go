@@ -17,9 +17,11 @@ import (
 	"io"
 	"net/url"
 	"sort"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pkg/errors"
 )
@@ -98,19 +100,6 @@ type UriHandler interface {
 	ReadManifest(string, *Manifest) error
 }
 
-// getHandler returns a UriHandler for the URI scheme.
-func getHandler(scheme string, creds *x.MinioCredentials) UriHandler {
-	switch scheme {
-	case "file", "":
-		return &fileHandler{}
-	case "minio", "s3":
-		return &s3Handler{
-			creds: creds,
-		}
-	}
-	return nil
-}
-
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
 // If the passed credentials are not nil, they will be used to override the
 // default credentials (only for backups to minio or S3).
@@ -137,12 +126,14 @@ func getHandler(scheme string, creds *x.MinioCredentials) UriHandler {
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
 func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return nil, errors.Errorf("Unable to handle url: %s", uri)
+	switch uri.Scheme {
+	case "file", "":
+		return &fileHandler{}, nil
+	case "minio", "s3":
+		return NewS3Handler(uri, creds)
 	}
+	return nil, errors.Errorf("Unable to handle url: %s", uri)
 
-	return h, nil
 }
 
 // loadFn is a function that will receive the current file being read.
@@ -159,8 +150,8 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCrede
 		return LoadResult{Err: err}
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
@@ -175,9 +166,9 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 		return err
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return errors.Errorf("Unsupported URI: %v", uri)
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return errors.Wrap(err, "VerifyBackup")
 	}
 
 	return h.Verify(uri, req, currentGroups)
@@ -190,9 +181,9 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manif
 		return nil, err
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return nil, errors.Errorf("Unsupported URI: %v", uri)
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return nil, errors.Wrap(err, "ListBackupManifests")
 	}
 
 	paths, err := h.ListManifests(uri)
@@ -200,17 +191,32 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manif
 		return nil, err
 	}
 
-	listedManifests := make(map[string]*Manifest)
-	for _, path := range paths {
-		var m Manifest
-		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, errors.Wrapf(err, "While reading %q", path)
-		}
-		m.Path = path
-		listedManifests[path] = &m
+	res := struct {
+		sync.Mutex
+		listedManifests map[string]*Manifest
+	}{
+		listedManifests: make(map[string]*Manifest),
 	}
 
-	return listedManifests, nil
+	var g errgroup.Group
+	for _, path := range paths {
+		path := path // https://golang.org/doc/faq#closures_and_goroutines
+		g.Go(func() error {
+			var m Manifest
+			if err := h.ReadManifest(path, &m); err != nil {
+				return errors.Wrapf(err, "ReadManifest: path=%q", path)
+			}
+			m.Path = path
+			res.Lock()
+			res.listedManifests[path] = &m
+			res.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return res.listedManifests, nil
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests

@@ -480,7 +480,7 @@ type Mutation {
 	addTodo(input: [AddTodoInput!]!): AddTodoPayload
 	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
 	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

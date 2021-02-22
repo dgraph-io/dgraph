@@ -37,6 +37,7 @@ const (
 	RaftDefaults      = `snapshot-after=10000; pending-proposals=256; learner=false;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
 	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
+	BadgerDefaults    = `compression=snappy; goroutines=8;`
 )
 
 // ServerState holds the state of the Dgraph server.
@@ -117,6 +118,7 @@ func (s *ServerState) initStorage() {
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
+			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
 			WithNamespaceOffset(x.NamespaceOffset)

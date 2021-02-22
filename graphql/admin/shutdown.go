@@ -21,20 +21,14 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-)
-
-var (
-	// ServerCloser is used to signal and wait for other goroutines to return gracefully after user
-	// requests shutdown.
-	ServerCloser = z.NewCloser(0)
 )
 
 func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got shutdown request through GraphQL admin API")
 
-	ServerCloser.Signal()
+	x.ServerCloser.Signal()
 
 	return resolve.DataResult(
 		m,

@@ -43,7 +43,7 @@ This will create an S3 bucket and an IAM user that has access to that bucket.  F
 
 * `../s3.env` - used to demonstrate or test dgraph backups with s3 bucket in local docker environment
 * `../env.sh`- destination string to use trigger backups from the command line or to configure Kubernetes cron jobs to schedule backups
-* `../charts/dgraph_secrets.yaml` - used to deploy degraph with support for backups
+* `../charts/dgraph_secrets.yaml` - used to deploy Dgraph with support for backups
 
 ```bash
 ## get a list of changes that will be made

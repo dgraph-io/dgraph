@@ -1,4 +1,4 @@
-# Binary Backups to S3
+# Binary backups to S3
 
 Binary backups can use AWS S3 (Simple Storage Service) for an object storage.
 
@@ -6,9 +6,9 @@ Binary backups can use AWS S3 (Simple Storage Service) for an object storage.
 
 Some example scripts have been provided to illustrate how to create S3.
 
-* [Terraform](terraform/README.md) - terraform scripts to provision S3 bucket and an IAM user with access to the bucket.
+* [Terraform](terraform/README.md) - terraform scripts to provision S3 bucket and an IAM user with access to the S3 bucket.
 
-## Setting up the Environment
+## Setting up the environment
 
 ### Prerequisites
 
@@ -48,7 +48,7 @@ docker-compose up --detach
 
 * Ratel UI: http://localhost:8000
 
-#### Clean Up Docker Environment
+#### Clean up the Docker Environment
 
 ```bash
 docker-compose stop
@@ -59,7 +59,7 @@ docker-compose rm
 
 For Kubernetes, you can deploy a Dgraph cluster and a Kubernetes Cronjob that triggers backups using [Helm](https://helm.sh/docs/intro/install/).
 
-#### Configuring Secrets Values
+#### Configuring secrets values
 
 These values are automatically created if you used the [Terraform](terraform/README.md) scripts.  
 
@@ -86,20 +86,20 @@ We need to define one environment variable `BACKUP_PATH`.  If [Terraform](terraf
 export BACKUP_PATH=s3://s3.<region>.amazonaws.com/<s3-bucket-name>
 ```
 
-#### Deploy Using Helmfile
+#### Deploy using Helmfile
 
 If you have [helmfile](https://github.com/roboll/helmfile#installation) and the [helm-diff](https://github.com/databus23/helm-diff) plugin installed, you can deploy a Dgraph cluster with the following:
 
 ```bash
-## source script for envvar BACKUP_PATH
+## source script for BACKUP_PATH env var 
 . env.sh
  ## deploy Dgraph cluster and configure K8S CronJob with BACKUP_PATH
 helmfile apply
 ```
-#### Deploy Using Helm
+#### Deploy using Helm
 
 ```bash
-## source script for envvar BACKUP_PATH
+## source script for BACKUP_PATH env var
 . env.sh
 ## deploy Dgraph cluster and configure K8S CronJob with BACKUP_PATH
 helm repo add "dgraph" https://charts.dgraph.io
@@ -111,7 +111,7 @@ helm install "my-release" \
   dgraph/dgraph
 ```
 
-#### Access Resources
+#### Access resources
 
 For Dgraph Alpha, you can use this to access it at http://localhost:8080:
 
@@ -137,12 +137,12 @@ export RATEL_POD_NAME=$(
 kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
-#### Cleanup Kubernetes Environment
+#### Cleanup the Kubernetes environment
 
 If you are using `helmfile`, you can delete the resources with:
 
 ```bash
-## source script for envvar BACKUP_PATH
+## source script for BACKUP_PATH env var
 . env.sh
 helmfile delete
 kubectl delete pvc --selector release=my-release # release dgraph name specified in charts/helmfile.yaml
@@ -155,7 +155,7 @@ helm delete my-release --namespace default "my-release" # dgraph release name us
 kubectl delete pvc --selector release=my-release # dgraph release name used earlier
 ```
 
-## Triggering a Backup
+## Triggering a backup
 
 This is run from the host with the alpha node accessible on localhost at port `8080`.  This can can be done by running the `docker-compose` environment, or in the Kubernetes environment, after running `kubectl --namespace default port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
 
@@ -164,7 +164,7 @@ This is run from the host with the alpha node accessible on localhost at port `8
 For versions of Dgraph that support GraphQL, you can use this:
 
 ```bash
-## source script for envvar BACKUP_PATH
+## source script for BACKUP_PATH env var
 . env.sh
 ## endpoint of alpha1 container
 ALPHA_HOST="localhost"
@@ -195,7 +195,7 @@ This should return a response in JSON that will look like this if successful:
 For earlier Dgraph versions that support the REST admin port, you can do this:
 
 ```bash
-## source script for envvar BACKUP_PATH
+## source script for BACKUP_PATH env var
 . env.sh
 ## endpoint of alpha1 container
 ALPHA_HOST="localhost"

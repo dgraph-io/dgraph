@@ -638,19 +638,6 @@ invalid_schemas:
       ]
 
   -
-    name: "Field with multiple @id directives should not be allowed"
-    input: |
-      type X {
-        f1: String! @id
-        f2: String! @id
-      }
-    errlist: [
-      {"message": "Type X: fields f1 and f2 have the @id directive, but a type can
-        have only one field with @id. Pick a single field with @id for type X.",
-      "locations":[{"line":2, "column":3},{"line":3, "column":3}]}
-      ]
-
-  -
     name: "Dgraph directive with wrong argument produces an error"
     input: |
       type X {
@@ -2793,6 +2780,13 @@ invalid_schemas:
       ]
 
 valid_schemas:
+  - name: "Multiple fields with @id directive should be allowed"
+    input: |
+      type X {
+        f1: String! @id
+        f2: String! @id
+      }
+
   - name: "Type implements from two interfaces where both have ID"
     input: |
       interface X {
