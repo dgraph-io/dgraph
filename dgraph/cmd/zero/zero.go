@@ -610,14 +610,14 @@ func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*
 		if gid == 0 {
 			continue
 		}
+		req := &pb.DeleteNsRequest{GroupId: gid, Namespace: in.Namespace}
 		g.Go(func() error {
 			return x.RetryUntilSuccess(10, 10*time.Second, func() error {
-				pl := s.Leader(gid)
+				pl := s.Leader(req.GroupId)
 				if pl == nil {
-					return errors.Errorf("Unable to reach leader of group: %d", gid)
+					return errors.Errorf("Unable to reach leader of group: %d", req.GroupId)
 				}
 				wc := pb.NewWorkerClient(pl.Get())
-				req := &pb.DeleteNsRequest{GroupId: gid, Namespace: in.Namespace}
 				_, err := wc.DeleteNamespace(ctx, req)
 				return err
 			})
