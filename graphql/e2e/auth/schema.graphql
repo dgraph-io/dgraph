@@ -864,6 +864,7 @@ interface Animal {
 
 type Dog implements Animal {
     breed: String @search
+    eats: [DogFood!]
 }
 
 type Parrot implements Animal {
@@ -879,24 +880,42 @@ type Plant {
     breed: String # field with same name as a field in type Dog
 }
 
+union DogFood = Parrot | Plant
+
 union HomeMember = Dog | Parrot | Plant
 
 type Home @auth(
-    # only return homes with a Dog or Plant member
-    query: { rule: """
+    # only return homes with either:
+    # 1. a Dog member which has something to eat
+    # 2. or a Plant member
+    query: { or: [ {rule: """
+    query {
+        queryHome @cascade(fields: ["members"]) {
+            members(filter: {memberTypes: [Dog]}) @cascade {
+                ... on Dog {
+                    eats {
+                        ... on Parrot {
+                            id
+                        }
+                        ... on Plant {
+                            id
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """}, {rule: """
     query {
         queryHome {
-            members {
-                ... on Dog {
-                    breed
-                }
+            members(filter: {memberTypes: [Plant]}) {
                 ... on Plant {
                     breed
                 }
             }
         }
     }
-    """}
+    """}]}
 ) {
     id: ID!
     address: String
