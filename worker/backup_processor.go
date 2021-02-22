@@ -37,11 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	// backupNumGo is the number of go routines used by the backup stream writer.
-	backupNumGo = 16
-)
-
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
@@ -68,7 +63,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, backupNumGo),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
 	}
 	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
@@ -151,7 +146,6 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	stream.NumGo = backupNumGo
 	// Ignore versions less than given sinceTs timestamp, or skip older versions of
 	// the given key by returning an empty list.
 	// Do not do this for schema and type keys. Those keys always have a

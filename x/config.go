@@ -80,6 +80,8 @@ type WorkerOptions struct {
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
 	Raft *z.SuperFlag
+	// Badger stores options related to Badger.
+	Badger *z.SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// MaxRetries is the maximum number of times to retry a commit before giving up.

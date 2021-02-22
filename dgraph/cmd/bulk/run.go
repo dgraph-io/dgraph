@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
@@ -116,22 +117,34 @@ func init() {
 	flag.Uint64("force-namespace", math.MaxUint64,
 		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
-	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
-	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "70,30",
-		"Cache percentages summing up to 100 for various caches"+
-			" (FORMAT: BlockCacheSize, IndexCacheSize).")
+	// Bulk has some extra defaults for Badger SuperFlag. These should only be applied in this
+	// package.
+	const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
+	flag.String("badger", worker.BadgerDefaults+bulkBadgerDefaults,
+		z.NewSuperFlagHelp(worker.BadgerDefaults+bulkBadgerDefaults).
+			Head("Badger options").
+			Flag("compression",
+				"Specifies the compression algorithm and compression level (if applicable) for the "+
+					`postings directory. "none" would disable compression, while "zstd:1" would set `+
+					"zstd compression at level 1.").
+			Flag("goroutines",
+				"The number of goroutines to use in badger.Stream.").
+			Flag("cache-mb",
+				"Total size of cache (in MB) per shard in the reducer.").
+			Flag("cache-percentage",
+				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
+					"IndexCacheSize)").
+			String())
+
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
 
 func run() {
-	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
+	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -170,9 +183,9 @@ func run() {
 		os.Exit(0)
 	}
 
-	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
+	totalCache := int64(badger.GetUint64("cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache_percentage"), 2)
+	cachePercent, err := x.GetCachePercentages(badger.GetString("cache-percentage"), 2)
 	x.Check(err)
 	totalCache <<= 20 // Convert to MB.
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
