@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	FlagDefaults         = "compress=false; days=10; size=100;"
+	FlagDefaults         = "dir=; encrypt-file=; compress=false; days=10; size=100;"
 	defaultAuditFilename = "dgraph_audit.log"
 )
 
