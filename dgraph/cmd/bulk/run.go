@@ -129,9 +129,9 @@ func init() {
 					"zstd compression at level 1.").
 			Flag("goroutines",
 				"The number of goroutines to use in badger.Stream.").
-			Flag("cache_mb",
+			Flag("cache-mb",
 				"Total size of cache (in MB) per shard in the reducer.").
-			Flag("cache_percentage",
+			Flag("cache-percentage",
 				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
 					"IndexCacheSize)").
 			String())
@@ -183,9 +183,9 @@ func run() {
 		os.Exit(0)
 	}
 
-	totalCache := int64(badger.GetUint64("cache_mb"))
+	totalCache := int64(badger.GetUint64("cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	cachePercent, err := x.GetCachePercentages(badger.GetString("cache_percentage"), 2)
+	cachePercent, err := x.GetCachePercentages(badger.GetString("cache-percentage"), 2)
 	x.Check(err)
 	totalCache <<= 20 // Convert to MB.
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
