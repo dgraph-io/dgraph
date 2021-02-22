@@ -643,6 +643,17 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
+func (s *Server) RemoveAlphaNode(ctx context.Context, member *pb.Member) (*pb.Status, error) {
+	glog.Info("Zero server RemoveAlphaNode() invoked start")
+
+	err := s.removeNode(ctx, member.Id, member.GroupId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.Status{Code: 0}, nil
+}
+
 // UpdateMembership updates the membership of the given group.
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
 	// Only Zero leader would get these membership updates.

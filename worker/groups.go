@@ -153,6 +153,8 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
+
+	gr.Node.forceNewCluster = x.WorkerConfig.ForceNewCluster
 	gr.Node.InitAndStartNode()
 
 	gr.closer = z.NewCloser(3) // Match CLOSER:1 in this file.

@@ -551,6 +551,7 @@ service Zero {
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
+	rpc RemoveAlphaNode (Member)       returns (Status) {}
 }
 
 service Worker {
