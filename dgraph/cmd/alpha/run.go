@@ -777,6 +777,7 @@ func run() {
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
+	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

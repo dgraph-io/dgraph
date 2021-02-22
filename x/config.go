@@ -37,6 +37,7 @@ type Options struct {
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
 	Limit               *z.SuperFlag
 	LimitMutationsNquad int
+	LimitQueryEdge      uint64
 	// GraphQL options:
 	//
 	// extension bool - Will be set to see extensions in GraphQL results
