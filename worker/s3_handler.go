@@ -385,6 +385,8 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 			}
 
 			_, err = exportInternal(context.Background(), req, db, true)
+			// It is important to close the db before sending err to ch. Else, we will see a memory
+			// leak.
 			db.Close()
 			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 		}(f)

@@ -99,7 +99,7 @@ type UriHandler interface {
 	// Manifest object.
 	ReadManifest(string, *Manifest) error
 
-	// ExportBackup takes the backup location and then export the data into the specified format
+	// ExportBackup takes the backup location and export the data into the specified format
 	// in the exportDir.
 	ExportBackup(location, exportDir, format string, key x.SensitiveByteSlice) error
 }

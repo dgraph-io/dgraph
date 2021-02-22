@@ -681,8 +681,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			return listWrap(kv), nil
 		// dgraph.cors attribute has been made part of graphql schema from version 21.03.
-		// If found, then it means they are being migrated from version < 21.03 and that's
-		// all the preds are collected here and then exported in the graphql schema itself.
+		// If found, then it means they are being migrated from version < 21.03. dgraph.cors
+		// preds will be collected here and then exported in the graphql schema itself.
 		case e.attr == "dgraph.cors":
 			// add all cors to the graphql schema
 			pl, err := posting.ReadPostingList(key, itr)
@@ -884,7 +884,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	if len(corsVals) > 0 {
-		if string(corsVals[0].Value.([]byte)) != "*" {
+		isStarAll := len(corsVals) == 1 && string(corsVals[0].Value.([]byte)) == "*"
+		if !isStarAll {
 			_, err := gqlSchemaWriter.gw.Write([]byte(
 				"\n\n\n# Below schema elements will only work for dgraph" +
 					" versions >= 21.03. In older versions it will be ignored."))
