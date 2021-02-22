@@ -680,10 +680,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				Version: 2, // GraphQL schema value
 			}
 			return listWrap(kv), nil
-
-		// below predicates no longer exist internally starting v21.03 but leaving them here
-		// so that users with a binary with version >= 21.03 can export data from a version < 21.03
-		// without this internal data showing up.
+		// dgraph.cors attribute has been made part of graphql schema from version 21.03.
+		// If found, then it means they are being migrated from version < 21.03 and that's
+		// all the preds are collected here and then exported in the graphql schema itself.
 		case e.attr == "dgraph.cors":
 			// add all cors to the graphql schema
 			pl, err := posting.ReadPostingList(key, itr)
@@ -699,6 +698,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 			corsVals = append(corsVals, vals...)
 			return nil, nil
+
+		// below predicates no longer exist internally starting v21.03 but leaving them here
+		// so that users with a binary with version >= 21.03 can export data from a version < 21.03
+		// without this internal data showing up.
 		case e.attr == "dgraph.graphql.schema_created_at":
 		case e.attr == "dgraph.graphql.schema_history":
 			// Ignore these predicates.
@@ -881,19 +884,22 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	if len(corsVals) > 0 {
-		_, err := gqlSchemaWriter.gw.Write([]byte(
-			"\n\n\n# Below schema elements will only work for dgraph" +
-				" versions greater than 21.03. " +
-				"Below this information will be ignored in older versions. "))
-		if err != nil {
-			return nil, err
-		}
-		for _, val := range corsVals {
-			if _, err := gqlSchemaWriter.gw.Write([]byte(
-				fmt.Sprintf("\n# Dgraph.Allow-Origin \"%s\"",
-					string(val.Value.([]byte))))); err != nil {
-				return nil, nil
+		if string(corsVals[0].Value.([]byte)) != "*" {
+			_, err := gqlSchemaWriter.gw.Write([]byte(
+				"\n\n\n# Below schema elements will only work for dgraph" +
+					" versions >= 21.03. In older versions it will be ignored."))
+			if err != nil {
+				return nil, err
 			}
+			for _, val := range corsVals {
+				if _, err := gqlSchemaWriter.gw.Write([]byte(
+					fmt.Sprintf("\n# Dgraph.Allow-Origin \"%s\"",
+						string(val.Value.([]byte))))); err != nil {
+					return nil, nil
+				}
+			}
+		} else {
+			glog.Info("skipping slash star")
 		}
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
