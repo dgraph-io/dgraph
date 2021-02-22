@@ -15,6 +15,12 @@ import (
 	"github.com/soheilhy/cmux"
 )
 
+var (
+	// ServerCloser is used to signal and wait for other goroutines to return gracefully after user
+	// requests shutdown.
+	ServerCloser = z.NewCloser(0)
+)
+
 func StartListenHttpAndHttps(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	defer closer.Done()
 	m := cmux.New(l)
