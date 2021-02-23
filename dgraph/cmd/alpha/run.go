@@ -246,7 +246,9 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	flag.String("audit", audit.FlagDefaults, z.NewSuperFlagHelp(audit.FlagDefaults).
+	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
+	//       option (from audit.FlagDefaults)
+	flag.String("audit", "", z.NewSuperFlagHelp(audit.FlagDefaults).
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
