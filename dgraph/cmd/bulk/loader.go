@@ -312,13 +312,22 @@ func (ld *loader) mapStage() {
 	ld.xids = nil
 }
 
-func parseGqlSchema(s string) []x.ExportedGQLSchema {
+func parseGqlSchema(s string) map[uint64]string {
 	var schemas []x.ExportedGQLSchema
 	if err := json.Unmarshal([]byte(s), &schemas); err != nil {
-		fmt.Println("Error while decoding the graphql schema. Assuming it to be in old format.")
-		return append(schemas, x.ExportedGQLSchema{Namespace: x.GalaxyNamespace, Schema: s})
+		fmt.Println("Error while decoding the graphql schema. Assuming it to be in format < 21.03.")
+		return map[uint64]string{x.GalaxyNamespace: s}
 	}
-	return schemas
+
+	schemaMap := make(map[uint64]string)
+	for _, schema := range schemas {
+		if _, ok := schemaMap[schema.Namespace]; ok {
+			fmt.Printf("Found multiple GraphQL schema for namespace %d.", schema.Namespace)
+			continue
+		}
+		schemaMap[schema.Namespace] = schema.Schema
+	}
+	return schemaMap
 }
 
 func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
@@ -374,21 +383,30 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	}
 
 	schemas := parseGqlSchema(string(buf))
-	if ld.opt.Namespace != math.MaxUint64 && len(schemas) > 1 {
-		// We expect only a single GraphQL schema when loading into specfic namespace.
-		fmt.Printf("Found multiple GraphQL schemas.")
-		process(ld.opt.Namespace, schemas[0].Schema)
+	if ld.opt.Namespace == math.MaxUint64 {
+		// Preserve the namespace.
+		for ns, schema := range schemas {
+			process(ns, schema)
+		}
+		return
 	}
 
-	seen := make(map[uint64]struct{})
-	for _, schema := range schemas {
-		if _, ok := seen[schema.Namespace]; ok {
-			fmt.Printf("WARN: Already processed GraphQL schema for namespace %d.", schema.Namespace)
-			continue
+	switch len(schemas) {
+	case 0: // Nothing to do.
+	case 1:
+		for _, schema := range schemas {
+			process(ld.opt.Namespace, schema)
 		}
-		seen[schema.Namespace] = struct{}{}
-		process(schema.Namespace, schema.Schema)
+	default:
+		if _, ok := schemas[ld.opt.Namespace]; !ok {
+			// We expect only a single GraphQL schema when loading into specfic namespace.
+			fmt.Printf("Found multiple GraphQL schema but none for %d. Not loading GraphQL schema.",
+				ld.opt.Namespace)
+			return
+		}
+		process(ld.opt.Namespace, schemas[ld.opt.Namespace])
 	}
+	return
 }
 
 func (ld *loader) reduceStage() {
