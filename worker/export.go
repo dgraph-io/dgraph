@@ -607,7 +607,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			return false
 		}
 
-		fmt.Println(pk)
 		// Do not pick keys storing parts of a multi-part list. They will be read
 		// from the main key.
 		if pk.HasStartUid {

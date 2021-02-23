@@ -106,11 +106,16 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
-	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
+	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
+		Head("Badger options").
+		Flag("compression",
+			"Specifies the compression algorithm and compression level (if applicable) for the "+
+				`postings directory. "none" would disable compression, while "zstd:1" would set `+
+				"zstd compression at level 1.").
+		Flag("goroutines",
+			"The number of goroutines to use in badger.Stream.").
+		String())
+
 	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
@@ -197,9 +202,11 @@ they form a Raft group and provide synchronous replication.
 		`Various audit options.
 	dir=/path/to/audits to define the path where to store the audit logs.
 	compress=true/false to enabled the compression of old audit logs (default behaviour is false).
-	encrypt_file=enc/key/file enables the audit log encryption with the key path provided with the
+	encrypt-file=enc/key/file enables the audit log encryption with the key path provided with the
 	flag.
-	Sample flag could look like --audit dir=aa;encrypt_file=/filepath;compress=true`)
+	days=10 is the number of days audit logs will be preserved (default 10).
+	size=100 is the size of each file in mb after which it will be rolled over (default 100).
+	Sample flag would be --audit dir=aa;encrypt-file=/filepath;compress=true;days=10;size=100`)
 
 	flag.String("cdc", "",
 		`Various change data capture options.
@@ -581,18 +588,18 @@ func setupServer(closer *z.Closer) {
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
 	// Initialize the servers.
-	admin.ServerCloser.AddRunning(3)
-	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, admin.ServerCloser)
+	x.ServerCloser.AddRunning(3)
+	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	go func() {
-		defer admin.ServerCloser.Done()
+		defer x.ServerCloser.Done()
 
-		<-admin.ServerCloser.HasBeenClosed()
+		<-x.ServerCloser.HasBeenClosed()
 		// TODO - Verify why do we do this and does it have to be done for all namespaces.
 		e = globalEpoch[x.GalaxyNamespace]
 		atomic.StoreUint64(e, math.MaxUint64)
@@ -610,7 +617,7 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
-	admin.ServerCloser.Wait()
+	x.ServerCloser.Wait()
 }
 
 func run() {
@@ -641,7 +648,9 @@ func run() {
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	ctype, clevel := x.ParseCompression(Alpha.Conf.GetString("badger.compression"))
+	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
@@ -709,6 +718,7 @@ func run() {
 		NumPendingProposals:  Alpha.Conf.GetInt("pending_proposals"),
 		ZeroAddr:             strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                 raft,
+		Badger:               badger,
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
@@ -795,7 +805,7 @@ func run() {
 	go func() {
 		var numShutDownSig int
 		for range sdCh {
-			closer := admin.ServerCloser
+			closer := x.ServerCloser
 			select {
 			case <-closer.HasBeenClosed():
 			default:

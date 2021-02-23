@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -155,8 +156,19 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	tablet := r.URL.Query().Get("tablet")
 
-	// TODO(Ahsan): The move tablet request should be namespace aware.
-	tablet = x.NamespaceAttr(x.GalaxyNamespace, tablet)
+	namespace := r.URL.Query().Get("namespace")
+	namespace = strings.TrimSpace(namespace)
+	ns := x.GalaxyNamespace
+	if namespace != "" {
+		var err error
+		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, "Invalid namespace in query parameter.")
+			return
+		}
+	}
+
+	tablet = x.NamespaceAttr(ns, tablet)
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")

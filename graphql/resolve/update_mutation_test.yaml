@@ -1844,3 +1844,50 @@
           "uid": "uid(x)"
         }
       cond: "@if(gt(len(x), 0))"
+
+-
+  name: "Update set mutation with multiple Id's"
+  gqlmutation: |
+    mutation update($patch: UpdateBookInput!) {
+    	updateBook(input: $patch) {
+    		book {
+    			title
+    			ISBN
+    			publisher
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+        "patch": {
+            "filter": {
+                "or": [
+                    {
+                        "title": {
+                            "in": "Sapiens"
+                        }
+                    },
+                    {
+                        "ISBN": {
+                            "in": "2QSAT"
+                        }
+                    }
+                ]
+            },
+            "set": {
+                "publisher": "penguin"
+            }
+        }
+    }
+  dgquerysec: |-
+    query {
+      x as updateBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2QSAT"))) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Book.publisher": "penguin"
+        }
+      cond: "@if(gt(len(x), 0))"

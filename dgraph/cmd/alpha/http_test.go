@@ -579,10 +579,8 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	require.Equal(t, "Error", qr.Errors[0].Extensions["code"])
 }
 
-// TODO(naman): See why this is breaking.
 // This test is a basic sanity test to check nothing breaks in the alter API.
 func TestAlterSanity(t *testing.T) {
-	t.Skip()
 	ops := []string{`{"drop_attr": "name"}`,
 		`{"drop_op": "TYPE", "drop_value": "Film"}`,
 		`{"drop_op": "DATA"}`,

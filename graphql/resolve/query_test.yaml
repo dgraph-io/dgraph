@@ -2386,7 +2386,7 @@
     }
   dgquery: |-
     query {
-      getEditor(func: uid(0x1)) @filter((eq(Editor.code, "tolstoy") AND type(Editor))) {
+      getEditor(func: uid(0x1)) @filter(((eq(Editor.code, "tolstoy")) AND type(Editor))) {
         Editor.name : Editor.name
         dgraph.uid : uid
       }
@@ -3257,5 +3257,57 @@
           dgraph.uid : uid
         }
         dgraph.uid : uid
+      }
+    }
+
+-
+  name: "get query with multiple @id and an ID field"
+  gqlquery: |
+    query {
+    	getBook(id: "0x1", title: "GraphQL", ISBN: "001HB") {
+    		id
+    		title
+    		ISBN
+    		author {
+    			name
+    		}
+    	}
+    }
+  dgquery: |-
+    query {
+      getBook(func: uid(0x1)) @filter(((eq(Book.ISBN, "001HB") AND eq(Book.title, "GraphQL")) AND type(Book))) {
+        Book.id : uid
+        Book.title : Book.title
+        Book.ISBN : Book.ISBN
+        Book.author : Book.author {
+          author.name : author.name
+          dgraph.uid : uid
+        }
+      }
+    }
+
+-
+  name: "get query with multiple @id fields "
+  gqlquery: |
+    query {
+    	getBook(title: "GraphQL", ISBN: "001HB") {
+    		id
+    		title
+    		ISBN
+    		author {
+              name
+            }
+    	}
+    }
+  dgquery: |-
+    query {
+      getBook(func: eq(Book.ISBN, "001HB")) @filter(((eq(Book.title, "GraphQL")) AND type(Book))) {
+        Book.id : uid
+        Book.title : Book.title
+        Book.ISBN : Book.ISBN
+        Book.author : Book.author {
+          author.name : author.name
+          dgraph.uid : uid
+        }
       }
     }

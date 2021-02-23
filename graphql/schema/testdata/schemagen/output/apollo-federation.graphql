@@ -211,7 +211,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -750,13 +750,13 @@ type Mutation {
 	addSchool(input: [AddSchoolInput!]!): AddSchoolPayload
 	updateSchool(input: UpdateSchoolInput!): UpdateSchoolPayload
 	deleteSchool(filter: SchoolFilter!): DeleteSchoolPayload
-	addCountry(input: [AddCountryInput!]!): AddCountryPayload
+	addCountry(input: [AddCountryInput!]!, upsert: Boolean): AddCountryPayload
 	updateCountry(input: UpdateCountryInput!): UpdateCountryPayload
 	deleteCountry(filter: CountryFilter!): DeleteCountryPayload
 	addProduct(input: [AddProductInput!]!): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

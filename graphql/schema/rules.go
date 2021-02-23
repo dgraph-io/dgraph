@@ -41,7 +41,7 @@ func init() {
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
 		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
-		fieldNameCheck, isValidFieldForList, hasAuthDirective)
+		fieldNameCheck, isValidFieldForList, hasAuthDirective, fieldDirectiveCheck)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check arguments of cascade directive", directiveArgumentsCheck)
@@ -682,13 +682,9 @@ func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List
 
 func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 	var idFields []*ast.FieldDefinition
-	var idDirectiveFields []*ast.FieldDefinition
 	for _, field := range typ.Fields {
 		if isIDField(typ, field) {
 			idFields = append(idFields, field)
-		}
-		if d := field.Directives.ForName(idDirective); d != nil {
-			idDirectiveFields = append(idDirectiveFields, field)
 		}
 	}
 
@@ -700,21 +696,6 @@ func idCountCheck(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
 				"but a type can have only one ID field. "+
 				"Pick a single field as the ID for type %s.",
 			fieldNamesString, typ.Name, typ.Name,
-		)
-
-		errs = append(errs, &gqlerror.Error{
-			Message:   errMessage,
-			Locations: errLocations,
-		})
-	}
-
-	if len(idDirectiveFields) > 1 {
-		fieldNamesString, errLocations := collectFieldNames(idDirectiveFields)
-		errMessage := fmt.Sprintf(
-			"Type %s: fields %s have the @id directive, "+
-				"but a type can have only one field with @id. "+
-				"Pick a single field with @id for type %s.",
-			typ.Name, fieldNamesString, typ.Name,
 		)
 
 		errs = append(errs, &gqlerror.Error{
@@ -774,6 +755,29 @@ func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerro
 				typ.Name, field.Name, arg.Name)}
 		}
 	}
+	return nil
+}
+
+func fieldDirectiveCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List {
+	// field name cannot be a reserved word
+	subsDir := field.Directives.ForName(subscriptionDirective)
+	customDir := field.Directives.ForName(customDirective)
+	if subsDir != nil && typ.Name != "Query" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			field.Position, "Type %s; Field %s: @withSubscription directive is applicable only on types "+
+				"and custom dql queries",
+			typ.Name, field.Name)}
+	}
+
+	if subsDir != nil && typ.Name == "Query" && customDir != nil {
+		if customDir.Arguments.ForName("dql") == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				field.Position, "Type %s; Field %s: custom query should have dql argument if @withSubscription "+
+					"directive is set",
+				typ.Name, field.Name)}
+		}
+	}
+
 	return nil
 }
 

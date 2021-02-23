@@ -50,13 +50,15 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return nil
 	}
 
-	queryForSHA := `query Me($sha: string){
-						me(func: eq(dgraph.graphql.p_sha256hash, $sha)){
+	join := sha256Hash + query
+
+	queryForSHA := `query Me($join: string){
+						me(func: eq(dgraph.graphql.p_query, $join)){
 							dgraph.graphql.p_query
 						}
 					}`
 	variables := map[string]string{
-		"$sha": sha256Hash,
+		"$join": join,
 	}
 	req := &Request{
 		req: &api.Request{
@@ -105,12 +107,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 							{
 								Subject:     "_:a",
 								Predicate:   "dgraph.graphql.p_query",
-								ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: query}},
-							},
-							{
-								Subject:     "_:a",
-								Predicate:   "dgraph.graphql.p_sha256hash",
-								ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: sha256Hash}},
+								ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: join}},
 							},
 							{
 								Subject:   "_:a",
@@ -137,11 +134,16 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return fmt.Errorf("same sha returned %d queries", len(shaQueryRes.Me))
 	}
 
-	if len(query) > 0 && shaQueryRes.Me[0].PersistedQuery != query {
+	gotQuery := ""
+	if len(shaQueryRes.Me[0].PersistedQuery) >= 64 {
+		gotQuery = shaQueryRes.Me[0].PersistedQuery[64:]
+	}
+
+	if len(query) > 0 && gotQuery != query {
 		return errors.New("query does not match persisted query")
 	}
 
-	gqlReq.Query = shaQueryRes.Me[0].PersistedQuery
+	gqlReq.Query = gotQuery
 	return nil
 
 }

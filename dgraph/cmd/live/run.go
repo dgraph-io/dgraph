@@ -673,10 +673,11 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if len(creds.GetString("user")) > 0 && opt.namespaceToLoad == math.MaxUint64 {
+	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
+		opt.namespaceToLoad != x.GalaxyNamespace {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
-		ctx = x.AttachGalaxyOperation(ctx)
+		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
 		// We don't support upsert predicate while loading data in multiple namespace.
 		if len(opt.upsertPredicate) > 0 {
 			return errors.Errorf("Upsert Predicate feature is not supported for loading" +

@@ -18,19 +18,21 @@
 
 package audit
 
+import "github.com/dgraph-io/dgraph/x"
+
 type AuditConf struct {
 	Dir string
 }
 
-func GetAuditConf(conf string) *AuditConf {
+func GetAuditConf(conf string) *x.LoggerConf {
 	return nil
 }
 
-func InitAuditorIfNecessary(conf *AuditConf, eeEnabled func() bool) error {
+func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 	return nil
 }
 
-func InitAuditor(conf *AuditConf) error {
+func InitAuditor(conf *x.LoggerConf) error {
 	return nil
 }
 

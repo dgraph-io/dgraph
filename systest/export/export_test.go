@@ -81,8 +81,7 @@ var expectedSchema = `[0x0] <movie>:string .` + " " + `
 [0x0] <dgraph.drop.op>:string .` + " " + `
 [0x0] <dgraph.graphql.xid>:string @index(exact) @upsert .` + " " + `
 [0x0] <dgraph.graphql.schema>:string .` + " " + `
-[0x0] <dgraph.graphql.p_query>:string .` + " " + `
-[0x0] <dgraph.graphql.p_sha256hash>:string @index(exact) .` + " " + `
+[0x0] <dgraph.graphql.p_query>:string @index(sha256) .` + " " + `
 [0x0] type <Node> {
 	movie
 }
@@ -92,7 +91,6 @@ var expectedSchema = `[0x0] <movie>:string .` + " " + `
 }
 [0x0] type <dgraph.graphql.persisted_query> {
 	dgraph.graphql.p_query
-	dgraph.graphql.p_sha256hash
 }
 `
 
