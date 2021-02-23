@@ -392,15 +392,16 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 	}
 
 	switch len(schemas) {
-	case 0: // Nothing to do.
 	case 1:
+		// User might have exported from a different namespace. So, schema.Namespace will not be
+		// having the correct value.
 		for _, schema := range schemas {
 			process(ld.opt.Namespace, schema)
 		}
 	default:
 		if _, ok := schemas[ld.opt.Namespace]; !ok {
 			// We expect only a single GraphQL schema when loading into specfic namespace.
-			fmt.Printf("Found multiple GraphQL schema but none for %d. Not loading GraphQL schema.",
+			fmt.Printf("Didn't find GraphQL schema for namespace %d. Not loading GraphQL schema.",
 				ld.opt.Namespace)
 			return
 		}
