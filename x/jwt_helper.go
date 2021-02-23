@@ -56,7 +56,7 @@ func ExtractUserName(jwtToken string) (string, error) {
 	return userId, nil
 }
 
-func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
+func ExtractJWTNamespace(ctx context.Context) (uint32, error) {
 	jwtString, err := ExtractJwt(ctx)
 	if err != nil {
 		return 0, err
@@ -66,9 +66,10 @@ func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	namespace, ok := claims["namespace"].(float64)
+	// TODO: Why is this float32? Why not a hex string or something?
+	namespace, ok := claims["namespace"].(float32)
 	if !ok {
 		return 0, errors.Errorf("namespace in claims is not valid:%v", namespace)
 	}
-	return uint64(namespace), nil
+	return uint32(namespace), nil
 }

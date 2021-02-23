@@ -205,12 +205,14 @@ message HealthInfo {
 }
 
 message Tablet {
-    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
-    string predicate = 2;
-    bool force = 3; // Used while moving predicate.
-    int64 on_disk_bytes = 7;
-    bool remove = 8;
-    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
+  uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+  string predicate = 2;
+  bool force = 3; // Used while moving predicate.
+	uint32 predicate_id = 4;
+
+  int64 on_disk_bytes = 7;
+  bool remove = 8;
+  bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
 	uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
 	int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
@@ -689,7 +691,8 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
-	uint64 namespace = 7;
+	uint32 namespace = 7;
+	uint32 attr_id = 8;
 }
 
 // A posting list stored in the format used for writing backups.

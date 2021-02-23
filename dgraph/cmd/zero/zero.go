@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -639,6 +640,13 @@ func (s *Server) ShouldServe(
 		// a DropAll operation.
 		tablet.GroupId = 1
 	}
+
+	// Assign a unique predicate ID to the predicate. For now, we're assuming that there are no
+	// collissions in the predicate names. Later, we might want to write code to deal with
+	// collissions
+	attrWithoutNs := x.ParseAttr(tablet.Predicate)
+	tablet.PredicateId = farm.Fingerprint32([]byte(attrWithoutNs))
+
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.Annotatef(nil, "While proposing tablet: %v", err)

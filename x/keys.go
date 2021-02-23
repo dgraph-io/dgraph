@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math"
-	"strings"
 
+	"github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -51,73 +51,67 @@ const (
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 	// GalaxyNamespace is the default namespace name.
-	GalaxyNamespace = uint64(0)
+	GalaxyNamespace = uint32(0)
 	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
 	IgnoreBytes = "1-8"
 	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
 	NamespaceOffset = 1
 )
 
-func NamespaceToBytes(ns uint64) []byte {
+func Uint64ToBytes(val uint64) []byte {
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, ns)
+	binary.BigEndian.PutUint64(buf, val)
 	return buf
 }
 
-// NamespaceAttr is used to generate attr from namespace.
-func NamespaceAttr(ns uint64, attr string) string {
-	return string(NamespaceToBytes(ns)) + attr
+func AttrEquals(attrId uint64, attr string) bool {
+	_, id := ParseNsAttr(attrId)
+	otherId := ToAttrId(attr)
+	return id == otherId
 }
 
-func NamespaceAttrList(ns uint64, preds []string) []string {
-	var resp []string
+var bitInternal uint32 = 0x80000000
+var bitReverse uint32 = 0x40000000
+var bitMask uint32 = 0x3FFFFFFF
+
+// We use 2 most-significant bits in uint32 for Dgraph, Reverse respectively. So, clear those out.
+func ToAttrId(attr string) uint32         { return farm.Fingerprint32([]byte(attr)) & bitMask }
+func ToAttrIdReverse(attr string) uint32  { return ToAttrId(attr) | bitReverse }
+func ToAttrIdInternal(attr string) uint32 { return ToAttrId(attr) | bitInternal }
+func IsAttrIdReverse(attr uint32) bool    { return attr&bitReverse > 0 }
+func IsAttrIdInternal(attr uint32) bool   { return attr&bitInternal > 0 }
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(ns uint32, attr string) uint64 {
+	val := uint64(ns) << 32
+	val |= uint64(ToAttrId(attr))
+	return val
+}
+
+func NamespaceAttrList(ns uint32, preds []string) []uint64 {
+	var resp []uint64
 	for _, pred := range preds {
 		resp = append(resp, NamespaceAttr(ns, pred))
 	}
 	return resp
 }
 
-func GalaxyAttr(attr string) string {
+func GalaxyAttr(attr string) uint64 {
 	return NamespaceAttr(GalaxyNamespace, attr)
 }
 
-// ParseNamespaceAttr returns the namespace and attr from the given value.
-func ParseNamespaceAttr(attr string) (uint64, string) {
-	AssertTrue(len(attr) >= 8)
-	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
-}
-
-func ParseNamespaceBytes(attr string) ([]byte, string) {
-	AssertTrue(len(attr) >= 8)
-	return []byte(attr[:8]), attr[8:]
-}
-
 // ParseAttr returns the attr from the given value.
-func ParseAttr(attr string) string {
-	AssertTrue(len(attr) >= 8)
-	return attr[8:]
+func ParseNsAttr(attr uint64) (uint32, uint32) {
+	return uint32(attr >> 32), uint32(attr & 0xFFFFFFFF)
 }
 
-// ParseNamespace returns the namespace from the given value.
-func ParseNamespace(attr string) uint64 {
-	AssertTrue(len(attr) >= 8)
-	return binary.BigEndian.Uint64([]byte(attr[:8]))
-}
-
-func ParseAttrList(attrs []string) []string {
-	var resp []string
+func ParseAttrList(attrs []uint64) []uint32 {
+	var resp []uint32
 	for _, attr := range attrs {
-		resp = append(resp, ParseAttr(attr))
+		_, id := ParseNsAttr(attr)
+		resp = append(resp, id)
 	}
 	return resp
-}
-
-func IsReverseAttr(attr string) bool {
-	AssertTrue(len(attr) >= 8)
-	if attr[8] == '~' {
-		return true
-	}
-	return false
 }
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -133,18 +127,13 @@ func writeAttr(buf []byte, attr string) []byte {
 // genKey creates the key and writes the initial bytes (type byte, length of attribute,
 // and the attribute itself). It leaves the rest of the key empty for further processing
 // if necessary.
-func generateKey(typeByte byte, attr string, totalLen int) []byte {
-	AssertTrue(totalLen >= 1+2+len(attr))
+func generateKey(buf []byte, typeByte byte, attr uint64) []byte {
+	AssertTrue(len(buf) >= 1+8)
 
-	buf := make([]byte, totalLen)
-	buf[0] = typeByte
-	// Separate namespace and attribute from attr and write namespace in the first 8 bytes of key.
-	namespace, attr := ParseNamespaceBytes(attr)
-	AssertTrue(copy(buf[1:], namespace) == 8)
-	rest := buf[9:]
+	buf[0] = typeByte                         // 1 byte.
+	binary.BigEndian.PutUint64(buf[1:], attr) // 8 bytes.
 
-	writeAttr(rest, attr)
-	return buf
+	return buf[9:]
 }
 
 // SchemaKey returns schema key for given attribute. Schema keys are stored
@@ -154,8 +143,10 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 // byte 0: key type prefix (set to ByteSchema)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
-func SchemaKey(attr string) []byte {
-	return generateKey(ByteSchema, attr, 1+2+len(attr))
+func SchemaKey(attr uint64) []byte {
+	buf := make([]byte, 9)
+	generateKey(buf, ByteSchema, attr)
+	return buf
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
@@ -165,31 +156,33 @@ func SchemaKey(attr string) []byte {
 // byte 0: key type prefix (set to ByteType)
 // byte 1-2: length of typeName
 // next len(attr) bytes: value of attr (the type name)
-func TypeKey(attr string) []byte {
-	return generateKey(ByteType, attr, 1+2+len(attr))
+func TypeKey(attr uint64) []byte {
+	buf := make([]byte, 9)
+	generateKey(buf, ByteType, attr)
+	return buf
 }
 
 // DataKey generates a data key with the given attribute and UID.
 // The structure of a data key is as follows:
 //
 // byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
-// byte 1-2: length of attr
-// next len(attr) bytes: value of attr
+// byte 1-8: Namespace (4 bytes) + Attribute (4-bytes)
 // next byte: data type prefix (set to ByteData)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key and the first byte will be sets to ByteSplit.
-func DataKey(attr string, uid uint64) []byte {
-	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 8
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+func DataKey(attr uint64, uid uint64) []byte {
+	totalLen := 2 * 9 // 9-bytes twice.
+	src := make([]byte, totalLen)
+	buf := generateKey(src, DefaultPrefix, attr)
+	buf = generateKey(buf, ByteData, uid)
+	return src
+}
 
-	rest := buf[prefixLen:]
-	rest[0] = ByteData
-
-	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, uid)
-	return buf
+func reverseAttr(attrId uint64) uint64 {
+	// Remove the MSB from attr uint32 for forward.
+	// Add the MSB in attr uint32 for reverse.
+	return attrId | uint64(0x80000000)
 }
 
 // ReverseKey generates a reverse key with the given attribute and UID.
@@ -202,17 +195,11 @@ func DataKey(attr string, uid uint64) []byte {
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
-func ReverseKey(attr string, uid uint64) []byte {
-	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 8
-	buf := generateKey(DefaultPrefix, attr, totalLen)
-
-	rest := buf[prefixLen:]
-	rest[0] = ByteReverse
-
-	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, uid)
-	return buf
+func ReverseKey(attr uint64, uid uint64) []byte {
+	src := make([]byte, 2*9) // 9-bytes twice.
+	buf := generateKey(src, DefaultPrefix, attr)
+	buf = generateKey(buf, ByteReverse, uid)
+	return src
 }
 
 // IndexKey generates a index key with the given attribute and term.
@@ -225,18 +212,17 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
-func IndexKey(attr, term string) []byte {
-	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + len(term)
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+func IndexKey(attr uint64, term string) []byte {
+	totalLen := 9 + 1 + len(term)
+	src := make([]byte, totalLen)
+	buf := generateKey(src, DefaultPrefix, attr)
 
-	rest := buf[prefixLen:]
-	rest[0] = ByteIndex
+	buf[0] = ByteIndex
 
-	rest = rest[1:]
-	AssertTrue(len(rest) == len(term))
-	AssertTrue(len(term) == copy(rest, term))
-	return buf
+	buf = buf[1:]
+	AssertTrue(len(buf) == len(term))
+	AssertTrue(len(term) == copy(buf, term))
+	return src
 }
 
 // CountKey generates a count key with the given attribute and uid.
@@ -247,33 +233,32 @@ func IndexKey(attr, term string) []byte {
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
 // next four bytes: value of count.
-func CountKey(attr string, count uint32, reverse bool) []byte {
-	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 4
-	buf := generateKey(DefaultPrefix, attr, totalLen)
+func CountKey(attr uint64, count uint32, reverse bool) []byte {
+	totalLen := 9 + 1 + 4
+	src := make([]byte, totalLen)
+	buf := generateKey(src, DefaultPrefix, attr)
 
-	rest := buf[prefixLen:]
 	if reverse {
-		rest[0] = ByteCountRev
+		buf[0] = ByteCountRev
 	} else {
-		rest[0] = ByteCount
+		buf[0] = ByteCount
 	}
 
-	rest = rest[1:]
-	binary.BigEndian.PutUint32(rest, count)
-	return buf
+	buf = buf[1:]
+	binary.BigEndian.PutUint32(buf, count)
+	return src
 }
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
-	ByteType    byte
-	Attr        string
+	Attr        uint64
 	Uid         uint64
-	HasStartUid bool
 	StartUid    uint64
-	Term        string
 	Count       uint32
+	Term        string
 	bytePrefix  byte
+	ByteType    byte
+	HasStartUid bool
 }
 
 // IsData returns whether the key is a data key.
@@ -335,14 +320,10 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 // SkipPredicate returns the first key after the keys corresponding to the predicate
 // of this key. Useful when iterating in the reverse order.
 func (p ParsedKey) SkipPredicate() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 9+1)
 	buf[0] = p.bytePrefix
-	ns, attr := ParseNamespaceBytes(p.Attr)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	rest := buf[9:]
-	k := writeAttr(rest, attr)
-	AssertTrue(len(k) == 1)
-	k[0] = 0xFF
+	binary.BigEndian.PutUint64(buf[1:], p.Attr)
+	buf[9] = 0xFF
 	return buf
 }
 
@@ -363,70 +344,54 @@ func (p ParsedKey) SkipType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 9+1)
 	buf[0] = p.bytePrefix
-	ns, attr := ParseNamespaceBytes(p.Attr)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	rest := buf[9:]
-	k := writeAttr(rest, attr)
-	AssertTrue(len(k) == 1)
-	k[0] = ByteData
+	binary.BigEndian.PutUint64(buf[1:], p.Attr)
+	buf[9] = ByteData
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 9+1)
 	buf[0] = DefaultPrefix
-	ns, attr := ParseNamespaceBytes(p.Attr)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	rest := buf[9:]
-	k := writeAttr(rest, attr)
-	AssertTrue(len(k) == 1)
-	k[0] = ByteIndex
+	binary.BigEndian.PutUint64(buf[1:], p.Attr)
+	buf[9] = ByteIndex
 	return buf
 }
 
 // ReversePrefix returns the prefix for index keys.
+// TODO: Understand how this works with p.Attr already holding the reverse bit.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 9+1)
 	buf[0] = DefaultPrefix
-	ns, attr := ParseNamespaceBytes(p.Attr)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	rest := buf[9:]
-	k := writeAttr(rest, attr)
-	AssertTrue(len(k) == 1)
-	k[0] = ByteReverse
+	binary.BigEndian.PutUint64(buf[1:], p.Attr)
+	buf[9] = ByteReverse
 	return buf
 }
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 9+1)
 	buf[0] = p.bytePrefix
-	ns, attr := ParseNamespaceBytes(p.Attr)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	rest := buf[9:]
-	k := writeAttr(rest, attr)
-	AssertTrue(len(k) == 1)
+	binary.BigEndian.PutUint64(buf[1:], p.Attr)
 	if reverse {
-		k[0] = ByteCountRev
+		buf[9] = ByteCountRev
 	} else {
-		k[0] = ByteCount
+		buf[9] = ByteCount
 	}
 	return buf
 }
 
 // ToBackupKey returns the key in the format used for writing backups.
 func (p ParsedKey) ToBackupKey() *pb.BackupKey {
-	ns, attr := ParseNamespaceAttr(p.Attr)
 	key := pb.BackupKey{}
-	key.Namespace = ns
-	key.Attr = attr
+	key.Namespace, key.AttrId = ParseNsAttr(p.Attr)
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
 	key.Term = p.Term
 	key.Count = p.Count
+	// TODO: Fill out key.Attr later.
 
 	switch {
 	case p.IsData():
@@ -497,21 +462,17 @@ func TypePrefix() []byte {
 }
 
 // PredicatePrefix returns the prefix for all keys belonging to this predicate except schema key.
-func PredicatePrefix(predicate string) []byte {
-	buf := make([]byte, 1+2+len(predicate))
-	buf[0] = DefaultPrefix
-	ns, predicate := ParseNamespaceBytes(predicate)
-	AssertTrue(copy(buf[1:], ns) == 8)
-	k := writeAttr(buf[9:], predicate)
-	AssertTrue(len(k) == 0)
+func PredicatePrefix(attr uint64) []byte {
+	buf := make([]byte, 9)
+	generateKey(buf, DefaultPrefix, attr)
 	return buf
 }
 
 // DataPrefix returns the prefix for all data keys belonging to this namespace.
-func DataPrefix(ns uint64) []byte {
-	buf := make([]byte, 1+8)
+func DataPrefix(ns uint32) []byte {
+	buf := make([]byte, 1+4)
 	buf[0] = DefaultPrefix
-	binary.BigEndian.PutUint64(buf[1:], ns)
+	binary.BigEndian.PutUint32(buf[1:], ns)
 	return buf
 }
 
@@ -541,41 +502,28 @@ func Parse(key []byte) (ParsedKey, error) {
 		return p, errors.New("Key length less than 9")
 	}
 	p.bytePrefix = key[0]
-	namespace := key[1:9]
+	p.Attr = binary.BigEndian.Uint64(key[1:9])
 	key = key[9:]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
 	p.HasStartUid = p.bytePrefix == ByteSplit
-
-	if len(key) < 3 {
-		return p, errors.Errorf("Invalid format for key %v", key)
-	}
-	sz := int(binary.BigEndian.Uint16(key[:2]))
-	k := key[2:]
-
-	if len(k) < sz {
-		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
-	}
-	p.Attr = string(namespace) + string(k[:sz])
-	k = k[sz:]
-
 	switch p.bytePrefix {
 	case ByteSchema, ByteType:
 		return p, nil
 	default:
 	}
 
-	p.ByteType = k[0]
-	k = k[1:]
+	p.ByteType = key[0]
+	key = key[1:]
 
 	switch p.ByteType {
 	case ByteData, ByteReverse:
-		if len(k) < 8 {
+		if len(key) < 8 {
 			return p, errors.Errorf("uid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
-		p.Uid = binary.BigEndian.Uint64(k)
+		p.Uid = binary.BigEndian.Uint64(key)
 		if p.Uid == 0 {
 			return p, errors.Errorf("Invalid UID with value 0 for key: %v", key)
 		}
@@ -583,42 +531,42 @@ func Parse(key []byte) (ParsedKey, error) {
 			break
 		}
 
-		if len(k) != 16 {
+		if len(key) != 16 {
 			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
-		k = k[8:]
-		p.StartUid = binary.BigEndian.Uint64(k)
+		key = key[8:]
+		p.StartUid = binary.BigEndian.Uint64(key)
 	case ByteIndex:
 		if !p.HasStartUid {
-			p.Term = string(k)
+			p.Term = string(key)
 			break
 		}
 
-		if len(k) < 8 {
+		if len(key) < 8 {
 			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 
-		term := k[:len(k)-8]
-		startUid := k[len(k)-8:]
+		term := key[:len(key)-8]
+		startUid := key[len(key)-8:]
 		p.Term = string(term)
 		p.StartUid = binary.BigEndian.Uint64(startUid)
 	case ByteCount, ByteCountRev:
-		if len(k) < 4 {
+		if len(key) < 4 {
 			return p, errors.Errorf("count length < 4 for key: %q, parsed key: %+v", key, p)
 		}
-		p.Count = binary.BigEndian.Uint32(k)
+		p.Count = binary.BigEndian.Uint32(key)
 
 		if !p.HasStartUid {
 			break
 		}
 
-		if len(k) != 12 {
+		if len(key) != 12 {
 			return p, errors.Errorf("StartUid length != 8 for key: %q, parsed key: %+v", key, p)
 		}
 
-		k = k[4:]
-		p.StartUid = binary.BigEndian.Uint64(k)
+		key = key[4:]
+		p.StartUid = binary.BigEndian.Uint64(key)
 	default:
 		// Some other data type.
 		return p, errors.Errorf("Invalid data type")
@@ -632,7 +580,7 @@ func IsDropOpKey(key []byte) (bool, error) {
 		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 	}
 
-	if pk.IsData() && ParseAttr(pk.Attr) == "dgraph.drop.op" {
+	if pk.IsData() && AttrEquals(pk.Attr, "dgraph.drop.op") {
 		return true, nil
 	}
 	return false, nil
@@ -686,6 +634,8 @@ func IsGraphqlReservedPredicate(pred string) bool {
 	return ok
 }
 
+/*
+
 // IsReservedPredicate returns true if the predicate is reserved for internal usage, i.e., prefixed
 // with `dgraph.`.
 //
@@ -702,7 +652,7 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // 	1. dgraph.type (reserved = true,  pre_defined = true )
 // 	2. dgraph.blah (reserved = true,  pre_defined = false)
 // 	3. person.name (reserved = false, pre_defined = false)
-func IsReservedPredicate(pred string) bool {
+func IsReservedPredicate(attr uint32) bool {
 	return isReservedName(ParseAttr(pred))
 }
 
@@ -787,3 +737,4 @@ func IsPreDefinedType(typ string) bool {
 func isReservedName(name string) bool {
 	return strings.HasPrefix(strings.ToLower(name), "dgraph.")
 }
+*/

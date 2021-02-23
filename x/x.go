@@ -255,7 +255,7 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 }
 
 // ExtractNamespaceHTTP parses the namespace value from the incoming HTTP request.
-func ExtractNamespaceHTTP(r *http.Request) uint64 {
+func ExtractNamespaceHTTP(r *http.Request) uint32 {
 	ctx := AttachAccessJwt(context.Background(), r)
 	// Ignoring error because the default value is zero anyways.
 	namespace, _ := ExtractJWTNamespace(ctx)
@@ -453,12 +453,12 @@ func AttachJWTNamespace(ctx context.Context) context.Context {
 }
 
 // AttachNamespace adds given namespace to the metadata of the context.
-func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
+func AttachNamespace(ctx context.Context, namespace uint32) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
-	ns := strconv.FormatUint(namespace, 10)
+	ns := strconv.FormatUint(uint64(namespace), 10)
 	md.Set("namespace", ns)
 	return metadata.NewIncomingContext(ctx, md)
 }

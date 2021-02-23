@@ -26,12 +26,16 @@ import (
 )
 
 func TestNameSpace(t *testing.T) {
-	ns := uint64(133)
+	ns := uint32(133)
 	attr := "name"
-	nsAttr := NamespaceAttr(ns, attr)
-	require.Equal(t, 8+len(attr), len(nsAttr))
-	parsedAttr := ParseAttr(nsAttr)
-	require.Equal(t, attr, parsedAttr)
+	id := ToAttrId(attr)
+	require.False(t, IsAttrIdReverse(id))
+	require.False(t, IsAttrIdInternal(id))
+
+	na := NamespaceAttr(ns, attr)
+	gotNs, gotAttrId := ParseNsAttr(na)
+	require.Equal(t, ns, gotNs)
+	require.Equal(t, id, gotAttrId)
 }
 
 func TestDataKey(t *testing.T) {
@@ -43,6 +47,7 @@ func TestDataKey(t *testing.T) {
 	_, err := Parse(key)
 	require.Error(t, err)
 
+	m := make(map[uint64]struct{})
 	for uid = 1; uid < 1001; uid++ {
 		// Use the uid to derive the attribute so it has variable length and the test
 		// can verify that multiple sizes of attr work correctly.
@@ -52,21 +57,24 @@ func TestDataKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsData())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
+		m[pk.Attr] = struct{}{}
 		require.Equal(t, uid, pk.Uid)
 		require.Equal(t, uint64(0), pk.StartUid)
 	}
+	// We have 1000 unique attributes.
+	require.Equal(t, 1000, len(m))
 
+	nattr := NamespaceAttr(GalaxyNamespace, "testing.key")
 	keys := make([]string, 0, 1024)
 	for uid = 1024; uid >= 1; uid-- {
-		key := DataKey(NamespaceAttr(GalaxyNamespace, "testing.key"), uid)
+		key := DataKey(nattr, uid)
 		keys = append(keys, string(key))
 	}
 	// Test that sorting is as expected.
 	sort.Strings(keys)
 	require.True(t, sort.StringsAreSorted(keys))
 	for i, key := range keys {
-		exp := DataKey(NamespaceAttr(GalaxyNamespace, "testing.key"), uint64(i+1))
+		exp := DataKey(nattr, uint64(i+1))
 		require.Equal(t, string(exp), key)
 	}
 }
@@ -83,7 +91,6 @@ func TestParseDataKeyWithStartUid(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsData())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, uid, pk.Uid)
 		require.Equal(t, pk.HasStartUid, true)
 		require.Equal(t, startUid, pk.StartUid)
@@ -101,7 +108,6 @@ func TestIndexKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsIndex())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, sterm, pk.Term)
 	}
 }
@@ -120,7 +126,6 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsIndex())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, sterm, pk.Term)
 		require.Equal(t, pk.HasStartUid, true)
 		require.Equal(t, startUid, pk.StartUid)
@@ -137,7 +142,6 @@ func TestReverseKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsReverse())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, uid, pk.Uid)
 	}
 }
@@ -155,7 +159,6 @@ func TestReverseKeyWithStartUid(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsReverse())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, uid, pk.Uid)
 		require.Equal(t, pk.HasStartUid, true)
 		require.Equal(t, startUid, pk.StartUid)
@@ -172,7 +175,6 @@ func TestCountKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsCountOrCountRev())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, count, pk.Count)
 	}
 }
@@ -190,7 +192,6 @@ func TestCountKeyWithStartUid(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsCountOrCountRev())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 		require.Equal(t, count, pk.Count)
 		require.Equal(t, pk.HasStartUid, true)
 		require.Equal(t, startUid, pk.StartUid)
@@ -207,7 +208,6 @@ func TestSchemaKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsSchema())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 	}
 }
 
@@ -221,7 +221,6 @@ func TestTypeKey(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, pk.IsType())
-		require.Equal(t, sattr, ParseAttr(pk.Attr))
 	}
 }
 
