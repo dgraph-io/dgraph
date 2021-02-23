@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.11.2] - 2021-02-23
+[20.11.2]: https://github.com/dgraph-io/dgraph/compare/v20.11.1...v20.11.2
+
+### Fixed
+- GraphQL
+  - Fix(Mutation): Deeply-nested uid facets ([#7457][])
+  - Fix(GraphQL): Fix panic caused by incorrect input coercion of scalar to list ([#7405][]) ([#7428][])
+  - Fix(GraphQL): Refactor Mutation Rewriter for Add and Update Mutations ([#7409][]) ([#7413][])
+  - Fix(GraphQL): fix `@auth` rules evaluation in case of null values. ([#7411][])
+  - Fix(GraphQL): fix interface query with auth rules ([#7408][])
+  - Fix(GraphQL): Added error for case when multiple filter functions are  used in filter. ([#7368][]) ([#7384][])
+
+- Core Dgraph 
+  - Fix(sort): Fix multi-sort with nils ([#7432][]) ([#7444][])
+  - Fix(GC): Reduce DiscardRatio from 0.9 to 0.7 ([#7412][]) ([#7421][])
+
+- Enterprise Features
+  - Fix(export-backup): fix memory leak in backup export ([#7452][]) ([#7453][])
+
+[#7457]: https://github.com/dgraph-io/dgraph/issues/7457
+[#7405]: https://github.com/dgraph-io/dgraph/issues/7405
+[#7428]: https://github.com/dgraph-io/dgraph/issues/7428
+[#7409]: https://github.com/dgraph-io/dgraph/issues/7409
+[#7413]: https://github.com/dgraph-io/dgraph/issues/7413
+[#7411]: https://github.com/dgraph-io/dgraph/issues/7411
+[#7408]: https://github.com/dgraph-io/dgraph/issues/7408
+[#7368]: https://github.com/dgraph-io/dgraph/issues/7368
+[#7384]: https://github.com/dgraph-io/dgraph/issues/7384
+[#7432]: https://github.com/dgraph-io/dgraph/issues/7432
+[#7444]: https://github.com/dgraph-io/dgraph/issues/7444
+[#7412]: https://github.com/dgraph-io/dgraph/issues/7412
+[#7421]: https://github.com/dgraph-io/dgraph/issues/7421
+[#7452]: https://github.com/dgraph-io/dgraph/issues/7452
+[#7453]: https://github.com/dgraph-io/dgraph/issues/7453
+
 ## [20.11.1] - 2021-01-27
 [20.11.1]: https://github.com/dgraph-io/dgraph/compare/v20.11.0...v20.11.1
 
