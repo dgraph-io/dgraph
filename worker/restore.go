@@ -249,7 +249,7 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					}
 					updateCopy.TypeName = update.TypeName
 					for _, sch := range update.Fields {
-						if sch.Predicate == "dgraph.graphql.p_sha256hash" {
+						if _, ok := depreciatedPreds[sch.Predicate]; ok {
 							// This predicate has been removed from versions >= 21.03.
 							continue
 						}
