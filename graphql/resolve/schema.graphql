@@ -416,3 +416,13 @@ type SpaceShip @key(fields: "id") @extends {
     id: String! @id @external
     missions: [Mission]
 }
+
+type Foo {
+    id: String! @id
+    bar: Bar! @hasInverse(field: foo)
+}
+
+type Bar {
+    id: String! @id
+    foo: Foo!
+}

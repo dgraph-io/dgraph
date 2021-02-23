@@ -598,6 +598,12 @@ func (s *Server) Connect(ctx context.Context,
 	return resp, nil
 }
 
+// DeleteNamespace removes the tablets for deleted namespace from the membership state.
+func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*pb.Status, error) {
+	err := s.Node.proposeAndWait(ctx, &pb.ZeroProposal{DeleteNs: in})
+	return &pb.Status{}, err
+}
+
 // ShouldServe returns the tablet serving the predicate passed in the request.
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {

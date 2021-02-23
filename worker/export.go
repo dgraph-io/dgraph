@@ -360,10 +360,11 @@ func fieldToString(update *pb.SchemaUpdate) string {
 }
 
 type fileWriter struct {
-	fd           *os.File
-	bw           *bufio.Writer
-	gw           *gzip.Writer
-	relativePath string
+	fd            *os.File
+	bw            *bufio.Writer
+	gw            *gzip.Writer
+	relativePath  string
+	hasDataBefore bool
 }
 
 func (writer *fileWriter) open(fpath string) error {
@@ -647,8 +648,6 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			// Ignore this predicate.
 		case e.attr == "dgraph.graphql.p_query":
 			// Ignore this predicate.
-		case e.attr == "dgraph.graphql.p_sha256hash":
-			// Ignore this predicate.
 		case pk.IsData() && e.attr == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
@@ -673,6 +672,15 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if !ok {
 				return nil, errors.Errorf("cannot convert value of GraphQL schema to byte array")
 			}
+
+			exported := x.ExportedGQLSchema{
+				Namespace: e.namespace,
+				Schema:    string(val),
+			}
+			if val, err = json.Marshal(exported); err != nil {
+				return nil, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
+			}
+
 			kv := &bpb.KV{
 				Value:   val,
 				Version: 2, // GraphQL schema value
@@ -685,6 +693,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		case e.attr == "dgraph.cors":
 		case e.attr == "dgraph.graphql.schema_created_at":
 		case e.attr == "dgraph.graphql.schema_history":
+		case e.attr == "dgraph.graphql.p_sha256hash":
 			// Ignore these predicates.
 
 		case pk.IsData():
@@ -726,11 +735,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, nil
 	}
 
-	hasDataBefore := false
-	var separator []byte
+	var dataSeparator []byte
 	switch in.Format {
 	case "json":
-		separator = []byte(",\n")
+		dataSeparator = []byte(",\n")
 	case "rdf":
 		// The separator for RDF should be empty since the toRDF function already
 		// adds newline to each RDF entry.
@@ -750,25 +758,28 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if len(kv.Value) == 0 {
 				return nil
 			}
+
 			var writer *fileWriter
+			var separator []byte
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
+				separator = dataSeparator
 			case 2: // graphQL schema
 				writer = gqlSchemaWriter
+				separator = []byte(",\n") // use json separator.
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
-			if kv.Version == 1 {
-				if hasDataBefore {
-					if _, err := writer.gw.Write(separator); err != nil {
-						return err
-					}
+
+			if writer.hasDataBefore {
+				if _, err := writer.gw.Write(separator); err != nil {
+					return err
 				}
-				// change the hasDataBefore flag so that the next data entry will have a separator
-				// prepended
-				hasDataBefore = true
 			}
+			// change the hasDataBefore flag so that the next data entry will have a separator
+			// prepended
+			writer.hasDataBefore = true
 
 			_, err = writer.gw.Write(kv.Value)
 			return err
@@ -847,6 +858,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	// All prepwork done. Time to roll.
+	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].pre)); err != nil {
+		return nil, err
+	}
 	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
 		return nil, err
 	}
@@ -856,6 +870,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
 		return nil, err
 	}
+	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
+		return nil, err
+	}
+
 	// Write the schema and types.
 	if err := writePrefix(x.ByteSchema); err != nil {
 		return nil, err

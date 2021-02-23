@@ -209,7 +209,7 @@ type Query interface {
 	Rename(newName string)
 	KeyField(typeName string) (string, bool, error)
 	BuildType(typeName string) Type
-	AuthFor(typ Type, jwtVars map[string]interface{}) Query
+	AuthFor(jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -863,13 +863,6 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-	// Auth rules can't be effectively validated as part of the normal rules -
-	// because they need the fully generated schema to be checked against.
-	authRules, err := authRules(s)
-	if err != nil {
-		return nil, err
-	}
-
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
@@ -878,10 +871,16 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:      typeMappings(s),
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
-		authRules:        authRules,
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	var err error
+	sch.authRules, err = authRules(sch)
+	if err != nil {
+		return nil, err
+	}
 
 	return sch, nil
 }
@@ -1582,14 +1581,14 @@ func (q *query) GetAuthMeta() *authorization.AuthMeta {
 	return (*field)(q).GetAuthMeta()
 }
 
-func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
+func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
 		field: (*field)(q).field,
 		op: &operation{op: q.op.op,
 			query:    q.op.query,
 			doc:      q.op.doc,
-			inSchema: typ.(*astType).inSchema,
+			inSchema: q.op.inSchema,
 			vars:     jwtVars,
 		},
 		sel: q.sel}

@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/api"
@@ -58,9 +59,11 @@ type IServeGraphQL interface {
 }
 
 type graphqlHandler struct {
-	resolver map[uint64]*resolve.RequestResolver
-	handler  http.Handler
-	poller   map[uint64]*subscription.Poller
+	resolver    map[uint64]*resolve.RequestResolver
+	handler     http.Handler
+	poller      map[uint64]*subscription.Poller
+	resolverMux sync.RWMutex // protects resolver from RW races
+	pollerMux   sync.RWMutex // protects poller from RW races
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
@@ -74,8 +77,13 @@ func NewServer() IServeGraphQL {
 }
 
 func (gh *graphqlHandler) Set(ns uint64, schemaEpoch *uint64, resolver *resolve.RequestResolver) {
+	gh.resolverMux.Lock()
 	gh.resolver[ns] = resolver
+	gh.resolverMux.Unlock()
+
+	gh.pollerMux.Lock()
 	gh.poller[ns] = subscription.NewPoller(schemaEpoch, resolver)
+	gh.pollerMux.Unlock()
 }
 
 func (gh *graphqlHandler) HTTPHandler() http.Handler {
@@ -84,7 +92,10 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 
 func (gh *graphqlHandler) ResolveWithNs(ctx context.Context, ns uint64,
 	gqlReq *schema.Request) *schema.Response {
-	return gh.resolver[ns].Resolve(ctx, gqlReq)
+	gh.resolverMux.RLock()
+	resolver := gh.resolver[ns]
+	gh.resolverMux.RUnlock()
+	return resolver.Resolve(ctx, gqlReq)
 }
 
 // write chooses between the http response writer and gzip writer
@@ -118,6 +129,8 @@ type graphqlSubscription struct {
 }
 
 func (gs *graphqlSubscription) isValid(namespace uint64) bool {
+	gs.graphqlHandler.pollerMux.RLock()
+	defer gs.graphqlHandler.pollerMux.RUnlock()
 	return !(gs == nil || !gs.graphqlHandler.isValid(namespace) || gs.graphqlHandler.
 		poller == nil || gs.graphqlHandler.poller[namespace] == nil)
 }
@@ -158,7 +171,11 @@ func (gs *graphqlSubscription) Subscribe(
 		return nil, errors.New(resolve.ErrInternal)
 	}
 
-	res, err := gs.graphqlHandler.poller[namespace].AddSubscriber(req)
+	gs.graphqlHandler.pollerMux.RLock()
+	poller := gs.graphqlHandler.poller[namespace]
+	gs.graphqlHandler.pollerMux.RUnlock()
+
+	res, err := poller.AddSubscriber(req)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +184,7 @@ func (gs *graphqlSubscription) Subscribe(
 		// Context is cancelled when a client disconnects, so delete subscription after client
 		// disconnects.
 		<-ctx.Done()
-		gs.graphqlHandler.poller[namespace].TerminateSubscription(res.BucketID, res.SubscriptionID)
+		poller.TerminateSubscription(res.BucketID, res.SubscriptionID)
 	}()
 	return res.UpdateCh, ctx.Err()
 }
@@ -190,7 +207,11 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
-	addDynamicHeaders(gh.resolver[ns], r.Header.Get("Origin"), w)
+	gh.resolverMux.RLock()
+	resolver := gh.resolver[ns]
+	gh.resolverMux.RUnlock()
+
+	addDynamicHeaders(resolver, r.Header.Get("Origin"), w)
 	if r.Method == http.MethodOptions {
 		// for OPTIONS, we only need to send the headers
 		return
@@ -215,11 +236,13 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res = gh.resolver[ns].Resolve(ctx, gqlReq)
+	res = resolver.Resolve(ctx, gqlReq)
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
 }
 
 func (gh *graphqlHandler) isValid(namespace uint64) bool {
+	gh.resolverMux.RLock()
+	defer gh.resolverMux.RUnlock()
 	return !(gh == nil || gh.resolver == nil || gh.resolver[namespace] == nil || gh.
 		resolver[namespace].Schema() == nil || gh.resolver[namespace].Schema().Meta() == nil)
 }
