@@ -12,7 +12,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(Mutation): Deeply-nested uid facets ([#7457][])
   - Fix(GraphQL): Fix panic caused by incorrect input coercion of scalar to list ([#7405][]) ([#7428][])
   - Fix(GraphQL): Refactor Mutation Rewriter for Add and Update Mutations ([#7409][]) ([#7413][])
-  - Fix(GraphQL): fix @auth rules evaluation in case of null values. ([#7411][])
+  - Fix(GraphQL): fix `@auth` rules evaluation in case of null values. ([#7411][])
   - Fix(GraphQL): fix interface query with auth rules ([#7408][])
   - Fix(GraphQL): Added error for case when multiple filter functions are  used in filter. ([#7368][]) ([#7384][])
 
