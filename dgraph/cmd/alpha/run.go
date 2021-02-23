@@ -246,7 +246,7 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp("").
+	flag.String("audit", audit.FlagDefaults, z.NewSuperFlagHelp(audit.FlagDefaults).
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
@@ -254,6 +254,10 @@ they form a Raft group and provide synchronous replication.
 			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
 			"The path to the key file to be used for audit log encryption.").
+		Flag("days",
+			"The number of days audit logs will be preserved.").
+		Flag("size",
+			"The audit log max size in MB after which it will be rolled over.").
 		String())
 }
 

@@ -98,7 +98,7 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
-		Head("Raft options (defaults shown):").
+		Head("Raft options").
 		Flag("idx",
 			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
 		Flag("learner",
@@ -106,8 +106,7 @@ instances to achieve high-availability.
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		String())
 
-	const auditDefaults = "compress=false;"
-	flag.String("audit", auditDefaults, z.NewSuperFlagHelp(auditDefaults).
+	flag.String("audit", audit.FlagDefaults, z.NewSuperFlagHelp(audit.FlagDefaults).
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
