@@ -48,7 +48,7 @@ func GetIDs(snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64 {
 		case raftpb.ConfChangeUpdateNode:
 			// do nothing
 		default:
-			glog.Fatalf("unknown ConfChange Type", zap.String("type", cc.Type.String()))
+			glog.Fatal("unknown ConfChange Type", zap.String("type", cc.Type.String()))
 		}
 	}
 	sids := make(Uint64Slice, 0, len(ids))
@@ -88,7 +88,7 @@ func CreateConfigChangeEnts(ids []uint64, self uint64, term, index uint64,
 		}
 		rcData, err := rc.Marshal()
 		if err != nil {
-			glog.Fatalf("failed to marshal member", zap.Error(err))
+			glog.Fatal("failed to marshal member", zap.Error(err))
 		}
 		cc := &raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
