@@ -1678,6 +1678,14 @@ func existenceQueries(
 	var ret []*gql.GraphQuery
 	var retErrors []error
 
+	// Inverse Object field is deleted. This is to ensure that we don't refer any conflicting
+	// inverse node as inverse of a field.
+	// Example: For the given mutation,
+	// addAuthor (input: [{name: ..., posts: [ {author: { id: "some id"}} ]} ] ),
+	// the part, author: { id: "some id"} is removed. This ensures that the author
+	// for the post is not set to something different but is set to the real author.
+	deleteInverseObject(obj, srcField)
+
 	id := typ.IDField()
 	if id != nil {
 		// Check if the ID field is referenced in the mutation
