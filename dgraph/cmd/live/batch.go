@@ -250,7 +250,7 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 }
 
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
-	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+	attr := x.ToNsAttrId(nq.Namespace, nq.Predicate)
 	pred, found := l.schema.preds[attr]
 
 	// We dont' need to generate conflict keys for predicate with noconflict directive.

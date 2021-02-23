@@ -718,7 +718,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 			fieldName := field.Predicate
 			ns, attr := x.ParseNamespaceAttr(fieldName)
 			if attr[0] == '~' {
-				fieldName = x.NamespaceAttr(ns, attr[1:])
+				fieldName = x.ToNsAttrId(ns, attr[1:])
 			}
 
 			if _, ok := reqPredSet[fieldName]; !ok {
@@ -744,7 +744,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 			fieldName := field.Predicate
 			ns, attr := x.ParseNamespaceAttr(fieldName)
 			if attr[0] == '~' {
-				fieldName = x.NamespaceAttr(ns, attr[1:])
+				fieldName = x.ToNsAttrId(ns, attr[1:])
 			}
 
 			_, inSchema := schemaSet[fieldName]

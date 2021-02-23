@@ -315,7 +315,7 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	m.schema.checkAndSetInitialSchema(nq.Namespace)
 
 	// Appropriate schema must exist for the nquad's namespace by this time.
-	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+	attr := x.ToNsAttrId(nq.Namespace, nq.Predicate)
 	fwd, rev := m.createPostings(nq, de)
 	shard := m.state.shards.shardFor(attr)
 	key := x.DataKey(attr, sid)
@@ -355,7 +355,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	// uid, isNew := m.xids.AssignUid(sb.String())
 
 	// There might be a case where Nquad from different namespace have the same xid.
-	uid, isNew := m.xids.AssignUid(x.NamespaceAttr(ns, xid))
+	uid, isNew := m.xids.AssignUid(x.ToNsAttrId(ns, xid))
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
@@ -381,7 +381,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	m.schema.validateType(de, nq.Namespace, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
-	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
+	sch := m.schema.getSchema(x.ToNsAttrId(nq.GetNamespace(), nq.GetPredicate()))
 	if nq.GetObjectValue() != nil {
 		lang := de.GetLang()
 		switch {
@@ -416,7 +416,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		return // Cannot index UIDs
 	}
 
-	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
+	sch := m.schema.getSchema(x.ToNsAttrId(nq.GetNamespace(), nq.GetPredicate()))
 	for _, tokerName := range sch.GetTokenizer() {
 		// Find tokeniser.
 		toker, ok := tok.GetTokenizer(tokerName)
@@ -440,7 +440,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
-		attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+		attr := x.ToNsAttrId(nq.Namespace, nq.Predicate)
 		// Store index posting.
 		for _, t := range toks {
 			m.addMapEntry(

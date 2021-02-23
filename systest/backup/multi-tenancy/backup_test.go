@@ -385,7 +385,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64,
 	var err error
 	pdir := "./data/restore/p1"
 	for _, n := range ns {
-		restored[n], err = testutil.GetPredicateValues(pdir, x.NamespaceAttr(n, "movie"), commitTs)
+		restored[n], err = testutil.GetPredicateValues(pdir, x.ToNsAttrId(n, "movie"), commitTs)
 	}
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)

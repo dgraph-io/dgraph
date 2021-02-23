@@ -32,7 +32,7 @@ func TestNameSpace(t *testing.T) {
 	require.False(t, IsAttrIdReverse(id))
 	require.False(t, IsAttrIdInternal(id))
 
-	na := NamespaceAttr(ns, attr)
+	na := ToNsAttrId(ns, attr)
 	gotNs, gotAttrId := ParseNsAttr(na)
 	require.Equal(t, ns, gotNs)
 	require.Equal(t, id, gotAttrId)
@@ -43,7 +43,7 @@ func TestDataKey(t *testing.T) {
 
 	// key with uid = 0 is invalid
 	uid = 0
-	key := DataKey(NamespaceAttr(GalaxyNamespace, "bad uid"), uid)
+	key := DataKey(ToNsAttrId(GalaxyNamespace, "bad uid"), uid)
 	_, err := Parse(key)
 	require.Error(t, err)
 
@@ -52,7 +52,7 @@ func TestDataKey(t *testing.T) {
 		// Use the uid to derive the attribute so it has variable length and the test
 		// can verify that multiple sizes of attr work correctly.
 		sattr := fmt.Sprintf("attr:%d", uid)
-		key := DataKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := DataKey(ToNsAttrId(GalaxyNamespace, sattr), uid)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -64,7 +64,7 @@ func TestDataKey(t *testing.T) {
 	// We have 1000 unique attributes.
 	require.Equal(t, 1000, len(m))
 
-	nattr := NamespaceAttr(GalaxyNamespace, "testing.key")
+	nattr := ToNsAttrId(GalaxyNamespace, "testing.key")
 	keys := make([]string, 0, 1024)
 	for uid = 1024; uid >= 1; uid-- {
 		key := DataKey(nattr, uid)
@@ -84,7 +84,7 @@ func TestParseDataKeyWithStartUid(t *testing.T) {
 	startUid := uint64(math.MaxUint64)
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
-		key := DataKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := DataKey(ToNsAttrId(GalaxyNamespace, sattr), uid)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -103,7 +103,7 @@ func TestIndexKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
-		key := IndexKey(NamespaceAttr(GalaxyNamespace, sattr), sterm)
+		key := IndexKey(ToNsAttrId(GalaxyNamespace, sattr), sterm)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -119,7 +119,7 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
-		key := IndexKey(NamespaceAttr(GalaxyNamespace, sattr), sterm)
+		key := IndexKey(ToNsAttrId(GalaxyNamespace, sattr), sterm)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -137,7 +137,7 @@ func TestReverseKey(t *testing.T) {
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := ReverseKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := ReverseKey(ToNsAttrId(GalaxyNamespace, sattr), uid)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -152,7 +152,7 @@ func TestReverseKeyWithStartUid(t *testing.T) {
 	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := ReverseKey(NamespaceAttr(GalaxyNamespace, sattr), uid)
+		key := ReverseKey(ToNsAttrId(GalaxyNamespace, sattr), uid)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -170,7 +170,7 @@ func TestCountKey(t *testing.T) {
 	for count = 0; count < 1001; count++ {
 		sattr := fmt.Sprintf("attr:%d", count)
 
-		key := CountKey(NamespaceAttr(GalaxyNamespace, sattr), count, true)
+		key := CountKey(ToNsAttrId(GalaxyNamespace, sattr), count, true)
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -185,7 +185,7 @@ func TestCountKeyWithStartUid(t *testing.T) {
 	for count = 0; count < 1001; count++ {
 		sattr := fmt.Sprintf("attr:%d", count)
 
-		key := CountKey(NamespaceAttr(GalaxyNamespace, sattr), count, true)
+		key := CountKey(ToNsAttrId(GalaxyNamespace, sattr), count, true)
 		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
@@ -203,7 +203,7 @@ func TestSchemaKey(t *testing.T) {
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := SchemaKey(NamespaceAttr(GalaxyNamespace, sattr))
+		key := SchemaKey(ToNsAttrId(GalaxyNamespace, sattr))
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -216,7 +216,7 @@ func TestTypeKey(t *testing.T) {
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
-		key := TypeKey(NamespaceAttr(GalaxyNamespace, sattr))
+		key := TypeKey(ToNsAttrId(GalaxyNamespace, sattr))
 		pk, err := Parse(key)
 		require.NoError(t, err)
 
@@ -235,16 +235,16 @@ func TestBadStartUid(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	key := DataKey(NamespaceAttr(GalaxyNamespace, "aa"), 1)
+	key := DataKey(ToNsAttrId(GalaxyNamespace, "aa"), 1)
 	testKey(key)
 
-	key = ReverseKey(NamespaceAttr(GalaxyNamespace, "aa"), 1)
+	key = ReverseKey(ToNsAttrId(GalaxyNamespace, "aa"), 1)
 	testKey(key)
 
-	key = CountKey(NamespaceAttr(GalaxyNamespace, "aa"), 0, false)
+	key = CountKey(ToNsAttrId(GalaxyNamespace, "aa"), 0, false)
 	testKey(key)
 
-	key = CountKey(NamespaceAttr(GalaxyNamespace, "aa"), 0, true)
+	key = CountKey(ToNsAttrId(GalaxyNamespace, "aa"), 0, true)
 	testKey(key)
 }
 
@@ -270,7 +270,7 @@ func TestBadKeys(t *testing.T) {
 
 	// key with uid = 0 is invalid
 	uid := 0
-	key = DataKey(NamespaceAttr(GalaxyNamespace, "bad uid"), uint64(uid))
+	key = DataKey(ToNsAttrId(GalaxyNamespace, "bad uid"), uint64(uid))
 	_, err = Parse(key)
 	require.Error(t, err)
 }

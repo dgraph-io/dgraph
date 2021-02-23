@@ -104,7 +104,7 @@ func (s *schemaStore) checkAndSetInitialSchema(namespace uint64) {
 	}
 
 	if s.opt.StoreXids {
-		s.schemaMap[x.NamespaceAttr(namespace, "xid")] = &pb.SchemaUpdate{
+		s.schemaMap[x.ToNsAttrId(namespace, "xid")] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"hash"},
 		}
@@ -118,7 +118,7 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, namespace uint64, object
 		de.ValueType = pb.Posting_UID
 	}
 
-	attr := x.NamespaceAttr(namespace, de.Attr)
+	attr := x.ToNsAttrId(namespace, de.Attr)
 	s.RLock()
 	sch, ok := s.schemaMap[attr]
 	s.RUnlock()

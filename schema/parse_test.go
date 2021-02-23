@@ -616,7 +616,7 @@ func TestParseWithNamespace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(result.Preds))
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: x.NamespaceAttr(10, "jobs"),
+		Predicate: x.ToNsAttrId(10, "jobs"),
 		ValueType: 9,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
@@ -624,13 +624,13 @@ func TestParseWithNamespace(t *testing.T) {
 	}, result.Preds[0])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: x.NamespaceAttr(0x123, "occupations"),
+		Predicate: x.ToNsAttrId(0x123, "occupations"),
 		ValueType: 9,
 		List:      true,
 	}, result.Preds[1])
 
 	require.EqualValues(t, &pb.SchemaUpdate{
-		Predicate: x.NamespaceAttr(0xf2, "graduation"),
+		Predicate: x.ToNsAttrId(0xf2, "graduation"),
 		ValueType: 5,
 		List:      true,
 	}, result.Preds[2])
@@ -638,16 +638,16 @@ func TestParseWithNamespace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result.Types))
 	require.Equal(t, &pb.TypeUpdate{
-		TypeName: x.NamespaceAttr(0xf2, "Person"),
+		TypeName: x.ToNsAttrId(0xf2, "Person"),
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: x.NamespaceAttr(0xf2, "name"),
+				Predicate: x.ToNsAttrId(0xf2, "name"),
 			},
 			{
-				Predicate: x.NamespaceAttr(0xf2, "address"),
+				Predicate: x.ToNsAttrId(0xf2, "address"),
 			},
 			{
-				Predicate: x.NamespaceAttr(0xf2, "children"),
+				Predicate: x.ToNsAttrId(0xf2, "children"),
 			},
 		},
 	}, result.Types[0])

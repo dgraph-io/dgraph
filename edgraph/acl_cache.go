@@ -72,7 +72,7 @@ func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {
-				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				aclPred := x.ToNsAttrId(ns, acl.Predicate)
 				if groupPerms, found := predPerms[aclPred]; found {
 					groupPerms[group.GroupID] = acl.Perm
 				} else {
@@ -91,7 +91,7 @@ func (cache *aclCache) update(ns uint64, groups []acl.Group) {
 			// via different groups. Therefore we take OR if the user already has
 			// a permission for a predicate
 			for _, acl := range acls {
-				aclPred := x.NamespaceAttr(ns, acl.Predicate)
+				aclPred := x.ToNsAttrId(ns, acl.Predicate)
 				if _, found := userPredPerms[user.UserID][aclPred]; found {
 					userPredPerms[user.UserID][aclPred] |= acl.Perm
 				} else {

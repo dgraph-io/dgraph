@@ -57,20 +57,20 @@ func GetWriteContext(ctx context.Context) context.Context {
 }
 
 func (s *state) init() {
-	s.predicate = make(map[string]*pb.SchemaUpdate)
-	s.types = make(map[string]*pb.TypeUpdate)
+	s.predicate = make(map[uint64]*pb.SchemaUpdate)
+	s.types = make(map[uint64]*pb.TypeUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
-	s.mutSchema = make(map[string]*pb.SchemaUpdate)
+	s.mutSchema = make(map[uint64]*pb.SchemaUpdate)
 }
 
 type state struct {
 	sync.RWMutex
 	// Map containing predicate to type information.
-	predicate map[string]*pb.SchemaUpdate
-	types     map[string]*pb.TypeUpdate
+	predicate map[uint64]*pb.SchemaUpdate
+	types     map[uint64]*pb.TypeUpdate
 	elog      trace.EventLog
 	// mutSchema holds the schema update that is being applied in the background.
-	mutSchema map[string]*pb.SchemaUpdate
+	mutSchema map[uint64]*pb.SchemaUpdate
 }
 
 // State returns the struct holding the current schema.
@@ -96,7 +96,7 @@ func (s *state) DeleteAll() {
 }
 
 // Delete updates the schema in memory and disk
-func (s *state) Delete(attr string) error {
+func (s *state) Delete(attr uint64) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -116,7 +116,7 @@ func (s *state) Delete(attr string) error {
 }
 
 // DeleteType updates the schema in memory and disk
-func (s *state) DeleteType(typeName string) error {
+func (s *state) DeleteType(typeName uint64) error {
 	if s == nil {
 		return nil
 	}
@@ -138,7 +138,7 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
-func logUpdate(schema *pb.SchemaUpdate, pred string) string {
+func logUpdate(schema *pb.SchemaUpdate) string {
 	if schema == nil {
 		return ""
 	}
@@ -148,38 +148,38 @@ func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 		typ = fmt.Sprintf("[%s]", typ)
 	}
 	return fmt.Sprintf("Setting schema for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
-		pred, typ, schema.Tokenizer, schema.Directive, schema.Count)
+		schema.Predicate, typ, schema.Tokenizer, schema.Directive, schema.Count)
 }
 
-func logTypeUpdate(typ pb.TypeUpdate, typeName string) string {
-	return fmt.Sprintf("Setting type definition for type %s: %v\n", typeName, typ)
+func logTypeUpdate(typ pb.TypeUpdate) string {
+	return fmt.Sprintf("Setting type definition for type %s: %v\n", typ.GetTypeName(), typ)
 }
 
 // Set sets the schema for the given predicate in memory.
 // Schema mutations must flow through the update function, which are synced to the db.
-func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
+func (s *state) Set(attrId uint64, schema *pb.SchemaUpdate) {
 	if schema == nil {
 		return
 	}
 
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[pred] = schema
-	s.elog.Printf(logUpdate(schema, pred))
+	s.predicate[attrId] = schema
+	s.elog.Printf(logUpdate(schema))
 }
 
 // SetMutSchema sets the mutation schema for the given predicate.
-func (s *state) SetMutSchema(pred string, schema *pb.SchemaUpdate) {
+func (s *state) SetMutSchema(attrId uint64, schema *pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
-	s.mutSchema[pred] = schema
+	s.mutSchema[attrId] = schema
 }
 
 // DeleteMutSchema deletes the schema for given predicate from mutSchema.
-func (s *state) DeleteMutSchema(pred string) {
+func (s *state) DeleteMutSchema(attrId uint64) {
 	s.Lock()
 	defer s.Unlock()
-	delete(s.mutSchema, pred)
+	delete(s.mutSchema, attrId)
 }
 
 // GetIndexingPredicates returns the list of predicates for which we are building indexes.
@@ -193,34 +193,43 @@ func GetIndexingPredicates() []string {
 
 	ps := make([]string, 0, len(s.mutSchema))
 	for p := range s.mutSchema {
-		ps = append(ps, p)
+		ps = append(ps, s.ToPredicateName(p))
 	}
 	return ps
 }
 
+func (s *state) ToPredicateName(attrId uint64) string {
+	sup := s.predicate[attrId]
+	return sup.GetPredicate()
+}
+func (s *state) ToTypeName(attrId uint64) string {
+	sup := s.types[attrId]
+	return sup.GetTypeName()
+}
+
 // SetType sets the type for the given predicate in memory.
 // schema mutations must flow through the update function, which are synced to the db.
-func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
+func (s *state) SetType(typeName uint64, typ pb.TypeUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.types[typeName] = &typ
-	s.elog.Printf(logTypeUpdate(typ, typeName))
+	s.elog.Printf(logTypeUpdate(typ))
 }
 
 // Get gets the schema for the given predicate.
-func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
+func (s *state) Get(ctx context.Context, attrId uint64) (pb.SchemaUpdate, bool) {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
 	// If this is write context, mutSchema will have the updated schema.
 	// If mutSchema doesn't have the predicate key, we use the schema from s.predicate.
 	if isWrite {
-		if schema, ok := s.mutSchema[pred]; ok {
+		if schema, ok := s.mutSchema[attrId]; ok {
 			return *schema, true
 		}
 	}
 
-	schema, ok := s.predicate[pred]
+	schema, ok := s.predicate[attrId]
 	if !ok {
 		return pb.SchemaUpdate{}, false
 	}
@@ -228,7 +237,7 @@ func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
 }
 
 // GetType gets the type definition for the given type name.
-func (s *state) GetType(typeName string) (pb.TypeUpdate, bool) {
+func (s *state) GetType(typeName uint64) (pb.TypeUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
 	typ, has := s.types[typeName]
@@ -239,7 +248,7 @@ func (s *state) GetType(typeName string) (pb.TypeUpdate, bool) {
 }
 
 // TypeOf returns the schema type of predicate
-func (s *state) TypeOf(pred string) (types.TypeID, error) {
+func (s *state) TypeOf(pred uint64) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -249,7 +258,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 }
 
 // IsIndexed returns whether the predicate is indexed or not
-func (s *state) IsIndexed(ctx context.Context, pred string) bool {
+func (s *state) IsIndexed(ctx context.Context, pred uint64) bool {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
@@ -277,7 +286,7 @@ func (s *state) Predicates() []string {
 	defer s.RUnlock()
 	var out []string
 	for k := range s.predicate {
-		out = append(out, k)
+		out = append(out, s.ToPredicateName(k))
 	}
 	return out
 }
@@ -292,13 +301,13 @@ func (s *state) Types() []string {
 	defer s.RUnlock()
 	var out []string
 	for k := range s.types {
-		out = append(out, k)
+		out = append(out, s.ToTypeName(k))
 	}
 	return out
 }
 
 // Tokenizer returns the tokenizer for given predicate
-func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
+func (s *state) Tokenizer(ctx context.Context, pred uint64) []tok.Tokenizer {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
@@ -324,7 +333,7 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 }
 
 // TokenizerNames returns the tokenizer names for given predicate
-func (s *state) TokenizerNames(ctx context.Context, pred string) []string {
+func (s *state) TokenizerNames(ctx context.Context, pred uint64) []string {
 	var names []string
 	tokenizers := s.Tokenizer(ctx, pred)
 	for _, t := range tokenizers {
@@ -335,7 +344,7 @@ func (s *state) TokenizerNames(ctx context.Context, pred string) []string {
 
 // HasTokenizer is a convenience func that checks if a given tokenizer is found in pred.
 // Returns true if found, else false.
-func (s *state) HasTokenizer(ctx context.Context, id byte, pred string) bool {
+func (s *state) HasTokenizer(ctx context.Context, id byte, pred uint64) bool {
 	for _, t := range s.Tokenizer(ctx, pred) {
 		if t.Identifier() == id {
 			return true
@@ -345,7 +354,7 @@ func (s *state) HasTokenizer(ctx context.Context, id byte, pred string) bool {
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
-func (s *state) IsReversed(ctx context.Context, pred string) bool {
+func (s *state) IsReversed(ctx context.Context, pred uint64) bool {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
@@ -361,7 +370,7 @@ func (s *state) IsReversed(ctx context.Context, pred string) bool {
 }
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
-func (s *state) HasCount(ctx context.Context, pred string) bool {
+func (s *state) HasCount(ctx context.Context, pred uint64) bool {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
@@ -377,7 +386,7 @@ func (s *state) HasCount(ctx context.Context, pred string) bool {
 }
 
 // IsList returns whether the predicate is of list type.
-func (s *state) IsList(pred string) bool {
+func (s *state) IsList(pred uint64) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -386,7 +395,7 @@ func (s *state) IsList(pred string) bool {
 	return false
 }
 
-func (s *state) HasUpsert(pred string) bool {
+func (s *state) HasUpsert(pred uint64) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -395,7 +404,7 @@ func (s *state) HasUpsert(pred string) bool {
 	return false
 }
 
-func (s *state) HasLang(pred string) bool {
+func (s *state) HasLang(pred uint64) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -404,7 +413,7 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
-func (s *state) HasNoConflict(pred string) bool {
+func (s *state) HasNoConflict(pred uint64) bool {
 	s.RLock()
 	defer s.RUnlock()
 	return s.predicate[pred].GetNoConflict()
@@ -424,10 +433,7 @@ func Init(ps *badger.DB) {
 }
 
 // Load reads the schema for the given predicate from the DB.
-func Load(predicate string) error {
-	if len(predicate) == 0 {
-		return errors.Errorf("Empty predicate")
-	}
+func Load(predicate uint64) error {
 	delete(State().mutSchema, predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)
@@ -448,8 +454,8 @@ func Load(predicate string) error {
 		return err
 	}
 	State().Set(predicate, &s)
-	State().elog.Printf(logUpdate(&s, predicate))
-	glog.Infoln(logUpdate(&s, predicate))
+	State().elog.Printf(logUpdate(&s))
+	glog.Infoln(logUpdate(&s))
 	return nil
 }
 
@@ -484,7 +490,7 @@ func LoadSchemaFromDb() error {
 		var s pb.SchemaUpdate
 		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
-				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
+				s = pb.SchemaUpdate{AttrId: attr, ValueType: pb.Posting_DEFAULT}
 			}
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			State().Set(attr, &s)
@@ -520,7 +526,7 @@ func LoadTypesFromDb() error {
 		var t pb.TypeUpdate
 		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
-				t = pb.TypeUpdate{TypeName: attr}
+				t = pb.TypeUpdate{}
 			}
 			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
 			State().SetType(attr, t)
@@ -536,7 +542,7 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the type updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
-func InitialTypes(namespace uint64) []*pb.TypeUpdate {
+func InitialTypes(namespace uint32) []*pb.TypeUpdate {
 	return initialTypesInternal(namespace, false)
 }
 
@@ -546,12 +552,12 @@ func InitialTypes(namespace uint64) []*pb.TypeUpdate {
 // example of such situation is while allowing type updates to go through during
 // alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
-func CompleteInitialTypes(namespace uint64) []*pb.TypeUpdate {
+func CompleteInitialTypes(namespace uint32) []*pb.TypeUpdate {
 	return initialTypesInternal(namespace, true)
 }
 
 // NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
-func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
+func initialTypesInternal(namespace uint32, all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
@@ -625,9 +631,10 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 	}
 
 	for _, typ := range initialTypes {
-		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		typ.TypeName = typ.TypeName
+		typ.Namespace = namespace
 		for _, fields := range typ.Fields {
-			fields.Predicate = x.NamespaceAttr(namespace, fields.Predicate)
+			fields.AttrId = x.ToNsAttrId(namespace, fields.Predicate)
 		}
 	}
 	return initialTypes
@@ -636,7 +643,7 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema(namespace uint64) []*pb.SchemaUpdate {
+func InitialSchema(namespace uint32) []*pb.SchemaUpdate {
 	return initialSchemaInternal(namespace, false)
 }
 
@@ -645,11 +652,11 @@ func InitialSchema(namespace uint64) []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema(namespace uint64) []*pb.SchemaUpdate {
+func CompleteInitialSchema(namespace uint32) []*pb.SchemaUpdate {
 	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace uint32, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema,
@@ -717,7 +724,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 		}...)
 	}
 	for _, sch := range initialSchema {
-		sch.Predicate = x.NamespaceAttr(namespace, sch.Predicate)
+		sch.AttrId = x.ToNsAttrId(namespace, sch.Predicate)
 	}
 	return initialSchema
 }

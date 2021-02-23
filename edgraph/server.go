@@ -451,7 +451,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		} else {
 			attr = op.DropValue
 		}
-		attr = x.NamespaceAttr(namespace, attr)
+		attr = x.ToNsAttrId(namespace, attr)
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
 			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
@@ -486,7 +486,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		// Pre-defined types cannot be dropped.
-		dropPred := x.NamespaceAttr(namespace, op.DropValue)
+		dropPred := x.ToNsAttrId(namespace, op.DropValue)
 		if x.IsPreDefinedType(dropPred) {
 			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
 				op.DropValue)
@@ -570,7 +570,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
-			pred = x.NamespaceAttr(ns, pred)
+			pred = x.ToNsAttrId(ns, pred)
 			if oldHint := predHints[pred]; oldHint == pb.Metadata_LIST {
 				continue
 			}

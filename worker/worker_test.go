@@ -369,7 +369,7 @@ func TestMain(m *testing.M) {
 	gr.tablets = make(map[string]*pb.Tablet)
 	addTablets := func(attrs []string, gid uint32, namespace uint64) {
 		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
+			gr.tablets[x.ToNsAttrId(namespace, attr)] = &pb.Tablet{GroupId: gid}
 		}
 	}
 

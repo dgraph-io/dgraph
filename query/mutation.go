@@ -82,7 +82,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 
 		var preds []string
 		if edge.Attr != x.Star {
-			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
+			preds = []string{x.ToNsAttrId(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}

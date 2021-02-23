@@ -598,7 +598,7 @@ func authorizePreds(ctx context.Context, userData, preds []string,
 	groupIds := userData[1:]
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
-		nsPred := x.NamespaceAttr(ns, pred)
+		nsPred := x.ToNsAttrId(ns, pred)
 		if err := aclCachePtr.authorizePredicate(groupIds, nsPred, aclOp); err != nil {
 			logAccess(&accessEntry{
 				userId:    userId,

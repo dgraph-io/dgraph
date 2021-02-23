@@ -109,7 +109,7 @@ func (l *schema) init(ns uint64) {
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
 		if ns != math.MaxUint64 {
-			i.Predicate = x.NamespaceAttr(ns, i.Predicate)
+			i.Predicate = x.ToNsAttrId(ns, i.Predicate)
 		}
 		l.preds[i.Predicate] = i
 	}
@@ -255,7 +255,7 @@ func (l *loader) uid(val string, ns uint64) string {
 	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
 	// this string.
 	sb := strings.Builder{}
-	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
+	x.Check2(sb.WriteString(x.ToNsAttrId(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
 	return fmt.Sprintf("%#x", uint64(uid))
@@ -318,12 +318,12 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	for _, nq := range nqs {
 		// taking hash as the value might contain invalid symbols
-		subject := x.NamespaceAttr(nq.Namespace, nq.Subject)
+		subject := x.ToNsAttrId(nq.Namespace, nq.Subject)
 		ids[subject] = generateBlankNode(subject)
 
 		if len(nq.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			object := x.NamespaceAttr(nq.Namespace, nq.ObjectId)
+			object := x.ToNsAttrId(nq.Namespace, nq.ObjectId)
 			ids[object] = generateBlankNode(object)
 		}
 	}
@@ -467,8 +467,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
-				iPred := sch.preds[x.NamespaceAttr(buffer[i].Namespace, buffer[i].Predicate)]
-				jPred := sch.preds[x.NamespaceAttr(buffer[j].Namespace, buffer[j].Predicate)]
+				iPred := sch.preds[x.ToNsAttrId(buffer[i].Namespace, buffer[i].Predicate)]
+				jPred := sch.preds[x.ToNsAttrId(buffer[j].Namespace, buffer[j].Predicate)]
 				t := func(a *predicate) int {
 					if a != nil && a.Count {
 						return 1

@@ -939,7 +939,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         x.NamespaceAttr(namespace, attr),
+		Attr:         x.ToNsAttrId(namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1974,7 +1974,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				// We already have the predicates populated from the var.
 				temp := getPredsFromVals(child.ExpandPreds)
 				for _, pred := range temp {
-					preds = append(preds, x.NamespaceAttr(namespace, pred))
+					preds = append(preds, x.ToNsAttrId(namespace, pred))
 				}
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
@@ -2458,7 +2458,7 @@ func (sg *SubGraph) createOrderForTask(ns uint64) []*pb.Order {
 	out := []*pb.Order{}
 	for _, o := range sg.Params.Order {
 		oc := &pb.Order{
-			Attr:  x.NamespaceAttr(ns, o.Attr),
+			Attr:  x.ToNsAttrId(ns, o.Attr),
 			Desc:  o.Desc,
 			Langs: o.Langs,
 		}
@@ -2675,7 +2675,7 @@ func getPredicatesFromTypes(namespace uint64, typeNames []string) []string {
 	var preds []string
 
 	for _, typeName := range typeNames {
-		typeDef, ok := schema.State().GetType(x.NamespaceAttr(namespace, typeName))
+		typeDef, ok := schema.State().GetType(x.ToNsAttrId(namespace, typeName))
 		if !ok {
 			continue
 		}

@@ -81,8 +81,8 @@ func ToAttrIdInternal(attr string) uint32 { return ToAttrId(attr) | bitInternal 
 func IsAttrIdReverse(attr uint32) bool    { return attr&bitReverse > 0 }
 func IsAttrIdInternal(attr uint32) bool   { return attr&bitInternal > 0 }
 
-// NamespaceAttr is used to generate attr from namespace.
-func NamespaceAttr(ns uint32, attr string) uint64 {
+// ToNsAttrId is used to generate attr from namespace.
+func ToNsAttrId(ns uint32, attr string) uint64 {
 	val := uint64(ns) << 32
 	val |= uint64(ToAttrId(attr))
 	return val
@@ -91,13 +91,13 @@ func NamespaceAttr(ns uint32, attr string) uint64 {
 func NamespaceAttrList(ns uint32, preds []string) []uint64 {
 	var resp []uint64
 	for _, pred := range preds {
-		resp = append(resp, NamespaceAttr(ns, pred))
+		resp = append(resp, ToNsAttrId(ns, pred))
 	}
 	return resp
 }
 
 func GalaxyAttr(attr string) uint64 {
-	return NamespaceAttr(GalaxyNamespace, attr)
+	return ToNsAttrId(GalaxyNamespace, attr)
 }
 
 // ParseAttr returns the attr from the given value.
@@ -419,7 +419,7 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 		return nil
 	}
 
-	attr := NamespaceAttr(backupKey.Namespace, backupKey.Attr)
+	attr := ToNsAttrId(backupKey.Namespace, backupKey.Attr)
 
 	var key []byte
 	switch backupKey.Type {

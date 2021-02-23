@@ -115,7 +115,7 @@ func populateGraphExport(t *testing.T) {
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
-		e.Attr = x.NamespaceAttr(nq.Namespace, e.Attr)
+		e.Attr = x.ToNsAttrId(nq.Namespace, e.Attr)
 		require.NoError(t, err)
 		if set {
 			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
@@ -477,9 +477,9 @@ func TestToSchema(t *testing.T) {
 		},
 		{
 			skv: &skv{
-				attr: x.NamespaceAttr(0xf2, "Alice:best"),
+				attr: x.ToNsAttrId(0xf2, "Alice:best"),
 				schema: pb.SchemaUpdate{
-					Predicate: x.NamespaceAttr(0xf2, "mother"),
+					Predicate: x.ToNsAttrId(0xf2, "mother"),
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,

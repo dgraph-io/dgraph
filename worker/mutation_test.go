@@ -52,14 +52,14 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Attr:  x.NamespaceAttr(0xf2, "name"),
+				Attr:  x.ToNsAttrId(0xf2, "name"),
 				Op:    pb.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Attr:      x.NamespaceAttr(0xf2, "name"),
+				Attr:      x.ToNsAttrId(0xf2, "name"),
 				Op:        pb.DirectedEdge_DEL,
 				ValueType: 9,
 			},

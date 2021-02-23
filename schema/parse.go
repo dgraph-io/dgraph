@@ -45,7 +45,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range result.Preds {
-		State().Set(update.Predicate, update)
+		State().Set(update.AttrId, update)
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string, ns uint32) (*pb.Sch
 	next = it.Item()
 	schema := &pb.SchemaUpdate{
 		Predicate: predicate,
-		Namespace: ns,
+		AttrId:    x.ToNsAttrId(ns, predicate),
 	}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
@@ -365,7 +365,7 @@ func parseTypeDeclaration(it *lex.ItemIterator, ns uint32) (*pb.TypeUpdate, erro
 func parseTypeField(it *lex.ItemIterator, typeName string, ns uint32) (*pb.SchemaUpdate, error) {
 	field := &pb.SchemaUpdate{
 		Predicate: it.Item().Val,
-		Namespace: ns,
+		AttrId:    x.ToNsAttrId(ns, it.Item().Val),
 	}
 	var list bool
 	it.Next()
