@@ -50,7 +50,7 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 	for gid := range state.Groups {
 		req := &pb.DeleteNsRequest{Namespace: ns, GroupId: gid}
 		g.Go(func() error {
-			return x.RetryUntilSuccess(100, 10*time.Second, func() error {
+			return x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
 				return proposeDeleteOrSend(ctx, req)
 			})
 		})
@@ -61,7 +61,7 @@ func ProcessDeleteNsRequest(ctx context.Context, ns uint64) error {
 	}
 
 	// Now propose the change to zero.
-	return x.RetryUntilSuccess(100, 10*time.Second, func() error {
+	return x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
 		return sendDeleteToZero(ctx, ns)
 	})
 }
