@@ -4016,3 +4016,155 @@
             ],
             "uid": "_:Person12"
         }
+
+- name: "Reference to inverse field should be ignored and not throw an error"
+  gqlmutation: |
+    mutation addDistrict($input: [AddDistrictInput!]!) {
+      addDistrict(input: $input) {
+        district {
+          name
+          code
+          cities {
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Dist1",
+          "code": "D1",
+          "cities": [{"name": "Bengaluru", "district": { "code": "non-existing" } }]
+        },
+        {
+          "name": "Dist2",
+          "code": "D2",
+          "cities": [{"name": "Pune", "district": { "code": "D2" } }]
+        }
+      ]
+    }
+  explanation: "As district is inverse of city. There is no need to supply district to
+    the city. In case it is supplied, it is simply ignored. The city is linked to D1 and
+    district with code non-existing is ignored. Not even its existence query is generated."
+  dgquery: |-
+    query {
+      District1(func: eq(District.code, "D1")) @filter(type(District)) {
+        uid
+      }
+      District2(func: eq(District.code, "D2")) @filter(type(District)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "District.cities":
+            [
+              {
+                "City.name":"Bengaluru",
+                "dgraph.type":["City"],
+                "City.district": {
+                  "uid": "_:District1"
+                },
+                "uid":"_:City3"
+              }
+            ],
+            "District.code":"D1",
+            "District.name":"Dist1",
+            "dgraph.type":["District"],
+            "uid":"_:District1"
+        }
+    - setjson: |
+        {
+          "District.cities":
+            [
+              {
+                "City.name":"Pune",
+                "dgraph.type":["City"],
+                "City.district": {
+                  "uid": "_:District2"
+                },
+                "uid":"_:City4"
+              }
+            ],
+            "District.code":"D2",
+            "District.name":"Dist2",
+            "dgraph.type":["District"],
+            "uid":"_:District2"
+        }
+
+- name: "Reference to inverse field should be ignored and not throw an error 2"
+  gqlmutation: |
+    mutation addFoo($input: [AddFooInput!]!) {
+      addFoo(input: $input) {
+        foo {
+          id
+          bar {
+            id
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "123",
+          "bar": {"id": "1234", "foo": { "id": "123" } }
+        },
+        {
+          "id": "1",
+          "bar": {"id": "2", "foo": { "id": "3" } }
+        }
+      ]
+    }
+  explanation: "As foo is inverse of bar. There is no need to supply bar to
+    foo. In case it is supplied, it is simply ignored."
+  dgquery: |-
+    query {
+      Foo1(func: eq(Foo.id, "123")) @filter(type(Foo)) {
+        uid
+      }
+      Bar2(func: eq(Bar.id, "1234")) @filter(type(Bar)) {
+        uid
+      }
+      Foo3(func: eq(Foo.id, "1")) @filter(type(Foo)) {
+        uid
+      }
+      Bar4(func: eq(Bar.id, "2")) @filter(type(Bar)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Foo.bar":
+              {
+                "Bar.id":"1234",
+                "dgraph.type":["Bar"],
+                "Bar.foo": {
+                  "uid": "_:Foo1"
+                },
+                "uid":"_:Bar2"
+              },
+            "Foo.id":"123",
+            "dgraph.type":["Foo"],
+            "uid":"_:Foo1"
+        }
+    - setjson: |
+        {
+          "Foo.bar":
+              {
+                "Bar.id":"2",
+                "dgraph.type":["Bar"],
+                "Bar.foo": {
+                  "uid": "_:Foo3"
+                },
+                "uid":"_:Bar4"
+              },
+            "Foo.id":"1",
+            "dgraph.type":["Foo"],
+            "uid":"_:Foo3"
+        }
