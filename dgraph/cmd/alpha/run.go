@@ -692,6 +692,8 @@ func run() {
 		worker.BadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
+	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
+		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
 		PostingDir:                 Alpha.Conf.GetString("postings"),
@@ -704,7 +706,7 @@ func run() {
 		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
-		AuthToken:      x.WorkerConfig.Security.GetString("token"),
+		AuthToken:      security.GetString("token"),
 		Audit:          conf,
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
@@ -741,8 +743,6 @@ func run() {
 
 	worker.SetConfiguration(&opts)
 
-	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
-		worker.SecurityDefaults)
 	ips, err := getIPsFromString(security.GetString("whitelist"))
 	x.Check(err)
 
