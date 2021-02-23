@@ -247,8 +247,8 @@ they form a Raft group and provide synchronous replication.
 		String())
 
 	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
-	//       option (from audit.FlagDefaults)
-	flag.String("audit", "", z.NewSuperFlagHelp(audit.FlagDefaults).
+	//       option.
+	flag.String("audit", "", z.NewSuperFlagHelp("compress=false; days=10; size=100;").
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
