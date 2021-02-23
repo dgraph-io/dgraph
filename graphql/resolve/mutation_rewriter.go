@@ -1413,8 +1413,6 @@ func rewriteObject(
 							// updating this node.
 							upsertVar = variable
 							srcUID = fmt.Sprintf("uid(%s)", variable)
-							// To ensure that xid is not added to the output json
-							delete(obj, xid.Name())
 						} else {
 							// We return an error as we are at top level of non-upsert mutation and the XID exists.
 							// We need to conceal the error because we might be leaking information to the user if it
@@ -1500,6 +1498,14 @@ func rewriteObject(
 					retErrors = append(retErrors, err)
 					return nil, upsertVar, retErrors
 				}
+			}
+		} else {
+			// In case this is known to be an Upsert. We delete all entries of XIDs
+			// from obj. This is done to prevent any XID entries in the json which is returned
+			// by rewriteObject and ensure that no XID value gets rewritten due to upsert.
+			for _, xid := range xids {
+				// To ensure that xid is not added to the output json in case of upsert
+				delete(obj, xid.Name())
 			}
 		}
 	}

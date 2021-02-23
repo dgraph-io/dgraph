@@ -915,7 +915,7 @@
       cond: "@if(gt(len(State3), 0))"
 
 -
-  name: "Multiple Upsert Mutation with multiple xids where both existence queries result exist"
+  name: "Upsert Mutation with multiple xids where both existence queries result exist"
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -958,6 +958,56 @@
   dgmutations:
     - setjson: |
         { "uid" : "uid(Book2)",
+          "Book.publisher": "penguin"
+        }
+      cond: "@if(gt(len(Book2), 0))"
+
+-
+  name: "Upsert Mutation with multiple xids where only one of existence queries result exist"
+  explanation: "Book1 does not exist but Book2 exists. As Book2 exists, this is an upsert.
+    Even though, Book1 does not exist, the mutation should not update ISBN as it is also an XID."
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+          ISBN
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "NSW",
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "NSW")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "Book2": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      Book2 as addBook(func: uid(0x11)) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid" : "uid(Book2)",
           "Book.publisher": "penguin"
         }
       cond: "@if(gt(len(Book2), 0))"
