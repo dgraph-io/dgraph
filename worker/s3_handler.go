@@ -16,16 +16,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
-	os "os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -320,68 +316,4 @@ func (h *s3Handler) Close() error {
 
 func (h *s3Handler) Write(b []byte) (int, error) {
 	return h.pwriter.Write(b)
-}
-
-func (h *s3Handler) ExportBackup(location, exportDir, format string,
-	key x.SensitiveByteSlice) error {
-	if format != "json" && format != "rdf" {
-		return errors.Errorf("invalid format %s", format)
-	}
-	// Create exportDir and temporary folder to store the restored backup.
-	var err error
-	exportDir, err = filepath.Abs(exportDir)
-	if err != nil {
-		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
-	}
-	if err := os.MkdirAll(exportDir, 0755); err != nil {
-		return errors.Wrapf(err, "cannot create dir %s", exportDir)
-	}
-	tmpDir, err := ioutil.TempDir("", "export_backup")
-	if err != nil {
-		return errors.Wrapf(err, "cannot create temp dir")
-	}
-
-	restore := RunRestore(tmpDir, location, "", key, options.None, 0)
-	if restore.Err != nil {
-		return restore.Err
-	}
-
-	files, err := ioutil.ReadDir(tmpDir)
-	if err != nil {
-		return err
-	}
-	// Export the data from the p directories produced by the last step.
-	ch := make(chan error, len(files))
-	for _, f := range files {
-		if !f.IsDir() {
-			continue
-		}
-
-		dir := filepath.Join(filepath.Join(tmpDir, f.Name()))
-		gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
-		if err != nil {
-			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
-		}
-		go storeExport(&pb.ExportRequest{
-			GroupId:     uint32(gid),
-			ReadTs:      restore.Version,
-			UnixTs:      time.Now().Unix(),
-			Format:      format,
-			Destination: exportDir,
-		}, dir, key, ch)
-	}
-
-	for i := 0; i < len(files); i++ {
-		err := <-ch
-		if err != nil {
-			return err
-		}
-	}
-
-	// Clean up temporary directory.
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
-	}
-
-	return nil
 }

@@ -101,7 +101,7 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
 	}
 }
 
-func storeExport(request *pb.ExportRequest, dir string,
+func StoreExport(request *pb.ExportRequest, dir string,
 	key x.SensitiveByteSlice, ch chan error) {
 
 	db, err := badger.OpenManaged(badger.DefaultOptions(dir).

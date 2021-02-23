@@ -13,21 +13,15 @@
 package worker
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -257,121 +251,4 @@ func pathExist(path string) bool {
 		return true
 	}
 	return !os.IsNotExist(err) && !os.IsPermission(err)
-}
-
-func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
-	key x.SensitiveByteSlice) error {
-	if format != "json" && format != "rdf" {
-		return errors.Errorf("invalid format %s", format)
-	}
-
-	// Create exportDir and temporary folder to store the restored backup.
-	var err error
-	exportDir, err = filepath.Abs(exportDir)
-	if err != nil {
-		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
-	}
-	if err := os.MkdirAll(exportDir, 0755); err != nil {
-		return errors.Wrapf(err, "cannot create dir %s", exportDir)
-	}
-	tmpDir, err := ioutil.TempDir("", "export_backup")
-	if err != nil {
-		return errors.Wrapf(err, "cannot create temp dir")
-	}
-
-	// Function to load the a single backup file.
-	loadFn := func(r io.Reader, groupId uint32, preds predicateSet, isOld bool) (uint64, error) {
-		dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", groupId))
-
-		r, err := enc.GetReader(key, r)
-		if err != nil {
-			return 0, err
-		}
-
-		gzReader, err := gzip.NewReader(r)
-		if err != nil {
-			if len(key) != 0 {
-				err = errors.Wrap(err,
-					"Unable to read the backup. Ensure the encryption key is correct.")
-			}
-			return 0, errors.Wrapf(err, "cannot create gzip reader")
-		}
-		// The badger DB should be opened only after creating the backup
-		// file reader and verifying the encryption in the backup file.
-		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-			WithSyncWrites(false).
-			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key).
-			WithNamespaceOffset(x.NamespaceOffset))
-
-		if err != nil {
-			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
-		}
-		defer db.Close()
-		_, _, err = loadFromBackup(db, &loadBackupInput{
-			// TODO(Naman): Why is drop operations nil here?
-			r: gzReader, restoreTs: 0, preds: preds, dropOperations: nil, isOld: isOld,
-		})
-		if err != nil {
-			return 0, errors.Wrapf(err, "cannot load backup")
-		}
-		return 0, x.WriteGroupIdFile(dir, uint32(groupId))
-	}
-
-	// Read manifest from folder.
-	manifest := &Manifest{}
-	manifestPath := filepath.Join(backupDir, backupManifest)
-	if err := h.ReadManifest(manifestPath, manifest); err != nil {
-		return errors.Wrapf(err, "cannot read manifest at %s", manifestPath)
-	}
-	manifest.Path = manifestPath
-	if manifest.Since == 0 || len(manifest.Groups) == 0 {
-		return errors.Errorf("no data found in backup")
-	}
-
-	// Restore backup to disk.
-	for gid := range manifest.Groups {
-		file := filepath.Join(backupDir, backupName(manifest.Since, gid))
-		fp, err := os.Open(file)
-		if err != nil {
-			return errors.Wrapf(err, "cannot open backup file at %s", file)
-		}
-		defer fp.Close()
-
-		// Only restore the predicates that were assigned to this group at the time
-		// of the last backup.
-		predSet := manifest.getPredsInGroup(gid)
-
-		_, err = loadFn(fp, gid, predSet, manifest.Version == 0)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Export the data from the p directories produced by the last step.
-	ch := make(chan error, len(manifest.Groups))
-	for gid := range manifest.Groups {
-
-		go storeExport(&pb.ExportRequest{
-			GroupId:     gid,
-			ReadTs:      manifest.Since,
-			UnixTs:      time.Now().Unix(),
-			Format:      format,
-			Destination: exportDir,
-		}, filepath.Join(tmpDir, fmt.Sprintf("p%d", gid)), key, ch)
-	}
-
-	for i := 0; i < len(manifest.Groups); i++ {
-		err := <-ch
-		if err != nil {
-			return err
-		}
-	}
-
-	// Clean up temporary directory.
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
-	}
-
-	return nil
 }
