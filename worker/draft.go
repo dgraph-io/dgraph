@@ -1798,7 +1798,7 @@ func (n *node) restartAsStandaloneNode() error {
 	// discard the previously uncommitted entries
 	for i, ent := range ents {
 		if ent.Index > hardState.Commit {
-			glog.Infof(
+			glog.Info(
 				"discarding uncommitted WAL entries",
 				zap.Uint64("entry-index", ent.Index),
 				zap.Uint64("commit-index-from-wal", hardState.Commit),
