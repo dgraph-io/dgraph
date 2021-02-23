@@ -128,7 +128,7 @@ func TestDeleteNamespace(t *testing.T) {
 	require.NoError(t, err)
 	dg[ns] = testutil.DgClientWithLogin(t, "groot", "password", ns)
 
-	addData := func(ns uint64) {
+	addData := func(ns uint64) error {
 		mutation := &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`
 			_:a <name> "%d" .
@@ -136,7 +136,7 @@ func TestDeleteNamespace(t *testing.T) {
 			CommitNow: true,
 		}
 		_, err := dg[ns].NewTxn().Mutate(context.Background(), mutation)
-		require.NoError(t, err)
+		return err
 	}
 	check := func(ns uint64, expected string) {
 		query := `
@@ -150,16 +150,20 @@ func TestDeleteNamespace(t *testing.T) {
 		testutil.CompareJSON(t, expected, string(resp))
 	}
 
-	addData(x.GalaxyNamespace)
+	err = addData(x.GalaxyNamespace)
+	require.NoError(t, err)
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
-	addData(ns)
+	err = addData(ns)
+	require.NoError(t, err)
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
 	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
 
-	addData(x.GalaxyNamespace)
+	err = addData(x.GalaxyNamespace)
+	require.NoError(t, err)
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
-	addData(ns)
+	err = addData(ns)
+	require.Contains(t, err.Error(), "Key is using the banned prefix")
 	check(ns, `{"me": []}`)
 
 	// No one should be able to delete the default namespace. Not even guardian of galaxy.
