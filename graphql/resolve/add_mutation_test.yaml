@@ -774,7 +774,7 @@
   explanation: "Error thrown as node with code nsw exists."
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
-      addState(input: [$input]) {
+      addState(input: [$input], upsert: false) {
         state {
           name
         }
@@ -804,8 +804,301 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id nsw already exists for type State"
+      "message": "failed to rewrite mutation payload because id nsw already exists for field code inside type State"
     }
+
+-
+  name: "Multiple Upsert Mutation 1"
+  explanation: "As both states exist, the countries of the states are updated"
+  gqlmutation: |
+    mutation addState($input: [AddStateInput!]!) {
+      addState(input: $input, upsert: true) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "code": "nsw",
+          "name": "NSW",
+          "country": { "id": "0x12" }
+        },
+        {
+          "code": "mh",
+          "name": "Maharashtra",
+          "country": { "id": "0x14" }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+      State3(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
+      Country4(func: uid(0x14)) @filter(type(Country)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "State1": "0x11",
+      "Country2": "0x12",
+      "State3": "0x13",
+      "Country4": "0x14"
+    }
+  dgquerysec: |-
+    query {
+      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+        uid
+      }
+      State3 as addState(func: uid(0x13)) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State1)) {
+        Country5 as State.country @filter(NOT (uid(0x12)))
+      }
+      var(func: uid(State3)) {
+        Country7 as State.country @filter(NOT (uid(0x14)))
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(State1)",
+          "State.name": "NSW",
+          "State.country": {
+            "uid": "0x12",
+            "Country.states": [ { "uid": "uid(State1)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country5)",
+            "Country.states":
+              [
+                {
+                  "uid":"uid(State1)"
+                }
+              ]
+          }
+        ]
+      cond: "@if(gt(len(State1), 0))"
+    - setjson: |
+        { "uid" : "uid(State3)",
+          "State.name": "Maharashtra",
+          "State.country": {
+            "uid": "0x14",
+            "Country.states": [ { "uid": "uid(State3)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country7)",
+            "Country.states":
+              [
+                {
+                  "uid":"uid(State3)"
+                }
+              ]
+          }
+        ]
+      cond: "@if(gt(len(State3), 0))"
+
+-
+  name: "Upsert Mutation with multiple xids where both existence queries result exist"
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+          ISBN
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "NSW",
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "NSW")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "Book1": "0x11",
+      "Book2": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      Book2 as addBook(func: uid(0x11)) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(Book2)",
+          "Book.publisher": "penguin"
+        }
+      cond: "@if(gt(len(Book2), 0))"
+
+-
+  name: "Upsert Mutation with multiple xids where only one of existence queries result exist"
+  explanation: "Book1 does not exist but Book2 exists. As Book2 exists, this is an upsert.
+    Even though, Book1 does not exist, the mutation should not update ISBN as it is also an XID."
+  gqlmutation: |
+    mutation addBook($input: [AddBookInput!]!) {
+      addBook(input: $input, upsert: true) {
+        book {
+          title
+          ISBN
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "title": "Sapiens",
+          "ISBN": "NSW",
+          "publisher": "penguin"
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "NSW")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "Book2": "0x11"
+    }
+  dgquerysec: |-
+    query {
+      Book2 as addBook(func: uid(0x11)) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid" : "uid(Book2)",
+          "Book.publisher": "penguin"
+        }
+      cond: "@if(gt(len(Book2), 0))"
+
+-
+  name: "Multiple Upsert Mutation 2"
+  explanation: "The first state exists and is updated. Second is created. Country
+    is also created in second"
+  gqlmutation: |
+    mutation addState($input: [AddStateInput!]!) {
+      addState(input: $input, upsert: true) {
+        state {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      [
+        {
+          "code": "nsw",
+          "name": "NSW",
+          "country": { "id": "0x12" }
+        },
+        {
+          "code": "mh",
+          "name": "Maharashtra",
+          "country": { "name": "India" }
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: uid(0x12)) @filter(type(Country)) {
+        uid
+      }
+      State3(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "State1": "0x11",
+      "Country2": "0x12"
+    }
+  dgquerysec: |-
+    query {
+      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State1)) {
+        Country4 as State.country @filter(NOT (uid(0x12)))
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(State1)",
+          "State.name": "NSW",
+          "State.country": {
+            "uid": "0x12",
+            "Country.states": [ { "uid": "uid(State1)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid":"uid(Country4)",
+            "Country.states":
+              [
+                {
+                  "uid":"uid(State1)"
+                }
+              ]
+          }
+        ]
+      cond: "@if(gt(len(State1), 0))"
+    - setjson: |
+        { "uid" : "_:State3",
+          "dgraph.type": ["State"],
+          "State.name": "Maharashtra",
+          "State.code": "mh",
+          "State.country": {
+            "uid": "_:Country6",
+            "dgraph.type": ["Country"],
+            "Country.name": "India",
+            "Country.states": [ { "uid": "_:State3" } ]
+          }
+        }
 
 -
   name: "Add mutation using code on type which also has an ID field"
@@ -3328,3 +3621,600 @@
     message: |-
       failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
       failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
+
+-
+  name: "Add type with multiple Xid fields"
+  gqlmutation: |
+    mutation($input: [AddBookInput!]!) {
+    	addBook(input: $input) {
+    		book {
+    			title
+    			ISBN
+    			author {
+    				name
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "title": "Sapiens",
+                "ISBN": "2312SB",
+                "author": {
+                    "name": "Yuval Noah Harari"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Book.author": {
+                "author.name": "Yuval Noah Harari",
+                "author.book": [
+                    {
+                        "uid": "_:Book2"
+                    }
+                ],
+                "dgraph.type": [
+                    "author"
+                ],
+                "uid": "_:author3"
+            },
+            "Book.ISBN": "2312SB",
+            "Book.title": "Sapiens",
+            "dgraph.type": [
+                "Book"
+            ],
+            "uid": "_:Book2"
+        }
+
+-
+  name: "Add type with multiple Xid fields at deep level"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.ISBN": "2312SB",
+                    "Book.title": "Sapiens",
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "dgraph.type": [
+                        "Book"
+                    ],
+                    "uid": "_:Book2"
+                }
+            ]
+        }
+
+-
+  name: "Add mutation for type Person1 with multiple xids referencing same node as closeFriends and friends, closeFriends refer friends with xid id"
+  explanation: "The mutation adds same node as friends and closeFriends. It should
+    work irrespective of the order in which the node is referenced."
+  gqlmutation: |
+    mutation($input: [AddPerson1Input!]!) {
+      addPerson1(input: $input) {
+        person1 {
+          id
+          name
+          friends {
+            id
+            name
+          }
+          closeFriends {
+            id
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "1",
+          "name": "First Person",
+          "friends": [{
+            "id": "2",
+            "name": "Second Person"
+           }],
+          "closeFriends": [{
+            "id": "2"
+           }]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Person11(func: eq(Person1.id, "1")) @filter(type(Person1)) {
+        uid
+      }
+      Person12(func: eq(Person1.name, "First Person")) @filter(type(Person1)) {
+        uid
+      }
+      Person13(func: eq(Person1.id, "2")) @filter(type(Person1)) {
+        uid
+      }
+      Person14(func: eq(Person1.name, "Second Person")) @filter(type(Person1)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Person1.closeFriends": [
+            {
+              "Person1.closeFriends": [
+                {
+                  "uid": "_:Person12"
+                }
+              ],
+              "Person1.name": "Second Person",
+              "Person1.id": "2",
+              "dgraph.type": [
+                "Person1"
+              ],
+              "uid": "_:Person14"
+            }
+          ],
+          "Person1.friends": [
+            {
+              "uid": "_:Person14",
+              "Person1.friends": [
+                {
+                  "uid": "_:Person12"
+                }
+              ]
+            }
+          ],
+          "Person1.name": "First Person",
+          "Person1.id": "1",
+          "dgraph.type": [
+            "Person1"
+          ],
+          "uid": "_:Person12"
+        }
+
+-
+  name: "Add type with multiple Xids fields at deep level when deep node already exist for all existence queries"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x117)) {
+        author4 as Book.author
+      }
+    }
+  qnametouid: |
+    {
+      "Book1": "0x117",
+      "Book2": "0x116"
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "uid": "0x117"
+                }
+            ]
+        }
+      deletejson: |
+        [
+            {
+                "author.book": [
+                    {
+                        "uid": "0x117"
+                    }
+                ],
+                "uid": "uid(author4)"
+            }
+        ]
+
+-
+  name: "Add type with multiple Xids fields at deep level when deep node already exist for one existence query"
+  gqlmutation: |
+    mutation($input: [AddauthorInput!]!) {
+    	addauthor(input: $input) {
+    		author {
+    			name
+    			book {
+    				title
+    				ISBN
+    			}
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "name": "Yuval Noah Harari",
+                "book": {
+                    "title": "Sapiens",
+                    "ISBN": "2312SB"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      Book1(func: eq(Book.ISBN, "2312SB")) @filter(type(Book)) {
+        uid
+      }
+      Book2(func: eq(Book.title, "Sapiens")) @filter(type(Book)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x119)) {
+        author4 as Book.author
+      }
+    }
+  qnametouid: |
+    {
+      "Book2": "0x119"
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "author.name": "Yuval Noah Harari",
+            "dgraph.type": [
+                "author"
+            ],
+            "uid": "_:author3",
+            "author.book": [
+                {
+                    "Book.author": {
+                        "uid": "_:author3"
+                    },
+                    "uid": "0x119"
+                }
+            ]
+        }
+      deletejson: |
+        [
+            {
+                "author.book": [
+                    {
+                        "uid": "0x119"
+                    }
+                ],
+                "uid": "uid(author4)"
+            }
+        ]
+
+-
+  name: "Add mutation for type Person1 with multiple xids referencing same node as closeFriends and friends, friends refer closeFriends with xid name "
+  explanation: "The mutation adds same node as friends and closeFriends. It should
+    work irrespective of the order in which the node is referenced."
+  gqlmutation: |
+    mutation($input: [AddPerson1Input!]!) {
+      addPerson1(input: $input) {
+        person1 {
+          id
+          name
+          friends {
+            id
+            name
+          }
+          closeFriends {
+            id
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "1",
+          "name": "First Person",
+          "closeFriends": [{
+            "id": "2",
+            "name": "Second Person"
+           }],
+          "friends": [{
+            "name": "Second Person"
+           }]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Person11(func: eq(Person1.id, "1")) @filter(type(Person1)) {
+        uid
+      }
+      Person12(func: eq(Person1.name, "First Person")) @filter(type(Person1)) {
+        uid
+      }
+      Person13(func: eq(Person1.id, "2")) @filter(type(Person1)) {
+        uid
+      }
+      Person14(func: eq(Person1.name, "Second Person")) @filter(type(Person1)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Person1.closeFriends": [
+                {
+                    "Person1.closeFriends": [
+                        {
+                            "uid": "_:Person12"
+                        }
+                    ],
+                    "Person1.id": "2",
+                    "Person1.name": "Second Person",
+                    "dgraph.type": [
+                        "Person1"
+                    ],
+                    "uid": "_:Person14"
+                }
+            ],
+            "Person1.friends": [
+                {
+                    "Person1.friends": [
+                        {
+                            "uid": "_:Person12"
+                        }
+                    ],
+                    "uid": "_:Person14"
+                }
+            ],
+            "Person1.id": "1",
+            "Person1.name": "First Person",
+            "dgraph.type": [
+                "Person1"
+            ],
+            "uid": "_:Person12"
+        }
+
+- name: "Reference to inverse field should be ignored and not throw an error"
+  gqlmutation: |
+    mutation addDistrict($input: [AddDistrictInput!]!) {
+      addDistrict(input: $input) {
+        district {
+          name
+          code
+          cities {
+            name
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Dist1",
+          "code": "D1",
+          "cities": [{"name": "Bengaluru", "district": { "code": "non-existing" } }]
+        },
+        {
+          "name": "Dist2",
+          "code": "D2",
+          "cities": [{"name": "Pune", "district": { "code": "D2" } }]
+        }
+      ]
+    }
+  explanation: "As district is inverse of city. There is no need to supply district to
+    the city. In case it is supplied, it is simply ignored. The city is linked to D1 and
+    district with code non-existing is ignored. Not even its existence query is generated."
+  dgquery: |-
+    query {
+      District1(func: eq(District.code, "D1")) @filter(type(District)) {
+        uid
+      }
+      District2(func: eq(District.code, "D2")) @filter(type(District)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "District.cities":
+            [
+              {
+                "City.name":"Bengaluru",
+                "dgraph.type":["City"],
+                "City.district": {
+                  "uid": "_:District1"
+                },
+                "uid":"_:City3"
+              }
+            ],
+            "District.code":"D1",
+            "District.name":"Dist1",
+            "dgraph.type":["District"],
+            "uid":"_:District1"
+        }
+    - setjson: |
+        {
+          "District.cities":
+            [
+              {
+                "City.name":"Pune",
+                "dgraph.type":["City"],
+                "City.district": {
+                  "uid": "_:District2"
+                },
+                "uid":"_:City4"
+              }
+            ],
+            "District.code":"D2",
+            "District.name":"Dist2",
+            "dgraph.type":["District"],
+            "uid":"_:District2"
+        }
+
+- name: "Reference to inverse field should be ignored and not throw an error 2"
+  gqlmutation: |
+    mutation addFoo($input: [AddFooInput!]!) {
+      addFoo(input: $input) {
+        foo {
+          id
+          bar {
+            id
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "123",
+          "bar": {"id": "1234", "foo": { "id": "123" } }
+        },
+        {
+          "id": "1",
+          "bar": {"id": "2", "foo": { "id": "3" } }
+        }
+      ]
+    }
+  explanation: "As foo is inverse of bar. There is no need to supply bar to
+    foo. In case it is supplied, it is simply ignored."
+  dgquery: |-
+    query {
+      Foo1(func: eq(Foo.id, "123")) @filter(type(Foo)) {
+        uid
+      }
+      Bar2(func: eq(Bar.id, "1234")) @filter(type(Bar)) {
+        uid
+      }
+      Foo3(func: eq(Foo.id, "1")) @filter(type(Foo)) {
+        uid
+      }
+      Bar4(func: eq(Bar.id, "2")) @filter(type(Bar)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Foo.bar":
+              {
+                "Bar.id":"1234",
+                "dgraph.type":["Bar"],
+                "Bar.foo": {
+                  "uid": "_:Foo1"
+                },
+                "uid":"_:Bar2"
+              },
+            "Foo.id":"123",
+            "dgraph.type":["Foo"],
+            "uid":"_:Foo1"
+        }
+    - setjson: |
+        {
+          "Foo.bar":
+              {
+                "Bar.id":"2",
+                "dgraph.type":["Bar"],
+                "Bar.foo": {
+                  "uid": "_:Foo3"
+                },
+                "uid":"_:Bar4"
+              },
+            "Foo.id":"1",
+            "dgraph.type":["Foo"],
+            "uid":"_:Foo3"
+        }

@@ -36,13 +36,9 @@ const (
 `
 	otherInternalPreds = `
 {"predicate":"dgraph.type","type":"string","index":true,"tokenizer":["exact"],"list":true},
-{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true},
 {"predicate":"dgraph.drop.op", "type": "string"},
-{"predicate":"dgraph.graphql.p_query","type":"string"},
-{"predicate":"dgraph.graphql.p_sha256hash","type":"string","index":true,"tokenizer":["exact"]},
+{"predicate":"dgraph.graphql.p_query","type":"string","index":true,"tokenizer":["sha256"]},
 {"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.schema_history", "type": "string"},
-{"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
 	aclTypes = `
@@ -62,14 +58,8 @@ const (
 	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
 	"name": "dgraph.graphql"
 },{
-	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
-	"name": "dgraph.graphql.history"
-},{
-	"fields": [{"name": "dgraph.graphql.p_query"},{"name": "dgraph.graphql.p_sha256hash"}],
+	"fields": [{"name": "dgraph.graphql.p_query"}],
 	"name": "dgraph.graphql.persisted_query"
-},{
-	"fields": [{"name": "dgraph.cors"}],
-	"name": "dgraph.type.cors"
 }
 `
 )

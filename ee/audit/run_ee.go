@@ -31,9 +31,11 @@ var CmdAudit x.SubCommand
 
 func init() {
 	CmdAudit.Cmd = &cobra.Command{
-		Use:   "audit",
-		Short: "Dgraph audit tool",
+		Use:         "audit",
+		Short:       "Dgraph audit tool",
+		Annotations: map[string]string{"group": "security"},
 	}
+	CmdAudit.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	subcommands := initSubcommands()
 	for _, sc := range subcommands {

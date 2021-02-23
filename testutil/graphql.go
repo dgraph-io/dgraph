@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgrijalva/jwt-go/v4"
@@ -265,13 +263,4 @@ func AppendAuthInfoWithJWKUrlAndWithoutAudience(schema []byte) ([]byte, error) {
 func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
 	authInfo := `#Dgraph.Authorization{"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
 	return append(schema, []byte(authInfo)...), nil
-}
-
-func SetAuthMeta(strSchema string) *authorization.AuthMeta {
-	authMeta, err := authorization.Parse(strSchema)
-	if err != nil {
-		panic(err)
-	}
-	authorization.SetAuthMeta(authMeta)
-	return authMeta
 }

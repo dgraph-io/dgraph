@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -126,6 +128,20 @@ type Column struct {
 	InProject *Project  `json:"inProject,omitempty"`
 	Name      string    `json:"name,omitempty"`
 	Tickets   []*Ticket `json:"tickets,omitempty"`
+}
+
+type Country struct {
+	Id      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	States  []*State `json:"states,omitempty"`
+}
+
+type State struct {
+	Code    string   `json:"code,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	Country *Country `json:"country,omitempty"`
 }
 
 type Project struct {
@@ -335,7 +351,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	require.Error(t, gqlResponse.Errors)
 	require.Equal(t, len(gqlResponse.Errors), 1)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"GraphQL debug: id already exists for type Tweets")
+		"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)
@@ -539,7 +555,7 @@ func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
 		}
 	}
 }
-  
+
 func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
 	getVehicleParams := &common.GraphQLParams{
 		Query: `
@@ -1704,7 +1720,11 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		authMeta := testutil.SetAuthMeta(string(authSchema))
+		authMeta, err := authorization.Parse(string(authSchema))
+		if err != nil {
+			panic(err)
+		}
+
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
 			Namespace:      authMeta.Namespace,
@@ -2094,4 +2114,44 @@ func TestAuthRBACEvaluation(t *testing.T) {
 		})
 
 	}
+}
+
+func TestFragmentInAuthRulesWithUserDefinedCascade(t *testing.T) {
+	addHomeParams := &common.GraphQLParams{
+		Query: `mutation {
+			addHome(input: [
+				{address: "Home1", members: [{dogRef: {breed: "German Shepherd", eats: [{plantRef: {breed: "Crop"}}]}}]},
+				{address: "Home2", members: [{parrotRef: {repeatsWords: ["Hi", "Morning!"]}}]},
+				{address: "Home3", members: [{plantRef: {breed: "Flower"}}]},
+				{address: "Home4", members: [{dogRef: {breed: "Bulldog"}}]}
+			]) {
+				numUids
+			}
+		}`,
+	}
+	gqlResponse := addHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	queryHomeParams := &common.GraphQLParams{
+		Query: `query {
+			queryHome {
+				address
+			}
+		}`,
+		Headers: common.GetJWT(t, "", "", metaInfo),
+	}
+	gqlResponse = queryHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// we should get back only Home1 and Home3
+	testutil.CompareJSON(t, `{"queryHome": [
+		{"address": "Home1"},
+		{"address": "Home3"}
+	]}`, string(gqlResponse.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "Home", map[string]interface{}{}, 4, nil)
+	common.DeleteGqlType(t, "Dog", map[string]interface{}{}, 2, nil)
+	common.DeleteGqlType(t, "Parrot", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Plant", map[string]interface{}{}, 2, nil)
 }

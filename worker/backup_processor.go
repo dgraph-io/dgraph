@@ -65,7 +65,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		Request: req,
 		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
 	}
-	if db != nil {
+	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
@@ -95,6 +95,9 @@ type LoadResult struct {
 }
 
 func (pr *BackupProcessor) Close() {
+	if pr.txn == nil {
+		return
+	}
 	for _, th := range pr.threads {
 		th.itr.Close()
 	}
@@ -154,8 +157,13 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		tl := pr.threads[itr.ThreadId]
 		tl.alloc = itr.Alloc
 
-		bitr := tl.itr // Use the threadlocal iterator because "itr" has the sinceTs set.
-		bitr.Seek(key)
+		bitr := itr
+		// Use the threadlocal iterator because "itr" has the sinceTs set and
+		// it will not be able to read all the data.
+		if tl.itr != nil {
+			bitr = tl.itr
+			bitr.Seek(key)
+		}
 
 		kvList, dropOp, err := tl.toBackupList(key, bitr)
 		if err != nil {
@@ -435,6 +443,9 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		case "DROP_ATTR":
 			dropOp.DropOp = pb.DropOperation_ATTR
 			dropOp.DropValue = dropInfo[1]
+		case "DROP_NS":
+			dropOp.DropOp = pb.DropOperation_NS
+			dropOp.DropValue = dropInfo[1] // contains namespace.
 		}
 		return dropOp, nil
 	default:

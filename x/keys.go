@@ -54,6 +54,8 @@ const (
 	GalaxyNamespace = uint64(0)
 	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
 	IgnoreBytes = "1-8"
+	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
+	NamespaceOffset = 1
 )
 
 func NamespaceToBytes(ns uint64) []byte {
@@ -505,6 +507,14 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
+// DataPrefix returns the prefix for all data keys belonging to this namespace.
+func DataPrefix(ns uint64) []byte {
+	buf := make([]byte, 1+8)
+	buf[0] = DefaultPrefix
+	binary.BigEndian.PutUint64(buf[1:], ns)
+	return buf
+}
+
 // SplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
 func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
@@ -646,14 +656,10 @@ var aclPredicateMap = map[string]struct{}{
 // predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
 // by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
-	"dgraph.graphql.xid":               {},
-	"dgraph.graphql.schema":            {},
-	"dgraph.cors":                      {},
-	"dgraph.drop.op":                   {},
-	"dgraph.graphql.schema_history":    {},
-	"dgraph.graphql.schema_created_at": {},
-	"dgraph.graphql.p_query":           {},
-	"dgraph.graphql.p_sha256hash":      {},
+	"dgraph.graphql.xid":     {},
+	"dgraph.graphql.schema":  {},
+	"dgraph.drop.op":         {},
+	"dgraph.graphql.p_query": {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
@@ -669,9 +675,7 @@ var preDefinedTypeMap = map[string]struct{}{
 	"dgraph.type.User":               {},
 	"dgraph.type.Group":              {},
 	"dgraph.type.Rule":               {},
-	"dgraph.graphql.history":         {},
 	"dgraph.graphql.persisted_query": {},
-	"dgraph.type.cors":               {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.

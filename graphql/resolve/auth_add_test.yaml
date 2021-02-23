@@ -1220,4 +1220,144 @@
     }
   error:
     {"message" : "mutation failed because authorization failed"}
-  
+
+- name: "Upsert Add Mutation with RBAC true"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets(func: uid(TweetsRoot)) {
+        uid
+      }
+      TweetsRoot as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(0x123)) @filter(type(Tweets))
+    }
+
+- name: "Upsert Add Mutation with RBAC false"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "not foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets()
+    }
+
+- name: "Upsert with Deep Auth"
+  explanation: "As state already exists, update auth rules of State are applied.
+    As Country does not exist, add auth rules of Country are applied."
+  gqlquery: |
+    mutation addState($state: AddStateInput!) {
+      addState(input: [$state], upsert: true) {
+        state {
+          code
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "state":
+      {
+        "code": "mh",
+        "name": "Maharashtra",
+        "ownedBy": "user1",
+        "country":
+          {
+            "id": "in",
+            "ownedBy": "user1",
+            "name": "India"
+          }
+      }
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: eq(Country.id, "in")) @filter(type(Country)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "State1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      State1 as addState(func: uid(StateRoot)) {
+        uid
+      }
+      StateRoot as var(func: uid(State3)) @filter(uid(StateAuth4))
+      State3 as var(func: uid(0x123)) @filter(type(State))
+      StateAuth4 as var(func: uid(State3)) @filter(eq(State.ownedBy, "user1")) @cascade
+    }
+  uids: |
+    {
+      "Country2": "0x456"
+    }
+  json: |
+    {
+      "Country2":  [ { "uid": "0x456" } ],
+      "Country2.auth": [ { "uid": "0x456" } ]
+    }
+  authquery: |-
+    query {
+      Country(func: uid(Country1)) @filter(uid(CountryAuth2)) {
+        uid
+      }
+      Country1 as var(func: uid(0x456))
+      CountryAuth2 as var(func: uid(Country1)) @filter(eq(Country.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    {
+      "Country": [ { "uid": "0x456" } ]
+    }

@@ -26,7 +26,6 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -402,7 +401,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	mutationTimer.Stop()
 
-	authErr := authorizeNewNodes(ctx, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
+	authErr := authorizeNewNodes(ctx, mutation, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
@@ -516,12 +515,13 @@ func completeMutationResult(mutation schema.Mutation, qryResult []byte, numUids 
 // of the new nodes failed the auth rules.
 func authorizeNewNodes(
 	ctx context.Context,
+	m schema.Mutation,
 	uids map[string]string,
 	newNodeTypes map[string]schema.Type,
 	queryExecutor DgraphExecutor,
 	txn *dgoapi.TxnContext) error {
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}

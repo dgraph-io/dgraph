@@ -18,23 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetHandler(t *testing.T) {
-	tests := []struct {
-		in  string
-		out UriHandler
-	}{
-		{in: "file", out: &fileHandler{}},
-		{in: "minio", out: &s3Handler{}},
-		{in: "s3", out: &s3Handler{}},
-		{in: "", out: &fileHandler{}},
-		{in: "something", out: nil},
-	}
-	for _, tc := range tests {
-		actual := getHandler(tc.in, nil)
-		require.Equal(t, tc.out, actual)
-	}
-}
-
 func TestFilterManifestDefault(t *testing.T) {
 	manifests := []*Manifest{
 		{

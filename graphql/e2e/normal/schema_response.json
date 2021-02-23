@@ -9,6 +9,15 @@
       ]
     },
     {
+      "index": true,
+      "predicate": "Employer.company",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
       "predicate": "post1.author",
       "type": "uid"
     },
@@ -326,6 +335,28 @@
       "list": true
     },
     {
+      "predicate": "Worker.name",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "Worker.emp_Id",
+      "tokenizer": [
+        "hash"
+      ],
+      "type": "string",
+      "upsert": true
+    },
+    {
+      "index": true,
+      "predicate": "Worker.reg_No",
+      "tokenizer": [
+        "int"
+      ],
+      "type": "int",
+      "upsert": true
+    },
+    {
       "predicate": "Movie.name",
       "type": "string"
     },
@@ -602,6 +633,11 @@
       "list": true
     },
     {
+      "list": true,
+      "predicate": "Employer.worker",
+      "type": "uid"
+    },
+    {
       "predicate": "Teacher.subject",
       "type": "string"
     },
@@ -661,41 +697,19 @@
       "type": "string"
     },
     {
-      "predicate": "dgraph.cors",
-      "type": "string",
-      "index": true,
-      "tokenizer": [
-        "exact"
-      ],
-      "list": true,
-      "upsert": true
-    },
-    {
       "predicate": "dgraph.drop.op",
       "type": "string"
     },
     {
       "predicate": "dgraph.graphql.p_query",
-      "type": "string"
-    },
-    {
-      "predicate": "dgraph.graphql.p_sha256hash",
       "type": "string",
       "index": true,
       "tokenizer": [
-        "exact"
+        "sha256"
       ]
     },
     {
       "predicate": "dgraph.graphql.schema",
-      "type": "string"
-    },
-    {
-      "predicate": "dgraph.graphql.schema_created_at",
-      "type": "datetime"
-    },
-    {
-      "predicate": "dgraph.graphql.schema_history",
       "type": "string"
     },
     {
@@ -851,6 +865,20 @@
         }
       ],
       "name": "Cheetah"
+    },
+    {
+      "fields": [
+        {
+          "name": "Worker.emp_Id"
+        },
+        {
+          "name": "Worker.reg_No"
+        },
+        {
+          "name": "Worker.name"
+        }
+      ],
+      "name": "Worker"
     },
     {
       "fields": [
@@ -1341,32 +1369,10 @@
     {
       "fields": [
         {
-          "name": "dgraph.graphql.schema_history"
-        },
-        {
-          "name": "dgraph.graphql.schema_created_at"
-        }
-      ],
-      "name": "dgraph.graphql.history"
-    },
-    {
-      "fields": [
-        {
           "name": "dgraph.graphql.p_query"
-        },
-        {
-          "name": "dgraph.graphql.p_sha256hash"
         }
       ],
       "name": "dgraph.graphql.persisted_query"
-    },
-    {
-      "fields": [
-        {
-          "name": "dgraph.cors"
-        }
-      ],
-      "name": "dgraph.type.cors"
     },
     {
       "fields": [
@@ -1398,6 +1404,17 @@
         }
       ],
       "name": "author1"
+    },
+    {
+      "fields": [
+        {
+          "name": "Employer.company"
+        },
+        {
+          "name": "Employer.worker"
+        }
+      ],
+      "name": "Employer"
     }
   ]
 }

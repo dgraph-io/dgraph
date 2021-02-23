@@ -15,7 +15,6 @@ package worker
 import (
 	"compress/gzip"
 	"context"
-	"io"
 	"net/url"
 	"strings"
 	"sync"
@@ -324,8 +323,7 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredential
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
 		getCredentialsFromRestoreRequest(req),
-		func(r io.Reader, groupId uint32, preds predicateSet,
-			dropOperations []*pb.DropOperation) (uint64, uint64, error) {
+		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
@@ -340,17 +338,18 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "unable to read key")
 			}
-			r, err = enc.GetReader(key, r)
+			in.r, err = enc.GetReader(key, in.r)
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
-			gzReader, err := gzip.NewReader(r)
+			gzReader, err := gzip.NewReader(in.r)
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, maxNsId, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds,
-				dropOperations)
+			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
+				r: gzReader, restoreTs: req.RestoreTs, preds: in.preds, dropOperations: in.dropOperations,
+			})
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot write backup")
 			}

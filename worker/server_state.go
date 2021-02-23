@@ -115,7 +115,7 @@ func (s *ServerState) initStorage() {
 			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
-			WithNamespaceOffset(1)
+			WithNamespaceOffset(x.NamespaceOffset)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

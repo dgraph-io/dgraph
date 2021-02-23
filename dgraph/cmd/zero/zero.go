@@ -441,6 +441,13 @@ func (s *Server) Connect(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+
+	if m.Learner && !ms.License.GetEnabled() {
+		// Update the "ShouldCrash" function in x/x.go if you change the error message here.
+		return nil, errors.New("ENTERPRISE_ONLY_LEARNER - Missing or expired Enterpise License. " +
+			"Cannot add Learner Node.")
+	}
+
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
@@ -589,6 +596,12 @@ func (s *Server) Connect(ctx context.Context,
 		Member: m,
 	}
 	return resp, nil
+}
+
+// DeleteNamespace removes the tablets for deleted namespace from the membership state.
+func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*pb.Status, error) {
+	err := s.Node.proposeAndWait(ctx, &pb.ZeroProposal{DeleteNs: in})
+	return &pb.Status{}, err
 }
 
 // ShouldServe returns the tablet serving the predicate passed in the request.

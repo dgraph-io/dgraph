@@ -336,6 +336,12 @@ BUCKETS:
 		remainingCount := int(ts.Count) - len(r.UidMatrix[i].Uids)
 		canAppend := x.Min(uint64(remainingCount), uint64(len(nullNodes)))
 		r.UidMatrix[i].Uids = append(r.UidMatrix[i].Uids, nullNodes[:canAppend]...)
+
+		// The value list also need to contain null values for the appended uids.
+		if len(ts.Order) > 1 {
+			nullVals := make([]types.Val, canAppend)
+			values[i] = append(values[i], nullVals...)
+		}
 	}
 
 	select {

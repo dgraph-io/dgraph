@@ -21,9 +21,9 @@ package alpha
 import (
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgraph/graphql/web"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -37,7 +37,7 @@ func init() {
 }
 
 // backupHandler handles backup requests coming from the HTTP endpoint.
-func backupHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func backupHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	gqlReq := &schema.Request{
 		Query: `
 		mutation backup($input: BackupInput!) {

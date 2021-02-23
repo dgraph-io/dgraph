@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // QueryMiddleware represents a middleware for queries
@@ -207,6 +208,16 @@ func LoggingMWMutation(resolver MutationResolver) MutationResolver {
 	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
 		bool) {
 		glog.Infof("GraphQL admin mutation. Name =  %v", mutation.Name())
+		return resolver.Resolve(ctx, mutation)
+	})
+}
+
+func AclOnlyMW4Mutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
+		bool) {
+		if !x.WorkerConfig.AclEnabled {
+			return EmptyResult(mutation, errors.New("Enable ACL to use this mutation")), false
+		}
 		return resolver.Resolve(ctx, mutation)
 	})
 }

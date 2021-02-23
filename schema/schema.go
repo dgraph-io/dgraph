@@ -138,6 +138,28 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
+// DeletePredsForNs deletes the predicate information for the namespace from the schema.
+func (s *state) DeletePredsForNs(delNs uint64) {
+	if s == nil {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+	for pred := range s.predicate {
+		ns := x.ParseNamespace(pred)
+		if ns == delNs {
+			delete(s.predicate, pred)
+			delete(s.mutSchema, pred)
+		}
+	}
+	for typ := range s.types {
+		ns := x.ParseNamespace(typ)
+		if ns == delNs {
+			delete(s.types, typ)
+		}
+	}
+}
+
 func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 	if schema == nil {
 		return ""
@@ -433,7 +455,7 @@ func Load(predicate string) error {
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound || err == badger.ErrBannedKey {
 		return nil
 	}
 	if err != nil {
@@ -567,32 +589,10 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: "dgraph.graphql.history",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.graphql.schema_history",
-					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.schema_created_at",
-					ValueType: pb.Posting_DATETIME,
-				},
-			},
-		}, &pb.TypeUpdate{
 			TypeName: "dgraph.graphql.persisted_query",
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.graphql.p_query",
-					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.p_sha256hash",
-					ValueType: pb.Posting_STRING,
-				},
-			},
-		}, &pb.TypeUpdate{
-			TypeName: "dgraph.type.cors",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.cors",
 					ValueType: pb.Posting_STRING,
 				},
 			},
@@ -676,13 +676,6 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
-			Predicate: "dgraph.cors",
-			ValueType: pb.Posting_STRING,
-			List:      true,
-			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
-			Upsert:    true,
-		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
@@ -701,19 +694,10 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_history",
-			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_created_at",
-			ValueType: pb.Posting_DATETIME,
-		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.p_sha256hash",
-			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"sha256"},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {

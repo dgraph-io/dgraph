@@ -273,7 +273,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -297,7 +297,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @cascade(fields: [String]) on FIELD
@@ -933,10 +933,21 @@ func completeSchema(sch *ast.Schema, definitions []string, apolloServiceQuery bo
 	}
 
 	for _, key := range definitions {
+		defn := sch.Types[key]
+		if key == "Query" {
+			for _, q := range defn.Fields {
+				subsDir := q.Directives.ForName(subscriptionDirective)
+				customDir := q.Directives.ForName(customDirective)
+				if subsDir != nil && customDir != nil {
+					sch.Subscription.Fields = append(sch.Subscription.Fields, q)
+				}
+			}
+			continue
+		}
 		if isQueryOrMutation(key) {
 			continue
 		}
-		defn := sch.Types[key]
+
 		if defn.Kind == ast.Union {
 			// TODO: properly check the case of reverse predicates (~) with union members and clean
 			// them from unionRef or unionFilter as required.
@@ -1602,6 +1613,17 @@ func fieldAny(fields ast.FieldList, pred func(*ast.FieldDefinition) bool) bool {
 	return false
 }
 
+// xidsCount returns count of fields which have @id directive
+func xidsCount(fields ast.FieldList) int64 {
+	var xidCount int64
+	for _, fld := range fields {
+		if hasIDDirective(fld) {
+			xidCount++
+		}
+	}
+	return xidCount
+}
+
 func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	id := fld.Directives.ForName(idDirective)
 	if id != nil {
@@ -1867,6 +1889,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
+	xidCount := xidsCount(defn.Fields)
 	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
 		return
 	}
@@ -1877,7 +1900,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		},
 	}
 
-	// If the defn, only specified one of ID/XID field, they they are mandatory. If it specified
+	// If the defn, only specified one of ID/XID field, then they are mandatory. If it specified
 	// both, then they are optional.
 	if hasIDField {
 		fields := getIDField(defn)
@@ -1890,14 +1913,17 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 		})
 	}
 	if hasXIDField && defn.Kind != "INTERFACE" {
-		name, dtype := xidTypeFor(defn)
-		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
-			Name: name,
-			Type: &ast.Type{
-				NamedType: dtype,
-				NonNull:   !hasIDField,
-			},
-		})
+		for _, fld := range defn.Fields {
+			if hasIDDirective(fld) {
+				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
+					Name: fld.Name,
+					Type: &ast.Type{
+						NamedType: fld.Type.Name(),
+						NonNull:   !hasIDField && xidCount <= 1,
+					},
+				})
+			}
+		}
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 	subs := defn.Directives.ForName(subscriptionDirective)
@@ -2020,6 +2046,14 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
+	if hasXID(defn) {
+		add.Arguments = append(add.Arguments,
+			&ast.ArgumentDefinition{
+				Name: "upsert",
+				Type: &ast.Type{NamedType: "Boolean"},
+			})
+	}
+
 	schema.Mutation.Fields = append(schema.Mutation.Fields, add)
 
 }
@@ -2543,15 +2577,6 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 
 func idTypeFor(defn *ast.Definition) string {
 	return "ID"
-}
-
-func xidTypeFor(defn *ast.Definition) (string, string) {
-	for _, fld := range nonExternalAndKeyFields(defn) {
-		if hasIDDirective(fld) {
-			return fld.Name, fld.Type.Name()
-		}
-	}
-	return "", ""
 }
 
 func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {

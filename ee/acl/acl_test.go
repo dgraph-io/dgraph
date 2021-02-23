@@ -233,7 +233,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	resp := createUser(t, token, userid, userpassword)
 	require.Equal(t, 1, len(resp.Errors))
 	require.Equal(t, "couldn't rewrite mutation addUser because failed to rewrite mutation payload because id"+
-		" alice already exists for type User", resp.Errors[0].Message)
+		" alice already exists for field name inside type User", resp.Errors[0].Message)
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
@@ -2166,40 +2166,18 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "list": true
 	},
 	{
-		"predicate": "dgraph.cors",
-		"type": "string",
-		"list": true,
-		"index": true,
-      	"tokenizer": [
-          "exact"
-      	],
-      	"upsert": true
-	},
-	{
 		"predicate":"dgraph.drop.op",
 		"type":"string"
 	},
 	{
 		"predicate":"dgraph.graphql.p_query",
-		"type":"string"
-	},
-	{
-		"predicate":"dgraph.graphql.p_sha256hash",
 		"type":"string",
 		"index":true,
-		"tokenizer":["exact"]
+		"tokenizer":["sha256"]
 	},
     {
       "predicate": "dgraph.graphql.schema",
       "type": "string"
-	},
-	{
-		"predicate": "dgraph.graphql.schema_created_at",
-		"type": "datetime"
-	},
-	{
-		"predicate": "dgraph.graphql.schema_history",
-		"type": "string"
 	},
     {
       "predicate": "dgraph.graphql.xid",
@@ -2267,20 +2245,7 @@ func TestSchemaQueryWithACL(t *testing.T) {
 	{
 		"fields": [
 			{
-				"name": "dgraph.graphql.schema_history"
-			},{
-				"name": "dgraph.graphql.schema_created_at"
-			}
-		],
-		"name": "dgraph.graphql.history"
-	},
-	{
-		"fields": [
-			{
 				"name": "dgraph.graphql.p_query"
-			},
-			{
-				"name": "dgraph.graphql.p_sha256hash"
 			}
 		],
 		"name": "dgraph.graphql.persisted_query"
@@ -2320,14 +2285,6 @@ func TestSchemaQueryWithACL(t *testing.T) {
         }
       ],
       "name": "dgraph.type.User"
-    },
-    {
-      "fields": [
-        {
-          "name": "dgraph.cors"
-        }
-      ],
-      "name": "dgraph.type.cors"
     }
   ]
 }`
@@ -2348,10 +2305,6 @@ func TestSchemaQueryWithACL(t *testing.T) {
       "name": "dgraph.graphql"
 	},
 	{
-		"fields": [],
-		"name": "dgraph.graphql.history"
-	},
-	{
 		"fields":[],
 		"name":"dgraph.graphql.persisted_query"
 	},
@@ -2366,10 +2319,6 @@ func TestSchemaQueryWithACL(t *testing.T) {
     {
       "fields": [],
       "name": "dgraph.type.User"
-    },
-    {
-      "fields": [],
-      "name": "dgraph.type.cors"
     }
   ]
 }`

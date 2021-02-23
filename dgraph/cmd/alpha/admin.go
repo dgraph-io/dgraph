@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/web"
+	"github.com/dgraph-io/dgraph/graphql/admin"
 
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -72,7 +72,7 @@ func adminAuthHandler(next http.Handler) http.Handler {
 	})
 }
 
-func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	enableStr := r.URL.Query().Get("enable")
 
 	enable, err := strconv.ParseBool(enableStr)
@@ -99,7 +99,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer web.ISe
 		`"message": "draining mode has been set to %v"}`, enable))))
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	gqlReq := &schema.Request{
 		Query: `
 		mutation {
@@ -115,7 +115,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer web.ISe
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
-func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func exportHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	if err := r.ParseForm(); err != nil {
 		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
@@ -155,7 +155,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServ
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
-func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	switch r.Method {
 	case http.MethodGet:
 		memoryLimitGetHandler(w, r, adminServer)
@@ -164,7 +164,7 @@ func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 	}
 }
 
-func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -196,7 +196,7 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer w
 	w.WriteHeader(http.StatusOK)
 }
 
-func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	gqlReq := &schema.Request{
 		Query: `
 		query {

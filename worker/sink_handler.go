@@ -19,6 +19,7 @@ package worker
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -158,8 +159,8 @@ type fileSink struct {
 
 func (f *fileSink) Send(messages []SinkMessage) error {
 	for _, m := range messages {
-		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%s\", \"value\": %s}\n",
-			string(m.Key), string(m.Value))))
+		_, err := f.fileWriter.Write([]byte(fmt.Sprintf("{ \"key\": \"%d\", \"value\": %s}\n",
+			binary.BigEndian.Uint64(m.Key), string(m.Value))))
 		if err != nil {
 			return errors.Wrap(err, "unable to add message in the file sink")
 		}
