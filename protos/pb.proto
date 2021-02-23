@@ -486,6 +486,8 @@ message SchemaUpdate {
 	string object_type_name = 12;
 
 	bool no_conflict = 13;
+	uint32 predicate_id = 14;
+	uint32 namespace = 15;
 
 	// Deleted field:
 	reserved 7;
@@ -495,6 +497,7 @@ message SchemaUpdate {
 message TypeUpdate {
 	string type_name = 1;
 	repeated SchemaUpdate fields = 2;
+	uint32 namespace = 3;
 }
 
 message MapHeader {

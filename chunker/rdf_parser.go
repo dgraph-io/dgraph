@@ -195,11 +195,11 @@ L:
 
 		case itemLabel:
 			s := strings.TrimFunc(item.Val, isSpaceRune)
-			namespace, err := strconv.ParseUint(s, 0, 64)
+			namespace, err := strconv.ParseUint(s, 0, 32)
 			if err != nil {
 				return rnq, errors.Errorf("Invalid namespace ID. Input: [%s]", line)
 			}
-			rnq.Namespace = namespace
+			rnq.Namespace = uint32(namespace)
 
 		case itemLeftRound:
 			it.Prev() // backup '('

@@ -190,7 +190,7 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
 	uid       string       // uid retrieved or allocated for the node.
-	namespace uint64       // namespace to which the node belongs.
+	namespace uint32       // namespace to which the node belongs.
 	fcts      []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
@@ -457,17 +457,17 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			if err != nil {
 				return mr, err
 			}
-			namespace = uint64(nsi)
+			namespace = uint32(nsi)
 
 		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
 		case int64:
-			namespace = uint64(nsVal)
+			namespace = uint32(nsVal)
 		case string:
 			s := stripSpaces(nsVal)
 			if s == "" {
 				namespace = 0
-			} else if n, err := strconv.ParseUint(s, 0, 64); err == nil {
-				namespace = n
+			} else if n, err := strconv.ParseUint(s, 0, 32); err == nil {
+				namespace = uint32(n)
 			} else {
 				return mr, err
 			}
