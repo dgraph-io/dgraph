@@ -100,6 +100,14 @@ type loadBackupInput struct {
 	isOld          bool
 }
 
+var depreciatedPreds = map[string]struct{}{
+	"dgraph.cors":                      {},
+	"dgraph.graphql.schema_created_at": {},
+	"dgraph.graphql.schema_history":    {},
+	"dgraph.graphql.p_sha256hash":      {},
+	"dgraph.type.cors":                 {},
+}
+
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
@@ -170,13 +178,17 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 				continue
 			}
 
+			if in.isOld {
+				// Skip restoring the data for the depreciated predicates from the backup taken from
+				// versions < 21.03.
+				if _, ok := depreciatedPreds[x.ParseAttr(parsedKey.Attr)]; ok {
+					continue
+				}
+			}
+
 			// Update the max uid and namespace id that has been seen while restoring this backup.
-			if parsedKey.Uid > maxUid {
-				maxUid = parsedKey.Uid
-			}
-			if namespace > maxNsId {
-				maxNsId = namespace
-			}
+			maxUid = x.Max(maxUid, parsedKey.Uid)
+			maxNsId = x.Max(maxNsId, namespace)
 
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.
@@ -231,14 +243,20 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 				appendNamespace := func() error {
 					// If the backup was taken on old version, we need to append the namespace to
 					// the fields of TypeUpdate.
-					var update pb.TypeUpdate
+					var update, updateCopy pb.TypeUpdate
 					if err := update.Unmarshal(kv.Value); err != nil {
 						return err
 					}
+					updateCopy.TypeName = update.TypeName
 					for _, sch := range update.Fields {
+						if sch.Predicate == "dgraph.graphql.p_sha256hash" {
+							// This predicate has been removed from versions >= 21.03.
+							continue
+						}
 						sch.Predicate = x.GalaxyAttr(sch.Predicate)
+						updateCopy.Fields = append(updateCopy.Fields, sch)
 					}
-					kv.Value, err = update.Marshal()
+					kv.Value, err = updateCopy.Marshal()
 					return err
 				}
 				if in.isOld && parsedKey.IsType() {
