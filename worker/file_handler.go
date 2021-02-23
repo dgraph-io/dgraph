@@ -14,7 +14,6 @@ package worker
 
 import (
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -352,33 +351,14 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	// Export the data from the p directories produced by the last step.
 	ch := make(chan error, len(manifest.Groups))
 	for gid := range manifest.Groups {
-		go func(group uint32) {
-			dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", group))
-			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-				WithSyncWrites(false).
-				WithNumVersionsToKeep(math.MaxInt32).
-				WithEncryptionKey(key))
 
-			if err != nil {
-				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
-				return
-			}
-
-			req := &pb.ExportRequest{
-				GroupId:     group,
-				ReadTs:      manifest.Since,
-				UnixTs:      time.Now().Unix(),
-				Format:      format,
-				Namespace:   math.MaxUint64, // Export all the namespaces.
-				Destination: exportDir,
-			}
-
-			_, err = exportInternal(context.Background(), req, db, true)
-			// It is important to close the db before sending err to ch. Else, we will see a memory
-			// leak.
-			db.Close()
-			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
-		}(gid)
+		go storeExport(&pb.ExportRequest{
+			GroupId:     gid,
+			ReadTs:      manifest.Since,
+			UnixTs:      time.Now().Unix(),
+			Format:      format,
+			Destination: exportDir,
+		}, filepath.Join(tmpDir, fmt.Sprintf("p%d", gid)), key, ch)
 	}
 
 	for i := 0; i < len(manifest.Groups); i++ {

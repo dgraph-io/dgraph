@@ -17,7 +17,12 @@
 package worker
 
 import (
+	"context"
+	"math"
 	"sync"
+
+	"github.com/dgraph-io/badger/v3"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -94,4 +99,26 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
 		SessionToken: req.GetSessionToken(),
 		Anonymous:    req.GetAnonymous(),
 	}
+}
+
+func storeExport(request *pb.ExportRequest, dir string,
+	key x.SensitiveByteSlice, ch chan error) {
+
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+		WithSyncWrites(false).
+		WithValueThreshold(1 << 10).
+		WithNumVersionsToKeep(math.MaxInt32).
+		WithEncryptionKey(key))
+
+	if err != nil {
+		ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
+		return
+	}
+
+	_, err = exportInternal(context.Background(), request, db, true)
+	// It is important to close the db before sending err to ch. Else, we will see a memory
+	// leak.
+	db.Close()
+	ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
+	return
 }

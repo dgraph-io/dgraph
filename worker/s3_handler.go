@@ -13,12 +13,10 @@
 package worker
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"net/url"
 	os "os"
 	"path/filepath"
@@ -27,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -325,7 +322,8 @@ func (h *s3Handler) Write(b []byte) (int, error) {
 	return h.pwriter.Write(b)
 }
 
-func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.SensitiveByteSlice) error {
+func (h *s3Handler) ExportBackup(location, exportDir, format string,
+	key x.SensitiveByteSlice) error {
 	if format != "json" && format != "rdf" {
 		return errors.Errorf("invalid format %s", format)
 	}
@@ -359,37 +357,18 @@ func (h *s3Handler) ExportBackup(location, exportDir, format string, key x.Sensi
 			continue
 		}
 
-		go func(f os.FileInfo) {
-			dir := filepath.Join(filepath.Join(tmpDir, f.Name()))
-			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-				WithSyncWrites(false).
-				WithValueThreshold(1 << 10).
-				WithNumVersionsToKeep(math.MaxInt32).
-				WithEncryptionKey(key))
-
-			if err != nil {
-				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
-				return
-			}
-
-			gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
-			if err != nil {
-				ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
-			}
-			req := &pb.ExportRequest{
-				GroupId:     uint32(gid),
-				ReadTs:      restore.Version,
-				UnixTs:      time.Now().Unix(),
-				Format:      format,
-				Destination: exportDir,
-			}
-
-			_, err = exportInternal(context.Background(), req, db, true)
-			// It is important to close the db before sending err to ch. Else, we will see a memory
-			// leak.
-			db.Close()
+		dir := filepath.Join(filepath.Join(tmpDir, f.Name()))
+		gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
+		if err != nil {
 			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
-		}(f)
+		}
+		go storeExport(&pb.ExportRequest{
+			GroupId:     uint32(gid),
+			ReadTs:      restore.Version,
+			UnixTs:      time.Now().Unix(),
+			Format:      format,
+			Destination: exportDir,
+		}, dir, key, ch)
 	}
 
 	for i := 0; i < len(files); i++ {

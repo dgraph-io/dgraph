@@ -321,7 +321,7 @@ func initExportBackup() {
 
 	flag := ExportBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
-		"Sets the location of the backup. Only file URIs are supported for now.")
+		"Sets the location of the backup. Both file URIs and s3 are supported.")
 	flag.StringVarP(&opt.destination, "destination", "d", "",
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
