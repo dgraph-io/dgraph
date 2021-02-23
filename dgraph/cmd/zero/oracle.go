@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
@@ -44,8 +45,9 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	keyCommit   *z.Tree // fp(key) -> commitTs. Used to detect conflict.
-	maxAssigned uint64  // max transaction assigned by us.
+	keyCommitLock sync.RWMutex // lock for key commit map. Maybe create a new structure for locked tree.
+	keyCommit     *z.Tree      // fp(key) -> commitTs. Used to detect conflict.
+	maxAssigned   uint64       // max transaction assigned by us.
 
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
@@ -72,15 +74,23 @@ func (o *Oracle) close() {
 
 func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
-	defer o.Unlock()
 	o.startTxnTs = ts
+	o.Unlock()
+	o.keyCommitLock.Lock()
+	defer o.keyCommitLock.Unlock()
 	o.keyCommit.Reset()
 }
 
 // TODO: This should be done during proposal application for Txn status.
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 	// This transaction was started before I became leader.
-	if src.StartTs < o.startTxnTs {
+
+	// Do this locking outside this function to prevent programming bug causing deadlock.
+	o.RLock()
+	startTs := o.startTxnTs
+	o.RUnlock()
+
+	if src.StartTs < startTs {
 		return true
 	}
 	for _, k := range src.Keys {
@@ -101,7 +111,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	timer.Start()
 
 	o.Lock()
-	defer o.Unlock()
 
 	// Set startTxnTs so that every txn with start ts less than this, would be aborted.
 	o.startTxnTs = minTs
@@ -112,8 +121,12 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 			delete(o.commits, ts)
 		}
 	}
+	o.Unlock()
+
 	timer.Record("commits")
 
+	o.keyCommitLock.Lock()
+	defer o.keyCommitLock.Unlock()
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
 	stats := o.keyCommit.Stats()
@@ -130,8 +143,8 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
-	o.Lock()
-	defer o.Unlock()
+	o.keyCommitLock.Lock()
+	defer o.keyCommitLock.Unlock()
 
 	if o.hasConflict(src) {
 		return x.ErrConflict
@@ -355,9 +368,9 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 
 	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
-	s.orc.RLock()
+	s.orc.keyCommitLock.RLock()
 	conflict := s.orc.hasConflict(src)
-	s.orc.RUnlock()
+	s.orc.keyCommitLock.RUnlock()
 	if conflict {
 		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("abort", true)},
 			"Oracle found conflict")
