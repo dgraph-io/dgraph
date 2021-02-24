@@ -330,6 +330,9 @@ func toType(attr string, update pb.TypeUpdate) *bpb.KV {
 	ns, attr := x.ParseNamespaceAttr(attr)
 	x.Check2(buf.WriteString(fmt.Sprintf("[0x%x] type <%s> {\n", ns, attr)))
 	for _, field := range update.Fields {
+		if _, ok := depreciatedPreds[x.ParseAttr(field.Predicate)]; ok {
+			continue
+		}
 		x.Check2(buf.WriteString(fieldToString(field)))
 	}
 
@@ -535,6 +538,18 @@ func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, e
 	default:
 		return newLocalExportStorage(x.WorkerConfig.ExportPath, backupName)
 	}
+}
+
+var depreciatedPreds = map[string]struct{}{
+	"dgraph.cors":                      {},
+	"dgraph.graphql.schema_created_at": {},
+	"dgraph.graphql.schema_history":    {},
+	"dgraph.graphql.p_sha256hash":      {},
+}
+
+var depreciatedTypes = map[string]struct{}{
+	"dgraph.type.cors":       {},
+	"dgraph.graphql.history": {},
 }
 
 // export creates a export of data by exporting it as an RDF gzip.
@@ -804,6 +819,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			var kv *bpb.KV
 			switch prefix {
 			case x.ByteSchema:
+				if _, ok := depreciatedPreds[x.ParseAttr(pk.Attr)]; ok {
+					continue
+				}
 				if !skipZero {
 					servesTablet, err := groups().ServesTablet(pk.Attr)
 					if err != nil || !servesTablet {
@@ -823,6 +841,9 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				kv = toSchema(pk.Attr, &update)
 
 			case x.ByteType:
+				if _, ok := depreciatedTypes[x.ParseAttr(pk.Attr)]; ok {
+					continue
+				}
 				var update pb.TypeUpdate
 				err := item.Value(func(val []byte) error {
 					return update.Unmarshal(val)
