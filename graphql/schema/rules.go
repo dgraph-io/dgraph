@@ -2112,14 +2112,14 @@ func remoteResponseValidation(sch *ast.Schema,
 	if remoteDirectiveDefn == nil {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s, Field %s: @remoteResponse directive can only be defined on fields of @remote type.", typ.Name, field.Name)}
+			"Type %s: Field %s: @remoteResponse directive can only be defined on fields of @remote type.", typ.Name, field.Name)}
 	}
 
 	arg := dir.Arguments.ForName("name")
 	if arg == nil || arg.Value.Raw == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Argument %s inside @remoteResponse directive must be defined.", typ.Name, "name")}
+			"Type %s: Field %s: Argument %s inside @remoteResponse directive must be defined.", typ.Name, field.Name, "name")}
 	}
 	return nil
 }
