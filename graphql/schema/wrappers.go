@@ -125,6 +125,7 @@ type Field interface {
 	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field.
 	DgraphAlias() string
 	ResponseName() string
+	RemoteResponseName() string
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
@@ -909,6 +910,23 @@ func (f *field) ResponseName() string {
 	return responseName(f.field)
 }
 
+func remoteResponseDirectiveArgument(fd *ast.FieldDefinition) string {
+	remoteResponseDirectiveDefn := fd.Directives.ForName(remoteResponseDirective)
+	if remoteResponseDirectiveDefn != nil {
+		return remoteResponseDirectiveDefn.Arguments.ForName("name").Value.Raw
+	}
+	return ""
+}
+
+func (f *field) RemoteResponseName() string {
+	fd := f.field.ObjectDefinition.Fields.ForName(f.Name())
+	remoteResponseName := remoteResponseDirectiveArgument(fd)
+	if remoteResponseName == "" {
+		return f.Name()
+	}
+	return remoteResponseName
+}
+
 func (f *field) SetArgTo(arg string, val interface{}) {
 	if f.arguments == nil {
 		f.arguments = make(map[string]interface{})
@@ -1603,6 +1621,10 @@ func (q *query) Name() string {
 	return (*field)(q).Name()
 }
 
+func (q *query) RemoteResponseName() string {
+	return (*field)(q).RemoteResponseName()
+}
+
 func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
@@ -1868,6 +1890,10 @@ func (q *query) IncludeAbstractField(dgraphTypes []string) bool {
 
 func (m *mutation) Name() string {
 	return (*field)(m).Name()
+}
+
+func (m *mutation) RemoteResponseName() string {
+	return (*field)(m).RemoteResponseName()
 }
 
 func (m *mutation) Alias() string {

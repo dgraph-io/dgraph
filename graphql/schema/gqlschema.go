@@ -38,13 +38,14 @@ const (
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
 
-	idDirective           = "id"
-	subscriptionDirective = "withSubscription"
-	secretDirective       = "secret"
-	authDirective         = "auth"
-	customDirective       = "custom"
-	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
-	lambdaDirective       = "lambda"
+	idDirective             = "id"
+	subscriptionDirective   = "withSubscription"
+	secretDirective         = "secret"
+	authDirective           = "auth"
+	customDirective         = "custom"
+	remoteDirective         = "remote" // types with this directive are not stored in Dgraph.
+	remoteResponseDirective = "remoteResponse"
+	lambdaDirective         = "lambda"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -283,6 +284,7 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
@@ -560,6 +562,7 @@ var directiveValidators = map[string]directiveValidator{
 	apolloKeyDirective:      ValidatorNoOp,
 	apolloExtendsDirective:  ValidatorNoOp,
 	apolloExternalDirective: apolloExternalValidation,
+	remoteResponseDirective: remoteResponseValidation,
 }
 
 // directiveLocationMap stores the directives and their locations for the ones which can be
