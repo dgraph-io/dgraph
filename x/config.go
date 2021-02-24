@@ -40,7 +40,7 @@ type Options struct {
 	LimitQueryEdge      uint64
 	// GraphQL options:
 	//
-	// extension bool - Will be set to see extensions in GraphQL results
+	// extensions bool - Will be set to see extensions in GraphQL results
 	// debug bool - Will enable debug mode in GraphQL.
 	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
 	// poll-interval duration - The polling interval for graphql subscription.

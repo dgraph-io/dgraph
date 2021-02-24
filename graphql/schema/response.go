@@ -172,7 +172,7 @@ func (r *Response) Output() interface{} {
 		Data:   r.Data.Bytes(),
 	}
 
-	if x.Config.GraphQL.GetBool("extension") {
+	if x.Config.GraphQL.GetBool("extensions") {
 		res.Extensions = r.Extensions
 	}
 	return res
