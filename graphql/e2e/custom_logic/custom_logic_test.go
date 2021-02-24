@@ -2574,7 +2574,7 @@ func TestCustomDQL(t *testing.T) {
 	schema := `
 	type Tweets {
 		id: ID!
-		text: String! @search(by: [fulltext])
+		text: String! @search(by: [fulltext, exact])
 		user: User
 		timestamp: DateTime! @search
 	}
@@ -2598,7 +2598,7 @@ func TestCustomDQL(t *testing.T) {
 	type Query {
 	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
 		query getFirstUserByFollowerCount($count: int) {
-			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count),orderdesc: User.screen_name, first: 1) {
 				screen_name: User.screen_name
 				followers: User.followers
 			}
@@ -2794,7 +2794,7 @@ func TestCustomDQL(t *testing.T) {
 	userFilter := map[string]interface{}{"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}}}
 	common.DeleteGqlType(t, "User", userFilter, 3, nil)
 	tweetFilter := map[string]interface{}{"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}}}
-	common.DeleteGqlType(t, "Tweet", tweetFilter, 4, nil)
+	common.DeleteGqlType(t, "Tweets", tweetFilter, 4, nil)
 }
 
 func TestCustomGetQuerywithRESTError(t *testing.T) {
