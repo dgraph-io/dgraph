@@ -38,7 +38,7 @@ func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
 	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; internal-port-enabled=%v;",
 		// cacert
-		"../../../tlstest/mtls_internal/tls/live/ca.crt",
+		"../../tlstest/mtls_internal/tls/live/ca.crt",
 		// server-name
 		"alpha1",
 		// internal-port-enabled
@@ -56,6 +56,7 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 
 	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	require.NoError(t, err)
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
@@ -66,7 +67,7 @@ func TestLoaderXidmap(t *testing.T) {
 			// internal-port-enabled
 			true,
 			// cert
-			tlsDir+"/client.liveclient.cert",
+			tlsDir+"/client.liveclient.crt",
 			// key
 			tlsDir+"/client.liveclient.key",
 			// server-name
@@ -87,7 +88,7 @@ func TestLoaderXidmap(t *testing.T) {
 			// internal-port-enabled
 			true,
 			// cert
-			tlsDir+"/client.liveclient.cert",
+			tlsDir+"/client.liveclient.crt",
 			// key
 			tlsDir+"/client.liveclient.key",
 			// server-name
