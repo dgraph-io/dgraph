@@ -228,7 +228,10 @@ func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
 	require.NoError(t, err)
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
-	require.Equal(t, gqlSchema, buf.String())
+	expected := []x.ExportedGQLSchema{{Namespace: x.GalaxyNamespace, Schema: gqlSchema}}
+	b, err := json.Marshal(expected)
+	require.NoError(t, err)
+	require.JSONEq(t, string(b), buf.String())
 }
 
 func TestExportRdf(t *testing.T) {
