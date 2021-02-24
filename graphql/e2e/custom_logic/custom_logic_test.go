@@ -2637,12 +2637,12 @@ func TestCustomDQL(t *testing.T) {
 		}
 		""")
 
-	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+	queryUserTweetCounts: [UserTweetCount] @custom(dql: """
 		query {
 			var(func: type(User)) {
 				tc as count(User.tweets)
 			}
-			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
+			queryUserTweetCounts(func: uid(tc), orderdesc: User.screen_name) {
 				screen_name: User.screen_name
 				tweetCount: val(tc)
 			}
@@ -2763,16 +2763,16 @@ func TestCustomDQL(t *testing.T) {
 		  ],
 		  "queryUserTweetCounts": [
 			{
-			  "screen_name": "abhimanyu",
-			  "tweetCount": 2
-			},
-			{
 			  "screen_name": "pawan",
 			  "tweetCount": 1
 			},
 			{
 			  "screen_name": "minhaj",
 			  "tweetCount": 1
+			},
+			{
+			  "screen_name": "abhimanyu",
+			  "tweetCount": 2
 			}
 		  ],
 		  "queryUserKeyMap": [
