@@ -906,7 +906,6 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
 		remoteResponse:   remoteResponseDirs,
-		authRules:        authRules,
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
