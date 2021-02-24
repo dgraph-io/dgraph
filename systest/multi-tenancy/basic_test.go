@@ -46,7 +46,7 @@ func TestAclBasic(t *testing.T) {
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	require.Equal(t, 1, int(ns))
 
@@ -104,14 +104,14 @@ func TestCreateNamespace(t *testing.T) {
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 
 	token := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
 
 	// Create a new namespace using guardian of other namespace.
-	_, err = testutil.CreateNamespace(t, token)
+	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 }
@@ -124,7 +124,7 @@ func TestDeleteNamespace(t *testing.T) {
 	dg := make(map[uint64]*dgo.Dgraph)
 	dg[x.GalaxyNamespace] = testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dg[ns] = testutil.DgClientWithLogin(t, "groot", "password", ns)
 
@@ -211,7 +211,7 @@ func TestLiveLoadMulti(t *testing.T) {
 	galaxyToken := testutil.Login(t, galaxyCreds)
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dc1 := testutil.DgClientWithLogin(t, "groot", "password", ns)
 
