@@ -48,10 +48,10 @@ func TestAclBasic(t *testing.T) {
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
-	require.Equal(t, 1, int(ns))
+	require.Greater(t, int(ns), 0)
 
 	// Add some data to namespace 1
-	dc := testutil.DgClientWithLogin(t, "groot", "password", 1)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
 	testutil.AddData(t, dc)
 
 	query := `
@@ -78,7 +78,7 @@ func TestAclBasic(t *testing.T) {
 	testutil.CreateUser(t, token, "alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", 1)
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
 	resp = testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{}`, string(resp))
 
@@ -92,7 +92,7 @@ func TestAclBasic(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Now alice should see the name predicate but not nickname.
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", 1)
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
 	resp = testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, string(resp))
 
