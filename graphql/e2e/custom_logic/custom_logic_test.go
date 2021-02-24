@@ -2790,6 +2790,11 @@ func TestCustomDQL(t *testing.T) {
 			}
 		  ]
 	  }`, string(result.Data))
+
+	userFilter := map[string]interface{}{"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}}}
+	common.DeleteGqlType(t, "User", userFilter, 3, nil)
+	tweetFilter := map[string]interface{}{"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}}}
+	common.DeleteGqlType(t, "Tweet", tweetFilter, 4, nil)
 }
 
 func TestCustomGetQuerywithRESTError(t *testing.T) {
