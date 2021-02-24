@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -1086,21 +1085,45 @@ func (f *field) Cascade() []string {
 		return nil
 	}
 	arg := dir.Arguments.ForName(cascadeArg)
-	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
+	// check valid arg
+	if arg == nil || arg.Value == nil {
 		return []string{"__all__"}
 	}
-	fields := make([]string, 0, len(arg.Value.Children))
+	val := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
+	isVariable := strings.HasPrefix(arg.Value.String(), "$")
+	// check length of arg
+	if isVariable {
+		if len(val) == 0 {
+			return []string{"__all__"}
+		}
+	} else if len(arg.Value.Children) == 0 {
+		return []string{"__all__"}
+	}
+
+	gqlFields := make([]string, 0)
+	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
 
-	for _, child := range arg.Value.Children {
-		if idField != nil && idField.Name() == child.Value.Raw {
+	if isVariable {
+		for _, value := range val {
+			gqlFields = append(gqlFields, value.(string))
+		}
+	} else {
+		for _, child := range arg.Value.Children {
+			gqlFields = append(gqlFields, child.Value.Raw)
+		}
+	}
+
+	for _, value := range gqlFields {
+		if idField != nil && idField.Name() == value {
 			fields = append(fields, "uid")
 		} else {
-			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+			fields = append(fields, typ.DgraphPredicate(value))
 		}
 
 	}
+
 	return fields
 }
 

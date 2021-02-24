@@ -363,3 +363,101 @@
   errors:
     [ { "message": "Int64Filter filter expects only one filter function, got: 2",
         "locations": [ { "line": 2, "column": 29 } ] } ]
+
+-
+  name: "@cascade only accepts those fields as a argument, which are present in given type at both root and deep levels"
+  gqlrequest: |
+    query {
+    	queryAuthor @cascade(fields: ["dob","reputation"]) {
+    		dob
+    		reputation
+    		posts @cascade(fields: ["text1"]) {
+    			text
+    			title
+    		}
+    	}
+    }
+  errors:
+    [ { "message": "Field `text1` is not present in type `Post`. You can only use fields which are in type `Post`",
+    } ]
+
+-
+  name: "@cascade only accepts those fields as a argument, which are present in given type at deep level using variables"
+  gqlrequest: |
+    query($fieldsRoot: [String], $fieldsDeep: [String]) {
+    	queryAuthor @cascade(fields: $fieldsRoot) {
+    		dob
+    		reputation
+    		posts @cascade(fields: $fieldsDeep) {
+    			text
+    			title
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+        "fieldsRoot": [
+            "dob",
+            "reputation"
+        ],
+        "fieldsDeep": [
+            "text1"
+        ]
+    }
+  errors:
+    [ { "message": "Field `text1` is not present in type `Post`. You can only use fields which are in type `Post`",
+        "path": [ "variable", "fieldsDeep","text1"]
+    } ]
+
+-
+  name: "@cascade only accepts those fields as a argument, which are present in given type at root level using variables"
+  gqlrequest: |
+    query($fieldsRoot: [String], $fieldsDeep: [String]) {
+    	queryAuthor @cascade(fields: $fieldsRoot) {
+    		dob
+    		reputation
+    		posts @cascade(fields: $fieldsDeep) {
+    			text
+    			title
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+        "fieldsRoot": [
+            "dob",
+            "reputation1"
+        ],
+        "fieldsDeep": [
+            "text"
+        ]
+    }
+  errors:
+    [ { "message": "Field `reputation1` is not present in type `Author`. You can only use fields which are in type `Author`",
+        "path": [ "variable", "fieldsRoot","reputation1"]
+    } ]
+
+-
+  name: "error when one of the variable with @cascade not defined"
+  gqlrequest: |
+    query($fieldsRoot: [String], $fieldsDeep: [String]) {
+    	queryAuthor @cascade(fields: $fieldsRoot) {
+    		dob
+    		reputation
+    		posts @cascade(fields: $fieldsDeep) {
+    			text
+    			title
+    		}
+    	}
+    }
+  gqlvariables: |
+    {
+        "fieldsRoot": [
+            "dob",
+            "reputation"
+        ]
+    }
+  errors:
+    [ { "message": "variable fieldsDeep not defined",
+        "path": [ "variable", "fieldsDeep"]
+    } ]
