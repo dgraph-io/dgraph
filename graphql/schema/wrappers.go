@@ -293,6 +293,9 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// remoteResponse stores the mapping of typeName->fieldName->responseName which will be used in result
+	// completion step.
+	remoteResponse map[string]map[string]string
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 	// meta is the meta information extracted from input schema
@@ -726,6 +729,35 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func remoteResponseMapping(s *ast.Schema) map[string]map[string]string {
+	remoteResponse := make(map[string]map[string]string)
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name != remoteResponseDirective {
+					continue
+				}
+				lastIndex := len(field.Directives) - 1
+				field.Directives[i] = field.Directives[lastIndex]
+				field.Directives = field.Directives[:lastIndex]
+
+				var remoteFieldMap map[string]string
+				if existingRemoteFieldMap, ok := remoteResponse[typ.Name]; ok {
+					remoteFieldMap = existingRemoteFieldMap
+				} else {
+					remoteFieldMap = make(map[string]string)
+				}
+
+				remoteFieldMap[field.Name] = dir.Arguments[0].Value.Raw
+				remoteResponse[typ.Name] = remoteFieldMap
+
+				break
+			}
+		}
+	}
+	return remoteResponse
+}
+
 func hasExtends(def *ast.Definition) bool {
 	return def.Directives.ForName(apolloExtendsDirective) != nil
 }
@@ -872,6 +904,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	}
 
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
+	remoteResponseDirs := remoteResponseMapping(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:           s,
@@ -879,6 +912,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:      typeMappings(s),
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
+		remoteResponse:   remoteResponseDirs,
 		authRules:        authRules,
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
@@ -919,12 +953,11 @@ func remoteResponseDirectiveArgument(fd *ast.FieldDefinition) string {
 }
 
 func (f *field) RemoteResponseName() string {
-	fd := f.field.ObjectDefinition.Fields.ForName(f.Name())
-	remoteResponseName := remoteResponseDirectiveArgument(fd)
-	if remoteResponseName == "" {
+	remoteResponse := f.op.inSchema.remoteResponse[f.GetObjectName()][f.Name()]
+	if remoteResponse == "" {
 		return f.Name()
 	}
-	return remoteResponseName
+	return remoteResponse
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
