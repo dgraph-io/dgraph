@@ -57,21 +57,24 @@ func TestLoaderXidmap(t *testing.T) {
 
 	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
 	require.NoError(t, err)
+
+	tlsFlag := fmt.Sprintf(`cacert=%s; internal-port-enabled=%v; cert=%s; key=%s; server-name=%s;`,
+		// cacert
+		tlsDir+"/ca.crt",
+		// internal-port-enabled
+		true,
+		// cert
+		tlsDir+"/client.liveclient.crt",
+		// key
+		tlsDir+"/client.liveclient.key",
+		// server-name
+		"alpha1")
+
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		fmt.Sprintf(`--tls "cacert=%s; internal-port-enabled=%v; cert=%s; key=%s; server-name=%s;"`,
-			// cacert
-			tlsDir+"/ca.crt",
-			// internal-port-enabled
-			true,
-			// cert
-			tlsDir+"/client.liveclient.crt",
-			// key
-			tlsDir+"/client.liveclient.key",
-			// server-name
-			"alpha1"),
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -79,20 +82,10 @@ func TestLoaderXidmap(t *testing.T) {
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		fmt.Sprintf(`--tls "cacert=%s; internal-port-enabled=%v; cert=%s; key=%s; server-name=%s;"`,
-			// cacert
-			tlsDir+"/ca.crt",
-			// internal-port-enabled
-			true,
-			// cert
-			tlsDir+"/client.liveclient.crt",
-			// key
-			tlsDir+"/client.liveclient.key",
-			// server-name
-			"alpha1"),
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
