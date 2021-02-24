@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/dgraph-io/badger/v3/y"
 
 	ostats "go.opencensus.io/stats"
@@ -55,15 +53,6 @@ var (
 
 // Default limit on number of simultaneous open files on unix systems
 const DefaultMaxOpenFileLimit = 1024
-
-func queryMaxOpenFiles() int {
-	var rl unix.Rlimit
-	err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rl)
-	if err != nil {
-		return DefaultMaxOpenFileLimit
-	}
-	return int(rl.Cur)
-}
 
 func isStarAll(v []byte) bool {
 	return bytes.Equal(v, []byte(x.Star))
@@ -213,7 +202,11 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	defer wg.Done()
 	// This throttle allows is used to limit the number of files which are opened simultaneously
 	// by badger while building indexes for predicates in background.
-	maxOpenFileLimit := queryMaxOpenFiles()
+	maxOpenFileLimit, err := QueryMaxOpenFiles()
+	if err != nil {
+		// Setting to default value on unix systems
+		maxOpenFileLimit = 1024
+	}
 	glog.Infof("Max open files limit: %d", maxOpenFileLimit)
 	// Badger opens around 7 files for indexing per predicate.
 	// The throttle limit is set to maxOpenFileLimit/8 to ensure that indexing does not throw
