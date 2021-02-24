@@ -102,7 +102,7 @@ instances to achieve high-availability.
 		Flag("idx",
 			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
 		Flag("learner",
-			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
+			`Make this Zero a "learner" node. In learner mode, this Zero will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		String())
 
