@@ -1034,7 +1034,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		}
 
 		// create a copy of the auth query that's specialized for the values from the JWT
-		qry := rn.Rule.AuthFor(typ, authRw.authVariables)
+		qry := rn.Rule.AuthFor(authRw.authVariables)
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
@@ -1042,7 +1042,9 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1[0].Var = varName
 		r1[0].Attr = "var"
-		r1[0].Cascade = append(r1[0].Cascade, "__all__")
+		if len(r1[0].Cascade) == 0 {
+			r1[0].Cascade = append(r1[0].Cascade, "__all__")
+		}
 
 		return []*gql.GraphQuery{r1[0]}, &gql.FilterTree{
 			Func: &gql.Function{

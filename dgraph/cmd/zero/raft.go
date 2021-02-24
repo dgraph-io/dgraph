@@ -257,29 +257,35 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	return nil
 }
 
+func (n *node) regenerateChecksum() {
+	n.server.AssertLock()
+	state := n.server.state
+	// Regenerate group checksums. These checksums are solely based on which tablets are being
+	// served by the group. If the tablets that a group is serving changes, and the Alpha does
+	// not know about these changes, then the read request must fail.
+	for _, g := range state.GetGroups() {
+		preds := make([]string, 0, len(g.GetTablets()))
+		for pred := range g.GetTablets() {
+			preds = append(preds, pred)
+		}
+		sort.Strings(preds)
+		g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
+	}
+
+	if n.AmLeader() {
+		// It is important to push something to Oracle updates channel, so the subscribers would
+		// get the latest checksum that we calculated above. Otherwise, if all the queries are
+		// best effort queries which don't create any transaction, then the OracleDelta never
+		// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+		n.server.orc.updates <- &pb.OracleDelta{}
+	}
+}
+
 func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	n.server.AssertLock()
 	state := n.server.state
-	defer func() {
-		// Regenerate group checksums. These checksums are solely based on which tablets are being
-		// served by the group. If the tablets that a group is serving changes, and the Alpha does
-		// not know about these changes, then the read request must fail.
-		for _, g := range state.GetGroups() {
-			preds := make([]string, 0, len(g.GetTablets()))
-			for pred := range g.GetTablets() {
-				preds = append(preds, pred)
-			}
-			sort.Strings(preds)
-			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
-		}
-		if n.AmLeader() {
-			// It is important to push something to Oracle updates channel, so the subscribers would
-			// get the latest checksum that we calculated above. Otherwise, if all the queries are
-			// best effort queries which don't create any transaction, then the OracleDelta never
-			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
-			n.server.orc.updates <- &pb.OracleDelta{}
-		}
-	}()
+
+	defer n.regenerateChecksum()
 
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
@@ -313,6 +319,23 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	}
 	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
+	return nil
+}
+
+func (n *node) deleteNamespace(delNs uint64) error {
+	n.server.AssertLock()
+	state := n.server.state
+	glog.Infof("Deleting namespace %d", delNs)
+	defer n.regenerateChecksum()
+
+	for _, group := range state.Groups {
+		for pred := range group.Tablets {
+			ns := x.ParseNamespace(pred)
+			if ns == delNs {
+				delete(group.Tablets, pred)
+			}
+		}
+	}
 	return nil
 }
 
@@ -414,6 +437,12 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {
 			glog.Errorf("While applying snapshot: %v\n", err)
+		}
+	}
+	if p.DeleteNs != nil {
+		if err := n.deleteNamespace(p.DeleteNs.Namespace); err != nil {
+			glog.Errorf("While deleting namespace %+v", err)
+			return key, err
 		}
 	}
 
