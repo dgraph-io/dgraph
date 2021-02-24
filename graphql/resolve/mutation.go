@@ -422,6 +422,12 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	commit = true
 
+	// once committed, send updates to configured webhooks, if any.
+	if mutation.HasLambdaOnMutate() {
+		// TODO: complete this
+		go func() {}()
+	}
+
 	// For delete mutation, we would have already populated qryResp if query field was requested.
 	if mutation.MutationType() != schema.DeleteMutation {
 		queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)

@@ -199,6 +199,7 @@ type Mutation interface {
 	MutatedType() Type
 	QueryField() Field
 	NumUidsField() Field
+	HasLambdaOnMutate() bool
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -292,6 +293,10 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// lambdaOnMutate stores the mapping of mutationName -> true, if the config of @lambdaOnMutate
+	// enables lambdas for that mutation.
+	// It is read-only.
+	lambdaOnMutate map[string]bool
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 	// meta is the meta information extracted from input schema
@@ -749,8 +754,8 @@ func (m *mutation) IsExternal() bool {
 	return (*field)(m).IsExternal()
 }
 
-func (f *fieldDefinition) IsExternal() bool {
-	return hasExternal(f.fieldDef)
+func (fd *fieldDefinition) IsExternal() bool {
+	return hasExternal(fd.fieldDef)
 }
 
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
@@ -861,6 +866,24 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 	}
 }
 
+func lambdaOnMutateMappings(s *ast.Schema) map[string]bool {
+	result := make(map[string]bool)
+	for _, typ := range s.Types {
+		dir := typ.Directives.ForName(lambdaOnMutateDirective)
+		if dir == nil {
+			continue
+		}
+
+		for _, arg := range dir.Arguments {
+			value, _ := arg.Value.Value(nil)
+			if value != nil && value.(bool) == true {
+				result[arg.Name+typ.Name] = true
+			}
+		}
+	}
+	return result
+}
+
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
@@ -871,6 +894,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:      typeMappings(s),
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
+		lambdaOnMutate:   lambdaOnMutateMappings(s),
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -1968,6 +1992,10 @@ func (m *mutation) NumUidsField() Field {
 		}
 	}
 	return nil
+}
+
+func (m *mutation) HasLambdaOnMutate() bool {
+	return m.op.inSchema.lambdaOnMutate[m.Name()]
 }
 
 func (m *mutation) Location() x.Location {
