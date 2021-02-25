@@ -1083,13 +1083,8 @@ func (f *field) Cascade() []string {
 	if dir == nil {
 		return nil
 	}
-	fieldArg := dir.Arguments.ForName(cascadeArg)
-	if fieldArg == nil {
-		return []string{"__all__"}
-	}
-	// check valid arg
-	fieldsVal, ok := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
-	if !ok || fieldsVal == nil {
+	fieldsVal, _ := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
+	if len(fieldsVal) == 0 {
 		return []string{"__all__"}
 	}
 
@@ -1959,7 +1954,7 @@ func (m *mutation) QueryField() Field {
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
 		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
-			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
+			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective, Definition: m.op.inSchema.schema.Directives[cascadeDirective]})
 		}
 		return f
 	}

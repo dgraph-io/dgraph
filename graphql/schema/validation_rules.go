@@ -105,11 +105,6 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 			if !ok || fieldsVal == nil {
 				return
 			}
-
-			fieldStringVal := make([]string, len(fieldsVal))
-			for i, v := range fieldsVal {
-				fieldStringVal[i] = fmt.Sprint(v)
-			}
 			var validatorPath ast.Path
 			if isVariable {
 				validatorPath = ast.Path{ast.PathName("variables")}
@@ -119,12 +114,17 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 
 			typFields := directive.ParentDefinition.Fields
 			typName := directive.ParentDefinition.Name
-			for _, value := range fieldStringVal {
-				if typFields.ForName(value) == nil {
+
+			for _, value := range fieldsVal {
+				v, ok := value.(string)
+				if !ok {
+					continue
+				}
+				if typFields.ForName(v) == nil {
 					err := fmt.Sprintf("Field `%s` is not present in type `%s`."+
 						" You can only use fields in cascade which are in type `%s`", value, typName, typName)
 					if isVariable {
-						validatorPath = append(validatorPath, ast.PathName(value))
+						validatorPath = append(validatorPath, ast.PathName(v))
 						err = gqlerror.ErrorPathf(validatorPath, err).Error()
 					}
 					addError(validator.Message(err), validator.At(directive.Position))
