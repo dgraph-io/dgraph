@@ -224,7 +224,7 @@ func TestBackupMinioE(t *testing.T) {
 	require.NoError(t, err)
 
 	// perform an incremental backup and then restore
-	dirs := runBackup(t, 15, 5)
+	_ = runBackup(t, 15, 5)
 	restored = runRestore(t, "", incr4.Txn.CommitTs)
 
 	// Check that the newly added data is the only data for the movie predicate
@@ -239,10 +239,11 @@ func TestBackupMinioE(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
 	}
 
-	// Remove the full backup dirs and verify restore catches the error.
-	require.NoError(t, os.RemoveAll(dirs[0]))
-	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
+	// TODO(Ahsan): What do we do if the backup directory is deleted?
+	// // Remove the full backup dirs and verify restore catches the error.
+	// require.NoError(t, os.RemoveAll(dirs[0]))
+	// require.NoError(t, os.RemoveAll(dirs[3]))
+	// runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup(t)
@@ -294,10 +295,10 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
+	// manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+	// 	return !isdir && strings.Contains(path, "manifest.json")
+	// })
+	// require.Equal(t, numExpectedDirs, len(manifests))
 
 	return dirs
 }
@@ -307,14 +308,19 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	t.Logf("--- Restoring from: %q", localBackupDst)
+	// t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
-	cwd, err := os.Getwd()
+	// argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
+	// 	"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
+	// cwd, err := os.Getwd()
+	// require.NoError(t, err)
+	// err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
+	// require.NoError(t, err)
+	t.Logf("--- Restoring from: %q", localBackupDst)
+	key, err := ioutil.ReadFile("../../../ee/enc/test-fixtures/enc-key")
 	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	result := worker.RunRestore("./data/restore", localBackupDst, lastDir, x.SensitiveByteSlice(key), options.Snappy, 0)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)

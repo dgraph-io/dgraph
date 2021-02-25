@@ -409,11 +409,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json") && strings.HasPrefix(path, "data/backups_copy/dgraph.")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
-
 	return dirs
 }
 

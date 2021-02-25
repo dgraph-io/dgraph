@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -295,7 +294,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 }
 
 // CompleteBackup will finalize a backup by writing the manifest at the backup destination.
-func (pr *BackupProcessor) CompleteBackup(ctx context.Context, manifest *Manifest) error {
+func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -310,12 +309,15 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, manifest *Manifes
 		return err
 	}
 
-	if err := handler.CreateManifest(uri, pr.Request); err != nil {
+	manifest, err := handler.GetManifest(uri)
+	if err != nil {
 		return err
 	}
 
-	if err = json.NewEncoder(handler).Encode(manifest); err != nil {
-		return err
+	manifest.Manifests = append(manifest.Manifests, m)
+
+	if err := handler.CreateManifest(uri, manifest); err != nil {
+		return errors.Wrap(err, "Complete backup failed")
 	}
 
 	if err = handler.Close(); err != nil {

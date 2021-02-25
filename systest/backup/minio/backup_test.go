@@ -264,6 +264,8 @@ func TestBackupMinio(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
 	}
 
+	// TODO(Ahsan): Make minio backup correctly handle the case of a deleted backup dir.
+	// _ = dirs
 	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
@@ -320,11 +322,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
-
 	return dirs
 }
 
@@ -334,12 +331,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--force_zero=false"}
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
+		x.SensitiveByteSlice(nil), options.Snappy, 0)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -389,8 +383,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})
