@@ -16,12 +16,14 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc/codes"
@@ -70,8 +72,9 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
 		return handler(ctx, req)
 	}
+	ts := time.Now().UnixNano()
 	response, err := handler(ctx, req)
-	auditGrpc(ctx, req, info, err)
+	auditGrpc(ctx, ts, req, info)
 	return response, err
 }
 
@@ -85,25 +88,60 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-
+		ts := time.Now().UnixNano()
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
 		r.Body = ioutil.NopCloser(tee)
 		next.ServeHTTP(rw, r)
 		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-		auditHttp(rw, r)
+		auditHttp(rw, r, ts)
 	})
 }
 
-func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
+var skipReqBodyGrpc = map[string]bool{
+	"Login": true,
+}
+
+func checkRequestBody(reqType string, path string, body string) string {
+	switch reqType {
+	case Grpc:
+		if skipReqBodyGrpc[path] {
+			glog.V(3).Info("skipping audit of request body. " +
+				"Detected login grpc call.")
+			body = ""
+		}
+
+	case Http:
+		if path == "/admin" {
+			rb := string(body)
+			if strings.Contains(rb, "login") ||
+				strings.Contains(rb, "resetPassword") {
+				glog.V(3).Info("skipping audit of request body. " +
+					"Detected login/resetPassword call.")
+				body = ""
+			}
+		} else if path == "/grapqhl" {
+			rb := string(body)
+			if strings.Contains(rb, "check") ||
+				strings.Contains(rb, "Password") {
+				glog.V(3).Info("skipping audit of request body. " +
+					"Detected checkPassword call.")
+				body = ""
+			}
+		}
+	}
+	return body
+}
+
+func auditGrpc(ctx context.Context, ts int64, req interface{}, info *grpc.UnaryServerInfo) {
 	clientHost := ""
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
 	var user string
 	var namespace uint64
-
+	var err error
 	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
@@ -134,20 +172,23 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	if serr, ok := status.FromError(err); ok {
 		cd = serr.Code()
 	}
+
+	reqBody := checkRequestBody(Grpc, info.FullMethod[strings.LastIndex(info.FullMethod, "/")+1:], fmt.Sprintf("%+v", req))
 	auditor.Audit(&AuditEvent{
+		Timestamp:  ts,
 		User:       user,
 		Namespace:  namespace,
 		ServerHost: x.WorkerConfig.MyAddr,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
-		Req:        truncate(fmt.Sprintf("%+v", req), maxReqLength),
+		Req:        truncate(reqBody, maxReqLength),
 		Status:     cd.String(),
 	})
 }
 
-func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb := getRequestBody(r)
+func auditHttp(w *ResponseWriter, r *http.Request, ts int64) {
+	body := getRequestBody(r)
 	var user string
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
 		user = getUser(token, false)
@@ -156,14 +197,16 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	} else {
 		user = getUser("", false)
 	}
+
 	auditor.Audit(&AuditEvent{
+		Timestamp:   ts,
 		User:        user,
 		Namespace:   x.ExtractNamespaceHTTP(r),
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
 		ReqType:     Http,
-		Req:         truncate(string(rb), maxReqLength),
+		Req:         truncate(checkRequestBody(Http, r.URL.Path, string(body)), maxReqLength),
 		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
 	})

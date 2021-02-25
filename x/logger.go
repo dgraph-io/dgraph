@@ -30,6 +30,7 @@ type LoggerConf struct {
 	EncryptionKey SensitiveByteSlice
 	Size          int64
 	Days          int64
+	MessageKey    string
 }
 
 func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
@@ -54,8 +55,12 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 	if w, err = w.Init(); err != nil {
 		return nil, err
 	}
+	config := zap.NewProductionEncoderConfig()
+	config.MessageKey = conf.MessageKey
+	config.LevelKey = ""
+	config.TimeKey = ""
 	return &Logger{
-		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(config),
 			zapcore.AddSync(w), zap.DebugLevel)),
 		writer: w,
 	}, nil

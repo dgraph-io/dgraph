@@ -33,6 +33,7 @@ const (
 var auditEnabled uint32
 
 type AuditEvent struct {
+	Timestamp   int64
 	User        string
 	Namespace   uint64
 	ServerHost  string
@@ -76,6 +77,7 @@ func GetAuditConf(conf string) *x.LoggerConf {
 		EncryptionKey: encBytes,
 		Days:          auditFlag.GetInt64("days"),
 		Size:          auditFlag.GetInt64("size"),
+		MessageKey:    "path",
 	}
 }
 
@@ -175,6 +177,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
+		"ts", event.Timestamp,
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,
