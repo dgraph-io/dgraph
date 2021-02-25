@@ -1087,7 +1087,6 @@ func (f *field) Cascade() []string {
 	if fieldArg == nil {
 		return []string{"__all__"}
 	}
-	fmt.Println(dir.ArgumentMap(f.op.vars)[cascadeArg])
 	// check valid arg
 	fieldsVal, ok := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
 	if !ok || fieldsVal == nil {
