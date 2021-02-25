@@ -251,6 +251,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	for _, pred := range preds {
 		// Force the tablet to be moved to this group, even if it's currently being served
 		// by another group.
+		// TODO(Naman): The depreciated predicates removed in fixBackup() will still have tablet
+		// Add checks to not those tablet here.
 		if tablet, err := groups().ForceTablet(pred); err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		} else if tablet.GetGroupId() != req.GroupId {
@@ -321,6 +323,7 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredential
 }
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
+	var isOld bool
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
 		getCredentialsFromRestoreRequest(req),
 		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
@@ -347,8 +350,12 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
+			isOld = in.isOld
 			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
-				r: gzReader, restoreTs: req.RestoreTs, preds: in.preds, dropOperations: in.dropOperations,
+				r:              gzReader,
+				restoreTs:      req.RestoreTs,
+				preds:          in.preds,
+				dropOperations: in.dropOperations,
 			})
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot write backup")
@@ -388,6 +395,9 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		})
 	if res.Err != nil {
 		return errors.Wrapf(res.Err, "cannot write backup")
+	}
+	if isOld && groups().ServesGroup(1) {
+		return fixBackup()
 	}
 	return nil
 }

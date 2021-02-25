@@ -45,9 +45,10 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 		return LoadResult{Err: err}
 	}
 
+	var isOld bool
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return LoadBackup(location, backupId, 0, nil,
+	result := LoadBackup(location, backupId, 0, nil,
 		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -64,6 +65,10 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				}
 				return 0, 0, err
 			}
+
+			if !pathExist(dir) {
+				fmt.Println("Creating new db:", dir)
+			}
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
@@ -79,9 +84,6 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				return 0, 0, err
 			}
 			defer db.Close()
-			if !pathExist(dir) {
-				fmt.Println("Creating new db:", dir)
-			}
 			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
 				r:              gzReader,
 				restoreTs:      0,
@@ -92,8 +94,160 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 			if err != nil {
 				return 0, 0, err
 			}
+			isOld = in.isOld
 			return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
+
+	if result.Err == nil && isOld {
+		// Only group 1 contains the internal predicate.
+		dir := filepath.Join(pdir, fmt.Sprintf("p%d", 1))
+		pstore, result.Err = badger.OpenManaged(badger.DefaultOptions(dir).
+			WithCompression(ctype).
+			WithZSTDCompressionLevel(clevel).
+			WithSyncWrites(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
+		if result.Err != nil {
+			return result
+		}
+		defer pstore.Close()
+		result.Err = fixBackup()
+	}
+	return result
+}
+
+func getData(attr string, fn func(item *badger.Item) error) error {
+	return pstore.View(func(txn *badger.Txn) error {
+		attr = x.GalaxyAttr(attr)
+		initKey := x.ParsedKey{
+			Attr: attr,
+		}
+		prefix := initKey.DataPrefix()
+		startKey := append(x.DataKey(attr, math.MaxUint64))
+
+		itOpt := badger.DefaultIteratorOptions
+		itOpt.AllVersions = true
+		itOpt.Reverse = true
+		itOpt.Prefix = prefix
+		itr := txn.NewIterator(itOpt)
+		defer itr.Close()
+		for itr.Seek(startKey); itr.Valid(); itr.Next() {
+			item := itr.Item()
+			// We expect only complete posting list.
+			x.AssertTrue(item.UserMeta() == posting.BitCompletePosting)
+			if err := fn(item); err != nil {
+				return err
+			}
+			break
+		}
+		return nil
+	})
+}
+
+func updateGqlSchema(cors [][]byte) error {
+	entry := &badger.Entry{}
+	var version uint64
+	err := getData("dgraph.graphql.schema", func(item *badger.Item) error {
+		var err error
+		entry.Key = item.KeyCopy(nil)
+		entry.Value, err = item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		entry.UserMeta = item.UserMeta()
+		entry.ExpiresAt = item.ExpiresAt()
+		version = item.Version()
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if entry.Key == nil {
+		return nil
+	}
+
+	var corsBytes []byte
+	corsBytes = append(corsBytes, []byte("\n\n\n# Below schema elements will only work for dgraph"+
+		" versions >= 21.03. In older versions it will be ignored.")...)
+	for _, val := range cors {
+		corsBytes = append(corsBytes, []byte(fmt.Sprintf("\n# Dgraph.Allow-Origin \"%s\"",
+			string(val)))...)
+	}
+
+	// Append the cors at the end of GraphQL schema.
+	pl := pb.PostingList{}
+	if err = pl.Unmarshal(entry.Value); err != nil {
+		return err
+	}
+	pl.Postings[0].Value = append(pl.Postings[0].Value, corsBytes...)
+	entry.Value, err = pl.Marshal()
+	if err != nil {
+		return err
+	}
+
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+	if err = txn.SetEntry(entry); err != nil {
+		return err
+	}
+	return txn.CommitAt(version, nil)
+}
+
+func getCors() ([][]byte, error) {
+	var corsVals [][]byte
+	err := getData("dgraph.cors", func(item *badger.Item) error {
+		val, _ := item.ValueCopy(nil)
+		pl := pb.PostingList{}
+		if err := pl.Unmarshal(val); err != nil {
+			return err
+		}
+		for _, p := range pl.Postings {
+			corsVals = append(corsVals, p.Value)
+		}
+		return nil
+	})
+	return corsVals, err
+}
+
+var depreciatedPreds = map[string]struct{}{
+	"dgraph.cors":                      {},
+	"dgraph.graphql.schema_created_at": {},
+	"dgraph.graphql.schema_history":    {},
+	"dgraph.graphql.p_sha256hash":      {},
+}
+
+var depreciatedTypes = map[string]struct{}{
+	"dgraph.type.cors":       {},
+	"dgraph.graphql.history": {},
+}
+
+func dropDepreciated() error {
+	var prefixes [][]byte
+	for pred := range depreciatedPreds {
+		pred = x.GalaxyAttr(pred)
+		prefixes = append(prefixes, x.SchemaKey(pred), x.PredicatePrefix(pred))
+	}
+	for typ := range depreciatedTypes {
+		prefixes = append(prefixes, x.TypeKey(x.GalaxyAttr(typ)))
+	}
+	return pstore.DropPrefix(prefixes...)
+}
+
+// fixBackup removes the internal predicates from the restored backup. This also appends CORS from
+// dgraph.cors to GraphQL schema.
+func fixBackup() error {
+	glog.Infof("Fixing backups")
+	cors, err := getCors()
+	if err != nil {
+		return errors.Wrapf(err, "Error while getting cors from db.")
+	}
+	if err := updateGqlSchema(cors); err != nil {
+		return errors.Wrapf(err, "Error while updating GraphQL schema.")
+	}
+	return errors.Wrapf(dropDepreciated(), "Error while dropping depreciated preds/types.")
 }
 
 type loadBackupInput struct {
@@ -175,12 +329,8 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 			}
 
 			// Update the max uid and namespace id that has been seen while restoring this backup.
-			if parsedKey.Uid > maxUid {
-				maxUid = parsedKey.Uid
-			}
-			if namespace > maxNsId {
-				maxNsId = namespace
-			}
+			maxUid = x.Max(maxUid, parsedKey.Uid)
+			maxNsId = x.Max(maxNsId, namespace)
 
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.
