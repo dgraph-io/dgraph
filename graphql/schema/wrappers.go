@@ -125,6 +125,7 @@ type Field interface {
 	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field.
 	DgraphAlias() string
 	ResponseName() string
+	RemoteResponseName() string
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
@@ -292,6 +293,9 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// remoteResponse stores the mapping of typeName->fieldName->responseName which will be used in result
+	// completion step.
+	remoteResponse map[string]map[string]string
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 	// meta is the meta information extracted from input schema
@@ -725,6 +729,35 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func remoteResponseMapping(s *ast.Schema) map[string]map[string]string {
+	remoteResponse := make(map[string]map[string]string)
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name != remoteResponseDirective {
+					continue
+				}
+				lastIndex := len(field.Directives) - 1
+				field.Directives[i] = field.Directives[lastIndex]
+				field.Directives = field.Directives[:lastIndex]
+
+				var remoteFieldMap map[string]string
+				if existingRemoteFieldMap, ok := remoteResponse[typ.Name]; ok {
+					remoteFieldMap = existingRemoteFieldMap
+				} else {
+					remoteFieldMap = make(map[string]string)
+				}
+
+				remoteFieldMap[field.Name] = dir.Arguments[0].Value.Raw
+				remoteResponse[typ.Name] = remoteFieldMap
+
+				break
+			}
+		}
+	}
+	return remoteResponse
+}
+
 func hasExtends(def *ast.Definition) bool {
 	return def.Directives.ForName(apolloExtendsDirective) != nil
 }
@@ -864,6 +897,7 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
+	remoteResponseDirs := remoteResponseMapping(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:           s,
@@ -871,6 +905,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:      typeMappings(s),
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
+		remoteResponse:   remoteResponseDirs,
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -906,6 +941,22 @@ func (f *field) DgraphAlias() string {
 
 func (f *field) ResponseName() string {
 	return responseName(f.field)
+}
+
+func remoteResponseDirectiveArgument(fd *ast.FieldDefinition) string {
+	remoteResponseDirectiveDefn := fd.Directives.ForName(remoteResponseDirective)
+	if remoteResponseDirectiveDefn != nil {
+		return remoteResponseDirectiveDefn.Arguments.ForName("name").Value.Raw
+	}
+	return ""
+}
+
+func (f *field) RemoteResponseName() string {
+	remoteResponse := f.op.inSchema.remoteResponse[f.GetObjectName()][f.Name()]
+	if remoteResponse == "" {
+		return f.Name()
+	}
+	return remoteResponse
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
@@ -1602,6 +1653,10 @@ func (q *query) Name() string {
 	return (*field)(q).Name()
 }
 
+func (q *query) RemoteResponseName() string {
+	return (*field)(q).RemoteResponseName()
+}
+
 func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
@@ -1867,6 +1922,10 @@ func (q *query) IncludeAbstractField(dgraphTypes []string) bool {
 
 func (m *mutation) Name() string {
 	return (*field)(m).Name()
+}
+
+func (m *mutation) RemoteResponseName() string {
+	return (*field)(m).RemoteResponseName()
 }
 
 func (m *mutation) Alias() string {
