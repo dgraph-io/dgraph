@@ -35,14 +35,43 @@ type debugInfoCmdOpts struct {
 	directory string
 	duration  uint32
 
-	pprofProfiles []string
-	metricTypes   []string
+	metricTypes []string
 }
 
 var (
 	DebugInfo    x.SubCommand
 	debugInfoCmd = debugInfoCmdOpts{}
 )
+
+var metricMap = map[string]string{
+	"jemalloc":     "/jemalloc",
+	"state":        "/state",
+	"health":       "/health",
+	"vars":         "/debug/vars",
+	"metric":       "/metric",
+	"heap":         "/debug/pprof/heap",
+	"cpu_profile":  "/debug/pprof/profile",
+	"trace":        "/debug/pprof/trace",
+	"goroutine":    "/debug/pprof/goroutine",
+	"threadcreate": "/debug/pprof/threadcreate",
+	"block":        "/debug/pprof/block",
+	"mutex":        "/debug/pprof/mutex",
+}
+
+var metricList = []string{
+	"jemalloc",
+	"state",
+	"health",
+	"vars",
+	"metric",
+	"heap",
+	"cpu_profile",
+	"trace",
+	"goroutine",
+	"threadcreate",
+	"block",
+	"mutex",
+}
 
 func init() {
 	DebugInfo.Cmd = &cobra.Command{
@@ -56,6 +85,7 @@ func init() {
 		},
 		Annotations: map[string]string{"group": "debug"},
 	}
+
 	DebugInfo.EnvPrefix = "DGRAPH_AGENT_DEBUGINFO"
 	DebugInfo.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
@@ -67,12 +97,10 @@ func init() {
 		"Directory to write the debug info into.")
 	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
 		"Whether to archive the generated report")
-	flags.Uint32VarP(&debugInfoCmd.duration, "seconds", "s", 15,
-		"Duration for time-based profile collection.")
-	flags.StringSliceVarP(&debugInfoCmd.pprofProfiles, "profiles", "p", pprofProfileTypes,
-		"List of pprof profiles to dump in the report.")
-	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricTypes,
-		"List of metrics profiles to dump in the report.")
+	flags.Uint32VarP(&debugInfoCmd.duration, "seconds", "s", 30,
+		"Duration for time-based metric collection.")
+	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricList,
+		"List of metrics & profile to dump in the report.")
 }
 
 func collectDebugInfo() (err error) {
@@ -89,7 +117,7 @@ func collectDebugInfo() (err error) {
 	}
 	glog.Infof("using directory %s for debug info dump.", debugInfoCmd.directory)
 
-	collectPProfProfiles()
+	collectMetrics()
 
 	if debugInfoCmd.archive {
 		return archiveDebugInfo()
@@ -97,18 +125,17 @@ func collectDebugInfo() (err error) {
 	return nil
 }
 
-func collectPProfProfiles() {
+func collectMetrics() {
 	duration := time.Duration(debugInfoCmd.duration) * time.Second
-
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
-		saveProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+
 		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.metricTypes)
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
-		saveProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+
 		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.metricTypes)
 	}
 }

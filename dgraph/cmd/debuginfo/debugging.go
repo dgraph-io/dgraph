@@ -29,25 +29,7 @@ import (
 	"github.com/golang/glog"
 )
 
-var pprofProfileTypes = []string{
-	"goroutine",
-	"heap",
-	"threadcreate",
-	"block",
-	"mutex",
-	"profile",
-	"trace",
-}
-
-var metricTypes = []string{
-	"jemalloc",
-	"state",
-	"health",
-	"debug/vars",
-	"debug/prometheus_metrics",
-}
-
-func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []string) {
+func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []string) {
 	u, err := url.Parse(addr)
 	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
 		u, err = url.Parse("http://" + addr)
@@ -57,34 +39,10 @@ func saveProfiles(addr, pathPrefix string, duration time.Duration, profiles []st
 		return
 	}
 
-	for _, profileType := range profiles {
-		source := fmt.Sprintf("%s/debug/pprof/%s?duration=%d", u.String(),
-			profileType, int(duration.Seconds()))
-		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, profileType)
-
-		if err := saveDebug(source, savePath, duration); err != nil {
-			glog.Errorf("error while saving pprof profile from %s: %s", source, err)
-			continue
-		}
-
-		glog.Infof("saving %s profile in %s", profileType, savePath)
-	}
-}
-
-func saveMetrics(addr, pathPrefix string, duration time.Duration, metrics []string) {
-	u, err := url.Parse(addr)
-	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
-		u, err = url.Parse("http://" + addr)
-	}
-	if err != nil || u.Host == "" {
-		glog.Errorf("error while parsing address %s: %s", addr, err)
-		return
-	}
-
-	for _, metricType := range metrics {
-		source := fmt.Sprintf("%s/%s", u.String(),
-			metricType)
-		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, strings.ReplaceAll(metricType, "/", "_"))
+	for _, metricType := range metricTypes {
+		source := fmt.Sprintf("%s%s", u.String(),
+			metricMap[metricType])
+		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, metricType)
 		if err := saveDebug(source, savePath, duration); err != nil {
 			glog.Errorf("error while saving metric from %s: %s", source, err)
 			continue
