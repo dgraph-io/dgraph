@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/pkg/errors"
@@ -62,7 +64,7 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 	return token
 }
 
-func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
+func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 	createNs := `mutation {
 					 addNamespace
 					  {
@@ -74,10 +76,21 @@ func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
 	params := GraphQLParams{
 		Query: createNs,
 	}
-	resp := MakeRequest(t, token, params)
-	if len(resp.Errors) > 0 {
-		return 0, errors.Errorf(resp.Errors.Error())
+	var resp *GraphQLResponse
+	for {
+		resp = MakeRequest(t, token, params)
+		if len(resp.Errors) > 0 {
+			// retry if necessary
+			if strings.Contains(resp.Errors.Error(), "Predicate dgraph.xid is not indexed") {
+				glog.Warningf("error while creating namespace %v", resp.Errors)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return 0, errors.Errorf(resp.Errors.Error())
+		}
+		break
 	}
+
 	var result struct {
 		AddNamespace struct {
 			NamespaceId int    `json:"namespaceId"`
