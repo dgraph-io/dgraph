@@ -589,7 +589,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousMode {
+	if x.WorkerConfig.LudicrousEnabled {
 		// Mutations are automatically committed in case of ludicrous mode, so we don't
 		// need to manually commit.
 		if resp.Txn == nil {
@@ -849,9 +849,9 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
-	if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, x.Config.MutationsNQuadLimit)
+			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
 	}
 	return nil
 }
@@ -903,9 +903,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+			if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, x.Config.MutationsNQuadLimit)
+					qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
 			}
 		}
 	}
@@ -919,9 +919,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 		newObs := getNewVals(nq.ObjectId)
 
 		qc.nquadsCount += len(newSubs) * len(newObs)
-		if qc.nquadsCount > x.Config.MutationsNQuadLimit {
+		if qc.nquadsCount > int(x.Config.LimitQueryEdge) {
 			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-				qc.nquadsCount, x.Config.MutationsNQuadLimit)
+				qc.nquadsCount, int(x.Config.LimitQueryEdge))
 		}
 
 		for _, s := range newSubs {
@@ -1194,7 +1194,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousMode {
+		if x.WorkerConfig.LudicrousEnabled {
 			req.req.StartTs = posting.Oracle().MaxAssigned()
 		} else {
 			start := time.Now()
@@ -1252,7 +1252,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
-	if x.WorkerConfig.LudicrousMode {
+	if x.WorkerConfig.LudicrousEnabled {
 		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{

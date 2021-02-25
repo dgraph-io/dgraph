@@ -14,7 +14,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5080 --logtostderr -v=2 --datadog.collector=datadog:8126 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5080 --logtostderr -v=2
+      --trace "jaeger=http://jaeger:14268; datadog=datadog:8126;"
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -29,7 +30,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 0 --raft="idx=1" --my=zero1:5080 --replicas=3 --logtostderr --datadog.collector=datadog:8126 -v=2 --bindall --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph zero -o 0 --raft "idx=1;" --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall
+      --trace "jaeger=http://jaeger:14268; datadog=datadog:8126;"
   datadog:
     image: datadog/agent:latest
     container_name: datadog

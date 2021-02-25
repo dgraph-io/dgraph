@@ -861,7 +861,7 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 
 	// build the children for http argument
 	httpArgChildrens := []*ast.ChildValue{
-		getChildValue(httpUrl, x.Config.GraphqlLambdaUrl, ast.StringValue, lambdaDir.Position),
+		getChildValue(httpUrl, x.Config.GraphQL.GetString("lambda-url"), ast.StringValue, lambdaDir.Position),
 		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
 		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
 	}
