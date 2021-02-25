@@ -108,7 +108,7 @@ instances to achieve high-availability.
 
 	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
 	//       option.
-	flag.String("audit", "", z.NewSuperFlagHelp("compress=false; days=10; size=100;").
+	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
