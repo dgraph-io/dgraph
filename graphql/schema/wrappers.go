@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -1084,49 +1085,27 @@ func (f *field) Cascade() []string {
 	if dir == nil {
 		return nil
 	}
-	arg := dir.Arguments.ForName(cascadeArg)
+
 	// check valid arg
-	if arg == nil || arg.Value == nil {
-		return []string{"__all__"}
-	}
-	val := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
-	isVariable := strings.HasPrefix(arg.Value.String(), "$")
-	// check length of arg
-	if isVariable {
-		if len(val) == 0 {
-			return []string{"__all__"}
-		}
-	} else if len(arg.Value.Children) == 0 {
+	fieldsVal, ok := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
+	if !ok || fieldsVal == nil {
 		return []string{"__all__"}
 	}
 
+	glog.Infof("%v", fieldsVal)
 	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
 
-	for _, value := range GqlFields(val, arg, isVariable) {
+	for _, value := range fieldsVal {
 		if idField != nil && idField.Name() == value {
 			fields = append(fields, "uid")
 		} else {
-			fields = append(fields, typ.DgraphPredicate(value))
+			fields = append(fields, typ.DgraphPredicate(value.(string)))
 		}
 
 	}
 	return fields
-}
-
-func GqlFields(val []interface{}, arg *ast.Argument, varFlag bool) []string {
-	gqlFields := make([]string, 0)
-	if varFlag {
-		for _, value := range val {
-			gqlFields = append(gqlFields, value.(string))
-		}
-	} else {
-		for _, child := range arg.Value.Children {
-			gqlFields = append(gqlFields, child.Value.Raw)
-		}
-	}
-	return gqlFields
 }
 
 func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map[string]FieldDefinition {

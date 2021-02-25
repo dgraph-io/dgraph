@@ -408,7 +408,7 @@
         ]
     }
   errors:
-    [ { "message": "input: variable.fieldsDeep.text1 Field `text1` is not present in type `Post`. You can only use fields in cascade which are in type `Post`",
+    [ { "message": "input: variables.fieldsDeep.text1 Field `text1` is not present in type `Post`. You can only use fields in cascade which are in type `Post`",
         "locations":  [{ "line": 5, "column": 10}]
     } ]
 
@@ -436,6 +436,6 @@
         ]
     }
   errors:
-    [ { "message": "input: variable.fieldsRoot.reputation1 Field `reputation1` is not present in type `Author`. You can only use fields in cascade which are in type `Author`",
+    [ { "message": "input: variables.fieldsRoot.reputation1 Field `reputation1` is not present in type `Author`. You can only use fields in cascade which are in type `Author`",
         "locations":  [{ "line": 2, "column": 15}]
     } ]

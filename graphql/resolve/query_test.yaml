@@ -1948,40 +1948,6 @@
     }
 
 -
-  name: "Parameterized Cascade directive on root field using variables"
-  gqlquery: |
-    query($fieldsRoot:[String]) {
-      queryAuthor @cascade(fields: $fieldsRoot) {
-        dob
-        reputation
-        posts {
-          text
-          title
-        }
-      }
-    }
-  gqlvariables: |
-    {
-        "fieldsRoot": [
-            "dob",
-            "reputation"
-        ]
-    }
-  dgquery: |-
-    query {
-      queryAuthor(func: type(Author)) @cascade(Author.dob, Author.reputation) {
-        Author.dob : Author.dob
-        Author.reputation : Author.reputation
-        Author.posts : Author.posts {
-          Post.text : Post.text
-          Post.title : Post.title
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
-
--
   name: "Parameterized Cascade directive on root and nested field using variables"
   gqlquery: |
     query($fieldsRoot:[String],$fieldsDeep:[String]) {

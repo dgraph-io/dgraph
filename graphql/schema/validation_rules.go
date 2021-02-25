@@ -20,12 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/gqlparser/v2/gqlerror"
-	"strconv"
-	"strings"
-
 	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/validator"
+	"strconv"
 )
 
 var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
@@ -98,36 +96,37 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 				addError(validator.Message("Schema is not set yet. Please try after sometime."))
 				return
 			}
-			if directive.Arguments.ForName(cascadeArg) == nil {
+			fieldArg := directive.Arguments.ForName(cascadeArg)
+			if fieldArg == nil {
+				return
+			}
+			isVariable := fieldArg.Value.Kind == ast.Variable
+			fieldsVal, ok := directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
+			if !ok || fieldsVal == nil {
 				return
 			}
 
-			fieldArg := directive.Arguments.ForName(cascadeArg)
-			isVariable := strings.HasPrefix(fieldArg.Value.String(), "$")
-			if directive.ArgumentMap(walker.Variables)[cascadeArg] == nil {
-				return
+			fieldStringVal := make([]string, len(fieldsVal))
+			for i, v := range fieldsVal {
+				fieldStringVal[i] = fmt.Sprint(v)
 			}
-			var variableVal []interface{}
 			var validatorPath ast.Path
 			if isVariable {
-				validatorPath = ast.Path{ast.PathName("variable")}
+				validatorPath = ast.Path{ast.PathName("variables")}
 				validatorPath = append(validatorPath, ast.PathName(fieldArg.Value.Raw))
-				variableVal = directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
+
 			}
 
 			typFields := directive.ParentDefinition.Fields
 			typName := directive.ParentDefinition.Name
-
-			for _, value := range GqlFields(variableVal, fieldArg, isVariable) {
+			for _, value := range fieldStringVal {
 				if typFields.ForName(value) == nil {
 					err := fmt.Sprintf("Field `%s` is not present in type `%s`."+
 						" You can only use fields in cascade which are in type `%s`", value, typName, typName)
 					if isVariable {
 						validatorPath = append(validatorPath, ast.PathName(value))
-						addError(validator.Message(gqlerror.ErrorPathf(validatorPath, err).Error()), validator.At(directive.Position))
-						return
+						err = gqlerror.ErrorPathf(validatorPath, err).Error()
 					}
-
 					addError(validator.Message(err), validator.At(directive.Position))
 					return
 				}
