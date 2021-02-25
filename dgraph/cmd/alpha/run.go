@@ -36,6 +36,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -812,9 +813,9 @@ func run() {
 	}
 
 	x.PrintVersion()
-	glog.Infof("x.Config: %+v", x.Config)
-	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("worker.Config: %+v", worker.Config)
+	glog.Infof("x.Config: %+v", spew.Sdump(x.Config))
+	glog.Infof("x.WorkerConfig: %+v", spew.Sdump(x.WorkerConfig))
+	glog.Infof("worker.Config: %+v", spew.Sdump(worker.Config))
 
 	worker.InitServerState()
 
