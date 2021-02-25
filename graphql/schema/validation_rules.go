@@ -101,8 +101,8 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 				return
 			}
 			isVariable := fieldArg.Value.Kind == ast.Variable
-			fieldsVal, ok := directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
-			if !ok || fieldsVal == nil {
+			fieldsVal, _ := directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
+			if len(fieldsVal) == 0 {
 				return
 			}
 			var validatorPath ast.Path
