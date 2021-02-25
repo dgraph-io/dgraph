@@ -44,18 +44,18 @@ var (
 )
 
 var metricMap = map[string]string{
-	"jemalloc":           "/jemalloc",
-	"state":              "/state",
-	"health":             "/health",
-	"vars":               "/debug/vars",
-	"prometheus_metrics": "/debug/prometheus_metrics",
-	"heap":               "/debug/pprof/heap",
-	"cpu_profile":        "/debug/pprof/profile",
-	"trace":              "/debug/pprof/trace",
-	"goroutine":          "/debug/pprof/goroutine",
-	"threadcreate":       "/debug/pprof/threadcreate",
-	"block":              "/debug/pprof/block",
-	"mutex":              "/debug/pprof/mutex",
+	"jemalloc":     "/jemalloc",
+	"state":        "/state",
+	"health":       "/health",
+	"vars":         "/debug/vars",
+	"metrics":      "/metrics",
+	"heap":         "/debug/pprof/heap",
+	"cpu_profile":  "/debug/pprof/profile",
+	"trace":        "/debug/pprof/trace",
+	"goroutine":    "/debug/pprof/goroutine",
+	"threadcreate": "/debug/pprof/threadcreate",
+	"block":        "/debug/pprof/block",
+	"mutex":        "/debug/pprof/mutex",
 }
 
 var metricList = []string{
@@ -63,7 +63,7 @@ var metricList = []string{
 	"state",
 	"health",
 	"vars",
-	"prometheus_metrics",
+	"metrics",
 	"heap",
 	"cpu_profile",
 	"trace",
