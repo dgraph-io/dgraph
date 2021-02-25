@@ -45,14 +45,13 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 				"support annotation logs and discards them.").
 		String())
 
-	// Performance flags.
 	flag.String("survive", "process",
-		`Choose between "process" or "filesystem".
-		If set to "process", there would be no data loss in case of process crash, but the
-		behavior would be indeterministic in case of filesystem crash. If set to "filesystem",
-		blocking sync would be called after every write, hence guaranteeing no data loss in case
-		of hard reboot. Most users should be OK with choosing "process".
-		`)
+		`Choose between "process" or "filesystem".`+"\n    "+
+			`If set to "process", there would be no data loss in case of process crash, but `+
+			`the behavior would be indeterministic in case of filesystem crash.`+"\n    "+
+			`If set to "filesystem", blocking sync would be called after every write, hence `+
+			`guaranteeing no data loss in case of hard reboot.`+"\n    "+
+			`Most users should be OK with choosing "process".`)
 
 	// Cache flags.
 	flag.Int64("cache_mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")

@@ -109,8 +109,8 @@ they form a Raft group and provide synchronous replication.
 	enc.RegisterFlags(flag)
 
 	flag.String("cache_percentage", "0,65,35,0",
-		`Cache percentages summing up to 100 for various caches (FORMAT:
-		PostingListCache,PstoreBlockCache,PstoreIndexCache,WAL).`)
+		`Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,`+
+			`PstoreBlockCache,PstoreIndexCache,WAL).`)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -248,7 +248,7 @@ they form a Raft group and provide synchronous replication.
 
 	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
 	//       option.
-	flag.String("audit", "", z.NewSuperFlagHelp("compress=false; days=10; size=100;").
+	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
 		Flag("dir",
 			"The path where audit logs will be stored.").
