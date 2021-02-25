@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -1092,7 +1091,6 @@ func (f *field) Cascade() []string {
 		return []string{"__all__"}
 	}
 
-	glog.Infof("%v", fieldsVal)
 	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
