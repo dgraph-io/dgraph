@@ -548,7 +548,7 @@ func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *Rule
 			" one query, found an %s", typ.Name, op.Name)
 	}
 
-	listErr := validator.Validate(s, doc)
+	listErr := validator.Validate(s, doc, nil)
 	if len(listErr) != 0 {
 		var errs error
 		for _, err := range listErr {

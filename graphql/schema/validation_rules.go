@@ -18,8 +18,11 @@ package schema
 
 import (
 	"errors"
+	"fmt"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/validator"
@@ -90,7 +93,6 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 
 func directiveArgumentsCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
-
 		if directive.Name == cascadeDirective && len(directive.Arguments) == 1 {
 			if directive.ParentDefinition == nil {
 				addError(validator.Message("Schema is not set yet. Please try after sometime."))
@@ -99,11 +101,34 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 			if directive.Arguments.ForName(cascadeArg) == nil {
 				return
 			}
+
+			fieldArg := directive.Arguments.ForName(cascadeArg)
+			isVariable := strings.HasPrefix(fieldArg.Value.String(), "$")
+			if directive.ArgumentMap(walker.Variables)[cascadeArg] == nil {
+				return
+			}
+			var variableVal []interface{}
+			var validatorPath ast.Path
+			if isVariable {
+				validatorPath = ast.Path{ast.PathName("variable")}
+				validatorPath = append(validatorPath, ast.PathName(fieldArg.Value.Raw))
+				variableVal = directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
+			}
+
 			typFields := directive.ParentDefinition.Fields
-			for _, child := range directive.Arguments.ForName(cascadeArg).Value.Children {
-				if typFields.ForName(child.Value.Raw) == nil {
-					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
-						child.Value.Raw, directive.ParentDefinition.Name, directive.ParentDefinition.Name))
+			typName := directive.ParentDefinition.Name
+
+			for _, value := range GqlFields(variableVal, fieldArg, isVariable) {
+				if typFields.ForName(value) == nil {
+					err := fmt.Sprintf("Field `%s` is not present in type `%s`."+
+						" You can only use fields in cascade which are in type `%s`", value, typName, typName)
+					if isVariable {
+						validatorPath = append(validatorPath, ast.PathName(value))
+						addError(validator.Message(gqlerror.ErrorPathf(validatorPath, err).Error()), validator.At(directive.Position))
+						return
+					}
+
+					addError(validator.Message(err), validator.At(directive.Position))
 					return
 				}
 

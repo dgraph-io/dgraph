@@ -1100,12 +1100,24 @@ func (f *field) Cascade() []string {
 		return []string{"__all__"}
 	}
 
-	gqlFields := make([]string, 0)
 	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
 
-	if isVariable {
+	for _, value := range GqlFields(val, arg, isVariable) {
+		if idField != nil && idField.Name() == value {
+			fields = append(fields, "uid")
+		} else {
+			fields = append(fields, typ.DgraphPredicate(value))
+		}
+
+	}
+	return fields
+}
+
+func GqlFields(val []interface{}, arg *ast.Argument, varFlag bool) []string {
+	gqlFields := make([]string, 0)
+	if varFlag {
 		for _, value := range val {
 			gqlFields = append(gqlFields, value.(string))
 		}
@@ -1114,17 +1126,7 @@ func (f *field) Cascade() []string {
 			gqlFields = append(gqlFields, child.Value.Raw)
 		}
 	}
-
-	for _, value := range gqlFields {
-		if idField != nil && idField.Name() == value {
-			fields = append(fields, "uid")
-		} else {
-			fields = append(fields, typ.DgraphPredicate(value))
-		}
-
-	}
-
-	return fields
+	return gqlFields
 }
 
 func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map[string]FieldDefinition {
