@@ -1998,3 +1998,38 @@
       Vehicle1 as var(func: type(Vehicle))
       Car1 as var(func: type(Car))
     }
+
+-
+  name: "Fragments in auth queries with user defined cascade"
+  gqlquery: |
+    query {
+      queryHome {
+        id
+        address
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: uid(HomeRoot)) {
+        Home.id : uid
+        Home.address : Home.address
+      }
+      HomeRoot as var(func: uid(Home1)) @filter((uid(HomeAuth2) OR uid(HomeAuth3)))
+      Home1 as var(func: type(Home))
+      HomeAuth2 as var(func: uid(Home1)) @cascade(Home.members) {
+        Home.members : Home.members @filter((type(Dog))) @cascade {
+          dgraph.type
+          Dog.eats : Dog.eats {
+            dgraph.type
+            Parrot.id : uid
+            Plant.id : uid
+          }
+        }
+      }
+      HomeAuth3 as var(func: uid(Home1)) @cascade {
+        Home.members : Home.members @filter((type(Plant))) {
+          dgraph.type
+          Plant.breed : Plant.breed
+        }
+      }
+    }

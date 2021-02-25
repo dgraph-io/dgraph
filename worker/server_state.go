@@ -30,6 +30,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	BadgerDefaults = "compression=snappy; goroutines=8;"
+)
+
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
@@ -108,6 +112,7 @@ func (s *ServerState) initStorage() {
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
+			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
 			WithNamespaceOffset(x.NamespaceOffset)

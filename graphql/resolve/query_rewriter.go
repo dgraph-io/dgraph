@@ -550,7 +550,7 @@ func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
 func rewriteAsGet(
 	query schema.Query,
 	uid uint64,
-	xid *string,
+	xidArgToVal map[string]string,
 	auth *authRewriter) []*gql.GraphQuery {
 
 	var dgQuery []*gql.GraphQuery
@@ -579,7 +579,7 @@ func rewriteAsGet(
 		}
 	}
 
-	if xid == nil {
+	if len(xidArgToVal) == 0 {
 		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
 
 		// Add the type filter to the top level get query. When the auth has been written into the
@@ -588,16 +588,28 @@ func rewriteAsGet(
 
 		return dgQuery
 	}
-
-	xidArgName := query.XIDArg()
-	eqXidFunc := &gql.Function{
-		Name: "eq",
-		Args: []gql.Arg{
-			{Value: xidArgName},
-			{Value: maybeQuoteArg("eq", *xid)},
-		},
+	// iterate over map in sorted order to ensure consistency
+	xids := make([]string, len(xidArgToVal))
+	i := 0
+	for k := range xidArgToVal {
+		xids[i] = k
+		i++
 	}
-
+	sort.Strings(xids)
+	xidArgNameToDgPredMap := query.XIDArgs()
+	var flt []*gql.FilterTree
+	for _, xid := range xids {
+		eqXidFuncTemp := &gql.Function{
+			Name: "eq",
+			Args: []gql.Arg{
+				{Value: xidArgNameToDgPredMap[xid]},
+				{Value: maybeQuoteArg("eq", xidArgToVal[xid])},
+			},
+		}
+		flt = append(flt, &gql.FilterTree{
+			Func: eqXidFuncTemp,
+		})
+	}
 	if uid > 0 {
 		dgQuery = []*gql.GraphQuery{{
 			Attr: query.DgraphAlias(),
@@ -607,14 +619,21 @@ func rewriteAsGet(
 			},
 		}}
 		dgQuery[0].Filter = &gql.FilterTree{
-			Func: eqXidFunc,
+			Op:    "and",
+			Child: flt,
 		}
 
 	} else {
 		dgQuery = []*gql.GraphQuery{{
 			Attr: query.DgraphAlias(),
-			Func: eqXidFunc,
+			Func: flt[0].Func,
 		}}
+		if len(flt) > 1 {
+			dgQuery[0].Filter = &gql.FilterTree{
+				Op:    "and",
+				Child: flt[1:],
+			}
+		}
 	}
 
 	// Apply query auth rules even for password query
@@ -1015,7 +1034,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		}
 
 		// create a copy of the auth query that's specialized for the values from the JWT
-		qry := rn.Rule.AuthFor(typ, authRw.authVariables)
+		qry := rn.Rule.AuthFor(authRw.authVariables)
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
@@ -1023,7 +1042,9 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1[0].Var = varName
 		r1[0].Attr = "var"
-		r1[0].Cascade = append(r1[0].Cascade, "__all__")
+		if len(r1[0].Cascade) == 0 {
+			r1[0].Cascade = append(r1[0].Cascade, "__all__")
+		}
 
 		return []*gql.GraphQuery{r1[0]}, &gql.FilterTree{
 			Func: &gql.Function{

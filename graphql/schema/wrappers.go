@@ -127,8 +127,8 @@ type Field interface {
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
-	IDArgValue() (*string, uint64, error)
-	XIDArg() string
+	IDArgValue() (map[string]string, uint64, error)
+	XIDArgs() map[string]string
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
@@ -208,7 +208,7 @@ type Query interface {
 	Rename(newName string)
 	KeyField(typeName string) (string, bool, error)
 	BuildType(typeName string) Type
-	AuthFor(typ Type, jwtVars map[string]interface{}) Query
+	AuthFor(jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -218,7 +218,7 @@ type Type interface {
 	Field(name string) FieldDefinition
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
-	XIDField() FieldDefinition
+	XIDFields() []FieldDefinition
 	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
@@ -862,13 +862,6 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-	// Auth rules can't be effectively validated as part of the normal rules -
-	// because they need the fully generated schema to be checked against.
-	authRules, err := authRules(s)
-	if err != nil {
-		return nil, err
-	}
-
 	customDirs, lambdaDirs := customAndLambdaMappings(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
@@ -877,10 +870,16 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:      typeMappings(s),
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
-		authRules:        authRules,
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	var err error
+	sch.authRules, err = authRules(sch)
+	if err != nil {
+		return nil, err
+	}
 
 	return sch, nil
 }
@@ -1226,8 +1225,8 @@ func (f *field) HasLambdaDirective() bool {
 	return f.op.inSchema.lambdaDirectives[f.GetObjectName()][f.Name()]
 }
 
-func (f *field) XIDArg() string {
-	xidArgName := ""
+func (f *field) XIDArgs() map[string]string {
+	xidToDgraphPredicate := make(map[string]string)
 	passwordField := f.Type().PasswordField()
 
 	args := f.field.Definition.Arguments
@@ -1241,16 +1240,17 @@ func (f *field) XIDArg() string {
 	for _, arg := range args {
 		if arg.Type.Name() != IDType && (passwordField == nil ||
 			arg.Name != passwordField.Name()) {
-			xidArgName = arg.Name
+			xidToDgraphPredicate[arg.Name] = f.Type().DgraphPredicate(arg.Name)
 		}
 	}
-	return f.Type().DgraphPredicate(xidArgName)
+	return xidToDgraphPredicate
 }
 
-func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 	idField := f.Type().IDField()
 	passwordField := f.Type().PasswordField()
 	xidArgName := ""
+	xids = make(map[string]string)
 	// This method is only called for Get queries and check. These queries can accept ID, XID
 	// or Password. Therefore the non ID and Password field is an XID.
 	// TODO maybe there is a better way to do this.
@@ -1259,29 +1259,28 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 			(passwordField == nil || arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
-	}
-	if xidArgName != "" {
-		var ok bool
-		var xidArgVal string
-		switch v := f.ArgValue(xidArgName).(type) {
-		case int64:
-			xidArgVal = strconv.FormatInt(v, 10)
-		case float64:
-			xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
-		case string:
-			xidArgVal = v
-		default:
-			pos := f.field.GetPosition()
-			if !ok {
-				err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
-					xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
-				return
+
+		if xidArgName != "" {
+			var ok bool
+			var xidArgVal string
+			switch v := f.ArgValue(xidArgName).(type) {
+			case int64:
+				xidArgVal = strconv.FormatInt(v, 10)
+			case float64:
+				xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
+			case string:
+				xidArgVal = v
+			default:
+				pos := f.field.GetPosition()
+				if !ok {
+					err = x.GqlErrorf("Argument (%s) of %s was not able to be parsed as a string",
+						xidArgName, f.Name()).WithLocations(x.Location{Line: pos.Line, Column: pos.Column})
+					return
+				}
 			}
+			xids[xidArgName] = xidArgVal
 		}
-
-		xid = &xidArgVal
 	}
-
 	if idField == nil {
 		return
 	}
@@ -1584,14 +1583,14 @@ func (q *query) GetAuthMeta() *authorization.AuthMeta {
 	return (*field)(q).GetAuthMeta()
 }
 
-func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
+func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
 		field: (*field)(q).field,
 		op: &operation{op: q.op.op,
 			query:    q.op.query,
 			doc:      q.op.doc,
-			inSchema: typ.(*astType).inSchema,
+			inSchema: q.op.inSchema,
 			vars:     jwtVars,
 		},
 		sel: q.sel}
@@ -1661,12 +1660,12 @@ func (q *query) HasLambdaDirective() bool {
 	return (*field)(q).HasLambdaDirective()
 }
 
-func (q *query) IDArgValue() (*string, uint64, error) {
+func (q *query) IDArgValue() (map[string]string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
 
-func (q *query) XIDArg() string {
-	return (*field)(q).XIDArg()
+func (q *query) XIDArgs() map[string]string {
+	return (*field)(q).XIDArgs()
 }
 
 func (q *query) Type() Type {
@@ -1936,11 +1935,11 @@ func (m *mutation) AbstractType() bool {
 	return (*field)(m).AbstractType()
 }
 
-func (m *mutation) XIDArg() string {
-	return (*field)(m).XIDArg()
+func (m *mutation) XIDArgs() map[string]string {
+	return (*field)(m).XIDArgs()
 }
 
-func (m *mutation) IDArgValue() (*string, uint64, error) {
+func (m *mutation) IDArgValue() (map[string]string, uint64, error) {
 	return (*field)(m).IDArgValue()
 }
 
@@ -2390,7 +2389,7 @@ func (t *astType) PasswordField() FieldDefinition {
 	}
 }
 
-func (t *astType) XIDField() FieldDefinition {
+func (t *astType) XIDFields() []FieldDefinition {
 	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
@@ -2399,17 +2398,19 @@ func (t *astType) XIDField() FieldDefinition {
 	// If field is of ID type but it is an external field,
 	// then it is stored in Dgraph as string type with Hash index.
 	// So it should be returned as an XID Field.
+	var xids []FieldDefinition
 	for _, fd := range def.Fields {
 		if hasIDDirective(fd) || (hasExternal(fd) && isID(fd)) {
-			return &fieldDefinition{
+			xids = append(xids, &fieldDefinition{
 				fieldDef:   fd,
 				inSchema:   t.inSchema,
 				parentType: t,
-			}
+			})
 		}
 	}
-
-	return nil
+	// XIDs are sorted by name to ensure consistency.
+	sort.Slice(xids, func(i, j int) bool { return xids[i].Name() < xids[j].Name() })
+	return xids
 }
 
 // InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.

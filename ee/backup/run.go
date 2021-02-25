@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -41,7 +42,7 @@ var ExportBackup x.SubCommand
 
 var opt struct {
 	backupId    string
-	compression string
+	badger      string
 	location    string
 	pdir        string
 	zero        string
@@ -116,10 +117,18 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	}
 	Restore.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Restore.Cmd.Flags()
-	flag.StringVar(&opt.compression, "badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
+
+	flag.StringVarP(&opt.badger, "badger", "b", worker.BadgerDefaults,
+		z.NewSuperFlagHelp(worker.BadgerDefaults).
+			Head("Badger options").
+			Flag("compression",
+				"Specifies the compression algorithm and compression level (if applicable) for the "+
+					`postings directory. "none" would disable compression, while "zstd:1" would set `+
+					"zstd compression at level 1.").
+			Flag("goroutines",
+				"The number of goroutines to use in badger.Stream.").
+			String())
+
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
@@ -198,7 +207,8 @@ func runRestoreCmd() error {
 		zc = pb.NewZeroClient(zero)
 	}
 
-	ctype, clevel := x.ParseCompression(opt.compression)
+	badger := z.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	start = time.Now()
 	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key, ctype, clevel)

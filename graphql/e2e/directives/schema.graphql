@@ -361,3 +361,14 @@ type author1{
     name:String! @id @search(by: [regexp])
     posts:[post1] @hasInverse(field: author)
 }
+# multiple fields with @id directive
+type Worker {
+    name: String!
+    reg_No: Int! @id
+    emp_Id: String! @id
+}
+
+type Employer {
+    company: String! @id
+    worker: [Worker]
+}
