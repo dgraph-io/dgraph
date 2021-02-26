@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -344,7 +345,8 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// set up the lambda url for unit tests
-	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
+	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
+		MergeAndCheckDefault("")
 	// now run the tests
 	os.Exit(m.Run())
 }

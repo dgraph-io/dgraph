@@ -30,4 +30,7 @@ services:
     labels:
       cluster: test
       service: alpha1
-    command: /gobin/dgraph alpha --zero=zero1:5080 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --my=alpha1:7080 --graphql_debug=true
+    command: /gobin/dgraph alpha --zero=zero1:5080 --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=3 --my=alpha1:7080
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --graphql "debug=true;"
+      --trace "ratio=1.0;"

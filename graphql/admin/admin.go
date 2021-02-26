@@ -713,7 +713,7 @@ func (as *adminServer) initServer() {
 			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
 		}
-
+		as.incrementSchemaUpdateCounter(x.GalaxyNamespace)
 		as.resetSchema(x.GalaxyNamespace, generatedSchema)
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")

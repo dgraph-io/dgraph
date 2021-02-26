@@ -1231,10 +1231,10 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
-	if x.Config.GraphqlLambdaUrl == "" {
+	if x.Config.GraphQL.GetString("lambda-url") == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
-				"`--graphql_lambda_url` flag wasn't specified during alpha startup.",
+				`--graphql "lambda-url=...;" flag wasn't specified during alpha startup.`,
 			typ.Name, field.Name)}
 	}
 	// reuse @custom directive validation
@@ -2098,6 +2098,28 @@ func apolloExternalValidation(sch *ast.Schema,
 					"Type %s: Field %s: @%s directive can not be defined on @external fields that are not @key.", typ.Name, field.Name, directive)}
 			}
 		}
+	}
+	return nil
+}
+
+func remoteResponseValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+
+	remoteDirectiveDefn := typ.Directives.ForName(remoteDirective)
+	if remoteDirectiveDefn == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @remoteResponse directive can only be defined on fields of @remote type.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName("name")
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: Argument %s inside @remoteResponse directive must be defined.", typ.Name, field.Name, "name")}
 	}
 	return nil
 }

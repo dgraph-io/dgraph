@@ -31,7 +31,13 @@ import (
 )
 
 const (
-	BadgerDefaults = "compression=snappy; goroutines=8;"
+	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
+	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
+	SecurityDefaults  = ``
+	RaftDefaults      = `snapshot-after=10000; pending-proposals=256; learner=false;`
+	LudicrousDefaults = `enabled=false; concurrency=2000;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
+	BadgerDefaults    = `compression=snappy; goroutines=8;`
 )
 
 // ServerState holds the state of the Dgraph server.

@@ -140,6 +140,11 @@ func init() {
 	Live.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Live.Cmd.Flags()
+	// --vault SuperFlag and encryption flags
+	enc.RegisterFlags(flag)
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
@@ -174,7 +179,7 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
+	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
@@ -183,11 +188,6 @@ func init() {
 		"This flag will be ignored when not logging into galaxy namespace."+
 		"Only guardian of galaxy should use this for loading data into multiple namespaces."+
 		"Setting it to negative value will preserve the namespace.")
-
-	// Encryption and Vault options
-	enc.RegisterFlags(flag)
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {
@@ -644,7 +644,7 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
 	}

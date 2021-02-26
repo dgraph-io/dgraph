@@ -133,8 +133,8 @@ func CompleteObject(
 		x.Check2(buf.WriteString(comma))
 		f.CompleteAlias(&buf)
 
-		val := res[f.Name()]
-		if f.Name() == Typename {
+		val := res[f.RemoteResponseName()]
+		if f.RemoteResponseName() == Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
 			// "GraphQL supports type name introspection at any point within a query by the

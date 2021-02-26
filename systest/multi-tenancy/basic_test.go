@@ -46,12 +46,12 @@ func TestAclBasic(t *testing.T) {
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
-	require.Equal(t, 1, int(ns))
+	require.Greater(t, int(ns), 0)
 
 	// Add some data to namespace 1
-	dc := testutil.DgClientWithLogin(t, "groot", "password", 1)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", ns)
 	testutil.AddData(t, dc)
 
 	query := `
@@ -78,7 +78,7 @@ func TestAclBasic(t *testing.T) {
 	testutil.CreateUser(t, token, "alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", 1)
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
 	resp = testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{}`, string(resp))
 
@@ -92,7 +92,7 @@ func TestAclBasic(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Now alice should see the name predicate but not nickname.
-	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", 1)
+	dc = testutil.DgClientWithLogin(t, "alice", "newpassword", ns)
 	resp = testutil.QueryData(t, dc, query)
 	testutil.CompareJSON(t, `{"me": [{"name":"guy1"},{"name": "guy2"}]}`, string(resp))
 
@@ -104,14 +104,14 @@ func TestCreateNamespace(t *testing.T) {
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 
 	token := testutil.Login(t,
 		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
 
 	// Create a new namespace using guardian of other namespace.
-	_, err = testutil.CreateNamespace(t, token)
+	_, err = testutil.CreateNamespaceWithRetry(t, token)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
 }
@@ -124,11 +124,11 @@ func TestDeleteNamespace(t *testing.T) {
 	dg := make(map[uint64]*dgo.Dgraph)
 	dg[x.GalaxyNamespace] = testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dg[ns] = testutil.DgClientWithLogin(t, "groot", "password", ns)
 
-	addData := func(ns uint64) {
+	addData := func(ns uint64) error {
 		mutation := &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`
 			_:a <name> "%d" .
@@ -136,7 +136,7 @@ func TestDeleteNamespace(t *testing.T) {
 			CommitNow: true,
 		}
 		_, err := dg[ns].NewTxn().Mutate(context.Background(), mutation)
-		require.NoError(t, err)
+		return err
 	}
 	check := func(ns uint64, expected string) {
 		query := `
@@ -150,16 +150,20 @@ func TestDeleteNamespace(t *testing.T) {
 		testutil.CompareJSON(t, expected, string(resp))
 	}
 
-	addData(x.GalaxyNamespace)
+	err = addData(x.GalaxyNamespace)
+	require.NoError(t, err)
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}]}`)
-	addData(ns)
+	err = addData(ns)
+	require.NoError(t, err)
 	check(ns, fmt.Sprintf(`{"me": [{"name":"%d"}]}`, ns))
 
 	require.NoError(t, testutil.DeleteNamespace(t, galaxyToken, ns))
 
-	addData(x.GalaxyNamespace)
+	err = addData(x.GalaxyNamespace)
+	require.NoError(t, err)
 	check(x.GalaxyNamespace, `{"me": [{"name":"0"}, {"name":"0"}]}`)
-	addData(ns)
+	err = addData(ns)
+	require.Contains(t, err.Error(), "Key is using the banned prefix")
 	check(ns, `{"me": []}`)
 
 	// No one should be able to delete the default namespace. Not even guardian of galaxy.
@@ -207,7 +211,7 @@ func TestLiveLoadMulti(t *testing.T) {
 	galaxyToken := testutil.Login(t, galaxyCreds)
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dc1 := testutil.DgClientWithLogin(t, "groot", "password", ns)
 

@@ -91,7 +91,6 @@ func (exp *Experiment) verify() {
 		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	// TODO(Naman): Fix these tests, once the ACL is integrated.
 	ctx := context.Background()
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
