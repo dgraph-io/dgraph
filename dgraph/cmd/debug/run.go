@@ -893,8 +893,7 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	_, encKey := ee.GetKeys(Debug.Conf)
-	opt.key = encKey
+	_, opt.key = ee.GetKeys(Debug.Conf)
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)

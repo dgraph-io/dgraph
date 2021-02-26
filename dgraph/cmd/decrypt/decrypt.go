@@ -61,8 +61,7 @@ func run() {
 		file:   Decrypt.Conf.GetString("file"),
 		output: Decrypt.Conf.GetString("out"),
 	}
-	_, encKey := ee.GetKeys(Decrypt.Conf)
-	opts.keyfile = encKey
+	_, opts.keyfile = ee.GetKeys(Decrypt.Conf)
 	if len(opts.keyfile) == 0 {
 		log.Fatal("Error while reading encryption key: Key is empty")
 	}

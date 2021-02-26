@@ -193,8 +193,7 @@ func run() {
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
 	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
 
-	_, encKey := ee.GetKeys(Bulk.Conf)
-	opt.EncryptionKey = encKey
+	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
