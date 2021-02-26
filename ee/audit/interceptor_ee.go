@@ -15,11 +15,16 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -99,41 +104,6 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	})
 }
 
-var skipReqBodyGrpc = map[string]bool{
-	"Login": true,
-}
-
-func checkRequestBody(reqType string, path string, body string) string {
-	switch reqType {
-	case Grpc:
-		if skipReqBodyGrpc[path] {
-			glog.V(3).Info("skipping audit of request body. " +
-				"Detected login grpc call.")
-			body = ""
-		}
-
-	case Http:
-		if path == "/admin" {
-			rb := string(body)
-			if strings.Contains(rb, "login") ||
-				strings.Contains(rb, "resetPassword") {
-				glog.V(3).Info("skipping audit of request body. " +
-					"Detected login/resetPassword call.")
-				body = ""
-			}
-		} else if path == "/grapqhl" {
-			rb := string(body)
-			if strings.Contains(rb, "check") ||
-				strings.Contains(rb, "Password") {
-				glog.V(3).Info("skipping audit of request body. " +
-					"Detected checkPassword call.")
-				body = ""
-			}
-		}
-	}
-	return body
-}
-
 func auditGrpc(ctx context.Context, ts int64, req interface{}, info *grpc.UnaryServerInfo) {
 	clientHost := ""
 	if p, ok := peer.FromContext(ctx); ok {
@@ -210,6 +180,103 @@ func auditHttp(w *ResponseWriter, r *http.Request, ts int64) {
 		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
 	})
+}
+
+func maskPasswordFieldsInGQL(req string) string {
+	var gqlReq schema.Request
+	err := json.Unmarshal([]byte(req), &gqlReq)
+	if err != nil {
+		glog.Errorf("unable to marshal gql request %v", err)
+		return req
+	}
+	query, gErr := parser.ParseQuery(&ast.Source{
+		Input: gqlReq.Query,
+	})
+	if gErr != nil {
+		glog.Errorf("unable to parse gql request %+v", err)
+		return req
+	}
+	var variableName string
+	for _, op := range query.Operations {
+		if op.Operation != ast.Mutation || len(op.SelectionSet) == 0 {
+			continue
+		}
+
+		for _, ss := range op.SelectionSet {
+			if f, ok := ss.(*ast.Field); ok {
+				if len(f.Arguments) == 0 {
+					continue
+				}
+				if f.Name == "resetPassword" {
+					for _, a := range f.Arguments {
+						if a.Name == "input" && a.Value != nil && a.Value.Children != nil {
+							for _, c := range a.Value.Children {
+								if c.Name == "password" {
+									if c.Value.Kind == ast.Variable {
+										variableName = c.Value.String()
+									}
+								}
+							}
+						}
+					}
+				} else if f.Name == "login" {
+					for _, a := range f.Arguments {
+						if a.Name == "password" {
+							if a.Value.Kind == ast.Variable {
+								variableName = a.Value.String()
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if variableName == "" {
+		regex, err := regexp.Compile(
+			`password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+		if err != nil {
+			return req
+		}
+		return regex.ReplaceAllString(req, "*******")
+	}
+	regex, err := regexp.Compile(
+		fmt.Sprintf(`"%s[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`,
+			variableName[1:]))
+	if err != nil {
+		return req
+	}
+	return regex.ReplaceAllString(req, "*******")
+}
+
+var skipReqBodyGrpc = map[string]bool{
+	"Login": true,
+}
+
+func checkRequestBody(reqType string, path string, body string) string {
+	switch reqType {
+	case Grpc:
+		if skipReqBodyGrpc[path] {
+			regex, err := regexp.Compile(
+				`password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+			if err != nil {
+				return body
+			}
+			body = regex.ReplaceAllString(body, "*******")
+		}
+	case Http:
+		if path == "/admin" {
+			return maskPasswordFieldsInGQL(body)
+		} else if path == "/grapqhl" {
+			regex, err := regexp.Compile(
+				`check[\s]?(.*?)[\s]?Password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+			if err != nil {
+				return body
+			}
+			body = regex.ReplaceAllString(body, "*******")
+		}
+	}
+	return body
 }
 
 func getRequestBody(r *http.Request) []byte {
