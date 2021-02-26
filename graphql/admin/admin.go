@@ -433,6 +433,7 @@ type gqlSchema struct {
 	Schema          string `json:"schema,omitempty"`
 	Version         uint64
 	GeneratedSchema string
+	loaded          bool // This indicate whether the schema has been loaded into graphql server or not
 }
 
 type adminServer struct {
@@ -571,10 +572,16 @@ func newAdminResolver(
 
 		server.incrementSchemaUpdateCounter(ns)
 		// if the schema hasn't been loaded yet, then we don't need to load it here
-		if !ok {
-			glog.Info("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
+		currentSchema, ok = server.schema[ns]
+		if !(ok && currentSchema.loaded) {
+			// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
+			server.schema[ns] = newSchema
+			glog.Infof("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
 			return
 		}
+
+		// update this schema in both admin and graphql server
+		newSchema.loaded = true
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
 
@@ -689,7 +696,7 @@ func (as *adminServer) initServer() {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
 		}
-
+		sch.loaded = true
 		as.schema[x.GalaxyNamespace] = sch
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
@@ -848,7 +855,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	// if the schema is already in memory, no need to fetch it from disk
 	as.mux.RLock()
-	if _, ok := as.schema[namespace]; ok {
+	if currentSchema, ok := as.schema[namespace]; ok && currentSchema.loaded {
 		as.mux.RUnlock()
 		return
 	}
@@ -874,6 +881,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 
 	as.mux.Lock()
 	defer as.mux.Unlock()
+	sch.loaded = true
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
