@@ -196,6 +196,9 @@ func maskPasswordFieldsInGQL(req string) string {
 		glog.Errorf("unable to parse gql request %+v", err)
 		return req
 	}
+	if len(query.Operations) == 0 {
+		return req
+	}
 	var variableName string
 	for _, op := range query.Operations {
 		if op.Operation != ast.Mutation || len(op.SelectionSet) == 0 {
