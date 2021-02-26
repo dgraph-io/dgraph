@@ -580,7 +580,7 @@ func newAdminResolver(
 			return
 		}
 
-		//update this schema in both admin and graphql server
+		// update this schema in both admin and graphql server
 		newSchema.loaded = true
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
