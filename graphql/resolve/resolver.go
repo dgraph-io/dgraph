@@ -366,7 +366,11 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
 	// Pass in GraphQL @auth information
-	ctx = r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
+	ctx, err := r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
+	if err != nil {
+		return schema.ErrorResponse(err)
+	}
+
 	ctx = x.AttachJWTNamespace(ctx)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {

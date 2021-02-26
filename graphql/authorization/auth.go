@@ -196,14 +196,24 @@ func (a *AuthMeta) GetHeader() string {
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
-func (a *AuthMeta) AttachAuthorizationJwt(ctx context.Context, header http.Header) context.Context {
+func (a *AuthMeta) AttachAuthorizationJwt(ctx context.Context,
+	header http.Header) (context.Context, error) {
 	if a == nil {
-		return ctx
+		return ctx, nil
 	}
 
-	authorizationJwt := header.Get(a.Header)
-	if authorizationJwt == "" {
-		return ctx
+	authHeaderVal := header.Get(a.Header)
+	if authHeaderVal == "" {
+		return ctx, nil
+	}
+
+	if strings.HasPrefix(strings.ToLower(authHeaderVal), "bearer ") {
+		parts := strings.Split(authHeaderVal, " ")
+		if len(parts) != 2 {
+			return ctx, fmt.Errorf("invalid Bearer-formatted header value for JWT (%s)",
+				authHeaderVal)
+		}
+		authHeaderVal = parts[1]
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -211,9 +221,9 @@ func (a *AuthMeta) AttachAuthorizationJwt(ctx context.Context, header http.Heade
 		md = metadata.New(nil)
 	}
 
-	md.Append(string(AuthJwtCtxKey), authorizationJwt)
+	md.Append(string(AuthJwtCtxKey), authHeaderVal)
 	ctx = metadata.NewIncomingContext(ctx, md)
-	return ctx
+	return ctx, nil
 }
 
 type CustomClaims struct {
