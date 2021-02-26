@@ -22,6 +22,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -175,9 +176,7 @@ func runRestoreCmd() error {
 		zc    pb.ZeroClient
 		err   error
 	)
-	if opt.key, err = enc.ReadKey(Restore.Conf); err != nil {
-		return err
-	}
+	_, opt.key = ee.GetKeys(Restore.Conf)
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
@@ -339,11 +338,7 @@ func initExportBackup() {
 }
 
 func runExportBackup() error {
-	var err error
-	if opt.key, err = enc.ReadKey(ExportBackup.Conf); err != nil {
-		return err
-	}
-
+	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	exporter := worker.BackupExporter{}
 	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
 }

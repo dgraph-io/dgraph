@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -36,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -669,21 +669,12 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	secretFile := Alpha.Conf.GetString("acl_secret_file")
-	if secretFile != "" {
-		hmacSecret, err := ioutil.ReadFile(secretFile)
-		if err != nil {
-			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
-		}
-		if len(hmacSecret) < 32 {
-			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
-		}
-
-		opts.HmacSecret = hmacSecret
+	aclKey, encKey := ee.GetKeys(Alpha.Conf)
+	if aclKey != nil {
+		opts.HmacSecret = aclKey
 		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
 		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
-
-		glog.Info("HMAC secret loaded successfully.")
+		glog.Info("ACL secret key loaded successfully.")
 	}
 
 	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
@@ -722,7 +713,7 @@ func run() {
 		WhiteListedIPRanges:  ips,
 		MaxRetries:           Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:      opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:           secretFile != "",
+		AclEnabled:           aclKey != nil,
 		AbortOlderThan:       abortDur,
 		StartTime:            startTime,
 		LudicrousMode:        Alpha.Conf.GetBool("ludicrous_mode"),
@@ -737,10 +728,7 @@ func run() {
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
-	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
-		glog.Infof("unable to read key %v", err)
-		return
-	}
+	x.WorkerConfig.EncryptionKey = encKey
 
 	setupCustomTokenizers()
 	x.Init()

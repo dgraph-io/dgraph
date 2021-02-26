@@ -23,6 +23,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -334,11 +335,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
 			}
-			key, err := enc.ReadKey(cfg)
-			if err != nil {
-				return 0, 0, errors.Wrapf(err, "unable to read key")
-			}
-			in.r, err = enc.GetReader(key, in.r)
+			_, encKey := ee.GetKeys(cfg)
+			in.r, err = enc.GetReader(encKey, in.r)
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}

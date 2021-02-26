@@ -19,29 +19,54 @@
 package ee
 
 import (
-	"github.com/dgraph-io/dgraph/worker"
+	"io/ioutil"
+
+	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-// GetEEFeaturesList returns a list of Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	if !worker.EnterpriseEnabled() {
-		return nil
+func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+	const (
+		flagAclKeyFile = "acl_secret_file"
+		flagEncKeyFile = "encryption_key_file"
+	)
+
+	aclKey, encKey = vault.GetKeys(config)
+	var err error
+
+	aclKeyFile := config.GetString(flagAclKeyFile)
+	if aclKeyFile != "" {
+		if aclKey != nil {
+			glog.Exit("flags: ACL secret key set in both vault and acl_secret_file")
+		}
+		aclKey, err = ioutil.ReadFile(aclKeyFile)
+		if err != nil {
+			glog.Exitf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
+		}
 	}
-	var ee []string
-	if len(worker.Config.HmacSecret) > 0 {
-		ee = append(ee, "acl")
+	if aclKey != nil {
+		if l := len(aclKey); l < 32 {
+			glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
+		}
 	}
-	if x.WorkerConfig.EncryptionKey != nil {
-		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
-	} else {
-		ee = append(ee, "backup_restore")
+
+	encKeyFile := config.GetString(flagEncKeyFile)
+	if encKeyFile != "" {
+		if encKey != nil {
+			glog.Exit("flags: Encryption key set in both vault and encryption_key_file")
+		}
+		encKey, err = ioutil.ReadFile(encKeyFile)
+		if err != nil {
+			glog.Exitf("error reading encryption key from file: %s: %s", encKeyFile, err)
+		}
 	}
-	if x.WorkerConfig.Audit {
-		ee = append(ee, "audit")
+	if encKey != nil {
+		if l := len(encKey); l != 16 && l != 32 && l != 64 {
+			glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
+		}
 	}
-	if worker.Config.ChangeDataConf != "" {
-		ee = append(ee, "cdc")
-	}
-	return ee
+
+	return
 }

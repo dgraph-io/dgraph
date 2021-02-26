@@ -18,7 +18,6 @@
 
 package ee
 
-// GetEEFeaturesList returns a list Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	return nil
+func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+	return
 }
