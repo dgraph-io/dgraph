@@ -576,12 +576,12 @@ func newAdminResolver(
 		if !(ok && currentSchema.loaded) {
 			// this just set schema in admin server, so that next invalid badger subscription update gets rejected upfront
 			server.schema[ns] = newSchema
-			glog.Infof("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.", ns)
+			glog.Infof("Skipping in-memory GraphQL schema update, it will be lazy-loaded later.")
 			return
 		}
 
 		//update this schema in both admin and graphql server
-		newSchema.loaded = currentSchema.loaded
+		newSchema.loaded = true
 		server.schema[ns] = newSchema
 		server.resetSchema(ns, gqlSchema)
 
