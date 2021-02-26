@@ -30,7 +30,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
@@ -126,86 +125,88 @@ func toInt(o *pb.Posting) int {
 	return a
 }
 
-func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
-	keys := make(map[uint64]int)
-	var lastKey []byte
-	for itr.Rewind(); itr.Valid(); {
-		item := itr.Item()
-		if bytes.Equal(lastKey, item.Key()) {
-			itr.Next()
-			continue
-		}
-		lastKey = append(lastKey[:0], item.Key()...)
-		pk, err := x.Parse(item.Key())
-		x.Check(err)
-		if !pk.IsData() || !strings.HasPrefix(x.ParseAttr(pk.Attr), prefix) {
-			continue
-		}
-		if pk.IsSchema() {
-			continue
-		}
-		if pk.StartUid > 0 {
-			// This key is part of a multi-part posting list. Skip it and only read
-			// the main key, which is the entry point to read the whole list.
-			continue
-		}
+// func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
+// 	keys := make(map[uint64]int)
+// 	var lastKey []byte
+// 	for itr.Rewind(); itr.Valid(); {
+// 		item := itr.Item()
+// 		if bytes.Equal(lastKey, item.Key()) {
+// 			itr.Next()
+// 			continue
+// 		}
+// 		lastKey = append(lastKey[:0], item.Key()...)
+// 		pk, err := x.Parse(item.Key())
+// 		x.Check(err)
+// 		if !pk.IsData() || !strings.HasPrefix(x.ParseAttr(pk.Attr), prefix) {
+// 			continue
+// 		}
+// 		if pk.IsSchema() {
+// 			continue
+// 		}
+// 		if pk.StartUid > 0 {
+// 			// This key is part of a multi-part posting list. Skip it and only read
+// 			// the main key, which is the entry point to read the whole list.
+// 			continue
+// 		}
 
-		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
-		if err != nil {
-			log.Fatalf("Unable to read posting list: %v", err)
-		}
-		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-			from := types.Val{
-				Tid:   types.TypeID(o.ValType),
-				Value: o.Value,
-			}
-			out, err := types.Convert(from, types.StringID)
-			x.Check(err)
-			key := out.Value.(string)
-			k, err := strconv.Atoi(key)
-			x.Check(err)
-			keys[pk.Uid] = k
-			// fmt.Printf("Type: %v Uid=%d key=%s. commit=%d hex %x\n",
-			// 	o.ValType, pk.Uid, key, o.CommitTs, lastKey)
-			return nil
-		})
-		x.Checkf(err, "during iterate")
-	}
-	return keys
-}
+// 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+// 		if err != nil {
+// 			log.Fatalf("Unable to read posting list: %v", err)
+// 		}
+// 		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+// 			from := types.Val{
+// 				Tid:   types.TypeID(o.ValType),
+// 				Value: o.Value,
+// 			}
+// 			out, err := types.Convert(from, types.StringID)
+// 			x.Check(err)
+// 			key := out.Value.(string)
+// 			k, err := strconv.Atoi(key)
+// 			x.Check(err)
+// 			keys[pk.Uid] = k
+// 			// fmt.Printf("Type: %v Uid=%d key=%s. commit=%d hex %x\n",
+// 			// 	o.ValType, pk.Uid, key, o.CommitTs, lastKey)
+// 			return nil
+// 		})
+// 		x.Checkf(err, "during iterate")
+// 	}
+// 	return keys
+// }
 
 func seekTotal(db *badger.DB, readTs uint64) int {
-	txn := db.NewTransactionAt(readTs, false)
-	defer txn.Discard()
+	return 0
 
-	iopt := badger.DefaultIteratorOptions
-	iopt.AllVersions = true
-	iopt.PrefetchValues = false
-	itr := txn.NewIterator(iopt)
-	defer itr.Close()
+	// txn := db.NewTransactionAt(readTs, false)
+	// defer txn.Discard()
 
-	keys := uidToVal(itr, "key_")
-	fmt.Printf("Got keys: %+v\n", keys)
-	vals := uidToVal(itr, "amount_")
-	var total int
-	for _, val := range vals {
-		total += val
-	}
-	fmt.Printf("Got vals: %+v. Total: %d\n", vals, total)
-	if opt.noKeys {
-		// Ignore the key_ predicate. Only consider the amount_ predicate. Useful when tablets are
-		// being moved around.
-		keys = vals
-	}
+	// iopt := badger.DefaultIteratorOptions
+	// iopt.AllVersions = true
+	// iopt.PrefetchValues = false
+	// itr := txn.NewIterator(iopt)
+	// defer itr.Close()
 
-	total = 0
-	for uid, key := range keys {
-		a := vals[uid]
-		fmt.Printf("uid: %-5d %x key: %d amount: %d\n", uid, uid, key, a)
-		total += a
-	}
-	fmt.Printf("Total @ %d = %d\n", readTs, total)
-	return total
+	// keys := uidToVal(itr, "key_")
+	// fmt.Printf("Got keys: %+v\n", keys)
+	// vals := uidToVal(itr, "amount_")
+	// var total int
+	// for _, val := range vals {
+	// 	total += val
+	// }
+	// fmt.Printf("Got vals: %+v. Total: %d\n", vals, total)
+	// if opt.noKeys {
+	// 	// Ignore the key_ predicate. Only consider the amount_ predicate. Useful when tablets are
+	// 	// being moved around.
+	// 	keys = vals
+	// }
+
+	// total = 0
+	// for uid, key := range keys {
+	// 	a := vals[uid]
+	// 	fmt.Printf("uid: %-5d %x key: %d amount: %d\n", uid, uid, key, a)
+	// 	total += a
+	// }
+	// fmt.Printf("Total @ %d = %d\n", readTs, total)
+	// return total
 }
 
 func findFirstValidTxn(db *badger.DB) uint64 {
@@ -253,67 +254,68 @@ func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
 }
 
 func showAllPostingsAt(db *badger.DB, readTs uint64) {
-	txn := db.NewTransactionAt(readTs, false)
-	defer txn.Discard()
+	return
+	// txn := db.NewTransactionAt(readTs, false)
+	// defer txn.Discard()
 
-	itr := txn.NewIterator(badger.DefaultIteratorOptions)
-	defer itr.Close()
+	// itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	// defer itr.Close()
 
-	type account struct {
-		Key int
-		Amt int
-	}
-	keys := make(map[uint64]*account)
+	// type account struct {
+	// 	Key int
+	// 	Amt int
+	// }
+	// keys := make(map[uint64]*account)
 
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
-	for itr.Rewind(); itr.Valid(); itr.Next() {
-		item := itr.Item()
-		if item.Version() != readTs {
-			continue
-		}
+	// var buf bytes.Buffer
+	// fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
+	// for itr.Rewind(); itr.Valid(); itr.Next() {
+	// 	item := itr.Item()
+	// 	if item.Version() != readTs {
+	// 		continue
+	// 	}
 
-		pk, err := x.Parse(item.Key())
-		x.Check(err)
-		if !pk.IsData() {
-			continue
-		}
+	// 	pk, err := x.Parse(item.Key())
+	// 	x.Check(err)
+	// 	if !pk.IsData() {
+	// 		continue
+	// 	}
 
-		var acc *account
-		attr := x.ParseAttr(pk.Attr)
-		if strings.HasPrefix(attr, "key_") || strings.HasPrefix(attr, "amount_") {
-			var has bool
-			acc, has = keys[pk.Uid]
-			if !has {
-				acc = &account{}
-				keys[pk.Uid] = acc
-			}
-		}
-		fmt.Fprintf(&buf, "  key: %+v hex: %x\n", pk, item.Key())
-		val, err := item.ValueCopy(nil)
-		x.Check(err)
-		var plist pb.PostingList
-		x.Check(plist.Unmarshal(val))
+	// 	var acc *account
+	// 	attr := x.ParseAttr(pk.Attr)
+	// 	if strings.HasPrefix(attr, "key_") || strings.HasPrefix(attr, "amount_") {
+	// 		var has bool
+	// 		acc, has = keys[pk.Uid]
+	// 		if !has {
+	// 			acc = &account{}
+	// 			keys[pk.Uid] = acc
+	// 		}
+	// 	}
+	// 	fmt.Fprintf(&buf, "  key: %+v hex: %x\n", pk, item.Key())
+	// 	val, err := item.ValueCopy(nil)
+	// 	x.Check(err)
+	// 	var plist pb.PostingList
+	// 	x.Check(plist.Unmarshal(val))
 
-		x.AssertTrue(len(plist.Postings) <= 1)
-		var num int
-		for _, p := range plist.Postings {
-			num = toInt(p)
-			appendPosting(&buf, p)
-		}
-		if num > 0 && acc != nil {
-			switch {
-			case strings.HasPrefix(attr, "key_"):
-				acc.Key = num
-			case strings.HasPrefix(attr, "amount_"):
-				acc.Amt = num
-			}
-		}
-	}
-	for uid, acc := range keys {
-		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
-	}
-	fmt.Println(buf.String())
+	// 	x.AssertTrue(len(plist.Postings) <= 1)
+	// 	var num int
+	// 	for _, p := range plist.Postings {
+	// 		num = toInt(p)
+	// 		appendPosting(&buf, p)
+	// 	}
+	// 	if num > 0 && acc != nil {
+	// 		switch {
+	// 		case strings.HasPrefix(attr, "key_"):
+	// 			acc.Key = num
+	// 		case strings.HasPrefix(attr, "amount_"):
+	// 			acc.Amt = num
+	// 		}
+	// 	}
+	// }
+	// for uid, acc := range keys {
+	// 	fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
+	// }
+	// fmt.Println(buf.String())
 }
 
 func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
@@ -539,7 +541,8 @@ func lookup(db *badger.DB) {
 func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		// TODO: Fix this.
+		// prefix = x.PredicatePrefix(opt.predicate)
 	} else if len(opt.prefix) > 0 {
 		p, err := hex.DecodeString(opt.prefix)
 		x.Check(err)
@@ -571,9 +574,8 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-		ns, attr := x.ParseNamespaceAttr(pk.Attr)
-		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
-		x.Check2(buf.WriteString(" attr: " + attr))
+		ns, attr := x.ParseNsAttr(pk.Attr)
+		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x attr: %#x", ns, attr)))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
@@ -780,7 +782,8 @@ func sizeHistogram(db *badger.DB) {
 	// Collect key and value sizes.
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		// TODO: Fix this.
+		// prefix = x.PredicatePrefix(opt.predicate)
 	}
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {

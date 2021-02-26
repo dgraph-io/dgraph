@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math"
+	"strings"
 
 	"github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
@@ -70,9 +71,9 @@ func AttrEquals(attrId uint64, attr string) bool {
 	return id == otherId
 }
 
-var bitInternal uint32 = 0x80000000
-var bitReverse uint32 = 0x40000000
-var bitMask uint32 = 0x3FFFFFFF
+var bitInternal uint32 = 0x80000000 // 0x8 = 0x1000
+var bitReverse uint32 = 0x40000000  // 0x4 = 0x0100
+var bitMask uint32 = 0x3FFFFFFF     // 0x3 = 0x0011
 
 // We use 2 most-significant bits in uint32 for Dgraph, Reverse respectively. So, clear those out.
 func ToAttrId(attr string) uint32         { return farm.Fingerprint32([]byte(attr)) & bitMask }
@@ -86,6 +87,15 @@ func ToNsAttrId(ns uint32, attr string) uint64 {
 	val := uint64(ns) << 32
 	val |= uint64(ToAttrId(attr))
 	return val
+}
+
+func PrependNs(ns uint32, s string) string {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, ns)
+	return string(b) + s
+}
+func LeftStripNs(s string) string {
+	return s[4:]
 }
 
 func NamespaceAttrList(ns uint32, preds []string) []uint64 {
@@ -102,7 +112,13 @@ func GalaxyAttr(attr string) uint64 {
 
 // ParseAttr returns the attr from the given value.
 func ParseNsAttr(attr uint64) (uint32, uint32) {
-	return uint32(attr >> 32), uint32(attr & 0xFFFFFFFF)
+	return ParseNs(attr), ParseAttr(attr)
+}
+func ParseNs(attr uint64) uint32 {
+	return uint32(attr >> 32)
+}
+func ParseAttr(attr uint64) uint32 {
+	return uint32(attr & 0xFFFFFFFF)
 }
 
 func ParseAttrList(attrs []uint64) []uint32 {
@@ -634,8 +650,6 @@ func IsGraphqlReservedPredicate(pred string) bool {
 	return ok
 }
 
-/*
-
 // IsReservedPredicate returns true if the predicate is reserved for internal usage, i.e., prefixed
 // with `dgraph.`.
 //
@@ -652,8 +666,8 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // 	1. dgraph.type (reserved = true,  pre_defined = true )
 // 	2. dgraph.blah (reserved = true,  pre_defined = false)
 // 	3. person.name (reserved = false, pre_defined = false)
-func IsReservedPredicate(attr uint32) bool {
-	return isReservedName(ParseAttr(pred))
+func IsReservedPredicate(attr string) bool {
+	return isReservedName(attr)
 }
 
 // IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally
@@ -668,7 +682,6 @@ func IsReservedPredicate(attr uint32) bool {
 //
 // Pre-defined predicates are subset of reserved predicates.
 func IsPreDefinedPredicate(pred string) bool {
-	pred = ParseAttr(pred)
 	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
@@ -680,6 +693,7 @@ func IsAclPredicate(pred string) bool {
 	return ok
 }
 
+/*
 // StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
 func StarAllPredicates(namespace uint64) []string {
@@ -719,6 +733,7 @@ func IsInternalPredicate(pred string) bool {
 func IsReservedType(typ string) bool {
 	return isReservedName(ParseAttr(typ))
 }
+*/
 
 // IsPreDefinedType returns true only if the typ has been defined by dgraph internally.
 // For example, `dgraph.graphql` or ACL types are defined in the initial internal types.
@@ -729,7 +744,7 @@ func IsReservedType(typ string) bool {
 //
 // Pre-defined types are subset of reserved types.
 func IsPreDefinedType(typ string) bool {
-	_, ok := preDefinedTypeMap[ParseAttr(typ)]
+	_, ok := preDefinedTypeMap[typ]
 	return ok
 }
 
@@ -737,4 +752,3 @@ func IsPreDefinedType(typ string) bool {
 func isReservedName(name string) bool {
 	return strings.HasPrefix(strings.ToLower(name), "dgraph.")
 }
-*/

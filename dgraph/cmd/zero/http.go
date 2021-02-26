@@ -154,14 +154,15 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tablet := r.URL.Query().Get("tablet")
-
-	// TODO(Ahsan): The move tablet request should be namespace aware.
-	tablet = x.ToNsAttrId(x.GalaxyNamespace, tablet)
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
 		return
 	}
+
+	// TODO(Ahsan): The move tablet request should be namespace aware.
+	// TODO: Looks like this would NOT allow moving of tablets from other namespaces.
+	// tablet = x.ToNsAttrId(x.GalaxyNamespace, tablet)
 
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {

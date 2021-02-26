@@ -289,7 +289,7 @@ var errHasPendingTxns = errors.New("Pending transactions found. Please retry ope
 // We must not wait here. Previously, we used to block until we have aborted the
 // transactions. We're now applying all updates serially, so blocking for one
 // operation is not an option.
-func detectPendingTxns(attr string) error {
+func detectPendingTxns(attr uint64) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
@@ -354,7 +354,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
-		return schema.State().DeleteType(proposal.Mutations.DropValue)
+		// TODO: Fix this
+		// return schema.State().DeleteType(proposal.Mutations.DropValue)
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -370,7 +371,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
-			if err := detectPendingTxns(supdate.Predicate); err != nil {
+			if err := detectPendingTxns(supdate.AttrId); err != nil {
 				return err
 			}
 		}
@@ -411,24 +412,24 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// schema here without any locking
 
 	// Stores a map of predicate and type of first mutation for each predicate.
-	schemaMap := make(map[string]types.TypeID)
+	schemaMap := make(map[uint64]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
 			// transaction.
-			if err := detectPendingTxns(edge.Attr); err != nil {
+			if err := detectPendingTxns(edge.AttrId); err != nil {
 				span.Annotatef(nil, "Found pending transactions. Retry later.")
 				return err
 			}
-			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
-			return posting.DeletePredicate(ctx, edge.Attr)
+			span.Annotatef(nil, "Deleting predicate: %s", edge.AttrId)
+			return posting.DeletePredicate(ctx, edge.AttrId)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
 			continue
 		}
-		if _, ok := schemaMap[edge.Attr]; !ok {
-			schemaMap[edge.Attr] = posting.TypeID(edge)
+		if _, ok := schemaMap[edge.AttrId]; !ok {
+			schemaMap[edge.AttrId] = posting.TypeID(edge)
 		}
 	}
 
@@ -445,17 +446,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Go through all the predicates and their first observed schema type. If we are unable to find
 	// these predicates in the current schema state, add them to the schema state. Note that the
 	// schema deduction is done by RDF/JSON chunker.
-	for attr, storageType := range schemaMap {
-		if _, err := schema.State().TypeOf(attr); err != nil {
-			hint := pb.Metadata_DEFAULT
-			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
-				hint = mutHint
-			}
-			if err := createSchema(attr, storageType, hint); err != nil {
-				return err
-			}
-		}
-	}
+	// TODO: Fix this up.
+	// for attr, storageType := range schemaMap {
+	// 	if _, err := schema.State().TypeOf(attr); err != nil {
+	// 		hint := pb.Metadata_DEFAULT
+	// 		if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
+	// 			hint = mutHint
+	// 		}
+	// 		if err := createSchema(attr, storageType, hint); err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 
 	m := proposal.Mutations
 
@@ -467,8 +469,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	sort.SliceStable(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
-		if ei.GetAttr() != ej.GetAttr() {
-			return ei.GetAttr() < ej.GetAttr()
+		if ei.GetAttrId() != ej.GetAttrId() {
+			return ei.GetAttrId() < ej.GetAttrId()
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
@@ -577,7 +579,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 				proposal.CleanPredicate, proposal.ExpectedChecksum)
 			return nil
 		}
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
+		return posting.DeletePredicate(ctx, proposal.CleanAttrId)
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %d", key)
@@ -1398,12 +1400,12 @@ func (n *node) calculateTabletSizes() {
 		return
 	}
 	var total int64
-	tablets := make(map[string]*pb.Tablet)
+	tablets := make(map[uint64]*pb.Tablet)
 	updateSize := func(tinfo badger.TableInfo) {
 		// The error has already been checked by caller.
 		left, _ := x.Parse(tinfo.Left)
 		pred := left.Attr
-		if pred == "" {
+		if pred == 0 {
 			return
 		}
 		if tablet, ok := tablets[pred]; ok {
@@ -1411,8 +1413,9 @@ func (n *node) calculateTabletSizes() {
 			tablet.UncompressedBytes += int64(tinfo.UncompressedSize)
 		} else {
 			tablets[pred] = &pb.Tablet{
-				GroupId:           n.gid,
-				Predicate:         pred,
+				GroupId: n.gid,
+				// TODO: This needs to have the namespace.
+				AttrId:            pred,
 				OnDiskBytes:       int64(tinfo.OnDiskSize),
 				UncompressedBytes: int64(tinfo.UncompressedSize),
 			}

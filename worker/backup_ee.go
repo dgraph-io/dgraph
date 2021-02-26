@@ -177,12 +177,13 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	// Get the current membership state and parse it for easier processing.
 	state := GetMembershipState()
 	var groups []uint32
-	predMap := make(map[uint32][]string)
+	predMap := make(map[uint32][]uint64)
 	for gid, group := range state.Groups {
 		groups = append(groups, gid)
-		predMap[gid] = make([]string, 0)
-		for pred := range group.Tablets {
-			predMap[gid] = append(predMap[gid], pred)
+		predMap[gid] = make([]uint64, 0)
+		for _, t := range group.Tablets {
+			// TODO: Figure out the namespace as well.
+			predMap[gid] = append(predMap[gid], uint64(t.AttrId))
 		}
 	}
 
@@ -194,7 +195,8 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	for _, gid := range groups {
 		br := proto.Clone(req).(*pb.BackupRequest)
 		br.GroupId = gid
-		br.Predicates = predMap[gid]
+		// TODO: Fix this
+		// br.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			res, err := BackupGroup(ctx, req)
 			resCh <- BackupRes{res: res, err: err}

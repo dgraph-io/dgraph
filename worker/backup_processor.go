@@ -136,10 +136,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
-	predMap := make(map[string]struct{})
-	for _, pred := range pr.Request.Predicates {
-		predMap[pred] = struct{}{}
-	}
+	predMap := make(map[uint64]struct{})
+	// TODO: Fix this.
+	// for _, pred := range pr.Request.Predicates {
+	// 	predMap[pred] = struct{}{}
+	// }
 
 	var maxVersion uint64
 

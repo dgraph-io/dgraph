@@ -49,7 +49,7 @@ type executor struct {
 	smCount     int64 // Stores count for active sub mutations.
 
 	sync.RWMutex
-	predChan map[string]chan *subMutation
+	predChan map[uint64]chan *subMutation
 	closer   *z.Closer
 	applied  *y.WaterMark
 	throttle *y.Throttle
@@ -57,7 +57,7 @@ type executor struct {
 
 func newExecutor(applied *y.WaterMark, conc int) *executor {
 	ex := &executor{
-		predChan: make(map[string]chan *subMutation),
+		predChan: make(map[uint64]chan *subMutation),
 		closer:   z.NewCloser(0),
 		applied:  applied,
 		throttle: y.NewThrottle(conc), // Run conc threads mutations at a time.
@@ -87,7 +87,7 @@ func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint6
 		}
 
 		for _, t := range toks {
-			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Attr, t)))
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.AttrId, t)))
 		}
 	}
 
@@ -101,7 +101,7 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 	keys := make(map[uint64]struct{})
 
 	for _, edge := range p.edges {
-		key := x.DataKey(edge.Attr, edge.Entity)
+		key := x.DataKey(edge.AttrId, edge.Entity)
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.V(2).Info("Error in generating conflict keys", err)
@@ -109,9 +109,9 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 		}
 
 		keys[posting.GetConflictKey(pk, key, edge)] = struct{}{}
-		stt, _ := schema.State().Get(ctx, edge.Attr)
-		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
-		isReverse := schema.State().IsReversed(ctx, edge.Attr)
+		stt, _ := schema.State().Get(ctx, edge.AttrId)
+		tokenizers := schema.State().Tokenizer(ctx, edge.AttrId)
+		isReverse := schema.State().IsReversed(ctx, edge.AttrId)
 
 		if stt.Count || isReverse {
 			keys[0] = struct{}{}
@@ -268,13 +268,13 @@ func (e *executor) shutdown() {
 }
 
 // getChannel obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannel(ctx context.Context, pred string) (ch chan *subMutation) {
-	ch, ok := e.predChan[pred]
+func (e *executor) getChannel(ctx context.Context, attrId uint64) (ch chan *subMutation) {
+	ch, ok := e.predChan[attrId]
 	if ok {
 		return ch
 	}
 	ch = make(chan *subMutation, 1000)
-	e.predChan[pred] = ch
+	e.predChan[attrId] = ch
 	e.closer.AddRunning(1)
 	go e.processMutationCh(ctx, ch)
 	return ch
@@ -292,17 +292,17 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 	startTs := proposal.Mutations.StartTs
 	edges := proposal.Mutations.Edges
 
-	payloadMap := make(map[string]*subMutation)
+	payloadMap := make(map[uint64]*subMutation)
 	var esize int64
 	for _, edge := range edges {
-		payload, ok := payloadMap[edge.Attr]
+		payload, ok := payloadMap[edge.AttrId]
 		if !ok {
-			payloadMap[edge.Attr] = &subMutation{
+			payloadMap[edge.AttrId] = &subMutation{
 				ctx:     ctx,
 				startTs: startTs,
 				index:   index,
 			}
-			payload = payloadMap[edge.Attr]
+			payload = payloadMap[edge.AttrId]
 		}
 		payload.edges = append(payload.edges, edge)
 		esize += int64(edge.Size())

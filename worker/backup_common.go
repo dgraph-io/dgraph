@@ -31,7 +31,7 @@ const (
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
-type predicateSet map[string]struct{}
+type predicateSet map[uint64]struct{}
 
 // Manifest records backup details, these are values used during restore.
 // Since is the timestamp from which the next incremental backup should start (it's set
@@ -46,7 +46,7 @@ type Manifest struct {
 	// incremental backup.
 	Since uint64 `json:"since"`
 	// Groups is the map of valid groups to predicates at the time the backup was created.
-	Groups map[uint32][]string `json:"groups"`
+	Groups map[uint32][]uint64 `json:"groups"`
 	// BackupId is a unique ID assigned to all the backups in the same series
 	// (from the first full backup to the last incremental backup).
 	BackupId string `json:"backup_id"`
@@ -79,7 +79,8 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 	for _, pred := range preds {
 		if m.Version == 0 {
 			// For older versions, preds set will contain attribute without namespace.
-			pred = x.ToNsAttrId(x.GalaxyNamespace, pred)
+			// TODO: Deal with this.
+			// pred = x.ToNsAttrId(x.GalaxyNamespace, pred)
 		}
 		predSet[pred] = struct{}{}
 	}

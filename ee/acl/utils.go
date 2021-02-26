@@ -167,7 +167,7 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 	err := x.GetPassAndLogin(dg, &x.CredOpt{
 		UserID:    creds.GetString("user"),
 		Password:  creds.GetString("password"),
-		Namespace: creds.GetUint64("namespace"),
+		Namespace: creds.GetUint32("namespace"),
 	})
 	if err != nil {
 		return nil, nil, err

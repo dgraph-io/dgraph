@@ -55,7 +55,7 @@ type indexMutationInfo struct {
 // indexTokens return tokens, without the predicate prefix and
 // index rune, for specific tokenizers.
 func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
-	attr := info.edge.Attr
+	attr := info.edge.AttrId
 	lang := info.edge.GetLang()
 
 	schemaType, err := schema.State().TypeOf(attr)
@@ -87,10 +87,10 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // TODO - See if we need to pass op as argument as t should already have Op.
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
 	if info.tokenizers == nil {
-		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
+		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.AttrId)
 	}
 
-	attr := info.edge.Attr
+	attr := info.edge.AttrId
 	uid := info.edge.Entity
 	if uid == 0 {
 		return errors.New("invalid UID with value 0")
@@ -104,7 +104,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	// Create a value token -> uid edge.
 	edge := &pb.DirectedEdge{
 		ValueId: uid,
-		Attr:    attr,
+		AttrId:  attr,
 		Op:      info.op,
 	}
 
@@ -117,7 +117,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 }
 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string) error {
-	key := x.IndexKey(edge.Attr, token)
+	key := x.IndexKey(edge.AttrId, token)
 	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 // It deletes the uid from the key corresponding to <attr, countBefore> and adds it
 // to <attr, countAfter>.
 type countParams struct {
-	attr        string
+	attrId      uint64
 	countBefore int
 	countAfter  int
 	entity      uint64
@@ -161,7 +161,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, edge.Op)
 		return countParams{
-			attr:        edge.Attr,
+			attrId:      edge.AttrId,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      edge.Entity,
@@ -172,7 +172,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 }
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
-	key := x.ReverseKey(t.Attr, t.ValueId)
+	key := x.ReverseKey(t.AttrId, t.ValueId)
 	plist, err := txn.GetFromDelta(key)
 	if err != nil {
 		return err
@@ -183,7 +183,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
-		Attr:    t.Attr,
+		AttrId:  t.AttrId,
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
@@ -196,8 +196,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 }
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
-	key := x.ReverseKey(t.Attr, t.ValueId)
-	hasCountIndex := schema.State().HasCount(ctx, t.Attr)
+	key := x.ReverseKey(t.AttrId, t.ValueId)
+	hasCountIndex := schema.State().HasCount(ctx, t.AttrId)
 
 	var getFn func(key []byte) (*List, error)
 	if hasCountIndex {
@@ -218,11 +218,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 
 	// For single uid predicates, updating the reverse index requires that the existing
 	// entries for this key in the index are removed.
-	pred, ok := schema.State().Get(ctx, t.Attr)
+	pred, ok := schema.State().Get(ctx, t.AttrId)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
 	if isSingleUidUpdate {
-		dataKey := x.DataKey(t.Attr, t.Entity)
+		dataKey := x.DataKey(t.AttrId, t.Entity)
 		dataList, err := getFn(dataKey)
 		if err != nil {
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
@@ -232,7 +232,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
 				ValueId: p.Uid,
-				Attr:    t.Attr,
+				AttrId:  t.AttrId,
 				Op:      pb.DirectedEdge_DEL,
 			}
 			return txn.addReverseAndCountMutation(ctx, delEdge)
@@ -247,7 +247,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
-		Attr:    t.Attr,
+		AttrId:  t.AttrId,
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
@@ -268,11 +268,11 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 }
 
 func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
-	isReversed := schema.State().IsReversed(ctx, edge.Attr)
-	isIndexed := schema.State().IsIndexed(ctx, edge.Attr)
-	hasCount := schema.State().HasCount(ctx, edge.Attr)
+	isReversed := schema.State().IsReversed(ctx, edge.AttrId)
+	isIndexed := schema.State().IsIndexed(ctx, edge.AttrId)
+	hasCount := schema.State().HasCount(ctx, edge.AttrId)
 	delEdge := &pb.DirectedEdge{
-		Attr:   edge.Attr,
+		AttrId: edge.AttrId,
 		Op:     edge.Op,
 		Entity: edge.Entity,
 	}
@@ -292,7 +292,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				Value: p.Value,
 			}
 			return txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.AttrId),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
@@ -308,7 +308,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
 		// above.
 		if err := txn.updateCount(ctx, countParams{
-			attr:        edge.Attr,
+			attrId:      edge.AttrId,
 			countBefore: plen,
 			countAfter:  0,
 			entity:      edge.Entity,
@@ -322,14 +322,14 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
-	key := x.CountKey(t.Attr, count, reverse)
+	key := x.CountKey(t.AttrId, count, reverse)
 	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
-		t.Attr, t.ValueId)
+		t.AttrId, t.ValueId)
 	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
@@ -340,7 +340,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	edge := pb.DirectedEdge{
 		ValueId: params.entity,
-		Attr:    params.attr,
+		AttrId:  params.attrId,
 		Op:      pb.DirectedEdge_DEL,
 	}
 	if params.countBefore > 0 {
@@ -382,7 +382,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	if dur := time.Since(t1); dur > time.Millisecond {
 		span := otrace.FromContext(ctx)
 		span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-lock", true)},
-			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
+			"Acquired lock %v %v %v", dur, t.AttrId, t.Entity)
 	}
 
 	getUID := func(t *pb.DirectedEdge) uint64 {
@@ -401,7 +401,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	var found bool
 	var err error
 
-	delNonListPredicate := !schema.State().IsList(t.Attr) &&
+	delNonListPredicate := !schema.State().IsList(t.AttrId) &&
 		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
 
 	switch {
@@ -445,7 +445,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, t.Op)
 		return val, found, countParams{
-			attr:        t.Attr,
+			attrId:      t.AttrId,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      t.Entity,
@@ -457,7 +457,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 // AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
-	if edge.Attr == "" {
+	if edge.AttrId == 0 {
 		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
@@ -466,12 +466,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 		return l.handleDeleteAll(ctx, edge, txn)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.Attr)
-	hasCountIndex := schema.State().HasCount(ctx, edge.Attr)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.AttrId)
+	hasCountIndex := schema.State().HasCount(ctx, edge.AttrId)
 
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.AttrId) {
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
@@ -491,7 +491,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 		// Exact matches.
 		if found && val.Value != nil {
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.AttrId),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
@@ -505,7 +505,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				Value: edge.Value,
 			}
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.AttrId),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_SET,
@@ -518,9 +518,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 }
 
 // prefixesToDeleteTokensFor returns the prefixes to be deleted for index for the given attribute and token.
-func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]byte, error) {
+func prefixesToDeleteTokensFor(attrId uint64, tokenizerName string, hasLang bool) ([][]byte, error) {
 	prefixes := [][]byte{}
-	pk := x.ParsedKey{Attr: attr}
+	pk := x.ParsedKey{Attr: attrId}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
@@ -545,7 +545,7 @@ func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]by
 
 // rebuilder handles the process of rebuilding an index.
 type rebuilder struct {
-	attr    string
+	attr    uint64
 	prefix  []byte
 	startTs uint64
 
@@ -722,7 +722,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 // IndexRebuild holds the info needed to initiate a rebuilt of the indices.
 type IndexRebuild struct {
-	Attr          string
+	AttrId        uint64
 	StartTs       uint64
 	OldSchema     *pb.SchemaUpdate
 	CurrentSchema *pb.SchemaUpdate
@@ -776,7 +776,7 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	}
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
-	glog.Infof("Deleting indexes for %s", rb.Attr)
+	glog.Infof("Deleting indexes for %s", rb.AttrId)
 	return pstore.DropPrefix(prefixes...)
 }
 
@@ -886,10 +886,10 @@ func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, err
 		return prefixes, nil
 	}
 
-	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.AttrId,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.AttrId, tokenizer, false)
 		if err != nil {
 			return nil, err
 		}
@@ -897,18 +897,18 @@ func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, err
 		if tokenizer != "exact" {
 			continue
 		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.AttrId, tokenizer, true)
 		if err != nil {
 			return nil, err
 		}
 		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Deleting index for attr %x and tokenizers %s", rb.AttrId,
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.AttrId, tokenizer, false)
 		if err != nil {
 			return nil, err
 		}
@@ -916,7 +916,7 @@ func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, err
 		if tokenizer != "exact" {
 			continue
 		}
-		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.AttrId, tokenizer, true)
 		if err != nil {
 			return nil, err
 		}
@@ -939,17 +939,17 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		return nil
 	}
 
-	glog.Infof("Rebuilding index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Rebuilding index for attr %x and tokenizers %s", rb.AttrId,
 		rebuildInfo.tokenizersToRebuild)
 	tokenizers, err := tok.GetTokenizers(rebuildInfo.tokenizersToRebuild)
 	if err != nil {
 		return err
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	pk := x.ParsedKey{Attr: rb.AttrId}
+	builder := rebuilder{attr: rb.AttrId, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
-		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
+		edge := pb.DirectedEdge{AttrId: rb.AttrId, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
@@ -1010,7 +1010,7 @@ func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) [][]byte {
 		return nil
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
+	pk := x.ParsedKey{Attr: rb.AttrId}
 	prefixes := append([][]byte{}, pk.CountPrefix(false))
 	prefixes = append(prefixes, pk.CountPrefix(true))
 
@@ -1035,12 +1035,12 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 		return nil
 	}
 
-	glog.Infof("Rebuilding count index for %s", rb.Attr)
+	glog.Infof("Rebuilding count index for %s", rb.AttrId)
 	var reverse bool
 	fn := func(uid uint64, pl *List, txn *Txn) error {
 		t := &pb.DirectedEdge{
 			ValueId: uid,
-			Attr:    rb.Attr,
+			AttrId:  rb.AttrId,
 			Op:      pb.DirectedEdge_SET,
 		}
 		sz := pl.Length(rb.StartTs, 0)
@@ -1059,8 +1059,8 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	// Create the forward index.
-	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	pk := x.ParsedKey{Attr: rb.AttrId}
+	builder := rebuilder{attr: rb.AttrId, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	if err := builder.Run(ctx); err != nil {
 		return err
@@ -1071,7 +1071,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	// to call builder.Run even if that's not the case as the reverse prefix
 	// will be empty.
 	reverse = true
-	builder = rebuilder{attr: rb.Attr, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
+	builder = rebuilder{attr: rb.AttrId, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
 }
@@ -1109,7 +1109,7 @@ func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) [][]byte 
 		return nil
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
+	pk := x.ParsedKey{Attr: rb.AttrId}
 	prefixes := append([][]byte{}, pk.ReversePrefix())
 
 	// All the parts of any list that has been split into multiple parts.
@@ -1128,11 +1128,11 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 		return nil
 	}
 
-	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
-	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	glog.Infof("Rebuilding reverse index for %s", rb.AttrId)
+	pk := x.ParsedKey{Attr: rb.AttrId}
+	builder := rebuilder{attr: rb.AttrId, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
-		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
+		edge := pb.DirectedEdge{AttrId: rb.AttrId, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
@@ -1169,7 +1169,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
+			" without dropping it first.", rb.CurrentSchema.Predicate)
 	}
 
 	return false, nil
@@ -1182,8 +1182,8 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	pk := x.ParsedKey{Attr: rb.AttrId}
+	builder := rebuilder{attr: rb.AttrId, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -1203,7 +1203,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// Delete the old edge corresponding to ValueId math.MaxUint64
 		t := &pb.DirectedEdge{
 			ValueId: mpost.Uid,
-			Attr:    rb.Attr,
+			AttrId:  rb.AttrId,
 			Op:      pb.DirectedEdge_DEL,
 		}
 
@@ -1215,7 +1215,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		}
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
-			Attr:      rb.Attr,
+			AttrId:    rb.AttrId,
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
@@ -1237,12 +1237,12 @@ func DeleteData() error {
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
-func DeletePredicate(ctx context.Context, attr string) error {
-	glog.Infof("Dropping predicate: [%s]", attr)
-	prefix := x.PredicatePrefix(attr)
+func DeletePredicate(ctx context.Context, attrId uint64) error {
+	glog.Infof("Dropping predicate: [%x]", attrId)
+	prefix := x.PredicatePrefix(attrId)
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
 
-	return schema.State().Delete(attr)
+	return schema.State().Delete(attrId)
 }

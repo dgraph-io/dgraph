@@ -464,13 +464,13 @@ func AttachNamespace(ctx context.Context, namespace uint32) context.Context {
 }
 
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
-func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
+func AttachGalaxyOperation(ctx context.Context, ns uint32) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
 	md.Set("galaxy-operation", "true")
-	md.Set("force-namespace", strconv.FormatUint(ns, 10))
+	md.Set("force-namespace", strconv.FormatUint(uint64(ns), 10))
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
@@ -944,7 +944,7 @@ type CloseFunc func()
 type CredOpt struct {
 	UserID    string
 	Password  string
-	Namespace uint64
+	Namespace uint32
 }
 
 type authorizationCredentials struct {
@@ -1030,7 +1030,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 		err = GetPassAndLogin(dg, &CredOpt{
 			UserID:    user,
 			Password:  creds.GetString("password"),
-			Namespace: creds.GetUint64("namespace"),
+			Namespace: creds.GetUint32("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}

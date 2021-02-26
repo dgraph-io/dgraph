@@ -381,23 +381,24 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 
 	cdcEvents := make([]CDCEvent, 0)
 	for _, edge := range mutation.Edges {
-		if x.IsReservedPredicate(edge.Attr) {
+		ns, attr := x.ParseNsAttr(edge.AttrId)
+		if x.IsAttrIdInternal(attr) {
 			continue
 		}
-		ns, attr := x.ParseNamespaceBytes(edge.Attr)
 		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
 				{
-					Type: EventTypeDrop,
-					Event: &DropEvent{
-						Operation: OpDropPred,
-						Pred:      attr,
-					},
-					Meta: &EventMeta{
-						RaftIndex: index,
-						Namespace: ns,
-					},
+					// TODO: Fix this.
+					// Type: EventTypeDrop,
+					// Event: &DropEvent{
+					// 	Operation: OpDropPred,
+					// 	Pred:      attr,
+					// },
+					// Meta: &EventMeta{
+					// 	RaftIndex: index,
+					// 	Namespace: ns,
+					// },
 				},
 			}
 		}
@@ -418,18 +419,19 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 			}
 		}
 		cdcEvents = append(cdcEvents, CDCEvent{
-			Meta: &EventMeta{
-				RaftIndex: index,
-				Namespace: ns,
-			},
-			Type: EventTypeMutation,
-			Event: &MutationEvent{
-				Operation: strings.ToLower(edge.Op.String()),
-				Uid:       edge.Entity,
-				Attr:      attr,
-				Value:     val,
-				ValueType: posting.TypeID(edge).Name(),
-			},
+			// TODO: Fix this.
+			// Meta: &EventMeta{
+			// 	RaftIndex: index,
+			// 	Namespace: ns,
+			// },
+			// Type: EventTypeMutation,
+			// Event: &MutationEvent{
+			// 	Operation: strings.ToLower(edge.Op.String()),
+			// 	Uid:       edge.Entity,
+			// 	Attr:      attr,
+			// 	Value:     val,
+			// 	ValueType: posting.TypeID(edge).Name(),
+			// },
 		})
 	}
 

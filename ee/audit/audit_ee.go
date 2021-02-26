@@ -34,7 +34,7 @@ var auditEnabled uint32
 
 type AuditEvent struct {
 	User        string
-	Namespace   uint64
+	Namespace   uint32
 	ServerHost  string
 	ClientHost  string
 	Endpoint    string
@@ -47,7 +47,7 @@ type AuditEvent struct {
 const (
 	UnauthorisedUser = "UnauthorisedUser"
 	UnknownUser      = "UnknownUser"
-	UnknownNamespace = math.MaxUint64
+	UnknownNamespace = math.MaxUint32
 	PoorManAuth      = "PoorManAuth"
 	Grpc             = "Grpc"
 	Http             = "Http"

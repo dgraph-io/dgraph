@@ -17,13 +17,14 @@
 package zero
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
 	"sort"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
@@ -180,7 +181,7 @@ var (
 func newGroup() *pb.Group {
 	return &pb.Group{
 		Members: make(map[uint64]*pb.Member),
-		Tablets: make(map[string]*pb.Tablet),
+		Tablets: make(map[uint64]*pb.Tablet),
 	}
 }
 
@@ -265,12 +266,18 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		// served by the group. If the tablets that a group is serving changes, and the Alpha does
 		// not know about these changes, then the read request must fail.
 		for _, g := range state.GetGroups() {
-			preds := make([]string, 0, len(g.GetTablets()))
+			preds := make([]uint64, 0, len(g.GetTablets()))
 			for pred := range g.GetTablets() {
 				preds = append(preds, pred)
 			}
-			sort.Strings(preds)
-			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
+			sort.Slice(preds, func(i, j int) bool {
+				return preds[i] < preds[j]
+			})
+			var b bytes.Buffer
+			for _, p := range preds {
+				b.WriteString(strconv.FormatUint(p, 10))
+			}
+			g.Checksum = farm.Fingerprint64(b.Bytes())
 		}
 		if n.AmLeader() {
 			// It is important to push something to Oracle updates channel, so the subscribers would
@@ -288,7 +295,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	if tablet.Remove {
 		glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", tablet.Predicate, tablet.GroupId)
 		if group != nil {
-			delete(group.Tablets, tablet.Predicate)
+			delete(group.Tablets, tablet.AttrId)
 		}
 		return nil
 	}
@@ -303,7 +310,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
-			delete(originalGroup.Tablets, tablet.Predicate)
+			delete(originalGroup.Tablets, tablet.AttrId)
 		} else if prev.GroupId != tablet.GroupId {
 			glog.Infof(
 				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
@@ -312,7 +319,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		}
 	}
 	tablet.Force = false
-	group.Tablets[tablet.Predicate] = tablet
+	group.Tablets[tablet.AttrId] = tablet
 	return nil
 }
 

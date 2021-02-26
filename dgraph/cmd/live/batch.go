@@ -210,8 +210,7 @@ func getTypeVal(val *api.Value) (types.Val, error) {
 func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity:    sid,
-		Attr:      nq.Predicate,
-		Namespace: nq.Namespace,
+		AttrId:    x.ToNsAttrId(nq.Namespace, nq.Predicate),
 		Lang:      nq.Lang,
 		Facets:    nq.Facets,
 		ValueId:   oid,
@@ -221,11 +220,10 @@ func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
 
 func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 	p := &pb.DirectedEdge{
-		Entity:    sid,
-		Attr:      nq.Predicate,
-		Namespace: nq.Namespace,
-		Lang:      nq.Lang,
-		Facets:    nq.Facets,
+		Entity: sid,
+		AttrId: x.ToNsAttrId(nq.Namespace, nq.Predicate),
+		Lang:   nq.Lang,
+		Facets: nq.Facets,
 	}
 	val, err := getTypeVal(nq.ObjectValue)
 	if err != nil {

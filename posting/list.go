@@ -426,7 +426,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	switch {
 	case len(t.Lang) > 0:
 		id = farm.Fingerprint64([]byte(t.Lang))
-	case schema.State().IsList(t.Attr):
+	case schema.State().IsList(t.AttrId):
 		// TODO - When values are deleted for list type, then we should only delete the UID from
 		// index if no other values produces that index token.
 		// Value for list type.
@@ -451,9 +451,9 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 
 	var conflictKey uint64
 	switch {
-	case schema.State().HasNoConflict(t.Attr):
+	case schema.State().HasNoConflict(t.AttrId):
 		break
-	case schema.State().HasUpsert(t.Attr):
+	case schema.State().HasUpsert(t.AttrId):
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
@@ -463,7 +463,7 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 		// that two users don't set the same email id.
 		conflictKey = getKey(key, 0)
 
-	case pk.IsData() && schema.State().IsList(t.Attr):
+	case pk.IsData() && schema.State().IsList(t.AttrId):
 		// Data keys, irrespective of whether they are UID or values, should be judged based on
 		// whether they are lists or not. For UID, t.ValueId = UID. For value, t.ValueId =
 		// fingerprint(value) or could be fingerprint(lang) or something else.
@@ -515,7 +515,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
 			hex.EncodeToString(l.key))
 	}
-	pred, ok := schema.State().Get(ctx, t.Attr)
+	pred, ok := schema.State().Get(ctx, t.AttrId)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
 

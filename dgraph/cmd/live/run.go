@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,10 +78,11 @@ type options struct {
 	upsertPredicate string
 	tmpDir          string
 	key             x.SensitiveByteSlice
-	namespaceToLoad uint64
+	namespaceToLoad uint32
 }
 
 type predicate struct {
+	AttrId     uint64
 	Predicate  string   `json:"predicate,omitempty"`
 	Type       string   `json:"type,omitempty"`
 	Tokenizer  []string `json:"tokenizer,omitempty"`
@@ -96,7 +98,7 @@ type predicate struct {
 
 type schema struct {
 	Predicates []*predicate `json:"schema,omitempty"`
-	preds      map[string]*predicate
+	preds      map[uint64]*predicate
 }
 
 type request struct {
@@ -104,14 +106,14 @@ type request struct {
 	conflicts []uint64
 }
 
-func (l *schema) init(ns uint64) {
-	l.preds = make(map[string]*predicate)
+func (l *schema) init(ns uint32) {
+	l.preds = make(map[uint64]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
-		if ns != math.MaxUint64 {
-			i.Predicate = x.ToNsAttrId(ns, i.Predicate)
+		if ns != math.MaxUint32 {
+			i.AttrId = x.ToNsAttrId(ns, i.Predicate)
 		}
-		l.preds[i.Predicate] = i
+		l.preds[i.AttrId] = i
 	}
 }
 
@@ -179,7 +181,7 @@ func init() {
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
-	flag.Int64("force-namespace", 0, "Namespace onto which to load the data."+
+	flag.Uint32("force-namespace", 0, "Namespace onto which to load the data."+
 		"This flag will be ignored when not logging into galaxy namespace."+
 		"Only guardian of galaxy should use this for loading data into multiple namespaces."+
 		"Setting it to negative value will preserve the namespace.")
@@ -190,7 +192,7 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint32) (*schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -240,7 +242,7 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 	return dgraphClient.Alter(ctx, op)
 }
 
-func (l *loader) uid(val string, ns uint64) string {
+func (l *loader) uid(val string, ns uint32) string {
 	// Attempt to parse as a UID (in the same format that dgraph outputs - a
 	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
 	// to be an existing node in the graph. There is limited protection against
@@ -252,11 +254,10 @@ func (l *loader) uid(val string, ns uint64) string {
 		}
 	}
 
-	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
-	// this string.
-	sb := strings.Builder{}
-	x.Check2(sb.WriteString(x.ToNsAttrId(ns, val)))
-	uid, _ := l.alloc.AssignUid(sb.String())
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, ns)
+	s := string(b) + val
+	uid, _ := l.alloc.AssignUid(s)
 
 	return fmt.Sprintf("%#x", uint64(uid))
 }
@@ -318,12 +319,12 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	for _, nq := range nqs {
 		// taking hash as the value might contain invalid symbols
-		subject := x.ToNsAttrId(nq.Namespace, nq.Subject)
+		subject := x.PrependNs(nq.Namespace, nq.Subject)
 		ids[subject] = generateBlankNode(subject)
 
 		if len(nq.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			object := x.ToNsAttrId(nq.Namespace, nq.ObjectId)
+			object := x.PrependNs(nq.Namespace, nq.ObjectId)
 			ids[object] = generateBlankNode(object)
 		}
 	}
@@ -339,7 +340,7 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 		}
 
 		// Strip away the namespace from the query and mutation.
-		xid := x.ParseAttr(xid)
+		xid := x.LeftStripNs(xid)
 		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
 		query.WriteRune('\n')
 		mutations = append(mutations, &api.NQuad{
@@ -499,7 +500,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
-			if opt.namespaceToLoad != math.MaxUint64 {
+			if opt.namespaceToLoad != math.MaxUint32 {
 				// If do not preserve namespace, use the namespace passed through
 				// `--force-namespace` flag.
 				for _, nq := range nqs {
@@ -649,16 +650,16 @@ func run() error {
 		tmpDir:          Live.Conf.GetString("tmp"),
 	}
 
-	switch creds.GetUint64("namespace") {
+	switch creds.GetUint32("namespace") {
 	case x.GalaxyNamespace:
-		ns := Live.Conf.GetInt64("force-namespace")
+		ns := Live.Conf.GetUint32("force-namespace")
 		if ns < 0 {
-			opt.namespaceToLoad = math.MaxUint64
+			opt.namespaceToLoad = math.MaxUint32
 		} else {
-			opt.namespaceToLoad = uint64(ns)
+			opt.namespaceToLoad = uint32(ns)
 		}
 	default:
-		opt.namespaceToLoad = creds.GetUint64("namespace")
+		opt.namespaceToLoad = creds.GetUint32("namespace")
 	}
 
 	z.SetTmpDir(opt.tmpDir)
@@ -673,7 +674,7 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
+	if len(creds.GetString("user")) > 0 && creds.GetUint32("namespace") == x.GalaxyNamespace &&
 		opt.namespaceToLoad != x.GalaxyNamespace {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.

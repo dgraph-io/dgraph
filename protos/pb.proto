@@ -138,7 +138,7 @@ message Member {
 
 message Group {
 	map<uint64, Member> members = 1; // Raft ID is the key.
-	map<string, Tablet> tablets = 2; // Predicate + others are key.
+	map<uint64, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
 	uint64 checksum             = 4; // Stores a checksum.
 	uint64 checkpoint_ts        = 5; // Stores checkpoint ts as seen by leader.
@@ -208,7 +208,7 @@ message Tablet {
   uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
   string predicate = 2;
   bool force = 3; // Used while moving predicate.
-	uint32 predicate_id = 4;
+	uint64 attr_id = 4;
 
   int64 on_disk_bytes = 7;
   bool remove = 8;
@@ -311,17 +311,18 @@ message RestoreRequest {
 
 message Proposal {
 	reserved 7; // Was used for string key.
-	Mutations mutations    		= 2;
+	Mutations mutations       = 2;
 	repeated badgerpb3.KV kv  = 4;
-	MembershipState state  		= 5;
-	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
-	OracleDelta delta      		= 8;
-	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
-	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
-	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
-	RestoreRequest restore 		= 12;
-	CDCState cdc_state 				= 13;
+	MembershipState state     = 5;
+	string clean_predicate    = 6;  // Delete the predicate which was moved to other group.
+	OracleDelta delta         = 8;
+	Snapshot snapshot         = 9;  // Used to tell the group when to take snapshot.
+	uint64 index              = 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum  = 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore    = 12;
+	CDCState cdc_state        = 13;
 	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+	uint64 clean_attr_id      = 15;
 }
 
 message CDCState {
@@ -503,7 +504,7 @@ message MapHeader {
 }
 
 message MovePredicatePayload {
-	string predicate         = 1;
+	uint64 attr_id           = 1;
 	uint32 source_gid        = 2;
 	uint32 dest_gid          = 3;
 	uint64 txn_ts            = 4;
@@ -724,7 +725,7 @@ message BulkMeta {
 
 message DeleteNsRequest {
 	uint32 group_id = 1;
-	uint64 namespace = 2;
+	uint32 namespace = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

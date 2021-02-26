@@ -102,7 +102,7 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		clientHost = p.Addr.String()
 	}
 	var user string
-	var namespace uint64
+	var namespace uint32
 
 	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
@@ -119,7 +119,9 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		if len(ns) == 0 {
 			namespace = UnknownNamespace
 		} else {
-			if namespace, err = strconv.ParseUint(ns[0], 10, 64); err != nil {
+			if ns64, err := strconv.ParseUint(ns[0], 0, 64); err == nil {
+				namespace = uint32(ns64)
+			} else {
 				namespace = UnknownNamespace
 			}
 		}

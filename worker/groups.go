@@ -699,7 +699,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	}
 }
 
-func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
+func (g *groupi) doSendMembership(tablets map[uint64]*pb.Tablet) error {
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
 		Id:         g.Node.Id,

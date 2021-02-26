@@ -88,9 +88,10 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	defer span.End()
 
 	// Ensure that reserved predicates cannot be moved.
-	if x.IsReservedPredicate(predicate) {
-		return errors.Errorf("Unable to move reserved predicate %s", predicate)
-	}
+	// TODO: Bring this back.
+	// if x.IsReservedPredicate(predicate) {
+	// 	return errors.Errorf("Unable to move reserved predicate %s", predicate)
+	// }
 
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {

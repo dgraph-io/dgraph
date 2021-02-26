@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/telemetry"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -246,7 +245,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 		}
 
 		if g.Tablets == nil {
-			g.Tablets = make(map[string]*pb.Tablet)
+			g.Tablets = make(map[uint64]*pb.Tablet)
 		}
 	}
 
@@ -309,8 +308,8 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	defer s.RUnlock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
+		for _, tab := range group.Tablets {
+			if tab.Predicate == tablet {
 				return tab
 			}
 		}
@@ -334,8 +333,8 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			if key == tablet {
+		for _, tab := range group.Tablets {
+			if tab.Predicate == tablet {
 				return tab
 			}
 		}
@@ -644,8 +643,8 @@ func (s *Server) ShouldServe(
 	// Assign a unique predicate ID to the predicate. For now, we're assuming that there are no
 	// collissions in the predicate names. Later, we might want to write code to deal with
 	// collissions
-	attrWithoutNs := x.ParseAttr(tablet.Predicate)
-	tablet.PredicateId = farm.Fingerprint32([]byte(attrWithoutNs))
+	// attrWithoutNs := x.ParseAttr(tablet.Predicate)
+	// tablet.PredicateId = farm.Fingerprint32([]byte(attrWithoutNs))
 
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {

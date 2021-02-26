@@ -738,7 +738,7 @@ func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema(x.ParseNamespace(update.Predicate))
+	initialSchema := CompleteInitialSchema(x.ParseNs(update.AttrId))
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
@@ -757,7 +757,7 @@ func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
 		return false
 	}
 
-	initialTypes := CompleteInitialTypes(x.ParseNamespace(update.TypeName))
+	initialTypes := CompleteInitialTypes(update.Namespace)
 	for _, original := range initialTypes {
 		if original.TypeName != update.TypeName {
 			continue
