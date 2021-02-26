@@ -202,13 +202,13 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	defer wg.Done()
 	// This throttle allows is used to limit the number of files which are opened simultaneously
 	// by badger while building indexes for predicates in background.
-	maxOpenFileLimit, err := QueryMaxOpenFiles()
+	maxOpenFileLimit, err := x.QueryMaxOpenFiles()
 	if err != nil {
 		// Setting to default value on unix systems
 		maxOpenFileLimit = 1024
 	}
 	glog.Infof("Max open files limit: %d", maxOpenFileLimit)
-	// Badger opens around 7 files for indexing per predicate.
+	// Badger opens around 8 files for indexing per predicate.
 	// The throttle limit is set to maxOpenFileLimit/8 to ensure that indexing does not throw
 	// "Too many open files" error.
 	throttle := y.NewThrottle(maxOpenFileLimit / 8)

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package worker
+package x
 
 import "github.com/pkg/errors"
 
