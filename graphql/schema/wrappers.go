@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -1135,19 +1134,20 @@ func (f *field) Cascade() []string {
 	if dir == nil {
 		return nil
 	}
-	arg := dir.Arguments.ForName(cascadeArg)
-	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
+	fieldsVal, _ := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
+	if len(fieldsVal) == 0 {
 		return []string{"__all__"}
 	}
-	fields := make([]string, 0, len(arg.Value.Children))
+
+	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
 
-	for _, child := range arg.Value.Children {
-		if idField != nil && idField.Name() == child.Value.Raw {
+	for _, value := range fieldsVal {
+		if idField != nil && idField.Name() == value {
 			fields = append(fields, "uid")
 		} else {
-			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+			fields = append(fields, typ.DgraphPredicate(value.(string)))
 		}
 
 	}
@@ -2013,7 +2013,7 @@ func (m *mutation) QueryField() Field {
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
 		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
-			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
+			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective, Definition: m.op.inSchema.schema.Directives[cascadeDirective]})
 		}
 		return f
 	}

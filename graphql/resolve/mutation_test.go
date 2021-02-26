@@ -368,10 +368,15 @@ func TestMutationQueryRewriting(t *testing.T) {
 					gqlMutationStr := strings.Replace(tcase.GQLQuery, testType, tt.mut, 1)
 					tcase.DGQuery = strings.Replace(tcase.DGQuery, "PAYLOAD_TYPE",
 						tt.payloadType, 1)
+					var vars map[string]interface{}
+					if tcase.GQLVariables != "" {
+						err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+						require.NoError(t, err)
+					}
 					op, err := gqlSchema.Operation(
 						&schema.Request{
 							Query:     gqlMutationStr,
-							Variables: tcase.Variables,
+							Variables: vars,
 						})
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
