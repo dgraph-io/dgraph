@@ -48,22 +48,22 @@ const (
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls", TLSServerDefaults, z.NewSuperFlagHelp(TLSServerDefaults).
 		Head("TLS Server options").
-		Flag("cacert",
+		Flag("ca-cert",
 			"The CA cert file used to verify server certificates. Required for enabling TLS.").
 		Flag("use-system-ca",
 			"Includes System CA into CA Certs.").
-		Flag("client-auth",
-			"Enable TLS client authentication.").
 		Flag("node-cert",
 			"The node Cert file which is needed to initiate the server in the cluster.").
 		Flag("node-key",
 			"The node Key file which is needed to initiate the server in the cluster.").
-		Flag("internal-port-enabled",
+		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		Flag("cert",
+		Flag("client-auth",
+			"Enable TLS client authentication.").
+		Flag("client-cert",
 			"(Optional) The client Cert file which is needed to connect as a client with the other "+
 				"nodes in the cluster.").
-		Flag("key",
+		Flag("client-key",
 			"(Optional) The private client Key file which is needed to connect as a client with the "+
 				"other nodes in the cluster.").
 		String())
@@ -73,13 +73,13 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls", TLSClientDefaults, z.NewSuperFlagHelp(TLSClientDefaults).
 		Head("TLS Client options (defaults shown):").
-		Flag("cacert",
+		Flag("ca-cert",
 			"The CA cert file used to verify server certificates. Required for enabling TLS.").
 		Flag("use-system-ca",
 			"Includes System CA into CA Certs.").
 		Flag("server-name",
 			"Used to verify the server hostname.").
-		Flag("internal-port-enabled",
+		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
 		Flag("cert",
 			"(Optional) The Cert file provided by the client to the server.").
