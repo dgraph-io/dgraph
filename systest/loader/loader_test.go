@@ -36,12 +36,12 @@ import (
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; internal-port-enabled=%v;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
 		"../../tlstest/mtls_internal/tls/live/ca.crt",
 		// server-name
 		"alpha1",
-		// internal-port-enabled
+		// internal-port
 		true))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
@@ -58,14 +58,15 @@ func TestLoaderXidmap(t *testing.T) {
 	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
 	require.NoError(t, err)
 
-	tlsFlag := fmt.Sprintf(`cacert=%s; internal-port-enabled=%v; cert=%s; key=%s; server-name=%s;`,
-		// cacert
+	tlsFlag := fmt.Sprintf(
+		`ca-cert=%s; internal-port=%v; client-cert=%s; client-key=%s; server-name=%s;`,
+		// ca-cert
 		tlsDir+"/ca.crt",
-		// internal-port-enabled
+		// internal-port
 		true,
-		// cert
+		// client-cert
 		tlsDir+"/client.liveclient.crt",
-		// key
+		// client-key
 		tlsDir+"/client.liveclient.key",
 		// server-name
 		"alpha1")
