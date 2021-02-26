@@ -40,7 +40,7 @@ type TLSHelperConfig struct {
 }
 
 const (
-	TLSServerDefaults = `use-system-ca=true; client-auth=VERIFYIFGIVEN; internal-port=false;`
+	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false;`
 	TLSClientDefaults = `use-system-ca=true; internal-port=false;`
 )
 
@@ -58,8 +58,8 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 			"The node Key file which is needed to initiate the server in the cluster.").
 		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		Flag("client-auth",
-			"Enable TLS client authentication.").
+		Flag("client-auth-type",
+			"The TLS client authentication method.").
 		Flag("client-cert",
 			"(Optional) The client Cert file which is needed to connect as a client with the other "+
 				"nodes in the cluster.").
@@ -81,9 +81,9 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 			"Used to verify the server hostname.").
 		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		Flag("cert",
+		Flag("client-cert",
 			"(Optional) The Cert file provided by the client to the server.").
-		Flag("key",
+		Flag("client-key",
 			"(Optional) The private Key file provided by the clients to the server.").
 		String())
 }
