@@ -23,10 +23,12 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/pkg/errors"
 )
 
@@ -157,10 +159,10 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 	in := []uint64{sg.Params.From}
 	sg.SrcUIDs = &pb.List{Uids: in}
 	sg.uidMatrix = []*pb.List{{Uids: in}}
-	sg.DestUIDs = sg.SrcUIDs
+	sg.DestMap = codec.FromList(sg.SrcUIDs)
 
 	for _, child := range sg.Children {
-		child.SrcUIDs = sg.DestUIDs
+		child.SrcUIDs = sg.SrcUIDs
 		exec = append(exec, child)
 	}
 	dummy := &SubGraph{}
@@ -248,7 +250,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, subgraph := range exec {
-			if len(subgraph.DestUIDs.Uids) == 0 {
+			if subgraph.DestMap.IsEmpty() {
 				continue
 			}
 			select {
@@ -260,7 +262,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 					temp := new(SubGraph)
 					temp.copyFiltersRecurse(child)
 
-					temp.SrcUIDs = subgraph.DestUIDs
+					temp.SrcUIDs = codec.ToList(subgraph.DestMap)
 					// Remove those nodes which we have already traversed. As this cannot be
 					// in the path again.
 					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
@@ -424,14 +426,13 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	next <- false
 
 	if len(kroutes) == 0 {
-		sg.DestUIDs = &pb.List{}
+		sg.DestMap = roaring64.New()
 		return nil, nil
 	}
-	var res []uint64
+	// TODO: The order would be wrong here for the path. Fix that later.
 	for _, it := range *kroutes[0].route {
-		res = append(res, it.uid)
+		sg.DestMap.Add(it.uid)
 	}
-	sg.DestUIDs.Uids = res
 	shortestSg := createkroutesubgraph(ctx, kroutes)
 	return shortestSg, nil
 }
@@ -606,7 +607,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		cur = dist[cur].parent
 	}
 	if cur != sg.Params.From {
-		sg.DestUIDs = &pb.List{}
+		sg.DestMap = roaring64.New()
 		return nil, nil
 	}
 
@@ -616,7 +617,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		result[i], result[l-i-1] = result[l-i-1], result[i]
 	}
 	// Put the path in DestUIDs of the root.
-	sg.DestUIDs.Uids = result
+	// TODO: This would result in out of order Uids.
+	sg.DestMap.AddMany(result)
 
 	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)
 	return []*SubGraph{shortestSg}, nil
@@ -634,7 +636,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 	}
 	curUid := result[0]
 	shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
-	shortestSg.DestUIDs = &pb.List{Uids: []uint64{curUid}}
+	shortestSg.DestMap = codec.FromList(shortestSg.SrcUIDs)
 	shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 	curNode := shortestSg
@@ -653,7 +655,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
-		node.DestUIDs = &pb.List{Uids: []uint64{childUid}}
+		node.DestMap = roaring64.New()
+		node.DestMap.Add(childUid)
 		node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
@@ -685,7 +688,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		}
 		curUid := (*it.route)[0].uid
 		shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
-		shortestSg.DestUIDs = &pb.List{Uids: []uint64{curUid}}
+		shortestSg.DestMap = codec.FromList(shortestSg.SrcUIDs)
 		shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 		curNode := shortestSg
@@ -704,7 +707,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			node.Attr = (*it.route)[i+1].attr
 			node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{(*it.route)[i+1].facet}}}
 			node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
-			node.DestUIDs = &pb.List{Uids: []uint64{childUid}}
+			node.DestMap = codec.FromList(node.SrcUIDs)
 			node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
 
 			curNode.Children = append(curNode.Children, node)

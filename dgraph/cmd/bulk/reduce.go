@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/dustin/go-humanize"
 )
 
@@ -602,7 +603,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		}
 
 		alloc.Reset()
-		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
+		bm := roaring64.New()
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -615,7 +616,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 			lastUid = uid
 
-			enc.Add(uid)
+			bm.Add(uid)
 			if pbuf := me.Plist(); len(pbuf) > 0 {
 				p := getPosting()
 				x.Check(p.Unmarshal(pbuf))
@@ -625,8 +626,8 @@ func (r *reducer) toList(req *encodeRequest) {
 
 		// We should not do defer FreePack here, because we might be giving ownership of it away if
 		// we run Rollup.
-		pl.Pack = enc.Done()
-		numUids := codec.ExactLen(pl.Pack)
+		pl.Bitmap = codec.ToBytes(bm)
+		numUids := bm.GetCardinality()
 
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
@@ -657,7 +658,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
+		shouldSplit := pl.Size() >= (1<<20)/2
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)

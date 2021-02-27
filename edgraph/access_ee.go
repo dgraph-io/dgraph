@@ -433,6 +433,7 @@ func ResetAcl(closer *z.Closer) {
 		}
 		var groupResp groupQryResp
 		var guardiansGroupUid string
+		glog.Infof("---> JSON: %s\n", resp.GetJson())
 		if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
 			return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
 		}
@@ -502,6 +503,7 @@ func ResetAcl(closer *z.Closer) {
 
 		var grootUserUid string
 		var userResp userQryResp
+		glog.Infof("----> groot JSON: %s\n", resp.GetJson())
 		if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
 			return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
 		}

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
@@ -1123,8 +1125,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	empty := pb.List{}
-	var uids *pb.List
+	var uids *roaring64.Bitmap
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1139,12 +1140,11 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		// not support eq/gt/lt/le in @filter, see #4077), and this was new code that
 		// was added just to support the aforementioned case, the race condition is only
 		// in this part of the code.
-		uids = &pb.List{}
-		uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
+		uids.AddMany(arg.q.UidList.Uids)
 
 	// Prefer to use an index (fast)
 	case useIndex:
-		uids, err = uidsForRegex(attr, arg, query, &empty)
+		uids, err = uidsForRegex(attr, arg, query, nil)
 		if err != nil {
 			return err
 		}
@@ -1157,14 +1157,15 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			attr)
 	}
 
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
 
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
+	filtered := roaring64.New()
+	itr := uids.Iterator()
+	for itr.HasNext() {
+		uid := itr.Next()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1197,17 +1198,17 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-				filtered.Uids = append(filtered.Uids, uid)
+				filtered.Add(uid)
 				// NOTE: We only add the uid once.
 				break
 			}
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	list := &pb.List{
+		Uids: filtered.ToArray(),
 	}
-
+	arg.out.UidMatrix = append(arg.out.UidMatrix, list)
 	return nil
 }
 
@@ -1377,7 +1378,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	var uids *pb.List
+	var uids *roaring64.Bitmap
 	switch {
 	case !typ.IsScalar():
 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -1386,7 +1387,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 
 	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
-		uids = arg.q.UidList
+		uids = codec.FromList(arg.q.UidList)
 
 	case schema.State().HasTokenizer(ctx, tok.IdentTrigram, attr):
 		var err error
@@ -1404,12 +1405,15 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uids.GetCardinality(), isList, lang)
+	// arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
 	matchQuery := strings.Join(arg.srcFn.tokens, "")
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
+	filtered := roaring64.New()
+
+	itr := uids.Iterator()
+	for itr.HasNext() {
+		uid := itr.Next()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1443,17 +1447,17 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
-				filtered.Uids = append(filtered.Uids, uid)
+				filtered.Add(uid)
 				// NOTE: We only add the uid once.
 				break
 			}
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	out := &pb.List{
+		Uids: filtered.ToArray(),
 	}
-
+	arg.out.UidMatrix = append(arg.out.UidMatrix, out)
 	return nil
 }
 
@@ -1463,18 +1467,37 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	defer stop()
 
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	numGo, width := x.DivideAndRule(len(uids.Uids))
+
+	uids := roaring64.New()
+	var matrix []*roaring64.Bitmap
+	for _, l := range arg.out.UidMatrix {
+		bm := codec.FromList(l)
+		matrix = append(matrix, bm)
+		uids.Or(bm)
+	}
+	numUids := int(uids.GetCardinality())
+
+	numGo, width := x.DivideAndRule(numUids)
 	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
-			len(uids.Uids), numGo, width)
+			uids.GetCardinality(), numGo, width)
 	}
 
-	filtered := make([]*pb.List, numGo)
+	filtered := make([]*roaring64.Bitmap, numGo)
 	filter := func(idx, start, end int) error {
-		filtered[idx] = &pb.List{}
+
+		filtered[idx] = roaring64.New()
 		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
+
+		startUid, err := uids.Select(uint64(start))
+		if err != nil {
+			return err
+		}
+		itr := uids.Iterator()
+		itr.AdvanceIfNeeded(startUid)
+
+		for uidx := start; uidx < end; uidx++ {
+			uid := itr.Next()
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1484,7 +1507,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
-					out.Uids = append(out.Uids, uid)
+					out.Add(uid)
 					return posting.ErrStopIteration
 				}
 				return nil
@@ -1500,8 +1523,8 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
-		if end > len(uids.Uids) {
-			end = len(uids.Uids)
+		if end > numUids {
+			end = numUids
 		}
 		go func(idx, start, end int) {
 			errCh <- filter(idx, start, end)
@@ -1512,15 +1535,19 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			return err
 		}
 	}
-	final := &pb.List{}
+
+	final := roaring64.New()
 	for _, out := range filtered {
-		final.Uids = append(final.Uids, out.Uids...)
+		final.Or(out)
 	}
+
 	if span != nil && numGo > 1 {
-		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+		span.Annotatef(nil, "Total uids after filtering geo: %d", final.GetCardinality())
 	}
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
+	for i := 0; i < len(matrix); i++ {
+		matrix[i].And(final)
+		// TODO: This could be a conversion to Bitmap instead of ToArray.
+		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
 	}
 	return nil
 }
@@ -1534,16 +1561,51 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		defer glog.Infof("Done filterStringFunction")
 	}
 	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	var values [][]types.Val
-	filteredUids := make([]uint64, 0, len(uids.Uids))
+
+	uids := roaring64.New()
+	var matrix []*roaring64.Bitmap
+	for _, l := range arg.out.UidMatrix {
+		bm := codec.FromList(l)
+		matrix = append(matrix, bm)
+		uids.Or(bm)
+	}
+
 	lang := langForFunc(arg.q.Langs)
+	filter := &stringFilter{
+		funcName: arg.srcFn.fname,
+		funcType: arg.srcFn.fnType,
+		lang:     lang,
+	}
+	switch arg.srcFn.fnType {
+	case hasFn:
+		// Dont do anything, as filtering based on lang is already
+		// done above.
+		filter = nil
+	case fullTextSearchFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "fulltext"
+	case standardFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = "term"
+	case customIndexFn:
+		filter.tokens = arg.srcFn.tokens
+		filter.match = defaultMatch
+		filter.tokName = arg.q.SrcFunc.Args[0]
+	case compareAttrFn:
+		// filter.ineqValue = arg.srcFn.ineqValue
+		filter.eqVals = arg.srcFn.eqTokens
+		filter.match = ineqMatch
+	}
 
 	// This iteration must be done in a serial order, because we're also storing the values in a
 	// matrix, to check it later.
 	// TODO: This function can be optimized by having a query specific cache, which can be populated
 	// by the handleHasFunction for e.g. for a `has(name)` query.
-	for _, uid := range uids.Uids {
+	itr := uids.Iterator()
+	for itr.HasNext() {
+		uid := itr.Next()
 		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
 		switch {
 		case err == posting.ErrNoValue:
@@ -1561,47 +1623,15 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 			}
 			strVals = append(strVals, strVal)
 		}
-		if len(strVals) > 0 {
-			values = append(values, strVals)
-			filteredUids = append(filteredUids, uid)
+		if !matchStrings(filter, strVals) {
+			uids.Remove(uid)
 		}
 	}
 
-	filtered := &pb.List{Uids: filteredUids}
-	filter := stringFilter{
-		funcName: arg.srcFn.fname,
-		funcType: arg.srcFn.fnType,
-		lang:     lang,
-	}
-
-	switch arg.srcFn.fnType {
-	case hasFn:
-		// Dont do anything, as filtering based on lang is already
-		// done above.
-	case fullTextSearchFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "fulltext"
-		filtered = matchStrings(filtered, values, &filter)
-	case standardFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "term"
-		filtered = matchStrings(filtered, values, &filter)
-	case customIndexFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = arg.q.SrcFunc.Args[0]
-		filtered = matchStrings(filtered, values, &filter)
-	case compareAttrFn:
-		// filter.ineqValue = arg.srcFn.ineqValue
-		filter.eqVals = arg.srcFn.eqTokens
-		filter.match = ineqMatch
-		filtered = matchStrings(filtered, values, &filter)
-	}
-
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	for i := 0; i < len(matrix); i++ {
+		matrix[i].And(uids)
+		// TODO: This could be a conversion to Bitmap instead of ToArray.
+		arg.out.UidMatrix[i].Uids = matrix[i].ToArray()
 	}
 	return nil
 }

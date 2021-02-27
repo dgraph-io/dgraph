@@ -37,6 +37,7 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 message List {
 	repeated fixed64 uids = 1;
+	bytes bitmap_do_not_use = 2;
 }
 
 message TaskValue {
@@ -388,6 +389,8 @@ message PostingList {
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
   repeated uint64 splits = 4;
+
+	bytes bitmap = 5; // Roaring Bitmap encoded uint64s.
 }
 
 message FacetParam {
