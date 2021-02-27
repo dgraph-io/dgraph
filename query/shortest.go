@@ -22,13 +22,13 @@ import (
 	"math"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/pkg/errors"
 )
 

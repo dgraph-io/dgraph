@@ -17,10 +17,10 @@
 package worker
 
 import (
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 // LevenshteinDistance measures the difference between two strings.

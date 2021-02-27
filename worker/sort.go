@@ -22,12 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
-	"github.com/dgraph-io/badger/v3"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -35,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 var emptySortResult pb.SortResult

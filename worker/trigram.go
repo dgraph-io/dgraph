@@ -19,13 +19,13 @@ package worker
 import (
 	"errors"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	cindex "github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 var errRegexTooWide = errors.New(

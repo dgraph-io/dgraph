@@ -24,7 +24,6 @@ import (
 	"math"
 	"sort"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
 
@@ -38,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )

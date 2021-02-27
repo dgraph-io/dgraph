@@ -24,13 +24,13 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )

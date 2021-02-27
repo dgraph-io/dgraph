@@ -5,11 +5,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/stretchr/testify/require"
 )
 

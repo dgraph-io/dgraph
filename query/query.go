@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"

@@ -26,9 +26,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
