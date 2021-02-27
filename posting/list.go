@@ -616,23 +616,27 @@ func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	p := &pb.Posting{}
 
 	uitr := bm.Iterator()
-	next := uint64(math.MaxUint64)
-	if uitr.HasNext() {
-		next = uitr.Next()
+	var next uint64
+
+	advance := func() {
+		next = math.MaxUint64
+		if uitr.HasNext() {
+			next = uitr.Next()
+		}
 	}
+	advance()
 
 	var maxUid uint64
 	fi := func(obj *pb.Posting) error {
 		if obj.Uid <= next {
 			maxUid = x.Max(maxUid, obj.Uid)
+			if obj.Uid == next {
+				advance()
+			}
 			return f(obj)
 		}
 		p.Uid = next
-		if uitr.HasNext() {
-			next = uitr.Next()
-		} else {
-			next = math.MaxUint64
-		}
+		advance()
 		maxUid = x.Max(maxUid, p.Uid)
 		return f(p)
 	}
