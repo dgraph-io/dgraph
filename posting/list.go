@@ -598,6 +598,61 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	return l.iterate(readTs, afterUid, f)
 }
 
+// IterateAll iterates over all the UIDs and Postings.
+// TODO: We should remove this function after merging roaring bitmaps and fixing up how we map
+// facetsMatrix to uidMatrix.
+func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	l.RLock()
+	defer l.RUnlock()
+
+	bm, err := l.bitmap(ListOptions{
+		ReadTs:   readTs,
+		AfterUid: afterUid,
+	})
+	if err != nil {
+		return err
+	}
+
+	p := &pb.Posting{}
+
+	uitr := bm.Iterator()
+	var next uint64
+
+	advance := func() {
+		next = math.MaxUint64
+		if uitr.HasNext() {
+			next = uitr.Next()
+		}
+	}
+	advance()
+
+	var maxUid uint64
+	fi := func(obj *pb.Posting) error {
+		if obj.Uid <= next {
+			maxUid = x.Max(maxUid, obj.Uid)
+			if obj.Uid == next {
+				advance()
+			}
+			return f(obj)
+		}
+		p.Uid = next
+		advance()
+		maxUid = x.Max(maxUid, p.Uid)
+		return f(p)
+	}
+	if err := l.iterate(readTs, afterUid, fi); err != nil {
+		return err
+	}
+
+	codec.RemoveRange(bm, 0, maxUid)
+	uitr = bm.Iterator()
+	for uitr.HasNext() {
+		p.Uid = uitr.Next()
+		f(p)
+	}
+	return nil
+}
+
 // pickPostings goes through the mutable layer and returns the appropriate postings,
 // along with the timestamp of the delete marker, if any. If this timestamp is greater
 // than zero, it indicates that the immutable layer should be ignored during traversals.

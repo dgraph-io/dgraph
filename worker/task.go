@@ -559,7 +559,7 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 	// TODO(Ashish): This function starts iteration from start(afterUID is always 0). This can be
 	// optimized in come cases. For example when we know lang tag to fetch, we can directly jump
 	// to posting starting with that UID(check list.ValueFor()).
-	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+	return pl.IterateAll(q.ReadTs, 0, func(p *pb.Posting) error {
 		if q.ExpandAll {
 			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
 		} else if listType && len(q.Langs) == 0 {
@@ -630,13 +630,12 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
 	fn func(*pb.Posting)) error {
 
-	x.AssertTrue(facetsTree != nil)
-
-	// If facetsTree is nil, then we'd choose all the UIDs.
-	// If facetsTree is not nil, then we'd only choose UIDs with postings. So, iteration over
-	// pl.Postings makes sense.
-	return pl.Postings(opts, func(p *pb.Posting) error {
-		// If filterTree is nil, applyFacetsTree returns true and nil error.
+	// We want to iterate over this to allow picking up all the facets.
+	return pl.IterateAll(opts.ReadTs, opts.AfterUid, func(p *pb.Posting) error {
+		// Only pick the UID postings.
+		if p.PostingType != pb.Posting_REF {
+			return nil
+		}
 		pick, err := applyFacetsTree(p.Facets, facetsTree)
 		if err != nil {
 			return err
@@ -670,29 +669,54 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	uidList := &pb.List{}
 	var fcsList []*pb.Facets
 
-	// If q.FacetParam is nil, we pick all UIDs. Don't care about picking up facets.
-	// If facetsTree is nil, then we pick up all the UIDs.
-	if q.FacetParam == nil || facetsTree == nil {
-		bm, err := pl.Bitmap(opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		uidList = codec.ToList(bm)
+	// [1] q.FacetParam == nil, facetsTree == nil => No facets. Pick all UIDs.
+	// [2] q.FacetParam == nil, facetsTree != nil => No facets. Pick selective UIDs.
+	// [3] q.FacetParam != nil, facetsTree != nil => Pick facets. Pick selective UIDs.
+	// [4] q.FacetParam != nil, facetsTree == nil => Pick facets. Pick all UIDs.
 
-	} else {
-		// Both q.FacetParam and facetsTree are NOT nil. So, apply the filter.
-		err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-			uidList.Uids = append(uidList.Uids, p.Uid)
+	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+		uidList.Uids = append(uidList.Uids, p.Uid)
+		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
 			})
-		})
-		if err != nil {
-			return nil, nil, err
 		}
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-
 	return uidList, fcsList, nil
+
+	// if q.FacetParam != nil || facetsTree != nil {
+	// 	// Takes care of 2 and 3. And also 4 for picking facets.
+	// 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+	// 		uidList.Uids = append(uidList.Uids, p.Uid)
+	// 		if q.FacetParam != nil {
+	// 			fcsList = append(fcsList, &pb.Facets{
+	// 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+	// 			})
+	// 		}
+	// 	})
+	// 	if err != nil {
+	// 		return nil, nil, err
+	// 	}
+	// }
+	// if facetsTree == nil {
+	// 	// Takes care of 1 and 4 for picking all UIDs.
+	// 	bm, err := pl.Bitmap(opts)
+	// 	if err != nil {
+	// 		return nil, nil, err
+	// 	}
+	// 	uidList = codec.ToList(bm)
+	// }
+
+	// // TODO: We shouldn't be adding nils to match up indices. Refactor how we do this.
+	// if q.FacetParam != nil {
+	// 	if len(uidList.Uids) != len(fcsList) {
+	// 	}
+	// }
+
+	// return uidList, fcsList, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
