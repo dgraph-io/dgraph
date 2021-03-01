@@ -559,7 +559,7 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 	// TODO(Ashish): This function starts iteration from start(afterUID is always 0). This can be
 	// optimized in come cases. For example when we know lang tag to fetch, we can directly jump
 	// to posting starting with that UID(check list.ValueFor()).
-	return pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+	return pl.IterateAll(q.ReadTs, 0, func(p *pb.Posting) error {
 		if q.ExpandAll {
 			// If q.ExpandAll is true we need to consider all postings irrespective of langs.
 		} else if listType && len(q.Langs) == 0 {

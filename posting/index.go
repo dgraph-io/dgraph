@@ -283,7 +283,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	plen := l.Length(txn.StartTs, 0)
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+	err := l.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
@@ -1137,7 +1137,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return pl.IterateAll(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1191,7 +1191,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
