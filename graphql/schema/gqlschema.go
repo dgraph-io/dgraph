@@ -46,7 +46,6 @@ const (
 	remoteDirective         = "remote" // types with this directive are not stored in Dgraph.
 	remoteResponseDirective = "remoteResponse"
 	lambdaDirective         = "lambda"
-
 	lambdaOnMutateDirective = "lambdaOnMutate"
 
 	generateDirective       = "generate"
