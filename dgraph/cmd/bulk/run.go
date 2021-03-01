@@ -133,7 +133,7 @@ func init() {
 			Flag("cache-mb",
 				"Total size of cache (in MB) per shard in the reducer.").
 			Flag("cache-percentage",
-				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
+				"Cache percentages summing up to 100 for various caches. (FORMAT: BlockCacheSize,"+
 					"IndexCacheSize)").
 			String())
 

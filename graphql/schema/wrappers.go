@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/dgraph-io/gqlparser/v2/parser"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -125,6 +124,7 @@ type Field interface {
 	// DgraphAlias is used as an alias in DQL while rewriting the GraphQL field.
 	DgraphAlias() string
 	ResponseName() string
+	RemoteResponseName() string
 	Arguments() map[string]interface{}
 	ArgValue(name string) interface{}
 	IsArgListType(name string) bool
@@ -297,6 +297,9 @@ type schema struct {
 	// enables lambdas for that mutation.
 	// It is read-only.
 	lambdaOnMutate map[string]bool
+	// remoteResponse stores the mapping of typeName->fieldName->responseName which will be used in result
+	// completion step.
+	remoteResponse map[string]map[string]string
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 	// meta is the meta information extracted from input schema
@@ -730,6 +733,35 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func remoteResponseMapping(s *ast.Schema) map[string]map[string]string {
+	remoteResponse := make(map[string]map[string]string)
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name != remoteResponseDirective {
+					continue
+				}
+				lastIndex := len(field.Directives) - 1
+				field.Directives[i] = field.Directives[lastIndex]
+				field.Directives = field.Directives[:lastIndex]
+
+				var remoteFieldMap map[string]string
+				if existingRemoteFieldMap, ok := remoteResponse[typ.Name]; ok {
+					remoteFieldMap = existingRemoteFieldMap
+				} else {
+					remoteFieldMap = make(map[string]string)
+				}
+
+				remoteFieldMap[field.Name] = dir.Arguments[0].Value.Raw
+				remoteResponse[typ.Name] = remoteFieldMap
+
+				break
+			}
+		}
+	}
+	return remoteResponse
+}
+
 func hasExtends(def *ast.Definition) bool {
 	return def.Directives.ForName(apolloExtendsDirective) != nil
 }
@@ -833,7 +865,7 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 
 	// build the children for http argument
 	httpArgChildrens := []*ast.ChildValue{
-		getChildValue(httpUrl, x.Config.GraphqlLambdaUrl, ast.StringValue, lambdaDir.Position),
+		getChildValue(httpUrl, x.Config.GraphQL.GetString("lambda-url"), ast.StringValue, lambdaDir.Position),
 		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
 		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
 	}
@@ -895,6 +927,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		customDirectives: customDirs,
 		lambdaDirectives: lambdaDirs,
 		lambdaOnMutate:   lambdaOnMutateMappings(s),
+		remoteResponse:   remoteResponseMapping(s),
 		meta:             &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -930,6 +963,22 @@ func (f *field) DgraphAlias() string {
 
 func (f *field) ResponseName() string {
 	return responseName(f.field)
+}
+
+func remoteResponseDirectiveArgument(fd *ast.FieldDefinition) string {
+	remoteResponseDirectiveDefn := fd.Directives.ForName(remoteResponseDirective)
+	if remoteResponseDirectiveDefn != nil {
+		return remoteResponseDirectiveDefn.Arguments.ForName("name").Value.Raw
+	}
+	return ""
+}
+
+func (f *field) RemoteResponseName() string {
+	remoteResponse := f.op.inSchema.remoteResponse[f.GetObjectName()][f.Name()]
+	if remoteResponse == "" {
+		return f.Name()
+	}
+	return remoteResponse
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
@@ -1108,19 +1157,20 @@ func (f *field) Cascade() []string {
 	if dir == nil {
 		return nil
 	}
-	arg := dir.Arguments.ForName(cascadeArg)
-	if arg == nil || arg.Value == nil || len(arg.Value.Children) == 0 {
+	fieldsVal, _ := dir.ArgumentMap(f.op.vars)[cascadeArg].([]interface{})
+	if len(fieldsVal) == 0 {
 		return []string{"__all__"}
 	}
-	fields := make([]string, 0, len(arg.Value.Children))
+
+	fields := make([]string, 0)
 	typ := f.Type()
 	idField := typ.IDField()
 
-	for _, child := range arg.Value.Children {
-		if idField != nil && idField.Name() == child.Value.Raw {
+	for _, value := range fieldsVal {
+		if idField != nil && idField.Name() == value {
 			fields = append(fields, "uid")
 		} else {
-			fields = append(fields, typ.DgraphPredicate(child.Value.Raw))
+			fields = append(fields, typ.DgraphPredicate(value.(string)))
 		}
 
 	}
@@ -1626,6 +1676,10 @@ func (q *query) Name() string {
 	return (*field)(q).Name()
 }
 
+func (q *query) RemoteResponseName() string {
+	return (*field)(q).RemoteResponseName()
+}
+
 func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
@@ -1893,6 +1947,10 @@ func (m *mutation) Name() string {
 	return (*field)(m).Name()
 }
 
+func (m *mutation) RemoteResponseName() string {
+	return (*field)(m).RemoteResponseName()
+}
+
 func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
 }
@@ -1978,7 +2036,7 @@ func (m *mutation) QueryField() Field {
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
 		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
-			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
+			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective, Definition: m.op.inSchema.schema.Directives[cascadeDirective]})
 		}
 		return f
 	}

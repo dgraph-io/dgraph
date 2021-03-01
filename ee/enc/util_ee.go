@@ -20,6 +20,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -101,9 +102,11 @@ func newKeyReader(cfg *viper.Viper) (keyReader, error) {
 	var keyReader keyReader
 	var err error
 
+	vaultFlag := z.NewSuperFlag(cfg.GetString("vault")).MergeAndCheckDefault(VaultDefaults)
+
 	keyFile := cfg.GetString(encKeyFile)
-	roleID := cfg.GetString(vaultRoleIDFile)
-	secretID := cfg.GetString(vaultSecretIDFile)
+	roleID := vaultFlag.GetString("role-id-file")
+	secretID := vaultFlag.GetString("secret-id-file")
 
 	if keyFile != "" {
 		keyReader = &localKeyReader{
@@ -112,7 +115,7 @@ func newKeyReader(cfg *viper.Viper) (keyReader, error) {
 		keyReaders++
 	}
 	if roleID != "" || secretID != "" {
-		keyReader, err = newVaultKeyReader(cfg)
+		keyReader, err = newVaultKeyReader(vaultFlag)
 		if err != nil {
 			return nil, err
 		}

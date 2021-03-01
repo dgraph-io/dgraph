@@ -110,5 +110,6 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, rootUIDs []string)
 	}
 
 	// don't care for the response/errors, if any.
-	_, _ = schema.MakeHttpRequest(nil, http.MethodPost, x.Config.GraphqlLambdaUrl, nil, b)
+	_, _ = schema.MakeHttpRequest(nil, http.MethodPost, x.Config.GraphQL.GetString("lambda-url"),
+		nil, b)
 }

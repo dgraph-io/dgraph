@@ -43,7 +43,9 @@ import (
 	otrace "go.opencensus.io/trace"
 )
 
-var raftDefault = "idx=1; learner=false"
+const (
+	raftDefaults = "idx=1; learner=false;"
+)
 
 type node struct {
 	*conn.Node

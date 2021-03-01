@@ -216,14 +216,13 @@ config_compose() {
 
   ## configure if user specifies
   [[ $ACL_ENABLED == "true" ]] && \
-    echo "acl_secret_file = '/dgraph/acl/hmac_secret_file'" >> "$CFGPATH/config.toml"
+    echo "--acl \"secret-file=/dgraph/acl/hmac_secret_file;\"" >> "$CFGPATH/config.toml"
   [[ $TOKEN_ENABLED == "true" ]] && \
     echo "auth_token = '$(cat ./data/token/auth_token_file)'" >> "$CFGPATH/config.toml"
   [[ $ENC_ENABLED == "true" ]] && \
     echo "encryption_key_file = '/dgraph/enc/enc_key_file'" >> "$CFGPATH/config.toml"
   [[ $TLS_ENABLED == "true" ]] &&
     cat <<-TLS_CONFIG >> $CFGPATH/config.toml
-tls_dir = '/dgraph/tls'
 tls_client_auth = '$TLS_CLIENT_AUTH'
 TLS_CONFIG
 

@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
@@ -45,6 +43,7 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -528,35 +527,37 @@ func SinceMs(startTime time.Time) float64 {
 
 // RegisterExporters sets up the services to which metrics will be exported.
 func RegisterExporters(conf *viper.Viper, service string) {
-	if collector := conf.GetString("jaeger.collector"); len(collector) > 0 {
-		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default collectorEndpointURI := "http://localhost:14268"
-		je, err := jaeger.NewExporter(jaeger.Options{
-			Endpoint:    collector,
-			ServiceName: service,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
+		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault("")
+		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// Port details: https://www.jaegertracing.io/docs/getting-started/
+			// Default collectorEndpointURI := "http://localhost:14268"
+			je, err := jaeger.NewExporter(jaeger.Options{
+				Endpoint:    collector,
+				ServiceName: service,
+			})
+			if err != nil {
+				log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+			}
+			// And now finally register it as a Trace Exporter
+			trace.RegisterExporter(je)
 		}
-		// And now finally register it as a Trace Exporter
-		trace.RegisterExporter(je)
-	}
+		if collector := t.GetString("datadog"); len(collector) > 0 {
+			exporter, err := datadog.NewExporter(datadog.Options{
+				Service:   service,
+				TraceAddr: collector,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
 
-	if collector := conf.GetString("datadog.collector"); len(collector) > 0 {
-		exporter, err := datadog.NewExporter(datadog.Options{
-			Service:   service,
-			TraceAddr: collector,
-		})
-		if err != nil {
-			log.Fatal(err)
+			trace.RegisterExporter(exporter)
+
+			// For demoing purposes, always sample.
+			trace.ApplyConfig(trace.Config{
+				DefaultSampler: trace.AlwaysSample(),
+			})
 		}
-
-		trace.RegisterExporter(exporter)
-
-		// For demoing purposes, always sample.
-		trace.ApplyConfig(trace.Config{
-			DefaultSampler: trace.AlwaysSample(),
-		})
 	}
 
 	// Exclusively for stats, metrics, etc. Not for tracing.
