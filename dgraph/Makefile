@@ -49,6 +49,11 @@ lastCommitTime  = github.com/dgraph-io/dgraph/x.lastCommitTime
 
 BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}${MODIFIED}" -X ${gitBranch}=${BUILD_BRANCH}'
 
+
+ifneq ($(strip $(UNCOMPRESS_DWARF)),)
+	BUILD_FLAGS += -ldflags=-compressdwarf=false
+endif
+
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
 	BUILD_FLAGS += -tags '$(BUILD_TAGS)'
@@ -56,6 +61,7 @@ ifneq ($(strip $(BUILD_TAGS)),)
 		BUILD_VERSION := $(BUILD_VERSION)-oss
 	endif
 endif
+
 
 # Build with compiler optimizations disabled, which will help debugging with dlv.
 ifneq ($(strip $(BUILD_DEBUG)),)
@@ -75,6 +81,7 @@ JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jem
 all: $(BIN)
 
 $(BIN): clean jemalloc
+	@echo $(BUILD_FLAGS)
 	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
@@ -105,4 +112,3 @@ jemalloc:
 			sudo make install ; \
 		fi \
 	fi
-
