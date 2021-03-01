@@ -2791,13 +2791,14 @@ invalid_schemas:
 
   - name: "@lambdaOnMutate with bad arg values"
     input: |
-      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false") {
+      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false", badArg: true) {
         id: ID!
         name: String
       }
     errlist: [
       { "message": "Type TwitterUser; update argument in @lambdaOnMutate directive can only be true/false, found: `badValue`.", "locations": [{"line": 1, "column": 45}]},
-      { "message": "Type TwitterUser; delete argument in @lambdaOnMutate directive can only be true/false, found: `\"false\"`.", "locations": [{"line": 1, "column": 63}]}
+      { "message": "Type TwitterUser; delete argument in @lambdaOnMutate directive can only be true/false, found: `\"false\"`.", "locations": [{"line": 1, "column": 63}]},
+      { "message": "Type TwitterUser; @lambdaOnMutate directive doesn't support argument named: `badArg`.", "locations": [{"line": 1, "column": 80}]}
     ]
 
   - name: "@lambdaOnMutate isn't allowed on @remote types"

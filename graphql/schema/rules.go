@@ -1269,33 +1269,27 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 			typ.Name))
 	}
 
-	if addArg := dir.Arguments.ForName("add"); addArg != nil {
-		if addArg.Value.Kind != ast.BooleanValue {
+	for _, arg := range dir.Arguments {
+		switch arg.Name {
+		case "add":
+		case "update":
+		case "delete":
+			// do nothing
+		default:
 			errs = append(errs, gqlerror.ErrorPosf(
-				addArg.Position,
-				"Type %s; add argument in @lambdaOnMutate directive can only be "+
-					"true/false, found: `%s`.",
-				typ.Name, addArg.Value.String()))
+				arg.Position,
+				"Type %s; @lambdaOnMutate directive doesn't support argument named: `%s`.",
+				typ.Name, arg.Name))
+			continue // to next arg
 		}
-	}
 
-	if updateArg := dir.Arguments.ForName("update"); updateArg != nil {
-		if updateArg.Value.Kind != ast.BooleanValue {
+		// validate add/update/delete args
+		if arg.Value.Kind != ast.BooleanValue {
 			errs = append(errs, gqlerror.ErrorPosf(
-				updateArg.Position,
-				"Type %s; update argument in @lambdaOnMutate directive can only be "+
+				arg.Position,
+				"Type %s; %s argument in @lambdaOnMutate directive can only be "+
 					"true/false, found: `%s`.",
-				typ.Name, updateArg.Value.String()))
-		}
-	}
-
-	if deleteArg := dir.Arguments.ForName("delete"); deleteArg != nil {
-		if deleteArg.Value.Kind != ast.BooleanValue {
-			errs = append(errs, gqlerror.ErrorPosf(
-				deleteArg.Position,
-				"Type %s; delete argument in @lambdaOnMutate directive can only be "+
-					"true/false, found: `%s`.",
-				typ.Name, deleteArg.Value.String()))
+				typ.Name, arg.Name, arg.Value.String()))
 		}
 	}
 
