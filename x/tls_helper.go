@@ -75,7 +75,7 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls", TLSClientDefaults, z.NewSuperFlagHelp(TLSClientDefaults).
-		Head("TLS Client options (defaults shown):").
+		Head("TLS Client options").
 		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
 		Flag("server-name",
