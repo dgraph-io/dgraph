@@ -590,6 +590,7 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	apolloKeyDirective:      {ast.Object: true, ast.Interface: true},
 	apolloExtendsDirective:  {ast.Object: true, ast.Interface: true},
 	apolloExternalDirective: nil,
+	remoteResponseDirective: nil,
 	cascadeDirective:        nil,
 }
 
