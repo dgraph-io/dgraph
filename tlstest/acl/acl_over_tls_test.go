@@ -15,8 +15,8 @@ import (
 
 func TestLoginOverTLS(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s;",
+		// ca-cert
 		"../mtls_internal/tls/live/ca.crt",
 		// server-name
 		"alpha1"))

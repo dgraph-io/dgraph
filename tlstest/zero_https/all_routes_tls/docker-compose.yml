@@ -35,5 +35,5 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --logtostderr -v=2 --bindall
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key;"
 volumes: {}

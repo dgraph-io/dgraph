@@ -57,12 +57,12 @@ func TestBackupMinioE(t *testing.T) {
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; internal-port-enabled=%v;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
 		"../../../tlstest/mtls_internal/tls/live/ca.crt",
 		// server-name
 		"alpha1",
-		// internal-port-enabled
+		// internal-port
 		true))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
