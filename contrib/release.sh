@@ -46,7 +46,7 @@ Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
 fi
 
 
-if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
@@ -167,7 +167,7 @@ pushd $basedir
   git checkout "$commitish"
 popd
 
-if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
   # Clone ratel repo.
   pushd $basedir
     git clone https://github.com/dgraph-io/ratel.git
@@ -195,7 +195,7 @@ if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
     mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
   popd
 
-  if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+  if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
     pushd $basedir/ratel
       xgo -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
       mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
@@ -217,7 +217,7 @@ if [[ $DGRAPH_BUILD_MAC =~ 1|true ]]; then
     mv badger-darwin-10.9-amd64 $TMP/darwin/badger
   popd
 
-  if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+  if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
     pushd $basedir/ratel
       xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version" .
       mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
@@ -240,7 +240,7 @@ pushd $basedir/badger/badger
   mv badger-linux-amd64 $TMP/linux/badger
 popd
 
-if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
   pushd $basedir/ratel
     xgo -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
     strip -x ratel-linux-amd64
