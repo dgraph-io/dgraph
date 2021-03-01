@@ -62,7 +62,7 @@ var tc = []struct {
 	{
 		query: `{
 			coactors(func:allofterms(name@en, "Jane Campion")) @cascade {
-				JC_films as director.film {      # JC_films = all Jane Campion's films
+				JC_films as director.film {      # JC_films = all Jane Campion films
 					starting_movie: name@en
 					starring {
 						JC_actors as performance.actor {      # JC_actors = all actors in all JC films

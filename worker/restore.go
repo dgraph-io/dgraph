@@ -30,7 +30,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -201,7 +200,6 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
 					newKv := posting.MarshalPostingList(pl, nil)
-					codec.FreePack(pl.Pack)
 					newKv.Key = restoreKey
 					// Use the version of the KV before we marshalled the
 					// posting list. The MarshalPostingList function returns KV

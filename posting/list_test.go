@@ -29,6 +29,8 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/roaring/roaring64"
+	"github.com/gogo/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -469,10 +471,12 @@ func TestMillion(t *testing.T) {
 
 	t.Logf("Completed a million writes.\n")
 	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
+	bm, err := ol.Bitmap(opt)
 	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
+	require.Equal(t, uint64(commits), bm.GetCardinality())
+
+	uids := bm.ToArray()
+	for i, uid := range uids {
 		require.Equal(t, uint64(i+1)*2, uid)
 	}
 }
@@ -923,7 +927,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
 	defer setMaxListSize(maxListSize)
-	maxListSize = 10000
+	maxListSize = 1000
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -946,6 +950,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		commits++
 	}
+	t.Logf("Num splits: %d\n", len(ol.plist.Splits))
 	require.True(t, len(ol.plist.Splits) > 0)
 	verifySplits(t, ol.plist.Splits)
 
@@ -980,12 +985,9 @@ func TestDeleteStarMultiPartList(t *testing.T) {
 	require.NoError(t, err)
 
 	validateCount := func(expected int) {
-		count := 0
-		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
-			count++
-			return nil
-		})
-		require.Equal(t, expected, count)
+		bm, err := list.Bitmap(ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.Equal(t, uint64(expected), bm.GetCardinality())
 	}
 	validateCount(numEdges)
 
@@ -1030,8 +1032,11 @@ func TestMultiPartListBasic(t *testing.T) {
 	}
 }
 
+var maxReadTs = ListOptions{ReadTs: math.MaxUint64}
+
 // Checks if the binSplit works correctly.
 func TestBinSplit(t *testing.T) {
+
 	createList := func(t *testing.T, size int) *List {
 		// This is a package level constant, so reset it after use.
 		originalListSize := maxListSize
@@ -1051,9 +1056,13 @@ func TestBinSplit(t *testing.T) {
 			addMutationHelper(t, ol, edge, Set, &txn)
 			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		}
+		bm, err := ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		t.Logf("createList Bitmap: %d\n", bm.GetCardinality())
 
 		kvs, err := ol.Rollup(nil)
 		require.NoError(t, err)
+		t.Logf("Num KVs: %d\n", len(kvs))
 		for _, kv := range kvs {
 			require.Equal(t, uint64(size+1), kv.Version)
 		}
@@ -1062,41 +1071,81 @@ func TestBinSplit(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, len(ol.plist.Splits))
 		require.Equal(t, size, len(ol.plist.Postings))
+
+		bm, err = ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		t.Logf("createList Bitmap after store: %d\n", bm.GetCardinality())
 		return ol
 	}
-	verifyBinSplit := func(t *testing.T, ol *List, startUids []uint64, pls []*pb.PostingList) {
-		require.Equal(t, 2, len(startUids))
-		require.Equal(t, 2, len(pls))
-		uids := codec.Decode(ol.plist.Pack, 0)
-		lowUids := codec.Decode(pls[0].Pack, startUids[0])
-		highUids := codec.Decode(pls[1].Pack, startUids[1])
+	verifyBinSplit := func(t *testing.T, ol *List, ro *rollupOutput) {
+		require.Equal(t, 2, len(ro.parts))
+
+		var keys []uint64
+		for start := range ro.parts {
+			keys = append(keys, start)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i] < keys[j]
+		})
+
+		low := codec.FromBytes(ro.parts[keys[0]].Bitmap)
+		high := codec.FromBytes(ro.parts[keys[1]].Bitmap)
+
+		bm, err := ol.Bitmap(maxReadTs)
+		require.NoError(t, err)
+		expected := bm.ToArray()
+
 		// Check if no data is lost in splitting.
-		require.Equal(t, uids, append(lowUids, highUids...))
-		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+		t.Logf("expected: %d [%d -> %d] low: %d [%d -> %d] high: %d [%d -> %d]\n",
+			bm.GetCardinality(), bm.Minimum(), bm.Maximum(),
+			low.GetCardinality(), low.Minimum(), low.Maximum(),
+			high.GetCardinality(), high.Minimum(), high.Maximum())
+		require.Equal(t, uint64(0), roaring64.And(low, high).GetCardinality())
+		got := append(low.ToArray(), high.ToArray()...)
+		require.Equal(t, len(expected), len(got))
+		require.Equal(t, expected, got)
+		require.Equal(t, ol.plist.Postings,
+			append(ro.parts[keys[0]].Postings, ro.parts[keys[1]].Postings...))
+
 		// Check if the postings belong to the correct half.
-		midUid := pls[1].Pack.Blocks[0].GetBase()
-		require.Equal(t, startUids[1], midUid)
-		for _, p := range pls[0].Postings {
+		midUid := high.Minimum()
+		require.Equal(t, keys[1], midUid)
+		for _, p := range ro.parts[keys[0]].Postings {
 			require.Less(t, p.Uid, midUid)
 		}
-		for _, p := range pls[1].Postings {
+		for _, p := range ro.parts[keys[1]].Postings {
 			require.GreaterOrEqual(t, p.Uid, midUid)
 		}
 	}
 	size := int(1e5)
 	ol := createList(t, size)
-	postings := ol.plist.Postings
-	startUids, pls := binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+
+	postings := make([]*pb.Posting, len(ol.plist.Postings))
+	copy(postings, ol.plist.Postings)
+
+	getRO := func(pl *pb.PostingList) *rollupOutput {
+		out := &rollupOutput{
+			plist: &pb.PostingList{},
+			parts: make(map[uint64]*pb.PostingList),
+		}
+		out.plist.Splits = append(out.plist.Splits, uint64(1))
+		out.parts[1] = proto.Clone(pl).(*pb.PostingList)
+		return out
+	}
+	out := getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 
 	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
 	ol.plist.Postings = postings[:size/3]
-	startUids, pls = binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+	out = getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 
 	ol.plist.Postings = postings[:0]
-	startUids, pls = binSplit(1, ol.plist)
-	verifyBinSplit(t, ol, startUids, pls)
+	out = getRO(ol.plist)
+	require.NoError(t, out.split(1))
+	verifyBinSplit(t, ol, out)
 }
 
 // Verify that iteration works with an afterUid value greater than zero.
@@ -1104,13 +1153,13 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
 
-	var visitedUids []uint64
-	ol.Iterate(uint64(size+1), 50000, func(p *pb.Posting) error {
-		visitedUids = append(visitedUids, p.Uid)
-		return nil
+	bm, err := ol.Bitmap(ListOptions{
+		ReadTs:   uint64(size + 1),
+		AfterUid: 50000,
 	})
-	require.Equal(t, 50000, len(visitedUids))
-	for i, uid := range visitedUids {
+	require.NoError(t, err)
+	require.Equal(t, uint64(50000), bm.GetCardinality())
+	for i, uid := range bm.ToArray() {
 		require.Equal(t, uint64(50000+i+1), uid)
 	}
 }
