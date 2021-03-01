@@ -430,7 +430,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// once committed, send async updates to configured webhooks, if any.
 	if mutation.HasLambdaOnMutate() {
 		rootUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
-		go sendWebhookEvent(ctx, mutation, rootUIDs)
+		go sendWebhookEvent(ctx, mutation, mutResp.Txn.CommitTs, rootUIDs)
 	}
 
 	// For delete mutation, we would have already populated qryResp if query field was requested.
