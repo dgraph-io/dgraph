@@ -80,7 +80,7 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, rootUIDs []string)
 		AccessJWT:  accessJWT,
 		AuthHeader: authHeader,
 		Event: eventPayload{
-			Typename:  m.GetObjectName(),
+			Typename:  m.MutatedType().Name(),
 			Operation: m.MutationType(),
 		},
 	}
