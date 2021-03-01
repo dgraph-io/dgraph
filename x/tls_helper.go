@@ -122,16 +122,16 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
 	}
-	if tlsFlag.GetString("node-cert") == "" || tlsFlag.GetString("node-key") == "" {
+	if tlsFlag.GetString("server-cert") == "" || tlsFlag.GetString("server-key") == "" {
 		return nil, errors.Errorf(`Inter-node TLS is enabled but server node certs are not provided. ` +
-			`Please provide --tls "node-cert=...; node-key=...;"`)
+			`Please provide --tls "server-cert=...; server-key=...;"`)
 	}
 	conf := TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
 	conf.RootCACert = tlsFlag.GetString("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("node-cert")
-	conf.Key = tlsFlag.GetString("node-key")
+	conf.Cert = tlsFlag.GetString("server-cert")
+	conf.Key = tlsFlag.GetString("server-key")
 	conf.ClientAuth = "REQUIREANDVERIFY"
 	return GenerateServerTLSConfig(&conf)
 }
@@ -140,15 +140,15 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 func LoadServerTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSServerDefaults)
 
-	if tlsFlag.GetString("node-cert") == "" && tlsFlag.GetString("node-key") == "" {
+	if tlsFlag.GetString("server-cert") == "" && tlsFlag.GetString("server-key") == "" {
 		return nil, nil
 	}
 
 	conf := TLSHelperConfig{}
 	conf.RootCACert = tlsFlag.GetString("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("node-cert")
-	conf.Key = tlsFlag.GetString("node-key")
+	conf.Cert = tlsFlag.GetString("server-cert")
+	conf.Key = tlsFlag.GetString("server-key")
 	conf.ClientAuth = tlsFlag.GetString("client-auth-type")
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
 	return GenerateServerTLSConfig(&conf)
