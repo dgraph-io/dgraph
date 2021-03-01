@@ -187,7 +187,8 @@ type metaInfo struct {
 	// allowedCorsOrigins stores allowed CORS origins extracted from # Dgraph.Allow-Origin.
 	// They are returned to the client as part of Access-Control-Allow-Origin.
 	allowedCorsOrigins map[string]bool
-	// authMeta stores the authorization meta info extracted from # Dgraph.Authorization
+	// authMeta stores the authorization meta info extracted from `# Dgraph.Authorization` if any,
+	// otherwise it is nil.
 	authMeta *authorization.AuthMeta
 }
 

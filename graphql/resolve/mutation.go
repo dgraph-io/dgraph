@@ -112,6 +112,11 @@ type MutationRewriter interface {
 		m schema.Mutation,
 		assigned map[string]string,
 		result map[string]interface{}) ([]*gql.GraphQuery, error)
+	// MutatedRootUIDs returns a list of Root UIDs that were mutated as part of the mutation.
+	MutatedRootUIDs(
+		mutation schema.Mutation,
+		assigned map[string]string,
+		result map[string]interface{}) []string
 }
 
 // A DgraphExecutor can execute a query/mutation and returns the request response and any errors.
@@ -422,10 +427,10 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	commit = true
 
-	// once committed, send updates to configured webhooks, if any.
+	// once committed, send async updates to configured webhooks, if any.
 	if mutation.HasLambdaOnMutate() {
-		// TODO: complete this
-		go func() {}()
+		rootUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
+		go sendWebhookEvent(ctx, mutation, rootUIDs)
 	}
 
 	// For delete mutation, we would have already populated qryResp if query field was requested.

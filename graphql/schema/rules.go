@@ -39,7 +39,8 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
+		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation,
+		apolloExtendsValidation, lambdaOnMutateValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective, fieldDirectiveCheck)
 
@@ -1244,6 +1245,21 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
 	return errs
+}
+
+func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dir := typ.Directives.ForName(lambdaOnMutateDirective)
+	if dir == nil {
+		return nil
+	}
+
+	// lambda url must be specified during alpha startup
+	if x.Config.GraphqlLambdaUrl == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
+			"Type %s: has the @lambdaOnMutate directive, but the "+
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name)}
+	}
+	return nil
 }
 
 func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List {

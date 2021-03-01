@@ -249,12 +249,12 @@ func (xidMetadata *xidMetadata) isDuplicateXid(atTopLevel bool, xidVar string,
 // simply ignored.
 // If it is found out that the Person with id 0x123 does not exist, the corresponding
 // mutation will fail.
-func (mrw *AddRewriter) RewriteQueries(
+func (arw *AddRewriter) RewriteQueries(
 	ctx context.Context,
 	m schema.Mutation) ([]*gql.GraphQuery, error) {
 
-	mrw.VarGen = NewVariableGenerator()
-	mrw.XidMetadata = NewXidMetadata()
+	arw.VarGen = NewVariableGenerator()
+	arw.XidMetadata = NewXidMetadata()
 
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
@@ -264,7 +264,7 @@ func (mrw *AddRewriter) RewriteQueries(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		queries, errs := existenceQueries(ctx, mutatedType, nil, mrw.VarGen, obj, mrw.XidMetadata)
+		queries, errs := existenceQueries(ctx, mutatedType, nil, arw.VarGen, obj, arw.XidMetadata)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -394,7 +394,7 @@ func (urw *UpdateRewriter) RewriteQueries(
 //   } ],
 //   "Author.friends":[ {"uid":"0x123"} ],
 // }
-func (mrw *AddRewriter) Rewrite(
+func (arw *AddRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation,
 	idExistence map[string]string) ([]*UpsertMutation, error) {
@@ -403,8 +403,8 @@ func (mrw *AddRewriter) Rewrite(
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
-	varGen := mrw.VarGen
-	xidMetadata := mrw.XidMetadata
+	varGen := arw.VarGen
+	xidMetadata := arw.XidMetadata
 	// ret stores a slice of Upsert Mutations. These are used in executing upsert queries in graphql/resolve/mutation.go
 	var ret []*UpsertMutation
 	// fragments stores a slice of mutationFragments. This is used in constructing mutationsAll which is returned back to the caller
@@ -472,7 +472,7 @@ func (mrw *AddRewriter) Rewrite(
 		}
 		if fragment != nil {
 			fragments = append(fragments, fragment)
-			mrw.frags = append(mrw.frags, []*mutationFragment{fragment})
+			arw.frags = append(arw.frags, []*mutationFragment{fragment})
 		}
 	}
 
@@ -696,7 +696,7 @@ func (urw *UpdateRewriter) Rewrite(
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
-func (mrw *AddRewriter) FromMutationResult(
+func (arw *AddRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
@@ -704,50 +704,14 @@ func (mrw *AddRewriter) FromMutationResult(
 
 	var errs error
 
-	// This stores a list of added or updated uids.
-	uids := make([]uint64, 0)
-
-	// Add any newly added uids.
-	for _, frag := range mrw.frags {
+	for _, frag := range arw.frags {
 		err := checkResult(frag, result)
 		errs = schema.AppendGQLErrs(errs, err)
-		if err != nil {
-			continue
-		}
-
-		node := strings.TrimPrefix(frag[0].
-			fragment.(map[string]interface{})["uid"].(string), "_:")
-		val, ok := assigned[node]
-		if !ok {
-			continue
-		}
-		uid, err := strconv.ParseUint(val, 0, 64)
-		if err != nil {
-			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-				"received %s as an assigned uid from Dgraph,"+
-					" but couldn't parse it as uint64",
-				assigned[node]))
-		}
-
-		uids = append(uids, uid)
 	}
 
-	// Extract and add any updated uids. This is done for upsert With Add Mutation.
-	// In this case, it may happen that no new node is created, but there may still
-	// be some updated nodes. We get these nodes over here and add to uid list.
-	mutated := extractMutated(result, mutation.Name())
-	if len(mutated) > 0 {
-		// This is the case of a conditional upsert where we should get uids from mutated.
-		for _, id := range mutated {
-			uid, err := strconv.ParseUint(id, 0, 64)
-			if err != nil {
-				return nil, schema.GQLWrapf(err,
-					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-						"uint64", id)
-			}
-			uids = append(uids, uid)
-		}
-	}
+	// Find any newly added/updated rootUIDs.
+	uids, err := convertIDsWithErr(arw.MutatedRootUIDs(mutation, assigned, result))
+	errs = schema.AppendGQLErrs(errs, err)
 
 	// Find out if its an upsert with Add mutation.
 	upsert := false
@@ -795,20 +759,9 @@ func (urw *UpdateRewriter) FromMutationResult(
 		return nil, err
 	}
 
-	mutated := extractMutated(result, mutation.Name())
-
-	var uids []uint64
-	if len(mutated) > 0 {
-		// This is the case of a conditional upsert where we should get uids from mutated.
-		for _, id := range mutated {
-			uid, err := strconv.ParseUint(id, 0, 64)
-			if err != nil {
-				return nil, schema.GQLWrapf(err,
-					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-						"uint64", id)
-			}
-			uids = append(uids, uid)
-		}
+	uids, err := convertIDsWithErr(urw.MutatedRootUIDs(mutation, assigned, result))
+	if err != nil {
+		return nil, err
 	}
 
 	customClaims, err := mutation.GetAuthMeta().ExtractCustomClaims(ctx)
@@ -824,6 +777,58 @@ func (urw *UpdateRewriter) FromMutationResult(
 	}
 	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
+}
+
+func (arw *AddRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+
+	var rootUIDs []string // This stores a list of added or updated rootUIDs.
+
+	// Add any newly added rootUIDs.
+	for _, frag := range arw.frags {
+		blankNodeName := strings.TrimPrefix(frag[0].
+			fragment.(map[string]interface{})["uid"].(string), "_:")
+		uid, ok := assigned[blankNodeName]
+		if ok {
+			rootUIDs = append(rootUIDs, uid)
+		}
+	}
+
+	// Extract and add any updated rootUIDs. This is done for upsert With Add Mutation.
+	// In this case, it may happen that no new node is created, but there may still
+	// be some updated nodes. We get these nodes over here and add to uid list.
+	rootUIDs = append(rootUIDs, extractMutated(result, mutation.Name())...)
+
+	return rootUIDs
+}
+
+func (urw *UpdateRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+
+	return extractMutated(result, mutation.Name())
+}
+
+func convertIDsWithErr(uidSlice []string) ([]uint64, error) {
+	var errs error
+	uids := make([]uint64, 0, len(uidSlice))
+
+	if len(uidSlice) > 0 {
+		for _, id := range uidSlice {
+			uid, err := strconv.ParseUint(id, 0, 64)
+			if err != nil {
+				errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+					"received %s as a uid from Dgraph, but couldn't parse it as uint64", id))
+				continue
+			}
+			uids = append(uids, uid)
+		}
+	}
+
+	return uids, errs
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {
@@ -1095,6 +1100,14 @@ func (drw *deleteRewriter) FromMutationResult(
 
 	// There's no query that follows a delete
 	return nil, nil
+}
+
+func (drw *deleteRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+
+	return extractMutated(result, mutation.Name())
 }
 
 // RewriteQueries on deleteRewriter does not return any queries. queries to check
