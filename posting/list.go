@@ -295,7 +295,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 				newPlist.Postings = append(newPlist.Postings, post)
 			}
 		}
-
 		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
@@ -625,18 +624,26 @@ func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 	advance()
 
 	var maxUid uint64
+	fn := func(obj *pb.Posting) error {
+		maxUid = x.Max(maxUid, obj.Uid)
+		return f(obj)
+	}
+
 	fi := func(obj *pb.Posting) error {
-		if obj.Uid <= next {
-			maxUid = x.Max(maxUid, obj.Uid)
-			if obj.Uid == next {
-				advance()
+		for next < obj.Uid {
+			p.Uid = next
+			if err := fn(p); err != nil {
+				return err
 			}
-			return f(obj)
+			advance()
 		}
-		p.Uid = next
-		advance()
-		maxUid = x.Max(maxUid, p.Uid)
-		return f(p)
+		if err := fn(obj); err != nil {
+			return err
+		}
+		if obj.Uid == next {
+			advance()
+		}
+		return nil
 	}
 	if err := l.iterate(readTs, afterUid, fi); err != nil {
 		return err
@@ -1578,7 +1585,6 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 		}
 		return fcs, nil
 	}
-
 	p, err := l.postingFor(readTs, langs)
 	switch {
 	case err == ErrNoValue:
