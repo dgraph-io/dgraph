@@ -115,7 +115,7 @@ jemallocXgoFlags=
 
 # Get xgo and docker image
 if [[ $GOVERSION =~ ^1\.16.* ]]; then
-  docker build -f release_scripts/xgo.Dockerfile -t dgraph/xgo:go-1.16.0 .
+  docker build -f release/xgo.Dockerfile -t dgraph/xgo:go-1.16.0 .
   export DGRAPH_BUILD_XGO_IMAGE="-image dgraph/xgo:go-1.16.0"
 fi
 go install src.techknowlogick.com/xgo
