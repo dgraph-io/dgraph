@@ -129,6 +129,9 @@ func Merge(matrix []*pb.List) *roaring64.Bitmap {
 }
 
 func ToBytes(bm *roaring64.Bitmap) []byte {
+	if bm.IsEmpty() {
+		return nil
+	}
 	b, err := bm.ToBytes()
 	x.Check(err)
 	return b
