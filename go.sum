@@ -131,10 +131,8 @@ github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b/go.
 github.com/dgraph-io/ristretto v0.0.4-0.20201224172411-e860a6c48e8a/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2 h1:Ii2KMtC40rP1jJB08GVFfQh/NEca2LBjKokO45N7xes=
 github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
-github.com/dgraph-io/roaring v0.5.6-0.20210227160332-37efc32a1781 h1:RLRkSRe8eAfzfLXM+DnbWxthcTC3hDI9QbZpb21f75M=
-github.com/dgraph-io/roaring v0.5.6-0.20210227160332-37efc32a1781/go.mod h1:eseRnRo7cBvdHDYeOJ/9k8Cj8c/isaECGzMwl2GgOPk=
-github.com/dgraph-io/roaring v0.5.6-0.20210227161040-e39fa18ac652 h1:gOp6hUkSYwAHqhnYYas8Nk/d3thAjomD1iXI4Jcb/b8=
-github.com/dgraph-io/roaring v0.5.6-0.20210227161040-e39fa18ac652/go.mod h1:I8kxPBtSQW3OdQFWonumQdCx2DTmq2WjdnTjGXz3uTM=
+github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5 h1:9t3OKcvsQlxU9Cu0U55tgvNtaRYVGDr6rUb95P8cSbg=
+github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5/go.mod h1:I8kxPBtSQW3OdQFWonumQdCx2DTmq2WjdnTjGXz3uTM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/zOnF8VvUfEbhRatPcwKVWamvbYd8tQGRWacE9kU=

@@ -298,12 +298,13 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 			}
 		}
 
-		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
+		err := l.iterateAll(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
 			if obj.Uid == mpost.Uid {
 				return nil
 			}
+			glog.Info("=============Deleting: ", obj.Uid)
 
 			// Mark all other values as deleted. By the end of the iteration, the
 			// list of postings will contain deleted operations and only one set
@@ -596,6 +597,73 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
+}
+
+// IterateAll iterates over all the UIDs and Postings.
+// TODO: We should remove this function after merging roaring bitmaps and fixing up how we map
+// facetsMatrix to uidMatrix.
+func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+
+	bm, err := l.bitmap(ListOptions{
+		ReadTs:   readTs,
+		AfterUid: afterUid,
+	})
+	if err != nil {
+		return err
+	}
+
+	p := &pb.Posting{}
+
+	uitr := bm.Iterator()
+	var next uint64
+
+	advance := func() {
+		next = math.MaxUint64
+		if uitr.HasNext() {
+			next = uitr.Next()
+		}
+	}
+	advance()
+
+	var maxUid uint64
+	fn := func(obj *pb.Posting) error {
+		maxUid = x.Max(maxUid, obj.Uid)
+		return f(obj)
+	}
+
+	fi := func(obj *pb.Posting) error {
+		for next < obj.Uid {
+			p.Uid = next
+			if err := fn(p); err != nil {
+				return err
+			}
+			advance()
+		}
+		if err := fn(obj); err != nil {
+			return err
+		}
+		if obj.Uid == next {
+			advance()
+		}
+		return nil
+	}
+	if err := l.iterate(readTs, afterUid, fi); err != nil {
+		return err
+	}
+
+	codec.RemoveRange(bm, 0, maxUid)
+	uitr = bm.Iterator()
+	for uitr.HasNext() {
+		p.Uid = uitr.Next()
+		f(p)
+	}
+	return nil
+}
+
+func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	l.RLock()
+	defer l.RUnlock()
+	return l.iterateAll(readTs, afterUid, f)
 }
 
 // pickPostings goes through the mutable layer and returns the appropriate postings,
@@ -1525,7 +1593,6 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 		}
 		return fcs, nil
 	}
-
 	p, err := l.postingFor(readTs, langs)
 	switch {
 	case err == ErrNoValue:

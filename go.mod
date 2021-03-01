@@ -4,6 +4,7 @@ go 1.12
 
 // replace github.com/dgraph-io/badger/v2 => /home/mrjn/go/src/github.com/dgraph-io/badger
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
+// replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
@@ -16,13 +17,13 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210113052537-b69163b5c21b
-	github.com/dgraph-io/dgo/v200 v200.0.0-20200805103119-a3544c464dd6
+	github.com/dgraph-io/badger/v3 v3.0.0-20210209201111-6c35ad6c28e0
+	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.4
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20200916064635-48589439591b
 	github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2
-	github.com/dgraph-io/roaring v0.5.6-0.20210227161040-e39fa18ac652
+	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
