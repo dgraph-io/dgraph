@@ -164,6 +164,9 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 
 func FromBytes(buf []byte) *roaring64.Bitmap {
 	r := roaring64.New()
+	if buf == nil || len(buf) == 0 {
+		return r
+	}
 	x.Check(r.UnmarshalBinary(buf))
 	return r
 }
