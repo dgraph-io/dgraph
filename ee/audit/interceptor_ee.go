@@ -17,10 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/dgraph-io/gqlparser/v2/parser"
-	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +25,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc/codes"
@@ -186,7 +187,7 @@ func maskPasswordFieldsInGQL(req string) string {
 	var gqlReq schema.Request
 	err := json.Unmarshal([]byte(req), &gqlReq)
 	if err != nil {
-		glog.Errorf("unable to marshal gql request %v", err)
+		glog.Errorf("unable to unmarshal gql request %v", err)
 		return req
 	}
 	query, gErr := parser.ParseQuery(&ast.Source{
@@ -206,35 +207,13 @@ func maskPasswordFieldsInGQL(req string) string {
 		}
 
 		for _, ss := range op.SelectionSet {
-			if f, ok := ss.(*ast.Field); ok {
-				if len(f.Arguments) == 0 {
-					continue
-				}
-				if f.Name == "resetPassword" {
-					for _, a := range f.Arguments {
-						if a.Name == "input" && a.Value != nil && a.Value.Children != nil {
-							for _, c := range a.Value.Children {
-								if c.Name == "password" {
-									if c.Value.Kind == ast.Variable {
-										variableName = c.Value.String()
-									}
-								}
-							}
-						}
-					}
-				} else if f.Name == "login" {
-					for _, a := range f.Arguments {
-						if a.Name == "password" {
-							if a.Value.Kind == ast.Variable {
-								variableName = a.Value.String()
-							}
-						}
-					}
-				}
+			if f, ok := ss.(*ast.Field); ok && len(f.Arguments) > 0 {
+				variableName = getMaskedFieldVarName(f)
 			}
 		}
 	}
 
+	// no variable present
 	if variableName == "" {
 		regex, err := regexp.Compile(
 			`password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
@@ -250,6 +229,32 @@ func maskPasswordFieldsInGQL(req string) string {
 		return req
 	}
 	return regex.ReplaceAllString(req, "*******")
+}
+
+func getMaskedFieldVarName(f *ast.Field) string {
+	switch f.Name {
+	case "resetPassword":
+		for _, a := range f.Arguments {
+			if a.Name == "input" && a.Value != nil && a.Value.Children != nil {
+				for _, c := range a.Value.Children {
+					if c.Name == "password" {
+						if c.Value.Kind == ast.Variable {
+							return c.Value.String()
+						}
+					}
+				}
+			}
+		}
+	case "login":
+		for _, a := range f.Arguments {
+			if a.Name == "password" {
+				if a.Value.Kind == ast.Variable {
+					return a.Value.String()
+				}
+			}
+		}
+	}
+	return ""
 }
 
 var skipReqBodyGrpc = map[string]bool{
