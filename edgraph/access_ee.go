@@ -453,6 +453,9 @@ func upsertGuardian(ctx context.Context) error {
 	}
 
 	resp, err := (&Server{}).doQuery(ctx, req)
+	if err != nil {
+		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+	}
 
 	// Structs to parse guardians group uid from query response
 	type groupNode struct {
@@ -463,9 +466,6 @@ func upsertGuardian(ctx context.Context) error {
 		GuardiansGroup []groupNode `json:"guardians"`
 	}
 
-	if err != nil {
-		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
-	}
 	var groupResp groupQryResp
 	var guardiansUidStr string
 	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
