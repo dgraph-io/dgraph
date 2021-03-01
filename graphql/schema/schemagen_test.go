@@ -159,7 +159,10 @@ func TestSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input, false)
+				schHandler, errlist := NewHandler(sch.Input, false)
+				if errlist == nil {
+					_, errlist = FromString(schHandler.GQLSchema())
+				}
 				if diff := cmp.Diff(sch.Errlist, errlist, cmpopts.IgnoreUnexported(gqlerror.Error{})); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}

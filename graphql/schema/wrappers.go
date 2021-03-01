@@ -908,7 +908,7 @@ func lambdaOnMutateMappings(s *ast.Schema) map[string]bool {
 
 		for _, arg := range dir.Arguments {
 			value, _ := arg.Value.Value(nil)
-			if value != nil && value.(bool) == true {
+			if val, ok := value.(bool); ok && val {
 				result[arg.Name+typ.Name] = true
 			}
 		}

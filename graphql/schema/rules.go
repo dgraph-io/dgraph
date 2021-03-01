@@ -1253,13 +1253,53 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 		return nil
 	}
 
+	var errs []*gqlerror.Error
+
 	// lambda url must be specified during alpha startup
 	if x.Config.GraphQL.GetString("lambda-url") == "" {
-		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
 			"Type %s: has the @lambdaOnMutate directive, but the "+
-				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name)}
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name))
 	}
-	return nil
+
+	if typ.Directives.ForName(remoteDirective) != nil {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; @lambdaOnMutate directive not allowed along with @remote directive.",
+			typ.Name))
+	}
+
+	if addArg := dir.Arguments.ForName("add"); addArg != nil {
+		if addArg.Value.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				addArg.Position,
+				"Type %s; add argument in @lambdaOnMutate directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, addArg.Value.String()))
+		}
+	}
+
+	if updateArg := dir.Arguments.ForName("update"); updateArg != nil {
+		if updateArg.Value.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				updateArg.Position,
+				"Type %s; update argument in @lambdaOnMutate directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, updateArg.Value.String()))
+		}
+	}
+
+	if deleteArg := dir.Arguments.ForName("delete"); deleteArg != nil {
+		if deleteArg.Value.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				deleteArg.Position,
+				"Type %s; delete argument in @lambdaOnMutate directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, deleteArg.Value.String()))
+		}
+	}
+
+	return errs
 }
 
 func generateDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List {

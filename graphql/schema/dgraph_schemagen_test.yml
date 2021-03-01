@@ -754,6 +754,7 @@ schemas:
       }
       T.id: float @index(float) @upsert .
       T.value: string .
+
   - name: "type extension having @external field of ID type which is @key"
     input: |
       extend type Product @key(fields: "id") {
@@ -771,6 +772,7 @@ schemas:
       Product.id: string @index(hash) @upsert .
       Product.name: string .
       Product.reviews: [string] .
+
   - name: "type extension having @external field of non ID type which is @key"
     input: |
       extend type Product @key(fields: "name") {
@@ -785,4 +787,16 @@ schemas:
       }
       Product.name: string @index(hash) @upsert .
       Product.reviews: [string] .
+
+  - name: "nothing is added in dgraph schema with lambdaOnMutate"
+    input: |
+      type T @lambdaOnMutate(add: true, update: true, delete: true) {
+        id : ID!
+        value: String
+      }
+    output: |
+      type T {
+        T.value
+      }
+      T.value: string .
 
