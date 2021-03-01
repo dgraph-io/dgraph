@@ -109,7 +109,9 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, rootUIDs []string)
 		return
 	}
 
+	headers := http.Header{}
+	headers.Set("Content-Type", "application/json")
 	// don't care for the response/errors, if any.
 	_, _ = schema.MakeHttpRequest(nil, http.MethodPost, x.Config.GraphQL.GetString("lambda-url"),
-		nil, b)
+		headers, b)
 }
