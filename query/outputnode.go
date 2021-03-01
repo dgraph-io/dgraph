@@ -1011,7 +1011,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return nil
 	}
 
-	hasChild, err := sg.handleCountUIDNodes(enc, fj, len(sg.DestUIDs.Uids))
+	hasChild, err := sg.handleCountUIDNodes(enc, fj, int(sg.DestMap.GetCardinality()))
 	if err != nil {
 		return err
 	}
@@ -1025,7 +1025,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+		if !sg.DestMap.Contains(uid) {
 			// This UID was filtered. So Ignore it.
 			continue
 		}
@@ -1286,6 +1286,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
+		// TODO: If we move GroupbyRes to a map, then this won't be needed.
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
