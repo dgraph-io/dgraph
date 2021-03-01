@@ -50,11 +50,11 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 		Head("TLS Server options").
 		Flag("internal-port",
 			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		// node
-		Flag("node-cert",
-			"The node Cert file which is needed to initiate the server in the cluster.").
-		Flag("node-key",
-			"The node Key file which is needed to initiate the server in the cluster.").
+		// server
+		Flag("server-cert",
+			"The server Cert file which is needed to initiate the server in the cluster.").
+		Flag("server-key",
+			"The server Key file which is needed to initiate the server in the cluster.").
 		// ca
 		Flag("ca-cert",
 			"The CA cert file used to verify server certificates. Required for enabling TLS.").
