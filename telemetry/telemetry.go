@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -32,19 +33,20 @@ import (
 
 // Telemetry holds information about the state of the zero and alpha server.
 type Telemetry struct {
-	Arch         string `json:",omitempty"`
-	Cid          string `json:",omitempty"`
-	ClusterSize  int    `json:",omitempty"`
-	DiskUsageMB  int64  `json:",omitempty"`
-	NumAlphas    int    `json:",omitempty"`
-	NumGroups    int    `json:",omitempty"`
-	NumTablets   int    `json:",omitempty"`
-	NumZeros     int    `json:",omitempty"`
-	OS           string `json:",omitempty"`
-	SinceHours   int    `json:",omitempty"`
-	Version      string `json:",omitempty"`
-	NumGraphQLPM uint64 `json:",omitempty"`
-	NumGraphQL   uint64 `json:",omitempty"`
+	Arch           string   `json:",omitempty"`
+	Cid            string   `json:",omitempty"`
+	ClusterSize    int      `json:",omitempty"`
+	DiskUsageMB    int64    `json:",omitempty"`
+	NumAlphas      int      `json:",omitempty"`
+	NumGroups      int      `json:",omitempty"`
+	NumTablets     int      `json:",omitempty"`
+	NumZeros       int      `json:",omitempty"`
+	OS             string   `json:",omitempty"`
+	SinceHours     int      `json:",omitempty"`
+	Version        string   `json:",omitempty"`
+	NumGraphQLPM   uint64   `json:",omitempty"`
+	NumGraphQL     uint64   `json:",omitempty"`
+	EEFeaturesList []string `json:",omitempty"`
 }
 
 const url = "https://ping.dgraph.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
@@ -87,6 +89,7 @@ func NewAlpha(ms *pb.MembershipState) *Telemetry {
 
 // Post reports the Telemetry to the stats server.
 func (t *Telemetry) Post() error {
+	t.EEFeaturesList = ee.GetEEFeaturesList()
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
