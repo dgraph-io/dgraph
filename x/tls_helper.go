@@ -40,8 +40,8 @@ type TLSHelperConfig struct {
 }
 
 const (
-	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false;`
-	TLSClientDefaults = `use-system-ca=true; internal-port=false;`
+	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN;`
+	TLSClientDefaults = `use-system-ca=true;`
 )
 
 // RegisterServerTLSFlags registers the required flags to set up a TLS server.
