@@ -18,8 +18,11 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
+	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
@@ -225,4 +228,67 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 
 	return cmd
 
+}
+
+func convertYAML(old string) io.Reader {
+	isFlat := func(l string) bool {
+		if len(l) < 1 {
+			return false
+		}
+		if unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isOption := func(l string) bool {
+		if len(l) < 3 {
+			return false
+		}
+		if !strings.Contains(l, ":") {
+			return false
+		}
+		if !unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isSuper := func(l string) bool {
+		s := strings.TrimSpace(l)
+		if len(s) < 1 {
+			return false
+		}
+		if s[len(s)-1] != ':' {
+			return false
+		}
+		return true
+	}
+	getName := func(l string) string {
+		s := strings.TrimSpace(l)
+		return s[:strings.IndexRune(s, rune(':'))]
+	}
+	getValue := func(l string) string {
+		s := strings.TrimSpace(l)
+		v := s[strings.IndexRune(s, rune(':'))+2:]
+		return strings.ReplaceAll(v, `"`, ``)
+	}
+	super, good, last := make(map[string]string), make([]string, 0), ""
+	for _, line := range strings.Split(old, "\n") {
+		if isSuper(line) {
+			last = getName(line)
+			continue
+		}
+		if isOption(line) {
+			name, value := getName(line), getValue(line)
+			super[last] += name + "=" + value + "; "
+			continue
+		}
+		if isFlat(line) {
+			good = append(good, strings.TrimSpace(line))
+		}
+	}
+	for k, v := range super {
+		super[k] = `"` + strings.TrimSpace(v) + `"`
+		good = append(good, fmt.Sprintf("%s: %s", k, super[k]))
+	}
+	return strings.NewReader(strings.Join(good, "\n"))
 }
