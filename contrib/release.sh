@@ -15,6 +15,12 @@ repodir="$(cd "$scriptdir/..">/dev/null; pwd)"
 RED='\033[91;1m'
 RESET='\033[0m'
 
+## Toggle Builds
+## TODO: update to use command line flags
+DGRAPH_BUILD_WINDOWS=${DGRAPH_BUILD_WINDOWS:-0}
+DGRAPH_BUILD_MAC=${DGRAPH_BUILD_MAC:-0}
+DGRAPH_BUILD_RATEL=${DGRAPH_BUILD_RATEL:-1}
+
 print_error() {
     printf "$RED$1$RESET\n"
 }
@@ -39,9 +45,15 @@ Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
   $0 dev/feature-branch dev-abc123"
 fi
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then 
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+  check_command_exists nvm
+  check_command_exists npm
+fi
 
 # TODO Check if ports 8000, 9080, or 6080 are bound already and error out early.
 
@@ -104,7 +116,7 @@ commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 jemallocXgoFlags=
 
 go install src.techknowlogick.com/xgo
-mkdir ~/.xgo-cache || echo "Continuing"
+mkdir -p ~/.xgo-cache
 
 basedir=$GOPATH/src/github.com/dgraph-io
 mkdir -p "$basedir"
@@ -151,52 +163,63 @@ pushd $basedir
   git checkout "$commitish"
 popd
 
-# Clone ratel repo.
-pushd $basedir
-  git clone https://github.com/dgraph-io/ratel.git
-popd
+if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+  # Clone ratel repo.
+  pushd $basedir
+    git clone https://github.com/dgraph-io/ratel.git
+  popd
 
-pushd $basedir/ratel
-  nvm install --lts
-  (export GO111MODULE=off; ./scripts/build.prod.sh)
-  ./scripts/test.sh
-popd
+  # build ratel client
+  pushd $basedir/ratel
+    nvm install --lts
+    (export GO111MODULE=off; ./scripts/build.prod.sh)
+    ./scripts/test.sh
+  popd
+fi
 
 # Build Windows.
-pushd $basedir/dgraph/dgraph
-  xgo -go="go-$GOVERSION" --targets=windows/amd64 -buildmode=exe -ldflags \
-      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-  mkdir $TMP/windows
-  mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
-popd
+if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
+  pushd $basedir/dgraph/dgraph
+    xgo -go="go-$GOVERSION" --targets=windows/amd64 -buildmode=exe -ldflags \
+        "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+    mkdir $TMP/windows
+    mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
+  popd
 
-pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=windows/amd64  -buildmode=exe .
-  mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
-popd
+  pushd $basedir/badger/badger
+    xgo -go="go-$GOVERSION" --targets=windows/amd64  -buildmode=exe .
+    mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
+  popd
 
-pushd $basedir/ratel
-  xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
-  mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
-popd
+  if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+    pushd $basedir/ratel
+      xgo -go="go-$GOVERSION" --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
+      mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
+    popd
+  fi
+fi
 
 # Build Darwin.
-pushd $basedir/dgraph/dgraph
-  xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags \
-  "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-  mkdir $TMP/darwin
-  mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
-popd
+if [[ $DGRAPH_BUILD_MAC =~ 1|true ]]; then
+  pushd $basedir/dgraph/dgraph
+    xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags \
+    "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+    mkdir $TMP/darwin
+    mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
+  popd
 
-pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 .
-  mv badger-darwin-10.9-amd64 $TMP/darwin/badger
-popd
+  pushd $basedir/badger/badger
+    xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 .
+    mv badger-darwin-10.9-amd64 $TMP/darwin/badger
+  popd
 
-pushd $basedir/ratel
-  xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
-  mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
-popd
+  if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+    pushd $basedir/ratel
+      xgo -go="go-$GOVERSION" --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
+      mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
+    popd
+  fi
+fi
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
@@ -213,11 +236,13 @@ pushd $basedir/badger/badger
   mv badger-linux-amd64 $TMP/linux/badger
 popd
 
-pushd $basedir/ratel
-  xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
-  strip -x ratel-linux-amd64
-  mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
-popd
+if ! [[ $DGRAPH_BUILD_RATEL =~ 0|false ]]; then
+  pushd $basedir/ratel
+    xgo -go="go-$GOVERSION" --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
+    strip -x ratel-linux-amd64
+    mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
+  popd
+fi
 
 createSum () {
   os=$1
@@ -239,9 +264,10 @@ createSum () {
   fi
 }
 
-createSum darwin
+# Build Checksums
+[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
 createSum linux
-createSum windows
+[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
 
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
@@ -280,9 +306,10 @@ createZip () {
   rm -Rf $TMP/$os
 }
 
-createZip windows
-createTar darwin
+# Build Archives
 createTar linux
+[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createZip windows
+[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
 
 echo "Release $TAG is ready."
 docker run dgraph/dgraph:$DOCKER_TAG dgraph
