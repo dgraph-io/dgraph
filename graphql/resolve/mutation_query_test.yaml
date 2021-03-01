@@ -12,9 +12,9 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          postID : uid
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
         }
       }
 
@@ -34,11 +34,11 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          postID : uid
-          title : Post.title
-          author : Post.author {
-            name : Author.name
+        PAYLOAD_TYPE.result(func: uid(0x4)) {
+          Post.postID : uid
+          Post.titleAlias : Post.title
+          Post.theAuthor : Post.author {
+            Author.nameAlias : Author.name
             dgraph.uid : uid
           }
         }
@@ -57,9 +57,9 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) @filter(anyofterms(Post.title, "GraphQL")) {
-          postID : uid
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) @filter(anyofterms(Post.title, "GraphQL")) {
+          Post.postID : uid
+          Post.title : Post.title
         }
       }
 
@@ -79,11 +79,11 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          postID : uid
-          title : Post.title
-          author : Post.author {
-            name : Author.name
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
+          Post.author : Post.author {
+            Author.name : Author.name
             dgraph.uid : uid
           }
         }
@@ -108,13 +108,13 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          postID : uid
-          title : Post.title
-          author : Post.author {
-            name : Author.name
-            posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
-              title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.postID : uid
+          Post.title : Post.title
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) {
+              Post.title : Post.title
               dgraph.uid : uid
             }
             dgraph.uid : uid
@@ -124,9 +124,6 @@ ADD_UPDATE_MUTATION:
 
   -
     name: "can work with skip and filter"
-    variables:
-      skip: true
-      include: false
     gqlquery: |
       mutation ($skip: Boolean!, $include: Boolean!) {
         ADD_UPDATE_MUTATION {
@@ -142,10 +139,15 @@ ADD_UPDATE_MUTATION:
           }
         }
       }
+    gqlvariables: |
+      {
+          "skip": true,
+          "include": false
+      }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
           dgraph.uid : uid
         }
       }
@@ -167,12 +169,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @cascade {
-          title : Post.title
-          text : Post.text
-          author : Post.author {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -196,12 +198,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @cascade {
-          title : Post.title
-          text : Post.text
-          author : Post.author {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -225,12 +227,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          title : Post.title
-          text : Post.text
-          author : Post.author @cascade {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -254,12 +256,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @cascade {
-          title : Post.title
-          text : Post.text
-          author : Post.author {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -283,12 +285,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @cascade(Post.title, Post.text) {
-          title : Post.title
-          text : Post.text
-          author : Post.author {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade(Post.title, Post.text) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -312,12 +314,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) {
-          title : Post.title
-          text : Post.text
-          author : Post.author @cascade(Author.name, Author.dob, uid) {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade(Author.name, Author.dob, uid) {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -341,12 +343,12 @@ ADD_UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @cascade {
-          title : Post.title
-          text : Post.text
-          author : Post.author @cascade(Author.name, Author.dob) {
-            name : Author.name
-            dob : Author.dob
+        PAYLOAD_TYPE.post(func: uid(0x4)) @cascade {
+          Post.title : Post.title
+          Post.text : Post.text
+          Post.author : Post.author @cascade(Author.name, Author.dob) {
+            Author.name : Author.name
+            Author.dob : Author.dob
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -366,9 +368,9 @@ UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
-          postID : uid
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
+          Post.postID : uid
+          Post.title : Post.title
         }
       }
   -
@@ -384,9 +386,9 @@ UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4), orderasc: Post.title) {
-          postID : uid
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title) {
+          Post.postID : uid
+          Post.title : Post.title
         }
       }
 
@@ -403,8 +405,8 @@ UPDATE_MUTATION:
       }
     dgquery: |-
       query {
-        post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
-          postID : uid
-          title : Post.title
+        PAYLOAD_TYPE.post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
+          Post.postID : uid
+          Post.title : Post.title
         }
       }

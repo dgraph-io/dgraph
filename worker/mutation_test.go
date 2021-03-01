@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestConvertEdgeType(t *testing.T) {
@@ -38,31 +39,27 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.GalaxyAttr("name"),
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Label:     "test-mutation",
-				Attr:      "name",
+				Attr:      x.GalaxyAttr("name"),
 				ValueType: 9,
 			},
 		},
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.NamespaceAttr(0xf2, "name"),
 				Op:    pb.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Label:     "test-mutation",
-				Attr:      "name",
+				Attr:      x.NamespaceAttr(0xf2, "name"),
 				Op:        pb.DirectedEdge_DEL,
 				ValueType: 9,
 			},
@@ -70,8 +67,7 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				ValueId: 123,
-				Label:   "test-mutation",
-				Attr:    "name",
+				Attr:    x.GalaxyAttr("name"),
 			},
 			to:        types.StringID,
 			expectErr: true,
@@ -79,8 +75,7 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
+				Attr:  x.GalaxyAttr("name"),
 			},
 			to:        types.UidID,
 			expectErr: true,
@@ -105,8 +100,7 @@ func TestConvertEdgeType(t *testing.T) {
 func TestValidateEdgeTypeError(t *testing.T) {
 	edge := &pb.DirectedEdge{
 		Value: []byte("set edge"),
-		Label: "test-mutation",
-		Attr:  "name",
+		Attr:  x.GalaxyAttr("name"),
 	}
 
 	err := ValidateAndConvert(edge,
@@ -119,10 +113,10 @@ func TestValidateEdgeTypeError(t *testing.T) {
 func TestPopulateMutationMap(t *testing.T) {
 	edges := []*pb.DirectedEdge{{
 		Value: []byte("set edge"),
-		Label: "test-mutation",
+		Attr:  x.GalaxyAttr(""),
 	}}
 	schema := []*pb.SchemaUpdate{{
-		Predicate: "name",
+		Predicate: x.GalaxyAttr("name"),
 	}}
 	m := &pb.Mutations{Edges: edges, Schema: schema}
 
@@ -138,61 +132,61 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, posting.DeleteAll())
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
-	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID}
+	s1 := &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to password
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to string
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	// int to password
 	err = schema.ParseBytes([]byte("name:int ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to password
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_PASSWORD}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name"), ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("friend"), ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 
 	// Schema with internal predicate.
-	s1 = &pb.SchemaUpdate{Predicate: "uid", ValueType: pb.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: x.GalaxyAttr("uid"), ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
@@ -220,7 +214,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef := &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "",
+				Predicate: x.GalaxyAttr(""),
 			},
 		},
 	}
@@ -232,7 +226,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 				ValueType: pb.Posting_OBJECT,
 			},
 		},
@@ -245,7 +239,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 				Directive: pb.SchemaUpdate_REVERSE,
 			},
 		},
@@ -258,7 +252,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: "name",
+				Predicate: x.GalaxyAttr("name"),
 				Tokenizer: []string{"int"},
 			},
 		},

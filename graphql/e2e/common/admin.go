@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/pkg/errors"
@@ -33,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -165,8 +163,10 @@ func admin(t *testing.T) {
 	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
+	oldCounter := RetryProbeGraphQL(t, Alpha1HTTP, nil).SchemaUpdateCounter
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	testutil.DropAll(t, client)
+	AssertSchemaUpdateCounterIncrement(t, Alpha1HTTP, oldCounter, nil)
 
 	hasSchema, err := hasCurrentGraphQLSchema(GraphqlAdminURL)
 	require.NoError(t, err)
@@ -193,7 +193,7 @@ func admin(t *testing.T) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	addSchemaAndData(schema, data, client)
+	addSchemaAndData(schema, data, client, nil)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -225,7 +225,7 @@ func updateSchema(t *testing.T, client *dgo.Dgraph) {
 }
 
 func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
-	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema)
+	assertUpdateGqlSchemaUsingAdminSchemaEndpt(t, Alpha1HTTP, adminSchemaEndptGqlSchema, nil)
 
 	testutil.VerifySchema(t, client, testutil.SchemaOptions{
 		UserPreds:        adminSchemaEndptPreds,
@@ -415,8 +415,9 @@ func adminState(t *testing.T) {
 					clusterInfoOnly
 					forceGroupId
 				}
-				maxLeaseId
+				maxUID
 				maxTxnTs
+				maxNsID
 				maxRaftId
 				removed {
 					id
@@ -448,13 +449,14 @@ func adminState(t *testing.T) {
 				Tablets    []*pb.Tablet
 				SnapshotTs uint64
 			}
-			Zeros      []*pb.Member
-			MaxLeaseId uint64
-			MaxTxnTs   uint64
-			MaxRaftId  uint64
-			Removed    []*pb.Member
-			Cid        string
-			License    struct {
+			Zeros     []*pb.Member
+			MaxUID    uint64
+			MaxTxnTs  uint64
+			MaxNsID   uint64
+			MaxRaftId uint64
+			Removed   []*pb.Member
+			Cid       string
+			License   struct {
 				User     string
 				ExpiryTs int64
 				Enabled  bool
@@ -499,8 +501,9 @@ func adminState(t *testing.T) {
 
 		require.Equal(t, expectedZero, zero)
 	}
-	require.Equal(t, state.MaxLeaseId, result.State.MaxLeaseId)
+	require.Equal(t, state.MaxUID, result.State.MaxUID)
 	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)
+	require.Equal(t, state.MaxNsID, result.State.MaxNsID)
 	require.Equal(t, state.MaxRaftId, result.State.MaxRaftId)
 	require.True(t, len(state.Removed) == len(result.State.Removed))
 	if len(state.Removed) != 0 {
@@ -510,106 +513,4 @@ func adminState(t *testing.T) {
 	require.Equal(t, state.License.User, result.State.License.User)
 	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
 	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
-}
-
-func testCors(t *testing.T) {
-	t.Run("testing normal retrieval", func(t *testing.T) {
-		queryParams := &GraphQLParams{
-			Query: `query{
-                getAllowedCORSOrigins{
-                  acceptedOrigins
-                }
-              }`,
-		}
-		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.JSONEq(t, ` {
-            "getAllowedCORSOrigins": {
-              "acceptedOrigins": [
-                "*"
-              ]
-            }
-          }`, string(gqlResponse.Data))
-	})
-
-	t.Run("mutating cors", func(t *testing.T) {
-		queryParams := &GraphQLParams{
-			Query: `mutation{
-                replaceAllowedCORSOrigins(origins:["google.com"]){
-                  acceptedOrigins
-                }
-              }`,
-		}
-		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.JSONEq(t, ` {
-            "replaceAllowedCORSOrigins": {
-              "acceptedOrigins": [
-                "google.com"
-              ]
-            }
-          }`, string(gqlResponse.Data))
-	})
-
-	t.Run("retrieve mutated cors", func(t *testing.T) {
-		queryParams := &GraphQLParams{
-			Query: `query{
-                getAllowedCORSOrigins{
-                  acceptedOrigins
-                }
-              }`,
-		}
-		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.JSONEq(t, ` {
-            "getAllowedCORSOrigins": {
-              "acceptedOrigins": [
-                "google.com"
-              ]
-            }
-          }`, string(gqlResponse.Data))
-
-		// Wait for the subscription to hit.
-		time.Sleep(2 * time.Second)
-
-		client := &http.Client{}
-		req, err := http.NewRequest("GET", GraphqlURL, nil)
-		require.NoError(t, err)
-		req.Header.Add("Origin", "google.com")
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "google.com")
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "POST, OPTIONS")
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Headers"), x.AccessControlAllowedHeaders)
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "true")
-
-		client = &http.Client{}
-		req, err = http.NewRequest("GET", GraphqlURL, nil)
-		require.NoError(t, err)
-		req.Header.Add("Origin", "googl.com")
-		resp, err = client.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Origin"), "")
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Methods"), "")
-		require.Equal(t, resp.Header.Get("Access-Control-Allow-Credentials"), "")
-	})
-
-	t.Run("mutating empty cors", func(t *testing.T) {
-		queryParams := &GraphQLParams{
-			Query: `mutation{
-                replaceAllowedCORSOrigins(origins:[]){
-                  acceptedOrigins
-                }
-              }`,
-		}
-		gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
-		RequireNoGQLErrors(t, gqlResponse)
-		require.JSONEq(t, ` {
-            "replaceAllowedCORSOrigins": {
-              "acceptedOrigins": [
-                "*"
-              ]
-            }
-          }`, string(gqlResponse.Data))
-	})
 }

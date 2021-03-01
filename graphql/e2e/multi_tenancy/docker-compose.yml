@@ -1,0 +1,87 @@
+# Auto-generated with: [./compose -a 3 -z 1 -w]
+#
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8080
+    - 9080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ../../../ee/acl/hmac-secret
+      target: /dgraph-acl/hmac-secret
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
+      --logtostderr -v=2 --raft "idx=1;"
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
+  alpha2:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha2
+    depends_on:
+    - alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8080
+    - 9080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ../../../ee/acl/hmac-secret
+      target: /dgraph-acl/hmac-secret
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
+      --logtostderr -v=2 --raft "idx=2;" 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
+  alpha3:
+    image: dgraph/dgraph:latest
+    working_dir: /data/alpha3
+    depends_on:
+    - alpha2
+    labels:
+      cluster: test
+    ports:
+    - 8080
+    - 9080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    - type: bind
+      source: ../../../ee/acl/hmac-secret
+      target: /dgraph-acl/hmac-secret
+      read_only: true
+    command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
+      --logtostderr -v=2 --raft "idx=3;" 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=3000s;"
+  zero1:
+    image: dgraph/dgraph:latest
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5080
+    - 6080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
+      -v=2 --bindall
+volumes: {}

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -128,6 +130,20 @@ type Column struct {
 	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
+type Country struct {
+	Id      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	States  []*State `json:"states,omitempty"`
+}
+
+type State struct {
+	Code    string   `json:"code,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	OwnedBy string   `json:"ownedBy,omitempty"`
+	Country *Country `json:"country,omitempty"`
+}
+
 type Project struct {
 	ProjID  string    `json:"projID,omitempty"`
 	Name    string    `json:"name,omitempty"`
@@ -159,6 +175,7 @@ type TestCase struct {
 	ans           bool
 	result        string
 	name          string
+	jwt           string
 	filter        map[string]interface{}
 	variables     map[string]interface{}
 	query         string
@@ -334,7 +351,7 @@ func TestAddMutationWithXid(t *testing.T) {
 	require.Error(t, gqlResponse.Errors)
 	require.Equal(t, len(gqlResponse.Errors), 1)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		"GraphQL debug: id already exists for type Tweets")
+		"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
 
 	// Clear the tweet.
 	tweet.DeleteByID(t, user, metaInfo)
@@ -494,6 +511,119 @@ func TestAuthOnInterfaces(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthRulesWithNullValuesInJWT(t *testing.T) {
+	testCases := []TestCase{
+		{
+			name: "Query with null value in jwt",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}
+			`,
+			result: `{"queryProject":[]}`,
+		},
+		{
+			name: "Query with null value in jwt: deep level",
+			query: `
+			query {
+				queryUser(order: {desc: username}, first: 1) {
+					username
+					issues {
+						msg
+					}
+				}
+			}
+			`,
+			role:   "ADMIN",
+			result: `{"queryUser":[{"username":"user8","issues":[]}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: common.GetJWTWithNullUser(t, tcase.role, metaInfo),
+			Query:   tcase.query,
+		}
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+
+func TestAuthOnInterfaceWithRBACPositive(t *testing.T) {
+	getVehicleParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryVehicle{
+				owner
+			}
+		}`,
+		Headers: common.GetJWT(t, "Alice", "ADMIN", metaInfo),
+	}
+	gqlResponse := getVehicleParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	result := `
+	{
+		"queryVehicle": [
+		  {
+			"owner": "Bob"
+		  }
+		]
+	  }`
+
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
+func TestQueryWithStandardClaims(t *testing.T) {
+	if metaInfo.Algo == "RS256" {
+		t.Skip()
+	}
+	testCases := []TestCase{
+		{
+			query: `
+            query {
+                queryProject (order: {asc: name}) {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6IkFETUlOIn0.cH_EcC8Sd0pawJs96XPhpRsYVXuTybT1oUkluBDS8B4",
+			result: `{"queryProject":[{"name":"Project1"},{"name":"Project2"}]}`,
+		},
+		{
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.wabcAkINZ6ycbEuziTQTSpv8T875Ky7JQu68ynoyDQE",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Headers: make(http.Header),
+			Query:   tcase.query,
+		}
+		queryParams.Headers.Set(metaInfo.Header, tcase.jwt)
+
+		gqlResponse := queryParams.ExecuteAsPost(t, common.GraphqlURL)
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
+}
+
 func TestAuthRulesWithMissingJWT(t *testing.T) {
 	testCases := []TestCase{
 		{name: "Query non auth field without JWT Token",
@@ -1590,7 +1720,11 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		authMeta := testutil.SetAuthMeta(string(authSchema))
+		authMeta, err := authorization.Parse(string(authSchema))
+		if err != nil {
+			panic(err)
+		}
+
 		metaInfo = &testutil.AuthMeta{
 			PublicKey:      authMeta.VerificationKey,
 			Namespace:      authMeta.Namespace,
@@ -1622,7 +1756,11 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 							[
 								{
 									"username": "user1",
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMax": null,
+										"msgMin": null
+									}
 								}
 							]
 					}`},
@@ -1668,7 +1806,7 @@ func TestChildAggregateQueryWithDeepRBAC(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1684,7 +1822,11 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 								{
 									"username": "user1",
 									"issues":[],
-									"issuesAggregate": null
+									"issuesAggregate": {
+										"count": null,
+										"msgMin": null,
+										"msgMax": null
+									}
 								}
 							]
 					}`},
@@ -1739,7 +1881,7 @@ func TestChildAggregateQueryWithOtherFields(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 }
@@ -1972,4 +2114,44 @@ func TestAuthRBACEvaluation(t *testing.T) {
 		})
 
 	}
+}
+
+func TestFragmentInAuthRulesWithUserDefinedCascade(t *testing.T) {
+	addHomeParams := &common.GraphQLParams{
+		Query: `mutation {
+			addHome(input: [
+				{address: "Home1", members: [{dogRef: {breed: "German Shepherd", eats: [{plantRef: {breed: "Crop"}}]}}]},
+				{address: "Home2", members: [{parrotRef: {repeatsWords: ["Hi", "Morning!"]}}]},
+				{address: "Home3", members: [{plantRef: {breed: "Flower"}}]},
+				{address: "Home4", members: [{dogRef: {breed: "Bulldog"}}]}
+			]) {
+				numUids
+			}
+		}`,
+	}
+	gqlResponse := addHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	queryHomeParams := &common.GraphQLParams{
+		Query: `query {
+			queryHome {
+				address
+			}
+		}`,
+		Headers: common.GetJWT(t, "", "", metaInfo),
+	}
+	gqlResponse = queryHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// we should get back only Home1 and Home3
+	testutil.CompareJSON(t, `{"queryHome": [
+		{"address": "Home1"},
+		{"address": "Home3"}
+	]}`, string(gqlResponse.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "Home", map[string]interface{}{}, 4, nil)
+	common.DeleteGqlType(t, "Dog", map[string]interface{}{}, 2, nil)
+	common.DeleteGqlType(t, "Parrot", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Plant", map[string]interface{}{}, 2, nil)
 }

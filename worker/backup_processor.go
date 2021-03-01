@@ -37,11 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	// backupNumGo is the number of go routines used by the backup stream writer.
-	backupNumGo = 16
-)
-
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
@@ -49,6 +44,8 @@ type BackupProcessor struct {
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
 
+	// txn is used for the iterators in the threadLocal
+	txn     *badger.Txn
 	threads []*threadLocal
 }
 
@@ -59,17 +56,26 @@ type threadLocal struct {
 	// pre-allocated pb.BackupPostingList object.
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
+	itr   *badger.Iterator
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, backupNumGo),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
+	}
+	if req.SinceTs > 0 && db != nil {
+		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
+		}
+		if bp.txn != nil {
+			iopt := badger.DefaultIteratorOptions
+			iopt.AllVersions = true
+			bp.threads[i].itr = bp.txn.NewIterator(iopt)
 		}
 	}
 	return bp
@@ -82,8 +88,20 @@ type LoadResult struct {
 	// MaxLeaseUid is the max UID seen by the load operation. Needed to request zero
 	// for the proper number of UIDs.
 	MaxLeaseUid uint64
+	// MaxLeaseNsId is the max namespace ID seen by the load operation.
+	MaxLeaseNsId uint64
 	// The error, if any, of the load operation.
 	Err error
+}
+
+func (pr *BackupProcessor) Close() {
+	if pr.txn == nil {
+		return
+	}
+	for _, th := range pr.threads {
+		th.itr.Close()
+	}
+	pr.txn.Discard()
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
@@ -128,12 +146,26 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	stream.NumGo = backupNumGo
+	// Ignore versions less than given sinceTs timestamp, or skip older versions of
+	// the given key by returning an empty list.
+	// Do not do this for schema and type keys. Those keys always have a
+	// version of one. They're handled separately.
+	stream.SinceTs = pr.Request.SinceTs
+	stream.Prefix = []byte{x.ByteData}
 
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
 		tl.alloc = itr.Alloc
-		kvList, dropOp, err := tl.toBackupList(key, itr)
+
+		bitr := itr
+		// Use the threadlocal iterator because "itr" has the sinceTs set and
+		// it will not be able to read all the data.
+		if tl.itr != nil {
+			bitr = tl.itr
+			bitr.Seek(key)
+		}
+
+		kvList, dropOp, err := tl.toBackupList(key, bitr)
 		if err != nil {
 			return nil, err
 		}
@@ -157,12 +189,10 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			return false
 		}
 
-		// Backup type keys in every group.
-		if parsedKey.IsType() {
-			return true
+		// Skip backing up the schema and type keys. They will be backed up separately.
+		if parsedKey.IsSchema() || parsedKey.IsType() {
+			return false
 		}
-
-		// Only backup schema and data keys for the requested predicates.
 		_, ok := predMap[parsedKey.Attr]
 		return ok
 	}
@@ -182,6 +212,67 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &response, err
+	}
+
+	// This is used to backup the schema and types.
+	writePrefix := func(prefix byte) error {
+		tl := threadLocal{
+			alloc: z.NewAllocator(1 << 10),
+		}
+		defer tl.alloc.Release()
+
+		// Schema and types are written at Ts=1.
+		txn := pr.DB.NewTransactionAt(1, false)
+		defer txn.Discard()
+		// We don't need to iterate over all versions.
+		iopts := badger.DefaultIteratorOptions
+		iopts.Prefix = []byte{prefix}
+
+		itr := txn.NewIterator(iopts)
+		defer itr.Close()
+
+		list := &bpb.KVList{}
+		for itr.Rewind(); itr.Valid(); itr.Next() {
+			item := itr.Item()
+			// Don't export deleted items.
+			if item.IsDeletedOrExpired() {
+				continue
+			}
+			parsedKey, err := x.Parse(item.Key())
+			if err != nil {
+				glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
+				continue
+			}
+			// This check makes sense only for the schema keys. The types are not stored in it.
+			if _, ok := predMap[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+				continue
+			}
+			kv := y.NewKV(tl.alloc)
+			if err := item.Value(func(val []byte) error {
+				kv.Value = append(kv.Value, val...)
+				return nil
+			}); err != nil {
+				return errors.Wrapf(err, "while copying value")
+			}
+
+			backupKey, err := tl.toBackupKey(item.Key())
+			if err != nil {
+				return err
+			}
+			kv.Key = backupKey
+			kv.UserMeta = tl.alloc.Copy([]byte{item.UserMeta()})
+			kv.Version = item.Version()
+			kv.ExpiresAt = item.ExpiresAt()
+			list.Kv = append(list.Kv, kv)
+		}
+		return writeKVList(list, gzWriter)
+	}
+
+	for _, prefix := range []byte{x.ByteSchema, x.ByteType} {
+		if err := writePrefix(prefix); err != nil {
+			glog.Errorf("While writing prefix %d to backup: %v", prefix, err)
+			return &response, err
+		}
 	}
 
 	if maxVersion > pr.Request.ReadTs {
@@ -246,12 +337,12 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 	var dropOp *pb.DropOperation
 
 	item := itr.Item()
-	if item.UserMeta() != posting.BitSchemaPosting &&
-		(item.Version() < tl.Request.SinceTs || item.IsDeletedOrExpired()) {
-		// Ignore versions less than given timestamp, or skip older versions of
-		// the given key by returning an empty list.
-		// Do not do this for schema and type keys. Those keys always have a
-		// version of one so they would be incorrectly rejected by above check.
+	if item.Version() < tl.Request.SinceTs {
+		return list, nil,
+			errors.Errorf("toBackupList: Item.Version(): %d should be less than sinceTs: %d",
+				item.Version(), tl.Request.SinceTs)
+	}
+	if item.IsDeletedOrExpired() {
 		return list, nil, nil
 	}
 
@@ -281,27 +372,6 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 
 		kv.Key = backupKey
 		list.Kv = append(list.Kv, kv)
-
-	case posting.BitSchemaPosting:
-		kv := y.NewKV(tl.alloc)
-		if err := item.Value(func(val []byte) error {
-			kv.Value = tl.alloc.Copy(val)
-			return nil
-		}); err != nil {
-			return nil, nil, errors.Wrapf(err, "while copying value")
-		}
-
-		backupKey, err := tl.toBackupKey(key)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		kv.Key = backupKey
-		kv.UserMeta = tl.alloc.Copy([]byte{item.UserMeta()})
-		kv.Version = item.Version()
-		kv.ExpiresAt = item.ExpiresAt()
-		list.Kv = append(list.Kv, kv)
-
 	default:
 		return nil, nil, errors.Errorf(
 			"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
@@ -373,6 +443,9 @@ func checkAndGetDropOp(key []byte, l *posting.List, readTs uint64) (*pb.DropOper
 		case "DROP_ATTR":
 			dropOp.DropOp = pb.DropOperation_ATTR
 			dropOp.DropValue = dropInfo[1]
+		case "DROP_NS":
+			dropOp.DropOp = pb.DropOperation_NS
+			dropOp.DropValue = dropInfo[1] // contains namespace.
 		}
 		return dropOp, nil
 	default:

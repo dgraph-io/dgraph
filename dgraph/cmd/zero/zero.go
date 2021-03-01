@@ -59,10 +59,9 @@ type Server struct {
 	state       *pb.MembershipState
 	nextRaftId  uint64
 
-	nextLeaseId uint64
-	nextTxnTs   uint64
-	readOnlyTs  uint64
-	leaseLock   sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
+	nextLease  map[pb.NumLeaseType]uint64
+	readOnlyTs uint64
+	leaseLock  sync.Mutex // protects nextUID, nextTxnTs, nextNsID and corresponding proposals.
 
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
@@ -90,9 +89,11 @@ func (s *Server) Init() {
 		Groups: make(map[uint32]*pb.Group),
 		Zeros:  make(map[uint64]*pb.Member),
 	}
+	s.nextLease = make(map[pb.NumLeaseType]uint64)
 	s.nextRaftId = 1
-	s.nextLeaseId = 1
-	s.nextTxnTs = 1
+	s.nextLease[pb.Num_UID] = 1
+	s.nextLease[pb.Num_TXN_TS] = 1
+	s.nextLease[pb.Num_NS_ID] = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = z.NewCloser(2) // grpc and http
@@ -440,6 +441,13 @@ func (s *Server) Connect(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+
+	if m.Learner && !ms.License.GetEnabled() {
+		// Update the "ShouldCrash" function in x/x.go if you change the error message here.
+		return nil, errors.New("ENTERPRISE_ONLY_LEARNER - Missing or expired Enterpise License. " +
+			"Cannot add Learner Node.")
+	}
+
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
@@ -588,6 +596,12 @@ func (s *Server) Connect(ctx context.Context,
 		Member: m,
 	}
 	return resp, nil
+}
+
+// DeleteNamespace removes the tablets for deleted namespace from the membership state.
+func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*pb.Status, error) {
+	err := s.Node.proposeAndWait(ctx, &pb.ZeroProposal{DeleteNs: in})
+	return &pb.Status{}, err
 }
 
 // ShouldServe returns the tablet serving the predicate passed in the request.

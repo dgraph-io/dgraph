@@ -17,6 +17,19 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 	return &updateGroupRewriter{}
 }
 
+// RewriteQueries on updateGroupRewriter initializes  urw.VarGen and
+// urw.XidMetadata. As there is no need to rewrite queries to check for existing
+// nodes. It does not rewrite any queries.
+func (urw *updateGroupRewriter) RewriteQueries(
+	ctx context.Context,
+	m schema.Mutation) ([]*gql.GraphQuery, error) {
+
+	urw.VarGen = resolve.NewVariableGenerator()
+	urw.XidMetadata = resolve.NewXidMetadata()
+
+	return []*gql.GraphQuery{}, nil
+}
+
 // Rewrite rewrites set and remove update patches into dql upsert mutations
 // only for Group type. It ensures that if a rule already exists in db, it is updated;
 // otherwise, it is created. It also ensures that only the last rule out of all
@@ -24,7 +37,8 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 // name as another rule.
 func (urw *updateGroupRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
+	m schema.Mutation,
+	idExistence map[string]string) ([]*resolve.UpsertMutation, error) {
 
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	setArg := inp["set"]
@@ -34,12 +48,11 @@ func (urw *updateGroupRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil)
+	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, "")
 	srcUID := resolve.MutationQueryVarUID
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := resolve.NewVariableGenerator()
 	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
@@ -50,7 +63,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := urw.VarGen.Next(ruleType, "", "", false)
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -96,7 +109,7 @@ func (urw *updateGroupRewriter) Rewrite(
 				continue
 			}
 
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := urw.VarGen.Next(ruleType, "", "", false)
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[

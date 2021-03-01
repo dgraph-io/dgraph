@@ -1,0 +1,477 @@
+#######################
+# Input Schema
+#######################
+
+type Todo @secret(field: "pwd") {
+	id: ID!
+	title: String
+	text: String
+	isPublic: Boolean @search
+	dateCompleted: String @search
+	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	owner(filter: UserFilter): User @hasInverse(field: "todos")
+	somethingPrivate: String
+	sharedWithAggregate(filter: UserFilter): UserAggregateResult
+}
+
+type User @key(fields: "username") {
+	username: String! @id
+	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+	todosAggregate(filter: TodoFilter): TodoAggregateResult
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
+enum DgraphIndex {
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+
+input IntFilter {
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
+}
+
+input Int64Filter {
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
+}
+
+input FloatFilter {
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
+}
+
+input StringHashFilter {
+	eq: String
+	in: [String]
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
+type TodoAggregateResult {
+	count: Int
+	titleMin: String
+	titleMax: String
+	textMin: String
+	textMax: String
+	dateCompletedMin: String
+	dateCompletedMax: String
+	somethingPrivateMin: String
+	somethingPrivateMax: String
+}
+
+type UpdateTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
+	usernameMin: String
+	usernameMax: String
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum TodoHasFilter {
+	title
+	text
+	isPublic
+	dateCompleted
+	sharedWith
+	owner
+	somethingPrivate
+}
+
+enum TodoOrderable {
+	title
+	text
+	dateCompleted
+	somethingPrivate
+}
+
+enum UserHasFilter {
+	username
+	todos
+}
+
+enum UserOrderable {
+	username
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddTodoInput {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String!
+}
+
+input AddUserInput {
+	username: String!
+	todos: [TodoRef]
+}
+
+input TodoFilter {
+	id: [ID!]
+	isPublic: Boolean
+	dateCompleted: StringTermFilter
+	has: [TodoHasFilter]
+	and: [TodoFilter]
+	or: [TodoFilter]
+	not: TodoFilter
+}
+
+input TodoOrder {
+	asc: TodoOrderable
+	desc: TodoOrderable
+	then: TodoOrder
+}
+
+input TodoPatch {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
+}
+
+input TodoRef {
+	id: ID
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+	pwd: String
+}
+
+input UpdateTodoInput {
+	filter: TodoFilter!
+	set: TodoPatch
+	remove: TodoPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	username: StringHashFilter
+	has: [UserHasFilter]
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	todos: [TodoRef]
+}
+
+input UserRef {
+	username: String
+	todos: [TodoRef]
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getTodo(id: ID!): Todo
+	checkTodoPassword(id: ID!, pwd: String!): Todo
+	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	aggregateTodo(filter: TodoFilter): TodoAggregateResult
+	getUser(username: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addTodo(input: [AddTodoInput!]!): AddTodoPayload
+	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
+	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+}
+

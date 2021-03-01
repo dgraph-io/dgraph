@@ -168,14 +168,14 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
 func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
-		return LoadResult{0, 0, errors.Wrapf(err, "cannot retrieve manifests")}
+		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
 	var since uint64
-	var maxUid uint64
+	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
@@ -186,7 +186,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to open %q", file)}
+				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
 			}
 			defer fp.Close()
 
@@ -194,18 +194,19 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, gid, predSet, manifest.DropOperations)
+			groupMaxUid, groupMaxNsId, err := fn(gid,
+				&loadBackupInput{r: fp, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return LoadResult{Err: err}
 			}
-			if groupMaxUid > maxUid {
-				maxUid = groupMaxUid
-			}
+			maxUid = x.Max(maxUid, groupMaxUid)
+			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
 // Verify performs basic checks to decide whether the specified backup can be restored
@@ -286,7 +287,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	}
 
 	// Function to load the a single backup file.
-	loadFn := func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+	loadFn := func(r io.Reader, groupId uint32, preds predicateSet, isOld bool) (uint64, error) {
 		dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", groupId))
 
 		r, err := enc.GetReader(key, r)
@@ -306,15 +307,18 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		// file reader and verifying the encryption in the backup file.
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 			WithSyncWrites(false).
-			WithValueThreshold(1 << 10).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key))
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
 
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot open DB at %s", dir)
 		}
 		defer db.Close()
-		_, err = loadFromBackup(db, gzReader, 0, preds, nil)
+		_, _, err = loadFromBackup(db, &loadBackupInput{
+			// TODO(Naman): Why is drop operations nil here?
+			r: gzReader, restoreTs: 0, preds: preds, dropOperations: nil, isOld: isOld,
+		})
 		if err != nil {
 			return 0, errors.Wrapf(err, "cannot load backup")
 		}
@@ -345,7 +349,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 		// of the last backup.
 		predSet := manifest.getPredsInGroup(gid)
 
-		_, err = loadFn(fp, gid, predSet)
+		_, err = loadFn(fp, gid, predSet, manifest.Version == 0)
 		if err != nil {
 			return err
 		}
@@ -358,7 +362,6 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 			dir := filepath.Join(tmpDir, fmt.Sprintf("p%d", group))
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
-				WithValueThreshold(1 << 10).
 				WithNumVersionsToKeep(math.MaxInt32).
 				WithEncryptionKey(key))
 
@@ -366,17 +369,20 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 				ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
 				return
 			}
-			defer db.Close()
 
 			req := &pb.ExportRequest{
 				GroupId:     group,
 				ReadTs:      manifest.Since,
 				UnixTs:      time.Now().Unix(),
 				Format:      format,
+				Namespace:   math.MaxUint64, // Export all the namespaces.
 				Destination: exportDir,
 			}
 
 			_, err = exportInternal(context.Background(), req, db, true)
+			// It is important to close the db before sending err to ch. Else, we will see a memory
+			// leak.
+			db.Close()
 			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 		}(gid)
 	}

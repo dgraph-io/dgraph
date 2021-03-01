@@ -58,7 +58,8 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
-		WithEncryptionKey(k)
+		WithEncryptionKey(k).
+		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }
 
@@ -197,7 +198,7 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 			continue
 		}
 
-		values = append(values, pk.Attr)
+		values = append(values, x.ParseAttr(pk.Attr))
 	}
 	return values, nil
 }

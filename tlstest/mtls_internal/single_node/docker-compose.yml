@@ -18,9 +18,8 @@ services:
         target: /dgraph-tls
         read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2
-      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
-      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.alpha1.crt --tls_key /dgraph-tls/client.alpha1.key
-      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha1.crt; key=/dgraph-tls/client.alpha1.key;"
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
@@ -38,8 +37,6 @@ services:
         source: ../tls/zero1
         target: /dgraph-tls
         read_only: true
-    command: /gobin/dgraph zero --raft="idx=1" --my=zero1:5080 --logtostderr
-      --tls_cacert /dgraph-tls/ca.crt --tls_node_cert /dgraph-tls/node.crt --tls_node_key /dgraph-tls/node.key
-      --tls_internal_port_enabled=true --tls_cert /dgraph-tls/client.zero1.crt --tls_key /dgraph-tls/client.zero1.key
-      -v=2 --bindall
+    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --logtostderr -v=2 --bindall
+      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.zero1.crt; key=/dgraph-tls/client.zero1.key;"
 volumes: {}

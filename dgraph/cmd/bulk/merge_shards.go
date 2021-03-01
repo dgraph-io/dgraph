@@ -59,7 +59,7 @@ func mergeMapShardsIntoReduceShards(opt *options) {
 	}
 
 	// Put the first map shard in the first reduce shard since it contains all the reserved
-	// predicates.
+	// predicates. We want all the reserved predicates in group 1.
 	reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
 	fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
 	x.Check(os.Rename(firstShard, reduceShard))

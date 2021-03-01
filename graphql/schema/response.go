@@ -48,6 +48,7 @@ type Response struct {
 	Data       bytes.Buffer
 	Extensions *Extensions
 	Header     http.Header
+	dataIsNull bool
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -74,23 +75,26 @@ func (r *Response) WithError(err error) {
 		return
 	}
 
-	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "authorization failed") {
+	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "authorization failed") {
 		return
 	}
 
-	if !x.Config.GraphqlDebug && strings.Contains(err.Error(), "GraphQL debug:") {
+	if !x.Config.GraphQLDebug && strings.Contains(err.Error(), "GraphQL debug:") {
 		return
 	}
 
 	r.Errors = append(r.Errors, AsGQLErrors(err)...)
 }
 
-// AddData adds p to r's data buffer.  If p is empty, the call has no effect.
-// If r.Data is empty before the call, then r.Data becomes {p}
+// AddData adds p to r's data buffer.
+//
+// If p is empty or r.SetDataNull() has been called earlier, the call has no effect.
+//
+// If r.Data is empty before the call, then r.Data becomes {p}.
 // If r.Data contains data it always looks like {f,g,...}, and
-// adding to that results in {f,g,...,p}
+// adding to that results in {f,g,...,p}.
 func (r *Response) AddData(p []byte) {
-	if r == nil || len(p) == 0 {
+	if r == nil || r.dataIsNull || len(p) == 0 {
 		return
 	}
 
@@ -105,6 +109,14 @@ func (r *Response) AddData(p []byte) {
 
 	x.Check2(r.Data.Write(p[1 : len(p)-1]))
 	x.Check2(r.Data.WriteRune('}'))
+}
+
+// SetDataNull sets r's data buffer to contain the bytes representing a null.
+// Once this has been called on r, any further call to AddData has no effect.
+func (r *Response) SetDataNull() {
+	r.dataIsNull = true
+	r.Data.Reset()
+	x.Check2(r.Data.Write(JsonNull))
 }
 
 // MergeExtensions merges the extensions given in ext to r.
@@ -147,7 +159,7 @@ func (r *Response) Output() interface{} {
 			Data   json.RawMessage `json:"data,omitempty"`
 		}{
 			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
-			Data:   []byte("null"),
+			Data:   JsonNull,
 		}
 	}
 
@@ -160,7 +172,7 @@ func (r *Response) Output() interface{} {
 		Data:   r.Data.Bytes(),
 	}
 
-	if x.Config.GraphqlExtension {
+	if x.Config.GraphQL.GetBool("extensions") {
 		res.Extensions = r.Extensions
 	}
 	return res

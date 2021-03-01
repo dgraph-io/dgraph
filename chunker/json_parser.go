@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	simdjson "github.com/dgraph-io/simdjson-go"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -82,6 +83,14 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 			jsonValue = jsonInt
 			valueType = api.Facet_INT
 		}
+	// these int64/float64 cases are needed for the FastParseJSON simdjson
+	// parser, which doesn't use json.Number
+	case int64:
+		jsonValue = v
+		valueType = api.Facet_INT
+	case float64:
+		jsonValue = v
+		valueType = api.Facet_FLOAT
 	case bool:
 		jsonValue = v
 		valueType = api.Facet_BOOL
@@ -180,8 +189,9 @@ func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, e
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	uid  string       // uid retrieved or allocated for the node.
-	fcts []*api.Facet // facets on the edge connecting this node to the source if any.
+	uid       string       // uid retrieved or allocated for the node.
+	namespace uint64       // namespace to which the node belongs.
+	fcts      []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
@@ -200,6 +210,14 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return err
 		}
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
+
+	// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+	case int64:
+		if v == 0 && op == DeleteNquads {
+			nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
+			return nil
+		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: v}}
 
 	case string:
 		// Default value is considered as S P * deletion.
@@ -250,6 +268,7 @@ func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{
 		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
+			Namespace:   mr.namespace,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		})
 	}
@@ -399,9 +418,13 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 			uid = uint64(ui)
 
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+		case int64:
+			uid = uint64(uidVal)
+
 		case string:
 			s := stripSpaces(uidVal)
-			if len(uidVal) == 0 {
+			if uidVal == "" {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
@@ -418,7 +441,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	if len(mr.uid) == 0 {
+	if mr.uid == "" {
 		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
@@ -426,12 +449,38 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		mr.uid = getNextBlank()
 	}
 
+	namespace := x.GalaxyNamespace
+	if ns, ok := m["namespace"]; ok {
+		switch nsVal := ns.(type) {
+		case json.Number:
+			nsi, err := nsVal.Int64()
+			if err != nil {
+				return mr, err
+			}
+			namespace = uint64(nsi)
+
+		// this int64 case is needed for FastParseJSON, which doesn't use json.Number
+		case int64:
+			namespace = uint64(nsVal)
+		case string:
+			s := stripSpaces(nsVal)
+			if s == "" {
+				namespace = 0
+			} else if n, err := strconv.ParseUint(s, 0, 64); err == nil {
+				namespace = n
+			} else {
+				return mr, err
+			}
+		}
+	}
+	mr.namespace = namespace
+
 	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" {
+		if pred == "uid" || pred == "namespace" {
 			continue
 		}
 
@@ -441,6 +490,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 				nq := &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
+					Namespace:   namespace,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				}
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -457,6 +507,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq := api.NQuad{
 			Subject:   mr.uid,
 			Predicate: pred,
+			Namespace: namespace,
 		}
 
 		prefix := pred + x.FacetDelimeter
@@ -473,6 +524,13 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
 		switch v := v.(type) {
+		// these int64/float64 cases are needed for FastParseJSON, which doesn't use json.Number
+		case int64, float64:
+			if err := handleBasicType(pred, v, op, &nq); err != nil {
+				return mr, err
+			}
+			buf.Push(&nq)
+			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
@@ -506,21 +564,30 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
 			buf.PushPredHint(pred, pb.Metadata_LIST)
-			// TODO(Ashish): We need to call this only in case of scalarlist, for other lists
-			// this can be avoided.
-			facetsMapSlice, err := parseMapFacets(mf, prefix)
-			if err != nil {
-				return mr, err
-			}
 
+			// NOTE: facetsMapSlice should be empty unless this is a scalar list
+			var facetsMapSlice []map[int]*api.Facet
 			for idx, item := range v {
+				if idx == 0 {
+					switch item.(type) {
+					case string, float64, json.Number, int64:
+						var err error
+						facetsMapSlice, err = parseMapFacets(mf, prefix)
+						if err != nil {
+							return mr, err
+						}
+					default:
+					}
+				}
+
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
+					Namespace: namespace,
 				}
 
 				switch iv := item.(type) {
-				case string, float64, json.Number:
+				case string, float64, json.Number, int64:
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
@@ -595,6 +662,87 @@ const (
 	DeleteNquads
 )
 
+// FastParseJSON currently parses NQuads about 30% faster than ParseJSON.
+//
+// This function is very similar to buf.ParseJSON, but we just replace encoding/json with
+// simdjson-go.
+func (buf *NQuadBuffer) FastParseJSON(b []byte, op int) error {
+	if !simdjson.SupportedCPU() {
+		// default to slower / old parser
+		return buf.ParseJSON(b, op)
+	}
+	// parse the json into tape format
+	tape, err := simdjson.Parse(b, nil)
+	if err != nil {
+		return err
+	}
+
+	// we only need the iter to get the first element, either an array or object
+	iter := tape.Iter()
+
+	tmp := &simdjson.Iter{}
+
+	// if root object, this will be filled
+	obj := &simdjson.Object{}
+	// if root array, this will be filled
+	arr := &simdjson.Array{}
+
+	// grab the first element
+	typ := iter.Advance()
+	switch typ {
+	case simdjson.TypeRoot:
+		if typ, tmp, err = iter.Root(tmp); err != nil {
+			return err
+		}
+		if typ == simdjson.TypeObject {
+			// the root element is an object, so parse the object
+			if obj, err = tmp.Object(obj); err != nil {
+				return err
+			}
+			// attempt to convert to map[string]interface{}
+			m, err := obj.Map(nil)
+			if err != nil {
+				return err
+			}
+			// pass to next parsing stage
+			mr, err := buf.mapToNquads(m, op, "")
+			if err != nil {
+				return err
+			}
+			buf.checkForDeletion(mr, m, op)
+		} else if typ == simdjson.TypeArray {
+			// the root element is an array, so parse the array
+			if arr, err = tmp.Array(arr); err != nil {
+				return err
+			}
+			// attempt to convert to []interface{}
+			a, err := arr.Interface()
+			if err != nil {
+				return err
+			}
+			if len(a) > 0 {
+				// attempt to convert each array element to a
+				// map[string]interface{} for further parsing
+				var o interface{}
+				for _, o = range a {
+					if _, ok := o.(map[string]interface{}); !ok {
+						return errors.Errorf("only array of map allowed at root")
+					}
+					// pass to next parsing stage
+					mr, err := buf.mapToNquads(o.(map[string]interface{}), op, "")
+					if err != nil {
+						return err
+					}
+					buf.checkForDeletion(mr, o.(map[string]interface{}), op)
+				}
+			}
+		}
+	default:
+		return errors.Errorf("initial element not found in json")
+	}
+	return nil
+}
+
 // ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
@@ -630,15 +778,18 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return nil
 	}
 	mr, err := buf.mapToNquads(ms, op, "")
+	if err != nil {
+		return err
+	}
 	buf.checkForDeletion(mr, ms, op)
-	return err
+	return nil
 }
 
 // ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
 // to high memory usage. So be careful using this.
 func ParseJSON(b []byte, op int) ([]*api.NQuad, *pb.Metadata, error) {
 	buf := NewNQuadBuffer(-1)
-	err := buf.ParseJSON(b, op)
+	err := buf.FastParseJSON(b, op)
 	if err != nil {
 		return nil, nil, err
 	}

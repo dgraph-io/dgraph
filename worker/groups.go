@@ -60,8 +60,6 @@ var gr = &groupi{
 	tablets:      make(map[string]*pb.Tablet),
 }
 
-var RaftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
-
 func groups() *groupi {
 	return gr
 }
@@ -203,7 +201,7 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) applyInitialTypes() {
-	initialTypes := schema.InitialTypes()
+	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
@@ -218,7 +216,7 @@ func (g *groupi) applyInitialSchema() {
 	if g.groupId() != 1 {
 		return
 	}
-	initialSchema := schema.InitialSchema()
+	initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {
@@ -274,7 +272,7 @@ func MaxLeaseId() uint64 {
 	if g.state == nil {
 		return 0
 	}
-	return g.state.MaxLeaseId
+	return g.state.MaxUID
 }
 
 // GetMembershipState returns the current membership state.
@@ -312,6 +310,14 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
+
+	invalid := state.License != nil && !state.License.Enabled
+	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
+		glog.Errorf("ENTERPRISE_ONLY_LEARNER: License Expired. Cannot run learner nodes.")
+		x.ServerCloser.Signal()
+		return
+	}
+
 	oldState := g.state
 	g.state = state
 
@@ -1099,7 +1105,7 @@ func (g *groupi) askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
+func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb.KVList),
 	group uint32, closer *z.Closer) {
 
 	var prefix []byte
@@ -1122,7 +1128,8 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.
-		stream, err := client.Subscribe(closer.Ctx(), &pb.SubscriptionRequest{Prefixes: prefixes})
+		stream, err := client.Subscribe(closer.Ctx(),
+			&pb.SubscriptionRequest{Matches: x.PrefixesToMatches(prefixes, ignore)})
 		if err != nil {
 			return errors.Wrapf(err, "error from client.subscribe")
 		}

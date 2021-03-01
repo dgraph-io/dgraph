@@ -26,7 +26,9 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,8 +52,8 @@ func TestEncodeMemory(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
-				var buf bytes.Buffer
-				enc.encode(n, &buf)
+				enc.buf.Reset()
+				enc.encode(n)
 			}
 		}()
 	}
@@ -61,7 +63,7 @@ func TestEncodeMemory(t *testing.T) {
 
 func TestNormalizeJSONLimit(t *testing.T) {
 	// Set default normalize limit.
-	x.Config.NormalizeNodeLimit = 1e4
+	x.Config.Limit = z.NewSuperFlag("normalize-node=10000;").MergeAndCheckDefault(worker.LimitDefaults)
 
 	if testing.Short() {
 		t.Skip("Skipping TestNormalizeJSONLimit")

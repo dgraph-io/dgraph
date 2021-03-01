@@ -31,18 +31,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/admin"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -601,7 +601,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponse(w, r)
 }
 
-func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
 	if commonHandler(w, r) {
 		return
 	}
@@ -637,14 +637,15 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 }
 
 func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
-	adminServer web.IServeGraphQL) *schema.Response {
+	adminServer admin.IServeGraphQL) *schema.Response {
 	md := metadata.New(nil)
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
+	ctx = x.AttachJWTNamespace(ctx)
 
-	return adminServer.Resolve(ctx, gqlReq)
+	return adminServer.ResolveWithNs(ctx, x.GalaxyNamespace, gqlReq)
 }
 
 func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {

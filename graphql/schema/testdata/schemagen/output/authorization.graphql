@@ -193,7 +193,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -203,6 +203,7 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
@@ -388,7 +389,7 @@ input TodoFilter {
 	id: [ID!]
 	isPublic: Boolean
 	dateCompleted: StringTermFilter
-	has: TodoHasFilter
+	has: [TodoHasFilter]
 	and: [TodoFilter]
 	or: [TodoFilter]
 	not: TodoFilter
@@ -437,7 +438,7 @@ input UpdateUserInput {
 
 input UserFilter {
 	username: StringHashFilter
-	has: UserHasFilter
+	has: [UserHasFilter]
 	and: [UserFilter]
 	or: [UserFilter]
 	not: UserFilter
@@ -480,7 +481,7 @@ type Mutation {
 	addTodo(input: [AddTodoInput!]!): AddTodoPayload
 	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
 	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
-	addUser(input: [AddUserInput!]!): AddUserPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

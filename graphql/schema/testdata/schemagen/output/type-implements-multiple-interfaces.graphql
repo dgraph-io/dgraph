@@ -197,7 +197,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -207,6 +207,7 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
@@ -407,7 +408,7 @@ input AddHumanInput {
 input CharacterFilter {
 	id: [ID!]
 	name: StringExactFilter
-	has: CharacterHasFilter
+	has: [CharacterHasFilter]
 	and: [CharacterFilter]
 	or: [CharacterFilter]
 	not: CharacterFilter
@@ -429,7 +430,7 @@ input CharacterRef {
 }
 
 input EmployeeFilter {
-	has: EmployeeHasFilter
+	has: [EmployeeHasFilter]
 	and: [EmployeeFilter]
 	or: [EmployeeFilter]
 	not: EmployeeFilter
@@ -449,7 +450,7 @@ input EmployeePatch {
 input HumanFilter {
 	id: [ID!]
 	name: StringExactFilter
-	has: HumanHasFilter
+	has: [HumanHasFilter]
 	and: [HumanFilter]
 	or: [HumanFilter]
 	not: HumanFilter

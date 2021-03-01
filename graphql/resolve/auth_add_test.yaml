@@ -26,7 +26,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }] }  
+    {
+      "UserSecret": [ { "uid": "0x123" }]
+    }
 
 - name: "Add multiple nodes"
   gqlquery: |
@@ -47,7 +49,10 @@
       ]
     }
   uids: |
-    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+    {
+      "UserSecret1": "0x123",
+      "UserSecret2": "0x456"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -57,7 +62,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ] } 
+    {
+      "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ]
+    }
 
 - name: "Add one node that fails auth"
   gqlquery: |
@@ -71,13 +78,17 @@
   jwtvar:
     USER: "user1"
   variables: |
-    { "secret":
-      { "aSecret": "it is",
-        "ownedBy": "user2"
-      }
+    {
+      "secret":
+        {
+          "aSecret": "it is",
+          "ownedBy": "user2"
+        }
     }
   uids: |
-    { "UserSecret1": "0x123" }
+    {
+      "UserSecret1": "0x123"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -87,7 +98,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ ] }  
+    {
+      "UserSecret": [ ]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -110,7 +123,10 @@
       ]
     }
   uids: |
-    { "UserSecret1": "0x123", "UserSecret2": "0x456" }
+    {
+      "UserSecret1": "0x123",
+      "UserSecret2": "0x456"
+    }
   authquery: |-
     query {
       UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
@@ -120,7 +136,9 @@
       UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
-    { "UserSecret": [ { "uid": "0x123" }] } 
+    {
+      "UserSecret": [ { "uid": "0x123" }]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -144,14 +162,19 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
-    { "Project2": [ { "uid": "0x123" } ] }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ]
+    }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -159,9 +182,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -170,10 +193,10 @@
       }
       Ticket3 as var(func: uid(0x789))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -206,14 +229,19 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
-    { "Project2": [ { "uid": "0x123" } ] }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ]
+    }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -221,9 +249,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -232,17 +260,19 @@
       }
       Ticket3 as var(func: uid(0x789))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
       }
     }
   authjson: |
-    { "Ticket": [ { "uid": "0x789" } ]}
+    {
+      "Ticket": [ { "uid": "0x789" } ]
+    }
   error:
     { "message": "mutation failed because authorization failed" }
 
@@ -271,20 +301,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
-        uid
-      }
-      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
+  queryjson: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ]
+      "Project1": [ { "uid": "0x123" } ]
     }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789",
+      "Column4": "0x459",
+      "Ticket5": "0x799"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -292,9 +323,9 @@
       }
       Column1 as var(func: uid(0x456, 0x459))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -303,10 +334,10 @@
       }
       Ticket3 as var(func: uid(0x789, 0x799))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -343,20 +374,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
-        uid
-      }
-      Project5 as Project5(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
-  json: |
+  queryjson: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Project5": [ { "uid": "0x123" } ]
+      "Project1": [ { "uid": "0x123" } ]
     }
   uids: |
-    { "Column1": "0x456", "Ticket3": "0x789", "Column4": "0x459", "Ticket6": "0x799" }
+    {
+      "Column2": "0x456",
+      "Ticket3": "0x789",
+      "Column4": "0x459",
+      "Ticket5": "0x799"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -364,9 +396,9 @@
       }
       Column1 as var(func: uid(0x456, 0x459))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -375,10 +407,10 @@
       }
       Ticket3 as var(func: uid(0x789, 0x799))
       TicketAuth4 as var(func: uid(Ticket3)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -417,13 +449,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket2(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ],
+      "Ticket2": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -433,22 +473,22 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
     }
+  uids: |
+    {
+      "Column3": "0x456"
+    }
   json: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
       "Column4.auth": [ { "uid": "0x799" } ]
     }
-  uids: |
-    { "Column1": "0x456" }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -456,9 +496,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -488,13 +528,21 @@
     }
   dgquery: |-
     query {
-      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
+      Project1(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket2(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Project1": [ { "uid": "0x123" } ],
+      "Ticket2": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -504,21 +552,21 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
     }
   json: |
     {
-      "Project2": [ { "uid": "0x123" } ],
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
-    { "Column1": "0x456" }
+    {
+      "Column3": "0x456"
+    }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -526,9 +574,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -564,10 +612,17 @@
     }
   dgquery: |-
     query {
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -577,23 +632,22 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
     }
   json: |
     {
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ],
       "Column4.auth": [ { "uid": "0x799" } ]
     }
   uids: |
     {
-      "Project1": "0x123",
-      "Column2": "0x456"
+      "Project2": "0x123",
+      "Column3": "0x456"
     }
   authquery: |-
     query {
@@ -602,9 +656,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -613,8 +667,8 @@
       }
       Project3 as var(func: uid(0x123))
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -648,10 +702,17 @@
     }
   dgquery: |-
     query {
-      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
         uid
       }
-      var(func: uid(Ticket3)) {
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
+      var(func: uid(0x789)) {
         Column4 as Ticket.onColumn
       }
       Column4(func: uid(Column4)) {
@@ -661,22 +722,21 @@
         uid
       }
       ColumnAuth5 as var(func: uid(Column4)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
     }
   json: |
     {
-      "Ticket3": [ { "uid": "0x789" } ],
       "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
     {
-      "Project1": "0x123",
-      "Column2": "0x456"
+      "Project2": "0x123",
+      "Column3": "0x456"
     }
   authquery: |-
     query {
@@ -685,9 +745,9 @@
       }
       Column1 as var(func: uid(0x456))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -696,8 +756,8 @@
       }
       Project3 as var(func: uid(0x123))
       ProjectAuth4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -755,7 +815,9 @@
       }
     }
   uids: |
-    { "Log1": "0x123" }
+    {
+      "Log1": "0x123"
+    }
   skipauth: true
 
 - name: "Add with top level OR RBAC true."
@@ -813,8 +875,8 @@
       }
       Project1 as var(func: uid(0x123))
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -846,21 +908,18 @@
     }
   dgquery: |-
     query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+      User1(func: eq(User.username, "user1")) @filter(type(User)) {
         uid
       }
     }
-  dgquerysec: |-
-    query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
-        uid
-      }
+  queryjson: |
+    {
+      "User1": [ { "uid": "0x123" } ]
     }
-  length: "2"
-  json: |
-    { "User3": [ { "uid": "0x123" } ] }
   uids: |
-    { "Issue1": "0x789" }
+    {
+      "Issue2": "0x789"
+    }
   authquery: |-
     query {
       Issue(func: uid(Issue1)) @filter(uid(IssueAuth2)) {
@@ -868,11 +927,13 @@
       }
       Issue1 as var(func: uid(0x789))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
   authjson: |
-    { "Issue": [ { "uid": "0x789" }] }
+    {
+      "Issue": [ { "uid": "0x789" }]
+    }
 
 - name: "Add with top level And RBAC false."
   gqlquery: |
@@ -897,21 +958,18 @@
     }
   dgquery: |-
     query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+      User1(func: eq(User.username, "user1")) @filter(type(User)) {
         uid
       }
     }
-  dgquerysec: |-
-    query {
-      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
-        uid
-      }
+  queryjson: |
+    {
+      "User1": [ { "uid": "0x123" } ]
     }
-  length: "2"
-  json: |
-    { "User3": [ { "uid": "0x123" } ] }
   uids: |
-    { "Issue1": "0x789" }
+    {
+      "Issue2": "0x789"
+    }
   authquery: |-
     query {
       Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
@@ -919,7 +977,7 @@
       }
       Issue1 as var(func: uid(0x789))
       Issue2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
   error:
@@ -944,7 +1002,9 @@
       }
     }
   uids: |
-    { "ComplexLog1": "0x123" }
+    {
+      "ComplexLog1": "0x123"
+    }
   error:
     { "message": "mutation failed because authorization failed"}
 
@@ -967,7 +1027,9 @@
       }
     }
   uids: |
-    { "ComplexLog1": "0x123" }
+    {
+      "ComplexLog1": "0x123"
+    }
   skipauth: true
 
 - name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
@@ -998,7 +1060,10 @@
       }]
     }
   uids: |
-    {"Question1": "0x123", "Author1": "0x456" }
+    {
+      "Question1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
@@ -1006,17 +1071,20 @@
       }
       Question1 as var(func: uid(0x123))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
   authjson: |
-    {"Question": [ {"uid": "0x123"}]}
+    {
+      "Question": [ {"uid": "0x123"}]
+    }
+
 - name: "Adding node for a Type that inherits auth rules from an interface fails."
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
@@ -1045,7 +1113,10 @@
       }]
     }
   uids: |
-    {"Question1": "0x123", "Author1": "0x456" }
+    {
+      "Question1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       Question(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3))) {
@@ -1053,17 +1124,19 @@
       }
       Question1 as var(func: uid(0x123))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
   authjson: |
-    {"Question": [ ], "Author": [ { "uid" : "0x456"} ] }
+    {
+      "Question": [ ], "Author": [ { "uid" : "0x456"} ]
+    }
   error:
     { "message": "mutation failed because authorization failed"}
 
@@ -1093,7 +1166,10 @@
       }]
     }
   uids: |
-    {"FbPost1": "0x123", "Author1": "0x456" }
+    {
+      "FbPost1": "0x123",
+      "Author1": "0x456"
+    }
   authquery: |-
     query {
       FbPost(func: uid(FbPost1)) @filter(uid(FbPostAuth2)) {
@@ -1102,13 +1178,15 @@
       FbPost1 as var(func: uid(0x123))
       FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
   authjson: |
-    {"FbPost": [ {"uid": "0x123"}]}
+    {
+      "FbPost": [ {"uid": "0x123"}]
+    }
 
 - name: "Add type with Having RBAC rule on interface failed"
   gqlquery: |
@@ -1136,7 +1214,150 @@
       }]
     }
   uids: |
-    {"FbPost1": "0x123", "Author1": "0x456" }
+    {
+      "FbPost1": "0x123",
+      "Author1": "0x456"
+    }
   error:
     {"message" : "mutation failed because authorization failed"}
-  
+
+- name: "Upsert Add Mutation with RBAC true"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets(func: uid(TweetsRoot)) {
+        uid
+      }
+      TweetsRoot as var(func: uid(Tweets2))
+      Tweets2 as var(func: uid(0x123)) @filter(type(Tweets))
+    }
+
+- name: "Upsert Add Mutation with RBAC false"
+  gqlquery: |
+    mutation addTweets($tweet: AddTweetsInput!) {
+      addTweets(input: [$tweet], upsert: true) {
+        tweets {
+          id
+        }
+      }
+    }
+  jwtvar:
+    USER: "not foo"
+  variables: |
+    { "tweet":
+      { "id": "existing ID",
+        "text": "some text",
+        "timestamp": "0"
+      }
+    }
+  dgquery: |-
+    query {
+      Tweets1(func: eq(Tweets.id, "existing ID")) @filter(type(Tweets)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Tweets1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      Tweets1 as addTweets()
+    }
+
+- name: "Upsert with Deep Auth"
+  explanation: "As state already exists, update auth rules of State are applied.
+    As Country does not exist, add auth rules of Country are applied."
+  gqlquery: |
+    mutation addState($state: AddStateInput!) {
+      addState(input: [$state], upsert: true) {
+        state {
+          code
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  variables: |
+    { "state":
+      {
+        "code": "mh",
+        "name": "Maharashtra",
+        "ownedBy": "user1",
+        "country":
+          {
+            "id": "in",
+            "ownedBy": "user1",
+            "name": "India"
+          }
+      }
+    }
+  dgquery: |-
+    query {
+      State1(func: eq(State.code, "mh")) @filter(type(State)) {
+        uid
+      }
+      Country2(func: eq(Country.id, "in")) @filter(type(Country)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "State1": [ { "uid": "0x123" } ]
+    }
+  dgquerysec: |-
+    query {
+      State1 as addState(func: uid(StateRoot)) {
+        uid
+      }
+      StateRoot as var(func: uid(State3)) @filter(uid(StateAuth4))
+      State3 as var(func: uid(0x123)) @filter(type(State))
+      StateAuth4 as var(func: uid(State3)) @filter(eq(State.ownedBy, "user1")) @cascade
+    }
+  uids: |
+    {
+      "Country2": "0x456"
+    }
+  json: |
+    {
+      "Country2":  [ { "uid": "0x456" } ],
+      "Country2.auth": [ { "uid": "0x456" } ]
+    }
+  authquery: |-
+    query {
+      Country(func: uid(Country1)) @filter(uid(CountryAuth2)) {
+        uid
+      }
+      Country1 as var(func: uid(0x456))
+      CountryAuth2 as var(func: uid(Country1)) @filter(eq(Country.ownedBy, "user1")) @cascade
+    }
+  authjson: |
+    {
+      "Country": [ { "uid": "0x456" } ]
+    }

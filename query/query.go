@@ -161,7 +161,7 @@ type params struct {
 	// Cascade is the list of predicates to apply @cascade to.
 	// __all__ is special to mean @cascade i.e. all the children of this subgraph are mandatory
 	// and should have values otherwise the node will be excluded.
-	Cascade []string
+	Cascade *CascadeArgs
 	// IgnoreReflex is true if the @ignorereflex directive is specified.
 	IgnoreReflex bool
 
@@ -206,6 +206,14 @@ type params struct {
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
 	// For OSS this should remain nil.
 	AllowedPreds []string
+}
+
+// CascadeArgs stores the arguments needed to process @cascade directive.
+// It is introduced to ensure correct behaviour for cascade with pagination.
+type CascadeArgs struct {
+	Fields []string
+	First  int
+	Offset int
 }
 
 type pathMetadata struct {
@@ -565,15 +573,22 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
+			Cascade:      &CascadeArgs{},
 		}
 
 		// Inherit from the parent.
-		if len(sg.Params.Cascade) > 0 {
-			args.Cascade = append(args.Cascade, sg.Params.Cascade...)
+		if len(sg.Params.Cascade.Fields) > 0 {
+			args.Cascade.Fields = append(args.Cascade.Fields, sg.Params.Cascade.Fields...)
 		}
 		// Allow over-riding at this level.
 		if len(gchild.Cascade) > 0 {
-			args.Cascade = gchild.Cascade
+			args.Cascade.Fields = gchild.Cascade
+		}
+
+		// Remove pagination arguments from the query if @cascade is mentioned since
+		// pagination will be applied post processing the data.
+		if len(args.Cascade.Fields) > 0 {
+			args.addCascadePaginationArguments(gchild)
 		}
 
 		if gchild.IsCount {
@@ -650,6 +665,13 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 	}
 	return nil
+}
+
+func (args *params) addCascadePaginationArguments(gq *gql.GraphQuery) {
+	args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
+	delete(gq.Args, "first")
+	args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
+	delete(gq.Args, "offset")
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
@@ -783,7 +805,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
 		Alias:            gq.Alias,
-		Cascade:          gq.Cascade,
+		Cascade:          &CascadeArgs{Fields: gq.Cascade},
 		GetUid:           isDebug(ctx),
 		IgnoreReflex:     gq.IgnoreReflex,
 		IsEmpty:          gq.IsEmpty,
@@ -799,6 +821,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		GroupbyAttrs:     gq.GroupbyAttrs,
 		IsGroupBy:        gq.IsGroupby,
 		AllowedPreds:     gq.AllowedPreds,
+	}
+
+	// Remove pagination arguments from the query if @cascade is mentioned since
+	// pagination will be applied post processing the data.
+	if len(args.Cascade.Fields) > 0 {
+		args.addCascadePaginationArguments(gq)
 	}
 
 	for argk := range gq.Args {
@@ -882,7 +910,11 @@ func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
+func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While creating query task")
+	}
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -913,7 +945,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         attr,
+		Attr:         x.NamespaceAttr(namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1334,7 +1366,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	}
 
 	cascadeArgMap := make(map[string]bool)
-	for _, pred := range sg.Params.Cascade {
+	for _, pred := range sg.Params.Cascade.Fields {
 		cascadeArgMap[pred] = true
 	}
 	cascadeAllPreds := cascadeArgMap["__all__"]
@@ -1353,16 +1385,24 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if len(child.Params.Cascade) == 0 {
+		if len(child.Params.Cascade.Fields) == 0 {
 			continue
 		}
 
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
 		child.updateUidMatrix()
+
+		// Apply pagination after the @cascade.
+		if len(child.Params.Cascade.Fields) > 0 && child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
+			for i := 0; i < len(child.uidMatrix); i++ {
+				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
+				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
+			}
+		}
 	}
 
-	if len(sg.Params.Cascade) == 0 {
+	if len(sg.Params.Cascade.Fields) == 0 {
 		return sg.updateVars(doneVars, sgPath)
 	}
 
@@ -1908,6 +1948,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
 	defer stop()
 
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While expanding subgraph")
+	}
 	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
@@ -1931,7 +1975,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 
-			preds = getPredicatesFromTypes(typeNames)
+			preds = getPredicatesFromTypes(namespace, typeNames)
 			// We check if enterprise is enabled and only
 			// restrict preds to allowed preds if ACL is turned on.
 			if worker.EnterpriseEnabled() && sg.Params.AllowedPreds != nil {
@@ -1953,10 +1997,13 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if len(child.ExpandPreds) > 0 {
 				span.Annotate(nil, "expand default")
 				// We already have the predicates populated from the var.
-				preds = getPredsFromVals(child.ExpandPreds)
+				temp := getPredsFromVals(child.ExpandPreds)
+				for _, pred := range temp {
+					preds = append(preds, x.NamespaceAttr(namespace, pred))
+				}
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
-				preds = getPredicatesFromTypes(typeNames)
+				preds = getPredicatesFromTypes(namespace, typeNames)
 			}
 		}
 		preds = uniquePreds(preds)
@@ -1971,9 +2018,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		for _, pred := range preds {
+			// Convert attribute name for the given namespace.
 			temp := &SubGraph{
 				ReadTs: sg.ReadTs,
-				Attr:   pred,
+				Attr:   x.ParseAttr(pred),
 			}
 			temp.Params = child.Params
 			// TODO(martinmr): simplify this condition once _reverse_ and _forward_
@@ -2110,7 +2158,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				sg.DestMap = nil
 			}
 		default:
-			taskQuery, err := createTaskQuery(sg)
+			taskQuery, err := createTaskQuery(ctx, sg)
 			if err != nil {
 				rch <- err
 				return
@@ -2394,8 +2442,13 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While ordering and paginating")
+	}
+	order := sg.createOrderForTask(ns)
 	sortMsg := &pb.SortMessage{
-		Order:     sg.Params.Order,
+		Order:     order,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2427,6 +2480,20 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// while sorting.
 	sg.updateDestUids()
 	return nil
+}
+
+// createOrderForTask creates namespaced aware order for the task.
+func (sg *SubGraph) createOrderForTask(ns uint64) []*pb.Order {
+	out := []*pb.Order{}
+	for _, o := range sg.Params.Order {
+		oc := &pb.Order{
+			Attr:  x.NamespaceAttr(ns, o.Attr),
+			Desc:  o.Desc,
+			Langs: o.Langs,
+		}
+		out = append(out, oc)
+	}
+	return out
 }
 
 func (sg *SubGraph) updateDestUids() {
@@ -2612,7 +2679,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 		SrcUIDs: codec.ToList(sg.DestMap),
 		ReadTs:  sg.ReadTs,
 	}
-	taskQuery, err := createTaskQuery(temp)
+	taskQuery, err := createTaskQuery(ctx, temp)
 	if err != nil {
 		return nil, err
 	}
@@ -2624,11 +2691,11 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
-func getPredicatesFromTypes(typeNames []string) []string {
+func getPredicatesFromTypes(namespace uint64, typeNames []string) []string {
 	var preds []string
 
 	for _, typeName := range typeNames {
-		typeDef, ok := schema.State().GetType(typeName)
+		typeDef, ok := schema.State().GetType(x.NamespaceAttr(namespace, typeName))
 		if !ok {
 			continue
 		}
@@ -2815,6 +2882,17 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
+			// first time at the root here.
+
+			// Apply pagination at the root after @cascade.
+			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.Offset != 0 {
+				sg.updateUidMatrix()
+				for i := 0; i < len(sg.uidMatrix); i++ {
+					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
+					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+				}
+			}
+
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
@@ -2857,19 +2935,71 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		calculateMetrics(sg, metrics)
 	}
 	er.Metrics = metrics
-
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return er, errors.Wrapf(err, "While processing query")
+	}
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
+		preds := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Predicates)
+		req.GqlQuery.Schema.Predicates = preds
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
 		}
+		typeNames := x.NamespaceAttrList(namespace, req.GqlQuery.Schema.Types)
+		req.GqlQuery.Schema.Types = typeNames
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+
+	if !x.IsGalaxyOperation(ctx) {
+		// Filter the schema nodes for the given namespace.
+		er.SchemaNode = filterSchemaNodeForNamespace(namespace, er.SchemaNode)
+		// Filter the types for the given namespace.
+		er.Types = filterTypesForNamespace(namespace, er.Types)
+	}
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
+}
+
+// filterTypesForNamespace filters types for the given namespace.
+func filterTypesForNamespace(namespace uint64, types []*pb.TypeUpdate) []*pb.TypeUpdate {
+	out := []*pb.TypeUpdate{}
+	for _, update := range types {
+		// Type name doesn't have reverse.
+		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
+		if typeNamespace != namespace {
+			continue
+		}
+		update.TypeName = typeName
+		fields := []*pb.SchemaUpdate{}
+		// Convert field name for the current namespace.
+		for _, field := range update.Fields {
+			_, fieldName := x.ParseNamespaceAttr(field.Predicate)
+			field.Predicate = fieldName
+			fields = append(fields, field)
+		}
+		update.Fields = fields
+		out = append(out, update)
+	}
+	return out
+}
+
+// filterSchemaNodeForNamespace filters schema nodes for the given namespace.
+func filterSchemaNodeForNamespace(namespace uint64, nodes []*pb.SchemaNode) []*pb.SchemaNode {
+	out := []*pb.SchemaNode{}
+
+	for _, node := range nodes {
+		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
+		if nodeNamespace != namespace {
+			continue
+		}
+		node.Predicate = attrName
+		out = append(out, node)
+	}
+	return out
 }
 
 // StripBlankNode returns a copy of the map where all the keys have the blank node prefix removed.

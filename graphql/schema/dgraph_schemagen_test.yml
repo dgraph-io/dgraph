@@ -754,3 +754,35 @@ schemas:
       }
       T.id: float @index(float) @upsert .
       T.value: string .
+  - name: "type extension having @external field of ID type which is @key"
+    input: |
+      extend type Product @key(fields: "id") {
+        id: ID! @external
+        name: String!
+        price: Int @external
+        reviews: [String]
+      }
+    output: |
+      type Product {
+        Product.id
+        Product.name
+        Product.reviews
+      }
+      Product.id: string @index(hash) @upsert .
+      Product.name: string .
+      Product.reviews: [string] .
+  - name: "type extension having @external field of non ID type which is @key"
+    input: |
+      extend type Product @key(fields: "name") {
+        id: ID! @external
+        name: String! @id @external
+        reviews: [String]
+      }
+    output: |
+      type Product {
+        Product.name
+        Product.reviews
+      }
+      Product.name: string @index(hash) @upsert .
+      Product.reviews: [string] .
+

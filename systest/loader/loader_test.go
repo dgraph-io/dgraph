@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -35,9 +36,13 @@ import (
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; internal-port-enabled=%v;",
+		// cacert
+		"../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port-enabled
+		true))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
@@ -51,15 +56,25 @@ func TestLoaderXidmap(t *testing.T) {
 	require.NoError(t, err)
 
 	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	require.NoError(t, err)
+
+	tlsFlag := fmt.Sprintf(`cacert=%s; internal-port-enabled=%v; cert=%s; key=%s; server-name=%s;`,
+		// cacert
+		tlsDir+"/ca.crt",
+		// internal-port-enabled
+		true,
+		// cert
+		tlsDir+"/client.liveclient.crt",
+		// key
+		tlsDir+"/client.liveclient.key",
+		// server-name
+		"alpha1")
+
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"--tls_cacert", tlsDir + "/ca.crt",
-		"--tls_internal_port_enabled=true",
-		"--tls_cert", tlsDir + "/client.liveclient.crt",
-		"--tls_key", tlsDir + "/client.liveclient.key",
-		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -67,14 +82,10 @@ func TestLoaderXidmap(t *testing.T) {
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"--tls_cacert", tlsDir + "/ca.crt",
-		"--tls_internal_port_enabled=true",
-		"--tls_cert", tlsDir + "/client.liveclient.crt",
-		"--tls_key", tlsDir + "/client.liveclient.key",
-		"--tls_server_name", "alpha1",
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

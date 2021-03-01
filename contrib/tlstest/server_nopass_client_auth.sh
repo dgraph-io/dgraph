@@ -1,3 +1,3 @@
 #!/bin/bash
 
-../../dgraph/dgraph alpha --tls_on --tls_ca_certs ca.crt --tls_cert server.crt --tls_cert_key server.key --tls_client_auth REQUIREANDVERIFY --zero 127.0.0.1:5081
+../../dgraph/dgraph alpha --tls "cacert=ca.crt; cert=server.crt; key=server.key; client-auth=REQUIREANDVERIFY;" --zero 127.0.0.1:5081

@@ -113,9 +113,9 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		_, ok1 := state.Groups["1"].Tablets["name1"]
-		_, ok2 := state.Groups["2"].Tablets["name2"]
-		_, ok3 := state.Groups["3"].Tablets["name3"]
+		_, ok1 := state.Groups["1"].Tablets[x.GalaxyAttr("name1")]
+		_, ok2 := state.Groups["2"].Tablets[x.GalaxyAttr("name2")]
+		_, ok3 := state.Groups["3"].Tablets[x.GalaxyAttr("name3")]
 		if ok1 && ok2 && ok3 {
 			moveOk = true
 			break
@@ -170,11 +170,11 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
-	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)
+	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)
 	require.NoError(t, err)
-	restored2, err := testutil.GetPredicateValues("./data/restore/p2", "name2", commitTs)
+	restored2, err := testutil.GetPredicateValues("./data/restore/p2", x.GalaxyAttr("name2"), commitTs)
 	require.NoError(t, err)
-	restored3, err := testutil.GetPredicateValues("./data/restore/p3", "name3", commitTs)
+	restored3, err := testutil.GetPredicateValues("./data/restore/p3", x.GalaxyAttr("name3"), commitTs)
 	require.NoError(t, err)
 
 	restored := make(map[string]string)

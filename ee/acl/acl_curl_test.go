@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
@@ -38,9 +39,10 @@ func TestCurlAuthorization(t *testing.T) {
 
 	// test query through curl
 	token, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   userid,
-		Passwd:   userpassword,
+		Endpoint:  adminEndpoint,
+		UserID:    userid,
+		Passwd:    userpassword,
+		Namespace: x.GalaxyNamespace,
 	})
 	require.NoError(t, err, "login failed")
 
@@ -99,6 +101,7 @@ func TestCurlAuthorization(t *testing.T) {
 	token, err = testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint:   adminEndpoint,
 		RefreshJwt: token.RefreshToken,
+		Namespace:  x.GalaxyNamespace,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 

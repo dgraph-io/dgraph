@@ -133,7 +133,6 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
-		WithValueThreshold(1 << 20 /* 1 KB */).
 		WithEncryptionKey(key).
 		WithBlockCacheSize(r.opt.BlockCacheSize).
 		WithIndexCacheSize(r.opt.IndexCacheSize)
@@ -293,7 +292,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 		}
 
 		for i := 0; i < len(kvs.Kv); i += maxSplitBatchLen {
-			// Flush the write batch when the max batch length is reached to prevent the
+			// flush the write batch when the max batch length is reached to prevent the
 			// value log from growing over the allowed limit.
 			if splitBatchLen >= maxSplitBatchLen {
 				x.Check(ci.splitWriter.Flush())

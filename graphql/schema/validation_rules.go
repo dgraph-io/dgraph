@@ -18,11 +18,17 @@ package schema
 
 import (
 	"errors"
-	"strconv"
-
+	"fmt"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/validator"
+	"strconv"
 )
+
+var allowedFilters = []string{"StringHashFilter", "StringExactFilter", "StringFullTextFilter",
+	"StringRegExpFilter", "StringTermFilter", "DateTimeFilter", "FloatFilter", "Int64Filter", "IntFilter", "PointGeoFilter",
+	"ContainsFilter", "IntersectsFilter", "PolygonGeoFilter"}
 
 func listInputCoercion(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
@@ -51,6 +57,18 @@ func listInputCoercion(observers *validator.Events, addError validator.AddErrFun
 	})
 }
 
+func filterCheck(observers *validator.Events, addError validator.AddErrFunc) {
+	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
+		if value.Definition == nil {
+			return
+		}
+
+		if x.HasString(allowedFilters, value.Definition.Name) && len(value.Children) > 1 {
+			addError(validator.Message("%s filter expects only one filter function, got: %d", value.Definition.Name, len(value.Children)), validator.At(value.Position))
+		}
+	})
+}
+
 func variableTypeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnValue(func(walker *validator.Walker, value *ast.Value) {
 		if value.Definition == nil || value.ExpectedType == nil ||
@@ -73,20 +91,43 @@ func variableTypeCheck(observers *validator.Events, addError validator.AddErrFun
 
 func directiveArgumentsCheck(observers *validator.Events, addError validator.AddErrFunc) {
 	observers.OnDirective(func(walker *validator.Walker, directive *ast.Directive) {
-
 		if directive.Name == cascadeDirective && len(directive.Arguments) == 1 {
 			if directive.ParentDefinition == nil {
 				addError(validator.Message("Schema is not set yet. Please try after sometime."))
 				return
 			}
-			if directive.Arguments.ForName(cascadeArg) == nil {
+			fieldArg := directive.Arguments.ForName(cascadeArg)
+			if fieldArg == nil {
 				return
 			}
+			isVariable := fieldArg.Value.Kind == ast.Variable
+			fieldsVal, _ := directive.ArgumentMap(walker.Variables)[cascadeArg].([]interface{})
+			if len(fieldsVal) == 0 {
+				return
+			}
+			var validatorPath ast.Path
+			if isVariable {
+				validatorPath = ast.Path{ast.PathName("variables")}
+				validatorPath = append(validatorPath, ast.PathName(fieldArg.Value.Raw))
+
+			}
+
 			typFields := directive.ParentDefinition.Fields
-			for _, child := range directive.Arguments.ForName(cascadeArg).Value.Children {
-				if typFields.ForName(child.Value.Raw) == nil {
-					addError(validator.Message("Field `%s` is not present in type `%s`. You can only use fields which are in type `%s`",
-						child.Value.Raw, directive.ParentDefinition.Name, directive.ParentDefinition.Name))
+			typName := directive.ParentDefinition.Name
+
+			for _, value := range fieldsVal {
+				v, ok := value.(string)
+				if !ok {
+					continue
+				}
+				if typFields.ForName(v) == nil {
+					err := fmt.Sprintf("Field `%s` is not present in type `%s`."+
+						" You can only use fields in cascade which are in type `%s`", value, typName, typName)
+					if isVariable {
+						validatorPath = append(validatorPath, ast.PathName(v))
+						err = gqlerror.ErrorPathf(validatorPath, err).Error()
+					}
+					addError(validator.Message(err), validator.At(directive.Position))
 					return
 				}
 

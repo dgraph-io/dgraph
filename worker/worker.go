@@ -59,7 +59,7 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
 	go limiter.bleed()
 
 	grpcOpts := []grpc.ServerOption{
@@ -83,9 +83,18 @@ type grpcWorker struct {
 func (w *grpcWorker) Subscribe(
 	req *pb.SubscriptionRequest, stream pb.Worker_SubscribeServer) error {
 	// Subscribe on given prefixes.
+	var matches []badgerpb.Match
+	for _, p := range req.GetPrefixes() {
+		matches = append(matches, badgerpb.Match{
+			Prefix: p,
+		})
+	}
+	for _, m := range req.GetMatches() {
+		matches = append(matches, *m)
+	}
 	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
 		return stream.Send(kvs)
-	}, req.GetPrefixes()...)
+	}, matches)
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
@@ -129,6 +138,8 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+
+	groups().Node.cdcTracker.Close()
 }
 
 // UpdateCacheMb updates the value of cache_mb and updates the corresponding cache sizes.

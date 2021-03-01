@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opencensus.io/trace"
-
 	"contrib.go.opencensus.io/exporter/jaeger"
 	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
@@ -45,6 +43,7 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -59,6 +58,15 @@ var (
 	// NumEdges is the total number of edges created so far.
 	NumEdges = stats.Int64("num_edges_total",
 		"Total number of edges created", stats.UnitDimensionless)
+	// NumBackups is the number of backups requested
+	NumBackups = stats.Int64("num_backups_total",
+		"Total number of backups requested", stats.UnitDimensionless)
+	// NumBackupsSuccess is the number of backups successfully completed
+	NumBackupsSuccess = stats.Int64("num_backups_success_total",
+		"Total number of backups completed", stats.UnitDimensionless)
+	// NumBackupsFailed is the number of backups failed
+	NumBackupsFailed = stats.Int64("num_backups_failed_total",
+		"Total number of backups failed", stats.UnitDimensionless)
 	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
@@ -71,6 +79,9 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
+	// PendingBackups records if a backup is currently in progress
+	PendingBackups = stats.Int64("pending_backups_total",
+		"Number of backups", stats.UnitDimensionless)
 	// MemoryAlloc records the amount of memory allocated via jemalloc
 	MemoryAlloc = stats.Int64("memory_alloc_bytes",
 		"Amount of memory allocated", stats.UnitBytes)
@@ -83,6 +94,15 @@ var (
 	// MemoryProc records the amount of memory used in processes.
 	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
+	// DiskFree records the number of bytes free on the disk
+	DiskFree = stats.Int64("disk_free_bytes",
+		"Total number of bytes free on disk", stats.UnitBytes)
+	// DiskUsed records the number of bytes free on the disk
+	DiskUsed = stats.Int64("disk_used_bytes",
+		"Total number of bytes used on disk", stats.UnitBytes)
+	// DiskTotal records the number of bytes free on the disk
+	DiskTotal = stats.Int64("disk_total_bytes",
+		"Total number of bytes on disk", stats.UnitBytes)
 	// ActiveMutations is the current number of active mutations.
 	ActiveMutations = stats.Int64("active_mutations_total",
 		"Number of active mutations", stats.UnitDimensionless)
@@ -99,9 +119,15 @@ var (
 	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
-	// TxnAborts records count of aborted transactions.
+	// TxnCommits records count of committed transactions.
+	TxnCommits = stats.Int64("txn_commits_total",
+		"Number of transaction commits", stats.UnitDimensionless)
+	// TxnDiscards records count of discarded transactions by the client.
+	TxnDiscards = stats.Int64("txn_discards_total",
+		"Number of transaction discards by the client", stats.UnitDimensionless)
+	// TxnAborts records count of aborted transactions by the server.
 	TxnAborts = stats.Int64("txn_aborts_total",
-		"Number of transaction aborts", stats.UnitDimensionless)
+		"Number of transaction aborts by the server", stats.UnitDimensionless)
 	// PBlockHitRatio records the hit ratio of posting store block cache.
 	PBlockHitRatio = stats.Float64("hit_ratio_postings_block",
 		"Hit ratio of p store block cache", stats.UnitDimensionless)
@@ -111,6 +137,15 @@ var (
 	// PLCacheHitRatio records the hit ratio of posting list cache.
 	PLCacheHitRatio = stats.Float64("hit_ratio_posting_cache",
 		"Hit ratio of posting list cache", stats.UnitDimensionless)
+	// RaftHasLeader records whether this instance has a leader
+	RaftHasLeader = stats.Int64("raft_has_leader",
+		"Whether or not a leader exists for the group", stats.UnitDimensionless)
+	// RaftIsLeader records whether this instance is the leader
+	RaftIsLeader = stats.Int64("raft_is_leader",
+		"Whether or not this instance is the leader of the group", stats.UnitDimensionless)
+	// RaftLeaderChanges records the total number of leader changes seen.
+	RaftLeaderChanges = stats.Int64("raft_leader_changes_total",
+		"Total number of leader changes seen", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -118,10 +153,16 @@ var (
 
 	// Tag keys.
 
+	// KeyGroup is the tag key used to record the group for Raft metrics.
+	KeyGroup, _ = tag.NewKey("group")
+
 	// KeyStatus is the tag key used to record the status of the server.
 	KeyStatus, _ = tag.NewKey("status")
 	// KeyMethod is the tag key used to record the method (e.g read or mutate).
 	KeyMethod, _ = tag.NewKey("method")
+
+	// KeyDirType is the tag key used to record the group for FileSystem metrics
+	KeyDirType, _ = tag.NewKey("dir")
 
 	// Tag values.
 
@@ -140,6 +181,10 @@ var (
 	allTagKeys = []tag.Key{
 		KeyStatus, KeyMethod,
 	}
+
+	allRaftKeys = []tag.Key{KeyGroup}
+
+	allFSKeys = []tag.Key{KeyDirType}
 
 	allViews = []*view.View{
 		{
@@ -164,39 +209,46 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        RaftAppliedIndex.Name(),
-			Measure:     RaftAppliedIndex,
-			Description: RaftAppliedIndex.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        NumBackups.Name(),
+			Measure:     NumBackups,
+			Description: NumBackups.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
-			Name:        RaftApplyCh.Name(),
-			Measure:     RaftApplyCh,
-			Description: RaftApplyCh.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        NumBackupsSuccess.Name(),
+			Measure:     NumBackupsSuccess,
+			Description: NumBackupsSuccess.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
-			Name:        RaftPendingSize.Name(),
-			Measure:     RaftPendingSize,
-			Description: RaftPendingSize.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        TxnCommits.Name(),
+			Measure:     TxnCommits,
+			Description: TxnCommits.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
-			Name:        MaxAssignedTs.Name(),
-			Measure:     MaxAssignedTs,
-			Description: MaxAssignedTs.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Name:        TxnDiscards.Name(),
+			Measure:     TxnDiscards,
+			Description: TxnDiscards.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        TxnAborts.Name(),
 			Measure:     TxnAborts,
 			Description: TxnAborts.Description(),
 			Aggregation: view.Count(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
+		},
+		{
+			Name:        ActiveMutations.Name(),
+			Measure:     ActiveMutations,
+			Description: ActiveMutations.Description(),
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 
 		// Last value aggregations
@@ -212,6 +264,13 @@ var (
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
 			Aggregation: view.LastValue(),
+			TagKeys:     nil,
+		},
+		{
+			Name:        PendingBackups.Name(),
+			Measure:     PendingBackups,
+			Description: PendingBackups.Description(),
+			Aggregation: view.Sum(),
 			TagKeys:     nil,
 		},
 		{
@@ -243,11 +302,25 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        ActiveMutations.Name(),
-			Measure:     ActiveMutations,
-			Description: ActiveMutations.Description(),
-			Aggregation: view.Sum(),
-			TagKeys:     nil,
+			Name:        DiskFree.Name(),
+			Measure:     DiskFree,
+			Description: DiskFree.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskUsed.Name(),
+			Measure:     DiskUsed,
+			Description: DiskUsed.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
+		},
+		{
+			Name:        DiskTotal.Name(),
+			Measure:     DiskTotal,
+			Description: DiskTotal.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allFSKeys,
 		},
 		{
 			Name:        AlphaHealth.Name(),
@@ -276,6 +349,56 @@ var (
 			Description: PLCacheHitRatio.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		// Raft metrics
+		{
+			Name:        RaftAppliedIndex.Name(),
+			Measure:     RaftAppliedIndex,
+			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftApplyCh.Name(),
+			Measure:     RaftApplyCh,
+			Description: RaftApplyCh.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftPendingSize.Name(),
+			Measure:     RaftPendingSize,
+			Description: RaftPendingSize.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftHasLeader.Name(),
+			Measure:     RaftHasLeader,
+			Description: RaftHasLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftIsLeader.Name(),
+			Measure:     RaftIsLeader,
+			Description: RaftIsLeader.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allRaftKeys,
+		},
+		{
+			Name:        RaftLeaderChanges.Name(),
+			Measure:     RaftLeaderChanges,
+			Description: RaftLeaderChanges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allRaftKeys,
 		},
 	}
 )
@@ -314,6 +437,8 @@ func init() {
 	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
 	view.RegisterExporter(pe)
 
+	// Exposing metrics at /metrics, which is the usual standard, as well as at the old endpoint
+	http.Handle("/metrics", pe)
 	http.Handle("/debug/prometheus_metrics", pe)
 }
 
@@ -402,35 +527,37 @@ func SinceMs(startTime time.Time) float64 {
 
 // RegisterExporters sets up the services to which metrics will be exported.
 func RegisterExporters(conf *viper.Viper, service string) {
-	if collector := conf.GetString("jaeger.collector"); len(collector) > 0 {
-		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default collectorEndpointURI := "http://localhost:14268"
-		je, err := jaeger.NewExporter(jaeger.Options{
-			Endpoint:    collector,
-			ServiceName: service,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
+		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault("")
+		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// Port details: https://www.jaegertracing.io/docs/getting-started/
+			// Default collectorEndpointURI := "http://localhost:14268"
+			je, err := jaeger.NewExporter(jaeger.Options{
+				Endpoint:    collector,
+				ServiceName: service,
+			})
+			if err != nil {
+				log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+			}
+			// And now finally register it as a Trace Exporter
+			trace.RegisterExporter(je)
 		}
-		// And now finally register it as a Trace Exporter
-		trace.RegisterExporter(je)
-	}
+		if collector := t.GetString("datadog"); len(collector) > 0 {
+			exporter, err := datadog.NewExporter(datadog.Options{
+				Service:   service,
+				TraceAddr: collector,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
 
-	if collector := conf.GetString("datadog.collector"); len(collector) > 0 {
-		exporter, err := datadog.NewExporter(datadog.Options{
-			Service:   service,
-			TraceAddr: collector,
-		})
-		if err != nil {
-			log.Fatal(err)
+			trace.RegisterExporter(exporter)
+
+			// For demoing purposes, always sample.
+			trace.ApplyConfig(trace.Config{
+				DefaultSampler: trace.AlwaysSample(),
+			})
 		}
-
-		trace.RegisterExporter(exporter)
-
-		// For demoing purposes, always sample.
-		trace.ApplyConfig(trace.Config{
-			DefaultSampler: trace.AlwaysSample(),
-		})
 	}
 
 	// Exclusively for stats, metrics, etc. Not for tracing.

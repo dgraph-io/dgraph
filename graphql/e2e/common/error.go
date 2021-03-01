@@ -27,13 +27,14 @@ import (
 	"strings"
 	"testing"
 
+	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -134,8 +135,8 @@ func deepMutationErrors(t *testing.T) {
 	}{
 		"missing ID and XID": {
 			set: &country{States: []*state{{Name: "NOT A VALID STATE"}}},
-			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation " +
-				"payload because type State requires a value for field xcode, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite" +
+				" mutation payload because field xcode cannot be empty",
 		},
 		"ID not valid": {
 			set: &country{States: []*state{{ID: "HI"}}},
@@ -144,13 +145,14 @@ func deepMutationErrors(t *testing.T) {
 		},
 		"ID not found": {
 			set: &country{States: []*state{{ID: "0x1"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because ID \"0x1\" isn't a State",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because ID \"0x1\" isn't a State",
 		},
 		"XID not found": {
 			set: &country{States: []*state{{Code: "NOT A VALID CODE"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because xid " +
-				"\"NOT A VALID CODE\" doesn't exist and input object not well formed because type " +
-				"State requires a value for field name, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because type State requires a value for field name, but no value" +
+				" present",
 		},
 	}
 
@@ -288,7 +290,8 @@ func panicCatcher(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers, true)
+	server := admin2.NewServer()
+	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -310,7 +313,8 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }
@@ -347,7 +351,8 @@ func clientInfoLogin(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers, true)
+	server := admin2.NewServer()
+	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

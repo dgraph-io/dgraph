@@ -158,7 +158,7 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		bm = roaring64.New()
 		pl.Reset()
 
-		// Flush out the buffer.
+		// flush out the buffer.
 		if outBuf.LenNoPadding() > 4<<20 {
 			x.Check(c.writer.Write(outBuf))
 			outBuf.Reset()

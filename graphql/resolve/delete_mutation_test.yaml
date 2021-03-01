@@ -69,15 +69,19 @@
         uid
         Post2 as Author.posts
       }
-      author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
-        id : uid
-        name : Author.name
-        country : Author.country {
-          name : Country.name
-          states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
-            code : State.code
-            name : State.name
-            capital : State.capital
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(0x1, 0x2)) @filter(type(Author))
+      DeleteAuthorPayload.author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
+        Author.id : uid
+        Author.name : Author.name
+        Author.country : Author.country {
+          Country.name : Country.name
+          Country.states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
+            State.code : State.code
+            State.name : State.name
+            State.capital : State.capital
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -260,9 +264,13 @@
       x as deleteA(func: type(A)) @filter(eq(A.name, "xyz")) {
         uid
       }
-      a(func: uid(x)) {
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: type(A)) @filter(eq(A.name, "xyz"))
+      DeleteAPayload.a(func: uid(x)) {
         dgraph.type
-        name : A.name
+        A.name : A.name
         dgraph.uid : uid
       }
     }
@@ -270,3 +278,50 @@
     - deletejson: |
         [{ "uid": "uid(x)"}]
 
+-
+  name: "delete with multiple id's"
+  gqlmutation: |
+    mutation deleteBook($filter: BookFilter!) {
+    	deleteBook(filter: $filter) {
+    		msg
+    	}
+    }
+  gqlvariables: |
+    {
+        "filter": {
+            "or": [
+                {
+                    "title": {
+                        "in": "Sapiens"
+                    }
+                },
+                {
+                    "ISBN": {
+                        "in": "2SB1Q"
+                    }
+                }
+            ]
+        }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+            {
+                "uid": "uid(x)"
+            },
+            {
+                "uid": "uid(author2)",
+                "author.book": [
+                    {
+                        "uid": "uid(x)"
+                    }
+                ]
+            }
+        ]
+  dgquery: |-
+    query {
+      x as deleteBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2SB1Q"))) {
+        uid
+        author2 as Book.author
+      }
+    }

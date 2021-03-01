@@ -27,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -39,9 +38,14 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
 
-var raftDefault = "idx=1; learner=false"
+const (
+	raftDefaults = "idx=1; learner=false;"
+)
 
 type node struct {
 	*conn.Node
@@ -255,29 +259,35 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	return nil
 }
 
+func (n *node) regenerateChecksum() {
+	n.server.AssertLock()
+	state := n.server.state
+	// Regenerate group checksums. These checksums are solely based on which tablets are being
+	// served by the group. If the tablets that a group is serving changes, and the Alpha does
+	// not know about these changes, then the read request must fail.
+	for _, g := range state.GetGroups() {
+		preds := make([]string, 0, len(g.GetTablets()))
+		for pred := range g.GetTablets() {
+			preds = append(preds, pred)
+		}
+		sort.Strings(preds)
+		g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
+	}
+
+	if n.AmLeader() {
+		// It is important to push something to Oracle updates channel, so the subscribers would
+		// get the latest checksum that we calculated above. Otherwise, if all the queries are
+		// best effort queries which don't create any transaction, then the OracleDelta never
+		// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+		n.server.orc.updates <- &pb.OracleDelta{}
+	}
+}
+
 func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	n.server.AssertLock()
 	state := n.server.state
-	defer func() {
-		// Regenerate group checksums. These checksums are solely based on which tablets are being
-		// served by the group. If the tablets that a group is serving changes, and the Alpha does
-		// not know about these changes, then the read request must fail.
-		for _, g := range state.GetGroups() {
-			preds := make([]string, 0, len(g.GetTablets()))
-			for pred := range g.GetTablets() {
-				preds = append(preds, pred)
-			}
-			sort.Strings(preds)
-			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
-		}
-		if n.AmLeader() {
-			// It is important to push something to Oracle updates channel, so the subscribers would
-			// get the latest checksum that we calculated above. Otherwise, if all the queries are
-			// best effort queries which don't create any transaction, then the OracleDelta never
-			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
-			n.server.orc.updates <- &pb.OracleDelta{}
-		}
-	}()
+
+	defer n.regenerateChecksum()
 
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
@@ -311,6 +321,23 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	}
 	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
+	return nil
+}
+
+func (n *node) deleteNamespace(delNs uint64) error {
+	n.server.AssertLock()
+	state := n.server.state
+	glog.Infof("Deleting namespace %d", delNs)
+	defer n.regenerateChecksum()
+
+	for _, group := range state.Groups {
+		for pred := range group.Tablets {
+			ns := x.ParseNamespace(pred)
+			if ns == delNs {
+				delete(group.Tablets, pred)
+			}
+		}
+	}
 	return nil
 }
 
@@ -403,23 +430,37 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
+			}
+		}
 	}
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {
 			glog.Errorf("While applying snapshot: %v\n", err)
 		}
 	}
+	if p.DeleteNs != nil {
+		if err := n.deleteNamespace(p.DeleteNs.Namespace); err != nil {
+			glog.Errorf("While deleting namespace %+v", err)
+			return key, err
+		}
+	}
 
 	switch {
-	case p.MaxLeaseId > state.MaxLeaseId:
-		state.MaxLeaseId = p.MaxLeaseId
+	case p.MaxUID > state.MaxUID:
+		state.MaxUID = p.MaxUID
 	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	case p.MaxLeaseId != 0 || p.MaxTxnTs != 0:
+	case p.MaxNsID > state.MaxNsID:
+		state.MaxNsID = p.MaxNsID
+	case p.MaxUID != 0 || p.MaxTxnTs != 0 || p.MaxNsID != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
-		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
-			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
+		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID=%d\n",
+			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
@@ -809,6 +850,12 @@ func (n *node) calculateAndProposeSnapshot() error {
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -861,6 +908,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
@@ -874,11 +937,14 @@ func (n *node) Run() {
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			span.Annotatef(nil, "Saved to storage")
-			if x.WorkerConfig.HardSync && rd.MustSync {
+			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
+					time.Sleep(10 * time.Millisecond)
+					continue
 				}
 				timer.Record("sync")
+				break
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {

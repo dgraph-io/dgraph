@@ -181,7 +181,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -191,6 +191,7 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
@@ -312,7 +313,7 @@ enum StudentOrderable {
 input StudentFilter {
 	rollNo: StringHashFilter
 	regNo: [ID!]
-	has: StudentHasFilter
+	has: [StudentHasFilter]
 	and: [StudentFilter]
 	or: [StudentFilter]
 	not: StudentFilter
@@ -330,7 +331,7 @@ input StudentPatch {
 
 input StudentRef {
 	regNo: ID
-	rollNo: String @id
+	rollNo: String
 }
 
 input UpdateStudentInput {

@@ -270,7 +270,9 @@ type Post1 {
 
 type Person1 {
   id: String! @id
-  name: String
+  friends: [Person1] @hasInverse(field: friends)
+  closeFriends: [Person1] @hasInverse(field: closeFriends)
+  name: String! @id
 }
 
 type Comment1 {
@@ -378,4 +380,49 @@ type Workflow {
 
 type Node {
     name: String!
+}
+
+type Book {
+    id: ID!
+    publisher: String
+    title: String! @id
+    ISBN: String! @id
+    author: author
+
+}
+
+type author {
+    id: ID!
+    name: String!
+    book: [Book] @hasInverse(field: author)
+}
+# test for entities resolver
+
+type Mission @key(fields: "id") {
+    id: String! @id
+    crew: [Astronaut]
+    spaceShip: [SpaceShip]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    missions: [Mission]
+}
+
+type SpaceShip @key(fields: "id") @extends {
+    id: String! @id @external
+    missions: [Mission]
+}
+
+type Foo {
+    id: String! @id
+    bar: Bar! @hasInverse(field: foo)
+}
+
+type Bar {
+    id: String! @id
+    foo: Foo!
 }

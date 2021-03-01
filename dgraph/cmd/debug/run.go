@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,7 +82,9 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
+	Debug.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
@@ -136,7 +138,7 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
-		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
+		if !pk.IsData() || !strings.HasPrefix(x.ParseAttr(pk.Attr), prefix) {
 			continue
 		}
 		if pk.IsSchema() {
@@ -278,7 +280,8 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		var acc *account
-		if strings.HasPrefix(pk.Attr, "key_") || strings.HasPrefix(pk.Attr, "amount_") {
+		attr := x.ParseAttr(pk.Attr)
+		if strings.HasPrefix(attr, "key_") || strings.HasPrefix(attr, "amount_") {
 			var has bool
 			acc, has = keys[pk.Uid]
 			if !has {
@@ -300,9 +303,9 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 		if num > 0 && acc != nil {
 			switch {
-			case strings.HasPrefix(pk.Attr, "key_"):
+			case strings.HasPrefix(attr, "key_"):
 				acc.Key = num
-			case strings.HasPrefix(pk.Attr, "amount_"):
+			case strings.HasPrefix(attr, "amount_"):
 				acc.Amt = num
 			}
 		}
@@ -574,7 +577,9 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-		x.Check2(buf.WriteString(" attr: " + pk.Attr))
+		ns, attr := x.ParseNamespaceAttr(pk.Attr)
+		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
+		x.Check2(buf.WriteString(" attr: " + attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
@@ -859,8 +864,10 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 		fmt.Fprintf(buf, " Member: %+v .", zpr.Member)
 	case zpr.Tablet != nil:
 		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
-	case zpr.MaxLeaseId > 0:
-		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxLeaseId)
+	case zpr.MaxUID > 0:
+		fmt.Fprintf(buf, " MaxUID: %d .", zpr.MaxUID)
+	case zpr.MaxNsID > 0:
+		fmt.Fprintf(buf, " MaxNsID: %d .", zpr.MaxNsID)
 	case zpr.MaxRaftId > 0:
 		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
 	case zpr.MaxTxnTs > 0:
@@ -909,7 +916,8 @@ func run() {
 		WithReadOnly(opt.readOnly).
 		WithEncryptionKey(opt.key).
 		WithBlockCacheSize(1 << 30).
-		WithIndexCacheSize(1 << 30)
+		WithIndexCacheSize(1 << 30).
+		WithNamespaceOffset(x.NamespaceOffset) // We don't want to see the banned data.
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)

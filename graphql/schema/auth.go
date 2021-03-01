@@ -131,7 +131,7 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 
 func (node *RuleNode) staticEvaluation(av map[string]interface{}) RuleResult {
 	for _, v := range node.Variables {
-		if _, ok := av[v.Variable]; !ok {
+		if val, ok := av[v.Variable]; !ok || val == nil {
 			return Negative
 		}
 	}
@@ -214,7 +214,8 @@ func createEmptyDQLRule(typeName string) *RuleNode {
 	}
 }
 
-func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
+func authRules(sch *schema) (map[string]*TypeAuth, error) {
+	s := sch.schema
 	//TODO: Add position in error.
 	var errResult, err error
 	authRules := make(map[string]*TypeAuth)
@@ -224,14 +225,14 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		authRules[name] = &TypeAuth{Fields: make(map[string]*AuthContainer)}
 		auth := typ.Directives.ForName(authDirective)
 		if auth != nil {
-			authRules[name].Rules, err = parseAuthDirective(s, typ, auth)
+			authRules[name].Rules, err = parseAuthDirective(sch, typ, auth)
 			errResult = AppendGQLErrs(errResult, err)
 		}
 
 		for _, field := range typ.Fields {
 			auth := field.Directives.ForName(authDirective)
 			if auth != nil {
-				authRules[name].Fields[field.Name], err = parseAuthDirective(s, typ, auth)
+				authRules[name].Fields[field.Name], err = parseAuthDirective(sch, typ, auth)
 				errResult = AppendGQLErrs(errResult, err)
 			}
 		}
@@ -321,7 +322,7 @@ func mergeAuthRules(
 }
 
 func parseAuthDirective(
-	s *ast.Schema,
+	sch *schema,
 	typ *ast.Definition,
 	dir *ast.Directive) (*AuthContainer, error) {
 
@@ -333,34 +334,34 @@ func parseAuthDirective(
 	result := &AuthContainer{}
 
 	if pwd := dir.Arguments.ForName("password"); pwd != nil && pwd.Value != nil {
-		result.Password, err = parseAuthNode(s, typ, pwd.Value)
+		result.Password, err = parseAuthNode(sch, typ, pwd.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if qry := dir.Arguments.ForName("query"); qry != nil && qry.Value != nil {
-		result.Query, err = parseAuthNode(s, typ, qry.Value)
+		result.Query, err = parseAuthNode(sch, typ, qry.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if add := dir.Arguments.ForName("add"); add != nil && add.Value != nil {
-		result.Add, err = parseAuthNode(s, typ, add.Value)
+		result.Add, err = parseAuthNode(sch, typ, add.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if upd := dir.Arguments.ForName("update"); upd != nil && upd.Value != nil {
-		result.Update, err = parseAuthNode(s, typ, upd.Value)
+		result.Update, err = parseAuthNode(sch, typ, upd.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if del := dir.Arguments.ForName("delete"); del != nil && del.Value != nil {
-		result.Delete, err = parseAuthNode(s, typ, del.Value)
+		result.Delete, err = parseAuthNode(sch, typ, del.Value)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	return result, errResult
 }
 
-func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNode, error) {
+func parseAuthNode(sch *schema, typ *ast.Definition, val *ast.Value) (*RuleNode, error) {
 
 	if len(val.Children) == 0 {
 		return nil, gqlerror.Errorf("Type %s: @auth: no arguments - "+
@@ -373,7 +374,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if ors := val.Children.ForName("or"); ors != nil && len(ors.Children) > 0 {
 		for _, or := range ors.Children {
-			rn, err := parseAuthNode(s, typ, or.Value)
+			rn, err := parseAuthNode(sch, typ, or.Value)
 			result.Or = append(result.Or, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
@@ -386,7 +387,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if ands := val.Children.ForName("and"); ands != nil && len(ands.Children) > 0 {
 		for _, and := range ands.Children {
-			rn, err := parseAuthNode(s, typ, and.Value)
+			rn, err := parseAuthNode(sch, typ, and.Value)
 			result.And = append(result.And, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
@@ -401,7 +402,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		len(not.Children) == 1 && not.Children[0] != nil {
 
 		var err error
-		result.Not, err = parseAuthNode(s, typ, not)
+		result.Not, err = parseAuthNode(sch, typ, not)
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
@@ -411,7 +412,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
 			result.RBACRule, err = getRBACQuery(typ, rule.Raw)
 		} else {
-			err = gqlValidateRule(s, typ, rule.Raw, result)
+			err = gqlValidateRule(sch, typ, rule.Raw, result)
 		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
@@ -525,7 +526,7 @@ func validateRBACOperators(typ *ast.Definition, query *RBACQuery) (bool, string)
 	return true, ""
 }
 
-func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *RuleNode) error {
+func gqlValidateRule(sch *schema, typ *ast.Definition, rule string, node *RuleNode) error {
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
 		return gqlerror.Errorf("Type %s: @auth: failed to parse GraphQL rule "+
@@ -548,7 +549,7 @@ func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *Rule
 			" one query, found an %s", typ.Name, op.Name)
 	}
 
-	listErr := validator.Validate(s, doc)
+	listErr := validator.Validate(sch.schema, doc, nil)
 	if len(listErr) != 0 {
 		var errs error
 		for _, err := range listErr {
@@ -574,14 +575,22 @@ func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *Rule
 			"rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 
+	opWrapper := &operation{
+		op:                      op,
+		query:                   rule,
+		doc:                     doc,
+		inSchema:                sch,
+		interfaceImplFragFields: map[*ast.Field]string{},
+		// need to fill in vars at query time
+	}
+
+	// recursively expand fragments in operation as selection set fields
+	recursivelyExpandFragmentSelections(f, opWrapper)
+
 	node.Rule = &query{
 		field: f,
-		op: &operation{op: op,
-			query: rule,
-			doc:   doc,
-			// need to fill in vars and schema at query time
-		},
-		sel: op.SelectionSet[0]}
+		op:    opWrapper,
+		sel:   op.SelectionSet[0]}
 	node.Variables = op.VariableDefinitions
 	return nil
 }

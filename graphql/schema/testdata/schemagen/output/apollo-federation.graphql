@@ -1,0 +1,764 @@
+#######################
+# Input Schema
+#######################
+
+type Reviews @key(fields: "id") {
+	id: ID!
+	review: String!
+}
+
+type Student @key(fields: "id") {
+	id: ID!
+	name: String!
+	age: Int!
+}
+
+type School @key(fields: "id") {
+	id: ID!
+	students(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	studentsAggregate(filter: StudentFilter): StudentAggregateResult
+}
+
+type Country {
+	code: String! @id
+	name: String!
+}
+
+type Product @key(fields: "id") @extends {
+	id: ID! @external
+	name: String! @external
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
+}
+
+type User @key(fields: "name") @extends {
+	id: ID! @external
+	name: String! @id @external
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
+}
+
+#######################
+# Extended Definitions
+#######################
+
+"""
+The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+Int64 can represent values in range [-(2^63),(2^63 - 1)].
+"""
+scalar Int64
+
+"""
+The DateTime scalar type represents date and time as a string in RFC3339 format.
+For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+"""
+scalar DateTime
+
+input IntRange{
+	min: Int!
+	max: Int!
+}
+
+input FloatRange{
+	min: Float!
+	max: Float!
+}
+
+input Int64Range{
+	min: Int64!
+	max: Int64!
+}
+
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
+}
+
+input StringRange{
+	min: String!
+	max: String!
+}
+
+enum DgraphIndex {
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+type Point {
+	longitude: Float!
+	latitude: Float!
+}
+
+input PointRef {
+	longitude: Float!
+	latitude: Float!
+}
+
+input NearFilter {
+	distance: Float!
+	coordinate: PointRef!
+}
+
+input PointGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+}
+
+type PointList {
+	points: [Point!]!
+}
+
+input PointListRef {
+	points: [PointRef!]!
+}
+
+type Polygon {
+	coordinates: [PointList!]!
+}
+
+input PolygonRef {
+	coordinates: [PointListRef!]!
+}
+
+type MultiPolygon {
+	polygons: [Polygon!]!
+}
+
+input MultiPolygonRef {
+	polygons: [PolygonRef!]!
+}
+
+input WithinFilter {
+	polygon: PolygonRef!
+}
+
+input ContainsFilter {
+	point: PointRef
+	polygon: PolygonRef
+}
+
+input IntersectsFilter {
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
+}
+
+input PolygonGeoFilter {
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
+}
+
+input GenerateQueryParams {
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
+}
+
+input GenerateMutationParams {
+	add: Boolean
+	update: Boolean
+	delete: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
+directive @cascade(fields: [String]) on FIELD
+directive @lambda on FIELD_DEFINITION
+directive @cacheControl(maxAge: Int!) on QUERY
+directive @generate(
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
+
+input IntFilter {
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
+}
+
+input Int64Filter {
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
+}
+
+input FloatFilter {
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
+}
+
+input StringHashFilter {
+	eq: String
+	in: [String]
+}
+
+#######################
+# Extended Apollo Definitions
+#######################
+union _Entity = Reviews | Student | School | Product | User
+
+scalar _Any
+scalar _FieldSet
+
+type _Service {
+	sdl: String
+}
+
+directive @external on FIELD_DEFINITION
+directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
+directive @extends on OBJECT | INTERFACE
+
+#######################
+# Generated Types
+#######################
+
+type AddCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	numUids: Int
+}
+
+type AddProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	numUids: Int
+}
+
+type AddReviewsPayload {
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	numUids: Int
+}
+
+type AddSchoolPayload {
+	school(filter: SchoolFilter, first: Int, offset: Int): [School]
+	numUids: Int
+}
+
+type AddStudentPayload {
+	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type CountryAggregateResult {
+	count: Int
+	codeMin: String
+	codeMax: String
+	nameMin: String
+	nameMax: String
+}
+
+type DeleteCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	msg: String
+	numUids: Int
+}
+
+type DeleteProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	msg: String
+	numUids: Int
+}
+
+type DeleteReviewsPayload {
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	msg: String
+	numUids: Int
+}
+
+type DeleteSchoolPayload {
+	school(filter: SchoolFilter, first: Int, offset: Int): [School]
+	msg: String
+	numUids: Int
+}
+
+type DeleteStudentPayload {
+	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
+}
+
+type ProductAggregateResult {
+	count: Int
+	idMin: ID
+	idMax: ID
+}
+
+type ReviewsAggregateResult {
+	count: Int
+	reviewMin: String
+	reviewMax: String
+}
+
+type SchoolAggregateResult {
+	count: Int
+}
+
+type StudentAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+	ageMin: Int
+	ageMax: Int
+	ageSum: Int
+	ageAvg: Float
+}
+
+type UpdateCountryPayload {
+	country(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	numUids: Int
+}
+
+type UpdateProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	numUids: Int
+}
+
+type UpdateReviewsPayload {
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	numUids: Int
+}
+
+type UpdateSchoolPayload {
+	school(filter: SchoolFilter, first: Int, offset: Int): [School]
+	numUids: Int
+}
+
+type UpdateStudentPayload {
+	student(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type UserAggregateResult {
+	count: Int
+	nameMin: String
+	nameMax: String
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum CountryHasFilter {
+	code
+	name
+}
+
+enum CountryOrderable {
+	code
+	name
+}
+
+enum ProductHasFilter {
+	reviews
+}
+
+enum ProductOrderable {
+	id
+}
+
+enum ReviewsHasFilter {
+	review
+}
+
+enum ReviewsOrderable {
+	review
+}
+
+enum SchoolHasFilter {
+	students
+}
+
+enum StudentHasFilter {
+	name
+	age
+}
+
+enum StudentOrderable {
+	name
+	age
+}
+
+enum UserHasFilter {
+	name
+	reviews
+}
+
+enum UserOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddCountryInput {
+	code: String!
+	name: String!
+}
+
+input AddProductInput {
+	id: ID!
+	reviews: [ReviewsRef]
+}
+
+input AddReviewsInput {
+	review: String!
+}
+
+input AddSchoolInput {
+	students: [StudentRef]
+}
+
+input AddStudentInput {
+	name: String!
+	age: Int!
+}
+
+input AddUserInput {
+	name: String!
+	reviews: [ReviewsRef]
+}
+
+input CountryFilter {
+	code: StringHashFilter
+	has: [CountryHasFilter]
+	and: [CountryFilter]
+	or: [CountryFilter]
+	not: CountryFilter
+}
+
+input CountryOrder {
+	asc: CountryOrderable
+	desc: CountryOrderable
+	then: CountryOrder
+}
+
+input CountryPatch {
+	name: String
+}
+
+input CountryRef {
+	code: String
+	name: String
+}
+
+input ProductFilter {
+	id: [ID!]
+	has: [ProductHasFilter]
+	and: [ProductFilter]
+	or: [ProductFilter]
+	not: ProductFilter
+}
+
+input ProductOrder {
+	asc: ProductOrderable
+	desc: ProductOrderable
+	then: ProductOrder
+}
+
+input ProductPatch {
+	reviews: [ReviewsRef]
+}
+
+input ProductRef {
+	id: ID
+	reviews: [ReviewsRef]
+}
+
+input ReviewsFilter {
+	id: [ID!]
+	has: [ReviewsHasFilter]
+	and: [ReviewsFilter]
+	or: [ReviewsFilter]
+	not: ReviewsFilter
+}
+
+input ReviewsOrder {
+	asc: ReviewsOrderable
+	desc: ReviewsOrderable
+	then: ReviewsOrder
+}
+
+input ReviewsPatch {
+	review: String
+}
+
+input ReviewsRef {
+	id: ID
+	review: String
+}
+
+input SchoolFilter {
+	id: [ID!]
+	has: [SchoolHasFilter]
+	and: [SchoolFilter]
+	or: [SchoolFilter]
+	not: SchoolFilter
+}
+
+input SchoolPatch {
+	students: [StudentRef]
+}
+
+input SchoolRef {
+	id: ID
+	students: [StudentRef]
+}
+
+input StudentFilter {
+	id: [ID!]
+	has: [StudentHasFilter]
+	and: [StudentFilter]
+	or: [StudentFilter]
+	not: StudentFilter
+}
+
+input StudentOrder {
+	asc: StudentOrderable
+	desc: StudentOrderable
+	then: StudentOrder
+}
+
+input StudentPatch {
+	name: String
+	age: Int
+}
+
+input StudentRef {
+	id: ID
+	name: String
+	age: Int
+}
+
+input UpdateCountryInput {
+	filter: CountryFilter!
+	set: CountryPatch
+	remove: CountryPatch
+}
+
+input UpdateProductInput {
+	filter: ProductFilter!
+	set: ProductPatch
+	remove: ProductPatch
+}
+
+input UpdateReviewsInput {
+	filter: ReviewsFilter!
+	set: ReviewsPatch
+	remove: ReviewsPatch
+}
+
+input UpdateSchoolInput {
+	filter: SchoolFilter!
+	set: SchoolPatch
+	remove: SchoolPatch
+}
+
+input UpdateStudentInput {
+	filter: StudentFilter!
+	set: StudentPatch
+	remove: StudentPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	name: StringHashFilter
+	has: [UserHasFilter]
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	reviews: [ReviewsRef]
+}
+
+input UserRef {
+	name: String
+	reviews: [ReviewsRef]
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	_entities(representations: [_Any!]!): [_Entity]!
+	_service: _Service!
+	getReviews(id: ID!): Reviews
+	queryReviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	aggregateReviews(filter: ReviewsFilter): ReviewsAggregateResult
+	getStudent(id: ID!): Student
+	queryStudent(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	aggregateStudent(filter: StudentFilter): StudentAggregateResult
+	getSchool(id: ID!): School
+	querySchool(filter: SchoolFilter, first: Int, offset: Int): [School]
+	aggregateSchool(filter: SchoolFilter): SchoolAggregateResult
+	getCountry(code: String!): Country
+	queryCountry(filter: CountryFilter, order: CountryOrder, first: Int, offset: Int): [Country]
+	aggregateCountry(filter: CountryFilter): CountryAggregateResult
+	getProduct(id: ID!): Product
+	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	aggregateProduct(filter: ProductFilter): ProductAggregateResult
+	getUser(name: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addReviews(input: [AddReviewsInput!]!): AddReviewsPayload
+	updateReviews(input: UpdateReviewsInput!): UpdateReviewsPayload
+	deleteReviews(filter: ReviewsFilter!): DeleteReviewsPayload
+	addStudent(input: [AddStudentInput!]!): AddStudentPayload
+	updateStudent(input: UpdateStudentInput!): UpdateStudentPayload
+	deleteStudent(filter: StudentFilter!): DeleteStudentPayload
+	addSchool(input: [AddSchoolInput!]!): AddSchoolPayload
+	updateSchool(input: UpdateSchoolInput!): UpdateSchoolPayload
+	deleteSchool(filter: SchoolFilter!): DeleteSchoolPayload
+	addCountry(input: [AddCountryInput!]!, upsert: Boolean): AddCountryPayload
+	updateCountry(input: UpdateCountryInput!): UpdateCountryPayload
+	deleteCountry(filter: CountryFilter!): DeleteCountryPayload
+	addProduct(input: [AddProductInput!]!): AddProductPayload
+	updateProduct(input: UpdateProductInput!): UpdateProductPayload
+	deleteProduct(filter: ProductFilter!): DeleteProductPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+}
+

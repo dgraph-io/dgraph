@@ -138,6 +138,28 @@ func (s *state) DeleteType(typeName string) error {
 	return nil
 }
 
+// DeletePredsForNs deletes the predicate information for the namespace from the schema.
+func (s *state) DeletePredsForNs(delNs uint64) {
+	if s == nil {
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+	for pred := range s.predicate {
+		ns := x.ParseNamespace(pred)
+		if ns == delNs {
+			delete(s.predicate, pred)
+			delete(s.mutSchema, pred)
+		}
+	}
+	for typ := range s.types {
+		ns := x.ParseNamespace(typ)
+		if ns == delNs {
+			delete(s.types, typ)
+		}
+	}
+}
+
 func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 	if schema == nil {
 		return ""
@@ -433,7 +455,7 @@ func Load(predicate string) error {
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound || err == badger.ErrBannedKey {
 		return nil
 	}
 	if err != nil {
@@ -536,8 +558,8 @@ func LoadTypesFromDb() error {
 // InitialTypes returns the type updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // types to insert.
-func InitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(false)
+func InitialTypes(namespace uint64) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, false)
 }
 
 // CompleteInitialTypes returns all the type updates regardless of the worker
@@ -546,12 +568,12 @@ func InitialTypes() []*pb.TypeUpdate {
 // example of such situation is while allowing type updates to go through during
 // alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
-func CompleteInitialTypes() []*pb.TypeUpdate {
-	return initialTypesInternal(true)
+func CompleteInitialTypes(namespace uint64) []*pb.TypeUpdate {
+	return initialTypesInternal(namespace, true)
 }
 
 // NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
-func initialTypesInternal(all bool) []*pb.TypeUpdate {
+func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
 		&pb.TypeUpdate{
@@ -567,32 +589,10 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 				},
 			},
 		}, &pb.TypeUpdate{
-			TypeName: "dgraph.graphql.history",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.graphql.schema_history",
-					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.schema_created_at",
-					ValueType: pb.Posting_DATETIME,
-				},
-			},
-		}, &pb.TypeUpdate{
 			TypeName: "dgraph.graphql.persisted_query",
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.graphql.p_query",
-					ValueType: pb.Posting_STRING,
-				}, {
-					Predicate: "dgraph.graphql.p_sha256hash",
-					ValueType: pb.Posting_STRING,
-				},
-			},
-		}, &pb.TypeUpdate{
-			TypeName: "dgraph.type.cors",
-			Fields: []*pb.SchemaUpdate{
-				{
-					Predicate: "dgraph.cors",
 					ValueType: pb.Posting_STRING,
 				},
 			},
@@ -646,14 +646,20 @@ func initialTypesInternal(all bool) []*pb.TypeUpdate {
 			})
 	}
 
+	for _, typ := range initialTypes {
+		typ.TypeName = x.NamespaceAttr(namespace, typ.TypeName)
+		for _, fields := range typ.Fields {
+			fields.Predicate = x.NamespaceAttr(namespace, fields.Predicate)
+		}
+	}
 	return initialTypes
 }
 
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
-func InitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(false)
+func InitialSchema(namespace uint64) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, false)
 }
 
 // CompleteInitialSchema returns all the schema updates regardless of the worker
@@ -661,22 +667,15 @@ func InitialSchema() []*pb.SchemaUpdate {
 // in advance and it's better to create all the reserved predicates and remove
 // them later than miss some of them. An example of such situation is during bulk
 // loading.
-func CompleteInitialSchema() []*pb.SchemaUpdate {
-	return initialSchemaInternal(true)
+func CompleteInitialSchema(namespace uint64) []*pb.SchemaUpdate {
+	return initialSchemaInternal(namespace, true)
 }
 
-func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
+func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema,
 		&pb.SchemaUpdate{
-			Predicate: "dgraph.cors",
-			ValueType: pb.Posting_STRING,
-			List:      true,
-			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
-			Upsert:    true,
-		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.type",
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
@@ -695,19 +694,10 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			Tokenizer: []string{"exact"},
 			Upsert:    true,
 		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_history",
-			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.schema_created_at",
-			ValueType: pb.Posting_DATETIME,
-		}, &pb.SchemaUpdate{
 			Predicate: "dgraph.graphql.p_query",
 			ValueType: pb.Posting_STRING,
-		}, &pb.SchemaUpdate{
-			Predicate: "dgraph.graphql.p_sha256hash",
-			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"sha256"},
 		})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -748,7 +738,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 			},
 		}...)
 	}
-
+	for _, sch := range initialSchema {
+		sch.Predicate = x.NamespaceAttr(namespace, sch.Predicate)
+	}
 	return initialSchema
 }
 
@@ -761,7 +753,7 @@ func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema()
+	initialSchema := CompleteInitialSchema(x.ParseNamespace(update.Predicate))
 	for _, original := range initialSchema {
 		if original.Predicate != update.Predicate {
 			continue
@@ -780,7 +772,7 @@ func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
 		return false
 	}
 
-	initialTypes := CompleteInitialTypes()
+	initialTypes := CompleteInitialTypes(x.ParseNamespace(update.TypeName))
 	for _, original := range initialTypes {
 		if original.TypeName != update.TypeName {
 			continue

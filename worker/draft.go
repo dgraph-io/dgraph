@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -41,7 +42,6 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -68,9 +68,9 @@ type node struct {
 	streaming    int32  // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[op]*z.Closer
-	opsLock sync.Mutex
-
+	ops         map[op]*z.Closer
+	opsLock     sync.Mutex
+	cdcTracker  *CDC
 	canCampaign bool
 	elog        trace.EventLog
 
@@ -246,13 +246,14 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []raftpb.Entry, 1000),
-		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  z.NewCloser(4), // Matches CLOSER:1
-		ops:     make(map[op]*z.Closer),
+		applyCh:    make(chan []raftpb.Entry, 1000),
+		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:     z.NewCloser(4), // Matches CLOSER:1
+		ops:        make(map[op]*z.Closer),
+		cdcTracker: newCDC(),
 	}
-	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor(&m.Applied, x.WorkerConfig.LudicrousConcurrency)
+	if x.WorkerConfig.LudicrousEnabled {
+		n.ex = newExecutor(&m.Applied, int(x.WorkerConfig.Ludicrous.GetInt64("concurrency")))
 	}
 	return n
 }
@@ -335,14 +336,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		posting.ResetCache()
 
 		if groups().groupId() == 1 {
-			initialSchema := schema.InitialSchema()
+			initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 			for _, s := range initialSchema {
 				applySchema(s)
 			}
 		}
 
 		// Propose initial types as well after a drop all as they would have been cleared.
-		initialTypes := schema.InitialTypes()
+		initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 		for _, t := range initialTypes {
 			if err := updateType(t.GetTypeName(), *t); err != nil {
 				return err
@@ -380,7 +381,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// as we call DropPrefix() on Badger while running schema mutations. DropPrefix() blocks
 		// writes on Badger and returns error if writes are tried. To avoid this we should wait for
 		// all active mutations to finish irrespective of predicates present in schema mutation.
-		if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.Schema) > 0 {
+		if x.WorkerConfig.LudicrousEnabled && len(proposal.Mutations.Schema) > 0 {
 			n.ex.waitForActiveMutations()
 		}
 
@@ -472,7 +473,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return ei.GetEntity() < ej.GetEntity()
 	})
 
-	if x.WorkerConfig.LudicrousMode {
+	if x.WorkerConfig.LudicrousEnabled {
 		n.ex.addEdges(ctx, proposal)
 		return nil
 	}
@@ -480,7 +481,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return zero.ErrConflict
+		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
@@ -611,7 +612,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
-
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
 		x.UpdateDrainingMode(true)
@@ -636,6 +636,15 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 				{StartTs: ts, CommitTs: ts},
 			},
 		})
+
+	case proposal.DeleteNs != nil:
+		x.AssertTrue(proposal.DeleteNs.Namespace != x.GalaxyNamespace)
+		n.elog.Printf("Deleting namespace: %d", proposal.DeleteNs.Namespace)
+		return posting.DeleteNamespace(proposal.DeleteNs.Namespace)
+
+	case proposal.CdcState != nil:
+		n.cdcTracker.updateCDCState(proposal.CdcState)
+		return nil
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
@@ -684,7 +693,10 @@ func (n *node) processApplyCh() {
 
 			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
 			// commit ts.
-			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
+			// WARNING: This would cause the leader and the follower to diverge in the timestamp
+			// they use to commit the same thing.
+			// TODO: This is broken. We need to find a way to fix this.
+			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
 
@@ -697,6 +709,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
+				// if this applyCommited fails, how do we ensure
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
@@ -764,7 +777,12 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}
 		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToDisk(writer, commit)
+			err := txn.CommitToDisk(writer, commit)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
 		})
 
 		if err != nil {
@@ -776,7 +794,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if x.WorkerConfig.LudicrousMode {
+	if x.WorkerConfig.LudicrousEnabled {
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting to commit: +%v", err)
 		}
@@ -889,8 +907,35 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	return nil
 }
 
-func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(0, discardN)
+func (n *node) proposeCDCState(ts uint64) error {
+	proposal := &pb.Proposal{
+		CdcState: &pb.CDCState{
+			SentTs: ts,
+		},
+	}
+	glog.V(2).Infof("Proposing new CDC state ts: %d\n", ts)
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data[8:])
+	data = data[:8+sz]
+	x.Check(err)
+	return n.Raft().Propose(n.ctx, data)
+}
+
+func (n *node) proposeSnapshot() error {
+	lastIdx := x.Min(n.Applied.DoneUntil(), n.cdcTracker.getSeenIndex())
+	// We can't rely upon the Raft entries to determine the minPendingStart,
+	// because there are many cases during mutations where we don't commit or
+	// abort the transaction. This might happen due to an early error thrown.
+	// Only the mutations which make it to Zero for a commit/abort decision have
+	// corresponding Delta entries. So, instead of replicating all that logic
+	// here, we just use the MinPendingStartTs tracked by the Oracle, and look
+	// for that in the logs.
+	//
+	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
+	// snapshotIdx. In any case, we continue picking up txn updates, to generate
+	// a maxCommitTs, which would become the readTs for the snapshot.
+	minPendingStart := x.Min(posting.Oracle().MinPendingStartTs(), n.cdcTracker.getTs())
+	snap, err := n.calculateSnapshot(0, lastIdx, minPendingStart)
 	if err != nil {
 		return err
 	}
@@ -937,7 +982,8 @@ func (n *node) updateRaftProgress() error {
 	// stored applied.
 	applied := n.Store.Uint(raftwal.CheckpointIndex)
 
-	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	snap, err := n.calculateSnapshot(applied, n.Applied.DoneUntil(),
+		posting.Oracle().MinPendingStartTs())
 	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
@@ -1006,7 +1052,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					// We can set discardN argument to zero, because we already know that calculate
 					// would be true if either we absolutely needed to calculate the snapshot,
 					// or our checkpoint already crossed the SnapshotAfter threshold.
-					if err := n.proposeSnapshot(0); err != nil {
+					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
@@ -1020,7 +1066,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			if x.WorkerConfig.LudicrousMode {
+			if x.WorkerConfig.LudicrousEnabled {
 				n.ex.closer.SignalAndWait()
 			}
 			close(done)
@@ -1051,6 +1097,12 @@ const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
+
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
 
 	firstRun := true
 	var leader bool
@@ -1106,6 +1158,23 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
+				// create context with group id
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, fmt.Sprintf("%d", n.gid)))
+				// detect leadership changes
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -1196,11 +1265,14 @@ func (n *node) Run() {
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
-			if x.WorkerConfig.HardSync && rd.MustSync {
+			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
+					time.Sleep(10 * time.Millisecond)
+					continue
 				}
 				timer.Record("sync")
+				break
 			}
 
 			// Now schedule or apply committed entries.
@@ -1233,7 +1305,7 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode {
+						if x.WorkerConfig.LudicrousEnabled {
 							var p pb.Proposal
 							if err := p.Unmarshal(entry.Data[8:]); err != nil {
 								glog.Errorf("Unable to unmarshal proposal: %v %x\n",
@@ -1475,10 +1547,11 @@ func (n *node) abortOldTransactions() {
 // This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
 // This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
 // until that last checkpoint) that we can use as a new start point for the snapshot calculation.
-func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb.Snapshot, error) {
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
+	discardN := 1
 
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
 	// pending iterators which would ensure that the data above their read ts would not be
@@ -1511,29 +1584,16 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
-	last := n.Applied.DoneUntil()
-	if int(last-first) < discardN {
+	if int(lastIdx-first) < discardN {
 		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
 	}
-	span.Annotatef(nil, "Found Raft entries: %d", last-first)
+	span.Annotatef(nil, "Found Raft entries: %d", lastIdx-first)
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
-	// We can't rely upon the Raft entries to determine the minPendingStart,
-	// because there are many cases during mutations where we don't commit or
-	// abort the transaction. This might happen due to an early error thrown.
-	// Only the mutations which make it to Zero for a commit/abort decision have
-	// corresponding Delta entries. So, instead of replicating all that logic
-	// here, we just use the MinPendingStartTs tracked by the Oracle, and look
-	// for that in the logs.
-	//
-	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
-	// snapshotIdx. In any case, we continue picking up txn updates, to generate
-	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
@@ -1541,8 +1601,8 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// cases where the raft log is too big to fit into memory. Instead of retrieving
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
-	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
+	for batchFirst := first; batchFirst <= lastIdx; {
+		entries, err := n.Store.Entries(batchFirst, lastIdx+1, 256<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
@@ -1576,7 +1636,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				}
 			}
 			// In ludicrous mode commitTs for any transaction is same as startTs.
-			if x.WorkerConfig.LudicrousMode {
+			if x.WorkerConfig.LudicrousEnabled {
 				maxCommitTs = x.Max(maxCommitTs, start)
 			} else if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
@@ -1726,6 +1786,7 @@ func (n *node) InitAndStartNode() {
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
 	go n.monitorRaftMetrics()
+	go n.cdcTracker.processCDCEvents()
 	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)

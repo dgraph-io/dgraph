@@ -20,11 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgrijalva/jwt-go/v4"
+
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -64,16 +66,28 @@ type subscriber struct {
 
 // AddSubscriber tries to add subscription into the existing polling goroutine if it exists.
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
-func (p *Poller) AddSubscriber(
-	req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
+func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error) {
 	p.RLock()
 	resolver := p.resolver
 	p.RUnlock()
 
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
-	err := resolver.ValidateSubscription(req)
+	if err := resolver.ValidateSubscription(req); err != nil {
+		return nil, err
+	}
+
+	// find out the custom claims for auth, if any. As,
+	// We also need to use authVariables in generating the hashed bucketID
+	authMeta := resolver.Schema().Meta().AuthMeta()
+	customClaims, err := authMeta.ExtractCustomClaims(authMeta.AttachAuthorizationJwt(context.
+		Background(), req.Header))
 	if err != nil {
 		return nil, err
+	}
+	// for the cases when no expiry is given in jwt or subscription doesn't have any authorization,
+	// we set their expiry to zero time
+	if customClaims.StandardClaims.ExpiresAt == nil {
+		customClaims.StandardClaims.ExpiresAt = jwt.At(time.Time{})
 	}
 
 	buf, err := json.Marshal(req)
@@ -93,8 +107,8 @@ func (p *Poller) AddSubscriber(
 	p.Lock()
 	defer p.Unlock()
 
-	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
-	res := resolver.Resolve(ctx, req)
+	res := resolver.Resolve(x.AttachAccessJwt(context.Background(),
+		&http.Request{Header: req.Header}), req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}
@@ -161,7 +175,7 @@ func (p *Poller) poll(req *pollRequest) {
 	pollID := uint64(0)
 	for {
 		pollID++
-		time.Sleep(x.Config.PollInterval)
+		time.Sleep(x.Config.GraphQL.GetDuration("poll-interval"))
 
 		globalEpoch := atomic.LoadUint64(p.globalEpoch)
 		if req.localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {
@@ -171,7 +185,7 @@ func (p *Poller) poll(req *pollRequest) {
 			p.terminateSubscriptions(req.bucketID)
 		}
 
-		ctx := context.WithValue(context.Background(), authorization.AuthVariables, req.authVariables)
+		ctx := x.AttachAccessJwt(context.Background(), &http.Request{Header: req.graphqlReq.Header})
 		res := resolver.Resolve(ctx, req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
@@ -222,13 +236,6 @@ func (p *Poller) poll(req *pollRequest) {
 		}
 		p.Unlock()
 	}
-}
-
-// UpdateResolver will update the resolver.
-func (p *Poller) UpdateResolver(resolver *resolve.RequestResolver) {
-	p.Lock()
-	defer p.Unlock()
-	p.resolver = resolver
 }
 
 // TerminateSubscriptions will terminate all the subscriptions of the given bucketID.

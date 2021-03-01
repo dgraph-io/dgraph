@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -132,7 +131,7 @@ func handleError(err error, isRetry bool) {
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != zero.ErrConflict && err != dgo.ErrAborted:
+	case err != x.ErrConflict && err != dgo.ErrAborted:
 		fmt.Printf("Error while mutating: %v s.Code %v\n", s.Message(), s.Code())
 	}
 }
@@ -212,7 +211,7 @@ func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity:    sid,
 		Attr:      nq.Predicate,
-		Label:     nq.Label,
+		Namespace: nq.Namespace,
 		Lang:      nq.Lang,
 		Facets:    nq.Facets,
 		ValueId:   oid,
@@ -222,11 +221,11 @@ func createUidEdge(nq *api.NQuad, sid, oid uint64) *pb.DirectedEdge {
 
 func createValueEdge(nq *api.NQuad, sid uint64) (*pb.DirectedEdge, error) {
 	p := &pb.DirectedEdge{
-		Entity: sid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Facets: nq.Facets,
+		Entity:    sid,
+		Attr:      nq.Predicate,
+		Namespace: nq.Namespace,
+		Lang:      nq.Lang,
+		Facets:    nq.Facets,
 	}
 	val, err := getTypeVal(nq.ObjectValue)
 	if err != nil {
@@ -251,7 +250,8 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 }
 
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
-	pred, found := l.schema.preds[nq.Predicate]
+	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+	pred, found := l.schema.preds[attr]
 
 	// We dont' need to generate conflict keys for predicate with noconflict directive.
 	if found && pred.NoConflict || opt.ludicrousMode {
@@ -286,9 +286,9 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 
 	if pred.List {
 		key := fingerprintEdge(de, pred)
-		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid))^key)
+		keys = append(keys, farm.Fingerprint64(x.DataKey(attr, sid))^key)
 	} else {
-		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, sid)))
+		keys = append(keys, farm.Fingerprint64(x.DataKey(attr, sid)))
 	}
 
 	if pred.Reverse {
@@ -296,7 +296,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		if err != nil {
 			return keys, err
 		}
-		keys = append(keys, farm.Fingerprint64(x.DataKey(nq.Predicate, oi)))
+		keys = append(keys, farm.Fingerprint64(x.DataKey(attr, oi)))
 	}
 
 	if nq.ObjectValue == nil || !(pred.Count || pred.Index) {
@@ -326,7 +326,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		}
 
 		for _, t := range toks {
-			keys = append(keys, farm.Fingerprint64(x.IndexKey(nq.Predicate, t))^sid)
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(attr, t))^sid)
 		}
 
 	}

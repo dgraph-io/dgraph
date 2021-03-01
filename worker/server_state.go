@@ -30,6 +30,16 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
+	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
+	SecurityDefaults  = ``
+	RaftDefaults      = `snapshot-after=10000; pending-proposals=256; learner=false;`
+	LudicrousDefaults = `enabled=false; concurrency=2000;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
+	BadgerDefaults    = `compression=snappy; goroutines=8;`
+)
+
 // ServerState holds the state of the Dgraph server.
 type ServerState struct {
 	FinishCh chan struct{} // channel to wait for all pending reqs to finish.
@@ -107,10 +117,11 @@ func (s *ServerState) initStorage() {
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
-			WithValueThreshold(1 << 10 /* 1KB */).
 			WithNumVersionsToKeep(math.MaxInt32).
+			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
-			WithIndexCacheSize(Config.PIndexCacheSize)
+			WithIndexCacheSize(Config.PIndexCacheSize).
+			WithNamespaceOffset(x.NamespaceOffset)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
@@ -129,10 +140,11 @@ func (s *ServerState) initStorage() {
 	// Temp directory
 	x.Check(os.MkdirAll(x.WorkerConfig.TmpDir, 0700))
 
-	s.gcCloser = z.NewCloser(2)
+	s.gcCloser = z.NewCloser(3)
 	go x.RunVlogGC(s.Pstore, s.gcCloser)
 	// Commenting this out because Badger is doing its own cache checks.
 	go x.MonitorCacheHealth(s.Pstore, s.gcCloser)
+	go x.MonitorDiskMetrics("postings_fs", Config.PostingDir, s.gcCloser)
 }
 
 // Dispose stops and closes all the resources inside the server state.

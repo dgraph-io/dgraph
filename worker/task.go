@@ -176,7 +176,8 @@ func convertValue(attr, data string) (types.Val, error) {
 		return types.Val{}, err
 	}
 	if !t.IsScalar() {
-		return types.Val{}, errors.Errorf("Attribute %s is not valid scalar type", attr)
+		return types.Val{}, errors.Errorf("Attribute %s is not valid scalar type",
+			x.ParseAttr(attr))
 	}
 	src := types.Val{Tid: types.StringID, Value: []byte(data)}
 	dst, err := types.Convert(src, t)
@@ -354,7 +355,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
 		return errors.Errorf("checkpwd fn can only be used on attr: [%s] with schema type "+
-			"password. Got type: %s", q.Attr, types.TypeID(srcFn.atype).Name())
+			"password. Got type: %s", x.ParseAttr(q.Attr), types.TypeID(srcFn.atype).Name())
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -962,7 +963,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	}
 	// For now, remove the query level cache. It is causing contention for queries with high
 	// fan-out.
-
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
 		return nil, err
@@ -987,16 +987,16 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	}
 
 	if q.Reverse && !schema.State().IsReversed(ctx, attr) {
-		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", attr)
+		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", x.ParseAttr(attr))
 	}
 
 	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(ctx, q.Attr) {
-		return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
+		return nil, errors.Errorf("Predicate %s is not indexed", x.ParseAttr(q.Attr))
 	}
 
 	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
 		return nil, errors.Errorf("Language tags can only be used with predicates of string type"+
-			" having @lang directive in schema. Got: [%v]", attr)
+			" having @lang directive in schema. Got: [%v]", x.ParseAttr(attr))
 	}
 	if len(q.Langs) == 1 && q.Langs[0] == "*" {
 		// Reset the Langs fields. The ExpandAll field is set to true already so there's no
@@ -1127,7 +1127,7 @@ func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcA
 	attr := arg.q.Attr
 	if ok := schema.State().HasCount(ctx, attr); !ok {
 		return errors.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
-			attr, arg.srcFn.fname)
+			x.ParseAttr(attr), arg.srcFn.fname)
 	}
 	counts := arg.srcFn.threshold
 	cp := countParams{
@@ -1153,7 +1153,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	typ, err := schema.State().TypeOf(attr)
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
 	if err != nil || !typ.IsScalar() {
-		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+		return errors.Errorf("Attribute not scalar: %s %v", x.ParseAttr(attr), typ)
 	}
 	if typ != types.StringID {
 		return errors.Errorf("Got non-string type. Regex match is allowed only on string type.")
@@ -1192,7 +1192,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf(
 			"Attribute %v does not have trigram index for regex matching. "+
 				"Please add a trigram index or use has/uid function with regexp() as filter.",
-			attr)
+			x.ParseAttr(attr))
 	}
 
 	isList := schema.State().IsList(attr)
@@ -1276,7 +1276,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	// Need to evaluate inequality for entries in the first bucket.
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil || !typ.IsScalar() {
-		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+		return errors.Errorf("Attribute not scalar: %s %v", x.ParseAttr(attr), typ)
 	}
 
 	x.AssertTrue(len(arg.out.UidMatrix) > 0)
@@ -1438,7 +1438,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		return errors.Errorf(
 			"Attribute %v does not have trigram index for fuzzy matching. "+
 				"Please add a trigram index or use has/uid function with match() as filter.",
-			attr)
+			x.ParseAttr(attr))
 	}
 
 	isList := schema.State().IsList(attr)
@@ -1777,11 +1777,11 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
-			return nil, errors.Errorf("Attribute %q is not scalar-type", attr)
+			return nil, errors.Errorf("Attribute %q is not scalar-type", x.ParseAttr(attr))
 		}
 		if !couldApplyAggregatorOn(f, typ) {
 			return nil, errors.Errorf("Aggregator %q could not apply on %v",
-				f, attr)
+				f, x.ParseAttr(attr))
 		}
 		fc.n = len(q.UidList.Uids)
 	case compareAttrFn:
@@ -1903,7 +1903,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
@@ -1916,7 +1917,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
-			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		fc.intersectDest = needsIntersect(f)
 		// Max Levenshtein distance
@@ -1939,7 +1941,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		tokerName := q.SrcFunc.Args[0]
 		if !verifyCustomIndex(ctx, q.Attr, tokerName) {
 			return nil, errors.Errorf("Attribute %s is not indexed with custom tokenizer %s",
-				q.Attr, tokerName)
+				x.ParseAttr(q.Attr), tokerName)
 		}
 		valToTok, err := convertValue(q.Attr, q.SrcFunc.Args[1])
 		if err != nil {
@@ -2037,7 +2039,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	if !groups().ServesGroup(gid) {
 		return nil, errors.Errorf(
-			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
+			"Temporary error, attr: %q groupId: %v Request sent to wrong server",
+			x.ParseAttr(q.Attr), gid)
 	}
 
 	type reply struct {

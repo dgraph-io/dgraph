@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
@@ -44,15 +46,19 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
+const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
+
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
-		Short: "Run Dgraph bulk loader",
+		Short: "Run Dgraph Bulk Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Bulk.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
+	Bulk.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
@@ -110,23 +116,36 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Uint64("force-namespace", math.MaxUint64,
+		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
-	// Options around how to set up Badger.
-	flag.String("badger.compression", "snappy",
-		"[none, zstd:level, snappy] Specifies the compression algorithm and the compression"+
-			"level (if applicable) for the postings directory. none would disable compression,"+
-			" while zstd:1 would set zstd compression at level 1.")
-	flag.Int64("badger.cache_mb", 64, "Total size of cache (in MB) per shard in reducer.")
-	flag.String("badger.cache_percentage", "70,30",
-		"Cache percentages summing up to 100 for various caches"+
-			" (FORMAT: BlockCacheSize, IndexCacheSize).")
+	// Bulk has some extra defaults for Badger SuperFlag. These should only be applied in this
+	// package.
+	flag.String("badger", worker.BadgerDefaults+bulkBadgerDefaults,
+		z.NewSuperFlagHelp(worker.BadgerDefaults+bulkBadgerDefaults).
+			Head("Badger options").
+			Flag("compression",
+				"Specifies the compression algorithm and compression level (if applicable) for the "+
+					`postings directory. "none" would disable compression, while "zstd:1" would set `+
+					"zstd compression at level 1.").
+			Flag("goroutines",
+				"The number of goroutines to use in badger.Stream.").
+			Flag("cache-mb",
+				"Total size of cache (in MB) per shard in the reducer.").
+			Flag("cache-percentage",
+				"Cache percentages summing up to 100 for various caches. (FORMAT: BlockCacheSize,"+
+					"IndexCacheSize)").
+			String())
+
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
 }
 
 func run() {
-	ctype, clevel := x.ParseCompression(Bulk.Conf.GetString("badger.compression"))
+	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
+		worker.BadgerDefaults + bulkBadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -153,6 +172,8 @@ func run() {
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
+		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
+
 		// Badger options
 		BadgerCompression:      ctype,
 		BadgerCompressionLevel: clevel,
@@ -163,9 +184,9 @@ func run() {
 		os.Exit(0)
 	}
 
-	totalCache := int64(Bulk.Conf.GetInt("badger.cache_mb"))
+	totalCache := int64(badger.GetUint64("cache-mb"))
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	cachePercent, err := x.GetCachePercentages(Bulk.Conf.GetString("badger.cache_percentage"), 2)
+	cachePercent, err := x.GetCachePercentages(badger.GetString("cache-percentage"), 2)
 	x.Check(err)
 	totalCache <<= 20 // Convert to MB.
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
@@ -209,7 +230,8 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+	}
+	if !filestore.Exists(opt.SchemaFile) {
 		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
 		os.Exit(1)
 	}
@@ -219,7 +241,7 @@ func run() {
 	} else {
 		fileList := strings.Split(opt.DataFiles, ",")
 		for _, file := range fileList {
-			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+			if !filestore.Exists(file) {
 				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
 				os.Exit(1)
 			}
@@ -322,6 +344,7 @@ func run() {
 	} else {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
+		loader.leaseNamespaces()
 
 		bulkMeta := pb.BulkMeta{
 			EdgeCount: loader.prog.mapEdgeCount,

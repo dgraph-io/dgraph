@@ -2,6 +2,7 @@ package certrequest
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -21,8 +22,11 @@ func TestAccessOverPlaintext(t *testing.T) {
 
 func TestAccessWithCaCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "../tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s;",
+		// cacert
+		"../tls/ca.crt",
+		// server-name
+		"node"))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)

@@ -296,7 +296,7 @@ function test::manual_start_acl() {
   local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
-  dgraph::start_alphas "$n_alphas" --acl_secret_file "$ACL_SECRET_PATH"
+  dgraph::start_alphas "$n_alphas" --acl "secret-file=$ACL_SECRET_PATH;"
 
   for i in $(seq "$n_zeros"); do
     dgraph::healthcheck_zero "$i"
@@ -326,7 +326,7 @@ function test::manual_start_tls() {
   local -r n_alphas=3
 
   dgraph::start_zeros "$n_zeros"
-  dgraph::start_alphas "$n_alphas" --tls_cacert "$TLS_PATH"/ca.crt --tls_node_cert "$TLS_PATH"/node.crt --tls_node_key "$TLS_PATH"/node.key
+  dgraph::start_alphas "$n_alphas" --tls "cacert=$TLS_PATH/ca.crt; node-cert=$TLS_PATH/node.crt; node-key=$TLS_PATH/node.key;"
 
   for i in $(seq "$n_zeros"); do
     dgraph::healthcheck_zero "$i"
@@ -340,7 +340,7 @@ function test::manual_start_tls() {
 
   local count
   for i in $(seq "$n_alphas"); do
-    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt)"
+    count="$(dgraph::increment "$i" --tls "cacert=$TLS_PATH/ca.crt;")"
     if [ "$i" -ne "$count" ]; then
       log::error "Expected increment: $i but got: $count"
       return 1
@@ -358,23 +358,13 @@ function test::manual_start_tls2() {
   for i in $(seq "$n_zeros"); do
     "$DGRAPH_BIN" cert --client "zero$i" --cwd "$DGRAPH_PATH"
     dgraph::start_zero "$i" \
-      --tls_cacert "$TLS_PATH"/ca.crt \
-      --tls_internal_port_enabled \
-      --tls_cert "$TLS_PATH/client.zero$i.crt" \
-      --tls_key "$TLS_PATH/client.zero$i.key" \
-      --tls_node_cert "$TLS_PATH"/node.crt \
-      --tls_node_key "$TLS_PATH"/node.key
+      --tls "cacert=$TLS_PATH/ca.crt; internal-port-enabled=true; cert=$TLS_PATH/client.zero$i.crt; key=$TLS_PATH/client.zero$i.key; node-cert=$TLS_PATH/node.crt; node-key=$TLS_PATH/node.key;"
   done
 
   for i in $(seq "$n_alphas"); do
     "$DGRAPH_BIN" cert --client "alpha$i" --cwd "$DGRAPH_PATH"
     dgraph::start_alpha "$i" \
-      --tls_cacert "$TLS_PATH"/ca.crt \
-      --tls_internal_port_enabled \
-      --tls_cert "$TLS_PATH/client.alpha$i.crt" \
-      --tls_key "$TLS_PATH/client.alpha$i.key" \
-      --tls_node_cert "$TLS_PATH"/node.crt \
-      --tls_node_key "$TLS_PATH"/node.key
+      --tls "cacert=$TLS_PATH/ca.crt; internal-port-enabled=true; cert=$TLS_PATH/client.alpha$i.crt; key=$TLS_PATH/client.alpha$i.key; node-cert=$TLS_PATH/node.crt; node-key=$TLS_PATH/node.key;"
   done
 
   for i in $(seq "$n_zeros"); do
@@ -389,7 +379,7 @@ function test::manual_start_tls2() {
 
   local count
   for i in $(seq "$n_alphas"); do
-    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt)"
+    count="$(dgraph::increment "$i" --tls "cacert=$TLS_PATH/ca.crt;")"
     if [ "$i" -ne "$count" ]; then
       log::error "Expected increment: $i but got: $count"
       return 1
@@ -407,9 +397,9 @@ function test::manual_start_encryption_acl_tls() {
 
   dgraph::start_zeros "$n_zeros"
   dgraph::start_alphas "$n_alphas" \
-    --acl_secret_file "$ACL_SECRET_PATH" \
+    --acl "secret-file=$ACL_SECRET_PATH;" \
     --encryption_key_file "$ENCRYPTION_KEY_PATH" \
-    --tls_cacert "$TLS_PATH"/ca.crt --tls_node_cert "$TLS_PATH"/node.crt --tls_node_key "$TLS_PATH"/node.key
+    --tls "cacert=$TLS_PATH/ca.crt; node-cert=$TLS_PATH/node.crt; node-key=$TLS_PATH/node.key;"
 
   for i in $(seq "$n_zeros"); do
     dgraph::healthcheck_zero "$i"
@@ -423,7 +413,7 @@ function test::manual_start_encryption_acl_tls() {
 
   local count
   for i in $(seq "$n_alphas"); do
-    count="$(dgraph::increment "$i" --tls_cacert "$TLS_PATH"/ca.crt --user groot --password password)"
+    count="$(dgraph::increment "$i" --tls "cacert=$TLS_PATH/ca.crt;" --user groot --password password)"
     if [ "$i" -ne "$count" ]; then
       log::error "Expected increment: $i but got: $count"
       return 1

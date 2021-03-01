@@ -25,8 +25,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -48,12 +51,13 @@ import (
 type options struct {
 	bindall           bool
 	portOffset        int
-	Raft              *x.SuperFlag
+	Raft              *z.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
+	audit             *x.LoggerConf
 }
 
 var opts options
@@ -64,7 +68,7 @@ var Zero x.SubCommand
 func init() {
 	Zero.Cmd = &cobra.Command{
 		Use:   "zero",
-		Short: "Run Dgraph Zero",
+		Short: "Run Dgraph Zero management server ",
 		Long: `
 A Dgraph Zero instance manages the Dgraph cluster.  Typically, a single Zero
 instance is sufficient for the cluster; however, one can run multiple Zero
@@ -74,29 +78,49 @@ instances to achieve high-availability.
 			defer x.StartProfile(Zero.Conf).Stop()
 			run()
 		},
+		Annotations: map[string]string{"group": "core"},
 	}
 	Zero.EnvPrefix = "DGRAPH_ZERO"
+	Zero.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Zero.Cmd.Flags()
 	x.FillCommonFlags(flag)
+	// --tls SuperFlag
+	x.RegisterServerTLSFlags(flag)
 
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
-	flag.String("raft", raftDefault,
-		`Raft options for group zero.
-		idx=N provides the Raft ID that this server would use to join the Zero group.
-			N cannot be 0.
-		learner=true would make this Zero a "learner" node. In learner node, the Zero would not
-			participate in Raft elections. This can be used to achieve a read-only replica.
-		`)
-	flag.Int("replicas", 1, "How many replicas to run per data shard."+
+	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	// TLS configurations
-	x.RegisterServerTLSFlags(flag)
+
+	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
+		Head("Raft options").
+		Flag("idx",
+			"Provides an optional Raft ID that this Alpha would use to join Raft groups.").
+		Flag("learner",
+			`Make this Zero a "learner" node. In learner mode, this Zero will not participate `+
+				"in Raft elections. This can be used to achieve a read-only replica.").
+		String())
+
+	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
+	//       option.
+	flag.String("audit", "", z.NewSuperFlagHelp("").
+		Head("Audit options").
+		Flag("dir",
+			"The path where audit logs will be stored.").
+		Flag("compress",
+			"Enables the compression of old audit logs.").
+		Flag("encrypt-file",
+			"The path to the key file to be used for audit log encryption.").
+		Flag("days",
+			"The number of days audit logs will be preserved.").
+		Flag("size",
+			"The audit log max size in MB after which it will be rolled over.").
+		String())
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -118,6 +142,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 
 	tlsConf, err := x.LoadServerTLSConfigForInternalPort(Zero.Conf)
@@ -185,7 +210,8 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	raft := x.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefault)
+	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefaults)
+	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
@@ -195,6 +221,7 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
+		audit:             conf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
@@ -213,6 +240,15 @@ func run() {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
+	}
+
+	if opts.audit != nil {
+		wd, err := filepath.Abs(opts.w)
+		x.Check(err)
+		ad, err := filepath.Abs(opts.audit.Dir)
+		x.Check(err)
+		x.AssertTruef(ad != wd,
+			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
 	}
 
 	if opts.rebalanceInterval <= 0 {
@@ -255,14 +291,17 @@ func run() {
 	x.Check(err)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
-	http.HandleFunc("/health", st.pingResponse)
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
-	http.HandleFunc("/jemalloc", x.JemallocHandler)
-	zpages.Handle(http.DefaultServeMux, "/z")
+	baseMux := http.NewServeMux()
+	http.Handle("/", audit.AuditRequestHttp(baseMux))
+
+	baseMux.HandleFunc("/health", st.pingResponse)
+	baseMux.HandleFunc("/state", st.getState)
+	baseMux.HandleFunc("/removeNode", st.removeNode)
+	baseMux.HandleFunc("/moveTablet", st.moveTablet)
+	baseMux.HandleFunc("/assign", st.assign)
+	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
@@ -311,8 +350,9 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
-	st.zero.closer.AddRunning(1)
+	st.zero.closer.AddRunning(2)
 	go x.MonitorMemoryMetrics(st.zero.closer)
+	go x.MonitorDiskMetrics("wal_fs", opts.w, st.zero.closer)
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
@@ -320,6 +360,9 @@ func run() {
 
 	err = store.Close()
 	glog.Infof("Raft WAL closed with err: %v\n", err)
+
+	audit.Close()
+
 	st.zero.orc.close()
 	glog.Infoln("All done. Goodbye!")
 }

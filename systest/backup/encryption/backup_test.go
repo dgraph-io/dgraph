@@ -57,9 +57,14 @@ func TestBackupMinioE(t *testing.T) {
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; internal-port-enabled=%v;",
+		// cacert
+		"../../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port-enabled
+		true))
+
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	mc, err = testutil.NewMinioClient()
@@ -90,6 +95,7 @@ func TestBackupMinioE(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	client := testutil.GetHttpsClient(t)
+	tabletName := x.NamespaceAttr(x.GalaxyNamespace, "movie")
 	// Move tablet to group 1 to avoid messes later.
 	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
@@ -101,7 +107,7 @@ func TestBackupMinioE(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+		if _, ok := state.Groups["1"].Tablets[tabletName]; ok {
 			moveOk = true
 			break
 		}
@@ -322,19 +328,19 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
 	require.NoError(t, err)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid",
-		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"},
+	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type",
+		"movie", "dgraph.graphql.p_query", "dgraph.drop.op"},
 		restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query", "dgraph.type.cors"}, restoredTypes)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql",
+		"dgraph.graphql.persisted_query"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)

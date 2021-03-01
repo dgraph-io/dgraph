@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go/v6"
@@ -43,7 +44,7 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 		SecretAccessKey: req.SecretKey,
 		SessionToken:    req.SessionToken,
 	}
-	provider := credentialsProvider(uri.Scheme, defaultCreds)
+	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
 
 	creds, _ := provider.Retrieve() // Error is always nil.
 
@@ -60,25 +61,29 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
-	creds                    *Credentials
+	creds                    *x.MinioCredentials
 	uri                      *url.URL
+	mc                       *x.MinioClient
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
-func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
-	mc, err := newMinioClient(uri, h.creds)
+func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
+	h := &s3Handler{
+		creds: creds,
+		uri:   uri,
+	}
+	mc, err := x.NewMinioClient(uri, creds)
 	if err != nil {
 		return nil, err
 	}
-
-	h.bucketName, h.objectPrefix, err = validateBucket(mc, uri)
-
-	return mc, err
+	h.mc = mc
+	h.bucketName, h.objectPrefix = mc.ParseBucketAndPrefix(uri.Path)
+	return h, nil
 }
 
-func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.Client,
+func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *x.MinioClient,
 	objectName string) {
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
@@ -96,17 +101,12 @@ func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	mc, err := h.setup(uri)
-	if err != nil {
-		return nil, err
-	}
-
 	// Find the max Since value from the latest backup.
 	var lastManifest string
 	done := make(chan struct{})
 	defer close(done)
 	suffix := "/" + backupManifest
-	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
 		if strings.HasSuffix(object.Key, suffix) && object.Key > lastManifest {
 			lastManifest = object.Key
 		}
@@ -117,7 +117,7 @@ func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 		return &m, nil
 	}
 
-	if err := h.readManifest(mc, lastManifest, &m); err != nil {
+	if err := h.ReadManifest(lastManifest, &m); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -132,13 +132,8 @@ func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
-	mc, err := h.setup(uri)
-	if err != nil {
-		return err
-	}
-
 	objectName := backupName(req.ReadTs, req.GroupId)
-	h.createObject(uri, req, mc, objectName)
+	h.createObject(uri, req, h.mc, objectName)
 	return nil
 }
 
@@ -146,39 +141,19 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 func (h *s3Handler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
-	mc, err := h.setup(uri)
-	if err != nil {
-		return err
-	}
-
-	h.createObject(uri, req, mc, backupManifest)
+	h.createObject(uri, req, h.mc, backupManifest)
 	return nil
-}
-
-// readManifest reads a manifest file at path using the handler.
-// Returns nil on success, otherwise an error.
-func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) error {
-	reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(m)
 }
 
 func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
-	mc, err := h.setup(uri)
-	if err != nil {
-		return nil, err
-	}
 
 	var paths []string
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
 	suffix := "/" + backupManifest
-	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
 			paths = append(paths, object.Key)
 		}
@@ -193,7 +168,7 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
 	var manifests []*Manifest
 	for _, path := range paths {
 		var m Manifest
-		if err := h.readManifest(mc, path, &m); err != nil {
+		if err := h.ReadManifest(path, &m); err != nil {
 			return nil, errors.Wrapf(err, "while reading %q", path)
 		}
 		m.Path = path
@@ -209,12 +184,7 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
 func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
 	manifests, err := h.GetManifests(uri, backupId, backupNum)
 	if err != nil {
-		return LoadResult{0, 0, errors.Wrapf(err, "while retrieving manifests")}
-	}
-
-	mc, err := h.setup(uri)
-	if err != nil {
-		return LoadResult{0, 0, err}
+		return LoadResult{Err: errors.Wrapf(err, "while retrieving manifests")}
 	}
 
 	// since is returned with the max manifest Since value found.
@@ -223,7 +193,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup manifests for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	var maxUid uint64
+	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
@@ -232,37 +202,42 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 		path := filepath.Dir(manifests[i].Path)
 		for gid := range manifest.Groups {
 			object := filepath.Join(path, backupName(manifest.Since, gid))
-			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
+			reader, err := h.mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to get %q", object)}
+				return LoadResult{Err: errors.Wrapf(err, "Failed to get %q", object)}
 			}
 			defer reader.Close()
 
 			st, err := reader.Stat()
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Stat failed %q", object)}
+				return LoadResult{Err: errors.Wrapf(err, "Stat failed %q", object)}
 			}
 			if st.Size <= 0 {
-				return LoadResult{0, 0,
-					errors.Errorf("Remote object is empty or inaccessible: %s", object)}
+				return LoadResult{Err: errors.Errorf("Remote object is empty or inaccessible: %s",
+					object)}
 			}
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(reader, gid, predSet, manifest.DropOperations)
+			groupMaxUid, groupMaxNsId, err := fn(gid,
+				&loadBackupInput{r: reader, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return LoadResult{Err: err}
 			}
 			if groupMaxUid > maxUid {
 				maxUid = groupMaxUid
+			}
+			if groupMaxNsId > maxNsId {
+				maxNsId = groupMaxNsId
 			}
 		}
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
 // Verify performs basic checks to decide whether the specified backup can be restored
@@ -277,10 +252,6 @@ func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups [
 
 // ListManifests loads the manifests in the locations and returns them.
 func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
-	mc, err := h.setup(uri)
-	if err != nil {
-		return nil, err
-	}
 	h.uri = uri
 
 	var manifests []string
@@ -288,7 +259,7 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 	defer close(doneCh)
 
 	suffix := "/" + backupManifest
-	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
 			manifests = append(manifests, object.Key)
 		}
@@ -301,16 +272,16 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 }
 
 func (h *s3Handler) ReadManifest(path string, m *Manifest) error {
-	mc, err := h.setup(h.uri)
+	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
 	if err != nil {
 		return err
 	}
-
-	return h.readManifest(mc, path, m)
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(m)
 }
 
 // upload will block until it's done or an error occurs.
-func (h *s3Handler) upload(mc *minio.Client, object string) error {
+func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 	start := time.Now()
 
 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
