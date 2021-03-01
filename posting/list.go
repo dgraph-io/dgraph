@@ -295,12 +295,14 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 				newPlist.Postings = append(newPlist.Postings, post)
 			}
 		}
-		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
+
+		err := l.iterateAll(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
 			if obj.Uid == mpost.Uid {
 				return nil
 			}
+			glog.Info("=============Deleting: ", obj.Uid)
 
 			// Mark all other values as deleted. By the end of the iteration, the
 			// list of postings will contain deleted operations and only one set
@@ -598,9 +600,7 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 // IterateAll iterates over all the UIDs and Postings.
 // TODO: We should remove this function after merging roaring bitmaps and fixing up how we map
 // facetsMatrix to uidMatrix.
-func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
-	l.RLock()
-	defer l.RUnlock()
+func (l *List) iterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 
 	bm, err := l.bitmap(ListOptions{
 		ReadTs:   readTs,
@@ -656,6 +656,12 @@ func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting
 		f(p)
 	}
 	return nil
+}
+
+func (l *List) IterateAll(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	l.RLock()
+	defer l.RUnlock()
+	return l.iterateAll(readTs, afterUid, f)
 }
 
 // pickPostings goes through the mutable layer and returns the appropriate postings,
