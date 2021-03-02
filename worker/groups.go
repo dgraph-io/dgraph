@@ -60,8 +60,6 @@ var gr = &groupi{
 	tablets:      make(map[string]*pb.Tablet),
 }
 
-var RaftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
-
 func groups() *groupi {
 	return gr
 }
@@ -312,6 +310,14 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
+
+	invalid := state.License != nil && !state.License.Enabled
+	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
+		glog.Errorf("ENTERPRISE_ONLY_LEARNER: License Expired. Cannot run learner nodes.")
+		x.ServerCloser.Signal()
+		return
+	}
+
 	oldState := g.state
 	g.state = state
 

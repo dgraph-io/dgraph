@@ -22,6 +22,7 @@ import (
 	"math"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -141,7 +142,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				// Can't use merge sort if the UIDs are not sorted.
 				sg.updateDestUids()
 			} else {
-				sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+				sg.DestMap = codec.Merge(sg.uidMatrix)
 			}
 		}
 
@@ -152,7 +153,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			if sg.UnknownAttr {
 				continue
 			}
-			if len(sg.DestUIDs.Uids) == 0 {
+			if sg.DestMap.IsEmpty() {
 				continue
 			}
 			if exp, err = expandChildren(ctx, sg, startChildren); err != nil {
@@ -161,10 +162,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			out = append(out, exp...)
 		}
 
-		if numEdges > x.Config.QueryEdgeLimit {
+		if numEdges > x.Config.LimitQueryEdge {
 			// If we've seen too many edges, stop the query.
 			return errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
-				x.Config.QueryEdgeLimit, numEdges)
+				x.Config.LimitQueryEdge, numEdges)
 		}
 
 		if len(out) == 0 {
@@ -191,7 +192,7 @@ func expandChildren(ctx context.Context, sg *SubGraph, children []*SubGraph) ([]
 	for _, child := range expandedChildren {
 		newChild := new(SubGraph)
 		newChild.copyFiltersRecurse(child)
-		newChild.SrcUIDs = sg.DestUIDs
+		newChild.SrcUIDs = codec.ToList(sg.DestMap)
 		newChild.Params.Var = child.Params.Var
 		sg.Children = append(sg.Children, newChild)
 		out = append(out, newChild)

@@ -2461,6 +2461,42 @@ func queryWithCascade(t *testing.T) {
 						}`,
 		},
 		{
+			name: "parameterized cascade at all levels using variables",
+			query: `query ($ids: [ID!],$fieldsRoot: [String], $fieldsDeep: [String]) {
+						queryAuthor(filter: {id: $ids}) @cascade(fields: $fieldsRoot) {
+							reputation
+							name
+							dob
+							posts @cascade(fields: $fieldsDeep) {
+								title
+								text
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds, "fieldsRoot": []string{"reputation", "name"}, "fieldsDeep": []string{"text"}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null,
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "posts": [],
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+		},
+		{
 			name: "parameterized cascade on ID type ",
 			query: `query ($ids: [ID!]) {
 						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {

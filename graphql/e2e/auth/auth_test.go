@@ -707,6 +707,31 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 	}
 }
 
+func TestBearerToken(t *testing.T) {
+	queryProjectParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryProject {
+				name
+			}
+		}`,
+		Headers: http.Header{},
+	}
+
+	// querying with a bad bearer token should give back an error
+	queryProjectParams.Headers.Set(metaInfo.Header, "Bearer bad token")
+	resp := queryProjectParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Contains(t, resp.Errors.Error(), "invalid Bearer-formatted header value for JWT (Bearer bad token)")
+	require.Nil(t, resp.Data)
+
+	// querying with a correct bearer token should give back expected results
+	queryProjectParams.Headers.Set(metaInfo.Header, "Bearer "+common.GetJWT(t, "user1", "",
+		metaInfo).Get(metaInfo.Header))
+	resp = queryProjectParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{"queryProject":[{"name":"Project1"}]}`, string(resp.Data))
+}
+
 func TestOrderAndOffset(t *testing.T) {
 	tasks := Tasks{
 		Task{
@@ -2114,4 +2139,44 @@ func TestAuthRBACEvaluation(t *testing.T) {
 		})
 
 	}
+}
+
+func TestFragmentInAuthRulesWithUserDefinedCascade(t *testing.T) {
+	addHomeParams := &common.GraphQLParams{
+		Query: `mutation {
+			addHome(input: [
+				{address: "Home1", members: [{dogRef: {breed: "German Shepherd", eats: [{plantRef: {breed: "Crop"}}]}}]},
+				{address: "Home2", members: [{parrotRef: {repeatsWords: ["Hi", "Morning!"]}}]},
+				{address: "Home3", members: [{plantRef: {breed: "Flower"}}]},
+				{address: "Home4", members: [{dogRef: {breed: "Bulldog"}}]}
+			]) {
+				numUids
+			}
+		}`,
+	}
+	gqlResponse := addHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	queryHomeParams := &common.GraphQLParams{
+		Query: `query {
+			queryHome {
+				address
+			}
+		}`,
+		Headers: common.GetJWT(t, "", "", metaInfo),
+	}
+	gqlResponse = queryHomeParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+
+	// we should get back only Home1 and Home3
+	testutil.CompareJSON(t, `{"queryHome": [
+		{"address": "Home1"},
+		{"address": "Home3"}
+	]}`, string(gqlResponse.Data))
+
+	// cleanup
+	common.DeleteGqlType(t, "Home", map[string]interface{}{}, 4, nil)
+	common.DeleteGqlType(t, "Dog", map[string]interface{}{}, 2, nil)
+	common.DeleteGqlType(t, "Parrot", map[string]interface{}{}, 1, nil)
+	common.DeleteGqlType(t, "Plant", map[string]interface{}{}, 2, nil)
 }

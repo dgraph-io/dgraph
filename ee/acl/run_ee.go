@@ -44,7 +44,7 @@ func init() {
 	namespace defines the namespace to log into.
 	Sample flag could look like --guardian-creds user=username;password=mypass;namespace=2`)
 
-	// TLS configuration
+	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
 	subcommands := initSubcommands()

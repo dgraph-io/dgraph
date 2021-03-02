@@ -413,11 +413,17 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
-			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
-				for _, uid := range uids {
+				r.GetCardinality(), len(plist.Bitmap))
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
 					fmt.Fprintf(&buf, " Uid = %d\n", uid)
 				}
 			}

@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -85,7 +86,8 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			preds = []string{x.NamespaceAttr(namespace, edge.Attr)}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
+			sg.DestMap = roaring64.New()
+			sg.DestMap.Add(edge.GetEntity())
 			sg.ReadTs = m.StartTs
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
@@ -112,6 +114,10 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 		}
 
 		for _, pred := range preds {
+			// Do not return reverse edges.
+			if x.ParseAttr(pred)[0] == '~' {
+				continue
+			}
 			edgeCopy := *edge
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)

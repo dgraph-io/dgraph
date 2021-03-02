@@ -1574,9 +1574,6 @@
 
 -
   name: "Skip directive"
-  variables:
-    skipTrue: true
-    skipFalse: false
   gqlquery: |
     query ($skipTrue: Boolean!, $skipFalse: Boolean!) {
       getAuthor(id: "0x1") {
@@ -1586,6 +1583,11 @@
           text
         }
       }
+    }
+  gqlvariables: |
+    {
+        "skipTrue": true,
+        "skipFalse": false
     }
   dgquery: |-
     query {
@@ -1597,9 +1599,6 @@
 
 -
   name: "Include directive"
-  variables:
-    includeTrue: true
-    includeFalse: false
   gqlquery: |
     query ($includeTrue: Boolean!, $includeFalse: Boolean!) {
       queryAuthor {
@@ -1608,6 +1607,12 @@
           title
         }
       }
+    }
+
+  gqlvariables: |
+    {
+        "includeTrue": true,
+        "includeFalse": false
     }
   dgquery: |-
     query {
@@ -1637,6 +1642,13 @@
           tags
         }
       }
+    }
+  gqlvariables: |
+    {
+        "includeTrue": true,
+        "includeFalse": false,
+        "skipTrue": true,
+        "skipFalse": false
     }
   dgquery: |-
     query {
@@ -1932,6 +1944,43 @@
         dgraph.type
         Character.id : uid
         Character.name : Character.name
+      }
+    }
+
+-
+  name: "Parameterized Cascade directive on root and nested field using variables"
+  gqlquery: |
+    query($fieldsRoot:[String],$fieldsDeep:[String]) {
+      queryAuthor @cascade(fields: $fieldsRoot) {
+        dob
+        reputation
+        posts @cascade(fields: $fieldsDeep) {
+          text
+          title
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "fieldsRoot": [
+            "dob",
+            "reputation"
+        ],
+        "fieldsDeep": [
+            "text"
+        ]
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade(Author.dob, Author.reputation) {
+        Author.dob : Author.dob
+        Author.reputation : Author.reputation
+        Author.posts : Author.posts @cascade(Post.text) {
+          Post.text : Post.text
+          Post.title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
       }
     }
 

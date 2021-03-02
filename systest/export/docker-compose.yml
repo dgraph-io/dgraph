@@ -22,7 +22,8 @@ services:
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      -v=2 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
@@ -43,7 +44,8 @@ services:
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      -v=2 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
@@ -64,7 +66,8 @@ services:
       target: /data
       read_only: false
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      -v=2 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   minio:
     image: minio/minio:RELEASE.2020-11-13T20-10-18Z
     env_file:
@@ -85,7 +88,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --raft="idx=1" --my=zero1:5080 --replicas=3 --logtostderr
+    command: /gobin/dgraph zero --raft="idx=1;" --my=zero1:5080 --replicas=3 --logtostderr
       -v=2 --bindall
 volumes:
   data: {}

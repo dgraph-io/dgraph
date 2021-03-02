@@ -62,7 +62,10 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	header := http.Header{
 		"Sec-WebSocket-Protocol": []string{protocolGraphQLWS},
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+
+	dialer := websocket.DefaultDialer
+	dialer.EnableCompression = true
+	conn, _, err := dialer.Dial(url, header)
 	if err != nil {
 		return nil, err
 	}

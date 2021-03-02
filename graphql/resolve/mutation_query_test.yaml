@@ -124,9 +124,6 @@ ADD_UPDATE_MUTATION:
 
   -
     name: "can work with skip and filter"
-    variables:
-      skip: true
-      include: false
     gqlquery: |
       mutation ($skip: Boolean!, $include: Boolean!) {
         ADD_UPDATE_MUTATION {
@@ -141,6 +138,11 @@ ADD_UPDATE_MUTATION:
             }
           }
         }
+      }
+    gqlvariables: |
+      {
+          "skip": true,
+          "include": false
       }
     dgquery: |-
       query {

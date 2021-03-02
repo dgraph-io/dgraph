@@ -23,38 +23,35 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
-// Configuration options of Vault.
 const (
-	vaultAddr         = "vault_addr"
-	vaultRoleIDFile   = "vault_roleid_file"
-	vaultSecretIDFile = "vault_secretid_file"
-	vaultPath         = "vault_path"
-	vaultField        = "vault_field"
-	vaultFormat       = "vault_format"
+	VaultDefaults = `addr=http://localhost:8200; path=secret/data/dgraph; field=enc_key; format=base64;`
 )
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.
 func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
-	flag.String(vaultAddr, "http://localhost:8200",
-		"Vault server's address in the form http://ip:port.")
-	flag.String(vaultRoleIDFile, "",
-		"File containing Vault role-id used for approle auth.")
-	flag.String(vaultSecretIDFile, "",
-		"File containing Vault secret-id used for approle auth.")
-	flag.String(vaultPath, "secret/data/dgraph",
-		"Vault kv store path. e.g. secret/data/dgraph for kv-v2, kv/dgraph for kv-v1.")
-	flag.String(vaultField, "enc_key",
-		"Vault kv store field whose value is the Base64 encoded encryption key.")
-	flag.String(vaultFormat, "base64",
-		"Vault field format. raw or base64")
+	flag.String("vault", VaultDefaults, z.NewSuperFlagHelp(VaultDefaults).
+		Head("Vault options").
+		Flag("addr",
+			"Vault server address in the form of http://ip:port").
+		Flag("role-id-file",
+			"File containing Vault role-id used for approle auth.").
+		Flag("secret-id-file",
+			"File containing Vault secret-id used for approle auth.").
+		Flag("path",
+			"Vault kv store path. e.g. secret/data/dgraph for kv-v2, kv/dgraph for kv-v1.").
+		Flag("field",
+			"Vault kv store field whose value is the base64 encoded encryption key.").
+		Flag("format",
+			"Vault field format: raw or base64.").
+		String())
 }
 
 // vaultKeyReader implements the KeyReader interface. It reads the key from vault server.
@@ -67,29 +64,29 @@ type vaultKeyReader struct {
 	format   string
 }
 
-func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
+func newVaultKeyReader(vaultFlag *z.SuperFlag) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
-		addr:     cfg.GetString(vaultAddr),
-		roleID:   cfg.GetString(vaultRoleIDFile),
-		secretID: cfg.GetString(vaultSecretIDFile),
-		path:     cfg.GetString(vaultPath),
-		field:    cfg.GetString(vaultField),
-		format:   cfg.GetString(vaultFormat),
+		addr:     vaultFlag.GetString("addr"),
+		roleID:   vaultFlag.GetString("role-id-file"),
+		secretID: vaultFlag.GetString("secret-id-file"),
+		path:     vaultFlag.GetString("path"),
+		field:    vaultFlag.GetString("field"),
+		format:   vaultFlag.GetString("format"),
 	}
 
 	if v.addr == "" || v.path == "" || v.field == "" || v.format == "" {
 		return nil, errors.Errorf("%v, %v, %v or %v is missing",
-			vaultAddr, vaultPath, vaultField, vaultFormat)
+			"addr", "path", "field", "format")
 	}
 	if v.format != "base64" && v.format != "raw" {
-		return nil, errors.Errorf("vault_format = %v; must be one of base64 or raw", v.format)
+		return nil, errors.Errorf(`--vault "format = %v;" must be one of base64 or raw`, v.format)
 	}
 
 	if v.roleID != "" && v.secretID != "" {
 		return v, nil
 	}
 	return nil, errors.Errorf("%v and %v must both be specified",
-		vaultRoleIDFile, vaultSecretIDFile)
+		"role-id-file", "secret-id-file")
 }
 
 // readKey reads the key from the vault kv store.

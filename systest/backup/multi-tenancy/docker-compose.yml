@@ -24,8 +24,9 @@ services:
       target: /data/backups/
       read_only: false
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --raft='idx=1; group=1' --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --acl_secret_file=/secret/hmac
+      -v=2 --raft "idx=1; group=1;" 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/secret/hmac;"
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
@@ -48,8 +49,9 @@ services:
       target: /data/backups/
       read_only: false
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --raft='idx=2; group=2' --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --acl_secret_file=/secret/hmac
+      -v=2 --raft "idx=2; group=2;" 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/secret/hmac;"
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
@@ -72,8 +74,9 @@ services:
       target: /data/backups/
       read_only: false
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
-      -v=2 --raft='idx=3; group=3' --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      --acl_secret_file=/secret/hmac
+      -v=2 --raft "idx=3; group=3;" 
+      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --acl "secret-file=/secret/hmac;"
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
@@ -91,6 +94,6 @@ services:
       source: ./data/backups
       target: /data/backups/
       read_only: false
-    command: /gobin/dgraph zero --raft='idx=1' --my=zero1:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
 volumes: {}
