@@ -33,7 +33,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -49,6 +48,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
+	schemapkg "github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -209,8 +209,29 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schem
 	return &sch, nil
 }
 
+// validate that the schema contains the predicates whose namespace exist.
+func validateSchema(sch string, namespaces map[uint64]struct{}) error {
+	result, err := schemapkg.Parse(sch)
+	if err != nil {
+		return err
+	}
+	for _, pred := range result.Preds {
+		ns := x.ParseNamespace(pred.Predicate)
+		if _, ok := namespaces[ns]; !ok {
+			return errors.Errorf("Namespace %#x doesn't exist for pred %s.", ns, pred.Predicate)
+		}
+	}
+	for _, typ := range result.Types {
+		ns := x.ParseNamespace(typ.TypeName)
+		if _, ok := namespaces[ns]; !ok {
+			return errors.Errorf("Namespace %#x doesn't exist for type %s.", ns, typ.TypeName)
+		}
+	}
+	return nil
+}
+
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+func (l *loader) processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
 	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
@@ -237,6 +258,11 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 
 	op := &api.Operation{}
 	op.Schema = string(b)
+	if opt.namespaceToLoad == math.MaxUint64 {
+		if err := validateSchema(op.Schema, l.namespaces); err != nil {
+			return err
+		}
+	}
 	return dgraphClient.Alter(ctx, op)
 }
 
@@ -453,12 +479,14 @@ func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filena
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
-	var wg sync.WaitGroup
-	wg.Add(1)
 	nqbuf := ck.NQuads()
+	errCh := make(chan error, 1)
 	// Spin a goroutine to push NQuads to mutation channel.
 	go func() {
-		defer wg.Done()
+		var err error
+		defer func() {
+			errCh <- err
+		}()
 		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
 
 		drain := func() {
@@ -499,11 +527,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
-			if opt.namespaceToLoad != math.MaxUint64 {
-				// If do not preserve namespace, use the namespace passed through
-				// `--force-namespace` flag.
-				for _, nq := range nqs {
+			for _, nq := range nqs {
+				if opt.namespaceToLoad != math.MaxUint64 {
+					// If do not preserve namespace, use the namespace passed through
+					// `--force-namespace` flag.
 					nq.Namespace = opt.namespaceToLoad
+				}
+				if _, ok := l.namespaces[nq.Namespace]; !ok {
+					err = errors.Errorf("Cannot load nquad:%+v as its namespace doesn't exist.", nq)
+					return
 				}
 			}
 
@@ -539,6 +571,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case err := <-errCh:
+			return err
 		default:
 		}
 
@@ -556,9 +590,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		}
 	}
 	nqbuf.Flush()
-	wg.Wait()
-
-	return nil
+	return <-errCh
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
@@ -599,14 +631,15 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
-		opts:      opts,
-		dc:        dc,
-		start:     time.Now(),
-		reqs:      make(chan *request, opts.Pending*2),
-		conflicts: make(map[uint64]struct{}),
-		alloc:     alloc,
-		db:        db,
-		zeroconn:  connzero,
+		opts:       opts,
+		dc:         dc,
+		start:      time.Now(),
+		reqs:       make(chan *request, opts.Pending*2),
+		conflicts:  make(map[uint64]struct{}),
+		alloc:      alloc,
+		db:         db,
+		zeroconn:   connzero,
+		namespaces: make(map[uint64]struct{}),
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -616,6 +649,32 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 	rand.Seed(time.Now().Unix())
 	return l
+}
+
+func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, loginNs uint64) error {
+	if loginNs != x.GalaxyNamespace {
+		l.namespaces[opt.namespaceToLoad] = struct{}{}
+		return nil
+	}
+
+	txn := dc.NewTxn()
+	defer txn.Discard(ctx)
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		return err
+	}
+
+	var sch schema
+	err = json.Unmarshal(res.GetJson(), &sch)
+	if err != nil {
+		return err
+	}
+
+	for _, pred := range sch.Predicates {
+		ns := x.ParseNamespace(pred.Predicate)
+		l.namespaces[ns] = struct{}{}
+	}
+	return nil
 }
 
 func run() error {
@@ -703,8 +762,20 @@ func run() error {
 	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
+	if err := l.populateNamespaces(ctx, dg, creds.GetUint64("namespace")); err != nil {
+		fmt.Printf("Error while populating namespaces %v", err)
+		return err
+	}
+
+	if opt.namespaceToLoad != math.MaxUint64 {
+		if _, ok := l.namespaces[opt.namespaceToLoad]; !ok {
+			return errors.Errorf("Cannot load into namespace %#x. It does not exist.",
+				opt.namespaceToLoad)
+		}
+	}
+
 	if len(opt.schemaFile) > 0 {
-		err := processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
+		err := l.processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -735,7 +806,6 @@ func run() error {
 	}
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
-	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
