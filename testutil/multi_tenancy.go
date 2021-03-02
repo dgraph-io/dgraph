@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -59,7 +60,12 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 	if loginParams.Endpoint == "" {
 		loginParams.Endpoint = AdminUrl()
 	}
-	token, err := HttpLogin(loginParams)
+	var token *HttpToken
+	err := x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
+		var err error
+		token, err = HttpLogin(loginParams)
+		return err
+	})
 	require.NoError(t, err, "login failed")
 	return token
 }
@@ -308,10 +314,10 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule)
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {
 	userClient, err := DgraphClient(SockAddr)
 	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
 
-	err = userClient.LoginIntoNamespace(context.Background(), id, password, ns)
-	require.NoError(t, err)
+	require.NoError(t, x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
+		return userClient.LoginIntoNamespace(context.Background(), id, password, ns)
+	}))
 	return userClient
 }
 
