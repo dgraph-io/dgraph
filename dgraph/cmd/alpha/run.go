@@ -534,28 +534,8 @@ func setupServer(closer *z.Closer) {
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
-	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
-		// lazy load the schema so that just by making a probe request,
-		// one can boot up GraphQL for their namespace
-		namespace := x.ExtractNamespaceHTTP(r)
-		admin.LazyLoadSchema(namespace)
+	baseMux.Handle("/probe/graphql", graphqlProbeHandler(gqlHealthStore, globalEpoch))
 
-		healthStatus := gqlHealthStore.GetHealth()
-		httpStatusCode := http.StatusOK
-		if !healthStatus.Healthy {
-			httpStatusCode = http.StatusServiceUnavailable
-		}
-		w.Header().Set("Content-Type", "application/json")
-		x.AddCorsHeaders(w)
-		w.WriteHeader(httpStatusCode)
-		e = globalEpoch[namespace]
-		var counter uint64
-		if e != nil {
-			counter = atomic.LoadUint64(e)
-		}
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
-			healthStatus.StatusMsg, counter))))
-	})
 	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
@@ -567,55 +547,7 @@ func setupServer(closer *z.Closer) {
 			http.MethodOptions: true,
 		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
 	})
-
-	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
-		w http.ResponseWriter,
-		r *http.Request) {
-		adminSchemaHandler(w, r, adminServer)
-	})))
-
-	baseMux.HandleFunc("/admin/schema/validate", func(w http.ResponseWriter,
-		r *http.Request) {
-		schema := readRequest(w, r)
-		w.Header().Set("Content-Type", "application/json")
-
-		err := admin.SchemaValidate(string(schema))
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-			x.SetStatus(w, "success", "Schema is valid")
-			return
-		}
-
-		w.WriteHeader(http.StatusBadRequest)
-		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	})
-
-	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.
-		MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			shutDownHandler(w, r, adminServer)
-		}))))
-
-	baseMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
-		http.MethodPut:  true,
-		http.MethodPost: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		drainingHandler(w, r, adminServer)
-	}))))
-
-	baseMux.Handle("/admin/export", allowedMethodsHandler(
-		allowedMethods{http.MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			exportHandler(w, r, adminServer)
-		}))))
-
-	baseMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
-		http.MethodGet: true,
-		http.MethodPut: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		memoryLimitHandler(w, r, adminServer)
-	}))))
+	baseMux.Handle("/admin/", getAdminMux())
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
