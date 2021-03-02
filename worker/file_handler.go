@@ -85,37 +85,6 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 	return nil
 }
 
-func (h *fileHandler) getConsolidatedManifest(uri *url.URL) (*MasterManifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Wrap(err, "While GetLatestManifest")
-	}
-	var paths []string
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		if !isdir && strings.HasSuffix(path, suffix) {
-			paths = append(paths, path)
-		}
-		return false
-	})
-
-	sort.Strings(paths)
-	var mlist []*Manifest
-	var manifest MasterManifest
-
-	for _, path := range paths {
-		var m Manifest
-		if err := h.readManifest(path, &m); err != nil {
-			return nil, errors.Wrap(err, "While Getting latest manifest")
-		}
-		path = filepath.Dir(path)
-		_, path = filepath.Split(path)
-		m.Path = path
-		mlist = append(mlist, &m)
-	}
-	manifest.Manifests = mlist
-	return &manifest, nil
-}
-
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
@@ -178,9 +147,10 @@ func (h *fileHandler) CreateManifest(uri *url.URL, manifest *MasterManifest) err
 	if err = json.NewEncoder(h).Encode(manifest); err != nil {
 		return err
 	}
+
+	// Move the tmpManifest to backupManifest
 	path := filepath.Join(uri.Path, backupManifest)
-	err = os.Rename(tmpPath, path)
-	if err != nil {
+	if err = os.Rename(tmpPath, path); err != nil {
 		return err
 	}
 	return nil
@@ -459,4 +429,35 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	}
 
 	return nil
+}
+
+func (h *fileHandler) getConsolidatedManifest(uri *url.URL) (*MasterManifest, error) {
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Wrap(err, "While GetLatestManifest")
+	}
+	var paths []string
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		if !isdir && strings.HasSuffix(path, suffix) {
+			paths = append(paths, path)
+		}
+		return false
+	})
+
+	sort.Strings(paths)
+	var mlist []*Manifest
+	var manifest MasterManifest
+
+	for _, path := range paths {
+		var m Manifest
+		if err := h.readManifest(path, &m); err != nil {
+			return nil, errors.Wrap(err, "While Getting latest manifest")
+		}
+		path = filepath.Dir(path)
+		_, path = filepath.Split(path)
+		m.Path = path
+		mlist = append(mlist, &m)
+	}
+	manifest.Manifests = mlist
+	return &manifest, nil
 }

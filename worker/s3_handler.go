@@ -96,67 +96,6 @@ func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
 	}()
 }
 
-func (h *s3Handler) objectExists(objectName string) bool {
-	objectPath := filepath.Join(h.objectPrefix, objectName)
-	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
-	if err != nil {
-		errResponse := minio.ToErrorResponse(err)
-		if errResponse.Code == "NoSuchKey" {
-			return false
-		} else {
-			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
-			return false
-		}
-	}
-	return true
-}
-
-func (h *s3Handler) readManifest(path string, m *Manifest) error {
-	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(m)
-}
-
-func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
-	path := filepath.Join(h.objectPrefix, backupManifest)
-	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(m)
-}
-
-func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
-	var paths []string
-	done := make(chan struct{})
-	defer close(done)
-	suffix := "/" + backupManifest
-	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-		if strings.HasSuffix(object.Key, suffix) {
-			paths = append(paths, object.Key)
-		}
-	}
-
-	sort.Strings(paths)
-	var mlist []*Manifest
-	var manifest MasterManifest
-
-	for _, path := range paths {
-		var m Manifest
-		if err := h.readManifest(path, &m); err != nil {
-			return nil, errors.Wrap(err, "While Getting latest manifest")
-		}
-		m.Path = path
-		mlist = append(mlist, &m)
-	}
-	manifest.Manifests = mlist
-	return &manifest, nil
-}
-
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
@@ -394,4 +333,65 @@ func (h *s3Handler) Close() error {
 
 func (h *s3Handler) Write(b []byte) (int, error) {
 	return h.pwriter.Write(b)
+}
+
+func (h *s3Handler) objectExists(objectName string) bool {
+	objectPath := filepath.Join(h.objectPrefix, objectName)
+	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
+	if err != nil {
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" {
+			return false
+		} else {
+			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
+			return false
+		}
+	}
+	return true
+}
+
+func (h *s3Handler) readManifest(path string, m *Manifest) error {
+	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(m)
+}
+
+func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
+	path := filepath.Join(h.objectPrefix, backupManifest)
+	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(m)
+}
+
+func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
+	var paths []string
+	done := make(chan struct{})
+	defer close(done)
+	suffix := "/" + backupManifest
+	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+		if strings.HasSuffix(object.Key, suffix) {
+			paths = append(paths, object.Key)
+		}
+	}
+
+	sort.Strings(paths)
+	var mlist []*Manifest
+	var manifest MasterManifest
+
+	for _, path := range paths {
+		var m Manifest
+		if err := h.readManifest(path, &m); err != nil {
+			return nil, errors.Wrap(err, "While Getting latest manifest")
+		}
+		m.Path = path
+		mlist = append(mlist, &m)
+	}
+	manifest.Manifests = mlist
+	return &manifest, nil
 }

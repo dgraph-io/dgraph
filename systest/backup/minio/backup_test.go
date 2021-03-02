@@ -264,8 +264,6 @@ func TestBackupMinio(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
 	}
 
-	// TODO(Ahsan): Make minio backup correctly handle the case of a deleted backup dir.
-	// _ = dirs
 	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))

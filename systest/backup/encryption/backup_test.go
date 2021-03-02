@@ -224,7 +224,7 @@ func TestBackupMinioE(t *testing.T) {
 	require.NoError(t, err)
 
 	// perform an incremental backup and then restore
-	_ = runBackup(t, 15, 5)
+	dirs := runBackup(t, 15, 5)
 	restored = runRestore(t, "", incr4.Txn.CommitTs)
 
 	// Check that the newly added data is the only data for the movie predicate
@@ -239,11 +239,10 @@ func TestBackupMinioE(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
 	}
 
-	// TODO(Ahsan): What do we do if the backup directory is deleted?
 	// // Remove the full backup dirs and verify restore catches the error.
-	// require.NoError(t, os.RemoveAll(dirs[0]))
-	// require.NoError(t, os.RemoveAll(dirs[3]))
-	// runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
+	require.NoError(t, os.RemoveAll(dirs[0]))
+	require.NoError(t, os.RemoveAll(dirs[3]))
+	runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup(t)
@@ -295,11 +294,6 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	// manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-	// 	return !isdir && strings.Contains(path, "manifest.json")
-	// })
-	// require.Equal(t, numExpectedDirs, len(manifests))
-
 	return dirs
 }
 
@@ -308,18 +302,12 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	// t.Logf("--- Restoring from: %q", localBackupDst)
-	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
-	// argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-	// 	"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
-	// cwd, err := os.Getwd()
-	// require.NoError(t, err)
-	// err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	// require.NoError(t, err)
 	t.Logf("--- Restoring from: %q", localBackupDst)
+	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
 	key, err := ioutil.ReadFile("../../../ee/enc/test-fixtures/enc-key")
 	require.NoError(t, err)
-	result := worker.RunRestore("./data/restore", localBackupDst, lastDir, x.SensitiveByteSlice(key), options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
+		x.SensitiveByteSlice(key), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
@@ -399,8 +387,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})

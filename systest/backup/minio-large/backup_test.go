@@ -214,7 +214,6 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		t.Log("=========== Got object1: ", object.Key)
 		if object.Key != "manifest.json" {
 			dstDir := backupDir + "/" + object.Key
 			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
@@ -225,7 +224,6 @@ func copyToLocalFs(t *testing.T) {
 		objectCh2 := mc.ListObjectsV2(bucketName, "", true, lsCh2)
 		for object := range objectCh2 {
 			require.NoError(t, object.Err)
-			t.Log("=========== Got object: ", object.Key)
 			dstFile := backupDir + "/" + object.Key
 			err := mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
 			require.NoError(t, err)
