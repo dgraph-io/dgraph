@@ -490,13 +490,13 @@ func NewBadgerCollector() prometheus.Collector {
 			"Total number of memtable gets",
 			nil, nil,
 		),
-		"badger_v3_lsm_size": prometheus.NewDesc(
-			"badger_v3_lsm_size",
+		"badger_v3_lsm_size_bytes": prometheus.NewDesc(
+			"badger_v3_lsm_size_bytes",
 			"Size of the LSM in bytes",
 			[]string{"dir"}, nil,
 		),
-		"badger_v3_vlog_size": prometheus.NewDesc(
-			"badger_v3_vlog_size",
+		"badger_v3_vlog_size_bytes": prometheus.NewDesc(
+			"badger_v3_vlog_size_bytes",
 			"Size of the value log in bytes",
 			[]string{"dir"}, nil,
 		),
