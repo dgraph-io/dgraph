@@ -83,7 +83,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 	if src.StartTs < o.startTxnTs {
 		return true
 	}
-	for k := range src.Keys {
+	for _, k := range src.Keys {
 		ki, err := strconv.ParseUint(k, 36, 64)
 		if err != nil {
 			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
@@ -139,7 +139,7 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	// We store src.Keys as string to ensure compatibility with all the various language clients we
 	// have. But, really they are just uint64s encoded as strings. We use base 36 during creation of
 	// these keys in FillContext in posting/mvcc.go.
-	for k := range src.Keys {
+	for _, k := range src.Keys {
 		ki, err := strconv.ParseUint(k, 36, 64)
 		if err != nil {
 			glog.Errorf("Got error while parsing conflict key %q: %v\n", k, err)
@@ -367,7 +367,12 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
-		for pkey := range src.Preds {
+		preds := make(map[string]struct{})
+
+		for _, k := range src.Preds {
+			preds[k] = struct{}{}
+		}
+		for pkey := range preds {
 			splits := strings.Split(pkey, "-")
 			if len(splits) < 2 {
 				return errors.Errorf("Unable to find group id in %s", pkey)
