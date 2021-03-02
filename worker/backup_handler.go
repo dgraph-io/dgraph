@@ -151,8 +151,6 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCrede
 	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}
-	fmt.Println("Uri schema: ", uri.Scheme)
-	fmt.Println("Load called")
 
 	return h.Load(uri, backupId, backupNum, fn)
 }

@@ -239,7 +239,7 @@ func TestBackupMinioE(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[incr4.Uids[check.blank]])
 	}
 
-	// // Remove the full backup dirs and verify restore catches the error.
+	// Remove the full backup dirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
 	runFailingRestore(t, backupDir, "", incr4.Txn.CommitTs)

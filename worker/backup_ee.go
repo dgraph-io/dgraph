@@ -212,8 +212,6 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	// backupPath := filepath.Join(dir, backupManifest)
-
 	m := Manifest{Since: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
 		DropOperations: dropOperations, Path: dir}
 	if req.SinceTs == 0 {
