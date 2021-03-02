@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -228,6 +230,40 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 
 	return cmd
 
+}
+
+func convertJSON(old string) io.Reader {
+	dec := json.NewDecoder(strings.NewReader(old))
+	config := make(map[string]interface{})
+	if err := dec.Decode(&config); err != nil {
+		panic(err)
+	}
+	good := make(map[string]string)
+	super := make(map[string]map[string]interface{})
+	for k, v := range config {
+		switch t := v.(type) {
+		case map[string]interface{}:
+			super[k] = t
+		default:
+			good[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	// condense superflags
+	for f, options := range super {
+		good[f] = `"`
+		for k, v := range options {
+			good[f] += fmt.Sprintf("%s=%v; ", k, v)
+		}
+		good[f] = good[f][:len(good[f])-1] + `"`
+	}
+	// generate good json string
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetIndent("", "    ")
+	if err := enc.Encode(&good); err != nil {
+		panic(err)
+	}
+	return buf
 }
 
 func convertYAML(old string) io.Reader {
