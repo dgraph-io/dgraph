@@ -230,7 +230,6 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 		}
 
 		path := manifests[i].Path
-		// _, path = filepath.Split(path)
 		path = filepath.Join(uri.Path, path)
 		for gid := range manifest.Groups {
 			file := filepath.Join(path, backupName(manifest.Since, gid))
