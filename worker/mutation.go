@@ -688,8 +688,18 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 			e = res.err
 		}
 		if res.ctx != nil {
-			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
-			tctx.Preds = append(tctx.Preds, res.ctx.Preds...)
+			if tctx.Keys == nil {
+				tctx.Keys = make(map[string]bool)
+			}
+			for key := range res.ctx.Keys {
+				tctx.Keys[key] = true
+			}
+			if tctx.Preds == nil {
+				tctx.Preds = make(map[string]bool)
+			}
+			for pred := range res.ctx.Preds {
+				tctx.Preds[pred] = true
+			}
 		}
 	}
 	close(resCh)

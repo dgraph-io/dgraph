@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"mime"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -422,12 +421,10 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
 	}
-	sort.Strings(e.Txn.Keys)
-	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
 	if req.CommitNow {
-		e.Txn.Keys = e.Txn.Keys[:0]
+		e.Txn.Keys = nil
 	}
 
 	response := map[string]interface{}{}
@@ -533,10 +530,10 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 	}
 
 	if useList {
-		tc.Keys = reqList
+		tc.Keys = x.ListToMap(reqList)
 	} else {
-		tc.Keys = reqMap["keys"]
-		tc.Preds = reqMap["preds"]
+		tc.Keys = x.ListToMap(reqMap["keys"])
+		tc.Preds = x.ListToMap(reqMap["preds"])
 	}
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
@@ -550,7 +547,7 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 	e := query.Extensions{
 		Txn: resp.Txn,
 	}
-	e.Txn.Keys = e.Txn.Keys[:0]
+	e.Txn.Keys = make(map[string]bool)
 	response := map[string]interface{}{}
 	response["extensions"] = e
 	mp := map[string]interface{}{}

@@ -212,9 +212,11 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
 		fps := strconv.FormatUint(key, 36)
-		ctx.Keys = append(ctx.Keys, fps)
+		if ctx.Keys == nil {
+			ctx.Keys = make(map[string]bool)
+		}
+		ctx.Keys[fps] = true
 	}
-	ctx.Keys = x.Unique(ctx.Keys)
 
 	txn.Unlock()
 	txn.Update()

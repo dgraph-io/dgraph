@@ -241,7 +241,9 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
-		ctx.Preds = append(ctx.Preds, predKey)
+		if ctx.Preds == nil {
+			ctx.Preds = make(map[string]bool)
+		}
+		ctx.Preds[predKey] = true
 	}
-	ctx.Preds = x.Unique(ctx.Preds)
 }

@@ -595,7 +595,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		if resp.Txn == nil {
 			return errors.Wrapf(err, "Txn Context is nil")
 		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
+		resp.Txn.Keys = make(map[string]bool)
 		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
@@ -649,7 +649,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	// CommitNow was true, no need to send keys.
-	resp.Txn.Keys = resp.Txn.Keys[:0]
+	resp.Txn.Keys = make(map[string]bool)
 	resp.Txn.CommitTs = cts
 	calculateMutationMetrics()
 	return nil
