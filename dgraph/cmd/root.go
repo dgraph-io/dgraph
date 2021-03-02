@@ -22,7 +22,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -146,8 +148,33 @@ func initCmds() {
 			if cfg == "" {
 				continue
 			}
-			sc.Conf.SetConfigFile(cfg)
-			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			// TODO: might want to put the rest of this scope outside the for loop, do we need to
+			//       read the config file for each subcommand if there's only one global config
+			//       file?
+			cfgFile, err := os.OpenFile(cfg, os.O_RDONLY, 0644)
+			if err != nil {
+				x.Fatalf("unable to open config file for reading: %v", err)
+			}
+			cfgData, err := ioutil.ReadAll(cfgFile)
+			if err != nil {
+				x.Fatalf("unable to read config file: %v", err)
+			}
+			if ext := filepath.Ext(cfg); len(ext) > 1 {
+				ext = ext[1:]
+				sc.Conf.SetConfigType(ext)
+				var fixed io.Reader
+				switch ext {
+				case "json":
+					fixed = convertJSON(string(cfgData))
+				case "yaml", "yml":
+					fixed = convertYAML(string(cfgData))
+				default:
+					x.Fatalf("unknown config file extension: %s", ext)
+				}
+				x.Check(errors.Wrapf(sc.Conf.ReadConfig(fixed), "reading config"))
+			} else {
+				x.Fatalf("config file requires an extension: .json or .yaml or .yml")
+			}
 			setGlogFlags(sc.Conf)
 		}
 	})
@@ -232,14 +259,17 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 
 }
 
+// convertJSON
+//
+// TODO: tests
 func convertJSON(old string) io.Reader {
 	dec := json.NewDecoder(strings.NewReader(old))
 	config := make(map[string]interface{})
 	if err := dec.Decode(&config); err != nil {
 		panic(err)
 	}
-	good := make(map[string]string)
-	super := make(map[string]map[string]interface{})
+	// super holds superflags to later be condensed into 'good'
+	super, good := make(map[string]map[string]interface{}), make(map[string]string)
 	for k, v := range config {
 		switch t := v.(type) {
 		case map[string]interface{}:
@@ -250,11 +280,10 @@ func convertJSON(old string) io.Reader {
 	}
 	// condense superflags
 	for f, options := range super {
-		good[f] = `"`
 		for k, v := range options {
 			good[f] += fmt.Sprintf("%s=%v; ", k, v)
 		}
-		good[f] = good[f][:len(good[f])-1] + `"`
+		good[f] = good[f][:len(good[f])-1]
 	}
 	// generate good json string
 	buf := &bytes.Buffer{}
@@ -266,6 +295,9 @@ func convertJSON(old string) io.Reader {
 	return buf
 }
 
+// convertYAML
+//
+// TODO: tests
 func convertYAML(old string) io.Reader {
 	isFlat := func(l string) bool {
 		if len(l) < 1 {
