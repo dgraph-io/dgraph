@@ -397,7 +397,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	if isOld && groups().ServesGroup(1) {
-		return fixBackup()
+		// Group 1 contains all the internal predicates.
+		return fixRestore()
 	}
 	return nil
 }
