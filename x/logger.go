@@ -26,7 +26,7 @@ import (
 
 type LoggerConf struct {
 	Compress      bool
-	Dir           string
+	Output        string
 	EncryptionKey SensitiveByteSlice
 	Size          int64
 	Days          int64
@@ -39,7 +39,7 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 	config.LevelKey = zapcore.OmitKey
 	config.EncodeTime = zapcore.ISO8601TimeEncoder
 	// if stdout, then init the logger and return
-	if conf.Dir == "stdout" {
+	if conf.Output == "stdout" {
 		return &Logger{
 			logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(config),
 				zapcore.AddSync(os.Stdout), zapcore.DebugLevel)),
@@ -47,14 +47,14 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 		}, nil
 	}
 
-	if err := os.MkdirAll(conf.Dir, 0700); err != nil {
+	if err := os.MkdirAll(conf.Output, 0700); err != nil {
 		return nil, err
 	}
 	if conf.EncryptionKey != nil {
 		filename = filename + ".enc"
 	}
 
-	path, err := filepath.Abs(filepath.Join(conf.Dir, filename))
+	path, err := filepath.Abs(filepath.Join(conf.Output, filename))
 	if err != nil {
 		return nil, err
 	}

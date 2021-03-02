@@ -233,11 +233,13 @@ func getMaskedFieldVarName(f *ast.Field) string {
 	switch f.Name {
 	case "resetPassword":
 		for _, a := range f.Arguments {
-			if a.Name == "input" && a.Value != nil && a.Value.Children != nil {
-				for _, c := range a.Value.Children {
-					if c.Name == "password" && c.Value.Kind == ast.Variable {
-						return c.Value.String()
-					}
+			if a.Name != "input" || a.Value == nil || a.Value.Children == nil {
+				continue
+			}
+
+			for _, c := range a.Value.Children {
+				if c.Name == "password" && c.Value.Kind == ast.Variable {
+					return c.Value.String()
 				}
 			}
 		}
