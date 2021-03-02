@@ -184,20 +184,20 @@ fi
 # Build Windows.
 if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
   pushd $basedir/dgraph/dgraph
-    xgo -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
+    xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
         "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
     mkdir $TMP/windows
     mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
   popd
 
   pushd $basedir/badger/badger
-    xgo -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
+    xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
     mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
   popd
 
   if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
     pushd $basedir/ratel
-      xgo -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
+      xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
       mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
     popd
   fi
@@ -227,7 +227,7 @@ fi
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
-  xgo -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags \
+  xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags \
       "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
@@ -235,14 +235,14 @@ pushd $basedir/dgraph/dgraph
 popd
 
 pushd $basedir/badger/badger
-  xgo -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+  xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
 
 if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
   pushd $basedir/ratel
-    xgo -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
+    xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
     strip -x ratel-linux-amd64
     mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
   popd
