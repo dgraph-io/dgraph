@@ -37,6 +37,7 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 	config := zap.NewProductionEncoderConfig()
 	config.MessageKey = conf.MessageKey
 	config.LevelKey = zapcore.OmitKey
+	config.EncodeTime = zapcore.ISO8601TimeEncoder
 	// if stdout, then init the logger and return
 	if conf.Dir == "stdout" {
 		return &Logger{
