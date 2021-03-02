@@ -34,6 +34,18 @@ type LoggerConf struct {
 }
 
 func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
+	config := zap.NewProductionEncoderConfig()
+	config.MessageKey = conf.MessageKey
+	config.LevelKey = zapcore.OmitKey
+	// if stdout, then init the logger and return
+	if conf.Dir == "stdout" {
+		return &Logger{
+			logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(config),
+				zapcore.AddSync(os.Stdout), zapcore.DebugLevel)),
+			writer: nil,
+		}, nil
+	}
+
 	if err := os.MkdirAll(conf.Dir, 0700); err != nil {
 		return nil, err
 	}
@@ -55,9 +67,7 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 	if w, err = w.Init(); err != nil {
 		return nil, err
 	}
-	config := zap.NewProductionEncoderConfig()
-	config.MessageKey = conf.MessageKey
-	config.LevelKey = ""
+
 	return &Logger{
 		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(config),
 			zapcore.AddSync(w), zap.DebugLevel)),

@@ -176,6 +176,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
+		"level", "AUDIT",
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,

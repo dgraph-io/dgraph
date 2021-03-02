@@ -179,7 +179,8 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	})
 }
 
-// this is for only for /admin endpoint
+// password fields are accessible only via /admin endpoint hence,
+// this will be only called with /admin endpoint
 func maskPasswordFieldsInGQL(req string) string {
 	var gqlReq schema.Request
 	err := json.Unmarshal([]byte(req), &gqlReq)

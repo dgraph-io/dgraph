@@ -251,7 +251,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
 		Flag("dir",
-			"The path where audit logs will be stored.").
+			`The path where audit logs will be stored. "stdout" for standard output.
+				When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
