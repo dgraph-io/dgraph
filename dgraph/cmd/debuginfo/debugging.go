@@ -42,8 +42,8 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 	for _, metricType := range metricTypes {
 		source := fmt.Sprintf("%s%s", u.String(),
 			metricMap[metricType])
-		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, metricType)
-		if err := saveDebug(source, savePath, duration); err != nil {
+		savePath := fmt.Sprintf("%s%s.gz", pathPrefix)
+		if err := saveDebug(source, savePath, duration, metricTypes); err != nil {
 			glog.Errorf("error while saving metric from %s: %s", source, err)
 			continue
 		}
@@ -54,13 +54,14 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 
 // saveDebug writes the debug specified in the argument fetching it from the host
 // provided in the configuration
-func saveDebug(sourceURL, filePath string, duration time.Duration) error {
+func saveDebug(sourceURL, filePath string, duration time.Duration, metricTypes []string) error {
 	var err error
 	var resp io.ReadCloser
-
-	glog.Infof("fetching information over HTTP from %s", sourceURL)
-	if duration > 0 {
-		glog.Info(fmt.Sprintf("please wait... (%v)", duration))
+	for _, metricType := range metricTypes {
+		glog.Infof("fetching %s over HTTP from %s", metricType, sourceURL)
+		if duration > 0 {
+			glog.Info(fmt.Sprintf("please wait... (%v)", duration))
+		}
 	}
 
 	timeout := duration + duration/2 + 2*time.Second
