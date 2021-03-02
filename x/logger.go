@@ -58,7 +58,6 @@ func InitLogger(conf *LoggerConf, filename string) (*Logger, error) {
 	config := zap.NewProductionEncoderConfig()
 	config.MessageKey = conf.MessageKey
 	config.LevelKey = ""
-	config.TimeKey = ""
 	return &Logger{
 		logger: zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(config),
 			zapcore.AddSync(w), zap.DebugLevel)),
