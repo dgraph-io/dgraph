@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 
@@ -106,7 +107,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 	fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
 
 	// In case we need to truncate raft entries.
-	batch := db.NewWriteBatch()
+	batch := db.NewWriteBatchAt(math.MaxUint64)
 	defer batch.Cancel()
 	var numTruncates int
 

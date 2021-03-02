@@ -775,11 +775,8 @@ func run() {
 
 	var db *badger.DB
 	var err error
-	if isWal {
-		db, err = badger.Open(bopts)
-	} else {
-		db, err = badger.OpenManaged(bopts)
-	}
+	db, err = badger.OpenManaged(bopts)
+
 	x.Check(err)
 	posting.Init(db)
 	defer db.Close()
