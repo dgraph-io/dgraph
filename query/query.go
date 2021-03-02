@@ -1337,7 +1337,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 // lists in uidMatrix which are not in DestUIDs.
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
-	for _, l := range sg.uidMatrix {
+	for idx, l := range sg.uidMatrix {
 		if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
@@ -1349,9 +1349,12 @@ func (sg *SubGraph) updateUidMatrix() {
 			// algo.IntersectWith(l, sg.DestUIDs, l)
 			// TODO: Doing intersection with list would require conversion to Bitmap and conversion
 			// back. Instead, just directly applyfilter like above.
-			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				return sg.DestMap.Contains(uid)
-			})
+			r := codec.FromList(l)
+			r.And(sg.DestMap)
+			sg.uidMatrix[idx] = codec.ToList(r)
+			// algo.ApplyFilter(l, func(uid uint64, idx int) bool {
+			// 	return sg.DestMap.Contains(uid)
+			// })
 		}
 	}
 }

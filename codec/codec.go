@@ -120,11 +120,16 @@ func Merge(matrix []*pb.List) *roaring64.Bitmap {
 	if len(matrix) == 0 {
 		return out
 	}
-	out.Or(FromList(matrix[0]))
-	for _, l := range matrix[1:] {
-		r := FromList(l)
-		out.Or(r)
+	// TODO: When pb.List uses bitmap directly, we should change this.
+	for _, l := range matrix {
+		out.AddMany(l.Uids)
 	}
+	// out.Or(FromList(matrix[0]))
+	// roaring64.ParOr()
+	// for _, l := range matrix[1:] {
+	// 	r := FromList(l)
+	// 	out.Or(r)
+	// }
 	return out
 }
 
