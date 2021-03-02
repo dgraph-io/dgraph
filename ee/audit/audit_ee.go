@@ -33,7 +33,6 @@ const (
 var auditEnabled uint32
 
 type AuditEvent struct {
-	Timestamp   int64
 	User        string
 	Namespace   uint64
 	ServerHost  string
@@ -177,7 +176,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
-		"ts", event.Timestamp,
+		"level", "AUDIT",
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,

@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/gqlparser/v2/ast"
@@ -78,9 +77,8 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
 		return handler(ctx, req)
 	}
-	ts := time.Now().UnixNano()
 	response, err := handler(ctx, req)
-	auditGrpc(ctx, ts, req, info)
+	auditGrpc(ctx, req, info)
 	return response, err
 }
 
@@ -94,18 +92,17 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ts := time.Now().UnixNano()
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
 		r.Body = ioutil.NopCloser(tee)
 		next.ServeHTTP(rw, r)
 		r.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
-		auditHttp(rw, r, ts)
+		auditHttp(rw, r)
 	})
 }
 
-func auditGrpc(ctx context.Context, ts int64, req interface{}, info *grpc.UnaryServerInfo) {
+func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo) {
 	clientHost := ""
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
@@ -144,9 +141,9 @@ func auditGrpc(ctx context.Context, ts int64, req interface{}, info *grpc.UnaryS
 		cd = serr.Code()
 	}
 
-	reqBody := checkRequestBody(Grpc, info.FullMethod[strings.LastIndex(info.FullMethod, "/")+1:], fmt.Sprintf("%+v", req))
+	reqBody := checkRequestBody(Grpc, info.FullMethod[strings.LastIndex(info.FullMethod,
+		"/")+1:], fmt.Sprintf("%+v", req))
 	auditor.Audit(&AuditEvent{
-		Timestamp:  ts,
 		User:       user,
 		Namespace:  namespace,
 		ServerHost: x.WorkerConfig.MyAddr,
@@ -158,7 +155,7 @@ func auditGrpc(ctx context.Context, ts int64, req interface{}, info *grpc.UnaryS
 	})
 }
 
-func auditHttp(w *ResponseWriter, r *http.Request, ts int64) {
+func auditHttp(w *ResponseWriter, r *http.Request) {
 	body := getRequestBody(r)
 	var user string
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
@@ -170,7 +167,6 @@ func auditHttp(w *ResponseWriter, r *http.Request, ts int64) {
 	}
 
 	auditor.Audit(&AuditEvent{
-		Timestamp:   ts,
 		User:        user,
 		Namespace:   x.ExtractNamespaceHTTP(r),
 		ServerHost:  x.WorkerConfig.MyAddr,
@@ -183,6 +179,8 @@ func auditHttp(w *ResponseWriter, r *http.Request, ts int64) {
 	})
 }
 
+// password fields are accessible only via /admin endpoint hence,
+// this will be only called with /admin endpoint
 func maskPasswordFieldsInGQL(req string) string {
 	var gqlReq schema.Request
 	err := json.Unmarshal([]byte(req), &gqlReq)
@@ -237,20 +235,16 @@ func getMaskedFieldVarName(f *ast.Field) string {
 		for _, a := range f.Arguments {
 			if a.Name == "input" && a.Value != nil && a.Value.Children != nil {
 				for _, c := range a.Value.Children {
-					if c.Name == "password" {
-						if c.Value.Kind == ast.Variable {
-							return c.Value.String()
-						}
+					if c.Name == "password" && c.Value.Kind == ast.Variable {
+						return c.Value.String()
 					}
 				}
 			}
 		}
 	case "login":
 		for _, a := range f.Arguments {
-			if a.Name == "password" {
-				if a.Value.Kind == ast.Variable {
-					return a.Value.String()
-				}
+			if a.Name == "password" && a.Value.Kind == ast.Variable {
+				return a.Value.String()
 			}
 		}
 	}
