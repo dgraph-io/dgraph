@@ -250,7 +250,7 @@ func run() {
 		ad, err := filepath.Abs(opts.audit.Output)
 		x.Check(err)
 		x.AssertTruef(ad != wd,
-			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Output)
+			"WAL directory and Audit output cannot be the same ('%s').", opts.audit.Output)
 	}
 
 	if opts.rebalanceInterval <= 0 {

@@ -67,7 +67,7 @@ func GetAuditConf(conf string) *x.LoggerConf {
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
 	out := auditFlag.GetString("output")
-	x.AssertTruef(out != "", "dir flag is not provided for the audit logs")
+	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
