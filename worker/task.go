@@ -365,9 +365,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// calculate) to work correctly. But we have seen some panics while forming DataKey in
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
-	if srcFn.n != len(q.UidList.Uids) {
+	bm := codec.FromList(q.UidList)
+	if sz := int(bm.GetCardinality()); srcFn.n != sz {
 		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
-			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+			"handleValuePostings", srcFn.n, sz, srcFn)
 	}
 
 	// This function has small boilerplate as handleUidPostings, around how the code gets

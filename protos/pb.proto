@@ -36,8 +36,8 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 /* option (gogoproto.goproto_getters_all) = true; */
 
 message List {
-	repeated fixed64 uids = 1;
-	bytes bitmap_do_not_use = 2;
+	repeated fixed64 sorted_uids = 1;
+	bytes bitmap = 2;
 }
 
 message TaskValue {

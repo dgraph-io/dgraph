@@ -17,8 +17,7 @@
 package algo
 
 import (
-	"sort"
-
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
@@ -26,21 +25,26 @@ const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
-	out := u.Uids[:0]
-	for i, uid := range u.Uids {
+	var out []uint64
+	bm := codec.FromList(u)
+	var i int
+	for itr := bm.Iterator(); itr.HasNext(); i++ {
+		uid := itr.Next()
 		if f(uid, i) {
 			out = append(out, uid)
 		}
 	}
-	u.Uids = out
+	u.Bitmap = nil
+	u.SortedUids = out
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *pb.List, uid uint64) int {
-	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
-	if i < len(u.Uids) && u.Uids[i] == uid {
-		return i
+	bm := codec.FromList(u)
+	r := bm.Rank(uid)
+	if r == bm.GetCardinality() {
+		return -1
 	}
-	return -1
+	return int(r)
 }

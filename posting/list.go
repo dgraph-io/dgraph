@@ -1308,25 +1308,26 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// TODO: Need to fix this. We shouldn't pick up too many uids.
 	// Before this, we were only picking math.Int32 number of uids.
 	// Now we're picking everything.
-	if opt.First == 0 {
-		out.Uids = bm.ToArray()
-		// TODO: Not yet ready to use Bitmap for data transfer. We'd have to deal with all the
-		// places where List.Uids is being called.
-		// out.Bitmap = codec.ToBytes(bm)
-		return out, nil
+	num := uint64(abs(opt.First))
+	sz := bm.GetCardinality()
+	if sz >= num {
+		return codec.ToList(bm), nil
 	}
 
-	var itr roaring64.IntIterable64
 	if opt.First > 0 {
-		itr = bm.Iterator()
+		x, err := bm.Select(num)
+		if err != nil {
+			return nil, err
+		}
+		codec.RemoveRange(bm, x, math.MaxUint64)
 	} else {
-		itr = bm.ReverseIterator()
+		x, err := bm.Select(sz - num)
+		if err != nil {
+			return nil, err
+		}
+		codec.RemoveRange(bm, 0, x)
 	}
-	num := abs(opt.First)
-	for len(out.Uids) < num && itr.HasNext() {
-		out.Uids = append(out.Uids, itr.Next())
-	}
-	return out, nil
+	return codec.ToList(bm), nil
 
 	// errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
 	//		hex.EncodeToString(l.key))

@@ -83,8 +83,8 @@ func Encode(uids []uint64) []byte {
 
 func ToList(rm *roaring64.Bitmap) *pb.List {
 	return &pb.List{
-		Uids: rm.ToArray(),
-		// Bitmap: ToBytes(rm),
+		// Uids: rm.ToArray(),
+		Bitmap: ToBytes(rm),
 	}
 }
 
@@ -120,9 +120,9 @@ func Merge(matrix []*pb.List) *roaring64.Bitmap {
 	if len(matrix) == 0 {
 		return out
 	}
-	// TODO: When pb.List uses bitmap directly, we should change this.
 	for _, l := range matrix {
-		out.AddMany(l.Uids)
+		bm := FromList(l)
+		out.Or(bm)
 	}
 	// out.Or(FromList(matrix[0]))
 	// roaring64.ParOr()
@@ -157,14 +157,21 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 	if l == nil {
 		return iw
 	}
-	if len(l.BitmapDoNotUse) > 0 {
+	switch {
+	case len(l.Bitmap) > 0:
 		// Only one of Uids or Bitmap should be defined.
-		x.Check(iw.UnmarshalBinary(l.BitmapDoNotUse))
-	}
-	if len(l.Uids) > 0 {
-		iw.AddMany(l.Uids)
+		x.Check(iw.UnmarshalBinary(l.Bitmap))
+	case len(l.SortedUids) > 0:
+		iw.AddMany(l.SortedUids)
 	}
 	return iw
+}
+
+func ToSortedUids(l *pb.List) *pb.List {
+	bm := FromList(l)
+	return &pb.List{
+		SortedUids: bm.ToArray(),
+	}
 }
 
 func FromBytes(buf []byte) *roaring64.Bitmap {
