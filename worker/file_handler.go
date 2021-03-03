@@ -430,6 +430,7 @@ func (h *fileHandler) ExportBackup(backupDir, exportDir, format string,
 	return nil
 }
 
+// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
 func (h *fileHandler) getConsolidatedManifest(uri *url.URL) (*MasterManifest, error) {
 	if err := createIfNotExists(uri.Path); err != nil {
 		return nil, errors.Wrap(err, "While GetLatestManifest")

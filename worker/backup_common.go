@@ -59,8 +59,7 @@ type Manifest struct {
 	// versions (<= 20.11), the predicates in Group map do not have namespace. Version will be zero
 	// for older versions.
 	Version int `json:"version"`
-	// Path is the path to the manifest file. This field is only used during
-	// processing and is not written to disk.
+	// Path is the name of the backup directory to which this manifest belongs to.
 	Path string `json:"path"`
 	// Encrypted indicates whether this backup was encrypted or not.
 	Encrypted bool `json:"encrypted"`

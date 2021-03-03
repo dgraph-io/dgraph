@@ -369,6 +369,7 @@ func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
 	return json.NewDecoder(reader).Decode(m)
 }
 
+// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
 func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
 	var paths []string
 	done := make(chan struct{})
