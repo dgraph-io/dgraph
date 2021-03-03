@@ -264,29 +264,29 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 // respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
 // change anything and returns the config file string as it is. For example:
 //
-//	{
-//		"mutations": "strict",
-//		"badger": {
-//			"compression": "zstd:1",
-//			"goroutines": 5
-//		},
-//		"raft": {
-//			"idx": 2,
-//			"learner": true
-//      },
-//		"security": {
-//			"whitelist": "127.0.0.1,0.0.0.0"
-//		}
-//	}
+//  {
+//    "mutations": "strict",
+//    "badger": {
+//      "compression": "zstd:1",
+//      "goroutines": 5
+//    },
+//    "raft": {
+//      "idx": 2,
+//      "learner": true
+//    },
+//    "security": {
+//      "whitelist": "127.0.0.1,0.0.0.0"
+//    }
+//  }
 //
 // Is converted into:
 //
-//	{
-//		"mutations": "strict",
-//		"badger": "compression=zstd:1; goroutines=5;",
-//		"raft": "idx=2; learner=true;",
-//		"security": "whitelist=127.0.0.1,0.0.0.0;"
-//	}
+//  {
+//    "mutations": "strict",
+//    "badger": "compression=zstd:1; goroutines=5;",
+//    "raft": "idx=2; learner=true;",
+//    "security": "whitelist=127.0.0.1,0.0.0.0;"
+//  }
 //
 // Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
 func convertJSON(old string) io.Reader {
@@ -327,9 +327,9 @@ func convertJSON(old string) io.Reader {
 // subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
 // returns the config file string as it is. For example:
 //
-//	mutations: strict
-//	badger:
-//	  compression: zstd:1
+//  mutations: strict
+//  badger:
+//    compression: zstd:1
 //    goroutines: 5
 //  raft:
 //    idx: 2
