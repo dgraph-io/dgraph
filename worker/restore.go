@@ -82,7 +82,11 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				fmt.Println("Creating new db:", dir)
 			}
 			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
-				r: gzReader, restoreTs: 0, preds: in.preds, dropOperations: in.dropOperations,
+				r:              gzReader,
+				restoreTs:      0,
+				preds:          in.preds,
+				dropOperations: in.dropOperations,
+				isOld:          in.isOld,
 			})
 			if err != nil {
 				return 0, 0, err

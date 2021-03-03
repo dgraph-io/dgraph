@@ -881,6 +881,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	if err := writePrefix(x.ByteType); err != nil {
 		return nil, err
 	}
+
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
 }
