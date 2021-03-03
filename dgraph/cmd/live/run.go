@@ -655,6 +655,9 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 // populateNamespace fetches the schema and extracts the information about the existing namespaces.
 func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, isGalaxyOp bool) error {
 	if !isGalaxyOp {
+		// The below schema query returns the predicates without the namespace if context does not
+		// have the galaxy operation set. As we are not loading data across namespaces, so existence
+		// of namespace is verified when the user logs in.
 		l.namespaces[opt.namespaceToLoad] = struct{}{}
 		return nil
 	}
