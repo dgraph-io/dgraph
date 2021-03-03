@@ -41,15 +41,12 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 		if aclKey != nil {
 			glog.Exit("flags: ACL secret key set in both vault and acl_secret_file")
 		}
-		aclKey, err = ioutil.ReadFile(aclKeyFile)
-		if err != nil {
+		if aclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
 			glog.Exitf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
 		}
 	}
-	if aclKey != nil {
-		if l := len(aclKey); l < 32 {
-			glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
-		}
+	if l := len(aclKey); aclKey != nil && l < 32 {
+		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
 	encKeyFile := config.GetString(flagEncKeyFile)
@@ -57,15 +54,12 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 		if encKey != nil {
 			glog.Exit("flags: Encryption key set in both vault and encryption_key_file")
 		}
-		encKey, err = ioutil.ReadFile(encKeyFile)
-		if err != nil {
+		if encKey, err = ioutil.ReadFile(encKeyFile); err != nil {
 			glog.Exitf("error reading encryption key from file: %s: %s", encKeyFile, err)
 		}
 	}
-	if encKey != nil {
-		if l := len(encKey); l != 16 && l != 32 && l != 64 {
-			glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
-		}
+	if l := len(encKey); encKey != nil && l != 16 && l != 32 && l != 64 {
+		glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
 	}
 
 	return

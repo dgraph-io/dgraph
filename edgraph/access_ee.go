@@ -67,7 +67,7 @@ func (s *Server) Login(ctx context.Context,
 	if ipAddr, err := hasAdminAuth(ctx, "Login"); err != nil {
 		return nil, err
 	} else {
-		addr := ipAddr.String()
+		addr = ipAddr.String()
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")
