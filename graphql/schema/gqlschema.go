@@ -585,8 +585,10 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
-	cascadeDirective:  nil,
-	generateDirective: {ast.Object: true, ast.Interface: true},
+	cascadeDirective:        nil,
+	generateDirective:       {ast.Object: true, ast.Interface: true},
+	apolloRequiresDirective: nil,
+	apolloProvidesDirective: nil,
 }
 
 // Struct to store parameters of @generate directive

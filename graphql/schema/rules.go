@@ -2112,7 +2112,6 @@ func apolloProvidesValidation(sch *ast.Schema,
 	dir *ast.Directive,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 
-	typ.Directives.ForName(apolloKeyDirective)
 	fldTypeDefn := sch.Types[field.Type.Name()]
 	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
 	if keyDirective == nil {
