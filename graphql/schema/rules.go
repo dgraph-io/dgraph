@@ -1373,8 +1373,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	defn := sch.Types[typ.Name]
-	id := getIDField(defn, make(map[string]bool))
-	xid := getXIDField(defn, make(map[string]bool))
+	id := getIDField(defn, nil)
+	xid := getXIDField(defn, nil)
 	if !isQueryOrMutationType(typ) {
 		if len(id) == 0 && len(xid) == 0 {
 			errs = append(errs, gqlerror.ErrorPosf(
