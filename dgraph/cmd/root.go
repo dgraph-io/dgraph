@@ -259,9 +259,36 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 
 }
 
-// convertJSON
+// convertJSON converts JSON hierarchical config objects into a flattened map fulfilling the
+// z.SuperFlag string format so that Viper can correctly set z.SuperFlag config options for the
+// respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
+// change anything and returns the config file string as it is. For example:
 //
-// TODO: tests
+//	{
+//		"mutations": "strict",
+//		"badger": {
+//			"compression": "zstd:1",
+//			"goroutines": 5
+//		},
+//		"raft": {
+//			"idx": 2,
+//			"learner": true
+//      },
+//		"security": {
+//			"whitelist": "127.0.0.1,0.0.0.0"
+//		}
+//	}
+//
+// Is converted into:
+//
+//	{
+//		"mutations": "strict",
+//		"badger": "compression=zstd:1; goroutines=5;",
+//		"raft": "idx=2; learner=true;",
+//		"security": "whitelist=127.0.0.1,0.0.0.0;"
+//	}
+//
+// Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
 func convertJSON(old string) io.Reader {
 	dec := json.NewDecoder(strings.NewReader(old))
 	config := make(map[string]interface{})
@@ -295,9 +322,29 @@ func convertJSON(old string) io.Reader {
 	return buf
 }
 
-// convertYAML
+// convertYAML converts YAML hierarchical notation into a flattened map fulfilling the z.SuperFlag
+// string format so that Viper can correctly set the z.SuperFlag config options for the respective
+// subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
+// returns the config file string as it is. For example:
 //
-// TODO: tests
+//	mutations: strict
+//	badger:
+//	  compression: zstd:1
+//    goroutines: 5
+//  raft:
+//    idx: 2
+//    learner: true
+//  security:
+//    whitelist: "127.0.0.1,0.0.0.0"
+//
+// Is converted into:
+//
+//  mutations: strict
+//  badger: "compression=zstd:1; goroutines=5;"
+//  raft: "idx=2; learner=true;"
+//  security: "whitelist=127.0.0.1,0.0.0.0;"
+//
+// Viper then uses the "converted" YAML to set the z.SuperFlag strings in subcommand option structs.
 func convertYAML(old string) io.Reader {
 	isFlat := func(l string) bool {
 		if len(l) < 1 {
