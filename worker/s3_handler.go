@@ -166,7 +166,7 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 func (h *s3Handler) GetManifest(uri *url.URL) (*MasterManifest, error) {
 	manifest, err := h.getConsolidatedManifest()
 	if err != nil {
-		errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
+		return manifest, errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
 	}
 	return manifest, nil
 
@@ -176,7 +176,7 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
 	manifest, err := h.getConsolidatedManifest()
 	if err != nil {
-		errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
+		return manifest.Manifests, errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
 	}
 
 	var filtered []*Manifest

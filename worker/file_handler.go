@@ -127,10 +127,7 @@ func (h *fileHandler) CreateManifest(uri *url.URL, manifest *MasterManifest) err
 
 	// Move the tmpManifest to backupManifest
 	path := filepath.Join(uri.Path, backupManifest)
-	if err = os.Rename(tmpPath, path); err != nil {
-		return err
-	}
-	return nil
+	return os.Rename(tmpPath, path)
 }
 
 // GetManifest returns the master manifest, if the directory doesn't contain
@@ -155,7 +152,7 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
 
 	manifest, err := h.getConsolidatedManifest(uri)
 	if err != nil {
-		return nil, errors.Wrap(err, "GetManifests failed to get consolidated manifest: ")
+		return manifest.Manifests, errors.Wrap(err, "GetManifests failed to get consolidated manifest: ")
 	}
 
 	var filtered []*Manifest
