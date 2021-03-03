@@ -11,7 +11,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/DataDog/datadog-go v0.0.0-20190425163447-40bafcb5f6c1 // indirect
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20190503082300-0f32ad59ab08
-	github.com/DataDog/zstd v1.4.5 // indirect
+	github.com/DataDog/zstd v1.4.6-0.20210216161059-8cb8bacba7ba // indirect
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
