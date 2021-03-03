@@ -181,98 +181,122 @@ if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
   popd
 fi
 
-# Build Windows.
-if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
+build_windows() {
+  # Build Windows.
+  if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
+    pushd $basedir/dgraph/dgraph
+      xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
+          "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+      mkdir $TMP/windows
+      mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/dgraph.exe
+    popd
+
+    pushd $basedir/badger/badger
+      xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
+      mv badger-windows-4.0-$GOARCH.exe $TMP/windows/badger.exe
+    popd
+
+    if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
+      pushd $basedir/ratel
+        xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
+        mv ratel-windows-4.0-$GOARCH.exe $TMP/windows/dgraph-ratel.exe
+      popd
+    fi
+  fi
+}
+
+build_darwin() {
+  # Build Darwin.
+  if [[ $DGRAPH_BUILD_MAC =~ 1|true ]]; then
+    pushd $basedir/dgraph/dgraph
+      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
+      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+      mkdir $TMP/darwin/$GOARCH
+      mv dgraph-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph
+    popd
+
+    pushd $basedir/badger/badger
+      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE .
+      mv badger-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/badger
+    popd
+
+    if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
+      pushd $basedir/ratel
+        xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version" .
+        mv ratel-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph-ratel
+      popd
+    fi
+  fi
+
+}
+
+build_linux() {
+  # Build Linux.
   pushd $basedir/dgraph/dgraph
-    xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
-        "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-    mkdir $TMP/windows
-    mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
+    xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
+        "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+    strip -x dgraph-linux-$GOARCH
+    mkdir $TMP/linux/$GOARCH
+    mv dgraph-linux-$GOARCH $TMP/linux/$GOARCH/dgraph
   popd
 
   pushd $basedir/badger/badger
-    xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
-    mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
+    xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+    strip -x badger-linux-$GOARCH
+    mv badger-linux-$GOARCH $TMP/linux/$GOARCH/badger
   popd
 
   if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
     pushd $basedir/ratel
-      xgo -x -go="go-$GOVERSION" --targets=windows/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
-      mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
+      xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
+      strip -x ratel-linux-$GOARCH
+      mv ratel-linux-$GOARCH $TMP/linux/dgraph-ratel
     popd
   fi
-fi
-
-# Build Darwin.
-if [[ $DGRAPH_BUILD_MAC =~ 1|true ]]; then
-  pushd $basedir/dgraph/dgraph
-    xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags \
-    "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-    mkdir $TMP/darwin
-    mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
-  popd
-
-  pushd $basedir/badger/badger
-    xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/amd64 $DGRAPH_BUILD_XGO_IMAGE .
-    mv badger-darwin-10.9-amd64 $TMP/darwin/badger
-  popd
-
-  if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-    pushd $basedir/ratel
-      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version" .
-      mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
-    popd
-  fi
-fi
-
-# Build Linux.
-pushd $basedir/dgraph/dgraph
-  xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags \
-      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
-  strip -x dgraph-linux-amd64
-  mkdir $TMP/linux
-  mv dgraph-linux-amd64 $TMP/linux/dgraph
-popd
-
-pushd $basedir/badger/badger
-  xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
-  strip -x badger-linux-amd64
-  mv badger-linux-amd64 $TMP/linux/badger
-popd
-
-if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-  pushd $basedir/ratel
-    xgo -x -go="go-$GOVERSION" --targets=linux/amd64 $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
-    strip -x ratel-linux-amd64
-    mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
-  popd
-fi
+}
 
 createSum () {
   os=$1
   echo "Creating checksum for $os"
   if [[ "$os" != "windows" ]]; then
-    pushd $TMP/$os
+    pushd $TMP/$GOARCH/$os
       csum=$(shasum -a 256 dgraph | awk '{print $1}')
-      echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-amd64.sha256
+      echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-$GOARCH.sha256
       csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
-      echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-amd64.sha256
+      echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-$GOARCH.sha256
     popd
   else
-    pushd $TMP/$os
+    pushd $TMP/$GOARCH/$os
       csum=$(shasum -a 256 dgraph.exe | awk '{print $1}')
-      echo $csum dgraph.exe >> ../dgraph-checksum-$os-amd64.sha256
+      echo $csum dgraph.exe >> ../dgraph-checksum-$os-$GOARCH.sha256
       csum=$(shasum -a 256 dgraph-ratel.exe | awk '{print $1}')
-      echo $csum dgraph-ratel.exe >> ../dgraph-checksum-$os-amd64.sha256
+      echo $csum dgraph-ratel.exe >> ../dgraph-checksum-$os-$GOARCH.sha256
     popd
   fi
 }
 
+export GOARCH=amd64
+# Build Binaries
+build_windows()
+build_darwin()
+build_linux()
+
 # Build Checksums
-[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
 createSum linux
+[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
 [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
 
+# export GOARCH=arm64
+# Build Binaries
+# build_windows()
+# build_darwin()
+# build_linux()
+# Build Checksums
+# createSum linux
+# [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
+# [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
+
+# TODO: fork on $GOARCH
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
 pushd $TMP
@@ -294,20 +318,20 @@ popd
 createTar () {
   os=$1
   echo "Creating tar for $os"
-  pushd $TMP/$os
-    tar -zcvf ../dgraph-$os-amd64.tar.gz *
+  pushd $TMP/$GOARCH/$os
+    tar -zcvf ../dgraph-$os-$GOARCH.tar.gz *
   popd
-  rm -Rf $TMP/$os
+  rm -Rf $TMP/$GOARCH/$os
 }
 
 # Create the zip and delete the binaries.
 createZip () {
   os=$1
   echo "Creating zip for $os"
-  pushd $TMP/$os
-    zip -r ../dgraph-$os-amd64.zip *
+  pushd $TMP/$GOARCH/$os
+    zip -r ../dgraph-$os-$GOARCH.zip *
   popd
-  rm -Rf $TMP/$os
+  rm -Rf $TMP/$GOARCH/$os
 }
 
 # Build Archives
@@ -315,6 +339,7 @@ createTar linux
 [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createZip windows
 [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
 
+# TODO: fork on $GOARCH
 echo "Release $TAG is ready."
 docker run dgraph/dgraph:$DOCKER_TAG dgraph
 ls -alh $TMP
