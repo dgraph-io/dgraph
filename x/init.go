@@ -93,11 +93,12 @@ Branch           : %v
 Go version       : %v
 jemalloc enabled : %v
 
-For Dgraph official documentation, visit https://dgraph.io/docs/.
+For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-Copyright 2015-2020 Dgraph Labs, Inc.
+Copyright 2015-2021 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
