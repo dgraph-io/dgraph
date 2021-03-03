@@ -183,51 +183,46 @@ fi
 
 build_windows() {
   # Build Windows.
-  if [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]]; then
-    pushd $basedir/dgraph/dgraph
-      xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
-          "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-      mkdir -p $TMP/$GOARCH/windows
-      mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph.exe
-    popd
+  pushd $basedir/dgraph/dgraph
+    xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
+        "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+    mkdir -p $TMP/$GOARCH/windows
+    mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph.exe
+  popd
 
-    pushd $basedir/badger/badger
-      xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
-      mv badger-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/badger.exe
-    popd
+  pushd $basedir/badger/badger
+    xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
+    mv badger-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/badger.exe
+  popd
 
-    if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-      pushd $basedir/ratel
-        xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
-        mv ratel-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph-ratel.exe
-      popd
-    fi
+  if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
+    pushd $basedir/ratel
+      xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
+      mv ratel-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph-ratel.exe
+    popd
   fi
 }
 
 build_darwin() {
   # Build Darwin.
-  if [[ $DGRAPH_BUILD_MAC =~ 1|true ]]; then
-    pushd $basedir/dgraph/dgraph
-      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
-      "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-      mkdir -p $TMP/darwin/$GOARCH
-      mv dgraph-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph
-    popd
+  pushd $basedir/dgraph/dgraph
+    xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
+    "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+    mkdir -p $TMP/darwin/$GOARCH
+    mv dgraph-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph
+  popd
 
-    pushd $basedir/badger/badger
-      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE .
-      mv badger-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/badger
-    popd
+  pushd $basedir/badger/badger
+    xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE .
+    mv badger-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/badger
+  popd
 
-    if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
-      pushd $basedir/ratel
-        xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version" .
-        mv ratel-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph-ratel
-      popd
-    fi
+  if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
+    pushd $basedir/ratel
+      xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version" .
+      mv ratel-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph-ratel
+    popd
   fi
-
 }
 
 build_linux() {
@@ -275,27 +270,6 @@ createSum () {
   fi
 }
 
-export GOARCH=amd64
-# Build Binaries
-build_windows
-build_darwin
-build_linux
-
-# Build Checksums
-createSum linux
-[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
-[[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createSum windows
-
-# export GOARCH=arm64
-# Build Binaries
-# build_windows
-# build_darwin
-# build_linux
-# Build Checksums
-# createSum linux
-# [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
-# [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
-
 build_docker_image() {
   if [[ "$GOARCH" == "amd64" ]]; then
     # Create Dgraph Docker image.
@@ -318,8 +292,6 @@ build_docker_image() {
   fi
 }
 
-build_docker_image
-
 # Create the tar and delete the binaries.
 createTar () {
   os=$1
@@ -340,15 +312,33 @@ createZip () {
   rm -Rf $TMP/$os/$GOARCH
 }
 
-# Build Archives
-createTar linux
-[[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createZip windows
-[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
+export GOARCH=amd64
+build artifacts() {
+  # Build Binaries
+  [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && build_windows
+  [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && build_darwin
+  build_linux
 
-# TODO: fork on $GOARCH
-echo "Release $TAG is ready."
-docker run dgraph/dgraph:$DOCKER_TAG dgraph
-ls -alh $TMP
+  # Build Checksums
+  createSum linux
+  [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
+  [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createSum windows
+
+  # Build Docker images
+  build_docker_image
+
+  # Build Archives
+  createTar linux
+  [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createZip windows
+  [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
+
+  # TODO: fork on $GOARCH
+  echo "Release $TAG is ready."
+  docker run dgraph/dgraph:$DOCKER_TAG dgraph
+  ls -alh $TMP
+}
+
+build_artifacts
 
 set +o xtrace
 echo "To release:"
