@@ -152,8 +152,8 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}`,
 	}
-	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if len(resp.Errors) != 0 {
+
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Shutdown failed.")
 		return
 	}
@@ -192,8 +192,8 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		}`,
 		Variables: map[string]interface{}{},
 	}
-	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if len(resp.Errors) != 0 {
+
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
 		return
 	}
@@ -251,8 +251,7 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 		  }
 		}`,
 	}
-	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if len(resp.Errors) != 0 {
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Get cache_mb failed")
 		return
 	}
