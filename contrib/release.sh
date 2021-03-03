@@ -187,7 +187,7 @@ build_windows() {
     pushd $basedir/dgraph/dgraph
       xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
           "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-      mkdir $TMP/$GOARCH/windows
+      mkdir -p $TMP/$GOARCH/windows
       mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph.exe
     popd
 
@@ -211,7 +211,7 @@ build_darwin() {
     pushd $basedir/dgraph/dgraph
       xgo -x -go="go-$GOVERSION" --targets=darwin-10.9/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
       "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-      mkdir $TMP/darwin/$GOARCH
+      mkdir -p $TMP/darwin/$GOARCH
       mv dgraph-darwin-10.9-$GOARCH $TMP/darwin/$GOARCH/dgraph
     popd
 
@@ -236,7 +236,7 @@ build_linux() {
     xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
         "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
     strip -x dgraph-linux-$GOARCH
-    mkdir $TMP/linux/$GOARCH
+    mkdir -p $TMP/linux/$GOARCH
     mv dgraph-linux-$GOARCH $TMP/linux/$GOARCH/dgraph
   popd
 
@@ -259,14 +259,14 @@ createSum () {
   os=$1
   echo "Creating checksum for $os"
   if [[ "$os" != "windows" ]]; then
-    pushd $TMP/$GOARCH/$os
+    pushd $TMP/$os/$GOARCH
       csum=$(shasum -a 256 dgraph | awk '{print $1}')
       echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-$GOARCH.sha256
       csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
       echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-$GOARCH.sha256
     popd
   else
-    pushd $TMP/$GOARCH/$os
+    pushd $TMP/$os/$GOARCH
       csum=$(shasum -a 256 dgraph.exe | awk '{print $1}')
       echo $csum dgraph.exe >> ../dgraph-checksum-$os-$GOARCH.sha256
       csum=$(shasum -a 256 dgraph-ratel.exe | awk '{print $1}')
@@ -296,42 +296,48 @@ createSum linux
 # [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
 # [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
 
-# TODO: fork on $GOARCH
-# Create Docker image.
-cp $basedir/dgraph/contrib/Dockerfile $TMP
-pushd $TMP
-  # Get a fresh ubuntu:latest image each time
-  # Don't rely on whatever "latest" version
-  # happens to be on the machine.
-  docker pull ubuntu:latest
+build_docker_image() {
+  if [[ "$GOARCH" == "amd64" ]]; then
+    # Create Dgraph Docker image.
+    # edit Dockerfile to point to binaries 
+    sed "s/^ADD linux/ADD linux\/$GOARCH/" $basedir/dgraph/contrib/Dockerfile > $TMP/Dockerfile
+    pushd $TMP
+      # Get a fresh ubuntu:latest image each time
+      # Don't rely on whatever "latest" version
+      # happens to be on the machine.
+      docker pull ubuntu:latest
 
-  docker build -t dgraph/dgraph:$DOCKER_TAG .
-popd
-rm $TMP/Dockerfile
+      docker build -t dgraph/dgraph:$DOCKER_TAG .
+    popd
+    rm $TMP/Dockerfile
 
-# Create Docker standalone image.
-pushd $basedir/dgraph/contrib/standalone
-  make DGRAPH_VERSION=$DOCKER_TAG
-popd
+    # Create Dgraph standalone Docker image.
+    pushd $basedir/dgraph/contrib/standalone
+      make DGRAPH_VERSION=$DOCKER_TAG
+    popd
+  fi
+}
+
+build_docker_image
 
 # Create the tar and delete the binaries.
 createTar () {
   os=$1
   echo "Creating tar for $os"
-  pushd $TMP/$GOARCH/$os
+  pushd $TMP/$os/$GOARCH
     tar -zcvf ../dgraph-$os-$GOARCH.tar.gz *
   popd
-  rm -Rf $TMP/$GOARCH/$os
+  rm -Rf $TMP/$os/$GOARCH
 }
 
 # Create the zip and delete the binaries.
 createZip () {
   os=$1
   echo "Creating zip for $os"
-  pushd $TMP/$GOARCH/$os
+  pushd $TMP/$os/$GOARCH
     zip -r ../dgraph-$os-$GOARCH.zip *
   popd
-  rm -Rf $TMP/$GOARCH/$os
+  rm -Rf $TMP/$os/$GOARCH
 }
 
 # Build Archives
