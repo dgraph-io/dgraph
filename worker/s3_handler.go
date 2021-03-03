@@ -132,19 +132,12 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 	// will be used to replace original manifest.
 	objectPath := filepath.Join(h.objectPrefix, backupManifest)
 	if h.objectExists(objectPath) {
-
-		// A new handler is required to create the temporary manifest and then wait for the
-		// upload to be completed. Close() waits for the upload to finish.
-		tmpHandler, err := NewS3Handler(uri, h.creds)
-		if err != nil {
-			return errors.Wrap(err, "CreateManifest failed to create tmpHandler")
-		}
-		tmpHandler.createObject(tmpHandler.mc, tmpManifest)
-		if err := json.NewEncoder(tmpHandler).Encode(manifest); err != nil {
+		h.createObject(h.mc, tmpManifest)
+		if err := json.NewEncoder(h).Encode(manifest); err != nil {
 			return err
 		}
-		if err := tmpHandler.Close(); err != nil {
-			return errors.Wrap(err, "CreateManifest failed to close temp handler")
+		if err := h.flush(); err != nil {
+			return errors.Wrap(err, "CreateManifest failed to flush the handler")
 		}
 
 		// At this point, a temporary manifest is successfully created, we need to replace the
@@ -159,15 +152,12 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 		if err := h.mc.CopyObject(dst, src); err != nil {
 			return errors.Wrap(err, "CreateManifest failed to create temporary copy of manifest")
 		}
-		if err := h.mc.RemoveObject(h.bucketName, tmpObject); err != nil {
-			return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
-		}
+		err = h.mc.RemoveObject(h.bucketName, tmpObject)
+		return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
 	}
 	h.createObject(h.mc, backupManifest)
-	if err := json.NewEncoder(h).Encode(manifest); err != nil {
-		return err
-	}
-	return nil
+	err := json.NewEncoder(h).Encode(manifest)
+	return errors.Wrap(err, "CreateManifest failed to create a new master manifest")
 }
 
 // GetManifest returns the master manifest, if the directory doesn't contain
@@ -297,11 +287,21 @@ func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 
 func (h *s3Handler) Close() error {
 	// Done buffering, send EOF.
+	if h.pwriter == nil {
+		return nil
+	}
+	return h.flush()
+}
+
+func (h *s3Handler) flush() error {
 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
 		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}
 	glog.V(2).Infof("Backup waiting for upload to complete.")
+	// We are setting this to nil, so that closing the handler after flushing is a no-op.
+	h.pwriter = nil
 	return <-h.cerr
+
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
@@ -373,6 +373,8 @@ func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
 		if err := h.readManifest(path, &m); err != nil {
 			return nil, errors.Wrap(err, "While Getting latest manifest")
 		}
+		path = filepath.Dir(path)
+		_, path = filepath.Split(path)
 		m.Path = path
 		mlist = append(mlist, &m)
 	}
