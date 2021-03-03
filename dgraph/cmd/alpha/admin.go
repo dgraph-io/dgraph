@@ -133,7 +133,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 	if len(resp.Errors) != 0 {
-		x.SetStatus(w, resp.Errors[0].Message, "Shutdown failed.")
+		x.SetStatus(w, resp.Errors[0].Message, "draining mode request failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
