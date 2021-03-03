@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dgraph-io/badger/v3/options"
 
 	"google.golang.org/grpc/credentials"
@@ -367,7 +369,7 @@ func runExportBackup() error {
 		return err
 	}
 	// Export the data from the p directories produced by the last step.
-	ch := make(chan error, len(files))
+	eg, _ := errgroup.WithContext(context.Background())
 	for _, f := range files {
 		if !f.IsDir() {
 			continue
@@ -376,22 +378,23 @@ func runExportBackup() error {
 		dir := filepath.Join(filepath.Join(tmpDir, f.Name()))
 		gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
 		if err != nil {
-			ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
+			fmt.Printf("WARNING WARNING WARNING: unable to get group id from directory "+
+				"inside DB at %s: %v", dir, err)
+			continue
 		}
-		go worker.StoreExport(&pb.ExportRequest{
-			GroupId:     uint32(gid),
-			ReadTs:      restore.Version,
-			UnixTs:      time.Now().Unix(),
-			Format:      opt.format,
-			Destination: exportDir,
-		}, dir, opt.key, ch)
+		eg.Go(func() error {
+			return worker.StoreExport(&pb.ExportRequest{
+				GroupId:     uint32(gid),
+				ReadTs:      restore.Version,
+				UnixTs:      time.Now().Unix(),
+				Format:      opt.format,
+				Destination: exportDir,
+			}, dir, opt.key)
+		})
 	}
 
-	for i := 0; i < len(files); i++ {
-		err := <-ch
-		if err != nil {
-			return err
-		}
+	if err := eg.Wait(); err != nil {
+		return errors.Wrapf(err, "error while exporting data")
 	}
 
 	// Clean up temporary directory.

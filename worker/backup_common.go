@@ -101,9 +101,7 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
 	}
 }
 
-func StoreExport(request *pb.ExportRequest, dir string,
-	key x.SensitiveByteSlice, ch chan error) {
-
+func StoreExport(request *pb.ExportRequest, dir string, key x.SensitiveByteSlice) error {
 	db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 		WithSyncWrites(false).
 		WithValueThreshold(1 << 10).
@@ -111,14 +109,12 @@ func StoreExport(request *pb.ExportRequest, dir string,
 		WithEncryptionKey(key))
 
 	if err != nil {
-		ch <- errors.Wrapf(err, "cannot open DB at %s", dir)
-		return
+		return err
 	}
 
 	_, err = exportInternal(context.Background(), request, db, true)
 	// It is important to close the db before sending err to ch. Else, we will see a memory
 	// leak.
 	db.Close()
-	ch <- errors.Wrapf(err, "cannot export data inside DB at %s", dir)
-	return
+	return errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 }
