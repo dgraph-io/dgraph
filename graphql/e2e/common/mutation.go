@@ -5067,10 +5067,11 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 
 func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	addAstronautParams := &GraphQLParams{
-		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
-			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+		Query: `mutation addAstronaut($id1: ID!, name1: String!, $missionId1: String!, $id2: ID!, name2: String!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, name: $name1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, name: $name2, missions: [{id: $missionId2, designation: "Apollo11"}]}]) {
 				astronaut(order: {asc: id}){
 					id
+					name
 					missions {
 						id
 						designation
@@ -5080,8 +5081,10 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{
 			"id1":        "Astronaut1",
+			"name1":      "Gus Grissom",
 			"missionId1": "Mission1",
 			"id2":        "Astronaut2",
+			"name2":      "Neil Armstrong",
 			"missionId2": "Mission2",
 		},
 	}
@@ -5094,6 +5097,7 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 		  "astronaut": [
 			{
 			  "id": "Astronaut1",
+			  "Gus Grissom",
 			  "missions": [
 				{
 				  "id": "Mission1",
@@ -5103,10 +5107,11 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 			},
 			{
 			  "id": "Astronaut2",
+			  "name": "Neil Armstrong",
 			  "missions": [
 				{
 				  "id": "Mission2",
-				  "designation": "Apollo2"
+				  "designation": "Apollo11"
 				}
 			  ]
 			}
