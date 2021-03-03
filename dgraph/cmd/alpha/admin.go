@@ -131,7 +131,10 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 		}`,
 		Variables: map[string]interface{}{"enable": enable},
 	}
-	_ = resolveWithAdminServer(gqlReq, r, adminServer)
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "draining mode request failed.")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
 		`"message": "draining mode has been set to %v"}`, enable))))
@@ -148,7 +151,11 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}`,
 	}
-	_ = resolveWithAdminServer(gqlReq, r, adminServer)
+
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "Shutdown failed.")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
@@ -184,8 +191,8 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		}`,
 		Variables: map[string]interface{}{},
 	}
-	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if len(resp.Errors) != 0 {
+
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
 		return
 	}
@@ -244,6 +251,10 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 		}`,
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+	if len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "Get cache_mb failed")
+		return
+	}
 	var data struct {
 		Config struct {
 			CacheMb float64
