@@ -250,7 +250,8 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 		  }
 		}`,
 	}
-	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
+	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+	if len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "Get cache_mb failed")
 		return
 	}
