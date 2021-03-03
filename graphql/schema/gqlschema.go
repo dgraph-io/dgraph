@@ -1379,7 +1379,8 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
-		// as an argument in @key directive=
+		// as an argument in @key directive. If the field is an argument to `@provides` directive
+		// then it can't be ignored.
 		if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
 			continue
 		}
@@ -1503,7 +1504,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 
 	for _, fld := range defn.Fields {
 		// Ignore Fields with @external directives also excluding those which are present
-		// as an argument in @key directive
+		// as an argument in @key directive. If the field is an argument to `@provides` directive
+		// then it can't be ignored.
 		if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
 			continue
 		}
@@ -1594,7 +1596,8 @@ func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
-	// External field can't be ordered except when it is a @key field
+	// External field can't be ordered except when it is a @key field or
+	// the field is an argument in `@provides` directive.
 	if !hasExternal(fld) {
 		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 	}
@@ -2165,7 +2168,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		}
 
 		// Ignore Fields with @external directives also as they shouldn't be present
-		// in the Patch Type Also.
+		// in the Patch Type also. If the field is an argument to `@provides` directive
+		// then it should be presnt.
 		if hasExternal(fld) && !providesTypeMap[fld.Name] {
 			continue
 		}
@@ -2248,7 +2252,8 @@ func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.Field
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
-			// Excluding those fields which are external and are not @key.
+			// Excluding those fields which are external and are not @key and are not
+			// used as an argument in `@provides` directive.
 			if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
 				continue
 			}
@@ -2280,7 +2285,8 @@ func getXIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.Fiel
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if hasIDDirective(fld) {
-			// Excluding those fields which are external and are not @key.
+			// Excluding those fields which are external and are not @key and are not
+			// used as an argument in `@provides` directive.
 			if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
 				continue
 			}
