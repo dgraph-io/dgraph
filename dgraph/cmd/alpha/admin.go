@@ -131,8 +131,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 		}`,
 		Variables: map[string]interface{}{"enable": enable},
 	}
-	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if len(resp.Errors) != 0 {
+	if resp := resolveWithAdminServer(gqlReq, r, adminServer); len(resp.Errors) != 0 {
 		x.SetStatus(w, resp.Errors[0].Message, "draining mode request failed.")
 		return
 	}
