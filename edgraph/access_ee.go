@@ -1076,7 +1076,7 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	if err := AuthorizeGuardians(ctx); err != nil {
 		return errors.Wrap(err, "AuthGuradiansOfTheGalaxy, failed to authorize guarrdians")
 	}
-	glog.V(3).Info("Successfully authorised guardians of the galaxy")
+	glog.V(3).Info("Successfully authorised guardian of the galaxy")
 	return nil
 }
 
