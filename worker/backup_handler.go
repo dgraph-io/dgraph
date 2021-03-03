@@ -64,8 +64,8 @@ type UriHandler interface {
 	io.WriteCloser
 
 	// GetManifest returns the master manifest, containing information about all the
-	// backups. If the backup directory is using old formats of manifests, then it will
-	// return a consolidated master manifest.
+	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
+	// then it will return a consolidated master manifest.
 	GetManifest(*url.URL) (*MasterManifest, error)
 
 	// GetManifests returns the list of manfiests for the given backup series ID
@@ -81,7 +81,7 @@ type UriHandler interface {
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error
 
-	// CreateManifest writes the creates the given manifest.
+	// CreateManifest creates the given manifest.
 	CreateManifest(*url.URL, *MasterManifest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.

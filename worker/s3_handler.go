@@ -99,18 +99,9 @@ func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
 // GetLatestManifest reads the manifests at the given URL and returns the
 // latest manifest.
 func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	var manifest MasterManifest
-	// If there is no master manifest, create one using old manifests.
-	if !h.objectExists(backupManifest) {
-		m, err := h.getConsolidatedManifest()
-		if err != nil {
-			return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
-		}
-		manifest.Manifests = m.Manifests
-	} else {
-		if err := h.readMasterManifest(&manifest); err != nil {
-			return nil, errors.Wrap(err, "Get latest manifest failed to read master manifest: ")
-		}
+	manifest, err := h.getConsolidatedManifest()
+	if err != nil {
+		errors.Wrap(err, "GetLatestManifest failed to get consolidated manifests: ")
 	}
 	if len(manifest.Manifests) == 0 {
 		return &Manifest{}, nil
@@ -139,7 +130,8 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 
 	// If there is already a consolidated manifest, write the manifest to a temp file, which
 	// will be used to replace original manifest.
-	if h.objectExists(backupManifest) {
+	objectPath := filepath.Join(h.objectPrefix, backupManifest)
+	if h.objectExists(objectPath) {
 
 		// A new handler is required to create the temporary manifest and then wait for the
 		// upload to be completed. Close() waits for the upload to finish.
@@ -182,17 +174,19 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 // a master manifest, then it will try to return a master manifest by consolidating
 // the manifests.
 func (h *s3Handler) GetManifest(uri *url.URL) (*MasterManifest, error) {
-	var manifest MasterManifest
-	if !h.objectExists(backupManifest) {
-		m, err := h.getConsolidatedManifest()
-		if err != nil {
-			return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
-		}
-		manifest.Manifests = m.Manifests
-	} else {
-		if err := h.readMasterManifest(&manifest); err != nil {
-			return nil, err
-		}
+	manifest, err := h.getConsolidatedManifest()
+	if err != nil {
+		errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
+	}
+	return manifest, nil
+
+}
+
+func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
+	manifest, err := h.getConsolidatedManifest()
+	if err != nil {
+		errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
 	}
 
 	var filtered []*Manifest
@@ -200,27 +194,6 @@ func (h *s3Handler) GetManifest(uri *url.URL) (*MasterManifest, error) {
 		path := filepath.Join(uri.Path, m.Path)
 		if h.objectExists(path) {
 			filtered = append(filtered, m)
-		}
-	}
-	return &manifest, nil
-
-}
-
-func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
-	backupNum uint64) ([]*Manifest, error) {
-
-	var manifest MasterManifest
-	// If there is no master manifest, create one using old manifests.
-	if !h.objectExists(backupManifest) {
-		var err error
-		m, err := h.getConsolidatedManifest()
-		if err != nil {
-			errors.Wrap(err, "Get manifests failed to get consolidated manifests: ")
-		}
-		manifest.Manifests = m.Manifests
-	} else {
-		if err := h.readMasterManifest(&manifest); err != nil {
-			return nil, errors.Wrap(err, "Get manifests failed: ")
 		}
 	}
 	return getManifests(manifest.Manifests, backupId, backupNum)
@@ -335,8 +308,7 @@ func (h *s3Handler) Write(b []byte) (int, error) {
 	return h.pwriter.Write(b)
 }
 
-func (h *s3Handler) objectExists(objectName string) bool {
-	objectPath := filepath.Join(h.objectPrefix, objectName)
+func (h *s3Handler) objectExists(objectPath string) bool {
 	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
 	if err != nil {
 		errResponse := minio.ToErrorResponse(err)
@@ -371,6 +343,18 @@ func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
 
 // getConsolidatedManifest walks over all the backup directories and generates a master manifest.
 func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
+	var manifest MasterManifest
+
+	// If there is a master manifest already, we just return it.
+	objectPath := filepath.Join(h.objectPrefix, backupManifest)
+	if h.objectExists(objectPath) {
+		if err := h.readMasterManifest(&manifest); err != nil {
+			return nil, err
+		}
+		return &manifest, nil
+	}
+
+	// Otherwise, we consolidate the manifests to make a master manifest.
 	var paths []string
 	done := make(chan struct{})
 	defer close(done)
@@ -383,7 +367,6 @@ func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
 
 	sort.Strings(paths)
 	var mlist []*Manifest
-	var manifest MasterManifest
 
 	for _, path := range paths {
 		var m Manifest
