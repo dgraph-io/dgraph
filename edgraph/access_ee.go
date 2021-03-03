@@ -1074,9 +1074,8 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
 	// any of the group to which the user belongs is "guardians" or not.
 	if err := AuthorizeGuardians(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "AuthGuradiansOfTheGalaxy, failed to authorize guarrdians")
 	}
-	glog.V(2).Info("Successfully authorised the guardian of the galaxy")
 	return nil
 }
 
