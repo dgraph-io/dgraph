@@ -335,7 +335,12 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 			su = schema
 		}
 	}
-	x.AssertTruef(su != nil, "schema state not found for %s", pred)
+	if su == nil {
+		// This may happen when some query that needs indexing over this predicate is executing
+		// while the predicate is dropped from the state (using drop operation).
+		glog.Errorf("Schema state not found for %s.", pred)
+		return nil
+	}
 	tokenizers := make([]tok.Tokenizer, 0, len(su.Tokenizer))
 	for _, it := range su.Tokenizer {
 		t, found := tok.GetTokenizer(it)

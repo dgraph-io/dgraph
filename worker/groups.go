@@ -60,8 +60,6 @@ var gr = &groupi{
 	tablets:      make(map[string]*pb.Tablet),
 }
 
-var RaftDefaults = "idx=0; group=0; learner=false; snapshot-after=10000"
-
 func groups() *groupi {
 	return gr
 }
@@ -1066,6 +1064,7 @@ func GetEEFeaturesList() []string {
 	var ee []string
 	if len(Config.HmacSecret) > 0 {
 		ee = append(ee, "acl")
+		ee = append(ee, "multi_tenancy")
 	}
 	if x.WorkerConfig.EncryptionKey != nil {
 		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")

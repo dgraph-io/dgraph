@@ -7,7 +7,7 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    command: dgraph zero --my=zero1:5080 --replicas 1 --raft="idx=1"
+    command: dgraph zero --my=zero1:5080 --replicas 1 --raft="idx=1;"
 
   alpha1:
     image: dgraph/dgraph:${DGRAPH_VERSION}
@@ -18,7 +18,8 @@ services:
     ports:
       - 8080:8080
       - 9080:9080
-    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --whitelist "10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1"
+    command: dgraph alpha --my=alpha1:7080 --zero=zero1:5080 
+      --security "whitelist=10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,127.0.0.1;"
 
   ratel:
     image: dgraph/dgraph:${DGRAPH_VERSION}

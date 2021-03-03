@@ -23,23 +23,20 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 )
 
 func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
-	const (
-		flagAclKeyFile = "acl_secret_file"
-		flagEncKeyFile = "encryption_key_file"
-	)
-
+	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
 	aclKey, encKey = vault.GetKeys(config)
 	var err error
 
-	aclKeyFile := config.GetString(flagAclKeyFile)
+	aclKeyFile := aclSuperFlag.GetString("secret-file")
 	if aclKeyFile != "" {
 		if aclKey != nil {
-			glog.Exit("flags: ACL secret key set in both vault and acl_secret_file")
+			glog.Exit("flags: ACL secret key set in both vault and acl flags")
 		}
 		if aclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
 			glog.Exitf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
@@ -49,7 +46,7 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
-	encKeyFile := config.GetString(flagEncKeyFile)
+	encKeyFile := config.GetString("encryption_key_file")
 	if encKeyFile != "" {
 		if encKey != nil {
 			glog.Exit("flags: Encryption key set in both vault and encryption_key_file")

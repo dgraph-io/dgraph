@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
@@ -72,7 +73,44 @@ func adminAuthHandler(next http.Handler) http.Handler {
 	})
 }
 
-func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func getAdminMux() *http.ServeMux {
+	adminMux := http.NewServeMux()
+	adminMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(adminSchemaHandler)))
+	adminMux.Handle("/admin/schema/validate", schemaValidateHandler())
+	adminMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(shutDownHandler))))
+	adminMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+		http.MethodPut:  true,
+		http.MethodPost: true,
+	}, adminAuthHandler(http.HandlerFunc(drainingHandler))))
+	adminMux.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(exportHandler))))
+	adminMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
+		http.MethodGet: true,
+		http.MethodPut: true,
+	}, adminAuthHandler(http.HandlerFunc(memoryLimitHandler))))
+	return adminMux
+}
+
+func schemaValidateHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sch := readRequest(w, r)
+		w.Header().Set("Content-Type", "application/json")
+
+		err := admin.SchemaValidate(string(sch))
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			x.SetStatus(w, "success", "Schema is valid")
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
+		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
+	})
+}
+
+func drainingHandler(w http.ResponseWriter, r *http.Request) {
 	enableStr := r.URL.Query().Get("enable")
 
 	enable, err := strconv.ParseBool(enableStr)
@@ -99,7 +137,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request, adminServer admin.I
 		`"message": "draining mode has been set to %v"}`, enable))))
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	gqlReq := &schema.Request{
 		Query: `
 		mutation {
@@ -115,7 +153,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request, adminServer admin.I
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
-func exportHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
@@ -155,16 +193,16 @@ func exportHandler(w http.ResponseWriter, r *http.Request, adminServer admin.ISe
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
-func memoryLimitHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		memoryLimitGetHandler(w, r, adminServer)
+		memoryLimitGetHandler(w, r)
 	case http.MethodPut:
-		memoryLimitPutHandler(w, r, adminServer)
+		memoryLimitPutHandler(w, r)
 	}
 }
 
-func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -196,7 +234,7 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer a
 	w.WriteHeader(http.StatusOK)
 }
 
-func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request, adminServer admin.IServeGraphQL) {
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 	gqlReq := &schema.Request{
 		Query: `
 		query {

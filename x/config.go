@@ -29,22 +29,23 @@ import (
 type Options struct {
 	// PortOffset will be used to determine the ports to use (port = default port + offset).
 	PortOffset int
-	// QueryEdgeLimit is the maximum number of edges that will be traversed during
-	// recurse and shortest-path queries.
-	QueryEdgeLimit uint64
-	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
-	NormalizeNodeLimit int
-	// MutationsNQuadLimit is maximum number of nquads that can be present in a single
-	// mutation request.
-	MutationsNQuadLimit int
-	// PollInterval is the polling interval for graphql subscription.
-	PollInterval time.Duration
-	// GraphqlExtension will be set to see extensions in graphql results
-	GraphqlExtension bool
-	// GraphqlDebug will enable debug mode in GraphQL
-	GraphqlDebug bool
-	// GraphqlLambdaUrl stores the URL of lambda functions for custom GraphQL resolvers
-	GraphqlLambdaUrl string
+	// Limit options:
+	//
+	// query-edge uint64 - maximum number of edges that can be returned in a query
+	// normalize-node int - maximum number of nodes that can be returned in a query that uses the
+	//                      normalize directive
+	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
+	Limit               *z.SuperFlag
+	LimitMutationsNquad int
+	LimitQueryEdge      uint64
+	// GraphQL options:
+	//
+	// extensions bool - Will be set to see extensions in GraphQL results
+	// debug bool - Will enable debug mode in GraphQL.
+	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
+	// poll-interval duration - The polling interval for graphql subscription.
+	GraphQL      *z.SuperFlag
+	GraphQLDebug bool
 }
 
 // Config stores the global instance of this package's options.
@@ -62,12 +63,12 @@ type WorkerOptions struct {
 	TmpDir string
 	// ExportPath indicates the folder to which exported data will be saved.
 	ExportPath string
-	// NumPendingProposals indicates the maximum number of pending mutation proposals.
-	NumPendingProposals int
-	// Tracing tells Dgraph to only sample a percentage of the traces equal to its value.
-	// The value of this option must be between 0 and 1.
-	// TODO: Get rid of this here.
-	Tracing float64
+	// Trace options:
+	//
+	// ratio float64 - the ratio of queries to trace (must be between 0 and 1)
+	// jaeger string - URL of Jaeger to send OpenCensus traces
+	// datadog string - URL of Datadog to to send OpenCensus traces
+	Trace *z.SuperFlag
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string
 	// ZeroAddr stores the list of address:port for the zero instances associated with this alpha.
@@ -99,10 +100,19 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
-	// LudicrousMode is super fast mode with fewer guarantees.
-	LudicrousMode bool
-	// Number of mutations that can be run together in ludicrous mode
-	LudicrousConcurrency int
+	// Ludicrous options:
+	//
+	// enabled bool - turn Ludicrous mode on or off
+	// concurrency int - number of concurrent threads in Ludicrous mode
+	Ludicrous *z.SuperFlag
+	// LudicrousEnabled mirrors the "enabled" flag of the Ludicrous SuperFlag for usage in critical
+	// paths.
+	LudicrousEnabled bool
+	// Security options:
+	//
+	// whitelist string - comma separated IP addresses
+	// token string - if set, all Admin requests to Dgraph will have this token.
+	Security *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
@@ -112,7 +122,6 @@ type WorkerOptions struct {
 	LogRequest int32
 	// If true, we should call msync or fsync after every write to survive hard reboots.
 	HardSync bool
-
 	// Audit contains the audit flags that enables the audit.
 	Audit bool
 }
@@ -122,11 +131,10 @@ var WorkerConfig WorkerOptions
 
 func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	w.MyAddr = conf.GetString("my")
-	w.Tracing = conf.GetFloat64("trace")
+	w.Trace = z.NewSuperFlag(conf.GetString("trace")).MergeAndCheckDefault(TraceDefaults)
 
-	if w.LudicrousMode {
+	if w.LudicrousEnabled {
 		w.HardSync = false
-
 	} else {
 		survive := conf.GetString("survive")
 		AssertTruef(survive == "process" || survive == "filesystem",

@@ -19,7 +19,6 @@ package worker
 import (
 	"strings"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,23 +38,20 @@ type stringFilter struct {
 	tokName   string
 }
 
-func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb.List {
-	rv := &pb.List{}
+func matchStrings(filter *stringFilter, values []types.Val) bool {
+	if len(values) == 0 {
+		return false
+	}
 	if filter == nil {
 		// Handle a nil filter as filtering all the elements out.
-		return rv
+		return true
 	}
-
 	for i := 0; i < len(values); i++ {
-		for j := 0; j < len(values[i]); j++ {
-			if filter.match(values[i][j], filter) {
-				rv.Uids = append(rv.Uids, uids.Uids[i])
-				break
-			}
+		if filter.match(values[i], filter) {
+			return true
 		}
 	}
-
-	return rv
+	return false
 }
 
 func defaultMatch(value types.Val, filter *stringFilter) bool {

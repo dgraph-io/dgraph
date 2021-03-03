@@ -21,36 +21,42 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 var errRegexTooWide = errors.New(
 	"regular expression is too wide-ranging and can't be executed efficiently")
 
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *pb.List) (*pb.List, error) {
-	var results *pb.List
+	query *cindex.Query, intersect *roaring64.Bitmap) (*roaring64.Bitmap, error) {
+
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 		First:  int(arg.q.First),
 	}
-	if intersect.Size() > 0 {
-		opts.Intersect = intersect
+	// TODO: Unnecessary conversion here. Avoid if possible.
+	if !intersect.IsEmpty() {
+		opts.Intersect = &pb.List{
+			Uids: intersect.ToArray(),
+		}
+	} else {
+		intersect = roaring64.New()
 	}
 
-	uidsForTrigram := func(trigram string) (*pb.List, error) {
+	uidsForTrigram := func(trigram string) (*roaring64.Bitmap, error) {
 		key := x.IndexKey(attr, trigram)
 		pl, err := posting.GetNoStore(key, arg.q.ReadTs)
 		if err != nil {
 			return nil, err
 		}
-		return pl.Uids(opts)
+		return pl.Bitmap(opts)
 	}
 
+	results := roaring64.New()
 	switch query.Op {
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
@@ -59,18 +65,18 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results == nil {
+			if results.IsEmpty() {
 				results = trigramUids
 			} else {
-				algo.IntersectWith(results, trigramUids, results)
+				results.And(trigramUids)
 			}
 
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
 		for _, sub := range query.Sub {
-			if results == nil {
+			if results.IsEmpty() {
 				results = intersect
 			}
 			// current list of result is passed for intersection
@@ -79,30 +85,36 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
 	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
-		uidMatrix := make([]*pb.List, len(query.Trigram))
-		var err error
-		for i, t := range query.Trigram {
-			uidMatrix[i], err = uidsForTrigram(t)
+		for _, t := range query.Trigram {
+			out, err := uidsForTrigram(t)
 			if err != nil {
 				return nil, err
 			}
+			if results.IsEmpty() {
+				results = out
+			} else {
+				results.Or(out)
+			}
 		}
-		results = algo.MergeSorted(uidMatrix)
 		for _, sub := range query.Sub {
-			if results == nil {
+			if results.IsEmpty() {
 				results = intersect
 			}
+			// Looks like this won't take the results for intersect, but use the originally passed
+			// intersect itself.
 			subUids, err := uidsForRegex(attr, arg, sub, intersect)
 			if err != nil {
 				return nil, err
 			}
-			results = algo.MergeSorted([]*pb.List{results, subUids})
+			if subUids != nil {
+				results.Or(subUids)
+			}
 		}
 	default:
 		return nil, errRegexTooWide

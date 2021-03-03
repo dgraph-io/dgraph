@@ -2574,7 +2574,7 @@ func TestCustomDQL(t *testing.T) {
 	schema := `
 	type Tweets {
 		id: ID!
-		text: String! @search(by: [fulltext])
+		text: String! @search(by: [fulltext, exact])
 		user: User
 		timestamp: DateTime! @search
 	}
@@ -2587,11 +2587,18 @@ func TestCustomDQL(t *testing.T) {
 		screen_name: String
 		tweetCount: Int
 	}
-	
+	type UserMap @remote {
+		followers: Int
+		count: Int
+	}
+	type GroupUserMapQ @remote {
+		groupby: [UserMap] @remoteResponse(name: "@groupby")
+	}
+
 	type Query {
 	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
 		query getFirstUserByFollowerCount($count: int) {
-			getFirstUserByFollowerCount(func: eq(User.followers, $count), first: 1) {
+			getFirstUserByFollowerCount(func: eq(User.followers, $count),orderdesc: User.screen_name, first: 1) {
 				screen_name: User.screen_name
 				followers: User.followers
 			}
@@ -2630,15 +2637,23 @@ func TestCustomDQL(t *testing.T) {
 		}
 		""")
 
-	  queryUserTweetCounts: [UserTweetCount] @custom(dql: """
+	queryUserTweetCounts: [UserTweetCount] @custom(dql: """
 		query {
 			var(func: type(User)) {
 				tc as count(User.tweets)
 			}
-			queryUserTweetCounts(func: uid(tc), orderdesc: val(tc)) {
+			queryUserTweetCounts(func: uid(tc), orderdesc: User.screen_name) {
 				screen_name: User.screen_name
 				tweetCount: val(tc)
 			}
+		}
+		""")
+
+	  queryUserKeyMap: [GroupUserMapQ] @custom(dql: """
+		{
+				queryUserKeyMap(func: type(User)) @groupby(followers: User.followers){
+					count(uid)
+				}
 		}
 		""")
 	}
@@ -2673,6 +2688,14 @@ func TestCustomDQL(t *testing.T) {
 			  }
 			  timestamp: "2020-07-30"
 			}
+			{
+			  text: "Nice."
+			  user: {
+				screen_name: "minhaj"
+				followers: 10
+			  }
+			  timestamp: "2021-02-23"
+			}
 		  ]) {
 			numUids
 		  }
@@ -2703,6 +2726,12 @@ func TestCustomDQL(t *testing.T) {
 			screen_name
 			tweetCount
 		  }
+		  queryUserKeyMap {
+			groupby {
+			  followers
+			  count
+			}
+		  }
 		}`,
 		Variables: map[string]interface{}{"count": 5},
 	}
@@ -2712,37 +2741,60 @@ func TestCustomDQL(t *testing.T) {
 
 	require.JSONEq(t, `{
 		"queryWithVar": {
-		  "screen_name": "abhimanyu",
-		  "followers": 5
-		},
-		"getFirstUserByFollowerCount": {
-		  "screen_name": "pawan",
-		  "followers": 10
-		},
-		"dqlTweetsByAuthorFollowers": [
-		  {
-			"text": "Woah DQL works!"
-		  },
-		  {
-			"text": "Hello DQL!"
-		  }
-		],
-		"filteredTweetsByAuthorFollowers": [
-		  {
-			"text": "Hello DQL!"
-		  }
-		],
-		"queryUserTweetCounts": [
-		  {
 			"screen_name": "abhimanyu",
-			"tweetCount": 2
+			"followers": 5
 		  },
-		  {
+		  "getFirstUserByFollowerCount": {
 			"screen_name": "pawan",
-			"tweetCount": 1
-		  }
-		]
+			"followers": 10
+		  },
+		  "dqlTweetsByAuthorFollowers": [
+			{
+			  "text": "Woah DQL works!"
+			},
+			{
+			  "text": "Hello DQL!"
+			}
+		  ],
+		  "filteredTweetsByAuthorFollowers": [
+			{
+			  "text": "Hello DQL!"
+			}
+		  ],
+		  "queryUserTweetCounts": [
+			{
+			  "screen_name": "pawan",
+			  "tweetCount": 1
+			},
+			{
+			  "screen_name": "minhaj",
+			  "tweetCount": 1
+			},
+			{
+			  "screen_name": "abhimanyu",
+			  "tweetCount": 2
+			}
+		  ],
+		  "queryUserKeyMap": [
+			{
+			  "groupby": [
+				{
+				  "followers": 5,
+				  "count": 1
+				},
+				{
+				  "followers": 10,
+				  "count": 2
+				}
+			  ]
+			}
+		  ]
 	  }`, string(result.Data))
+
+	userFilter := map[string]interface{}{"screen_name": map[string]interface{}{"in": []string{"minhaj", "pawan", "abhimanyu"}}}
+	common.DeleteGqlType(t, "User", userFilter, 3, nil)
+	tweetFilter := map[string]interface{}{"text": map[string]interface{}{"in": []string{"Hello DQL!", "Woah DQL works!", "hmm, It worked.", "Nice."}}}
+	common.DeleteGqlType(t, "Tweets", tweetFilter, 4, nil)
 }
 
 func TestCustomGetQuerywithRESTError(t *testing.T) {

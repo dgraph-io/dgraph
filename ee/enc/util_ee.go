@@ -20,6 +20,7 @@ import (
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 )

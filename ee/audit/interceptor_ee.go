@@ -15,13 +15,20 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc/codes"
@@ -71,7 +78,7 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 		return handler(ctx, req)
 	}
 	response, err := handler(ctx, req)
-	auditGrpc(ctx, req, info, err)
+	auditGrpc(ctx, req, info)
 	return response, err
 }
 
@@ -85,7 +92,6 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-
 		rw := NewResponseWriter(w)
 		var buf bytes.Buffer
 		tee := io.TeeReader(r.Body, &buf)
@@ -96,14 +102,14 @@ func AuditRequestHttp(next http.Handler) http.Handler {
 	})
 }
 
-func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, err error) {
+func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo) {
 	clientHost := ""
 	if p, ok := peer.FromContext(ctx); ok {
 		clientHost = p.Addr.String()
 	}
 	var user string
 	var namespace uint64
-
+	var err error
 	extractUser := func(md metadata.MD) {
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
@@ -134,6 +140,9 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 	if serr, ok := status.FromError(err); ok {
 		cd = serr.Code()
 	}
+
+	reqBody := checkRequestBody(Grpc, info.FullMethod[strings.LastIndex(info.FullMethod,
+		"/")+1:], fmt.Sprintf("%+v", req))
 	auditor.Audit(&AuditEvent{
 		User:       user,
 		Namespace:  namespace,
@@ -141,13 +150,13 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		ClientHost: clientHost,
 		Endpoint:   info.FullMethod,
 		ReqType:    Grpc,
-		Req:        truncate(fmt.Sprintf("%+v", req), maxReqLength),
+		Req:        truncate(reqBody, maxReqLength),
 		Status:     cd.String(),
 	})
 }
 
 func auditHttp(w *ResponseWriter, r *http.Request) {
-	rb := getRequestBody(r)
+	body := getRequestBody(r)
 	var user string
 	if token := r.Header.Get("X-Dgraph-AccessToken"); token != "" {
 		user = getUser(token, false)
@@ -156,6 +165,7 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 	} else {
 		user = getUser("", false)
 	}
+
 	auditor.Audit(&AuditEvent{
 		User:        user,
 		Namespace:   x.ExtractNamespaceHTTP(r),
@@ -163,10 +173,114 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
 		ReqType:     Http,
-		Req:         truncate(string(rb), maxReqLength),
+		Req:         truncate(checkRequestBody(Http, r.URL.Path, string(body)), maxReqLength),
 		Status:      http.StatusText(w.statusCode),
 		QueryParams: r.URL.Query(),
 	})
+}
+
+// password fields are accessible only via /admin endpoint hence,
+// this will be only called with /admin endpoint
+func maskPasswordFieldsInGQL(req string) string {
+	var gqlReq schema.Request
+	err := json.Unmarshal([]byte(req), &gqlReq)
+	if err != nil {
+		glog.Errorf("unable to unmarshal gql request %v", err)
+		return req
+	}
+	query, gErr := parser.ParseQuery(&ast.Source{
+		Input: gqlReq.Query,
+	})
+	if gErr != nil {
+		glog.Errorf("unable to parse gql request %+v", err)
+		return req
+	}
+	if len(query.Operations) == 0 {
+		return req
+	}
+	var variableName string
+	for _, op := range query.Operations {
+		if op.Operation != ast.Mutation || len(op.SelectionSet) == 0 {
+			continue
+		}
+
+		for _, ss := range op.SelectionSet {
+			if f, ok := ss.(*ast.Field); ok && len(f.Arguments) > 0 {
+				variableName = getMaskedFieldVarName(f)
+			}
+		}
+	}
+
+	// no variable present
+	if variableName == "" {
+		regex, err := regexp.Compile(
+			`password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+		if err != nil {
+			return req
+		}
+		return regex.ReplaceAllString(req, "*******")
+	}
+	regex, err := regexp.Compile(
+		fmt.Sprintf(`"%s[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`,
+			variableName[1:]))
+	if err != nil {
+		return req
+	}
+	return regex.ReplaceAllString(req, "*******")
+}
+
+func getMaskedFieldVarName(f *ast.Field) string {
+	switch f.Name {
+	case "resetPassword":
+		for _, a := range f.Arguments {
+			if a.Name != "input" || a.Value == nil || a.Value.Children == nil {
+				continue
+			}
+
+			for _, c := range a.Value.Children {
+				if c.Name == "password" && c.Value.Kind == ast.Variable {
+					return c.Value.String()
+				}
+			}
+		}
+	case "login":
+		for _, a := range f.Arguments {
+			if a.Name == "password" && a.Value.Kind == ast.Variable {
+				return a.Value.String()
+			}
+		}
+	}
+	return ""
+}
+
+var skipReqBodyGrpc = map[string]bool{
+	"Login": true,
+}
+
+func checkRequestBody(reqType string, path string, body string) string {
+	switch reqType {
+	case Grpc:
+		if skipReqBodyGrpc[path] {
+			regex, err := regexp.Compile(
+				`password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+			if err != nil {
+				return body
+			}
+			body = regex.ReplaceAllString(body, "*******")
+		}
+	case Http:
+		if path == "/admin" {
+			return maskPasswordFieldsInGQL(body)
+		} else if path == "/grapqhl" {
+			regex, err := regexp.Compile(
+				`check[\s]?(.*?)[\s]?Password[\s]?(.*?)[\s]?:[\s]?(.*?)[\s]?"[\s]?(.*?)[\s]?"`)
+			if err != nil {
+				return body
+			}
+			body = regex.ReplaceAllString(body, "*******")
+		}
+	}
+	return body
 }
 
 func getRequestBody(r *http.Request) []byte {

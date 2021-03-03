@@ -14,7 +14,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180 --logtostderr -v=2 --jaeger.collector=http://ocagent:14268
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --zero=zero1:5180 --logtostderr -v=2
+      --trace "jaeger=http://ocagent:14268;"
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -29,7 +30,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --raft="idx=1" --my=zero1:5180 --replicas=3 --logtostderr --jaeger.collector=http://ocagent:14268 -v=2 --bindall
+    command: /gobin/dgraph zero -o 100 --raft="idx=1" --my=zero1:5180 --replicas=3 --logtostderr -v=2 --bindall
+      --trace "jaeger=http://ocagent:14268;"
   ocagent:
     image: omnition/opencensus-agent:0.1.6
     container_name: ocagent

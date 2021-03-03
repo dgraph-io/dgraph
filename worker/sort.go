@@ -19,22 +19,22 @@ package worker
 import (
 	"context"
 	"encoding/hex"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 var emptySortResult pb.SortResult
@@ -368,25 +368,21 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	// For each uid in dest uids, we have multiple values which belong to different attributes.
 	// 1  -> [ "Alice", 23, "1932-01-01"]
 	// 10 -> [ "Bob", 35, "1912-02-01" ]
-	sortVals := make([][]types.Val, len(dest.Uids))
+	sortVals := make(map[uint64][]types.Val, dest.GetCardinality())
 	for idx := range sortVals {
 		sortVals[idx] = make([]types.Val, len(ts.Order))
 	}
 
-	seen := make(map[uint64]struct{})
 	// Walk through the uidMatrix and put values for this attribute in sortVals.
 	for i, ul := range r.reply.UidMatrix {
 		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
 		for j, uid := range ul.Uids {
-			uidx := algo.IndexOf(dest, uid)
-			x.AssertTrue(uidx >= 0)
-
-			if _, ok := seen[uid]; ok {
+			if _, ok := sortVals[uid]; ok {
 				// We have already seen this uid.
 				continue
 			}
-			seen[uid] = struct{}{}
-			sortVals[uidx][0] = r.vals[i][j]
+			sortVals[uid] = make([]types.Val, len(ts.Order))
+			sortVals[uid][0] = r.vals[i][j]
 		}
 	}
 
@@ -395,7 +391,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	for i := 1; i < len(ts.Order); i++ {
 		in := &pb.Query{
 			Attr:    ts.Order[i].Attr,
-			UidList: dest,
+			UidList: codec.ToList(dest),
 			Langs:   ts.Order[i].Langs,
 			ReadTs:  ts.ReadTs,
 		}
@@ -414,8 +410,10 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 		}
 
 		result := or.r
-		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
-		for i := range dest.Uids {
+		dsz := int(dest.GetCardinality())
+		x.AssertTrue(len(result.ValueMatrix) == dsz)
+		itr := dest.Iterator()
+		for i := 0; itr.HasNext(); i++ {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {
 				// Assign nil value which is sorted as greater than all other values.
@@ -430,7 +428,8 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 					return err
 				}
 			}
-			sortVals[i][or.idx] = sv
+			uid := itr.Next()
+			sortVals[uid][or.idx] = sv
 		}
 	}
 
@@ -447,9 +446,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	for i, ul := range r.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
-			idx := algo.IndexOf(dest, uid)
-			x.AssertTrue(idx >= 0)
-			vals[j] = sortVals[idx]
+			vals[j] = sortVals[uid]
 		}
 		if err := types.Sort(vals, &ul.Uids, desc, ""); err != nil {
 			return err
@@ -541,19 +538,12 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	return r.reply, err
 }
 
-func destUids(uidMatrix []*pb.List) *pb.List {
-	included := make(map[uint64]struct{})
+func destUids(uidMatrix []*pb.List) *roaring64.Bitmap {
+	res := roaring64.New()
 	for _, ul := range uidMatrix {
-		for _, uid := range ul.Uids {
-			included[uid] = struct{}{}
-		}
+		out := codec.FromList(ul)
+		res.Or(out)
 	}
-
-	res := &pb.List{Uids: make([]uint64, 0, len(included))}
-	for uid := range included {
-		res.Uids = append(res.Uids, uid)
-	}
-	sort.Slice(res.Uids, func(i, j int) bool { return res.Uids[i] < res.Uids[j] })
 	return res
 }
 
