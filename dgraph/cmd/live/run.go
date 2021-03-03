@@ -652,8 +652,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 }
 
 // populateNamespace fetches the schema and extracts the information about the existing namespaces.
-func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph) error {
-	if !x.IsGalaxyOperation(ctx) {
+func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, isGalaxyOp bool) error {
+	if !isGalaxyOp {
 		l.namespaces[opt.namespaceToLoad] = struct{}{}
 		return nil
 	}
@@ -733,8 +733,12 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
+	galaxyOp := false
 	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
 		opt.namespaceToLoad != x.GalaxyNamespace {
+		galaxyOp = true
+	}
+	if galaxyOp {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
@@ -763,7 +767,7 @@ func run() error {
 	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
-	if err := l.populateNamespaces(ctx, dg); err != nil {
+	if err := l.populateNamespaces(ctx, dg, galaxyOp); err != nil {
 		fmt.Printf("Error while populating namespaces %v", err)
 		return err
 	}
