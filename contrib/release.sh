@@ -312,8 +312,7 @@ createZip () {
   rm -Rf $TMP/$os/$GOARCH
 }
 
-export GOARCH=amd64
-build artifacts() {
+build_artifacts() {
   # Build Binaries
   [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && build_windows
   [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && build_darwin
@@ -338,7 +337,12 @@ build artifacts() {
   ls -alh $TMP
 }
 
+export GOARCH=amd64
 build_artifacts
+export GOARCH=arm64
+build_artifacts
+
+
 
 set +o xtrace
 echo "To release:"
