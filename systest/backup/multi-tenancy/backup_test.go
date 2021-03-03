@@ -60,7 +60,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	galaxyToken := testutil.Login(t, galaxyCreds)
 
 	// Create a new namespace
-	ns, err := testutil.CreateNamespace(t, galaxyToken)
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
 	dg1 := testutil.DgClientWithLogin(t, "groot", "password", ns)
 

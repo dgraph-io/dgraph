@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -157,7 +156,7 @@ func (b *rdfBuilder) rdfForCount(subject uint64, count uint32, sg *SubGraph) {
 // rdfForUIDList returns rdf for uid list.
 func (b *rdfBuilder) rdfForUIDList(subject uint64, list *pb.List, sg *SubGraph) {
 	for _, destUID := range list.Uids {
-		if algo.IndexOf(sg.DestUIDs, destUID) < 0 {
+		if !sg.DestMap.Contains(destUID) {
 			// This uid is filtered.
 			continue
 		}

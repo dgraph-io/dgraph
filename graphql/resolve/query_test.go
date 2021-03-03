@@ -36,10 +36,10 @@ import (
 // Tests showing that the query rewriter produces the expected Dgraph queries
 
 type QueryRewritingCase struct {
-	Name      string
-	GQLQuery  string
-	Variables map[string]interface{}
-	DGQuery   string
+	Name         string
+	GQLQuery     string
+	GQLVariables string
+	DGQuery      string
 }
 
 func TestQueryRewriting(t *testing.T) {
@@ -56,10 +56,15 @@ func TestQueryRewriting(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,
-					Variables: tcase.Variables,
+					Variables: vars,
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)

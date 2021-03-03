@@ -59,7 +59,7 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: x.WorkerConfig.NumPendingProposals}
+	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
 	go limiter.bleed()
 
 	grpcOpts := []grpc.ServerOption{

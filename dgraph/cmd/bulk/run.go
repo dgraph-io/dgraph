@@ -46,6 +46,8 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
+const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
+
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
@@ -119,7 +121,6 @@ func init() {
 
 	// Bulk has some extra defaults for Badger SuperFlag. These should only be applied in this
 	// package.
-	const bulkBadgerDefaults = " cache_mb=64; cache_percentage=70,30;"
 	flag.String("badger", worker.BadgerDefaults+bulkBadgerDefaults,
 		z.NewSuperFlagHelp(worker.BadgerDefaults+bulkBadgerDefaults).
 			Head("Badger options").
@@ -132,7 +133,7 @@ func init() {
 			Flag("cache-mb",
 				"Total size of cache (in MB) per shard in the reducer.").
 			Flag("cache-percentage",
-				"Cache percentages summing up to 100 for various caches. (Format: BlockCacheSize,"+
+				"Cache percentages summing up to 100 for various caches. (FORMAT: BlockCacheSize,"+
 					"IndexCacheSize)").
 			String())
 
@@ -143,7 +144,7 @@ func init() {
 
 func run() {
 	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
-		worker.BadgerDefaults)
+		worker.BadgerDefaults + bulkBadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),

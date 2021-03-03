@@ -24,8 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -57,12 +60,17 @@ func Login(t *testing.T, loginParams *LoginParams) *HttpToken {
 	if loginParams.Endpoint == "" {
 		loginParams.Endpoint = AdminUrl()
 	}
-	token, err := HttpLogin(loginParams)
+	var token *HttpToken
+	err := x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
+		var err error
+		token, err = HttpLogin(loginParams)
+		return err
+	})
 	require.NoError(t, err, "login failed")
 	return token
 }
 
-func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
+func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 	createNs := `mutation {
 					 addNamespace
 					  {
@@ -74,10 +82,21 @@ func CreateNamespace(t *testing.T, token *HttpToken) (uint64, error) {
 	params := GraphQLParams{
 		Query: createNs,
 	}
-	resp := MakeRequest(t, token, params)
-	if len(resp.Errors) > 0 {
-		return 0, errors.Errorf(resp.Errors.Error())
+	var resp *GraphQLResponse
+	for {
+		resp = MakeRequest(t, token, params)
+		if len(resp.Errors) > 0 {
+			// retry if necessary
+			if strings.Contains(resp.Errors.Error(), "Predicate dgraph.xid is not indexed") {
+				glog.Warningf("error while creating namespace %v", resp.Errors)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return 0, errors.Errorf(resp.Errors.Error())
+		}
+		break
 	}
+
 	var result struct {
 		AddNamespace struct {
 			NamespaceId int    `json:"namespaceId"`
@@ -295,10 +314,10 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule)
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {
 	userClient, err := DgraphClient(SockAddr)
 	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
 
-	err = userClient.LoginIntoNamespace(context.Background(), id, password, ns)
-	require.NoError(t, err)
+	require.NoError(t, x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
+		return userClient.LoginIntoNamespace(context.Background(), id, password, ns)
+	}))
 	return userClient
 }
 

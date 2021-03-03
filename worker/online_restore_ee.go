@@ -15,6 +15,7 @@ package worker
 import (
 	"compress/gzip"
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"sync"
@@ -292,22 +293,25 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 	// Copy from the request.
 	config.Set("encryption_key_file", req.EncryptionKeyFile)
-	config.Set("vault_roleid_file", req.VaultRoleidFile)
-	config.Set("vault_secretid_file", req.VaultSecretidFile)
+
+	flagString := fmt.Sprintf("role-id-file=%s; secret-id-file=%s;",
+		req.VaultRoleidFile, req.VaultSecretidFile)
 
 	// Override only if non-nil
 	if req.VaultAddr != "" {
-		config.Set("vault_addr", req.VaultAddr)
+		flagString += fmt.Sprintf(" addr=%s;", req.VaultAddr)
 	}
 	if req.VaultPath != "" {
-		config.Set("vault_path", req.VaultPath)
+		flagString += fmt.Sprintf(" path=%s;", req.VaultPath)
 	}
 	if req.VaultField != "" {
-		config.Set("vault_field", req.VaultField)
+		flagString += fmt.Sprintf(" field=%s;", req.VaultField)
 	}
 	if req.VaultFormat != "" {
-		config.Set("vault_format", req.VaultField)
+		flagString += fmt.Sprintf(" format=%s;", req.VaultFormat)
 	}
+
+	config.Set("vault", flagString)
 	return config, nil
 }
 

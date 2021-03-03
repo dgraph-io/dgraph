@@ -30,7 +30,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -83,7 +82,11 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				fmt.Println("Creating new db:", dir)
 			}
 			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
-				r: gzReader, restoreTs: 0, preds: in.preds, dropOperations: in.dropOperations,
+				r:              gzReader,
+				restoreTs:      0,
+				preds:          in.preds,
+				dropOperations: in.dropOperations,
+				isOld:          in.isOld,
 			})
 			if err != nil {
 				return 0, 0, err
@@ -201,7 +204,6 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
 					newKv := posting.MarshalPostingList(pl, nil)
-					codec.FreePack(pl.Pack)
 					newKv.Key = restoreKey
 					// Use the version of the KV before we marshalled the
 					// posting list. The MarshalPostingList function returns KV

@@ -49,7 +49,7 @@ func LiveLoad(opts LiveOpts) error {
 		"--force-namespace", strconv.FormatInt(opts.ForceNs, 10),
 	}
 	if opts.Ludicrous {
-		args = append(args, "--ludicrous_mode")
+		args = append(args, "--ludicrous")
 	}
 	if opts.Creds != nil {
 		args = append(args, "--creds")

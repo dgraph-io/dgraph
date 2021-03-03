@@ -22,8 +22,10 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/pkg/errors"
 )
 
@@ -183,6 +185,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 		return
 	}
 
+	curmap := codec.FromList(cur)
 	for _, v := range dedupMap.groups[l].elements {
 		temp := new(pb.List)
 		groupVal = append(groupVal, groupPair{
@@ -190,7 +193,9 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 			attr: dedupMap.groups[l].attr,
 		})
 		if l != 0 {
-			algo.IntersectWith(cur, v.entities, temp)
+			ve := codec.FromList(v.entities)
+			r := roaring64.And(curmap, ve)
+			temp = codec.ToList(r)
 		} else {
 			temp.Uids = make([]uint64, len(v.entities.Uids))
 			copy(temp.Uids, v.entities.Uids)
@@ -213,7 +218,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.GetUids()) > 0 {
+		if !child.DestMap.IsEmpty() {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
@@ -295,7 +300,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.GetUids()) > 0 {
+		if !child.DestMap.IsEmpty() {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]

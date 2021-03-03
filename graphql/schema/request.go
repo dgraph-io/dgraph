@@ -60,7 +60,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, gqlErr
 	}
 
-	listErr := validator.Validate(s.schema, doc)
+	listErr := validator.Validate(s.schema, doc, req.Variables)
 	if len(listErr) != 0 {
 		return nil, listErr
 	}

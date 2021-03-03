@@ -63,6 +63,10 @@ type LogWriter struct {
 }
 
 func (l *LogWriter) Init() (*LogWriter, error) {
+	if l == nil {
+		return nil, nil
+	}
+
 	l.manageOldLogs()
 	if err := l.open(); err != nil {
 		return nil, fmt.Errorf("not able to create new file %v", err)
@@ -87,6 +91,10 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 }
 
 func (l *LogWriter) Write(p []byte) (int, error) {
+	if l == nil {
+		return 0, nil
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -113,6 +121,9 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 }
 
 func (l *LogWriter) Close() error {
+	if l == nil {
+		return nil
+	}
 	// close all go routines first before acquiring the lock to avoid contention
 	l.closer.SignalAndWait()
 
@@ -132,6 +143,9 @@ func (l *LogWriter) Close() error {
 
 // flushPeriodic periodically flushes the log file buffers.
 func (l *LogWriter) flushPeriodic() {
+	if l == nil {
+		return
+	}
 	defer l.closer.Done()
 	for {
 		select {
@@ -147,6 +161,10 @@ func (l *LogWriter) flushPeriodic() {
 
 // LogWriter should be locked while calling this
 func (l *LogWriter) flush() {
+	if l == nil {
+		return
+	}
+
 	_ = l.writer.Flush()
 	_ = l.file.Sync()
 }
@@ -164,6 +182,10 @@ func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 }
 
 func (l *LogWriter) rotate() error {
+	if l == nil {
+		return nil
+	}
+
 	l.flush()
 	if err := l.file.Close(); err != nil {
 		return err
@@ -182,6 +204,10 @@ func (l *LogWriter) rotate() error {
 }
 
 func (l *LogWriter) open() error {
+	if l == nil {
+		return nil
+	}
+
 	if err := os.MkdirAll(filepath.Dir(l.FilePath), 0755); err != nil {
 		return err
 	}
@@ -280,6 +306,10 @@ func compress(src string) error {
 
 // this should be called in a serial order
 func (l *LogWriter) manageOldLogs() {
+	if l == nil {
+		return
+	}
+
 	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxSize)
 	if err != nil {
 		return

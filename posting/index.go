@@ -228,18 +228,23 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
 				hex.Dump(dataKey))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+
+		bm, err := dataList.Bitmap(ListOptions{ReadTs: txn.StartTs})
+		if err != nil {
+			return errors.Wrapf(err, "while retriving Bitmap for key %s", hex.Dump(dataKey))
+		}
+
+		for _, uid := range bm.ToArray() {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
-				ValueId: p.Uid,
+				ValueId: uid,
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
-		})
-		if err != nil {
-			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
-				hex.Dump(dataKey))
+			if err := txn.addReverseAndCountMutation(ctx, delEdge); err != nil {
+				return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+					hex.Dump(dataKey))
+			}
 		}
 	}
 
@@ -277,9 +282,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
-	var plen int
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-		plen++
+	plen := l.Length(txn.StartTs, 0)
+	err := l.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
@@ -575,7 +579,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
-		WithLoggingLevel(badger.WARNING)
+		WithLoggingLevel(badger.WARNING).
+		WithMetricsEnabled(false)
 
 	// Set cache if we have encryption.
 	if len(x.WorkerConfig.EncryptionKey) > 0 {
@@ -1133,7 +1138,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return pl.IterateAll(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -1186,7 +1191,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
