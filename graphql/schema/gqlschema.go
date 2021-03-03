@@ -1605,7 +1605,10 @@ func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap
 }
 
 // Returns true if the field is of type which can be summed. Eg: int, int64, float
-func isSummable(fld *ast.FieldDefinition) bool {
+func isSummable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
+	if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+		return false
+	}
 	return summable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
 }
 
@@ -1876,7 +1879,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 
 		// Adds scoreSum and scoreAvg field for a field of name score.
 		// The type of scoreAvg is Float irrespective of the type of score.
-		if isSummable(fld) {
+		if isSummable(fld, defn, providesTypeMap) {
 			sumField := &ast.FieldDefinition{
 				Name: fld.Name + "Sum",
 				Type: aggregateFieldType,
