@@ -569,6 +569,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	defer os.RemoveAll(tmpIndexDir)
 	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", tmpIndexDir)
 
+	// NOTE(karl): this might be something
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt32).
@@ -795,6 +796,9 @@ func (rb *IndexRebuild) NeedIndexRebuild() bool {
 
 // BuildIndexes builds indexes.
 func (rb *IndexRebuild) BuildIndexes(ctx context.Context) error {
+	// NOTE(karl): this function might be called for all/some deletion requests
+	//
+	//
 	if err := rebuildTokIndex(ctx, rb); err != nil {
 		return err
 	}
