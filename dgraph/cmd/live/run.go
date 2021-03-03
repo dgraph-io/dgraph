@@ -259,6 +259,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 	op := &api.Operation{}
 	op.Schema = string(b)
 	if opt.namespaceToLoad == math.MaxUint64 {
+		// Verify schema if we are loding into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
 		}
@@ -733,7 +734,7 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	galaxyOp := false
+	var galaxyOp bool
 	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
 		opt.namespaceToLoad != x.GalaxyNamespace {
 		galaxyOp = true
@@ -768,7 +769,7 @@ func run() error {
 	defer l.zeroconn.Close()
 
 	if err := l.populateNamespaces(ctx, dg, galaxyOp); err != nil {
-		fmt.Printf("Error while populating namespaces %v", err)
+		fmt.Printf("Error while populating namespaces %s\n", err)
 		return err
 	}
 
@@ -792,8 +793,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	l.schema, err = getSchema(ctx, dg, opt.namespaceToLoad)
-	if err != nil {
+	if l.schema, err = getSchema(ctx, dg, opt.namespaceToLoad); err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err
 	}
