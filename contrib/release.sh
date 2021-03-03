@@ -187,19 +187,19 @@ build_windows() {
     pushd $basedir/dgraph/dgraph
       xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe -ldflags \
           "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-      mkdir $TMP/windows
-      mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/dgraph.exe
+      mkdir $TMP/$GOARCH/windows
+      mv dgraph-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph.exe
     popd
 
     pushd $basedir/badger/badger
       xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -buildmode=exe .
-      mv badger-windows-4.0-$GOARCH.exe $TMP/windows/badger.exe
+      mv badger-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/badger.exe
     popd
 
     if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
       pushd $basedir/ratel
         xgo -x -go="go-$GOVERSION" --targets=windows/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  -buildmode=exe .
-        mv ratel-windows-4.0-$GOARCH.exe $TMP/windows/dgraph-ratel.exe
+        mv ratel-windows-4.0-$GOARCH.exe $TMP/windows/$GOARCH/dgraph-ratel.exe
       popd
     fi
   fi
@@ -277,20 +277,20 @@ createSum () {
 
 export GOARCH=amd64
 # Build Binaries
-build_windows()
-build_darwin()
-build_linux()
+build_windows
+build_darwin
+build_linux
 
 # Build Checksums
 createSum linux
 [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
-[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum windows
+[[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createSum windows
 
 # export GOARCH=arm64
 # Build Binaries
-# build_windows()
-# build_darwin()
-# build_linux()
+# build_windows
+# build_darwin
+# build_linux
 # Build Checksums
 # createSum linux
 # [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createSum darwin
@@ -336,7 +336,7 @@ createZip () {
 
 # Build Archives
 createTar linux
-[[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createZip windows
+[[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createZip windows
 [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
 
 # TODO: fork on $GOARCH
