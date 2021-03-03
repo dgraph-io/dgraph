@@ -146,9 +146,9 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
 		Head("Badger options").
 		Flag("compression",
-			"Specifies the compression algorithm and compression level (if applicable) for the "+
-				`postings directory. "none" would disable compression, while "zstd:1" would set `+
-				"zstd compression at level 1.").
+			`[none, zstd:level, snappy] Specifies the compression algorithm and
+			compression level (if applicable) for the postings directory."none" would disable 
+			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
 		String())
@@ -250,8 +250,10 @@ they form a Raft group and provide synchronous replication.
 	//       option.
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
-		Flag("dir",
-			"The path where audit logs will be stored.").
+		Flag("output",
+			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
+			"stdout" is for standard output. You can also specify the directory where audit logs 
+			will be saved. When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",

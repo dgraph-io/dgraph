@@ -105,13 +105,13 @@ func (opt *Options) validate() {
 	x.AssertTruef(wd != td,
 		"WAL and Tmp directory cannot be the same ('%s').", opt.WALDir)
 	if opt.Audit != nil {
-		ad, err := filepath.Abs(opt.Audit.Dir)
+		ad, err := filepath.Abs(opt.Audit.Output)
 		x.Check(err)
 		x.AssertTruef(ad != pd,
-			"Posting and Audit Directory cannot be the same ('%s').", opt.Audit.Dir)
+			"Posting directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 		x.AssertTruef(ad != wd,
-			"WAL and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+			"WAL directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 		x.AssertTruef(ad != td,
-			"Tmp and Audit directory cannot be the same ('%s').", opt.Audit.Dir)
+			"Tmp directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 	}
 }
