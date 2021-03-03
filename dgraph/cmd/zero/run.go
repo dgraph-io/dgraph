@@ -110,8 +110,10 @@ instances to achieve high-availability.
 	//       option.
 	flag.String("audit", "", z.NewSuperFlagHelp("").
 		Head("Audit options").
-		Flag("dir",
-			"The path where audit logs will be stored.").
+		Flag("output",
+			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
+			"stdout" is for standard output. You can also specify the directory where audit logs 
+			will be saved. When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
@@ -245,10 +247,10 @@ func run() {
 	if opts.audit != nil {
 		wd, err := filepath.Abs(opts.w)
 		x.Check(err)
-		ad, err := filepath.Abs(opts.audit.Dir)
+		ad, err := filepath.Abs(opts.audit.Output)
 		x.Check(err)
 		x.AssertTruef(ad != wd,
-			"WAL and Audit directory cannot be the same ('%s').", opts.audit.Dir)
+			"WAL directory and Audit output cannot be the same ('%s').", opts.audit.Output)
 	}
 
 	if opts.rebalanceInterval <= 0 {

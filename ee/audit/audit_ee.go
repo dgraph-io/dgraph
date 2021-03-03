@@ -66,16 +66,17 @@ func GetAuditConf(conf string) *x.LoggerConf {
 		return nil
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
-	dir := auditFlag.GetString("dir")
-	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
+	out := auditFlag.GetString("output")
+	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
 		Compress:      auditFlag.GetBool("compress"),
-		Dir:           dir,
+		Output:        out,
 		EncryptionKey: encBytes,
 		Days:          auditFlag.GetInt64("days"),
 		Size:          auditFlag.GetInt64("size"),
+		MessageKey:    "endpoint",
 	}
 }
 
@@ -175,6 +176,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
+		"level", "AUDIT",
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,
