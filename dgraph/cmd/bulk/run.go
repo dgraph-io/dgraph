@@ -372,7 +372,7 @@ func maxOpenFilesWarning() {
 		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
-	maxOpenFiles, err := queryMaxOpenFiles()
+	maxOpenFiles, err := x.QueryMaxOpenFiles()
 	if err != nil || maxOpenFiles < 1e6 {
 		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
 			" on the size of the data set loaded, the map file output size, and the level" +

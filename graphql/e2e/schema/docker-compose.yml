@@ -5,6 +5,10 @@ services:
   alpha1:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha1
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
     labels:
       cluster: test
     ports:
@@ -21,6 +25,10 @@ services:
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
     depends_on:
     - alpha1
     labels:
@@ -39,6 +47,10 @@ services:
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
     depends_on:
     - alpha2
     labels:

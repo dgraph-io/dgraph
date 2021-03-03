@@ -1,4 +1,4 @@
-// +build windows
+// +build !windows
 
 /*
  * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
@@ -16,10 +16,14 @@
  * limitations under the License.
  */
 
-package bulk
+package x
 
-import "github.com/pkg/errors"
+import (
+	"golang.org/x/sys/unix"
+)
 
-func queryMaxOpenFiles() (int, error) {
-	return 0, errors.New("Cannot detect max open files on this platform")
+func QueryMaxOpenFiles() (int, error) {
+	var rl unix.Rlimit
+	err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rl)
+	return int(rl.Cur), err
 }

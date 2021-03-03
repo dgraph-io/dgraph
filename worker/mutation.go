@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v3/y"
+
 	ostats "go.opencensus.io/stats"
 
 	"github.com/golang/glog"
@@ -48,6 +50,9 @@ var (
 	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
 	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
 )
+
+// Default limit on number of simultaneous open files on unix systems
+const DefaultMaxOpenFileLimit = 1024
 
 func isStarAll(v []byte) bool {
 	return bytes.Equal(v, []byte(x.Star))
@@ -195,6 +200,19 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
+	// This throttle allows is used to limit the number of files which are opened simultaneously
+	// by badger while building indexes for predicates in background.
+	maxOpenFileLimit, err := x.QueryMaxOpenFiles()
+	if err != nil {
+		// Setting to default value on unix systems
+		maxOpenFileLimit = 1024
+	}
+	glog.Infof("Max open files limit: %d", maxOpenFileLimit)
+	// Badger opens around 8 files for indexing per predicate.
+	// The throttle limit is set to maxOpenFileLimit/8 to ensure that indexing does not throw
+	// "Too many open files" error.
+	throttle := y.NewThrottle(maxOpenFileLimit / 8)
+
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
 		// In case background indexing is running, we should call it here again.
 		defer stopIndexing(closer)
@@ -205,11 +223,13 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		// cause writes to badger to fail leading to undesired indexing failures.
 		wg.Wait()
 
+		x.Check(throttle.Do())
 		// undo schema changes in case re-indexing fails.
 		if err := buildIndexesHelper(update, rebuild); err != nil {
 			glog.Errorf("error in building indexes, aborting :: %v\n", err)
 			undoSchemaUpdate(update.Predicate)
 		}
+		throttle.Done(nil)
 	}
 
 	for _, su := range updates {
