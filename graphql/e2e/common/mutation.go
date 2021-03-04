@@ -5028,6 +5028,7 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap2 := map[string]interface{}{
 		"missionId":   "Mission2",
 		"astronautId": "Astronaut1",
+		"name":        "Gus Garrisom",
 		"des":         "Apollo2",
 	}
 	addMissionParams.Variables = varMap2
