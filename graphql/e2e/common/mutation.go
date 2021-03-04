@@ -4981,10 +4981,11 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap1 := map[string]interface{}{
 		"missionId":   "Mission1",
 		"astronautId": "Astronaut1",
+		"name":        "Guss Garissom",
 		"des":         "Apollo1",
 	}
 	addMissionParams := &GraphQLParams{
-		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $des: String!) {
+		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $name: String!, $des: String!) {
 			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
 				mission{
 					id
@@ -5117,7 +5118,6 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 			  }
 			]
 		  }
-		}
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))
