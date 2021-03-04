@@ -18,13 +18,14 @@ package testutil
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
+
+	"github.com/pkg/errors"
 )
 
 type LiveOpts struct {
@@ -65,11 +66,11 @@ func LiveLoad(opts LiveOpts) error {
 		liveCmd.Env = append(os.Environ(), opts.Env...)
 	}
 
-	out, err := liveCmd.Output()
+	out, err := liveCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
-		return err
+		return errors.Wrapf(err, string(out))
 	}
 	if CheckIfRace(out) {
 		return errors.New("race condition detected. check logs for more details")
