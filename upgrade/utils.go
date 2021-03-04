@@ -17,15 +17,19 @@
 package upgrade
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -47,8 +51,7 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 		password := Upgrade.Conf.GetString(password)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		// login to cluster
-		//TODO(Ahsan): What should be the namespace here?
+		// login to cluster. Only guardian of the galaxy can run this operation.
 		if err = dg.LoginIntoNamespace(ctx, userName, password, x.GalaxyNamespace); err != nil {
 			x.Check(conn.Close())
 			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
@@ -56,6 +59,119 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 	}
 
 	return dg, conn, nil
+}
+
+func getAuthToken() (*api.Jwt, error) {
+	alpha := Upgrade.Conf.GetString(alpha)
+
+	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
+	}
+	defer conn.Close()
+
+	dc := api.NewDgraphClient(conn)
+
+	userName := Upgrade.Conf.GetString(user)
+	password := Upgrade.Conf.GetString(password)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// login to cluster. Only guardian of the galaxy can run this operation.
+	resp, err := dc.Login(ctx, &api.LoginRequest{
+		Userid:    userName,
+		Password:  password,
+		Namespace: x.GalaxyNamespace})
+	if err != nil {
+		return nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
+	}
+
+	jwt := &api.Jwt{}
+	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
+		return nil, err
+	}
+
+	return jwt, nil
+}
+
+type GraphQLParams struct {
+	Query         string                 `json:"query"`
+	OperationName string                 `json:"operationName"`
+	Variables     map[string]interface{} `json:"variables"`
+	Headers       http.Header
+}
+
+// GraphQLResponse GraphQL response structure.
+// see https://graphql.github.io/graphql-spec/June2018/#sec-Response
+type GraphQLResponse struct {
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func makeGqlRequest(params *GraphQLParams, url string) (*GraphQLResponse, error) {
+	req, err := createGQLPost(params, url)
+	if err != nil {
+		return nil, err
+	}
+	for h := range params.Headers {
+		req.Header.Set(h, params.Headers.Get(h))
+	}
+	res, err := runGQLRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result *GraphQLResponse
+	if err := json.Unmarshal(res, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func createGQLPost(params *GraphQLParams, url string) (*http.Request, error) {
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
+func runGQLRequest(req *http.Request) ([]byte, error) {
+	client := &http.Client{Timeout: 50 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// GraphQL server should always return OK, even when there are errors
+	if status := resp.StatusCode; status != http.StatusOK {
+		return nil, errors.Errorf("unexpected status code: %v", status)
+	}
+
+	if strings.ToLower(resp.Header.Get("Content-Type")) != "application/json" {
+		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Errorf("unable to read response body: %v", err)
+	}
+
+	return body, nil
 }
 
 // getQueryResult executes the given query and unmarshals the result in given pointer queryResPtr.

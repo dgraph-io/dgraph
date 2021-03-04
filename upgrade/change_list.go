@@ -52,5 +52,15 @@ func init() {
 				//	can't handle every scenario. So, it is best to let the user do it.
 			},
 		},
+		{
+			introducedIn: &version{major: 21, minor: 3, patch: 0},
+			changes: []*change{{
+				name: "Upgrade CORS",
+				description: "This updates the ACL nodes to use the new ACL model introduced in" +
+					" v20.03.0. This is applied while upgrading from v1.2.2+ to v20.03.0+",
+				minFromVersion: &version{major: 20, minor: 11, patch: 0},
+				applyFunc:      upgradeCORS,
+			}},
+		},
 	}
 }

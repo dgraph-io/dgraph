@@ -545,7 +545,7 @@ func lookup(db *badger.DB) {
 func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		prefix = x.PredicatePrefix(x.GalaxyAttr(opt.predicate))
 	} else if len(opt.prefix) > 0 {
 		p, err := hex.DecodeString(opt.prefix)
 		x.Check(err)
@@ -786,7 +786,7 @@ func sizeHistogram(db *badger.DB) {
 	// Collect key and value sizes.
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		prefix = x.PredicatePrefix(x.GalaxyAttr(opt.predicate))
 	}
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
