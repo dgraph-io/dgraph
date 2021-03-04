@@ -149,9 +149,19 @@ func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error
 		if err != nil {
 			return errors.Wrap(err, "CreateManifest failed to create dstInfo")
 		}
-		if err := h.mc.CopyObject(dst, src); err != nil {
-			return errors.Wrap(err, "CreateManifest failed to create temporary copy of manifest")
-		}
+
+		// We try copying 100 times, if it still fails, the user should manually copy the
+		// tmpManifest to the original manifest.
+		x.RetryUntilSuccess(100, time.Second, func() error {
+			if err := h.mc.CopyObject(dst, src); err != nil {
+				return errors.Wrapf(err, "COPYING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!!!\n"+
+					"It is possible that the manifest would have been corrupted. You must copy "+
+					"the file: %s to: %s (present in the backup s3 bucket),  in order to "+
+					"fix the backup manifest.", tmpManifest, backupManifest)
+			}
+			return nil
+		})
+
 		err = h.mc.RemoveObject(h.bucketName, tmpObject)
 		return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
 	}
