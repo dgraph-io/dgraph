@@ -381,18 +381,31 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
-	calculate := func(start, end int) error {
+	calculate := func(start int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		for i := start; i < end; i++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
+		startNum, err := bm.Select(uint64(start))
+		x.Check(err)
+
+		itr := bm.Iterator()
+		itr.AdvanceIfNeeded(startNum)
+
+		for count := 0; itr.HasNext(); count++ {
+			if count >= width {
+				break
 			}
-			key := x.DataKey(q.Attr, q.UidList.Uids[i])
+			if count%100 == 0 {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+			}
+
+			uid := itr.Next()
+			key := x.DataKey(q.Attr, uid)
 
 			// Get or create the posting list for an entity, attribute combination.
 			pl, err := qs.cache.Get(key)
@@ -440,7 +453,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 			}
 
-			uidList := new(pb.List)
+			res := roaring64.New()
 			var vl pb.ValueList
 			for _, val := range vals {
 				newValue, err := convertToType(val, srcFn.atype)
@@ -459,17 +472,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					case "eq":
 						for _, eqToken := range srcFn.eqTokens {
 							if types.CompareVals(srcFn.fname, val, eqToken) {
-								uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+								res.Add(uid)
 								break
 							}
 						}
 					case "between":
 						if types.CompareBetween(val, srcFn.eqTokens[0], srcFn.eqTokens[1]) {
-							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+							res.Add(uid)
 						}
 					default:
 						if types.CompareVals(srcFn.fname, val, srcFn.eqTokens[0]) {
-							uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+							res.Add(uid)
 						}
 					}
 
@@ -505,7 +518,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix = append(out.UidMatrix, codec.ToList(res))
 			}
 		}
 		return nil
@@ -514,12 +527,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
-		end := start + width
-		if end > srcFn.n {
-			end = srcFn.n
-		}
 		g.Go(func() error {
-			return calculate(start, end)
+			return calculate(start)
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -668,7 +677,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
 	q := args.q
 
-	uidList := &pb.List{}
+	res := roaring64.New()
 	var fcsList []*pb.Facets
 
 	// [1] q.FacetParam == nil, facetsTree == nil => No facets. Pick all UIDs.
@@ -677,7 +686,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	// [4] q.FacetParam != nil, facetsTree == nil => Pick facets. Pick all UIDs.
 
 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
+		res.Add(p.Uid)
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
@@ -687,7 +696,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	if err != nil {
 		return nil, nil, err
 	}
-	return uidList, fcsList, nil
+	return codec.ToList(res), fcsList, nil
 
 	// if q.FacetParam != nil || facetsTree != nil {
 	// 	// Takes care of 2 and 3. And also 4 for picking facets.
@@ -747,11 +756,13 @@ func (qs *queryState) handleUidPostings(
 	// calculate) to work correctly. But we have seen some panics while forming DataKey in
 	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
 	// from here when srcFn.n != len(q.UidList.Uids).
+	bm := codec.FromList(q.UidList)
+
 	switch srcFn.fnType {
 	case notAFunction, compareScalarFn, hasFn, uidInFn:
-		if srcFn.n != len(q.UidList.GetUids()) {
+		if sz := int(bm.GetCardinality()); srcFn.n != sz {
 			return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
-				"handleUidPostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
+				"handleUidPostings", srcFn.n, sz, srcFn)
 		}
 	}
 
@@ -760,33 +771,44 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
-	calculate := func(start, end int) error {
+	calculate := func(start int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		for i := start; i < end; i++ {
-			if i%100 == 0 {
+		startNum, err := bm.Select(uint64(start))
+		x.Check(err)
+
+		itr := bm.Iterator()
+		itr.AdvanceIfNeeded(startNum)
+
+		for count := 0; itr.HasNext(); count++ {
+			if count >= width {
+				break
+			}
+
+			if count%100 == 0 {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
 				}
 			}
+			uid := itr.Next()
+
 			var key []byte
 			switch srcFn.fnType {
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
-					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
+					key = x.ReverseKey(q.Attr, uid)
 				} else {
-					key = x.DataKey(q.Attr, q.UidList.Uids[i])
+					key = x.DataKey(q.Attr, uid)
 				}
 			case geoFn, regexFn, fullTextSearchFn, standardFn, customIndexFn, matchFn,
 				compareAttrFn:
-				key = x.IndexKey(q.Attr, srcFn.tokens[i])
+				key = x.IndexKey(q.Attr, srcFn.tokens[start+count])
 			default:
 				return errors.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 			}
@@ -797,9 +819,10 @@ func (qs *queryState) handleUidPostings(
 				return err
 			}
 
+			first := start == 0 && count == 0
 			switch {
 			case q.DoCount:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "DoCount")
 				}
 				count, err := countForUidPostings(args, pl, facetsTree, opts)
@@ -810,7 +833,7 @@ func (qs *queryState) handleUidPostings(
 				// Add an empty UID list to make later processing consistent.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "CompareScalarFn")
 				}
 				len := pl.Length(args.q.ReadTs, 0)
@@ -819,11 +842,10 @@ func (qs *queryState) handleUidPostings(
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold[0]) {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
 				}
 			case srcFn.fnType == hasFn:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "HasFn")
 				}
 				empty, err := pl.IsEmpty(args.q.ReadTs, 0)
@@ -831,30 +853,32 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
 				}
 			case srcFn.fnType == uidInFn:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqList := &pb.List{Uids: srcFn.uidsPresent}
+				// TODO: Fix up ListOptions. It should be using roaring bitmap, instead of a list of
+				// UIDs.
+				reqList := &pb.List{SortedUids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
 					First:     int(args.q.First),
 				}
-				plist, err := pl.Uids(topts)
+				res, err := pl.Bitmap(topts)
 				if err != nil {
 					return err
 				}
-				if len(plist.Uids) > 0 {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+				// TODO: This could be optimized it seems like. We don't need the whole
+				// intersection, just need to check if there are any results at all.
+				if !res.IsEmpty() {
+					out.UidMatrix = append(out.UidMatrix, codec.OneUid(uid))
 				}
 			case q.FacetParam != nil || facetsTree != nil:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "default with facets")
 				}
 				uidList, fcsList, err := retrieveUidsAndFacets(args, pl, facetsTree, opts)
@@ -866,34 +890,30 @@ func (qs *queryState) handleUidPostings(
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
 			default:
-				if i == 0 {
+				if first {
 					span.Annotate(nil, "default no facets")
 				}
-				uidList, err := pl.Uids(opts)
+				res, err := pl.Bitmap(opts)
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix = append(out.UidMatrix, codec.ToList(res))
 			}
 		}
 		return nil
 	} // End of calculate function.
 
+	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
-		end := start + width
-		if end > srcFn.n {
-			end = srcFn.n
-		}
-		go func(start, end int) {
-			errCh <- calculate(start, end)
-		}(start, end)
+		g.Go(func() error {
+			return calculate(start)
+		})
 	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
+
 	// All goroutines are done. Now attach their results.
 	out := args.out
 	for _, chunk := range outputs {
@@ -901,11 +921,6 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
-	var total int
-	for _, list := range out.UidMatrix {
-		total += len(list.Uids)
-	}
-	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 

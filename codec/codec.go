@@ -167,6 +167,12 @@ func FromList(l *pb.List) *roaring64.Bitmap {
 	return iw
 }
 
+func OneUid(uid uint64) *pb.List {
+	bm := roaring64.New()
+	bm.Add(uid)
+	return ToList(bm)
+}
+
 func ToSortedUids(l *pb.List) *pb.List {
 	bm := FromList(l)
 	return &pb.List{
