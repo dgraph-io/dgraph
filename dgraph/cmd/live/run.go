@@ -259,7 +259,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	if opt.namespaceToLoad == preserveNs {
+	if opt.preserveNs {
 		// Verify schema if we are loding into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
