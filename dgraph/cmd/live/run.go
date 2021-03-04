@@ -719,6 +719,7 @@ func run() error {
 		ns := Live.Conf.GetInt64("force-namespace")
 		if ns < 0 {
 			opt.preserveNs = true
+			opt.namespaceToLoad = math.MaxUint64
 		} else {
 			opt.namespaceToLoad = uint64(ns)
 		}
