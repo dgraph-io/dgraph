@@ -340,11 +340,10 @@ build_artifacts() {
   ls -alh $TMP
 }
 
-DGRAPH_BUILD_AMD64=${DGRAPH_BUILD_AMD64:-1}
-DGRAPH_BUILD_ARM64=${DGRAPH_BUILD_ARM64:-0}
 if [[ $DGRAPH_BUILD_AMD64 =~ 1|true ]]; then
   export GOARCH=amd64
   build_artifacts
+fi
 if [[ $DGRAPH_BUILD_ARM64 =~ 1|true ]]; then
   export GOARCH=arm64
   build_artifacts
