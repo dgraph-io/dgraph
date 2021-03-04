@@ -20,6 +20,8 @@ RESET='\033[0m'
 DGRAPH_BUILD_WINDOWS=${DGRAPH_BUILD_WINDOWS:-0}
 DGRAPH_BUILD_MAC=${DGRAPH_BUILD_MAC:-0}
 DGRAPH_BUILD_RATEL=${DGRAPH_BUILD_RATEL:-1}
+DGRAPH_BUILD_AMD64=${DGRAPH_BUILD_AMD64:-1}
+DGRAPH_BUILD_ARM64=${DGRAPH_BUILD_ARM64:-0}
 
 print_error() {
     printf "$RED$1$RESET\n"
@@ -228,22 +230,22 @@ build_darwin() {
 build_linux() {
   # Build Linux.
   pushd $basedir/dgraph/dgraph
-    xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
-        "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+    xgo -x -v -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags \
+       "-X $release=$release_version -X $codenameKey=$codename -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
     strip -x dgraph-linux-$GOARCH
     mkdir -p $TMP/linux/$GOARCH
     mv dgraph-linux-$GOARCH $TMP/linux/$GOARCH/dgraph
   popd
 
   pushd $basedir/badger/badger
-    xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
+    xgo -x -v -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE --tags=jemalloc -deps=https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2  --depsargs='--with-jemalloc-prefix=je_ --with-malloc-conf=background_thread:true,metadata_thp:auto --enable-prof' .
     strip -x badger-linux-$GOARCH
     mv badger-linux-$GOARCH $TMP/linux/$GOARCH/badger
   popd
 
   if [[ $DGRAPH_BUILD_RATEL =~ 1|true ]]; then
     pushd $basedir/ratel
-      xgo -x -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
+      xgo -x -v -go="go-$GOVERSION" --targets=linux/$GOARCH $DGRAPH_BUILD_XGO_IMAGE -ldflags "-X $ratel_release=$release_version"  .
       strip -x ratel-linux-$GOARCH
       mv ratel-linux-$GOARCH $TMP/linux/dgraph-ratel
     popd
@@ -331,18 +333,22 @@ build_artifacts() {
   [[ $DGRAPH_BUILD_WINDOWS =~ 1|true ]] && createZip windows
   [[ $DGRAPH_BUILD_MAC =~ 1|true ]] && createTar darwin
 
-  # TODO: fork on $GOARCH
-  echo "Release $TAG is ready."
-  docker run dgraph/dgraph:$DOCKER_TAG dgraph
+  if [[ "$GOARCH" == "amd64" ]]; then
+    echo "Release $TAG is ready."
+    docker run dgraph/dgraph:$DOCKER_TAG dgraph
+  fi
   ls -alh $TMP
 }
 
-export GOARCH=amd64
-build_artifacts
-export GOARCH=arm64
-build_artifacts
-
-
+DGRAPH_BUILD_AMD64=${DGRAPH_BUILD_AMD64:-1}
+DGRAPH_BUILD_ARM64=${DGRAPH_BUILD_ARM64:-0}
+if [[ $DGRAPH_BUILD_AMD64 =~ 1|true ]]; then
+  export GOARCH=amd64
+  build_artifacts
+if [[ $DGRAPH_BUILD_ARM64 =~ 1|true ]]; then
+  export GOARCH=arm64
+  build_artifacts
+fi
 
 set +o xtrace
 echo "To release:"
