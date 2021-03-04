@@ -5852,8 +5852,9 @@ func upsertMutationTests(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	// State should get added.
 	addStateParams := &GraphQLParams{
-		Query: `mutation addState($xcode: String!, $upsert: Boolean, $name: String!) {
-            addState(input: [{ xcode: $xcode, name: $name }], upsert: $upsert) {
+		Query: `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $xcode2: String!,
+					$name2: String!) {
+            addState(input: [{ xcode: $xcode, name: $name }, {xcode: $xcode2, name: $name2}], upsert: $upsert) {
                 state {
                     xcode
                     name
@@ -5866,6 +5867,8 @@ func upsertMutationTests(t *testing.T) {
 		Variables: map[string]interface{}{
 			"name":   "State1",
 			"xcode":  "S1",
+			"name2":  "State10",
+			"xcode2": "S10",
 			"upsert": true},
 	}
 
@@ -5874,18 +5877,26 @@ func upsertMutationTests(t *testing.T) {
 
 	addStateExpected := `{
         "addState": {
-            "state": [{
-                "xcode": "S1",
-                "name": "State1",
-				"country": null
-            }]
+            "state": [
+				{
+                	"xcode": "S1",
+                	"name": "State1",
+					"country": null
+            	},
+				{
+					"xcode": "S10",
+					"name": "State10",
+					"country": null
+				}]
         }
     }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
 
 	// Add Mutation with Upsert: false should fail.
-	addStateParams.Query = `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $countryID: ID) {
-            addState(input: [{ xcode: $xcode, name: $name, country: {id: $countryID }}], upsert: $upsert) {
+	addStateParams.Query = `mutation addState($xcode: String!, $upsert: Boolean, $name: String!, $countryID: ID,
+				$xcode2: String!, $name2: String!) {
+            addState(input: [{ xcode: $xcode, name: $name, country: {id: $countryID }},
+							 { xcode: $xcode2, name: $name2}], upsert: $upsert) {
                 state {
                     xcode
                     name
@@ -5899,6 +5910,8 @@ func upsertMutationTests(t *testing.T) {
 		"upsert":    false,
 		"name":      "State2",
 		"xcode":     "S1",
+		"xcode2":    "S10",
+		"name2":     "NewState10",
 		"countryID": newCountry.ID,
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
@@ -5912,19 +5925,27 @@ func upsertMutationTests(t *testing.T) {
 		"upsert":    true,
 		"name":      "State2",
 		"xcode":     "S1",
+		"xcode2":    "S10",
+		"name2":     "NewState10",
 		"countryID": newCountry.ID,
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	addStateExpected = `{
         "addState": {
-            "state": [{
-                "xcode": "S1",
-                "name": "State2",
-				"country": {
-					"name": "Testland"
-				}
-            }]
+            "state": [
+				{
+                	"xcode": "S1",
+                	"name": "State2",
+					"country": {
+						"name": "Testland"
+					}
+            	},
+				{
+					"xcode": "S10",
+					"name": "NewState10",
+					"country": null
+				}]
         }
     }`
 	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
@@ -5932,6 +5953,6 @@ func upsertMutationTests(t *testing.T) {
 	// Clean Up
 	filter := map[string]interface{}{"id": []string{newCountry.ID}}
 	deleteCountry(t, filter, 1, nil)
-	filter = GetXidFilter("xcode", []interface{}{"S1"})
-	deleteState(t, filter, 1, nil)
+	filter = GetXidFilter("xcode", []interface{}{"S1", "S10"})
+	deleteState(t, filter, 2, nil)
 }

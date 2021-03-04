@@ -1251,7 +1251,7 @@
     }
   dgquerysec: |-
     query {
-      Tweets1 as addTweets(func: uid(TweetsRoot)) {
+      Tweets1 as Tweets1(func: uid(TweetsRoot)) {
         uid
       }
       TweetsRoot as var(func: uid(Tweets2))
@@ -1333,7 +1333,7 @@
     }
   dgquerysec: |-
     query {
-      State1 as addState(func: uid(StateRoot)) {
+      State1 as State1(func: uid(StateRoot)) {
         uid
       }
       StateRoot as var(func: uid(State3)) @filter(uid(StateAuth4))
