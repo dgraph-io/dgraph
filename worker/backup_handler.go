@@ -68,7 +68,7 @@ type UriHandler interface {
 	// then it will return a consolidated master manifest.
 	GetManifest(*url.URL) (*MasterManifest, error)
 
-	// GetManifests returns the list of manfests for the given backup series ID
+	// GetManifests returns the list of manifest for the given backup series ID
 	// and backup number at the specified location. If backupNum is set to zero,
 	// all the manifests for the backup series will be returned. If it's greater
 	// than zero, manifests from one to backupNum will be returned.
