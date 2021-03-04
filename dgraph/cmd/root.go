@@ -17,9 +17,16 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
@@ -141,8 +148,33 @@ func initCmds() {
 			if cfg == "" {
 				continue
 			}
-			sc.Conf.SetConfigFile(cfg)
-			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			// TODO: might want to put the rest of this scope outside the for loop, do we need to
+			//       read the config file for each subcommand if there's only one global config
+			//       file?
+			cfgFile, err := os.OpenFile(cfg, os.O_RDONLY, 0644)
+			if err != nil {
+				x.Fatalf("unable to open config file for reading: %v", err)
+			}
+			cfgData, err := ioutil.ReadAll(cfgFile)
+			if err != nil {
+				x.Fatalf("unable to read config file: %v", err)
+			}
+			if ext := filepath.Ext(cfg); len(ext) > 1 {
+				ext = ext[1:]
+				sc.Conf.SetConfigType(ext)
+				var fixed io.Reader
+				switch ext {
+				case "json":
+					fixed = convertJSON(string(cfgData))
+				case "yaml", "yml":
+					fixed = convertYAML(string(cfgData))
+				default:
+					x.Fatalf("unknown config file extension: %s", ext)
+				}
+				x.Check(errors.Wrapf(sc.Conf.ReadConfig(fixed), "reading config"))
+			} else {
+				x.Fatalf("config file requires an extension: .json or .yaml or .yml")
+			}
 			setGlogFlags(sc.Conf)
 		}
 	})
@@ -225,4 +257,153 @@ http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 
 	return cmd
 
+}
+
+// convertJSON converts JSON hierarchical config objects into a flattened map fulfilling the
+// z.SuperFlag string format so that Viper can correctly set z.SuperFlag config options for the
+// respective subcommands. If JSON hierarchical config objects are not used, convertJSON doesn't
+// change anything and returns the config file string as it is. For example:
+//
+//  {
+//    "mutations": "strict",
+//    "badger": {
+//      "compression": "zstd:1",
+//      "goroutines": 5
+//    },
+//    "raft": {
+//      "idx": 2,
+//      "learner": true
+//    },
+//    "security": {
+//      "whitelist": "127.0.0.1,0.0.0.0"
+//    }
+//  }
+//
+// Is converted into:
+//
+//  {
+//    "mutations": "strict",
+//    "badger": "compression=zstd:1; goroutines=5;",
+//    "raft": "idx=2; learner=true;",
+//    "security": "whitelist=127.0.0.1,0.0.0.0;"
+//  }
+//
+// Viper then uses the "converted" JSON to set the z.SuperFlag strings in subcommand option structs.
+func convertJSON(old string) io.Reader {
+	dec := json.NewDecoder(strings.NewReader(old))
+	config := make(map[string]interface{})
+	if err := dec.Decode(&config); err != nil {
+		panic(err)
+	}
+	// super holds superflags to later be condensed into 'good'
+	super, good := make(map[string]map[string]interface{}), make(map[string]string)
+	for k, v := range config {
+		switch t := v.(type) {
+		case map[string]interface{}:
+			super[k] = t
+		default:
+			good[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	// condense superflags
+	for f, options := range super {
+		for k, v := range options {
+			good[f] += fmt.Sprintf("%s=%v; ", k, v)
+		}
+		good[f] = good[f][:len(good[f])-1]
+	}
+	// generate good json string
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetIndent("", "    ")
+	if err := enc.Encode(&good); err != nil {
+		panic(err)
+	}
+	return buf
+}
+
+// convertYAML converts YAML hierarchical notation into a flattened map fulfilling the z.SuperFlag
+// string format so that Viper can correctly set the z.SuperFlag config options for the respective
+// subcommands. If YAML hierarchical notation is not used, convertYAML doesn't change anything and
+// returns the config file string as it is. For example:
+//
+//  mutations: strict
+//  badger:
+//    compression: zstd:1
+//    goroutines: 5
+//  raft:
+//    idx: 2
+//    learner: true
+//  security:
+//    whitelist: "127.0.0.1,0.0.0.0"
+//
+// Is converted into:
+//
+//  mutations: strict
+//  badger: "compression=zstd:1; goroutines=5;"
+//  raft: "idx=2; learner=true;"
+//  security: "whitelist=127.0.0.1,0.0.0.0;"
+//
+// Viper then uses the "converted" YAML to set the z.SuperFlag strings in subcommand option structs.
+func convertYAML(old string) io.Reader {
+	isFlat := func(l string) bool {
+		if len(l) < 1 {
+			return false
+		}
+		if unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isOption := func(l string) bool {
+		if len(l) < 3 {
+			return false
+		}
+		if !strings.Contains(l, ":") {
+			return false
+		}
+		if !unicode.IsSpace(rune(l[0])) {
+			return false
+		}
+		return true
+	}
+	isSuper := func(l string) bool {
+		s := strings.TrimSpace(l)
+		if len(s) < 1 {
+			return false
+		}
+		if s[len(s)-1] != ':' {
+			return false
+		}
+		return true
+	}
+	getName := func(l string) string {
+		s := strings.TrimSpace(l)
+		return s[:strings.IndexRune(s, rune(':'))]
+	}
+	getValue := func(l string) string {
+		s := strings.TrimSpace(l)
+		v := s[strings.IndexRune(s, rune(':'))+2:]
+		return strings.ReplaceAll(v, `"`, ``)
+	}
+	super, good, last := make(map[string]string), make([]string, 0), ""
+	for _, line := range strings.Split(old, "\n") {
+		if isSuper(line) {
+			last = getName(line)
+			continue
+		}
+		if isOption(line) {
+			name, value := getName(line), getValue(line)
+			super[last] += name + "=" + value + "; "
+			continue
+		}
+		if isFlat(line) {
+			good = append(good, strings.TrimSpace(line))
+		}
+	}
+	for k, v := range super {
+		super[k] = `"` + strings.TrimSpace(v) + `"`
+		good = append(good, fmt.Sprintf("%s: %s", k, super[k]))
+	}
+	return strings.NewReader(strings.Join(good, "\n"))
 }
