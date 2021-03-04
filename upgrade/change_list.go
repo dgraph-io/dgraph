@@ -52,5 +52,19 @@ func init() {
 				//	can't handle every scenario. So, it is best to let the user do it.
 			},
 		},
+		{
+			introducedIn: &version{major: 21, minor: 3, patch: 0},
+			changes: []*change{{
+				name: "Upgrade CORS",
+				description: "This updates the GraphQL schema to contain the CORS information. " +
+					"Some of the dgraph internal predicates are removed in v21.03.0. dgraph.cors " +
+					"that used to store CORS information is one of them. " +
+					"For more info, see: https://github.com/dgraph-io/dgraph/pull/7431",
+				minFromVersion: &version{major: 20, minor: 11, patch: 0},
+				applyFunc:      upgradeCORS,
+			}},
+			// another change in 21.03.0 version is regarding persistant query that used another
+			// depreciated predicate. This upgrade tool does not upgrade that information.
+		},
 	}
 }
