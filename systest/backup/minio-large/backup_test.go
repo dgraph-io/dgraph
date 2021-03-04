@@ -214,8 +214,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})
