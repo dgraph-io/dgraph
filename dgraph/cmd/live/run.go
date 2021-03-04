@@ -78,6 +78,7 @@ type options struct {
 	tmpDir          string
 	key             x.SensitiveByteSlice
 	namespaceToLoad uint64
+	preserveNs      bool
 }
 
 type predicate struct {
@@ -108,7 +109,7 @@ func (l *schema) init(ns uint64) {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
-		if ns != math.MaxUint64 {
+		if !opt.preserveNs {
 			i.Predicate = x.NamespaceAttr(ns, i.Predicate)
 		}
 		l.preds[i.Predicate] = i
@@ -258,7 +259,7 @@ func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensi
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	if opt.namespaceToLoad == math.MaxUint64 {
+	if opt.namespaceToLoad == preserveNs {
 		// Verify schema if we are loding into multiple namespaces.
 		if err := validateSchema(op.Schema, l.namespaces); err != nil {
 			return err
@@ -529,7 +530,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			}
 
 			for _, nq := range nqs {
-				if opt.namespaceToLoad != math.MaxUint64 {
+				if !opt.preserveNs {
 					// If do not preserve namespace, use the namespace passed through
 					// `--force-namespace` flag.
 					nq.Namespace = opt.namespaceToLoad
@@ -653,8 +654,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 }
 
 // populateNamespace fetches the schema and extracts the information about the existing namespaces.
-func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, isGalaxyOp bool) error {
-	if !isGalaxyOp {
+func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleNsOp bool) error {
+	if singleNsOp {
 		// The below schema query returns the predicates without the namespace if context does not
 		// have the galaxy operation set. As we are not loading data across namespaces, so existence
 		// of namespace is verified when the user logs in.
@@ -717,7 +718,7 @@ func run() error {
 	case x.GalaxyNamespace:
 		ns := Live.Conf.GetInt64("force-namespace")
 		if ns < 0 {
-			opt.namespaceToLoad = math.MaxUint64
+			opt.preserveNs = true
 		} else {
 			opt.namespaceToLoad = uint64(ns)
 		}
@@ -737,12 +738,14 @@ func run() error {
 		}
 	}()
 	ctx := context.Background()
-	var galaxyOp bool
+	// singleNsOp is set to false, when loading data into a namespace different from the one user
+	// provided credentials for.
+	singleNsOp := true
 	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
 		opt.namespaceToLoad != x.GalaxyNamespace {
-		galaxyOp = true
+		singleNsOp = false
 	}
-	if galaxyOp {
+	if !singleNsOp {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
 		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
@@ -771,12 +774,12 @@ func run() error {
 	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
-	if err := l.populateNamespaces(ctx, dg, galaxyOp); err != nil {
+	if err := l.populateNamespaces(ctx, dg, singleNsOp); err != nil {
 		fmt.Printf("Error while populating namespaces %s\n", err)
 		return err
 	}
 
-	if opt.namespaceToLoad != math.MaxUint64 {
+	if !opt.preserveNs {
 		if _, ok := l.namespaces[opt.namespaceToLoad]; !ok {
 			return errors.Errorf("Cannot load into namespace %#x. It does not exist.",
 				opt.namespaceToLoad)
