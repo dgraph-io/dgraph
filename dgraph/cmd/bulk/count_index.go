@@ -133,13 +133,13 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		fmt.Printf("Writing count index for %q rev=%v\n", pk.Attr, pk.IsReverse())
 	}
 
-	alloc := z.NewAllocator(8 << 20)
+	alloc := z.NewAllocator(8<<20, "CountIndexer.WriteIndex")
 	defer alloc.Release()
 
 	var pl pb.PostingList
 	bm := roaring64.New()
 
-	outBuf := z.NewBuffer(5 << 20)
+	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
 	defer outBuf.Release()
 	encode := func() {
 		if bm.GetCardinality() == 0 {

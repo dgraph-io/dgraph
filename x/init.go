@@ -79,7 +79,7 @@ func BuildDetails() string {
 			"Community License"
 	}
 
-	buf := z.CallocNoRef(1)
+	buf := z.CallocNoRef(1, "X.BuildDetails")
 	jem := len(buf) > 0
 	z.Free(buf)
 

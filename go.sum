@@ -123,6 +123,8 @@ github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Ev
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgraph-io/badger/v3 v3.0.0-20210303071538-42d5e9510a4d h1:6ykqhVkgHypRkqIU95iFL3Ir+sY4bt9+gkElBu7PPQ0=
 github.com/dgraph-io/badger/v3 v3.0.0-20210303071538-42d5e9510a4d/go.mod h1:m0D1mIoSHk/Ph/5nUU1Ft3raZHHQ3M7VBs5Iu1qbdHw=
+github.com/dgraph-io/badger/v3 v3.0.0-20210303185901-6121fdc57546 h1:MpsltqvTNzssvU1j9TX4pxTOeGEpxE2BDNbEzrJBE6I=
+github.com/dgraph-io/badger/v3 v3.0.0-20210303185901-6121fdc57546/go.mod h1:RN2qv9bN6jMtj+yZG0SvS1E25+NQ2cPTGiMgn0glnEA=
 github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2 h1:3STgJCaLdsBynA0FDLqocwk/OdlnrQ5MGbR74C4NvUs=
 github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2/go.mod h1:zCfS4R3E/UC/PhETXJYq/Blia0eCH1EQqKrWDvvimxE=
 github.com/dgraph-io/gqlgen v0.13.2 h1:TNhndk+eHKj5qE7BenKKSYdSIdOGhLqxR1rCiMso9KM=
@@ -137,6 +139,8 @@ github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1 h1:E+NH1+aTO
 github.com/dgraph-io/ristretto v0.0.4-0.20210205182321-f8e4908e34d1/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
 github.com/dgraph-io/ristretto v0.0.4-0.20210223002318-8ec1dc18f880 h1:O/ele7cFBjTncG2sFb2D4BbL5vYk577hSsG6dmBs9AM=
 github.com/dgraph-io/ristretto v0.0.4-0.20210223002318-8ec1dc18f880/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
+github.com/dgraph-io/ristretto v0.0.4-0.20210303184538-12d7dcf7c838 h1:ShF3qLqrZEhsPtlWSIry3w35SBQA5/W1STDSp/b0nvk=
+github.com/dgraph-io/ristretto v0.0.4-0.20210303184538-12d7dcf7c838/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5 h1:9t3OKcvsQlxU9Cu0U55tgvNtaRYVGDr6rUb95P8cSbg=
 github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5/go.mod h1:I8kxPBtSQW3OdQFWonumQdCx2DTmq2WjdnTjGXz3uTM=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
