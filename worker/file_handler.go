@@ -139,7 +139,7 @@ func (h *fileHandler) GetManifest(uri *url.URL) (*MasterManifest, error) {
 	}
 	manifest, err := h.getConsolidatedManifest(uri)
 	if err != nil {
-		return nil, errors.Wrap(err, "GetManifest failed to get consolidated manifest: ")
+		return manifest, errors.Wrap(err, "GetManifest failed to get consolidated manifest: ")
 	}
 	return manifest, nil
 }
