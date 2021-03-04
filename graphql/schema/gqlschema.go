@@ -2554,7 +2554,14 @@ func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bo
 		x.Check2(sch.WriteString(input.String()))
 	}
 
-	if len(schema.Query.Fields) > 0 {
+	queriesToWrite := false
+	for _, fld := range schema.Query.Fields {
+		if !strings.HasPrefix(fld.Name, "__") {
+			queriesToWrite = true
+			break
+		}
+	}
+	if queriesToWrite {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Query\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
