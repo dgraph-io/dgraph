@@ -4986,7 +4986,7 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	}
 	addMissionParams := &GraphQLParams{
 		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $name: String!, $des: String!) {
-			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
+			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId, name: $name}]}]) {
 				mission{
 					id
 					crew {
