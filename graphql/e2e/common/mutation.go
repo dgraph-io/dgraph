@@ -5094,28 +5094,29 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 
 	expectedJSON := `{
 		"addAstronaut": {
-		  "astronaut": [
-			{
-			  "id": "Astronaut1",
-			  "Gus Grissom",
-			  "missions": [
-				{
-				  "id": "Mission1",
-				  "designation": "Apollo1"
-				}
-			  ]
-			},
-			{
-			  "id": "Astronaut2",
-			  "name": "Neil Armstrong",
-			  "missions": [
-				{
-				  "id": "Mission2",
-				  "designation": "Apollo11"
-				}
-			  ]
-			}
-		  ]
+			"astronaut": [
+			  {
+				"id": "Astronaut1",
+				"name": "Gus Grissom",
+				"missions": [
+				  {
+					"id": "Mission1",
+					"designation": "Apollo1"
+				  }
+				]
+			  },
+			  {
+				"id": "Astronaut2",
+				"name": "Neil Armstrong",
+				"missions": [
+				  {
+					"id": "Mission2",
+					"designation": "Apollo11"
+				  }
+				]
+			  }
+			]
+		  }
 		}
 	  }`
 
