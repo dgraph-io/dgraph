@@ -56,11 +56,11 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 			cronPprofMap[pprofs], duration)
 		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, pprofs)
 		if err := saveDebug(source, savePath, duration); err != nil {
-			glog.Errorf("error while saving metric from %s: %s", source, err)
+			glog.Errorf("error while saving pprof from %s: %s", source, err)
 			continue
 		}
 
-		glog.Infof("saving %s metric in %s", pprofs, savePath)
+		glog.Infof("saving %s pprof in %s", pprofs, savePath)
 	}
 
 }
