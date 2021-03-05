@@ -2428,6 +2428,17 @@ func generateUnionString(typ *ast.Definition) string {
 		strings.Join(typ.Types, " | "))
 }
 
+func hasStringifiableFields(typ *ast.Definition) bool {
+	queriesToWrite := false
+	for _, fld := range typ.Fields {
+		if !strings.HasPrefix(fld.Name, "__") {
+			queriesToWrite = true
+			break
+		}
+	}
+	return queriesToWrite
+}
+
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
 // built by completeSchema, and so contains an original set of definitions, the
 // definitions from schemaExtras and generated types, queries and mutations.
@@ -2554,7 +2565,7 @@ func Stringify(schema *ast.Schema, originalTypes []string, apolloServiceQuery bo
 		x.Check2(sch.WriteString(input.String()))
 	}
 
-	if len(schema.Query.Fields) > 0 {
+	if hasStringifiableFields(schema.Query) {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Query\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))

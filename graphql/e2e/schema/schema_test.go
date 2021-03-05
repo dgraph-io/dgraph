@@ -550,6 +550,20 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 		schema, nil).GeneratedSchema)
 }
 
+// TestLargeSchemaUpdate makes sure that updating large schemas (4000 fields with indexes) does not
+// throw any error
+func TestLargeSchemaUpdate(t *testing.T) {
+	numFields := 1000
+
+	schema := "type LargeSchema {"
+	for i := 1; i <= numFields; i++ {
+		schema = schema + "\n" + fmt.Sprintf("field%d: String! @search(by: [regexp])", i)
+	}
+	schema = schema + "\n}"
+
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, nil)
+}
+
 func TestIntrospection(t *testing.T) {
 	// note that both the types implement the same interface and have a field called `name`, which
 	// has exact same name as a field in full introspection query.

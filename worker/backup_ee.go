@@ -14,8 +14,8 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"net/url"
-	"sort"
 	"sync"
 	"time"
 
@@ -211,8 +211,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
+	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{Since: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
-		DropOperations: dropOperations}
+		DropOperations: dropOperations, Path: dir}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)
@@ -247,6 +248,5 @@ func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCred
 	for _, m := range manifests {
 		res = append(res, m)
 	}
-	sort.Slice(res, func(i, j int) bool { return res[i].Path < res[j].Path })
 	return res, nil
 }

@@ -17,11 +17,9 @@ import (
 	"io"
 	"net/url"
 	"sort"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pkg/errors"
 )
@@ -51,6 +49,8 @@ const (
 	// because it used by subsequent incremental backups.
 	// "groups" are the group IDs that participated.
 	backupManifest = `manifest.json`
+
+	tmpManifest = `manifest_tmp.json`
 )
 
 // UriHandler interface is implemented by URI scheme handlers.
@@ -63,7 +63,12 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetManifests returns the list of manfiests for the given backup series ID
+	// GetManifest returns the master manifest, containing information about all the
+	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
+	// then it will return a consolidated master manifest.
+	GetManifest(*url.URL) (*MasterManifest, error)
+
+	// GetManifests returns the list of manifest for the given backup series ID
 	// and backup number at the specified location. If backupNum is set to zero,
 	// all the manifests for the backup series will be returned. If it's greater
 	// than zero, manifests from one to backupNum will be returned.
@@ -76,8 +81,8 @@ type UriHandler interface {
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error
 
-	// CreateManifest prepares the manifest for writing.
-	CreateManifest(*url.URL, *pb.BackupRequest) error
+	// CreateManifest creates the given manifest.
+	CreateManifest(*url.URL, *MasterManifest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// It optionally takes the name of the last directory to consider. Any backup directories
@@ -90,14 +95,6 @@ type UriHandler interface {
 	// given groups. The last manifest of that backup should have the same number of
 	// groups as given list of groups.
 	Verify(*url.URL, *pb.RestoreRequest, []uint32) error
-
-	// ListManifests will scan the provided URI and return the paths to the manifests stored
-	// in that location.
-	ListManifests(*url.URL) ([]string, error)
-
-	// ReadManifest will read the manifest at the given location and load it into the given
-	// Manifest object.
-	ReadManifest(string, *Manifest) error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -175,7 +172,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manifest, error) {
+func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
@@ -186,37 +183,11 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) (map[string]*Manif
 		return nil, errors.Wrap(err, "ListBackupManifests")
 	}
 
-	paths, err := h.ListManifests(uri)
+	m, err := h.GetManifest(uri)
 	if err != nil {
 		return nil, err
 	}
-
-	res := struct {
-		sync.Mutex
-		listedManifests map[string]*Manifest
-	}{
-		listedManifests: make(map[string]*Manifest),
-	}
-
-	var g errgroup.Group
-	for _, path := range paths {
-		path := path // https://golang.org/doc/faq#closures_and_goroutines
-		g.Go(func() error {
-			var m Manifest
-			if err := h.ReadManifest(path, &m); err != nil {
-				return errors.Wrapf(err, "ReadManifest: path=%q", path)
-			}
-			m.Path = path
-			res.Lock()
-			res.listedManifests[path] = &m
-			res.Unlock()
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	return res.listedManifests, nil
+	return m.Manifests, nil
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests

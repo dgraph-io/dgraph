@@ -44,6 +44,16 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	return json.Unmarshal(b, m)
 }
 
+// readMasterManifest reads the master manifest file at path using the handler.
+// Returns nil on success, otherwise an error.
+func (h *fileHandler) readMasterManifest(path string, m *MasterManifest) error {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, m)
+}
+
 func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName string) error {
 	var dir, path string
 
@@ -66,28 +76,17 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 // latest manifest.
 func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Errorf("while GetLatestManifest: %v", err)
+		return nil, errors.Wrap(err, "Get latest manifest failed:")
 	}
 
-	// Find the max Since value from the latest backup.
-	var lastManifest string
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
-			lastManifest = path
-		}
-		return false
-	})
-
-	var m Manifest
-	if lastManifest == "" {
-		return &m, nil
+	manifest, err := h.getConsolidatedManifest(uri)
+	if err != nil {
+		return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
 	}
-
-	if err := h.readManifest(lastManifest, &m); err != nil {
-		return nil, err
+	if len(manifest.Manifests) == 0 {
+		return &Manifest{}, nil
 	}
-	return &m, nil
+	return manifest.Manifests[len(manifest.Manifests)-1], nil
 }
 
 func createIfNotExists(path string) error {
@@ -112,12 +111,37 @@ func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) erro
 }
 
 // CreateManifest completes the backup by writing the manifest to a file.
-func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return errors.Errorf("while CreateManifest: %v", err)
+func (h *fileHandler) CreateManifest(uri *url.URL, manifest *MasterManifest) error {
+	var err error
+	if err = createIfNotExists(uri.Path); err != nil {
+		return errors.Errorf("while WriteManifest: %v", err)
 	}
 
-	return h.createFiles(uri, req, backupManifest)
+	tmpPath := filepath.Join(uri.Path, tmpManifest)
+	if h.fp, err = os.Create(tmpPath); err != nil {
+		return err
+	}
+	if err = json.NewEncoder(h).Encode(manifest); err != nil {
+		return err
+	}
+
+	// Move the tmpManifest to backupManifest
+	path := filepath.Join(uri.Path, backupManifest)
+	return os.Rename(tmpPath, path)
+}
+
+// GetManifest returns the master manifest, if the directory doesn't contain
+// a master manifest, then it will try to return a master manifest by consolidating
+// the manifests.
+func (h *fileHandler) GetManifest(uri *url.URL) (*MasterManifest, error) {
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Errorf("while GetLatestManifest: %v", err)
+	}
+	manifest, err := h.getConsolidatedManifest(uri)
+	if err != nil {
+		return manifest, errors.Wrap(err, "GetManifest failed to get consolidated manifest: ")
+	}
+	return manifest, nil
 }
 
 func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
@@ -126,28 +150,20 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
 		return nil, errors.Errorf("while GetManifests: %v", err)
 	}
 
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	paths := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, suffix)
-	})
-	if len(paths) == 0 {
-		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
+	manifest, err := h.getConsolidatedManifest(uri)
+	if err != nil {
+		return manifest.Manifests, errors.Wrap(err, "GetManifests failed to get consolidated manifest: ")
 	}
-	sort.Strings(paths)
 
-	// Read and filter the files to get the list of files to consider for this restore operation.
-
-	var manifests []*Manifest
-	for _, path := range paths {
-		var m Manifest
-		if err := h.readManifest(path, &m); err != nil {
-			return nil, errors.Wrapf(err, "While reading %q", path)
+	var filtered []*Manifest
+	for _, m := range manifest.Manifests {
+		path := filepath.Join(uri.Path, m.Path)
+		if pathExist(path) {
+			filtered = append(filtered, m)
 		}
-		m.Path = path
-		manifests = append(manifests, &m)
 	}
 
-	return getManifests(manifests, backupId, backupNum)
+	return getManifests(filtered, backupId, backupNum)
 }
 
 // Load uses tries to load any backup files found.
@@ -168,7 +184,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			continue
 		}
 
-		path := filepath.Dir(manifests[i].Path)
+		path := filepath.Join(uri.Path, manifests[i].Path)
 		for gid := range manifest.Groups {
 			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
@@ -206,27 +222,6 @@ func (h *fileHandler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups
 	return verifyRequest(req, manifests, currentGroups)
 }
 
-// ListManifests loads the manifests in the locations and returns them.
-func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Errorf("while ListManifests: %v", err)
-	}
-
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, suffix)
-	})
-	if len(manifests) == 0 {
-		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
-	}
-	sort.Strings(manifests)
-	return manifests, nil
-}
-
-func (h *fileHandler) ReadManifest(path string, m *Manifest) error {
-	return h.readManifest(path, m)
-}
-
 func (h *fileHandler) Close() error {
 	if h.fp == nil {
 		return nil
@@ -251,4 +246,48 @@ func pathExist(path string) bool {
 		return true
 	}
 	return !os.IsNotExist(err) && !os.IsPermission(err)
+}
+
+// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
+func (h *fileHandler) getConsolidatedManifest(uri *url.URL) (*MasterManifest, error) {
+	if err := createIfNotExists(uri.Path); err != nil {
+		return nil, errors.Wrap(err, "While GetLatestManifest")
+	}
+
+	var manifest MasterManifest
+
+	// If there is a master manifest already, we just return it.
+	path := filepath.Join(uri.Path, backupManifest)
+	if pathExist(path) {
+		if err := h.readMasterManifest(path, &manifest); err != nil {
+			return nil, errors.Wrap(err, "Get latest manifest failed to read master manifest: ")
+		}
+		return &manifest, nil
+	}
+
+	// Otherwise, we create a master manifest by going through all the backup directories.
+	var paths []string
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		if !isdir && strings.HasSuffix(path, suffix) {
+			paths = append(paths, path)
+		}
+		return false
+	})
+
+	sort.Strings(paths)
+	var mlist []*Manifest
+
+	for _, path := range paths {
+		var m Manifest
+		if err := h.readManifest(path, &m); err != nil {
+			return nil, errors.Wrap(err, "While Getting latest manifest")
+		}
+		path = filepath.Dir(path)
+		_, path = filepath.Split(path)
+		m.Path = path
+		mlist = append(mlist, &m)
+	}
+	manifest.Manifests = mlist
+	return &manifest, nil
 }

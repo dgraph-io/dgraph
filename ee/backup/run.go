@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -270,14 +269,6 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	var paths []string
-	for path := range manifests {
-		paths = append(paths, path)
-	}
-	sort.Slice(paths, func(i, j int) bool {
-		return paths[i] < paths[j]
-	})
-
 	type backupEntry struct {
 		Path           string              `json:"path"`
 		Since          uint64              `json:"since"`
@@ -292,12 +283,10 @@ func runLsbackupCmd() error {
 	type backupOutput []backupEntry
 
 	var output backupOutput
-	for i := 0; i < len(paths); i++ {
-		path := paths[i]
-		manifest := manifests[path]
+	for _, manifest := range manifests {
 
 		be := backupEntry{
-			Path:      path,
+			Path:      manifest.Path,
 			Since:     manifest.Since,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,

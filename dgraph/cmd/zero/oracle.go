@@ -367,12 +367,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
-		preds := make(map[string]struct{})
-
-		for _, k := range src.Preds {
-			preds[k] = struct{}{}
-		}
-		for pkey := range preds {
+		for _, pkey := range src.Preds {
 			splits := strings.Split(pkey, "-")
 			if len(splits) < 2 {
 				return errors.Errorf("Unable to find group id in %s", pkey)
