@@ -29,7 +29,7 @@ import (
 	"github.com/golang/glog"
 )
 
-func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []string, pprofTypes []string) {
+func saveMetrics(addr, pathPrefix string, seconds uint32, metricTypes []string) {
 	u, err := url.Parse(addr)
 	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
 		u, err = url.Parse("http://" + addr)
@@ -39,9 +39,16 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 		return
 	}
 
+	duration := time.Duration(seconds) * time.Second
+
 	for _, metricType := range metricTypes {
-		source := fmt.Sprintf("%s%s", u.String(),
-			metricMap[metricType])
+		source := u.String() + metricMap[metricType]
+		switch metricType {
+		case "cpu":
+			source += fmt.Sprintf("%s%d", "?seconds=", seconds)
+		case "trace":
+			source += fmt.Sprintf("%s%d", "?seconds=", seconds)
+		}
 		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, metricType)
 		if err := saveDebug(source, savePath, duration); err != nil {
 			glog.Errorf("error while saving metric from %s: %s", source, err)
@@ -50,19 +57,6 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 
 		glog.Infof("saving %s metric in %s", metricType, savePath)
 	}
-
-	for _, pprofs := range pprofTypes {
-		source := fmt.Sprintf("%s%s%s", u.String(),
-			cronPprofMap[pprofs], duration)
-		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, pprofs)
-		if err := saveDebug(source, savePath, duration); err != nil {
-			glog.Errorf("error while saving pprof from %s: %s", source, err)
-			continue
-		}
-
-		glog.Infof("saving %s pprof in %s", pprofs, savePath)
-	}
-
 }
 
 // saveDebug writes the debug info specified in the argument fetching it from the host

@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -29,13 +28,12 @@ import (
 )
 
 type debugInfoCmdOpts struct {
-	alphaAddr      string
-	zeroAddr       string
-	archive        bool
-	directory      string
-	duration       uint32
-	cronPprofTypes []string
-	metricTypes    []string
+	alphaAddr   string
+	zeroAddr    string
+	archive     bool
+	directory   string
+	seconds     uint32
+	metricTypes []string
 }
 
 var (
@@ -43,10 +41,6 @@ var (
 	debugInfoCmd = debugInfoCmdOpts{}
 )
 
-var cronPprofMap = map[string]string{
-	"cpu_profile": "/debug/pprof/profile?seconds=",
-	"trace":       "/debug/pprof/trace?seconds=",
-}
 var metricMap = map[string]string{
 	"jemalloc":     "/jemalloc",
 	"state":        "/state",
@@ -58,6 +52,8 @@ var metricMap = map[string]string{
 	"threadcreate": "/debug/pprof/threadcreate",
 	"block":        "/debug/pprof/block",
 	"mutex":        "/debug/pprof/mutex",
+	"cpu":          "/debug/pprof/profile",
+	"trace":        "/debug/pprof/trace",
 }
 
 var metricList = []string{
@@ -71,10 +67,7 @@ var metricList = []string{
 	"threadcreate",
 	"block",
 	"mutex",
-}
-
-var cronPprofList = []string{
-	"cpu_profile",
+	"cpu",
 	"trace",
 }
 
@@ -102,12 +95,10 @@ func init() {
 		"Directory to write the debug info into.")
 	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
 		"Whether to archive the generated report")
-	flags.Uint32VarP(&debugInfoCmd.duration, "seconds", "s", 30,
+	flags.Uint32VarP(&debugInfoCmd.seconds, "seconds", "s", 30,
 		"Duration for time-based metric collection.")
 	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricList,
 		"List of metrics & profile to dump in the report.")
-	flags.StringSliceVarP(&debugInfoCmd.cronPprofTypes, "cron_pprof", "c", cronPprofList,
-		"time-based pprof")
 
 }
 
@@ -134,18 +125,17 @@ func collectDebugInfo() (err error) {
 }
 
 func collectDebug() {
-	duration := time.Duration(debugInfoCmd.duration) * time.Second
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
 
-		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.metricTypes, debugInfoCmd.cronPprofTypes)
+		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, debugInfoCmd.seconds, debugInfoCmd.metricTypes)
 
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
 
-		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.metricTypes, debugInfoCmd.cronPprofTypes)
+		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, debugInfoCmd.seconds, debugInfoCmd.metricTypes)
 
 	}
 }
