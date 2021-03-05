@@ -29,13 +29,13 @@ import (
 )
 
 type debugInfoCmdOpts struct {
-	alphaAddr string
-	zeroAddr  string
-	archive   bool
-	directory string
-	duration  uint32
-
-	metricTypes []string
+	alphaAddr      string
+	zeroAddr       string
+	archive        bool
+	directory      string
+	duration       uint32
+	cronPprofTypes []string
+	metricTypes    []string
 }
 
 var (
@@ -43,6 +43,10 @@ var (
 	debugInfoCmd = debugInfoCmdOpts{}
 )
 
+var cronPprofMap = map[string]string{
+	"cpu_profile": "/debug/pprof/profile?seconds=",
+	"trace":       "/debug/pprof/trace?seconds=",
+}
 var metricMap = map[string]string{
 	"jemalloc":     "/jemalloc",
 	"state":        "/state",
@@ -50,9 +54,7 @@ var metricMap = map[string]string{
 	"vars":         "/debug/vars",
 	"metrics":      "/metrics",
 	"heap":         "/debug/pprof/heap",
-	"cpu_profile":  "/debug/pprof/profile",
-	"trace":        "/debug/pprof/trace",
-	"goroutine":    "/debug/pprof/goroutine",
+	"goroutine":    "/debug/pprof/goroutine?debug=2",
 	"threadcreate": "/debug/pprof/threadcreate",
 	"block":        "/debug/pprof/block",
 	"mutex":        "/debug/pprof/mutex",
@@ -65,12 +67,15 @@ var metricList = []string{
 	"vars",
 	"metrics",
 	"heap",
-	"cpu_profile",
-	"trace",
 	"goroutine",
 	"threadcreate",
 	"block",
 	"mutex",
+}
+
+var cronPprofList = []string{
+	"cpu_profile",
+	"trace",
 }
 
 func init() {
@@ -101,6 +106,9 @@ func init() {
 		"Duration for time-based metric collection.")
 	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricList,
 		"List of metrics & profile to dump in the report.")
+	flags.StringSliceVarP(&debugInfoCmd.cronPprofTypes, "cron_pprof", "c", cronPprofList,
+		"time-based pprof")
+
 }
 
 func collectDebugInfo() (err error) {
@@ -117,7 +125,7 @@ func collectDebugInfo() (err error) {
 	}
 	glog.Infof("using directory %s for debug info dump.", debugInfoCmd.directory)
 
-	collectMetrics()
+	collectDebug()
 
 	if debugInfoCmd.archive {
 		return archiveDebugInfo()
@@ -125,18 +133,20 @@ func collectDebugInfo() (err error) {
 	return nil
 }
 
-func collectMetrics() {
+func collectDebug() {
 	duration := time.Duration(debugInfoCmd.duration) * time.Second
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
 
-		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.metricTypes)
+		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.metricTypes, debugInfoCmd.cronPprofTypes)
+
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
 
-		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.metricTypes)
+		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.metricTypes, debugInfoCmd.cronPprofTypes)
+
 	}
 }
 

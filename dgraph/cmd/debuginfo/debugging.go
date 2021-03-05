@@ -29,7 +29,7 @@ import (
 	"github.com/golang/glog"
 )
 
-func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []string) {
+func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []string, pprofTypes []string) {
 	u, err := url.Parse(addr)
 	if err != nil || (u.Host == "" && u.Scheme != "" && u.Scheme != "file") {
 		u, err = url.Parse("http://" + addr)
@@ -50,9 +50,22 @@ func saveMetrics(addr, pathPrefix string, duration time.Duration, metricTypes []
 
 		glog.Infof("saving %s metric in %s", metricType, savePath)
 	}
+
+	for _, pprofs := range pprofTypes {
+		source := fmt.Sprintf("%s%s%s", u.String(),
+			cronPprofMap[pprofs], duration)
+		savePath := fmt.Sprintf("%s%s.gz", pathPrefix, pprofs)
+		if err := saveDebug(source, savePath, duration); err != nil {
+			glog.Errorf("error while saving metric from %s: %s", source, err)
+			continue
+		}
+
+		glog.Infof("saving %s metric in %s", pprofs, savePath)
+	}
+
 }
 
-// saveDebug writes the debug specified in the argument fetching it from the host
+// saveDebug writes the debug info specified in the argument fetching it from the host
 // provided in the configuration
 func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 	var err error
@@ -72,7 +85,7 @@ func saveDebug(sourceURL, filePath string, duration time.Duration) error {
 	defer resp.Close()
 	out, err := os.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("error while creating dump file: %s", err)
+		return fmt.Errorf("error while creating debug file: %s", err)
 	}
 	_, err = io.Copy(out, resp)
 	return err
