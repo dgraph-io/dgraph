@@ -56,11 +56,15 @@ func init() {
 			introducedIn: &version{major: 21, minor: 3, patch: 0},
 			changes: []*change{{
 				name: "Upgrade CORS",
-				description: "This updates the ACL nodes to use the new ACL model introduced in" +
-					" v20.03.0. This is applied while upgrading from v1.2.2+ to v20.03.0+",
-				minFromVersion: &version{major: 20, minor: 11, patch: 0},
+				description: "This updates the GraphQL schema to contain the CORS information. " +
+					"Some of the dgraph internal predicates are removed in v21.03.0. dgraph.cors " +
+					"that used to store CORS information is one of them. " +
+					"For more info, see: https://github.com/dgraph-io/dgraph/pull/7431",
+				minFromVersion: &version{major: 20, minor: 7, patch: 0},
 				applyFunc:      upgradeCORS,
 			}},
+			// another change in 20.11.0 version is regarding persistant query that used another
+			// depreciated predicate. This upgrade tool does not upgrade that information.
 		},
 	}
 }

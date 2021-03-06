@@ -79,7 +79,13 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 		Variables: map[string]interface{}{"sch": gqlSchema},
 		Headers:   header,
 	}
-	adminUrl := "http://" + Upgrade.Conf.GetString(alphaHttp) + "/admin"
+
+	alpha, err := httpAddr()
+	if err != nil {
+		return errors.Wrapf(err, "unable to parse http address from grpc address")
+	}
+
+	adminUrl := "http://" + alpha + "/admin"
 	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
 	if err != nil {
 		return err
@@ -174,7 +180,7 @@ func upgradeCORS() error {
 	fmt.Printf("%+v\n", corsList)
 	fmt.Printf("%+v\n", gqlSchema)
 
-	// Update the schema.
+	// Update the GraphQL schema.
 	if err := updateGQLSchema(jwt, gqlSchema, corsList); err != nil {
 		return nil
 	}

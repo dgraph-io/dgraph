@@ -44,7 +44,6 @@ const (
 	acl       = "acl"
 	dryRun    = "dry-run"
 	alpha     = "alpha"
-	alphaHttp = "alphaHttp"
 	user      = "user"
 	password  = "password"
 	deleteOld = "deleteOld"
@@ -154,7 +153,6 @@ func init() {
 	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
 	flag.Bool(dryRun, false, "dry-run the upgrade")
 	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.String(alphaHttp, "127.0.0.1:8080", "Dgraph Alpha HTTP server address")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
 	flag.BoolP(deleteOld, "d", true, "Delete the older ACL types/predicates")
