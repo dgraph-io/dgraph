@@ -68,7 +68,14 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+	ctx, err := x.AttachJWTNamespace(ctx)
+	if err != nil {
+		// We should allow login request without JWT tokens.
+		if err == x.ErrNoJwt && gqlReq.OperationName == "login" {
+			return nil
+		}
+		return err
+	}
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {

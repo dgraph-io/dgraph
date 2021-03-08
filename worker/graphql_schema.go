@@ -81,7 +81,11 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, errUpdatingGraphQLSchemaOnNonGroupOneLeader
 	}
 
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.AttachJWTNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While updating gql schema")
