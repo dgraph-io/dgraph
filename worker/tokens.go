@@ -84,6 +84,9 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	}
 
 	tokenizers := schema.State().Tokenizer(ctx, attr)
+	if tokenizers == nil {
+		return nil, errors.Errorf("Schema state not found for %s.", attr)
+	}
 	for _, t := range tokenizers {
 		// If function is eq and we found a tokenizer that's !Lossy(), lets return it
 		switch f {
