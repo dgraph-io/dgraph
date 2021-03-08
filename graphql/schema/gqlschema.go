@@ -1383,9 +1383,10 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive. If the field is an argument to `@provides` directive
 		// then it can't be ignored.
-		if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
+
 		filter.EnumValues = append(filter.EnumValues,
 			&ast.EnumValueDefinition{Name: fld.Name})
 	}
@@ -1508,7 +1509,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive. If the field is an argument to `@provides` directive
 		// then it can't be ignored.
-		if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 
@@ -1608,7 +1609,7 @@ func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap
 
 // Returns true if the field is of type which can be summed. Eg: int, int64, float
 func isSummable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
-	if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+	if externalAndNonKeyField(fld, defn, providesTypeMap) {
 		return false
 	}
 	return summable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
@@ -2175,7 +2176,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		// Ignore Fields with @external directives also as they shouldn't be present
 		// in the Patch Type also. If the field is an argument to `@provides` directive
 		// then it should be presnt.
-		if hasExternal(fld) && !providesTypeMap[fld.Name] {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 		// Fields with @custom/@lambda directive should not be part of mutation input,
@@ -2221,7 +2222,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTy
 
 		// Ignore Fields with @external directives and excluding those which are present
 		// as an argument in @key directive
-		if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 
@@ -2259,7 +2260,7 @@ func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.Field
 		if isIDField(defn, fld) {
 			// Excluding those fields which are external and are not @key and are not
 			// used as an argument in `@provides` directive.
-			if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+			if externalAndNonKeyField(fld, defn, providesTypeMap) {
 				continue
 			}
 			newFld := *fld
@@ -2292,7 +2293,7 @@ func getXIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.Fiel
 		if hasIDDirective(fld) {
 			// Excluding those fields which are external and are not @key and are not
 			// used as an argument in `@provides` directive.
-			if hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name] {
+			if externalAndNonKeyField(fld, defn, providesTypeMap) {
 				continue
 			}
 			newFld := *fld
