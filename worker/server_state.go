@@ -44,10 +44,10 @@ const (
 	SecurityDefaults  = `token=; whiltelist=;`
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; 
-		lambda-url=;`
-	CDCDefaults = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; 
-	client-key=;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
+		`lambda-url=;`
+	CDCDefaults = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; ` +
+		`client-key=;`
 )
 
 // ServerState holds the state of the Dgraph server.
