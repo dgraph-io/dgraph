@@ -1088,11 +1088,14 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 }
 
 func shouldSplit(plist *pb.PostingList) (bool, error) {
-	r := roaring64.New()
-	if err := codec.FromPostingList(r, plist); err != nil {
-		return false, err
+	if plist.Size() >= maxListSize {
+		r := roaring64.New()
+		if err := codec.FromPostingList(r, plist); err != nil {
+			return false, err
+		}
+		return r.GetCardinality() > 1, nil
 	}
-	return plist.Size() >= maxListSize && r.GetCardinality() > 1, nil
+	return false, nil
 }
 
 func (ro *rollupOutput) runSplits() error {
