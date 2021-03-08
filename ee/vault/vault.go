@@ -25,6 +25,6 @@ import (
 )
 
 func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
-	glog.Fatalf("vault: this is an enterprise-only feature")
+	glog.Exit("flags: vault is an enterprise-only feature")
 	return
 }

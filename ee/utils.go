@@ -28,6 +28,6 @@ import (
 // through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
 // this function exits with an error.
 func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
-	glog.Fatalf("flags: acl / encryption is an enterprise-only feature")
+	glog.Exit("flags: acl / encryption is an enterprise-only feature")
 	return nil, nil
 }
