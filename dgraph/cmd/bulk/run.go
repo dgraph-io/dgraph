@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -192,10 +193,7 @@ func run() {
 	opt.BlockCacheSize = (cachePercent[0] * totalCache) / 100
 	opt.IndexCacheSize = (cachePercent[1] * totalCache) / 100
 
-	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return
-	}
+	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
