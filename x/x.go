@@ -38,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v3"
@@ -438,7 +439,7 @@ func AttachJWTNamespace(ctx context.Context) (context.Context, error) {
 	if WorkerConfig.AclEnabled {
 		ns, err := ExtractJWTNamespace(ctx)
 		if err != nil {
-			return ctx, err
+			return ctx, status.Error(codes.Unauthenticated, err.Error())
 		}
 		ctx = AttachNamespace(ctx, ns)
 	} else {
