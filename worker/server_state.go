@@ -31,13 +31,21 @@ import (
 )
 
 const (
-	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
-	AclDefaults       = `access-ttl=6h; refresh-ttl=30d;`
-	SecurityDefaults  = ``
-	RaftDefaults      = `snapshot-after=10000; pending-proposals=256; learner=false;`
-	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s;`
+	// NOTE: SuperFlag defaults must include every possible option that can be used. This way, if a
+	//       user makes a typo while defining a SuperFlag we can catch it and fail right away rather
+	//       than fail during runtime while trying to retrieve an option that isn't there.
+	//
+	//       For easy readability, keep the options without default values (if any) at the end of
+	//       the *Defaults string.
 	BadgerDefaults    = `compression=snappy; goroutines=8;`
+	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
+	SecurityDefaults  = `token=; whiltelist=;`
+	AclDefaults       = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
+	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
+	LudicrousDefaults = `enabled=false; concurrency=2000;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url=;`
+	CDCDefaults       = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; client-key=;`
+	AuditDefaults     = `compress=false; output=; encrypt-file=; days=; size=;`
 )
 
 // ServerState holds the state of the Dgraph server.
