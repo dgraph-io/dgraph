@@ -374,7 +374,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	ctx, err = x.AttachJWTNamespace(ctx)
 
 	// We should allow login request without JWT tokens.
-	if err != nil && !(err == x.ErrNoJwt && gqlReq.OperationName == "login") {
+	if err != nil && gqlReq.OperationName == "login" {
 		return schema.ErrorResponse(err)
 	}
 
