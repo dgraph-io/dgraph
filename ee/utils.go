@@ -18,6 +18,11 @@
 
 package ee
 
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/viper"
+)
+
 func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 	return
 }
