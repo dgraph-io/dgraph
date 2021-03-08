@@ -74,10 +74,11 @@ type AuthMeta struct {
 func (a *AuthMeta) validate() error {
 	var fields string
 
-	// If JWKUrl is provided, we don't expect (VerificationKey, Algo),
-	// they are needed only if JWKUrl is not present there.
+	// If JWKUrl/JWKUrls is provided, we don't expect (VerificationKey, Algo),
+	// they are needed only if JWKUrl/JWKUrls is not present there.
 	if len(a.JWKUrls) != 0 || a.JWKUrl != "" {
 
+		// User cannot provide both JWKUrl and JWKUrls.
 		if len(a.JWKUrls) != 0 && a.JWKUrl != "" {
 			return fmt.Errorf("expecting either JWKUrl or JWKUrls, both were given")
 		}
@@ -344,11 +345,10 @@ func GetJwtToken(ctx context.Context) string {
 	return jwtToken[0]
 }
 
+// validateThroughJWKUrl validates the JWT token against the given list of JWKUrls.
+// It returns an error only if the token is not validated against even one of the
+// JWKUrl.
 func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
-	if len(a.JWKUrls) == 0 {
-		return nil, errors.Errorf("no JWKUrl present")
-	}
-
 	var err error
 	var token *jwt.Token
 	for i := 0; i < len(a.JWKUrls); i++ {
