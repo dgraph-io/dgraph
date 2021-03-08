@@ -278,8 +278,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		schema: `
 		name: string @index(term) .
 `,
-		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
-			Namespace: x.GalaxyNamespace},
+		creds:   galaxyCreds,
 		forceNs: int64(ns),
 	}))
 
@@ -301,26 +300,46 @@ func TestLiveLoadMulti(t *testing.T) {
 
 	// Try loading into a multiple namespaces.
 	err = liveLoadData(t, &liveOpts{
-		rdfs:   fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
-		schema: `[0x123456] name: string @index(term) .`,
-		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
-			Namespace: x.GalaxyNamespace},
+		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <%#x> .`, ns),
+		schema:  `[0x123456] name: string @index(term) .`,
+		creds:   galaxyCreds,
 		forceNs: -1,
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Namespace 0x123456 doesn't exist for pred")
 
 	err = liveLoadData(t, &liveOpts{
-		rdfs:   fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
-		schema: `name: string @index(term) .`,
-		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password",
-			Namespace: x.GalaxyNamespace},
+		rdfs:    fmt.Sprintf(`_:c <name> "ns eon" <0x123456> .`),
+		schema:  `name: string @index(term) .`,
+		creds:   galaxyCreds,
 		forceNs: -1,
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot load nquad")
 
 	// Load data by non-galaxy user.
+	err = liveLoadData(t, &liveOpts{
+		rdfs: `_:c <name> "ns hola" .`,
+		schema: `
+		name: string @index(term) .
+`,
+		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
+		forceNs: -1,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot load into namespace")
+
+	err = liveLoadData(t, &liveOpts{
+		rdfs: `_:c <name> "ns hola" .`,
+		schema: `
+		name: string @index(term) .
+`,
+		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
+		forceNs: 10,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot load into namespace")
+
 	require.NoError(t, liveLoadData(t, &liveOpts{
 		rdfs: fmt.Sprintf(`
 		_:a <name> "ns free" .
@@ -330,10 +349,8 @@ func TestLiveLoadMulti(t *testing.T) {
 		schema: `
 		name: string @index(term) .
 `,
-		creds:   &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
-		forceNs: -1, // this will be ignored.
+		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
 	}))
-
 	resp = testutil.QueryData(t, dc1, query3)
 	testutil.CompareJSON(t,
 		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
