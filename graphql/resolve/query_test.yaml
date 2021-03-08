@@ -1357,7 +1357,7 @@
     query {
       queryAuthor {
         name
-        posts(filter: { title: { anyofterms: "GraphQL" } }, order: { asc: numLikes,then:{desc:title}}, first: 10, offset: 10) {
+        posts(filter: { title: { anyofterms: "GraphQL" } }, order: { asc: numLikes, then: { desc: title } }, first: 10, offset: 10) {
           title
         }
       }
