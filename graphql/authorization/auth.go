@@ -57,8 +57,9 @@ var (
 type AuthMeta struct {
 	VerificationKey string
 	JWKUrl          string
-	jwkSet          *jose.JSONWebKeySet
-	expiryTime      time.Time
+	JWKUrls         []string
+	jwkSet          []*jose.JSONWebKeySet
+	expiryTime      []time.Time
 	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header          string
 	Namespace       string
@@ -75,9 +76,14 @@ func (a *AuthMeta) validate() error {
 
 	// If JWKUrl is provided, we don't expect (VerificationKey, Algo),
 	// they are needed only if JWKUrl is not present there.
-	if a.JWKUrl != "" {
+	if len(a.JWKUrls) != 0 || a.JWKUrl != "" {
+
+		if len(a.JWKUrls) != 0 && a.JWKUrl != "" {
+			return fmt.Errorf("expecting either JWKUrl or JWKUrls, both were given")
+		}
+
 		if a.VerificationKey != "" || a.Algo != "" {
-			return fmt.Errorf("expecting either JWKUrl or (VerificationKey, Algo), both were given")
+			return fmt.Errorf("expecting either JWKUrl/JWKUrls or (VerificationKey, Algo), both were given")
 		}
 
 		// Audience should be a required field if JWKUrl is provided.
@@ -86,7 +92,7 @@ func (a *AuthMeta) validate() error {
 		}
 	} else {
 		if a.VerificationKey == "" {
-			fields = " `Verification key`/`JWKUrl`"
+			fields = " `Verification key`/`JWKUrl`/`JWKUrls`"
 		}
 
 		if a.Algo == "" {
@@ -125,6 +131,15 @@ func Parse(schema string) (*AuthMeta, error) {
 			return nil, algoErr
 		}
 
+		if meta.JWKUrl != "" {
+			meta.JWKUrls = append(meta.JWKUrls, meta.JWKUrl)
+			meta.JWKUrl = ""
+		}
+
+		if len(meta.JWKUrls) != 0 {
+			meta.expiryTime = make([]time.Time, len(meta.JWKUrls))
+			meta.jwkSet = make([]*jose.JSONWebKeySet, len(meta.JWKUrls))
+		}
 		return &meta, nil
 	}
 
@@ -329,16 +344,18 @@ func GetJwtToken(ctx context.Context) string {
 	return jwtToken[0]
 }
 
-func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
-	var token *jwt.Token
+func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
+	if len(a.JWKUrls) == 0 {
+		return nil, errors.Errorf("no JWKUrl present")
+	}
+
 	var err error
-	// Verification through JWKUrl
-	if a.JWKUrl != "" {
-		if a.isExpired() {
-			err = a.refreshJWK()
-			if err != nil {
-				return nil, errors.Wrap(err, "while refreshing JWK from the URL")
-			}
+	var token *jwt.Token
+	for i := 0; i < len(a.JWKUrls); i++ {
+		a.isExpired(i)
+		err = a.refreshJWK(i)
+		if err != nil {
+			return nil, errors.Wrap(err, "while refreshing JWK from the URL")
 		}
 
 		token, err =
@@ -348,12 +365,26 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 					return nil, errors.Errorf("kid not present in JWT")
 				}
 
-				signingKeys := a.jwkSet.Key(kid.(string))
+				signingKeys := a.jwkSet[0].Key(kid.(string))
 				if len(signingKeys) == 0 {
 					return nil, errors.Errorf("Invalid kid")
 				}
 				return signingKeys[0].Key, nil
 			}, jwt.WithoutAudienceValidation())
+
+		if err == nil {
+			return token, nil
+		}
+	}
+	return nil, err
+}
+
+func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
+	var token *jwt.Token
+	var err error
+	// Verification through JWKUrl
+	if len(a.JWKUrls) != 0 {
+		token, err = a.validateThroughJWKUrl(jwtStr)
 	} else {
 		if a.Algo == "" {
 			return nil, fmt.Errorf(
@@ -399,12 +430,16 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 
 // FetchJWKs fetches the JSON Web Key set from a JWKUrl. It acquires a Lock over a as some of the
 // properties of AuthMeta are modified in the process.
-func (a *AuthMeta) FetchJWKs() error {
-	if a.JWKUrl == "" {
+func (a *AuthMeta) FetchJWKs(i int) error {
+	if len(a.JWKUrls) == 0 {
 		return errors.Errorf("No JWKUrl supplied")
 	}
 
-	req, err := http.NewRequest("GET", a.JWKUrl, nil)
+	if len(a.JWKUrls) <= i {
+		return errors.Errorf("not enough JWKUrls")
+	}
+
+	req, err := http.NewRequest("GET", a.JWKUrls[i], nil)
 	if err != nil {
 		return err
 	}
@@ -430,9 +465,9 @@ func (a *AuthMeta) FetchJWKs() error {
 		return err
 	}
 
-	a.jwkSet = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
-	for i, jwk := range jwkArray.JWKs {
-		err = a.jwkSet.Keys[i].UnmarshalJSON(jwk)
+	a.jwkSet[i] = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
+	for k, jwk := range jwkArray.JWKs {
+		err = a.jwkSet[i].Keys[k].UnmarshalJSON(jwk)
 		if err != nil {
 			return err
 		}
@@ -447,18 +482,18 @@ func (a *AuthMeta) FetchJWKs() error {
 	}
 
 	if maxAge == 0 {
-		a.expiryTime = time.Time{}
+		a.expiryTime[i] = time.Time{}
 	} else {
-		a.expiryTime = time.Now().Add(time.Duration(maxAge) * time.Second)
+		a.expiryTime[i] = time.Now().Add(time.Duration(maxAge) * time.Second)
 	}
 
 	return nil
 }
 
-func (a *AuthMeta) refreshJWK() error {
+func (a *AuthMeta) refreshJWK(i int) error {
 	var err error
 	for i := 0; i < 3; i++ {
-		err = a.FetchJWKs()
+		err = a.FetchJWKs(i)
 		if err == nil {
 			return nil
 		}
@@ -471,18 +506,18 @@ func (a *AuthMeta) refreshJWK() error {
 // if expiryTime is equal to 0 which means there
 // is no expiry time of the JWKs, so it always
 // returns false
-func (a *AuthMeta) isExpired() bool {
-	if a.expiryTime.IsZero() {
+func (a *AuthMeta) isExpired(i int) bool {
+	if a.expiryTime[i].IsZero() {
 		return false
 	}
-	return time.Now().After(a.expiryTime)
+	return time.Now().After(a.expiryTime[i])
 }
 
 // initSigningMethod takes the current Algo value, validates it's a supported SigningMethod, then sets the SigningMethod
 // field.
 func (a *AuthMeta) initSigningMethod() error {
 	// configurations using JWK URLs do not use signing methods.
-	if a.JWKUrl != "" {
+	if len(a.JWKUrls) != 0 || a.JWKUrl != "" {
 		return nil
 	}
 

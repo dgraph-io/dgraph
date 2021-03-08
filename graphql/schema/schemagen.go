@@ -403,11 +403,13 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
 	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+	if metaInfo.authMeta != nil && len(metaInfo.authMeta.JWKUrls) != 0 {
 		metaInfo.authMeta.InitHttpClient()
-		fetchErr := metaInfo.authMeta.FetchJWKs()
-		if fetchErr != nil {
-			return nil, fetchErr
+		for i := 0; i < len(metaInfo.authMeta.JWKUrls); i++ {
+			fetchErr := metaInfo.authMeta.FetchJWKs(i)
+			if fetchErr != nil {
+				return nil, fetchErr
+			}
 		}
 	}
 
