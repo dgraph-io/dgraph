@@ -37,15 +37,17 @@ const (
 	//
 	//       For easy readability, keep the options without default values (if any) at the end of
 	//       the *Defaults string.
+	AclDefaults       = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
+	AuditDefaults     = `compress=false; output=; encrypt-file=; days=; size=;`
 	BadgerDefaults    = `compression=snappy; goroutines=8;`
 	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whiltelist=;`
-	AclDefaults       = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; lambda-url=;`
-	CDCDefaults       = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; client-key=;`
-	AuditDefaults     = `compress=false; output=; encrypt-file=; days=; size=;`
+	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; 
+		lambda-url=;`
+	CDCDefaults = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; 
+	client-key=;`
 )
 
 // ServerState holds the state of the Dgraph server.
