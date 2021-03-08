@@ -6,8 +6,6 @@ go 1.12
 // replace github.com/dgraph-io/ristretto => /home/mrjn/go/src/github.com/dgraph-io/ristretto
 // replace github.com/dgraph-io/roaring => /home/mrjn/go/src/github.com/dgraph-io/roaring
 
-replace github.com/dgraph-io/ristretto => /home/karl/go/src/github.com/dgraph-io/ristretto
-
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -25,7 +23,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.8
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
-	github.com/dgraph-io/ristretto v0.0.4-0.20210223002318-8ec1dc18f880
+	github.com/dgraph-io/ristretto v0.0.4-0.20210308215531-9b320d0a70ed
 	github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
