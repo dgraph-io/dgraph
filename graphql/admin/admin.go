@@ -196,7 +196,8 @@ const (
 		format: String
 
 		"""
-		Namespace for the export, if no value is given then it exports all namespaces.
+		Namespace for the export in multi-tenant cluster. Users from guardians of galaxy can export
+		all namespaces by passing a negative value or specific namespaceId to export that namespace.
 		"""
 		namespace: Int
 
