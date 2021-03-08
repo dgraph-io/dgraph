@@ -1087,10 +1087,22 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	return 1, math.MaxUint64
 }
 
+func shouldSplit(plist *pb.PostingList) (bool, error) {
+	r := roaring64.New()
+	if err := codec.FromPostingList(r, plist); err != nil {
+		return false, err
+	}
+	return plist.Size() >= maxListSize && r.GetCardinality() > 1, nil
+}
+
 func (ro *rollupOutput) runSplits() error {
 top:
 	for startUid, pl := range ro.parts {
-		if pl.Size() >= maxListSize {
+		should, err := shouldSplit(pl)
+		if err != nil {
+			return err
+		}
+		if should {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
@@ -1103,7 +1115,6 @@ top:
 
 func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
-	// x.AssertTrue(pl.Size() >= maxListSize)
 
 	r := roaring64.New()
 	if err := codec.FromPostingList(r, pl); err != nil {
@@ -1135,11 +1146,6 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
 
-	// if startUid == uint64(126) {
-	// 	fmt.Printf("Start Split %d. First Part (%d -> %d, %d). Second (%d -> %d, %d)\n",
-	// 		startUid, r.Minimum(), r.Maximum(), len(newpl.Postings),
-	// 		nr.Minimum(), nr.Maximum(), len(pl.Postings))
-	// }
 	return nil
 }
 
