@@ -264,7 +264,7 @@ func TestInvalidAuthInfo(t *testing.T) {
 	authSchema, err := testutil.AppendJWKAndVerificationKey(sch)
 	require.NoError(t, err)
 	_, err = schema.NewHandler(string(authSchema), false)
-	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl or (VerificationKey, Algo), both were given"))
+	require.Error(t, err, fmt.Errorf("Expecting either JWKUrl/JWKUrls or (VerificationKey, Algo), both were given"))
 }
 
 func TestMissingAudienceWithJWKUrl(t *testing.T) {
@@ -293,7 +293,8 @@ func TestVerificationWithJWKUrl(t *testing.T) {
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
 	require.Equal(t, metainfo.VerificationKey, "")
-	require.Equal(t, metainfo.JWKUrl, "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+	require.Equal(t, metainfo.JWKUrl, "")
+	require.Equal(t, metainfo.JWKUrls, []string{"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"})
 
 	testCase := struct {
 		name  string
