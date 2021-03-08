@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -61,20 +59,6 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 	}
 
 	return dg, conn, nil
-}
-
-// constructs the http address from the given grpc address.
-func httpAddr() (string, error) {
-	alpha := Upgrade.Conf.GetString(alpha)
-	u, err := url.Parse(alpha)
-	if err != nil {
-		return "", err
-	}
-	var httpPort uint64
-	if port, err := strconv.ParseUint(u.Port(), 0, 64); err != nil {
-		httpPort = port - 100 // Based on the fact that grpc and http port differ by 100 in alpha.
-	}
-	return u.Hostname() + strconv.FormatUint(httpPort, 10), nil
 }
 
 // getAuthToken gets the auth token from by logging into the cluster.

@@ -60,10 +60,10 @@ func init() {
 					"Some of the dgraph internal predicates are removed in v21.03.0. dgraph.cors " +
 					"that used to store CORS information is one of them. " +
 					"For more info, see: https://github.com/dgraph-io/dgraph/pull/7431",
-				minFromVersion: &version{major: 20, minor: 7, patch: 0},
+				minFromVersion: &version{major: 20, minor: 11, patch: 0},
 				applyFunc:      upgradeCORS,
 			}},
-			// another change in 20.11.0 version is regarding persistant query that used another
+			// another change in 21.03.0 version is regarding persistant query that used another
 			// depreciated predicate. This upgrade tool does not upgrade that information.
 		},
 	}

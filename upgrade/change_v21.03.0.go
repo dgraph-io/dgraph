@@ -55,6 +55,7 @@ type schema struct {
 
 func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 	if len(gqlSchema) == 0 || len(corsList) == 0 {
+		fmt.Println("Nothing to update in GraphQL shchema. Either schema or cors not found.")
 		return nil
 	}
 	gqlSchema += "\n\n\n# Below schema elements will only work for dgraph" +
@@ -71,8 +72,6 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
 				gqlSchema {
 					id
-					schema
-					generatedSchema
 				}
 			}
 		}`,
@@ -80,12 +79,7 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 		Headers:   header,
 	}
 
-	alpha, err := httpAddr()
-	if err != nil {
-		return errors.Wrapf(err, "unable to parse http address from grpc address")
-	}
-
-	adminUrl := "http://" + alpha + "/admin"
+	adminUrl := "http://" + Upgrade.Conf.GetString(alphaHttp) + "/admin"
 	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
 	if err != nil {
 		return err
@@ -93,6 +87,7 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 	if len(resp.Errors) > 0 {
 		return errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
 	}
+	fmt.Println("Successfully updated the GraphQL schema.")
 	return nil
 }
 
@@ -109,6 +104,9 @@ var depreciatedTypes = map[string]struct{}{
 }
 
 func dropDepreciated(dg *dgo.Dgraph) error {
+	if !Upgrade.Conf.GetBool("deleteOld") {
+		return nil
+	}
 	for pred := range depreciatedPreds {
 		op := &api.Operation{
 			DropOp:    api.Operation_ATTR,
@@ -127,6 +125,7 @@ func dropDepreciated(dg *dgo.Dgraph) error {
 			return fmt.Errorf("error deleting old predicate: %w", err)
 		}
 	}
+	fmt.Println("Successfully dropped the depreciated predicates")
 	return nil
 }
 
@@ -177,12 +176,9 @@ func upgradeCORS() error {
 		}
 	}
 
-	fmt.Printf("%+v\n", corsList)
-	fmt.Printf("%+v\n", gqlSchema)
-
 	// Update the GraphQL schema.
 	if err := updateGQLSchema(jwt, gqlSchema, corsList); err != nil {
-		return nil
+		return err
 	}
 
 	// Drop all the depreciated predicates and types.

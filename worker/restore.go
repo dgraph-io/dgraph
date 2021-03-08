@@ -44,10 +44,9 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 		return LoadResult{Err: err}
 	}
 
-	var isOld bool
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	result := LoadBackup(location, backupId, 0, nil,
+	return LoadBackup(location, backupId, 0, nil,
 		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -93,172 +92,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 			if err != nil {
 				return 0, 0, err
 			}
-			isOld = in.isOld
 			return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
-
-	if result.Err == nil && isOld {
-		// Group 1 contains all the internal predicates.
-		dir := filepath.Join(pdir, fmt.Sprintf("p%d", 1))
-		pstore, result.Err = badger.OpenManaged(badger.DefaultOptions(dir).
-			WithCompression(ctype).
-			WithZSTDCompressionLevel(clevel).
-			WithSyncWrites(false).
-			WithBlockCacheSize(100 * (1 << 20)).
-			WithIndexCacheSize(100 * (1 << 20)).
-			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key))
-		if result.Err != nil {
-			return result
-		}
-		defer pstore.Close()
-		result.Err = fixRestore()
-	}
-	return result
-}
-
-func getData(attr string, fn func(item *badger.Item) error) error {
-	return pstore.View(func(txn *badger.Txn) error {
-		attr = x.GalaxyAttr(attr)
-		initKey := x.ParsedKey{
-			Attr: attr,
-		}
-		prefix := initKey.DataPrefix()
-		// We expect a single node for predicate like dgraph.cors. But we have seen bugs where there
-		// have been more than one cors node. In that case, we pick up the one with higher UID.
-		startKey := append(x.DataKey(attr, math.MaxUint64))
-
-		itOpt := badger.DefaultIteratorOptions
-		itOpt.AllVersions = true
-		itOpt.Reverse = true
-		itOpt.Prefix = prefix
-		itr := txn.NewIterator(itOpt)
-		defer itr.Close()
-		for itr.Seek(startKey); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			if item.UserMeta() != posting.BitCompletePosting {
-				// We expect only complete posting list.
-				return errors.Errorf("item does not contain a complete posting.")
-			}
-			if err := fn(item); err != nil {
-				return err
-			}
-			break
-		}
-		return nil
-	})
-}
-
-func updateGqlSchema(cors [][]byte) error {
-	var entry *badger.Entry
-	var version uint64
-	err := getData("dgraph.graphql.schema", func(item *badger.Item) error {
-		var err error
-		entry.Key = item.KeyCopy(nil)
-		entry.Value, err = item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		entry.UserMeta = item.UserMeta()
-		entry.ExpiresAt = item.ExpiresAt()
-		version = item.Version()
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if entry == nil {
-		// We haven't found any graphql schema. It is safe to ignore the CORS information.
-		// This means CORS will be inferred as * .
-		return nil
-	}
-
-	var corsBytes []byte
-	corsBytes = append(corsBytes, []byte("\n\n\n# Below schema elements will only work for dgraph"+
-		" versions >= 21.03. In older versions it will be ignored.")...)
-	for _, val := range cors {
-		corsBytes = append(corsBytes, []byte(fmt.Sprintf("\n# Dgraph.Allow-Origin \"%s\"",
-			string(val)))...)
-	}
-
-	// Append the cors at the end of GraphQL schema.
-	pl := pb.PostingList{}
-	if err = pl.Unmarshal(entry.Value); err != nil {
-		return err
-	}
-	if len(pl.Postings) != 1 {
-		return errors.Errorf("Only one posting is expected in the graphql schema posting list "+
-			"but got %d", len(pl.Postings))
-	}
-	pl.Postings[0].Value = append(pl.Postings[0].Value, corsBytes...)
-	entry.Value, err = pl.Marshal()
-	if err != nil {
-		return err
-	}
-
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-	if err = txn.SetEntry(entry); err != nil {
-		return err
-	}
-	return txn.CommitAt(version, nil)
-}
-
-func getCors() ([][]byte, error) {
-	var corsVals [][]byte
-	err := getData("dgraph.cors", func(item *badger.Item) error {
-		val, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		pl := pb.PostingList{}
-		if err := pl.Unmarshal(val); err != nil {
-			return err
-		}
-		for _, p := range pl.Postings {
-			corsVals = append(corsVals, p.Value)
-		}
-		return nil
-	})
-	return corsVals, err
-}
-
-var depreciatedPreds = map[string]struct{}{
-	"dgraph.cors":                      {},
-	"dgraph.graphql.schema_created_at": {},
-	"dgraph.graphql.schema_history":    {},
-	"dgraph.graphql.p_sha256hash":      {},
-}
-
-var depreciatedTypes = map[string]struct{}{
-	"dgraph.type.cors":       {},
-	"dgraph.graphql.history": {},
-}
-
-func dropDepreciated() error {
-	var prefixes [][]byte
-	for pred := range depreciatedPreds {
-		pred = x.GalaxyAttr(pred)
-		prefixes = append(prefixes, x.SchemaKey(pred), x.PredicatePrefix(pred))
-	}
-	for typ := range depreciatedTypes {
-		prefixes = append(prefixes, x.TypeKey(x.GalaxyAttr(typ)))
-	}
-	return pstore.DropPrefix(prefixes...)
-}
-
-// fixRestore removes the internal predicates from the restored backup. This also appends CORS from
-// dgraph.cors to GraphQL schema.
-func fixRestore() error {
-	glog.Infof("Fixing restore from version < 21.03.")
-	cors, err := getCors()
-	if err != nil {
-		return errors.Wrapf(err, "Error while getting cors from db.")
-	}
-	if err := updateGqlSchema(cors); err != nil {
-		return errors.Wrapf(err, "Error while updating GraphQL schema.")
-	}
-	return errors.Wrapf(dropDepreciated(), "Error while dropping depreciated preds/types.")
 }
 
 type loadBackupInput struct {
