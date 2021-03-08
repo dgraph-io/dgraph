@@ -272,6 +272,7 @@ createSum () {
   fi
 }
 
+## TODO: Add arm64 buildkit support once xgo works for arm64
 build_docker_image() {
   if [[ "$GOARCH" == "amd64" ]]; then
     # Create Dgraph Docker image.
@@ -344,6 +345,9 @@ if [[ $DGRAPH_BUILD_AMD64 =~ 1|true ]]; then
   export GOARCH=amd64
   build_artifacts
 fi
+
+## Currently arm64 xgo fails for dgraph and badger
+## * https://github.com/techknowlogick/xgo/issues/105
 if [[ $DGRAPH_BUILD_ARM64 =~ 1|true ]]; then
   export GOARCH=arm64
   build_artifacts
