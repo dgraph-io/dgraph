@@ -1373,8 +1373,8 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	defn := sch.Types[typ.Name]
-	id := getIDField(defn)
-	xid := getXIDField(defn)
+	id := getIDField(defn, nil)
+	xid := getXIDField(defn, nil)
 	if !isQueryOrMutationType(typ) {
 		if len(id) == 0 && len(xid) == 0 {
 			errs = append(errs, gqlerror.ErrorPosf(
@@ -2065,6 +2065,76 @@ func apolloExtendsValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List
 		return []*gqlerror.Error{gqlerror.ErrorPosf(
 			remoteDirective.Definition.Position,
 			"Type %s; @remote directive cannot be defined with @extends directive", typ.Name)}
+	}
+	return nil
+}
+
+func apolloRequiresValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+
+	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
+	if extendsDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s: Field %s: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s inside @requires directive must be defined.", typ.Name, apolloKeyArg)}
+	}
+
+	fldList := strings.Fields(arg.Value.Raw)
+	for _, fld := range fldList {
+		fldDefn := typ.Fields.ForName(fld)
+		if fldDefn == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; @requires directive uses a field %s which is not defined inside the type.", typ.Name, fld)}
+		}
+		if !hasExternal(fldDefn) {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s must be @external.", typ.Name, fld)}
+		}
+	}
+	return nil
+}
+
+func apolloProvidesValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+
+	fldTypeDefn := sch.Types[field.Type.Name()]
+	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
+	if keyDirective == nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s does not return a type that has a @key.", typ.Name, field.Name)}
+	}
+
+	arg := dir.Arguments.ForName(apolloKeyArg)
+	if arg == nil || arg.Value.Raw == "" {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Argument %s inside @provides directive must be defined.", typ.Name, apolloKeyArg)}
+	}
+
+	fldList := strings.Fields(arg.Value.Raw)
+	for _, fld := range fldList {
+		fldDefn := fldTypeDefn.Fields.ForName(fld)
+		if fldDefn == nil {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @provides field %s doesn't exist for type %s.", typ.Name, field.Name, fld, fldTypeDefn.Name)}
+		}
 	}
 	return nil
 }
