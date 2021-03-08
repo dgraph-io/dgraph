@@ -153,6 +153,10 @@ func upgradeCORS() error {
 		}
 		if uid > maxUid {
 			uid = maxUid
+			if len(cors.Cors) == 1 && cors.Cors[0] == "*" {
+				// No need to update the GraphQL schema if all origins are allowed.
+				continue
+			}
 			corsList = cors.Cors
 		}
 	}
