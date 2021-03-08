@@ -1,48 +1,60 @@
 // +build !oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
 package ee
 
 import (
-	"github.com/dgraph-io/dgraph/worker"
+	"io/ioutil"
+
+	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-// GetEEFeaturesList returns a list of Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	if !worker.EnterpriseEnabled() {
-		return nil
+// GetKeys returns the ACL and encryption keys as configured by the user
+// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
+// this function exits with an error.
+func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
+	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
+	aclKey, encKey := vault.GetKeys(config)
+	var err error
+
+	aclKeyFile := aclSuperFlag.GetString("secret-file")
+	if aclKeyFile != "" {
+		if aclKey != nil {
+			glog.Exit("flags: ACL secret key set in both vault and acl flags")
+		}
+		if aclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
+			glog.Exitf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
+		}
 	}
-	var ee []string
-	if len(worker.Config.HmacSecret) > 0 {
-		ee = append(ee, "acl")
-		ee = append(ee, "multi_tenancy")
+	if l := len(aclKey); aclKey != nil && l < 32 {
+		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
-	if x.WorkerConfig.EncryptionKey != nil {
-		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
-	} else {
-		ee = append(ee, "backup_restore")
+
+	encKeyFile := config.GetString("encryption_key_file")
+	if encKeyFile != "" {
+		if encKey != nil {
+			glog.Exit("flags: Encryption key set in both vault and encryption_key_file")
+		}
+		if encKey, err = ioutil.ReadFile(encKeyFile); err != nil {
+			glog.Exitf("error reading encryption key from file: %s: %s", encKeyFile, err)
+		}
 	}
-	if x.WorkerConfig.Audit {
-		ee = append(ee, "audit")
+	if l := len(encKey); encKey != nil && l != 16 && l != 32 && l != 64 {
+		glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
 	}
-	if worker.Config.ChangeDataConf != "" {
-		ee = append(ee, "cdc")
-	}
-	return ee
+
+	return aclKey, encKey
 }

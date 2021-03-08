@@ -46,6 +46,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
 	schemapkg "github.com/dgraph-io/dgraph/schema"
@@ -731,10 +732,7 @@ func run() error {
 
 	z.SetTmpDir(opt.tmpDir)
 
-	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return err
-	}
+	_, opt.key = ee.GetKeys(Live.Conf)
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
