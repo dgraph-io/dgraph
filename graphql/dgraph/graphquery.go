@@ -219,7 +219,7 @@ func writeOrderAndPage(b *strings.Builder, query *gql.GraphQuery, root bool) {
 	var wroteOrder, wroteFirst bool
 
 	for _, ord := range query.Order {
-		if root {
+		if root || wroteOrder {
 			x.Check2(b.WriteString(", "))
 		}
 		if ord.Desc {
