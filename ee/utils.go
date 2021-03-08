@@ -24,5 +24,5 @@ import (
 )
 
 func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
-	return
+	glog.Fatalf("flags: acl/encryption is an enterprise-only feature")
 }
