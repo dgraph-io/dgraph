@@ -1,19 +1,13 @@
 // +build !oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
 package ee
@@ -28,9 +22,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+// GetKeys returns the ACL and encryption keys as configured by the user
+// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
+// this function exits with an error.
+func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
-	aclKey, encKey = vault.GetKeys(config)
+	aclKey, encKey := vault.GetKeys(config)
 	var err error
 
 	aclKeyFile := aclSuperFlag.GetString("secret-file")
@@ -59,5 +56,5 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 		glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
 	}
 
-	return
+	return aclKey, encKey
 }

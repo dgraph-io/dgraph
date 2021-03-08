@@ -20,17 +20,10 @@ package enc
 
 import (
 	"io"
-
-	"github.com/spf13/pflag"
 )
 
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
-
-// RegisterFlags registers the required encryption flags. None for OSS.
-func RegisterFlags(_ *pflag.FlagSet) {
-	return
-}
 
 // GetWriter returns the Writer as is for OSS Builds.
 func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {

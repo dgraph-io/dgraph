@@ -18,27 +18,12 @@ import (
 	"io"
 
 	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
 )
 
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
-
-const (
-	encKeyFile = "encryption_key_file"
-)
-
-// RegisterFlags registers the required encryption flags.
-func RegisterFlags(flag *pflag.FlagSet) {
-	flag.String(encKeyFile, "",
-		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
-			"The key size determines the chosen AES cipher "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
-	vault.RegisterFlags(flag)
-}
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
 func GetWriter(key x.SensitiveByteSlice, w io.Writer) (io.Writer, error) {
