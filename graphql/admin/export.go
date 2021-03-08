@@ -72,7 +72,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 			return uint64(inputNs), nil
 		default:
 			if input.Namespace != notSet && uint64(input.Namespace) != ns {
-				return 0, errors.Errorf("Not allowed to export namespace %#x", ns)
+				return 0, errors.Errorf("not allowed to export namespace %#x", input.Namespace)
 			}
 		}
 		return ns, nil
