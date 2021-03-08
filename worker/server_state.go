@@ -41,7 +41,7 @@ const (
 	AuditDefaults     = `compress=false; output=; encrypt-file=; days=; size=;`
 	BadgerDefaults    = `compression=snappy; goroutines=8;`
 	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
-	SecurityDefaults  = `token=; whiltelist=;`
+	SecurityDefaults  = `token=; whitelist=;`
 	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
 	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
