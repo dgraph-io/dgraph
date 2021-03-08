@@ -4981,11 +4981,12 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap1 := map[string]interface{}{
 		"missionId":   "Mission1",
 		"astronautId": "Astronaut1",
+		"name":        "Guss Garissom",
 		"des":         "Apollo1",
 	}
 	addMissionParams := &GraphQLParams{
-		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $des: String!) {
-			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId}]}]) {
+		Query: `mutation addMission($missionId: String!, $astronautId: ID!, $name: String!, $des: String!) {
+			addMission(input: [{id: $missionId, designation: $des, crew: [{id: $astronautId, name: $name}]}]) {
 				mission{
 					id
 					crew {
@@ -5027,6 +5028,7 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap2 := map[string]interface{}{
 		"missionId":   "Mission2",
 		"astronautId": "Astronaut1",
+		"name":        "Gus Garrisom",
 		"des":         "Apollo2",
 	}
 	addMissionParams.Variables = varMap2
@@ -5067,10 +5069,11 @@ func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 
 func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 	addAstronautParams := &GraphQLParams{
-		Query: `mutation addAstronaut($id1: ID!, $missionId1: String!, $id2: ID!, $missionId2: String! ) {
-			addAstronaut(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, missions: [{id: $missionId2, designation: "Apollo2"}]}]) {
+		Query: `mutation addAstronaut($id1: ID!, $name1: String!, $missionId1: String!, $id2: ID!, $name2: String!, $missionId2: String! ) {
+			addAstronaut(input: [{id: $id1, name: $name1, missions: [{id: $missionId1, designation: "Apollo1"}]}, {id: $id2, name: $name2, missions: [{id: $missionId2, designation: "Apollo11"}]}]) {
 				astronaut(order: {asc: id}){
 					id
+					name
 					missions {
 						id
 						designation
@@ -5080,8 +5083,10 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 		}`,
 		Variables: map[string]interface{}{
 			"id1":        "Astronaut1",
+			"name1":      "Gus Grissom",
 			"missionId1": "Mission1",
 			"id2":        "Astronaut2",
+			"name2":      "Neil Armstrong",
 			"missionId2": "Mission2",
 		},
 	}
@@ -5091,27 +5096,29 @@ func addMutationOnExtendedTypeWithIDasKeyField(t *testing.T) {
 
 	expectedJSON := `{
 		"addAstronaut": {
-		  "astronaut": [
-			{
-			  "id": "Astronaut1",
-			  "missions": [
-				{
-				  "id": "Mission1",
-				  "designation": "Apollo1"
-				}
-			  ]
-			},
-			{
-			  "id": "Astronaut2",
-			  "missions": [
-				{
-				  "id": "Mission2",
-				  "designation": "Apollo2"
-				}
-			  ]
-			}
-		  ]
-		}
+			"astronaut": [
+			  {
+				"id": "Astronaut1",
+				"name": "Gus Grissom",
+				"missions": [
+				  {
+					"id": "Mission1",
+					"designation": "Apollo1"
+				  }
+				]
+			  },
+			  {
+				"id": "Astronaut2",
+				"name": "Neil Armstrong",
+				"missions": [
+				  {
+					"id": "Mission2",
+					"designation": "Apollo11"
+				  }
+				]
+			  }
+			]
+		  }
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(gqlResponse.Data))

@@ -339,6 +339,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
+	providesFieldsMap := make(map[string]map[string]bool)
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
@@ -348,6 +349,25 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
+			}
+
+			for _, fld := range defn.Fields {
+				providesDir := fld.Directives.ForName(apolloProvidesDirective)
+				if providesDir == nil {
+					continue
+				}
+				arg := providesDir.Arguments.ForName(apolloKeyArg)
+				providesFieldArgs := strings.Fields(arg.Value.Raw)
+				var typeMap map[string]bool
+				if existingTypeMap, ok := providesFieldsMap[fld.Type.Name()]; ok {
+					typeMap = existingTypeMap
+				} else {
+					typeMap = make(map[string]bool)
+				}
+				for _, fldName := range providesFieldArgs {
+					typeMap[fldName] = true
+				}
+				providesFieldsMap[fld.Type.Name()] = typeMap
 			}
 		}
 		typesToComplete = append(typesToComplete, defn.Name)
@@ -374,7 +394,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete, apolloServiceQuery)
+	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
