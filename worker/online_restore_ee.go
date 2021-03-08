@@ -295,24 +295,29 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	// Copy from the request.
 	config.Set("encryption_key_file", req.EncryptionKeyFile)
 
-	flagString := fmt.Sprintf("role-id-file=%s; secret-id-file=%s;",
-		req.VaultRoleidFile, req.VaultSecretidFile)
-
-	// Override only if non-nil
+	vaultBuilder := new(strings.Builder)
+	if req.VaultRoleidFile != "" {
+		fmt.Fprintf(vaultBuilder, "role-id-file=%s;", req.VaultRoleidFile)
+	}
+	if req.VaultSecretidFile != "" {
+		fmt.Fprintf(vaultBuilder, "secret-id-file=%s;", req.VaultSecretidFile)
+	}
 	if req.VaultAddr != "" {
-		flagString += fmt.Sprintf(" addr=%s;", req.VaultAddr)
+		fmt.Fprintf(vaultBuilder, "addr=%s;", req.VaultAddr)
 	}
 	if req.VaultPath != "" {
-		flagString += fmt.Sprintf(" path=%s;", req.VaultPath)
+		fmt.Fprintf(vaultBuilder, "path=%s;", req.VaultPath)
 	}
 	if req.VaultField != "" {
-		flagString += fmt.Sprintf(" field=%s;", req.VaultField)
+		fmt.Fprintf(vaultBuilder, "field=%s;", req.VaultField)
 	}
 	if req.VaultFormat != "" {
-		flagString += fmt.Sprintf(" format=%s;", req.VaultFormat)
+		fmt.Fprintf(vaultBuilder, "format=%s;", req.VaultFormat)
+	}
+	if vaultConfig := vaultBuilder.String(); vaultConfig != "" {
+		config.Set("vault", vaultConfig)
 	}
 
-	config.Set("vault", flagString)
 	return config, nil
 }
 
