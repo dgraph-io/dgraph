@@ -71,7 +71,7 @@ func DirCleanup(t *testing.T) {
 	require.NoError(t, os.RemoveAll(restoreDir))
 	require.NoError(t, os.RemoveAll(copyBackupDir))
 
-	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
+	cmd := []string{"bash", "-c", "rm -rf /data/backups/*"}
 	require.NoError(t, testutil.DockerExec(alphaContainers[0], cmd...))
 }
 

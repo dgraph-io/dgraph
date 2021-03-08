@@ -570,12 +570,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
-	alloc := z.NewAllocator(16<<20, "Reducer.ToList")
-	defer func() {
-		// We put alloc.Release in defer because we reassign alloc for split posting lists.
-		alloc.Release()
-	}()
-
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
 		if num == 0 {
@@ -602,7 +596,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		alloc.Reset()
 		bm := roaring64.New()
 		var lastUid uint64
 		slice, next := []byte{}, start
@@ -664,9 +657,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
-
-			// Assign a new allocator, so we don't reset the one we were using during Rollup.
-			alloc = z.NewAllocator(16<<20, "Reducer.AppendToList")
 
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)

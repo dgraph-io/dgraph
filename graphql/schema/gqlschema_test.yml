@@ -2702,9 +2702,9 @@ invalid_schemas:
   - name: "@extends directive without @key directive"
     input: |
       type Product  @extends{
-      id: ID! @external
-      name: String! @external
-      reviews: [Reviews]
+          id: ID! @external
+          name: String! @external
+          reviews: [Reviews]
       }
 
       type Reviews @key(fields: "id") {
@@ -2712,7 +2712,7 @@ invalid_schemas:
           review: String!
       }
     errlist: [
-      {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 11, "column": 12} ] },
+      {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 13, "column": 12} ] },
     ]
   - name: "@remote directive with @key"
     input: |
@@ -2744,7 +2744,48 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
     ]
-
+  - name: "@requires directive defined on type definitions"
+    input: |
+      type Product @key(fields: "id"){
+        id: ID!
+        name: String!
+        reviews: [Reviews] @requires(fields: "name")
+      }
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product: Field reviews: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+  - name: "argument inside @requires directive is not an @external field."
+    input: |
+      extend type Product @key(fields: "id"){
+        id: ID! @external
+        name: String!
+        reviews: [Reviews] @requires(fields: "name")
+      }
+      type Reviews @key(fields: "id") {
+          id: ID!
+          review: String!
+      }
+    errlist: [
+      {"message": "Type Product; Field name must be @external.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
+  - name: "@provides directive used on field with type that does not have a @key."
+    input: |
+      type Product @key(fields: "id"){
+        id: ID!
+        name: String!
+        reviews: [Reviews] @provides(fields: "name")
+      }
+      type Reviews {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      {"message": "Type Product; Field reviews does not return a type that has a @key.", "locations": [ { "line": 4, "column": 23} ] }
+    ]
 
     
 

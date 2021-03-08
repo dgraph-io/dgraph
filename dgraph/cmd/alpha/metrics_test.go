@@ -180,12 +180,12 @@ func TestMetrics(t *testing.T) {
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
-		"badger_v3_disk_reads_total", "badger_v3_disk_writes_total", "badger_v3_gets_total",
-		"badger_v3_memtable_gets_total", "badger_v3_puts_total", "badger_v3_read_bytes",
-		"badger_v3_written_bytes",
+		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
+		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
+		"badger_written_bytes",
 		// The following metrics get exposed after 1 minute from Badger, so
 		// they're not available in time for this test
-		// "badger_v3_lsm_size_bytes", "badger_v3_vlog_size_bytes",
+		// "badger_lsm_size_bytes", "badger_vlog_size_bytes",
 
 		// Transaction Metrics
 		"dgraph_txn_aborts_total", "dgraph_txn_commits_total", "dgraph_txn_discards_total",

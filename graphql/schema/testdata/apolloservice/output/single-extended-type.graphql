@@ -2,28 +2,9 @@
 # Input Schema
 #######################
 
-type Mission @key(fields: "id") {
-	id: ID!
-	crew: [Astronaut] @provides(fields: "name age")
-	designation: String!
-	startDate: String
-	endDate: String
-}
-
-type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	name: String @external
-	age: Int @external
-	missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	missionsAggregate(filter: MissionFilter): MissionAggregateResult
-}
-
-type Product @key(fields: "upc") @extends {
-	upc: String! @id @external
-	price: Int @external
-	weight: Int @external
-	inStock: Boolean
-	shippingEstimate: Float @requires(fields: "price weight")
+type Product @key(fields: "id") @extends {
+	id: String! @id @external
+	name: String!
 }
 
 #######################
@@ -280,42 +261,8 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
-}
-
-type AddMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
-}
-
 type AddProductPayload {
 	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-	numUids: Int
-}
-
-type AstronautAggregateResult {
-	count: Int
-	idMin: ID
-	idMax: ID
-	nameMin: String
-	nameMax: String
-	ageMin: Int
-	ageMax: Int
-	ageSum: Int
-	ageAvg: Float
-}
-
-type DeleteAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	msg: String
-	numUids: Int
-}
-
-type DeleteMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	msg: String
 	numUids: Int
 }
 
@@ -325,34 +272,12 @@ type DeleteProductPayload {
 	numUids: Int
 }
 
-type MissionAggregateResult {
-	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
-}
-
 type ProductAggregateResult {
 	count: Int
-	upcMin: String
-	upcMax: String
-	shippingEstimateMin: Float
-	shippingEstimateMax: Float
-	shippingEstimateSum: Float
-	shippingEstimateAvg: Float
-}
-
-type UpdateAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
-}
-
-type UpdateMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
+	idMin: String
+	idMax: String
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateProductPayload {
@@ -364,124 +289,27 @@ type UpdateProductPayload {
 # Generated Enums
 #######################
 
-enum AstronautHasFilter {
-	name
-	age
-	missions
-}
-
-enum AstronautOrderable {
+enum ProductHasFilter {
 	id
 	name
-	age
-}
-
-enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
-}
-
-enum MissionOrderable {
-	designation
-	startDate
-	endDate
-}
-
-enum ProductHasFilter {
-	upc
-	inStock
-	shippingEstimate
 }
 
 enum ProductOrderable {
-	upc
-	shippingEstimate
+	id
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddAstronautInput {
-	id: ID!
-	name: String
-	age: Int
-	missions: [MissionRef]
-}
-
-input AddMissionInput {
-	crew: [AstronautRef]
-	designation: String!
-	startDate: String
-	endDate: String
-}
-
 input AddProductInput {
-	upc: String!
-	inStock: Boolean
-	shippingEstimate: Float
-}
-
-input AstronautFilter {
-	id: [ID!]
-	has: [AstronautHasFilter]
-	and: [AstronautFilter]
-	or: [AstronautFilter]
-	not: AstronautFilter
-}
-
-input AstronautOrder {
-	asc: AstronautOrderable
-	desc: AstronautOrderable
-	then: AstronautOrder
-}
-
-input AstronautPatch {
-	name: String
-	age: Int
-	missions: [MissionRef]
-}
-
-input AstronautRef {
-	id: ID
-	name: String
-	age: Int
-	missions: [MissionRef]
-}
-
-input MissionFilter {
-	id: [ID!]
-	has: [MissionHasFilter]
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
-}
-
-input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
-}
-
-input MissionPatch {
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
-}
-
-input MissionRef {
-	id: ID
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
+	id: String!
+	name: String!
 }
 
 input ProductFilter {
-	upc: StringHashFilter
+	id: StringHashFilter
 	has: [ProductHasFilter]
 	and: [ProductFilter]
 	or: [ProductFilter]
@@ -495,26 +323,12 @@ input ProductOrder {
 }
 
 input ProductPatch {
-	inStock: Boolean
-	shippingEstimate: Float
+	name: String
 }
 
 input ProductRef {
-	upc: String
-	inStock: Boolean
-	shippingEstimate: Float
-}
-
-input UpdateAstronautInput {
-	filter: AstronautFilter!
-	set: AstronautPatch
-	remove: AstronautPatch
-}
-
-input UpdateMissionInput {
-	filter: MissionFilter!
-	set: MissionPatch
-	remove: MissionPatch
+	id: String
+	name: String
 }
 
 input UpdateProductInput {
@@ -524,26 +338,10 @@ input UpdateProductInput {
 }
 
 #######################
-# Generated Query
-#######################
-
-type Query {
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
-}
-
-#######################
 # Generated Mutations
 #######################
 
 type Mutation {
-	addMission(input: [AddMissionInput!]!): AddMissionPayload
-	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
-	deleteMission(filter: MissionFilter!): DeleteMissionPayload
-	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
-	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
-	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
 	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload

@@ -84,10 +84,11 @@ type loader struct {
 	conflicts map[uint64]struct{}
 	uidsLock  sync.RWMutex
 
-	reqNum   uint64
-	reqs     chan *request
-	zeroconn *grpc.ClientConn
-	schema   *schema
+	reqNum     uint64
+	reqs       chan *request
+	zeroconn   *grpc.ClientConn
+	schema     *schema
+	namespaces map[uint64]struct{}
 
 	upsertLock sync.RWMutex
 }
