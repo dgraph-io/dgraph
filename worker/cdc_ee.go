@@ -259,8 +259,7 @@ func (cdc *CDC) processCDCEvents() {
 				bytes.Equal(edges[0].Value, []byte(x.Star)):
 				// If there are no pending txn send the events else
 				// return as the mutation must have errored out in that case.
-				_, attr := x.ParseNamespaceBytes(edges[0].Attr)
-				if !cdc.hasPending(attr) {
+				if !cdc.hasPending(x.ParseAttr(edges[0].Attr)) {
 					if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 						rerr = errors.Wrapf(err, "unable to send messages to sink")
 					}
@@ -398,12 +397,14 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// todo (aman): right now drop operations are still cluster wide.
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
-		var t string
-		if len(mutation.DropValue) > 0 {
-			_, t = x.ParseNamespaceBytes(mutation.DropValue)
-		}
 		ns := make([]byte, 8)
 		binary.BigEndian.PutUint64(ns, 0)
+		var t string
+		if mutation.DropOp == pb.Mutations_TYPE && len(mutation.DropValue) > 0 {
+			// drop type are namespace specific.
+			ns, t = x.ParseNamespaceBytes(mutation.DropValue)
+		}
+
 		return []CDCEvent{
 			{
 				Type: EventTypeDrop,
