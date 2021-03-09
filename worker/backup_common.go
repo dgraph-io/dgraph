@@ -29,13 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	unknownStatus    = "UNKNOWN"
-	inProgressStatus = "IN_PROGRESS"
-	okStatus         = "OK"
-	errStatus        = "ERR"
-)
-
 var LastBackupStatus atomic.Value
 
 func init() {

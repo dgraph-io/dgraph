@@ -260,9 +260,6 @@ func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCred
 		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
-	res := make([]*Manifest, 0)
-	for _, m := range manifests {
-		res = append(res, m)
-	}
+	res := append([]*Manifest(nil), manifests...)
 	return res, nil
 }
