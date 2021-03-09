@@ -1,0 +1,4 @@
+# This will add exact index on content field, overwriting the default "hash" index for field of type "String! @id".
+type Post {
+    content: String! @id @search(by:[exact])
+}
