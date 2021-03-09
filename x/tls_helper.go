@@ -43,7 +43,7 @@ const (
 	// TODO: clean/organize this to make it clearer
 
 	TLSDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
-		`ca-cert=; server-cert=; server-key=; client-cert=; client-key=;`
+		`ca-cert=; server-name=; server-cert=; server-key=; client-cert=; client-key=;`
 
 	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
 		`server-cert=; server-key=; ca-cert=; client-cert=; client-key=;`
