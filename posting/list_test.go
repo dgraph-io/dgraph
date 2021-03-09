@@ -916,7 +916,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	require.Nil(t, ol.plist.Pack)
+	require.Nil(t, ol.plist.Bitmap)
 	require.Equal(t, 0, len(ol.plist.Postings))
 	require.True(t, len(ol.plist.Splits) > 0)
 	verifySplits(t, ol.plist.Splits)
