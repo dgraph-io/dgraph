@@ -1277,9 +1277,9 @@
   dgquery: |-
     query {
       queryAuthor(func: type(Author)) {
-        Author.name : Author.name
-        Author.posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, orderdesc: Post.title, first: 10, offset: 10) {
-          Post.title : Post.title
+        name : Author.name
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, orderdesc: Post.title, first: 10, offset: 10) {
+          title : Post.title
           dgraph.uid : uid
         }
         dgraph.uid : uid
