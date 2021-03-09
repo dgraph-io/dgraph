@@ -47,7 +47,9 @@ func LiveLoad(opts LiveOpts) error {
 		"--schema", opts.SchemaFile,
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
-		"--force-namespace", strconv.FormatInt(opts.ForceNs, 10),
+	}
+	if opts.ForceNs != 0 {
+		args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
 	}
 	if opts.Ludicrous {
 		args = append(args, "--ludicrous")

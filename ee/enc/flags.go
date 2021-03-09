@@ -1,7 +1,7 @@
-// +build oss
+package enc
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,20 @@
  * limitations under the License.
  */
 
-package ee
-
 import (
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/spf13/viper"
+	"github.com/dgraph-io/dgraph/ee/vault"
+	"github.com/spf13/pflag"
 )
 
-// GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
-// this function exits with an error.
-func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
-	glog.Exit("flags: acl / encryption is an enterprise-only feature")
-	return nil, nil
+const (
+	encKeyFile = "encryption_key_file"
+)
+
+// RegisterFlags registers the required encryption flags.
+func RegisterFlags(flag *pflag.FlagSet) {
+	flag.String(encKeyFile, "",
+		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
+			"The key size determines the chosen AES cipher "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	vault.RegisterFlags(flag)
 }

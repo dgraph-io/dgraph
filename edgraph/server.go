@@ -46,7 +46,6 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
@@ -63,7 +62,6 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
-	groupFile    = "group_id"
 )
 
 type GraphqlContextKey int
@@ -1016,7 +1014,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
-		EeFeatures:  ee.GetEEFeaturesList(),
+		EeFeatures:  worker.GetEEFeaturesList(),
 		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
