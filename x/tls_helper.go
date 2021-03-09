@@ -115,10 +115,10 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("client-cert")
-	conf.Key = tlsFlag.GetString("client-key")
+	conf.Cert = tlsFlag.GetPath("client-cert")
+	conf.Key = tlsFlag.GetPath("client-key")
 	return GenerateClientTLSConfig(conf)
 }
 
@@ -135,10 +135,10 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	}
 	conf := TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("server-cert")
-	conf.Key = tlsFlag.GetString("server-key")
+	conf.Cert = tlsFlag.GetPath("server-cert")
+	conf.Key = tlsFlag.GetPath("server-key")
 	conf.ClientAuth = "REQUIREANDVERIFY"
 	return GenerateServerTLSConfig(&conf)
 }
