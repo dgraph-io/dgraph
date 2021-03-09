@@ -398,7 +398,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
 		ns := make([]byte, 8)
-		binary.BigEndian.PutUint64(ns, 0)
+		binary.BigEndian.PutUint64(ns, x.GalaxyNamespace)
 		var t string
 		if mutation.DropOp == pb.Mutations_TYPE {
 			// drop type are namespace specific.
