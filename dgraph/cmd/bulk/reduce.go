@@ -569,7 +569,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		freePostings = append(freePostings, p)
 	}
 
-	alloc := z.NewAllocator(16 << 20)
+	alloc := z.NewAllocator(16<<20, "Reducer.ToList")
 	defer func() {
 		// We put alloc.Release in defer because we reassign alloc for split posting lists.
 		alloc.Release()
@@ -665,7 +665,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			x.Check(err)
 
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.
-			alloc = z.NewAllocator(16 << 20)
+			alloc = z.NewAllocator(16<<20, "Reducer.AppendToList")
 
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)

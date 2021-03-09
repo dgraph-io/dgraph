@@ -120,8 +120,7 @@ func (e *Encoder) Add(uid uint64) {
 		e.buf = new(bytes.Buffer)
 	}
 	if e.Alloc == nil {
-		e.Alloc = z.NewAllocator(1024)
-		e.Alloc.Tag = tagEncoder
+		e.Alloc = z.NewAllocator(1024, tagEncoder)
 	}
 
 	size := len(e.uids)
