@@ -528,7 +528,7 @@ func SinceMs(startTime time.Time) float64 {
 // RegisterExporters sets up the services to which metrics will be exported.
 func RegisterExporters(conf *viper.Viper, service string) {
 	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
-		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault("")
+		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
 		if collector := t.GetString("jaeger"); len(collector) > 0 {
 			// Port details: https://www.jaegertracing.io/docs/getting-started/
 			// Default collectorEndpointURI := "http://localhost:14268"
