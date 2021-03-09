@@ -479,7 +479,7 @@ func rollupKey(db *badger.DB) {
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 	x.Check(err)
 
-	alloc := z.NewAllocator(32 << 20)
+	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
 	kvs, err := pl.Rollup(alloc)
