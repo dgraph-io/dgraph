@@ -394,13 +394,13 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	}
 
 	// If drop operation
-	// todo (aman): right now drop operations are still cluster wide.
+	// todo (aman): right now drop all and data operations are still cluster wide.
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
 		ns := make([]byte, 8)
 		binary.BigEndian.PutUint64(ns, 0)
 		var t string
-		if mutation.DropOp == pb.Mutations_TYPE && len(mutation.DropValue) > 0 {
+		if mutation.DropOp == pb.Mutations_TYPE {
 			// drop type are namespace specific.
 			ns, t = x.ParseNamespaceBytes(mutation.DropValue)
 		}
