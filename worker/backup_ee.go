@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -88,6 +89,11 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse,
 // to be processed at the same time. Multiple requests could lead to multiple
 // backups with the same backupNum in their manifest.
 var backupLock sync.Mutex
+var LastBackupStatus atomic.Value
+
+func init() {
+	LastBackupStatus.Store("")
+}
 
 // BackupRes is used to represent the response and error of the Backup gRPC call together to be
 // transported via a channel.
@@ -111,10 +117,23 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		return err
 	}
 
-	// Grab the lock here to avoid more than one request to be processed at the same time.
-	backupLock.Lock()
-	defer backupLock.Unlock()
+	go func() {
+		// Grab the lock here to avoid more than one request to be processed at the same time.
+		backupLock.Lock()
+		defer backupLock.Unlock()
 
+		LastBackupStatus.Store(fmt.Sprintf("STARTED: %s", time.Now().Format(time.RFC3339)))
+		if err := doBackup(ctx, req, forceFull); err != nil {
+			LastBackupStatus.Store(fmt.Sprintf("ERROR: %s: %s", time.Now().Format(time.RFC3339), err))
+		} else {
+			LastBackupStatus.Store(fmt.Sprintf("COMPLETED: %s", time.Now().Format(time.RFC3339)))
+		}
+	}()
+
+	return nil
+}
+
+func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
 	backupSuccessful := false
 	ostats.Record(ctx, x.NumBackups.M(1), x.PendingBackups.M(1))
 	defer func() {
@@ -180,13 +199,16 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	predMap := make(map[uint32][]string)
 	for gid, group := range state.Groups {
 		groups = append(groups, gid)
-		predMap[gid] = make([]string, 0)
+		preds := make([]string, len(group.Tablets))
 		for pred := range group.Tablets {
-			predMap[gid] = append(predMap[gid], pred)
+			preds = append(preds, pred)
 		}
+		predMap[gid] = preds
 	}
 
-	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
+	glog.Infof(
+		"Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\". Groups=%v\n",
+		req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
