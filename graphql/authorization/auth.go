@@ -429,13 +429,24 @@ func (a *AuthMeta) validateJWTCustomClaims(jwtStr string) (*CustomClaims, error)
 	return claims, nil
 }
 
-// FetchJWKs fetches the JSON Web Key set from a JWKUrl. It acquires a Lock over a as some of the
-// properties of AuthMeta are modified in the process.
-func (a *AuthMeta) FetchJWKs(i int) error {
+// FetchJWKs fetches the JSON Web Key sets for the JWKUrls. It returns an error if
+// the fetching of key is failed even for one of the JWKUrl.
+func (a *AuthMeta) FetchJWKs() error {
 	if len(a.JWKUrls) == 0 {
 		return errors.Errorf("No JWKUrl supplied")
 	}
 
+	for i := 0; i < len(a.JWKUrls); i++ {
+		err := a.FetchJWK(i)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FetchJWK fetches the JSON web Key set for the JWKUrl at a given index.
+func (a *AuthMeta) FetchJWK(i int) error {
 	if len(a.JWKUrls) <= i {
 		return errors.Errorf("not enough JWKUrls")
 	}
@@ -494,7 +505,7 @@ func (a *AuthMeta) FetchJWKs(i int) error {
 func (a *AuthMeta) refreshJWK(i int) error {
 	var err error
 	for i := 0; i < 3; i++ {
-		err = a.FetchJWKs(i)
+		err = a.FetchJWK(i)
 		if err == nil {
 			return nil
 		}

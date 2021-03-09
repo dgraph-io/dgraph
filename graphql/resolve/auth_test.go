@@ -276,12 +276,45 @@ func TestMissingAudienceWithJWKUrl(t *testing.T) {
 	require.Error(t, err, fmt.Errorf("required field missing in Dgraph.Authorization: `Audience`"))
 }
 
-//Todo(Minhaj): Add a testcase for token without Expiry
 func TestVerificationWithJWKUrl(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
-	authSchema, err := testutil.AppendAuthInfoWithJWKUrls(sch)
+	authSchema, err := testutil.AppendAuthInfoWithJWKUrl(sch)
+	require.NoError(t, err)
+
+	schema := test.LoadSchemaFromString(t, string(authSchema))
+	require.NotNil(t, schema.Meta().AuthMeta())
+
+	// Verify that authorization information is set correctly.
+	metainfo := schema.Meta().AuthMeta()
+	require.Equal(t, metainfo.Algo, "")
+	require.Equal(t, metainfo.Header, "X-Test-Auth")
+	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
+	require.Equal(t, metainfo.VerificationKey, "")
+	require.Equal(t, metainfo.JWKUrl, "")
+	require.Equal(t, metainfo.JWKUrls, []string{"https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"})
+
+	testCase := struct {
+		name  string
+		token string
+	}{
+		name:  `Valid Token`,
+		token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJKdVZuRkc0Q2JBX0E1VVNkenlDMyJ9.eyJnaXZlbl9uYW1lIjoibWluaGFqIiwiZmFtaWx5X25hbWUiOiJzaGFrZWVsIiwibmlja25hbWUiOiJtc3JpaXRkIiwibmFtZSI6Im1pbmhhaiBzaGFrZWVsIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hLS9BT2gxNEdnYzVEZ2cyQThWZFNzWUNnc2RlR3lFMHM1d01Gdmd2X1htZDA4Q3B3PXM5Ni1jIiwibG9jYWxlIjoiZW4iLCJ1cGRhdGVkX2F0IjoiMjAyMS0wMy0wOVQxMDowOTozNi4yMDNaIiwiZW1haWwiOiJtc3JpaXRkQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2Rldi1ocjJrdWdmcC51cy5hdXRoMC5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxMDM2NTgyNjIxNzU2NDczNzEwNjQiLCJhdWQiOiJIaGFYa1FWUkJuNWUwSzNEbU1wMnpiakk4aTF3Y3YyZSIsImlhdCI6MTYxNTI4NDU3NywiZXhwIjo1MjE1Mjg0NTc3LCJub25jZSI6IlVtUk9NbTV0WWtoR2NGVjVOWGRhVGtKV1UyWm5ZM0pKUzNSR1ZsWk1jRzFLZUVkMGQzWkdkVTFuYXc9PSJ9.rlVl0tGOCypIts0C52g1qyiNaFV3UnDafJETXTGbt-toWvtCyZsa-JySgwG0DD1rMYm-gdwyJcjJlgwVPQD3ZlkJqbFFNvY4cX5injiOljpVFOHKXdi7tehY9We_vv1KYYpvhGMsE4u7o8tz2wEctdLTXT7omEq7gSdHuDgpM-h-K2RLApU8oyu8YOIqQlrqGgJ7Q8jy-jxMlU7BoZVz38FokjmkSapAAVORsbdEqPgQjeDnjaDQ5bRhxZUMSeKvvpvtVlPaeM1NI4S0R3g0qUGvX6L6qsLZqIilSQUiUaOEo8bLNBFHOxhBbocF-R-x40nSYjdjrEz60A99mz5XAA",
+	}
+
+	md := metadata.New(map[string]string{"authorizationJwt": testCase.token})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	_, err = metainfo.ExtractCustomClaims(ctx)
+	require.Nil(t, err)
+}
+
+func TestVerificationWithMultipleJWKUrls(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	authSchema, err := testutil.AppendAuthInfoWithMultipleJWKUrls(sch)
 	require.NoError(t, err)
 
 	schema := test.LoadSchemaFromString(t, string(authSchema))
