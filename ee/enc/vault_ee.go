@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	VaultDefaults = `addr=http://localhost:8200; path=secret/data/dgraph; field=enc_key; format=base64;`
+	VaultDefaults = `addr=http://localhost:8200; path=secret/data/dgraph; field=enc_key; ` +
+		`format=base64; role-id-file=; secret-id-file=;`
 )
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.
