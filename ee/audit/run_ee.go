@@ -93,10 +93,22 @@ func run() error {
 	block, err := aes.NewCipher(key)
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
+	if stat.Size() == 0 {
+		glog.Info("audit file is empty")
+		return nil
+	}
+
 	iv := make([]byte, aes.BlockSize)
 	x.Check2(file.ReadAt(iv, 0))
+	t := make([]byte, 11)
+	x.Check2(file.ReadAt(t, 16))
+	stream := cipher.NewCTR(block, iv)
+	stream.XORKeyStream(t, t)
+	if string(t) != "Hello World" {
+		return errors.New("invalid encryption key provided")
+	}
 
-	var iterator int64 = 16
+	var iterator int64 = 16 + 11 // 16 for init vector and 11 for Hello World verification text.
 	for {
 		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
 		x.Check2(file.ReadAt(content, iterator))
