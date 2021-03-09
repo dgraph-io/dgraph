@@ -228,7 +228,7 @@ they form a Raft group and provide synchronous replication.
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
 		String())
 
-	flag.String("cdc", "", z.NewSuperFlagHelp("").
+	flag.String("cdc", "", z.NewSuperFlagHelp(worker.CDCDefaults).
 		Head("Change Data Capture options").
 		Flag("file",
 			"The path where audit logs will be stored.").
@@ -246,9 +246,7 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
-	//       option.
-	flag.String("audit", "", z.NewSuperFlagHelp("").
+	flag.String("audit", "", z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
