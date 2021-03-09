@@ -132,13 +132,13 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		fmt.Printf("Writing count index for %q rev=%v\n", pk.Attr, pk.IsReverse())
 	}
 
-	alloc := z.NewAllocator(8 << 20)
+	alloc := z.NewAllocator(8<<20, "CountIndexer.WriteIndex")
 	defer alloc.Release()
 
 	var pl pb.PostingList
 	encoder := codec.Encoder{BlockSize: 256, Alloc: alloc}
 
-	outBuf := z.NewBuffer(5 << 20)
+	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
 	defer outBuf.Release()
 	encode := func() {
 		pl.Pack = encoder.Done()
