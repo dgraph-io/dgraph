@@ -37,7 +37,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -349,7 +349,7 @@ func inCi() bool {
 }
 
 func saveJaegerTracesToJepsen(jepsenPath string) {
-	dst := path.Join(jepsenPath, "dgraph", "store", "current", "jaeger")
+	dst := filepath.Join(jepsenPath, "dgraph", "store", "current", "jaeger")
 	cmd := command("sudo", "docker", "cp", "jaeger:/working/jaeger", dst)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

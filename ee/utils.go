@@ -18,7 +18,16 @@
 
 package ee
 
-// GetEEFeaturesList returns a list Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	return nil
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
+)
+
+// GetKeys returns the ACL and encryption keys as configured by the user
+// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
+// this function exits with an error.
+func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
+	glog.Exit("flags: acl / encryption is an enterprise-only feature")
+	return nil, nil
 }

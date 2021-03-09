@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/errors"
 )
@@ -48,6 +49,8 @@ const (
 	// because it used by subsequent incremental backups.
 	// "groups" are the group IDs that participated.
 	backupManifest = `manifest.json`
+
+	tmpManifest = `manifest_tmp.json`
 )
 
 // UriHandler interface is implemented by URI scheme handlers.
@@ -60,7 +63,12 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetManifests returns the list of manfiests for the given backup series ID
+	// GetManifest returns the master manifest, containing information about all the
+	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
+	// then it will return a consolidated master manifest.
+	GetManifest(*url.URL) (*MasterManifest, error)
+
+	// GetManifests returns the list of manifest for the given backup series ID
 	// and backup number at the specified location. If backupNum is set to zero,
 	// all the manifests for the backup series will be returned. If it's greater
 	// than zero, manifests from one to backupNum will be returned.
@@ -73,8 +81,8 @@ type UriHandler interface {
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error
 
-	// CreateManifest prepares the manifest for writing.
-	CreateManifest(*url.URL, *pb.BackupRequest) error
+	// CreateManifest creates the given manifest.
+	CreateManifest(*url.URL, *MasterManifest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// It optionally takes the name of the last directory to consider. Any backup directories
@@ -87,27 +95,6 @@ type UriHandler interface {
 	// given groups. The last manifest of that backup should have the same number of
 	// groups as given list of groups.
 	Verify(*url.URL, *pb.RestoreRequest, []uint32) error
-
-	// ListManifests will scan the provided URI and return the paths to the manifests stored
-	// in that location.
-	ListManifests(*url.URL) ([]string, error)
-
-	// ReadManifest will read the manifest at the given location and load it into the given
-	// Manifest object.
-	ReadManifest(string, *Manifest) error
-}
-
-// getHandler returns a UriHandler for the URI scheme.
-func getHandler(scheme string, creds *Credentials) UriHandler {
-	switch scheme {
-	case "file", "":
-		return &fileHandler{}
-	case "minio", "s3":
-		return &s3Handler{
-			creds: creds,
-		}
-	}
-	return nil
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -135,33 +122,34 @@ func getHandler(scheme string, creds *Credentials) UriHandler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return nil, errors.Errorf("Unable to handle url: %s", uri)
+func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
+	switch uri.Scheme {
+	case "file", "":
+		return &fileHandler{}, nil
+	case "minio", "s3":
+		return NewS3Handler(uri, creds)
 	}
+	return nil, errors.Errorf("Unable to handle url: %s", uri)
 
-	return h, nil
 }
 
 // loadFn is a function that will receive the current file being read.
 // A reader, the backup groupId, and a map whose keys are the predicates to restore
 // are passed as arguments.
-type loadFn func(reader io.Reader, groupId uint32, preds predicateSet,
-	dropOperations []*pb.DropOperation) (uint64, error)
+type loadFn func(groupId uint32, in *loadBackupInput) (uint64, uint64, error)
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func LoadBackup(location, backupId string, backupNum uint64, creds *Credentials,
+func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCredentials,
 	fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return LoadResult{Err: err}
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return LoadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
 	return h.Load(uri, backupId, backupNum, fn)
@@ -169,48 +157,37 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *Credentials,
 
 // VerifyBackup will access the backup location and verify that the specified backup can
 // be restored to the cluster.
-func VerifyBackup(req *pb.RestoreRequest, creds *Credentials, currentGroups []uint32) error {
+func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGroups []uint32) error {
 	uri, err := url.Parse(req.GetLocation())
 	if err != nil {
 		return err
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return errors.Errorf("Unsupported URI: %v", uri)
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return errors.Wrap(err, "VerifyBackup")
 	}
 
 	return h.Verify(uri, req, currentGroups)
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, error) {
+func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
 	}
 
-	h := getHandler(uri.Scheme, creds)
-	if h == nil {
-		return nil, errors.Errorf("Unsupported URI: %v", uri)
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return nil, errors.Wrap(err, "ListBackupManifests")
 	}
 
-	paths, err := h.ListManifests(uri)
+	m, err := h.GetManifest(uri)
 	if err != nil {
 		return nil, err
 	}
-
-	listedManifests := make(map[string]*Manifest)
-	for _, path := range paths {
-		var m Manifest
-		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, errors.Wrapf(err, "While reading %q", path)
-		}
-		m.Path = path
-		listedManifests[path] = &m
-	}
-
-	return listedManifests, nil
+	return m.Manifests, nil
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests

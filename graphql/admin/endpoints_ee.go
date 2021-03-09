@@ -1,19 +1,13 @@
 // +build !oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
 package admin
@@ -33,22 +27,22 @@ const adminTypes = `
 
 		"""
 		Secret key credential for the destination.
-		"""		
+		"""
 		secretKey: String
 
 		"""
 		AWS session token, if required.
-		"""	
+		"""
 		sessionToken: String
 
 		"""
 		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
-		"""	
+		"""
 		anonymous: Boolean
 
 		"""
 		Force a full backup instead of an incremental backup.
-		"""	
+		"""
 		forceFull: Boolean
 	}
 
@@ -223,17 +217,17 @@ const adminTypes = `
 		"""
 		type: String
 	}
-	
+
 	type LoginResponse {
 
 		"""
 		JWT token that should be used in future requests after this login.
-		"""	
+		"""
 		accessJWT: String
 
 		"""
 		Refresh token that can be used to re-login after accessJWT expires.
-		"""	
+		"""
 		refreshJWT: String
 	}
 
@@ -265,12 +259,12 @@ const adminTypes = `
 
 		"""
 		Predicate to which the rule applies.
-		"""	
+		"""
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
 
 		"""
-		Permissions that apply for the rule.  Represented following the UNIX file permission 
-		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		Permissions that apply for the rule.  Represented following the UNIX file permission
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE,
 		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
 
 		The options are:
@@ -282,9 +276,9 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read,
 		write and modify operations.
-		"""	
+		"""
 		permission: Int! @dgraph(pred: "dgraph.rule.permission")
 	}
 
@@ -322,12 +316,12 @@ const adminTypes = `
 	input RuleRef {
 		"""
 		Predicate to which the rule applies.
-		"""	
+		"""
 		predicate: String!
 
 		"""
-		Permissions that apply for the rule.  Represented following the UNIX file permission 
-		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		Permissions that apply for the rule.  Represented following the UNIX file permission
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE,
 		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
 
 		The options are:
@@ -339,7 +333,7 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read,
 		write and modify operations.
 		"""
 		permission: Int!
@@ -412,7 +406,33 @@ const adminTypes = `
 	type DeleteGroupPayload {
 		msg: String
 		numUids: Int
-	}`
+	}
+
+	input AddNamespaceInput {
+		password: String
+	}
+
+	input DeleteNamespaceInput {
+		namespaceId: Int!
+	}
+
+	type NamespacePayload {
+		namespaceId: Int
+		message: String
+	}
+
+	input ResetPasswordInput {
+		userId: String!
+		password: String!
+		namespace: Int!
+	}
+
+	type ResetPasswordPayload {
+		userId: String
+		message: String
+		namespace: Int
+	}
+	`
 
 const adminMutations = `
 
@@ -431,7 +451,7 @@ const adminMutations = `
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
 	If login is not successful an error is returned.
 	"""
-	login(userId: String, password: String, refreshToken: String): LoginPayload
+	login(userId: String, password: String, namespace: Int, refreshToken: String): LoginPayload
 
 	"""
 	Add a user.  When linking to groups: if the group doesn't exist it is created; if the group
@@ -450,19 +470,36 @@ const adminMutations = `
 
 	"""
 	Update users, their passwords and groups.  As with AddUser, when linking to groups: if the
-	group doesn't exist it is created; if the group exists, the new user is linked to the existing 
+	group doesn't exist it is created; if the group exists, the new user is linked to the existing
 	group.  If the filter doesn't match any users, the mutation has no effect.
 	"""
 	updateUser(input: UpdateUserInput!): AddUserPayload
 
 	"""
-	Add or remove rules for groups. If the filter doesn't match any groups, 
+	Add or remove rules for groups. If the filter doesn't match any groups,
 	the mutation has no effect.
 	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload`
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+
+	"""
+	Add a new namespace.
+	"""
+	addNamespace(input: AddNamespaceInput): NamespacePayload
+
+	"""
+	Delete a namespace.
+	"""
+	deleteNamespace(input: DeleteNamespaceInput!): NamespacePayload
+
+	"""
+	Reset password can only be used by the Guardians of the galaxy to reset password of
+	any user in any namespace.
+	"""
+	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
+	`
 
 const adminQueries = `
 	getUser(name: String!): User
@@ -479,4 +516,5 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+	`

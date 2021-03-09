@@ -19,7 +19,7 @@ package common
 import (
 	"context"
 	"io/ioutil"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -39,7 +39,7 @@ import (
 
 func TestQueriesFor21Million(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Join(path.Dir(thisFile), "../queries")
+	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
 	// For this test we DON'T want to start with an empty database.
 	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
@@ -59,7 +59,7 @@ func TestQueriesFor21Million(t *testing.T) {
 			continue
 		}
 		t.Run(file.Name(), func(t *testing.T) {
-			filename := path.Join(queryDir, file.Name())
+			filename := filepath.Join(queryDir, file.Name())
 			reader, cleanup := chunker.FileReader(filename, nil)
 			bytes, err := ioutil.ReadAll(reader)
 			if err != nil {
@@ -88,7 +88,7 @@ func TestQueriesFor21Million(t *testing.T) {
 
 				t.Logf("running %s", file.Name())
 				//if *savedir != "" {
-				//	savepath = path.Join(*savedir, file.Name())
+				//	savepath = filepath.Join(*savedir, file.Name())
 				//}
 
 				testutil.CompareJSON(t, bodies[1], string(resp.GetJson()))

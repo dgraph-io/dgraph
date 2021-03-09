@@ -14,6 +14,7 @@ package cmd
 
 import (
 	acl "github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/ee/backup"
 )
 
@@ -24,5 +25,6 @@ func init() {
 		&backup.LsBackup,
 		&backup.ExportBackup,
 		&acl.CmdAcl,
+		&audit.CmdAudit,
 	)
 }

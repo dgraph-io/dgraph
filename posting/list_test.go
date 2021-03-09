@@ -26,15 +26,21 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+func setMaxListSize(newMaxListSize int) {
+	maxListSize = newMaxListSize
+}
 
 func (l *List) PostingList() *pb.PostingList {
 	l.RLock()
@@ -104,7 +110,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 }
 
 func TestAddMutation(t *testing.T) {
-	key := x.DataKey("name", 2)
+	key := x.DataKey(x.GalaxyAttr("name"), 2)
 
 	txn := NewTxn(1)
 	l, err := txn.Get(key)
@@ -112,7 +118,7 @@ func TestAddMutation(t *testing.T) {
 
 	edge := &pb.DirectedEdge{
 		ValueId: 9,
-		Label:   "testing",
+		Facets:  []*api.Facet{{Key: "testing"}},
 	}
 	addMutationHelper(t, l, edge, Set, txn)
 
@@ -120,7 +126,7 @@ func TestAddMutation(t *testing.T) {
 
 	p := getFirst(l, 1)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, p.Label, "testing")
+	require.EqualValues(t, "testing", p.Facets[0].Key)
 
 	// Add another edge now.
 	edge.ValueId = 81
@@ -142,7 +148,7 @@ func TestAddMutation(t *testing.T) {
 	addMutationHelper(t, l, edge, Set, txn)
 
 	edge.ValueId = 9
-	edge.Label = "anti-testing"
+	edge.Facets = []*api.Facet{{Key: "anti-testing"}}
 	addMutationHelper(t, l, edge, Set, txn)
 	l.commitMutation(1, 2)
 
@@ -151,7 +157,7 @@ func TestAddMutation(t *testing.T) {
 
 	p = getFirst(l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, "anti-testing", p.Label)
+	require.EqualValues(t, "anti-testing", p.Facets[0].Key)
 }
 
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
@@ -170,12 +176,11 @@ func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 
 // TODO(txn): Add tests after lru eviction
 func TestAddMutation_Value(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 10)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	edge := &pb.DirectedEdge{
 		Value: []byte("oh hey there"),
-		Label: "new-testing",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
@@ -193,14 +198,13 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	key := x.DataKey("value", 12)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 12)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
 	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
@@ -214,7 +218,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	// Set value to newcars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
@@ -223,7 +226,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	// Set value to someothercars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("someothercars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
@@ -232,7 +234,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	// Set value back to the committed value cars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
@@ -240,7 +241,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_DelSet(t *testing.T) {
-	key := x.DataKey("value", 1534)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 1534)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -266,7 +267,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 }
 
 func TestAddMutation_DelRead(t *testing.T) {
-	key := x.DataKey("value", 1543)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 1543)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -305,14 +306,13 @@ func TestAddMutation_DelRead(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	key := x.DataKey("value", 15)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 15)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
 	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Del, txn)
@@ -321,7 +321,6 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	// Set value to newcars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
@@ -329,14 +328,13 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
-	key := x.DataKey("value", 16)
+	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 16)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
 	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Del, txn)
@@ -346,7 +344,6 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	// Set value to newcars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
-		Label: "jchiu",
 	}
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Set, txn)
@@ -356,14 +353,13 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	key := x.DataKey("value", 29)
+	key := x.DataKey(x.GalaxyAttr("value"), 29)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
 	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
@@ -375,7 +371,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	// Del a value cars and but don't merge.
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Del, txn)
@@ -384,7 +379,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	// Set value to newcars, but don't merge yet.
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
@@ -393,21 +387,19 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	// Del a value newcars and but don't merge.
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	key := x.DataKey("value", 21)
+	key := x.DataKey(x.GalaxyAttr("value"), 21)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set a value cars and merge.
 	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
@@ -417,7 +409,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	txn = &Txn{StartTs: 3}
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
@@ -426,7 +417,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	// Delete the previously committed value cars. But don't merge.
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
@@ -435,7 +425,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	// Set the previously committed value cars. But don't merge.
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Set, txn)
 	checkValue(t, ol, "cars", txn.StartTs)
@@ -443,7 +432,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	// Delete it again, just for fun.
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
-		Label: "jchiu",
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
@@ -451,9 +439,10 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
+	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey("bal", 1331)
+	key := x.DataKey(x.GalaxyAttr("bal"), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
@@ -491,7 +480,7 @@ func TestMillion(t *testing.T) {
 // Test the various mutate, commit and abort sequences.
 func TestAddMutation_mrjn2(t *testing.T) {
 	ctx := context.Background()
-	key := x.DataKey("bal", 1001)
+	key := x.DataKey(x.GalaxyAttr("bal"), 1001)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var readTs uint64
@@ -577,13 +566,11 @@ func TestAddMutation_gru(t *testing.T) {
 		// Set two tag ids and merge.
 		edge := &pb.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &pb.DirectedEdge{
 			ValueId: 0x29bf442b48a772e0,
-			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 		ol.commitMutation(1, uint64(2))
@@ -592,13 +579,11 @@ func TestAddMutation_gru(t *testing.T) {
 	{
 		edge := &pb.DirectedEdge{
 			ValueId: 0x38dec821d2ac3a79,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &pb.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
-			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
 		ol.commitMutation(3, uint64(4))
@@ -614,13 +599,11 @@ func TestAddMutation_gru2(t *testing.T) {
 		// Set two tag ids and merge.
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &pb.DirectedEdge{
 			ValueId: 0x03,
-			Label:   "gru",
 		}
 		txn = &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -631,19 +614,16 @@ func TestAddMutation_gru2(t *testing.T) {
 		// Lets set a new tag and delete the two older ones.
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
 		edge = &pb.DirectedEdge{
 			ValueId: 0x03,
-			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
 
 		edge = &pb.DirectedEdge{
 			ValueId: 0x04,
-			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 
@@ -665,7 +645,6 @@ func TestAddAndDelMutation(t *testing.T) {
 	{
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -675,7 +654,6 @@ func TestAddAndDelMutation(t *testing.T) {
 	{
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
-			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
@@ -688,13 +666,11 @@ func TestAddAndDelMutation(t *testing.T) {
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	key := x.DataKey("value", 22)
+	key := x.DataKey(x.GalaxyAttr("value"), 22)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	// Set value to cars and merge to BadgerDB.
-	edge := &pb.DirectedEdge{
-		Label: "jchiu",
-	}
+	edge := &pb.DirectedEdge{}
 
 	txn := &Txn{StartTs: 1}
 	for i := 100; i < 300; i++ {
@@ -742,7 +718,6 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
-	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -762,14 +737,12 @@ func TestAfterUIDCount(t *testing.T) {
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	key := x.DataKey("value", 23)
+	key := x.DataKey(x.GalaxyAttr("value"), 23)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &pb.DirectedEdge{
-		Label: "jchiu",
-	}
+	edge := &pb.DirectedEdge{}
 
 	txn := &Txn{StartTs: 1}
 	for i := 100; i < 300; i++ {
@@ -781,7 +754,6 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Re-insert 1/4 of the edges. Counts should not change.
-	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -792,14 +764,12 @@ func TestAfterUIDCount2(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	key := x.DataKey("value", 25)
+	key := x.DataKey(x.GalaxyAttr("value"), 25)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &pb.DirectedEdge{
-		Label: "jchiu",
-	}
+	edge := &pb.DirectedEdge{}
 
 	txn := &Txn{StartTs: 1}
 	for i := 1; i <= 30; i++ {
@@ -816,14 +786,12 @@ func TestDelete(t *testing.T) {
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	key := x.DataKey("value", 26)
+	key := x.DataKey(x.GalaxyAttr("value"), 26)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &pb.DirectedEdge{
-		Label: "jchiu",
-	}
+	edge := &pb.DirectedEdge{}
 
 	txn := &Txn{StartTs: 1}
 	for i := 100; i < 400; i++ {
@@ -876,7 +844,6 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
-	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -905,12 +872,10 @@ func verifySplits(t *testing.T, splits []uint64) {
 	}
 }
 
-func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
+func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -920,8 +885,10 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
 		}
-		if addLabel {
-			edge.Label = strconv.Itoa(i)
+
+		// Earlier we used to have label with the posting list to force creation of posting.
+		if addFacet {
+			edge.Facets = []*api.Facet{{Key: strconv.Itoa(i)}}
 		}
 
 		txn := Txn{StartTs: uint64(i)}
@@ -938,10 +905,10 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 
 	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, uint64(size+1), kv.Version)
 	}
-	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
@@ -955,10 +922,8 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
+	defer setMaxListSize(maxListSize)
+	maxListSize = 10000
 
 	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps, math.MaxUint64)
@@ -1007,6 +972,41 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	return ol, commits
 }
 
+func TestDeleteStarMultiPartList(t *testing.T) {
+	numEdges := 10000
+
+	list, _ := createMultiPartList(t, numEdges, false)
+	parsedKey, err := x.Parse(list.key)
+	require.NoError(t, err)
+
+	validateCount := func(expected int) {
+		count := 0
+		list.Iterate(math.MaxUint64, 0, func(posting *pb.Posting) error {
+			count++
+			return nil
+		})
+		require.Equal(t, expected, count)
+	}
+	validateCount(numEdges)
+
+	readTs := list.maxTs + 1
+	commitTs := readTs + 1
+
+	txn := NewTxn(readTs)
+	edge := &pb.DirectedEdge{
+		ValueId: parsedKey.Uid,
+		Attr:    parsedKey.Attr,
+		Value:   []byte(x.Star),
+		Op:      pb.DirectedEdge_DEL,
+	}
+	err = list.addMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	err = list.commitMutation(readTs, commitTs)
+	require.NoError(t, err)
+	validateCount(0)
+}
+
 func writePostingListToDisk(kvs []*bpb.KV) error {
 	writer := NewTxnWriter(pstore)
 	for _, kv := range kvs {
@@ -1030,6 +1030,75 @@ func TestMultiPartListBasic(t *testing.T) {
 	}
 }
 
+// Checks if the binSplit works correctly.
+func TestBinSplit(t *testing.T) {
+	createList := func(t *testing.T, size int) *List {
+		// This is a package level constant, so reset it after use.
+		originalListSize := maxListSize
+		maxListSize = math.MaxInt32
+		defer func() {
+			maxListSize = originalListSize
+		}()
+		key := x.DataKey(uuid.New().String(), 1331)
+		ol, err := getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		for i := 1; i <= size; i++ {
+			edge := &pb.DirectedEdge{
+				ValueId: uint64(i),
+				Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			}
+			txn := Txn{StartTs: uint64(i)}
+			addMutationHelper(t, ol, edge, Set, &txn)
+			require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		}
+
+		kvs, err := ol.Rollup(nil)
+		require.NoError(t, err)
+		for _, kv := range kvs {
+			require.Equal(t, uint64(size+1), kv.Version)
+		}
+		require.NoError(t, writePostingListToDisk(kvs))
+		ol, err = getNew(key, ps, math.MaxUint64)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(ol.plist.Splits))
+		require.Equal(t, size, len(ol.plist.Postings))
+		return ol
+	}
+	verifyBinSplit := func(t *testing.T, ol *List, startUids []uint64, pls []*pb.PostingList) {
+		require.Equal(t, 2, len(startUids))
+		require.Equal(t, 2, len(pls))
+		uids := codec.Decode(ol.plist.Pack, 0)
+		lowUids := codec.Decode(pls[0].Pack, startUids[0])
+		highUids := codec.Decode(pls[1].Pack, startUids[1])
+		// Check if no data is lost in splitting.
+		require.Equal(t, uids, append(lowUids, highUids...))
+		require.Equal(t, ol.plist.Postings, append(pls[0].Postings, pls[1].Postings...))
+		// Check if the postings belong to the correct half.
+		midUid := pls[1].Pack.Blocks[0].GetBase()
+		require.Equal(t, startUids[1], midUid)
+		for _, p := range pls[0].Postings {
+			require.Less(t, p.Uid, midUid)
+		}
+		for _, p := range pls[1].Postings {
+			require.GreaterOrEqual(t, p.Uid, midUid)
+		}
+	}
+	size := int(1e5)
+	ol := createList(t, size)
+	postings := ol.plist.Postings
+	startUids, pls := binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+
+	// Artifically modify the ol.plist.Posting for purpose of checking binSplit.
+	ol.plist.Postings = postings[:size/3]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+
+	ol.plist.Postings = postings[:0]
+	startUids, pls = binSplit(1, ol.plist)
+	verifyBinSplit(t, ol, startUids, pls)
+}
+
 // Verify that iteration works with an afterUid value greater than zero.
 func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
@@ -1051,17 +1120,17 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
-	var labels []string
+	var facets []string
 	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
-		if len(p.Label) > 0 {
-			labels = append(labels, p.Label)
+		if len(p.Facets) > 0 {
+			facets = append(facets, p.Facets[0].Key)
 		}
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, commits, len(labels))
-	for i, label := range labels {
-		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	require.Equal(t, commits, len(facets))
+	for i, facet := range facets {
+		require.Equal(t, facet, strconv.Itoa(int(i+1)))
 	}
 }
 
@@ -1147,10 +1216,8 @@ func TestMultiPartListDelete(t *testing.T) {
 func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	size := int(1e5)
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Add entries to the maps.
 	key := x.DataKey(uuid.New().String(), 1331)
@@ -1259,17 +1326,17 @@ func TestSingleListRollup(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
 
-	var labels []string
+	var facets []string
 	err := ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
-		if len(p.Label) > 0 {
-			labels = append(labels, p.Label)
+		if len(p.Facets) > 0 {
+			facets = append(facets, p.Facets[0].Key)
 		}
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, commits, len(labels))
-	for i, label := range labels {
-		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	require.Equal(t, commits, len(facets))
+	for i, facet := range facets {
+		require.Equal(t, facet, strconv.Itoa(int(i+1)))
 	}
 
 	var bl pb.BackupPostingList
@@ -1285,10 +1352,8 @@ func TestSingleListRollup(t *testing.T) {
 
 func TestRecursiveSplits(t *testing.T) {
 	// For testing, set the max list size to a lower threshold.
+	defer setMaxListSize(maxListSize)
 	maxListSize = mb / 2
-	defer func() {
-		maxListSize = math.MaxInt32
-	}()
 
 	// Create a list that should be split recursively.
 	size := int(1e5)
@@ -1301,7 +1366,7 @@ func TestRecursiveSplits(t *testing.T) {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
 		}
-		edge.Label = strconv.Itoa(i)
+		edge.Facets = []*api.Facet{{Key: strconv.Itoa(i)}}
 
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
@@ -1320,17 +1385,17 @@ func TestRecursiveSplits(t *testing.T) {
 	require.True(t, len(ol.plist.Splits) > 2)
 
 	// Read back the list and verify the data is correct.
-	var labels []string
+	var facets []string
 	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
-		if len(p.Label) > 0 {
-			labels = append(labels, p.Label)
+		if len(p.Facets) > 0 {
+			facets = append(facets, p.Facets[0].Key)
 		}
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, commits, len(labels))
-	for i, label := range labels {
-		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	require.Equal(t, commits, len(facets))
+	for i, facet := range facets {
+		require.Equal(t, facet, strconv.Itoa(int(i+1)))
 	}
 }
 
@@ -1356,7 +1421,7 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkAddMutations(b *testing.B) {
-	key := x.DataKey("name", 1)
+	key := x.DataKey(x.GalaxyAttr("name"), 1)
 	l, err := getNew(key, ps, math.MaxUint64)
 	if err != nil {
 		b.Error(err)
@@ -1371,7 +1436,6 @@ func BenchmarkAddMutations(b *testing.B) {
 		}
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(rand.Intn(b.N) + 1),
-			Label:   "testing",
 			Op:      pb.DirectedEdge_SET,
 		}
 		txn := &Txn{StartTs: 1}

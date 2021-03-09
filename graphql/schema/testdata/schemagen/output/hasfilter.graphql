@@ -188,7 +188,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
-directive @withSubscription on OBJECT | INTERFACE
+directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	password: AuthRule
@@ -198,6 +198,7 @@ directive @auth(
 	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
+directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
 directive @cacheControl(maxAge: Int!) on QUERY
@@ -208,6 +209,7 @@ directive @generate(
 
 input IntFilter {
 	eq: Int
+	in: [Int]
 	le: Int
 	lt: Int
 	ge: Int
@@ -217,6 +219,7 @@ input IntFilter {
 
 input Int64Filter {
 	eq: Int64
+	in: [Int64]
 	le: Int64
 	lt: Int64
 	ge: Int64
@@ -226,6 +229,7 @@ input Int64Filter {
 
 input FloatFilter {
 	eq: Float
+	in: [Float]
 	le: Float
 	lt: Float
 	ge: Float
@@ -235,6 +239,7 @@ input FloatFilter {
 
 input DateTimeFilter {
 	eq: DateTime
+	in: [DateTime]
 	le: DateTime
 	lt: DateTime
 	ge: DateTime
@@ -362,7 +367,7 @@ input AddTInput {
 }
 
 input BFilter {
-	has: BHasFilter
+	has: [BHasFilter]
 	and: [BFilter]
 	or: [BFilter]
 	not: BFilter
@@ -393,7 +398,7 @@ input IRef {
 
 input TFilter {
 	id: [ID!]
-	has: THasFilter
+	has: [THasFilter]
 	and: [TFilter]
 	or: [TFilter]
 	not: TFilter

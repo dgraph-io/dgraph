@@ -23,6 +23,7 @@ import (
 // Constants representing type of different graphql lexed items.
 const (
 	itemText       lex.ItemType = 5 + iota // plain text
+	itemNumber                             // number
 	itemLeftCurl                           // left curly bracket
 	itemRightCurl                          // right curly bracket
 	itemColon                              // colon
@@ -81,6 +82,15 @@ Loop:
 		case r == '_':
 			// Predicates can start with _.
 			return lexWord
+		case isDigit(r):
+			nextRunes := l.PeekTwo()
+			if r == '0' && isHexseparator(nextRunes[0]) && isHexadecimal(nextRunes[1]) {
+				l.Backup()
+				return lexHexNumber
+			} else {
+				l.Backup()
+				return lexNumber
+			}
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
@@ -101,6 +111,37 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		l.Emit(itemText)
+		break
+	}
+	return lexText
+}
+
+func lexNumber(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNumber, and absorbed one rune.
+		r := l.Next()
+		if isDigit(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemNumber)
+		break
+	}
+	return lexText
+}
+
+func lexHexNumber(l *lex.Lexer) lex.StateFn {
+	// It satisfies 0[xX] then process the input as hexadecimal.
+	l.Next()
+	l.Next() // Absorb 0[xX]
+	for {
+		// The caller already checked isHexadecimal, and absorbed one rune.
+		r := l.Next()
+		if isHexadecimal(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemNumber)
 		break
 	}
 	return lexText
@@ -148,6 +189,29 @@ func isNameSuffix(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// isHexadecimal returns true if the rune is hexadecimal.
+func isHexadecimal(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'f':
+		return true
+	case r >= 'A' && r <= 'F':
+		return true
+	case isDigit(r):
+		return true
+	default:
+		return false
+	}
+}
+
+func isHexseparator(r rune) bool {
+	return r == 'x' || r == 'X'
+}
+
+// isDigit returns true if the rune is digit.
+func isDigit(r rune) bool {
+	return r >= '0' && r <= '9'
 }
 
 // isSpace returns true if the rune is a tab or space.

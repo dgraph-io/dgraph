@@ -24,13 +24,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v3/y"
+
 	ostats "go.opencensus.io/stats"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -48,6 +50,9 @@ var (
 	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
 	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
 )
+
+// Default limit on number of simultaneous open files on unix systems
+const DefaultMaxOpenFileLimit = 1024
 
 func isStarAll(v []byte) bool {
 	return bytes.Equal(v, []byte(x.Star))
@@ -73,6 +78,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if isDeletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
 	}
+
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
@@ -162,7 +168,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
 					return
 				}
-				if err := gr.Node.proposeSnapshot(1); err != nil {
+				if err := gr.Node.proposeSnapshot(); err != nil {
 					glog.Errorf("error in proposing snapshot: %v", err)
 				}
 			}
@@ -194,6 +200,19 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
+	// This throttle allows is used to limit the number of files which are opened simultaneously
+	// by badger while building indexes for predicates in background.
+	maxOpenFileLimit, err := x.QueryMaxOpenFiles()
+	if err != nil {
+		// Setting to default value on unix systems
+		maxOpenFileLimit = 1024
+	}
+	glog.Infof("Max open files limit: %d", maxOpenFileLimit)
+	// Badger opens around 8 files for indexing per predicate.
+	// The throttle limit is set to maxOpenFileLimit/8 to ensure that indexing does not throw
+	// "Too many open files" error.
+	throttle := y.NewThrottle(maxOpenFileLimit / 8)
+
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
 		// In case background indexing is running, we should call it here again.
 		defer stopIndexing(closer)
@@ -204,11 +223,13 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		// cause writes to badger to fail leading to undesired indexing failures.
 		wg.Wait()
 
+		x.Check(throttle.Do())
 		// undo schema changes in case re-indexing fails.
 		if err := buildIndexesHelper(update, rebuild); err != nil {
 			glog.Errorf("error in building indexes, aborting :: %v\n", err)
 			undoSchemaUpdate(update.Predicate)
 		}
+		throttle.Done(nil)
 	}
 
 	for _, su := range updates {
@@ -362,13 +383,13 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		return errors.Errorf("Nil schema")
 	}
 
-	if len(s.Predicate) == 0 {
+	if x.ParseAttr(s.Predicate) == "" {
 		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
 	if x.IsInternalPredicate(s.Predicate) {
 		return errors.Errorf("Cannot create user-defined predicate with internal name %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
@@ -383,16 +404,17 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
 		return errors.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
-		return errors.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+		return errors.Errorf("Cannot reverse for non-uid type on predicate %s",
+			x.ParseAttr(s.Predicate))
 	}
 
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
-			s.Predicate)
+			x.ParseAttr(s.Predicate))
 	}
 
 	t, err := schema.State().TypeOf(s.Predicate)
@@ -415,14 +437,14 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from [%s] => %s without"+
-				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
+				" deleting pred: %s", t.Name(), typ.Name(), x.ParseAttr(s.Predicate))
 		}
 
 	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
-				" while there is data for pred: %s", s.Predicate)
+				" while there is data for pred: %s", x.ParseAttr(s.Predicate))
 		}
 	}
 	return nil
@@ -451,10 +473,12 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -482,19 +506,33 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return err
 	}
 
-	if x.WorkerConfig.AclEnabled && edge.GetAttr() == "dgraph.rule.permission" {
+	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
 		perm, ok := dst.Value.(int64)
 		if !ok {
 			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
 		}
 		if perm < 0 || perm > 7 {
-			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this predicate should be between 0 and 7", perm)
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this"+
+				" predicate should be between 0 and 7", perm)
 		}
 	}
 
 	edge.ValueType = schemaType.Enum()
 	edge.Value = b.Value.([]byte)
 	return nil
+}
+
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
+func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+
+	con := pl.Get()
+	c := pb.NewZeroClient(con)
+	num.Type = pb.Num_NS_ID
+	return c.AssignIds(ctx, num)
 }
 
 // AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
@@ -506,7 +544,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.AssignUids(ctx, num)
+	num.Type = pb.Num_UID
+	return c.AssignIds(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
@@ -687,7 +726,7 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 	// Create a set of all the predicates already present in the schema.
 	var fields []string
 	for _, t := range m.Types {
-		if len(t.TypeName) == 0 {
+		if t.TypeName == "" {
 			return errors.Errorf("Type name must be specified in type update")
 		}
 
@@ -697,8 +736,9 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if fieldName[0] == '~' {
-				fieldName = fieldName[1:]
+			ns, attr := x.ParseNamespaceAttr(fieldName)
+			if attr[0] == '~' {
+				fieldName = x.NamespaceAttr(ns, attr[1:])
 			}
 
 			if _, ok := reqPredSet[fieldName]; !ok {
@@ -722,8 +762,9 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 		// this request.
 		for _, field := range t.Fields {
 			fieldName := field.Predicate
-			if fieldName[0] == '~' {
-				fieldName = fieldName[1:]
+			ns, attr := x.ParseNamespaceAttr(fieldName)
+			if attr[0] == '~' {
+				fieldName = x.NamespaceAttr(ns, attr[1:])
 			}
 
 			_, inSchema := schemaSet[fieldName]
@@ -742,11 +783,11 @@ func verifyTypes(ctx context.Context, m *pb.Mutations) error {
 // typeSanityCheck performs basic sanity checks on the given type update.
 func typeSanityCheck(t *pb.TypeUpdate) error {
 	for _, field := range t.Fields {
-		if len(field.Predicate) == 0 {
+		if x.ParseAttr(field.Predicate) == "" {
 			return errors.Errorf("Field in type definition must have a name")
 		}
 
-		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+		if field.ValueType == pb.Posting_OBJECT && field.ObjectTypeName == "" {
 			return errors.Errorf(
 				"Field with value type OBJECT must specify the name of the object type")
 		}
@@ -768,10 +809,22 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
 	defer span.End()
 
+	clientDiscard := false
+	if tc.Aborted {
+		// The client called Discard
+		ostats.Record(ctx, x.TxnDiscards.M(1))
+		clientDiscard = true
+	}
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return 0, conn.ErrNoConnection
 	}
+
+	// Do de-duplication before sending the request to zero.
+	tc.Keys = x.Unique(tc.Keys)
+	tc.Preds = x.Unique(tc.Preds)
+
 	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 
@@ -785,9 +838,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	span.Annotate(attributes, "")
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
-		ostats.Record(context.Background(), x.TxnAborts.M(1))
+		if !clientDiscard {
+			// The server aborted the txn (not the client)
+			ostats.Record(ctx, x.TxnAborts.M(1))
+		}
 		return 0, dgo.ErrAborted
 	}
+	ostats.Record(ctx, x.TxnCommits.M(1))
 	return tctx.CommitTs, nil
 }
 

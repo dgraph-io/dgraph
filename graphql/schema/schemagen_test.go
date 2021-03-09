@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -97,6 +98,36 @@ func TestSchemaString(t *testing.T) {
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
 				t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestApolloServiceQueryResult(t *testing.T) {
+	inputDir := "testdata/apolloservice/input/"
+	outputDir := "testdata/apolloservice/output/"
+
+	files, err := ioutil.ReadDir(inputDir)
+	require.NoError(t, err)
+
+	for _, testFile := range files {
+		t.Run(testFile.Name(), func(t *testing.T) {
+			inputFileName := inputDir + testFile.Name()
+			str1, err := ioutil.ReadFile(inputFileName)
+			require.NoError(t, err)
+
+			schHandler, errs := NewHandler(string(str1), true)
+			require.NoError(t, errs)
+
+			apolloServiceResult := schHandler.GQLSchemaWithoutApolloExtras()
+
+			_, err = FromString(schHandler.GQLSchema())
+			require.NoError(t, err)
+			outputFileName := outputDir + testFile.Name()
+			str2, err := ioutil.ReadFile(outputFileName)
+			require.NoError(t, err)
+			if diff := cmp.Diff(string(str2), apolloServiceResult); diff != "" {
+				t.Errorf("result mismatch - diff (- want +got):\n%s", diff)
 			}
 		})
 	}
@@ -314,7 +345,8 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// set up the lambda url for unit tests
-	x.Config.GraphqlLambdaUrl = "http://localhost:8086/graphql-worker"
+	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
+		MergeAndCheckDefault("")
 	// now run the tests
 	os.Exit(m.Run())
 }

@@ -32,9 +32,9 @@ import (
 	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -562,8 +562,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
-	tmpIndexDir, err := ioutil.TempDir("", "dgraph_index_")
+	tmpIndexDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "dgraph_index_")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
@@ -575,7 +574,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithLoggingLevel(badger.WARNING)
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
+		WithLoggingLevel(badger.WARNING).
+		WithMetricsEnabled(false)
 
 	// Set cache if we have encryption.
 	if len(x.WorkerConfig.EncryptionKey) > 0 {
@@ -1143,7 +1144,6 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
-			edge.Label = pp.Label
 
 			for {
 				// we only need to build reverse index here.
@@ -1174,7 +1174,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", rb.CurrentSchema.Predicate)
+			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
 	}
 
 	return false, nil
@@ -1224,7 +1224,6 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
-			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
 		return pl.addMutation(ctx, txn, newEdge)
@@ -1251,4 +1250,10 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 
 	return schema.State().Delete(attr)
+}
+
+// DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
+func DeleteNamespace(ns uint64) error {
+	schema.State().DeletePredsForNs(ns)
+	return pstore.BanNamespace(ns)
 }

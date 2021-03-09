@@ -775,3 +775,151 @@ type Book @auth(
     name: String!
     desc: String!
 }
+
+
+type Mission @key(fields: "id") @auth(
+    query:{ rule: """
+            query($USER: String!) { 
+              queryMission(filter: { supervisorName: {eq: $USER} } ) { 
+                id 
+              } 
+            }""" }
+){
+    id: String! @id
+    crew: [Astronaut]
+    supervisorName: String @search(by: [exact])
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends @auth(
+    query: { rule: "{$ROLE: { eq: \"admin\" } }"},
+    add: { rule: "{$USER: { eq: \"foo\" } }"},
+    delete: { rule: "{$USER: { eq: \"foo\" } }"},
+    update: { rule: "{$USER: { eq: \"foo\" } }"}
+){
+    id: ID! @external
+    missions: [Mission]
+}
+
+interface Vehicle @auth(
+    query:{
+        or:[
+            {rule: "{$ROLE: { eq: \"ADMIN\" } }"},
+            {rule: "query($USER: String!) { queryVehicle(filter: { owner: { eq: $USER }}) { owner } }"}
+        ]
+    }
+){
+    owner: String! @search(by: [exact])
+}
+
+type Car implements Vehicle {
+    id: ID!
+    manufacturer: String!
+}
+
+type Country @auth(
+    add: { rule: """
+        query($USER: String!) {
+            queryCountry(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """} ) {
+    id: String! @id
+    name: String!
+    ownedBy: String @search(by: [hash])
+    states: [State] @hasInverse(field: country)
+}
+
+type State @auth(
+    update: { rule: """
+        query($USER: String!) {
+            queryState(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """} ) {
+    code: String! @id
+    name: String!
+    ownedBy: String @search(by: [hash])
+    country: Country
+}
+
+# union testing - start
+enum AnimalCategory {
+    Fish
+    Amphibian
+    Reptile
+    Bird
+    Mammal
+    InVertebrate
+}
+
+interface Animal {
+    id: ID!
+    category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+    breed: String @search
+    eats: [DogFood!]
+}
+
+type Parrot implements Animal {
+    repeatsWords: [String]
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+    id: ID!
+    breed: String # field with same name as a field in type Dog
+}
+
+union DogFood = Parrot | Plant
+
+union HomeMember = Dog | Parrot | Plant
+
+type Home @auth(
+    # only return homes with either:
+    # 1. a Dog member which has something to eat
+    # 2. or a Plant member
+    query: { or: [ {rule: """
+    query {
+        queryHome @cascade(fields: ["members"]) {
+            members(filter: {memberTypes: [Dog]}) @cascade {
+                ... on Dog {
+                    eats {
+                        ... on Parrot {
+                            id
+                        }
+                        ... on Plant {
+                            id
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """}, {rule: """
+    query {
+        queryHome {
+            members(filter: {memberTypes: [Plant]}) {
+                ... on Plant {
+                    breed
+                }
+            }
+        }
+    }
+    """}]}
+) {
+    id: ID!
+    address: String
+    members: [HomeMember]
+    favouriteMember: HomeMember
+}
+# union testing - end

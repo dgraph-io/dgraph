@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -119,7 +119,7 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, x.GrootId, "password")
+		err = dg.LoginIntoNamespace(ctx, x.GrootId, "password", x.GalaxyNamespace)
 		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
 			strings.Contains(err.Error(), "user not found")) {
 
@@ -250,6 +250,7 @@ type LoginParams struct {
 	Endpoint   string
 	UserID     string
 	Passwd     string
+	Namespace  uint64
 	RefreshJwt string
 }
 
@@ -265,8 +266,8 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		loginPayload.Password = params.Passwd
 	}
 
-	login := `mutation login($userId: String, $password: String, $refreshToken: String) {
-		login(userId: $userId, password: $password, refreshToken: $refreshToken) {
+	login := `mutation login($userId: String, $password: String, $namespace: Int, $refreshToken: String) {
+		login(userId: $userId, password: $password, namespace: $namespace, refreshToken: $refreshToken) {
 			response {
 				accessJWT
 				refreshJWT
@@ -279,6 +280,7 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 		Variables: map[string]interface{}{
 			"userId":       params.UserID,
 			"password":     params.Passwd,
+			"namespace":    params.Namespace,
 			"refreshToken": params.RefreshJwt,
 		},
 	}
@@ -361,10 +363,15 @@ type HttpToken struct {
 // GrootHttpLogin logins using the groot account with the default password
 // and returns the access JWT
 func GrootHttpLogin(endpoint string) *HttpToken {
+	return GrootHttpLoginNamespace(endpoint, 0)
+}
+
+func GrootHttpLoginNamespace(endpoint string, namespace uint64) *HttpToken {
 	token, err := HttpLogin(&LoginParams{
-		Endpoint: endpoint,
-		UserID:   x.GrootId,
-		Passwd:   "password",
+		Endpoint:  endpoint,
+		UserID:    x.GrootId,
+		Passwd:    "password",
+		Namespace: namespace,
 	})
 	x.Check(err)
 	return token
@@ -508,7 +515,7 @@ func GetHttpsClient(t *testing.T) http.Client {
 func GetAlphaClientConfig(t *testing.T) *tls.Config {
 	_, filename, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	tlsDir := path.Join(path.Dir(filename), "../tlstest/mtls_internal/tls/live")
+	tlsDir := filepath.Join(filepath.Dir(filename), "../tlstest/mtls_internal/tls/live")
 	c := &x.TLSHelperConfig{
 		CertRequired:     true,
 		Cert:             tlsDir + "/client.liveclient.crt",

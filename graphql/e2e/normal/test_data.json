@@ -141,7 +141,6 @@
     {
         "uid": "_:chapter1",
         "dgraph.type": "Chapter",
-        "Chapter.bookId": 1234567890,
         "Chapter.chapterId": 1,
         "Chapter.name": "How Dgraph Works"
     },

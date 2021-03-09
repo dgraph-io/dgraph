@@ -15,7 +15,7 @@
         "set": { "aSecret": "new Value" }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateUserSecret(func: uid(UserSecretRoot)) {
         uid
@@ -48,7 +48,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -56,9 +56,9 @@
       ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
       Column1 as var(func: uid(0x123)) @filter(type(Column))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -74,10 +74,10 @@
       }
       Ticket1 as var(func: uid(0x789))
       TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -110,7 +110,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
@@ -118,9 +118,9 @@
       ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
       Column1 as var(func: uid(0x123)) @filter(type(Column))
       ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -136,10 +136,10 @@
       }
       Ticket1 as var(func: uid(0x789))
       TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
@@ -177,22 +177,29 @@
     }
   dgquery: |-
     query {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-      Column1 as var(func: uid(0x123)) @filter(type(Column))
-      ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+      ColumnRoot as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+      Column2 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth3 as var(func: uid(Column2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
-      Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
-        uid
-      }
-      var(func: uid(Ticket4)) {
+      var(func: uid(0x789)) {
         Column5 as Ticket.onColumn @filter(NOT (uid(x)))
       }
       Column5(func: uid(Column5)) {
@@ -202,9 +209,9 @@
         uid
       }
       ColumnAuth6 as var(func: uid(Column5)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -240,22 +247,29 @@
     }
   dgquery: |-
     query {
+      Ticket1(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Ticket1": [ { "uid": "0x789" } ]
+    }
+  dgquerysec: |-
+    query {
       x as updateColumn(func: uid(ColumnRoot)) {
         uid
       }
-      ColumnRoot as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-      Column1 as var(func: uid(0x123)) @filter(type(Column))
-      ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+      ColumnRoot as var(func: uid(Column2)) @filter(uid(ColumnAuth3))
+      Column2 as var(func: uid(0x123)) @filter(type(Column))
+      ColumnAuth3 as var(func: uid(Column2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
-      Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
-        uid
-      }
-      var(func: uid(Ticket4)) {
+      var(func: uid(0x789)) {
         Column5 as Ticket.onColumn @filter(NOT (uid(x)))
       }
       Column5(func: uid(Column5)) {
@@ -265,9 +279,9 @@
         uid
       }
       ColumnAuth6 as var(func: uid(Column5)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -278,6 +292,11 @@
       "Ticket4": [ { "uid": "0x789" } ],
       "Column5":  [ { "uid": "0x456" } ]
     }
+  authquery: |-
+    query {
+    }
+  authjson: |
+    { }
   error:
     { "message": "couldn't rewrite query for mutation updateColumn because authorization failed" }
 
@@ -304,25 +323,32 @@
     }
   dgquery: |-
     query {
+      Column1(func: uid(0x456)) @filter(type(Column)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Column1": [ { "uid": "0x456" } ]
+    }
+  dgquerysec: |-
+    query {
       x as updateTicket(func: uid(TicketRoot)) {
         uid
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+      TicketRoot as var(func: uid(Ticket2)) @filter(uid(TicketAuth3))
+      Ticket2 as var(func: uid(0x123)) @filter(type(Ticket))
+      TicketAuth3 as var(func: uid(Ticket2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
       }
-      Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
-        uid
-      }
       var(func: uid(x)) {
-        Column5 as Ticket.onColumn @filter(NOT (uid(Column4)))
+        Column5 as Ticket.onColumn @filter(NOT (uid(0x456)))
       }
       Column5(func: uid(Column5)) {
         uid
@@ -331,9 +357,9 @@
         uid
       }
       ColumnAuth6 as var(func: uid(Column5)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -368,25 +394,32 @@
     }
   dgquery: |-
     query {
+      Column1(func: uid(0x456)) @filter(type(Column)) {
+        uid
+      }
+    }
+  queryjson: |
+    {
+      "Column1": [ { "uid": "0x456" } ]
+    }
+  dgquerysec: |-
+    query {
       x as updateTicket(func: uid(TicketRoot)) {
         uid
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+      TicketRoot as var(func: uid(Ticket2)) @filter(uid(TicketAuth3))
+      Ticket2 as var(func: uid(0x123)) @filter(type(Ticket))
+      TicketAuth3 as var(func: uid(Ticket2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
           }
         }
       }
-      Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
-        uid
-      }
       var(func: uid(x)) {
-        Column5 as Ticket.onColumn @filter(NOT (uid(Column4)))
+        Column5 as Ticket.onColumn @filter(NOT (uid(0x456)))
       }
       Column5(func: uid(Column5)) {
         uid
@@ -395,9 +428,9 @@
         uid
       }
       ColumnAuth6 as var(func: uid(Column5)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
         }
       }
@@ -432,7 +465,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateLog()
     }
@@ -459,7 +492,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateLog(func: uid(LogRoot)) {
         uid
@@ -489,7 +522,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateProject(func: uid(ProjectRoot)) {
         uid
@@ -497,8 +530,8 @@
       ProjectRoot as var(func: uid(Project1)) @filter(uid(ProjectAuth2))
       Project1 as var(func: uid(0x123)) @filter(type(Project))
       ProjectAuth2 as var(func: uid(Project1)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
       }
     }
@@ -524,7 +557,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateProject(func: uid(ProjectRoot)) {
         uid
@@ -554,7 +587,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateIssue(func: uid(IssueRoot)) {
         uid
@@ -562,7 +595,7 @@
       IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
       Issue1 as var(func: uid(0x123)) @filter(type(Issue))
       IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
 
@@ -587,7 +620,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateIssue()
     }
@@ -613,7 +646,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateComplexLog(func: uid(ComplexLogRoot)) {
         uid
@@ -643,7 +676,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateComplexLog()
     }
@@ -670,7 +703,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateQuestion(func: uid(QuestionRoot)) {
         uid
@@ -678,12 +711,12 @@
       QuestionRoot as var(func: uid(Question1)) @filter((uid(QuestionAuth2) AND uid(QuestionAuth3)))
       Question1 as var(func: uid(0x123)) @filter(type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -707,7 +740,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateQuestion()
     }
@@ -734,7 +767,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateFbPost(func: uid(FbPostRoot)) {
         uid
@@ -743,8 +776,8 @@
       FbPost1 as var(func: uid(0x123)) @filter(type(FbPost))
       FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -771,7 +804,7 @@
         }
       }
     }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateFbPost()
     }
@@ -799,7 +832,7 @@
           }
         }
       }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updatePost(func: uid(PostRoot)) {
         uid
@@ -808,26 +841,26 @@
       Post1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
       Question1 as var(func: type(Question))
       QuestionAuth2 as var(func: uid(Question1)) @filter(eq(Question.answered, true)) @cascade {
-        id : uid
+        Question.id : uid
       }
       QuestionAuth3 as var(func: uid(Question1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
       FbPost1 as var(func: type(FbPost))
       FbPostAuth4 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth5 as var(func: uid(Answer1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -854,7 +887,7 @@
           }
         }
       }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updatePost(func: uid(PostRoot)) {
         uid
@@ -864,15 +897,15 @@
       FbPost1 as var(func: type(FbPost))
       FbPostAuth2 as var(func: uid(FbPost1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
       Answer1 as var(func: type(Answer))
       AnswerAuth3 as var(func: uid(Answer1)) @cascade {
         dgraph.type
-        author : Post.author @filter(eq(Author.name, "user1")) {
-          name : Author.name
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
         }
       }
     }
@@ -899,7 +932,7 @@
           }
         }
       }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updatePost()
     }
@@ -926,7 +959,7 @@
           }
         }
       }
-  dgquery: |-
+  dgquerysec: |-
     query {
       x as updateA(func: uid(ARoot)) {
         uid

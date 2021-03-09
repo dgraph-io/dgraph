@@ -18,13 +18,14 @@ package testutil
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
+
+	"github.com/pkg/errors"
 )
 
 type LiveOpts struct {
@@ -34,6 +35,9 @@ type LiveOpts struct {
 	SchemaFile string
 	Dir        string
 	Ludicrous  bool
+	Env        []string
+	Creds      *LoginParams
+	ForceNs    int64
 }
 
 func LiveLoad(opts LiveOpts) error {
@@ -44,20 +48,31 @@ func LiveLoad(opts LiveOpts) error {
 		"--alpha", opts.Alpha,
 		"--zero", opts.Zero,
 	}
+	if opts.ForceNs != 0 {
+		args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
+	}
 	if opts.Ludicrous {
-		args = append(args, "--ludicrous_mode")
+		args = append(args, "--ludicrous")
+	}
+	if opts.Creds != nil {
+		args = append(args, "--creds")
+		args = append(args, fmt.Sprintf("user=%s;password=%s;namespace=%d",
+			opts.Creds.UserID, opts.Creds.Passwd, opts.Creds.Namespace))
 	}
 	liveCmd := exec.Command(DgraphBinaryPath(), args...)
 
 	if opts.Dir != "" {
 		liveCmd.Dir = opts.Dir
 	}
+	if opts.Env != nil {
+		liveCmd.Env = append(os.Environ(), opts.Env...)
+	}
 
-	out, err := liveCmd.Output()
+	out, err := liveCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
-		return err
+		return errors.Wrapf(err, string(out))
 	}
 	if CheckIfRace(out) {
 		return errors.New("race condition detected. check logs for more details")
@@ -72,6 +87,7 @@ type BulkOpts struct {
 	SchemaFile    string
 	GQLSchemaFile string
 	Dir           string
+	Env           []string
 }
 
 func BulkLoad(opts BulkOpts) error {
@@ -89,6 +105,11 @@ func BulkLoad(opts BulkOpts) error {
 	if opts.Dir != "" {
 		bulkCmd.Dir = opts.Dir
 	}
+
+	if opts.Env != nil {
+		bulkCmd.Env = append(os.Environ(), opts.Env...)
+	}
+
 	out, err := bulkCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Error %v\n", err)

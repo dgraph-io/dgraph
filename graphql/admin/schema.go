@@ -17,26 +17,19 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
 type getSchemaResolver struct {
 	admin *adminServer
-
-	gqlQuery schema.Query
 }
 
 type updateGQLSchemaInput struct {
@@ -57,7 +50,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 
 	// We just need to validate the schema. Schema is later set in `resetSchema()` when the schema
 	// is returned from badger.
-	schHandler, err := schema.NewHandler(input.Set.Schema, true)
+	schHandler, err := schema.NewHandler(input.Set.Schema, false)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -66,93 +59,47 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 		return resolve.EmptyResult(m, err), false
 	}
 
-	usr.admin.mux.RLock()
-	oldSchemaHash := farm.Fingerprint64([]byte(usr.admin.schema.Schema))
-	usr.admin.mux.RUnlock()
-
-	newSchemaHash := farm.Fingerprint64([]byte(input.Set.Schema))
-	updateHistory := oldSchemaHash != newSchemaHash
-
 	resp, err := edgraph.UpdateGQLSchema(ctx, input.Set.Schema, schHandler.DGSchema())
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if updateHistory {
-		if err := edgraph.UpdateSchemaHistory(ctx, input.Set.Schema); err != nil {
-			glog.Errorf("error while updating schema history %s", err.Error())
-		}
-	}
-
-	return &resolve.Resolved{
-		Data: map[string]interface{}{
+	return resolve.DataResult(
+		m,
+		map[string]interface{}{
 			m.Name(): map[string]interface{}{
 				"gqlSchema": map[string]interface{}{
 					"id":              query.UidToHex(resp.Uid),
 					"schema":          input.Set.Schema,
 					"generatedSchema": schHandler.GQLSchema(),
 				}}},
-		Field: m,
-		Err:   nil,
-	}, true
+		nil), true
 }
 
-func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) ([]*gql.GraphQuery, error) {
-	gsr.gqlQuery = gqlQuery
-	return nil, nil
-}
+func (gsr *getSchemaResolver) Resolve(ctx context.Context, q schema.Query) *resolve.Resolved {
+	var data map[string]interface{}
 
-func (gsr *getSchemaResolver) Execute(
-	ctx context.Context,
-	req *dgoapi.Request) (*dgoapi.Response, error) {
 	gsr.admin.mux.RLock()
 	defer gsr.admin.mux.RUnlock()
-	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
-	return &dgoapi.Response{Json: b}, err
-}
 
-func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
-}
-
-func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
-
-	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(field.Name()))
-
-	if gql.ID == "" {
-		x.Check2(buf.WriteString(`": null }`))
-		return buf.Bytes(), nil
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
 	}
 
-	x.Check2(buf.WriteString(`": [{`))
-
-	for i, sel := range field.SelectionSet() {
-		var val []byte
-		var err error
-		switch sel.Name() {
-		case "id":
-			val, err = json.Marshal(gql.ID)
-		case "schema":
-			val, err = json.Marshal(gql.Schema)
-		case "generatedSchema":
-			val, err = json.Marshal(gql.GeneratedSchema)
-		}
-		x.Check2(val, err)
-
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.Name()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.Write(val))
+	cs := gsr.admin.schema[ns]
+	if cs == nil || cs.ID == "" {
+		data = map[string]interface{}{q.Name(): nil}
+	} else {
+		data = map[string]interface{}{
+			q.Name(): map[string]interface{}{
+				"id":              cs.ID,
+				"schema":          cs.Schema,
+				"generatedSchema": cs.GeneratedSchema,
+			}}
 	}
-	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return resolve.DataResult(q, data, nil)
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

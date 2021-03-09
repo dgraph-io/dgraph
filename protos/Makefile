@@ -14,8 +14,11 @@
 # limitations under the License.
 #
 
+# Update BADGER_PB_VERSION when upgrading Badger major versions
+BADGER_PB_VERSION = 3
+
 DGO_PATH    := github.com/dgraph-io/dgo/v200
-BADGER_PATH := github.com/dgraph-io/badger/v2
+BADGER_PATH := github.com/dgraph-io/badger/v${BADGER_PB_VERSION}
 GOGO_PATH   := github.com/gogo/protobuf
 
 TMPDIR     := $(shell mktemp -d)
@@ -31,29 +34,36 @@ help:
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
+.PHONY: tidy-deps
+tidy-deps:
+	@go mod tidy -v
+
 .PHONY: check
 check:
 	@./depcheck.sh && \
 		(echo "Installing proto libraries to versions in go.mod." ; \
 		go install github.com/golang/protobuf/protoc-gen-go ; \
-		go install github.com/gogo/protobuf/protoc-gen-gofast)
+		go install github.com/gogo/protobuf/protoc-gen-gogofaster)
 
 .PHONY: copy-protos
 copy-protos:
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
 	@mkdir -p ${TMPDIR}/src/${GOGO_PATH}/gogoproto
-	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb2.proto ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb${BADGER_PB_VERSION}.proto \
+	 ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto \
+	 ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
+	@cp $(shell go list -m -f "{{.Dir}}" ${GOGO_PATH})/gogoproto/gogo.proto \
+	 ${TMPDIR}/src/${GOGO_PATH}/gogoproto/gogo.proto
 
 .PHONY: regenerate
-regenerate: copy-protos check clean
+regenerate: tidy-deps copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
+		--gogofaster_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
 		pb.proto
 	@rm -rf ${TMPDIR}
 	@echo Done.

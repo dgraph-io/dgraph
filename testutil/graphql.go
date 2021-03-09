@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgrijalva/jwt-go/v4"
@@ -225,7 +223,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 }
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault bool) ([]byte, error) {
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"%s","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"%s","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"],"ClosedByDefault":%s}`
 
 	closedByDefaultStr := "false"
 	if closedByDefault {
@@ -246,12 +244,12 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 		verificationKey = string(bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110}))
 	}
 
-	authInfo = fmt.Sprintf(authInfo, verificationKey, closedByDefaultStr)
+	authInfo = fmt.Sprintf(authInfo, verificationKey, algo, closedByDefaultStr)
 	return append(schema, []byte(authInfo)...), nil
 }
 
 func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
 	return append(schema, []byte(authInfo)...), nil
 }
 
@@ -263,15 +261,6 @@ func AppendAuthInfoWithJWKUrlAndWithoutAudience(schema []byte) ([]byte, error) {
 // Add JWKUrl and (VerificationKey, Algo) in the same Authorization JSON
 // Adding Dummy values as this should result in validation error
 func AppendJWKAndVerificationKey(schema []byte) ([]byte, error) {
-	authInfo := `# Dgraph.Authorization {"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
+	authInfo := `#Dgraph.Authorization{"VerificationKey":"some-key","Header":"X-Test-Auth","jwkurl":"some-url", "Namespace":"https://xyz.io/jwt/claims","Algo":"algo","Audience":["fir-project1-259e7"]}`
 	return append(schema, []byte(authInfo)...), nil
-}
-
-func SetAuthMeta(strSchema string) *authorization.AuthMeta {
-	authMeta, err := authorization.Parse(strSchema)
-	if err != nil {
-		panic(err)
-	}
-	authorization.SetAuthMeta(authMeta)
-	return authMeta
 }

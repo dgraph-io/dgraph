@@ -27,22 +27,24 @@ var (
 	CmdAcl x.SubCommand
 )
 
-const gName = "guardian_name"
-const gPassword = "guardian_password"
 const defaultGroupList = "dgraph-unused-group"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
-		Use:   "acl",
-		Short: "Run the Dgraph acl tool",
+		Use:         "acl",
+		Short:       "Run the Dgraph Enterprise Edition ACL tool",
+		Annotations: map[string]string{"group": "security"},
 	}
-
+	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(gName, "w", x.GrootId, "Guardian username performing this operation")
-	flag.StringP(gPassword, "x", "", "Guardian password to authorize this operation")
+	flag.String("guardian-creds", "", `Login credentials for the guardian
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --guardian-creds user=username;password=mypass;namespace=2`)
 
-	// TLS configuration
+	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
 	subcommands := initSubcommands()

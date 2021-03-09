@@ -30,7 +30,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
@@ -102,7 +102,7 @@ func TestBackupMinio(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
@@ -122,10 +122,9 @@ func TestBackupMinio(t *testing.T) {
 
 	// Check the predicates and types in the schema are as expected.
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
-	preds := []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid", "dgraph.type", "movie",
-		"dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at", "dgraph.graphql.p_query",
-		"dgraph.graphql.p_sha256hash", "dgraph.drop.op"}
-	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}
+	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie",
+		"dgraph.graphql.p_query", "dgraph.drop.op"}
+	types := []string{"Node", "dgraph.graphql", "dgraph.graphql.persisted_query"}
 	testutil.CheckSchema(t, preds, types)
 
 	checks := []struct {
@@ -321,10 +320,13 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
+	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	require.NoError(t, err)
+
+	var manifest worker.MasterManifest
+	err = json.Unmarshal(b, &manifest)
+	require.NoError(t, err)
+	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
 	return dirs
 }
@@ -335,12 +337,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--force_zero=false"}
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
+		x.SensitiveByteSlice(nil), options.Snappy, 0)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -349,7 +348,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored
@@ -390,8 +389,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})

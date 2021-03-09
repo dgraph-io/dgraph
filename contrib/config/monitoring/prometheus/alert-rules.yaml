@@ -39,7 +39,7 @@ spec:
       for: 5m
       annotations:
         description: '{{ $labels.instance }} for cluster {{ $labels.cluster }} has
-          a high number of pending quries({{ $value }} in last 5m).'
+          a high number of pending queries({{ $value }} in last 5m).'
         summary: Instance {{ $labels.instance }} is experiencing high pending query rates.
       labels:
         severity: medium
@@ -72,4 +72,3 @@ spec:
         description: A follower is behind the leader's latest applied timestamp by {{ $value }}.
       labels:
         severity: medium
-

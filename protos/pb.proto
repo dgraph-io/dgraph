@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/dgraph-io/badger/v3/pb/pb.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 /* import "gogoproto/gogo.proto"; */
@@ -117,6 +117,7 @@ message RaftContext {
 	uint32 group = 2;
 	string addr = 3;
 	uint64 snapshot_ts = 4;
+	bool is_learner = 5;
 }
 
 // Member stores information about RAFT group member for a single RAFT node.
@@ -129,6 +130,7 @@ message Member {
 	bool leader = 4;
 	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
 	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
+	bool learner = 7;
 
 	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
 	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
@@ -154,13 +156,16 @@ message ZeroProposal {
 	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
 	Tablet tablet = 3;
-	uint64 maxLeaseId = 4;
+	uint64 maxUID = 4;
 	uint64 maxTxnTs = 5;
+	uint64 maxNsID = 12;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
 	ZeroSnapshot snapshot = 11; // Used to make Zeros take a snapshot.
+	// 12 has already been used.
+	DeleteNsRequest delete_ns = 13; // Used to delete namespace.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -170,12 +175,14 @@ message MembershipState {
 	uint64 counter = 1;  // used to find latest membershipState in case of race.
 	map<uint32, Group> groups = 2;
 	map<uint64, Member> zeros = 3;
-	uint64 maxLeaseId = 4;
+	uint64 maxUID = 4;
 	uint64 maxTxnTs = 5;
+	uint64 maxNsID = 10;
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 	License license = 9;
+	// 10 has already been used.
 }
 
 message ConnectionState {
@@ -210,12 +217,12 @@ message Tablet {
 }
 
 message DirectedEdge {
+	reserved 6;  // This was used for label.
 	fixed64 entity             = 1;    // Subject or source node / UID.
 	string attr                = 2;       // Attribute or predicate. Labels the edge.
 	bytes value                = 3;       // Edge points to a value.
 	Posting.ValType value_type = 4;  // The type of the value
 	fixed64 value_id           = 5;   // Object or destination node / UID.
-	string label               = 6;
 	string lang                = 7;
 	enum Op {
 		SET = 0;
@@ -224,6 +231,7 @@ message DirectedEdge {
 	Op op = 8;
 	repeated api.Facet facets = 9;
 	repeated string allowedPreds = 10;
+	uint64 namespace = 11;
 }
 
 message Mutations {
@@ -304,7 +312,7 @@ message RestoreRequest {
 message Proposal {
 	reserved 7; // Was used for string key.
 	Mutations mutations    		= 2;
-	repeated badgerpb2.KV kv  = 4;
+	repeated badgerpb3.KV kv  = 4;
 	MembershipState state  		= 5;
 	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
 	OracleDelta delta      		= 8;
@@ -312,6 +320,12 @@ message Proposal {
 	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
 	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
 	RestoreRequest restore 		= 12;
+	CDCState cdc_state 				= 13;
+	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+}
+
+message CDCState {
+	uint64 sent_ts    = 1;
 }
 
 message KVS {
@@ -327,6 +341,7 @@ message KVS {
 
 // Posting messages.
 message Posting {
+	reserved 6; // This was used for label.
 	fixed64 uid = 1;
 	bytes value = 2;
 	enum ValType {
@@ -350,7 +365,6 @@ message Posting {
 	}
 	PostingType posting_type = 4;
 	bytes lang_tag = 5; // Only set for VALUE_LANG
-	string label = 6;
 	repeated api.Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
@@ -534,10 +548,11 @@ service Zero {
 
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
-	rpc AssignUids (Num)               returns (AssignedIds) {}
+	rpc AssignIds (Num)               returns (AssignedIds) {}
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
+	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
 }
 
 service Worker {
@@ -552,22 +567,30 @@ service Worker {
 	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb3.KVList) {}
 	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
+	rpc DeleteNamespace (DeleteNsRequest)              returns (Status) {}
 }
 
 message SubscriptionRequest {
 	repeated bytes prefixes = 1;
+	repeated badgerpb3.Match matches = 2;
 }
 
 message SubscriptionResponse {
-    badgerpb2.KVList kvs = 1;
+    badgerpb3.KVList kvs = 1;
 }
 
 message Num {
 	uint64 val = 1;
 	bool read_only = 2;
 	bool forwarded = 3; // True if this request was forwarded by a peer.
+	enum leaseType {
+		NS_ID = 0;
+		UID = 1;
+		TXN_TS = 2;
+	}
+	leaseType type = 4;
 }
 
 message AssignedIds {
@@ -618,6 +641,7 @@ message DropOperation {
 		ALL = 0;
 		DATA = 1;
 		ATTR = 2;
+		NS = 3;
 	}
 	DropOp drop_op    = 1;
 	// When drop_op is ATTR, drop_value will be the name of the ATTR; empty otherwise.
@@ -637,6 +661,8 @@ message ExportRequest {
 	string secret_key = 7;
 	string session_token = 8;
 	bool anonymous = 9;
+
+	uint64 namespace = 10;
 }
 
 message ExportResponse {
@@ -665,6 +691,7 @@ message BackupKey {
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
+	uint64 namespace = 7;
 }
 
 // A posting list stored in the format used for writing backups.
@@ -691,6 +718,11 @@ message UpdateGraphQLSchemaResponse {
 message BulkMeta {
 	int64 edge_count = 1;
 	map<string, SchemaUpdate> schema_map = 2;
+}
+
+message DeleteNsRequest {
+	uint32 group_id = 1;
+	uint64 namespace = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

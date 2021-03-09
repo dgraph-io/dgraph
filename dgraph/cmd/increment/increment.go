@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,25 +45,34 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run(Increment.Conf)
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
+	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.String("user", "", "Username if login is required.")
-	flag.String("password", "", "Password of the user.")
+
+	flag.String("creds", "",
+		`Various login credentials if login is required.
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
+
 	flag.String("pred", "counter.val",
 		"Predicate to use for storing the counter.")
 	flag.Bool("ro", false,
 		"Read-only. Read the counter value without updating it.")
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
+	flag.String("jaeger", "", "Send opencensus traces to Jaeger.")
 }
 
 // Counter stores information about the value being incremented by this tool.
@@ -168,6 +178,9 @@ func run(conf *viper.Viper) {
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 	format := "0102 03:04:05.999"
+
+	// Do a sanity check on the passed credentials.
+	_ = z.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
 	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
 	defer closeFunc()

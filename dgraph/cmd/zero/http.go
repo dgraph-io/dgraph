@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -73,12 +74,17 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	what := r.URL.Query().Get("what")
 	switch what {
 	case "uids":
-		ids, err = st.zero.AssignUids(ctx, num)
+		num.Type = pb.Num_UID
+		ids, err = st.zero.AssignIds(ctx, num)
 	case "timestamps":
+		num.Type = pb.Num_TXN_TS
 		if num.Val == 0 {
 			num.ReadOnly = true
 		}
 		ids, err = st.zero.Timestamps(ctx, num)
+	case "nsids":
+		num.Type = pb.Num_NS_ID
+		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
 			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
@@ -149,6 +155,20 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tablet := r.URL.Query().Get("tablet")
+
+	namespace := r.URL.Query().Get("namespace")
+	namespace = strings.TrimSpace(namespace)
+	ns := x.GalaxyNamespace
+	if namespace != "" {
+		var err error
+		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, "Invalid namespace in query parameter.")
+			return
+		}
+	}
+
+	tablet = x.NamespaceAttr(ns, tablet)
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")

@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	badgerpb "github.com/dgraph-io/badger/v2/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -86,26 +86,33 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 			zeroAddr, x.WorkerConfig.MyAddr)
 	}
 
-	if x.WorkerConfig.RaftId == 0 {
-		id := walStore.Uint(raftwal.RaftId)
-		x.WorkerConfig.RaftId = id
+	raftIdx := x.WorkerConfig.Raft.GetUint64("idx")
+	if raftIdx == 0 {
+		raftIdx = walStore.Uint(raftwal.RaftId)
 
 		// If the w directory already contains raft information, ignore the proposed
 		// group ID stored inside the p directory.
-		if id > 0 {
+		if raftIdx > 0 {
 			x.WorkerConfig.ProposedGroupId = 0
 		}
 	}
-	glog.Infof("Current Raft Id: %#x\n", x.WorkerConfig.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", raftIdx)
 
+	if x.WorkerConfig.ProposedGroupId == 0 {
+		x.WorkerConfig.ProposedGroupId = x.WorkerConfig.Raft.GetUint32("group")
+	}
 	// Successfully connect with dgraphzero, before doing anything else.
-
 	// Connect with Zero leader and figure out what group we should belong to.
-	m := &pb.Member{Id: x.WorkerConfig.RaftId, GroupId: x.WorkerConfig.ProposedGroupId,
-		Addr: x.WorkerConfig.MyAddr}
+	m := &pb.Member{
+		Id:      raftIdx,
+		GroupId: x.WorkerConfig.ProposedGroupId,
+		Addr:    x.WorkerConfig.MyAddr,
+		Learner: x.WorkerConfig.Raft.GetBool("learner"),
+	}
 	if m.GroupId > 0 {
 		m.ForceGroupId = true
 	}
+	glog.Infof("Sending member request to Zero: %+v\n", m)
 	var connState *pb.ConnectionState
 	var err error
 
@@ -125,22 +132,22 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
-	x.WorkerConfig.RaftId = connState.GetMember().GetId()
-	glog.Infof("Raft Id after connection to Zero: %#x\n", x.WorkerConfig.RaftId)
+	raftIdx = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", raftIdx)
 
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	gr.applyState(connState.GetState())
+	gr.applyState(raftIdx, connState.GetState())
 
 	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	walStore.SetUint(raftwal.RaftId, x.WorkerConfig.RaftId)
+	walStore.SetUint(raftwal.RaftId, raftIdx)
 	walStore.SetUint(raftwal.GroupId, uint64(gid))
 
-	gr.Node = newNode(walStore, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
+	gr.Node = newNode(walStore, gid, raftIdx, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.UpdateNode(gr.Node.Node)
@@ -152,8 +159,8 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	go gr.processOracleDeltaStream()
 
 	gr.informZeroAboutTablets()
-	gr.proposeInitialSchema()
-	gr.proposeInitialTypes()
+	gr.applyInitialSchema()
+	gr.applyInitialTypes()
 
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
@@ -193,73 +200,62 @@ func (g *groupi) informZeroAboutTablets() {
 	}
 }
 
-func (g *groupi) proposeInitialTypes() {
-	initialTypes := schema.InitialTypes()
+func (g *groupi) applyInitialTypes() {
+	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		g.upsertSchema(nil, t)
+		if err := updateType(t.GetTypeName(), *t); err != nil {
+			glog.Errorf("Error while applying initial type: %s", err)
+		}
 	}
 }
 
-func (g *groupi) proposeInitialSchema() {
-	initialSchema := schema.InitialSchema()
+func (g *groupi) applyInitialSchema() {
+	if g.groupId() != 1 {
+		return
+	}
+	initialSchema := schema.InitialSchema(x.GalaxyNamespace)
 	ctx := g.Ctx()
+
+	apply := func(s *pb.SchemaUpdate) {
+		if err := applySchema(s); err != nil {
+			glog.Errorf("Error while applying initial schema: %s", err)
+		}
+	}
+
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s, nil)
+			apply(s)
 		} else if gid == 0 {
-			g.upsertSchema(s, nil)
+			// The tablet is not being served currently.
+			apply(s)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s, nil)
+			apply(s)
 		} else {
 			// The schema for this predicate has already been proposed.
-			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			glog.V(1).Infof("Schema found for predicate %s: %+v", s.Predicate, curr)
 			continue
 		}
 	}
 }
 
-func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
-	// Propose schema mutation.
-	var m pb.Mutations
-	// schema for a reserved predicate is not changed once set.
-	var ts *pb.AssignedIds
-	for {
-		ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
-		var err error
-		ts, err = Timestamps(ctx, &pb.Num{Val: 1})
-		cancel()
-		if err == nil {
-			break
-		}
-		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
+func applySchema(s *pb.SchemaUpdate) error {
+	if err := updateSchema(s); err != nil {
+		return err
 	}
-
-	m.StartTs = ts.StartId
-	if sch != nil {
-		m.Schema = append(m.Schema, sch)
+	if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
+		return err
+	} else if !servesTablet {
+		return errors.Errorf("group 1 should always serve reserved predicate %s", s.Predicate)
 	}
-	if typ != nil {
-		m.Types = append(m.Types, typ)
-	}
-
-	// This would propose the schema mutation and make sure some node serves this predicate
-	// and has the schema defined above.
-	for {
-		_, err := MutateOverNetwork(gr.Ctx(), &m)
-		if err == nil {
-			break
-		}
-		glog.Errorf("Error while proposing initial schema: %v\n", err)
-		time.Sleep(100 * time.Millisecond)
-	}
+	return nil
 }
 
 // No locks are acquired while accessing this function.
@@ -276,7 +272,7 @@ func MaxLeaseId() uint64 {
 	if g.state == nil {
 		return 0
 	}
-	return g.state.MaxLeaseId
+	return g.state.MaxUID
 }
 
 // GetMembershipState returns the current membership state.
@@ -300,11 +296,11 @@ func UpdateMembershipState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	g.applyState(state.GetState())
+	g.applyState(g.Node.Id, state.GetState())
 	return nil
 }
 
-func (g *groupi) applyState(state *pb.MembershipState) {
+func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -314,6 +310,14 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
+
+	invalid := state.License != nil && !state.License.Enabled
+	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
+		glog.Errorf("ENTERPRISE_ONLY_LEARNER: License Expired. Cannot run learner nodes.")
+		x.ServerCloser.Signal()
+		return
+	}
+
 	oldState := g.state
 	g.state = state
 
@@ -322,7 +326,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
-			if x.WorkerConfig.RaftId == member.Id {
+			if myId == member.Id {
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
@@ -346,7 +350,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if !foundSelf {
 		// I'm not part of this cluster. I should crash myself.
 		glog.Fatalf("Unable to find myself [id:%d group:%d] in membership state: %+v. Goodbye!",
-			g.Node.Id, g.groupId(), state)
+			myId, g.groupId(), state)
 	}
 
 	// While restarting we fill Node information after retrieving initial state.
@@ -696,7 +700,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
-		Id:         x.WorkerConfig.RaftId,
+		Id:         g.Node.Id,
 		GroupId:    g.groupId(),
 		Addr:       x.WorkerConfig.MyAddr,
 		Leader:     leader,
@@ -862,7 +866,7 @@ OUTER:
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
-			g.applyState(state)
+			g.applyState(g.Node.Id, state)
 		case <-ticker.C:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
@@ -1052,6 +1056,30 @@ func (g *groupi) processOracleDeltaStream() {
 	}
 }
 
+// GetEEFeaturesList returns a list of Enterprise Features that are available.
+func GetEEFeaturesList() []string {
+	if !EnterpriseEnabled() {
+		return nil
+	}
+	var ee []string
+	if len(Config.HmacSecret) > 0 {
+		ee = append(ee, "acl")
+		ee = append(ee, "multi_tenancy")
+	}
+	if x.WorkerConfig.EncryptionKey != nil {
+		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
+	} else {
+		ee = append(ee, "backup_restore")
+	}
+	if x.WorkerConfig.Audit {
+		ee = append(ee, "audit")
+	}
+	if Config.ChangeDataConf != "" {
+		ee = append(ee, "cdc")
+	}
+	return ee
+}
+
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
 	if !enc.EeBuild {
@@ -1101,7 +1129,7 @@ func (g *groupi) askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
+func SubscribeForUpdates(prefixes [][]byte, ignore string, cb func(kvs *badgerpb.KVList),
 	group uint32, closer *z.Closer) {
 
 	var prefix []byte
@@ -1124,7 +1152,8 @@ func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList),
 		client := pb.NewWorkerClient(pool.Get())
 
 		// Get Subscriber stream.
-		stream, err := client.Subscribe(closer.Ctx(), &pb.SubscriptionRequest{Prefixes: prefixes})
+		stream, err := client.Subscribe(closer.Ctx(),
+			&pb.SubscriptionRequest{Matches: x.PrefixesToMatches(prefixes, ignore)})
 		if err != nil {
 			return errors.Wrapf(err, "error from client.subscribe")
 		}

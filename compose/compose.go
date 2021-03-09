@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/user"
 	"strconv"
@@ -83,6 +84,7 @@ type options struct {
 	NumZeros       int
 	NumAlphas      int
 	NumReplicas    int
+	NumLearners    int
 	Acl            bool
 	AclSecret      string
 	DataDir        string
@@ -102,7 +104,6 @@ type options struct {
 	Ratel          bool
 	RatelPort      int
 	MemLimit       string
-	TlsDir         string
 	ExposePorts    bool
 	Encryption     bool
 	LudicrousMode  bool
@@ -113,6 +114,7 @@ type options struct {
 	AlphaEnvFile   []string
 	ZeroEnvFile    []string
 	Minio          bool
+	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
 
@@ -212,12 +214,12 @@ func initService(basename string, idx, grpcPort int) service {
 	}
 	svc.Command += " " + basename
 	if opts.Jaeger {
-		svc.Command += " --jaeger.collector=http://jaeger:14268"
+		svc.Command += ` --trace "jaeger=http://jaeger:14268;"`
 	}
 	return svc
 }
 
-func getZero(idx int) service {
+func getZero(idx int, raft string) service {
 	basename := "zero"
 	basePort := zeroBasePort + opts.PortOffset
 	grpcPort := basePort + getOffset(idx)
@@ -232,7 +234,7 @@ func getZero(idx int) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	svc.Command += fmt.Sprintf(" --idx=%d", idx)
+	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
@@ -265,13 +267,11 @@ func getZero(idx int) service {
 	return svc
 }
 
-func getAlpha(idx int) service {
+func getAlpha(idx int, raft string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 	svc := initService(basename, idx, grpcPort)
-	// Don't make Alphas depend on each other.
-	svc.DependsOn = nil
 
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
@@ -307,19 +307,24 @@ func getAlpha(idx int) service {
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.LudicrousMode {
-		svc.Command += " --ludicrous_mode=true"
+		svc.Command += ` --ludicrous "enabled=true;"`
 	}
 
+	if opts.SnapshotAfter != "" {
+		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
+	}
+	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
+
 	// Don't assign idx, let it auto-assign.
-	// svc.Command += fmt.Sprintf(" --idx=%d", idx)
+	// svc.Command += fmt.Sprintf(" --raft='idx=%d'", idx)
 	if opts.Vmodule != "" {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
-		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"`
 	}
 	if opts.Acl {
-		svc.Command += " --acl_secret_file=/secret/hmac"
+		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./acl-secret",
@@ -327,11 +332,8 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
-	if opts.SnapshotAfter != "" {
-		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
-	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac"
+		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -350,15 +352,6 @@ func getAlpha(idx int) service {
 			Type:     "bind",
 			Source:   "./enc-secret",
 			Target:   "/secret/enc_key",
-			ReadOnly: true,
-		})
-	}
-	if opts.TlsDir != "" {
-		svc.Command += " --tls_dir=/secret/tls"
-		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
-			Source:   opts.TlsDir,
-			Target:   "/secret/tls",
 			ReadOnly: true,
 		})
 	}
@@ -412,7 +405,7 @@ func getJaeger() service {
 	return svc
 }
 
-func getMinio() service {
+func getMinio(minioDataDir string) service {
 	svc := service{
 		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
 		ContainerName: containerName("minio1"),
@@ -422,6 +415,13 @@ func getMinio() service {
 		EnvFile: opts.MinioEnvFile,
 		Command: "minio server /data/minio --address :" +
 			strconv.FormatUint(uint64(opts.MinioPort), 10),
+	}
+	if minioDataDir != "" {
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:   "bind",
+			Source: minioDataDir,
+			Target: "/data/minio",
+		})
 	}
 	return svc
 }
@@ -536,11 +536,13 @@ func main() {
 	}
 
 	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 3,
-		"number of zeros in dgraph cluster")
+		"number of zeros in Dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
-		"number of alphas in dgraph cluster")
+		"number of alphas in Dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
-		"number of alpha replicas in dgraph cluster")
+		"number of alpha replicas in Dgraph cluster")
+	cmd.PersistentFlags().IntVarP(&opts.NumLearners, "num_learners", "n", 0,
+		"number of learner replicas in Dgraph cluster")
 	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
@@ -576,15 +578,13 @@ func main() {
 		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
-	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
-		"TLS Dir.")
 	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
 		"expose host:container ports for each service")
 	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous_mode", false,
+	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
 		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
@@ -604,6 +604,8 @@ func main() {
 		"env_file for zero")
 	cmd.PersistentFlags().BoolVar(&opts.Minio, "minio", false,
 		"include minio service")
+	cmd.PersistentFlags().StringVar(&opts.MinioDataDir, "minio_data_dir", "",
+		"default minio data directory")
 	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio_port", 9001,
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
@@ -640,13 +642,35 @@ func main() {
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
-		svc := getZero(i)
+		svc := getZero(i, fmt.Sprintf("idx=%d", i))
 		services[svc.name] = svc
 	}
 
 	for i := 1; i <= opts.NumAlphas; i++ {
-		svc := getAlpha(i)
+		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
+		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
+		svc := getAlpha(i, rs)
+		// Don't make Alphas depend on each other.
+		svc.DependsOn = nil
 		services[svc.name] = svc
+	}
+
+	numGroups := opts.NumAlphas / opts.NumReplicas
+	lidx := opts.NumZeros
+	for i := 1; i <= opts.NumLearners; i++ {
+		lidx++
+		rs := fmt.Sprintf("idx=%d; learner=true", lidx)
+		svc := getZero(lidx, rs)
+		services[svc.name] = svc
+	}
+	lidx = opts.NumAlphas
+	for gid := 1; gid <= numGroups; gid++ {
+		for i := 1; i <= opts.NumLearners; i++ {
+			lidx++
+			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
+			svc := getAlpha(lidx, rs)
+			services[svc.name] = svc
+		}
 	}
 
 	cfg := composeConfig{
@@ -691,7 +715,7 @@ func main() {
 	}
 
 	if opts.Minio {
-		services["minio1"] = getMinio()
+		services["minio1"] = getMinio(opts.MinioDataDir)
 	}
 
 	if opts.Acl {

@@ -29,20 +29,21 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/dgraph/graphql/admin"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -601,7 +602,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponse(w, r)
 }
 
-func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
 	}
@@ -636,15 +637,41 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 	writeSuccessResponse(w, r)
 }
 
+func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch map[uint64]*uint64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// lazy load the schema so that just by making a probe request,
+		// one can boot up GraphQL for their namespace
+		namespace := x.ExtractNamespaceHTTP(r)
+		admin.LazyLoadSchema(namespace)
+
+		healthStatus := gqlHealthStore.GetHealth()
+		httpStatusCode := http.StatusOK
+		if !healthStatus.Healthy {
+			httpStatusCode = http.StatusServiceUnavailable
+		}
+		w.Header().Set("Content-Type", "application/json")
+		x.AddCorsHeaders(w)
+		w.WriteHeader(httpStatusCode)
+		e := globalEpoch[namespace]
+		var counter uint64
+		if e != nil {
+			counter = atomic.LoadUint64(e)
+		}
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
+			healthStatus.StatusMsg, counter))))
+	})
+}
+
 func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
-	adminServer web.IServeGraphQL) *schema.Response {
+	adminServer admin.IServeGraphQL) *schema.Response {
 	md := metadata.New(nil)
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
+	ctx = x.AttachJWTNamespace(ctx)
 
-	return adminServer.Resolve(ctx, gqlReq)
+	return adminServer.ResolveWithNs(ctx, x.GalaxyNamespace, gqlReq)
 }
 
 func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {

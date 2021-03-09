@@ -28,8 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -57,9 +58,14 @@ func TestBackupMinioE(t *testing.T) {
 	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
-	conf.Set("tls_cacert", "../../../tlstest/mtls_internal/tls/live/ca.crt")
-	conf.Set("tls_internal_port_enabled", true)
-	conf.Set("tls_server_name", "alpha1")
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
+		"../../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port
+		true))
+
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	mc, err = testutil.NewMinioClient()
@@ -90,6 +96,7 @@ func TestBackupMinioE(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	client := testutil.GetHttpsClient(t)
+	tabletName := x.NamespaceAttr(x.GalaxyNamespace, "movie")
 	// Move tablet to group 1 to avoid messes later.
 	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
@@ -101,7 +108,7 @@ func TestBackupMinioE(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+		if _, ok := state.Groups["1"].Tablets[tabletName]; ok {
 			moveOk = true
 			break
 		}
@@ -293,11 +300,13 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return !isdir && strings.Contains(path, "manifest.json")
-	})
-	require.Equal(t, numExpectedDirs, len(manifests))
+	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	require.NoError(t, err)
 
+	var manifest worker.MasterManifest
+	err = json.Unmarshal(b, &manifest)
+	require.NoError(t, err)
+	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 	return dirs
 }
 
@@ -308,12 +317,11 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
-	cwd, err := os.Getwd()
+	key, err := ioutil.ReadFile("../../../ee/enc/test-fixtures/enc-key")
 	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	result := worker.RunRestore("./data/restore", localBackupDst, lastDir,
+		x.SensitiveByteSlice(key), options.Snappy, 0)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -322,19 +330,19 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
 	require.NoError(t, err)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.cors", "dgraph.graphql.xid",
-		"dgraph.type", "movie", "dgraph.graphql.schema_history", "dgraph.graphql.schema_created_at",
-		"dgraph.graphql.p_query", "dgraph.graphql.p_sha256hash", "dgraph.drop.op"},
+	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type",
+		"movie", "dgraph.graphql.p_query", "dgraph.drop.op"},
 		restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node", "dgraph.graphql", "dgraph.graphql.history", "dgraph.graphql.persisted_query"}, restoredTypes)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql",
+		"dgraph.graphql.persisted_query"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
@@ -351,11 +359,10 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Get key.
 	config := getEncConfig()
 	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
-	k, err := enc.ReadKey(config)
-	require.NotNil(t, k)
-	require.NoError(t, err)
+	_, encKey := ee.GetKeys(config)
+	require.NotNil(t, encKey)
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k, options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, encKey, options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
@@ -392,8 +399,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})
