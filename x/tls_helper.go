@@ -40,9 +40,7 @@ type TLSHelperConfig struct {
 }
 
 const (
-	// TODO: clean/organize this to make it clearer
-
-	TLSDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
+	AllTLSDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
 		`ca-cert=; server-name=; server-cert=; server-key=; client-cert=; client-key=;`
 
 	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
@@ -102,7 +100,7 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 
 // LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
 func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSClientDefaults)
 
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
@@ -124,7 +122,7 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 
 // LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
 func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSServerDefaults)
 
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
@@ -145,7 +143,7 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
 func LoadServerTLSConfig(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSServerDefaults)
 
 	if tlsFlag.GetString("server-cert") == "" && tlsFlag.GetString("server-key") == "" {
 		return nil, nil
@@ -181,7 +179,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		return SlashTLSConfig(v.GetString("slash_grpc_endpoint"))
 	}
 
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSClientDefaults)
 
 	// When the --tls ca-cert="..."; option is specified, the connection will be set up using TLS
 	// instead of plaintext. However the client cert files are optional, depending on whether the

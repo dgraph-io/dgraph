@@ -208,7 +208,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
 		Head("Ludicrous options").
 		Flag("enabled",
-			"Run Dgraph in Ludicrous mode.").
+			"Set enabled to true to run Dgraph in Ludicrous mode.").
 		Flag("concurrency",
 			"The number of concurrent threads to use in Ludicrous mode.").
 		String())
@@ -246,7 +246,7 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp(worker.AuditDefaults).
+	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.

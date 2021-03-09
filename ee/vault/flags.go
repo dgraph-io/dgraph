@@ -32,9 +32,9 @@ const (
 	flagEncField     = "enc-field"
 	flagEncFormat    = "enc-format"
 
-	defaultConfig = "addr=http://localhost:8200;" +
-		"path=secret/data/dgraph;" +
-		"acl-format=base64;" +
+	defaultConfig = "addr=http://localhost:8200; " +
+		"path=secret/data/dgraph; " +
+		"acl-format=base64; " +
 		"enc-format=base64;"
 )
 
