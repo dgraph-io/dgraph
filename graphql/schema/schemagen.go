@@ -380,7 +380,6 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
-
 	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
 	// then initialise the http client and Fetch the JWKs from the JWKUrl
 	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
@@ -617,6 +616,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
+						if arg != nil {
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
+						} else {
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
+						}
+					}
+
 					id := f.Directives.ForName(idDirective)
 					if id != nil || f.Type.Name() == "ID" {
 						upsertStr = "@upsert "
@@ -626,17 +635,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						case "Float":
 							indexes = append(indexes, "float")
 						case "String", "ID":
-							indexes = append(indexes, "hash")
-						}
-					}
-
-					if search != nil {
-						arg := search.Arguments.ForName(searchArgs)
-						if arg != nil {
-							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
-						} else {
-							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
-								Name()]].dgIndex)
+							if !hasIndex(indexes, "exact") {
+								indexes = append(indexes, "hash")
+							}
 						}
 					}
 
