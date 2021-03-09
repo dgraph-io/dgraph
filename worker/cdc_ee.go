@@ -259,7 +259,8 @@ func (cdc *CDC) processCDCEvents() {
 				bytes.Equal(edges[0].Value, []byte(x.Star)):
 				// If there are no pending txn send the events else
 				// return as the mutation must have errored out in that case.
-				if !cdc.hasPending(edges[0].Attr[8:]) {
+				_, attr := x.ParseNamespaceBytes(edges[0].Attr)
+				if !cdc.hasPending(attr) {
 					if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
 						rerr = errors.Wrapf(err, "unable to send messages to sink")
 					}
@@ -299,7 +300,6 @@ func (cdc *CDC) processCDCEvents() {
 		if cdcIndex > last {
 			return nil
 		}
-		glog.Info("cdc index is %d and last index is %d", cdcIndex, last)
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			if err != nil {
@@ -346,7 +346,6 @@ func (cdc *CDC) processCDCEvents() {
 					// No need to propose anything.
 					continue
 				}
-				glog.Info("length of pending events is", len(cdc.pendingTxnEvents))
 				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
 					glog.Errorf("unable to propose cdc state %+v", err)
 				} else {
@@ -401,7 +400,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	if mutation.DropOp != pb.Mutations_NONE {
 		var t string
 		if len(mutation.DropValue) > 0 {
-			t = mutation.DropValue[8:]
+			_, t = x.ParseNamespaceBytes(mutation.DropValue)
 		}
 		ns := make([]byte, 8)
 		binary.BigEndian.PutUint64(ns, 0)
