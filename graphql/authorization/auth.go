@@ -352,10 +352,11 @@ func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
 	var err error
 	var token *jwt.Token
 	for i := 0; i < len(a.JWKUrls); i++ {
-		a.isExpired(i)
-		err = a.refreshJWK(i)
-		if err != nil {
-			return nil, errors.Wrap(err, "while refreshing JWK from the URL")
+		if a.isExpired(i) {
+			err = a.refreshJWK(i)
+			if err != nil {
+				return nil, errors.Wrap(err, "while refreshing JWK from the URL")
+			}
 		}
 
 		token, err =
@@ -365,7 +366,7 @@ func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
 					return nil, errors.Errorf("kid not present in JWT")
 				}
 
-				signingKeys := a.jwkSet[0].Key(kid.(string))
+				signingKeys := a.jwkSet[i].Key(kid.(string))
 				if len(signingKeys) == 0 {
 					return nil, errors.Errorf("Invalid kid")
 				}
