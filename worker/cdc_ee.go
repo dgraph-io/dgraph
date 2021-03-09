@@ -14,6 +14,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"math"
 	"strings"
@@ -109,6 +110,24 @@ func (cdc *CDC) resetPendingEvents() {
 	cdc.Lock()
 	defer cdc.Unlock()
 	cdc.pendingTxnEvents = make(map[uint64][]CDCEvent)
+}
+
+func (cdc *CDC) hasPending(attr string) bool {
+	if cdc == nil {
+		return false
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	for _, events := range cdc.pendingTxnEvents {
+		for _, e := range events {
+			if me, ok := e.Event.(*MutationEvent); ok {
+				if me.Attr == attr {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (cdc *CDC) addToPending(ts uint64, events []CDCEvent) {
@@ -221,7 +240,7 @@ func (cdc *CDC) processCDCEvents() {
 			// TODO: We should get a confirmation from ludicrous scheduler about this.
 			// It should tell you what the commit ts used was.
 			// TODO: For now, do NOT support ludicrous mode.
-
+			edges := proposal.Mutations.Edges
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
 				// if there is DROP ALL or DROP DATA operation, clear pending events also.
@@ -233,6 +252,19 @@ func (cdc *CDC) processCDCEvents() {
 					rerr = errors.Wrapf(err, "unable to send messages to sink")
 					return
 				}
+				// If drop predicate, then mutation only succeeds if there were no pending txn
+				// This check ensures then event will only be send if there were no pending txns
+			case len(edges) == 1 &&
+				edges[0].Entity == 0 &&
+				bytes.Equal(edges[0].Value, []byte(x.Star)):
+				// If there are no pending txn send the events else
+				// return as the mutation must have errored out in that case.
+				if !cdc.hasPending(edges[0].Attr[8:]) {
+					if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
+						rerr = errors.Wrapf(err, "unable to send messages to sink")
+					}
+				}
+				return
 			default:
 				cdc.addToPending(proposal.Mutations.StartTs, events)
 			}
@@ -267,6 +299,7 @@ func (cdc *CDC) processCDCEvents() {
 		if cdcIndex > last {
 			return nil
 		}
+		glog.Info("cdc index is %d and last index is %d", cdcIndex, last)
 		for batchFirst := cdcIndex; batchFirst <= last; {
 			entries, err := groups().Node.Store.Entries(batchFirst, last+1, 256<<20)
 			if err != nil {
@@ -313,6 +346,7 @@ func (cdc *CDC) processCDCEvents() {
 					// No need to propose anything.
 					continue
 				}
+				glog.Info("length of pending events is", len(cdc.pendingTxnEvents))
 				if err := groups().Node.proposeCDCState(atomic.LoadUint64(&cdc.sentTs)); err != nil {
 					glog.Errorf("unable to propose cdc state %+v", err)
 				} else {
@@ -365,15 +399,22 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// todo (aman): right now drop operations are still cluster wide.
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
+		var t string
+		if len(mutation.DropValue) > 0 {
+			t = mutation.DropValue[8:]
+		}
+		ns := make([]byte, 8)
+		binary.BigEndian.PutUint64(ns, 0)
 		return []CDCEvent{
 			{
 				Type: EventTypeDrop,
 				Event: &DropEvent{
 					Operation: strings.ToLower(mutation.DropOp.String()),
-					Type:      mutation.DropValue,
+					Type:      t,
 				},
 				Meta: &EventMeta{
 					RaftIndex: index,
+					Namespace: ns,
 				},
 			},
 		}
