@@ -120,10 +120,8 @@ func (cdc *CDC) hasPending(attr string) bool {
 	defer cdc.Unlock()
 	for _, events := range cdc.pendingTxnEvents {
 		for _, e := range events {
-			if me, ok := e.Event.(*MutationEvent); ok {
-				if me.Attr == attr {
-					return true
-				}
+			if me, ok := e.Event.(*MutationEvent); ok && me.Attr == attr {
+				return true
 			}
 		}
 	}
