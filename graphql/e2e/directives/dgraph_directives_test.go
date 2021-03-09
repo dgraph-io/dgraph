@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 
 	// set up the lambda url for unit tests
 	x.Config.GraphQL = z.NewSuperFlag("lambda-url=http://localhost:8086/graphql-worker;").
-		MergeAndCheckDefault("")
+		MergeAndCheckDefault("lambda-url=;")
 
 	common.BootstrapServer(schema, data)
 
