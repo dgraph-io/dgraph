@@ -820,7 +820,7 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// If the old schema is nil, we can treat it as an empty schema. Copy it
 	// first to avoid overwriting it in rb.
 	old := rb.OldSchema
-	if old == nil || old.Predicate == "" {
+	if old.Predicate == "" {
 		return indexRebuildInfo{
 			op: indexNoop,
 		}
@@ -988,7 +988,7 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	// If the old schema is nil, treat it as an empty schema. Copy it to avoid
 	// overwriting it in rb.
 	old := rb.OldSchema
-	if old == nil || old.Predicate == "" {
+	if old.Predicate == "" {
 		return indexNoop
 	}
 
@@ -1087,7 +1087,7 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	// If old schema is nil, treat it as an empty schema. Copy it to avoid
 	// overwriting it in rb.
 	old := rb.OldSchema
-	if old == nil || old.Predicate == "" {
+	if old.Predicate == "" {
 		return indexNoop
 	}
 
