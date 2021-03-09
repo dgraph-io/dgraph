@@ -38,7 +38,7 @@ const (
 	//       For easy readability, keep the options without default values (if any) at the end of
 	//       the *Defaults string.
 	AclDefaults       = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
-	AuditDefaults     = `compress=false; output=; encrypt-file=; days=; size=;`
+	AuditDefaults     = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
 	BadgerDefaults    = `compression=snappy; goroutines=8;`
 	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whitelist=;`
