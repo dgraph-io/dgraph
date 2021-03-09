@@ -407,7 +407,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
 func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
-	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc, "Codec.DecodeToBuffer")
 	x.Check(err)
 	buf.AutoMmapAfter(1 << 30)
 

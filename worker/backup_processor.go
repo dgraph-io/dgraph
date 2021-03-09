@@ -216,7 +216,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	// This is used to backup the schema and types.
 	writePrefix := func(prefix byte) error {
 		tl := threadLocal{
-			alloc: z.NewAllocator(1 << 10),
+			alloc: z.NewAllocator(1<<10, "BackupProcessor.WritePrefix"),
 		}
 		defer tl.alloc.Release()
 
