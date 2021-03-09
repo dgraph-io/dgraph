@@ -553,7 +553,7 @@ func TestUpdateGQLSchemaFields(t *testing.T) {
 // TestLargeSchemaUpdate makes sure that updating large schemas (4000 fields with indexes) does not
 // throw any error
 func TestLargeSchemaUpdate(t *testing.T) {
-	numFields := 1000
+	numFields := 250
 
 	schema := "type LargeSchema {"
 	for i := 1; i <= numFields; i++ {
