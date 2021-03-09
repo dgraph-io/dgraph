@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -89,11 +88,6 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse,
 // to be processed at the same time. Multiple requests could lead to multiple
 // backups with the same backupNum in their manifest.
 var backupLock sync.Mutex
-var LastBackupStatus atomic.Value
-
-func init() {
-	LastBackupStatus.Store("")
-}
 
 // BackupRes is used to represent the response and error of the Backup gRPC call together to be
 // transported via a channel.
