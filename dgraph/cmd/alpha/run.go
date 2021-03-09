@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -36,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -147,7 +147,7 @@ they form a Raft group and provide synchronous replication.
 		Head("Badger options").
 		Flag("compression",
 			`[none, zstd:level, snappy] Specifies the compression algorithm and
-			compression level (if applicable) for the postings directory."none" would disable 
+			compression level (if applicable) for the postings directory."none" would disable
 			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
@@ -252,7 +252,7 @@ they form a Raft group and provide synchronous replication.
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
-			"stdout" is for standard output. You can also specify the directory where audit logs 
+			"stdout" is for standard output. You can also specify the directory where audit logs
 			will be saved. When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
@@ -645,22 +645,15 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
-	secretFile := acl.GetString("secret-file")
-	if secretFile != "" {
-		hmacSecret, err := ioutil.ReadFile(secretFile)
-		if err != nil {
-			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
-		}
-		if len(hmacSecret) < 32 {
-			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
-		}
+	aclKey, encKey := ee.GetKeys(Alpha.Conf)
+	if aclKey != nil {
+		opts.HmacSecret = aclKey
 
-		opts.HmacSecret = hmacSecret
+		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 
-		glog.Info("HMAC secret loaded successfully.")
+		glog.Info("ACL secret key loaded successfully.")
 	}
 
 	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
@@ -699,7 +692,7 @@ func run() {
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          secretFile != "",
+		AclEnabled:          aclKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
@@ -716,10 +709,7 @@ func run() {
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
-	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
-		glog.Infof("unable to read key %v", err)
-		return
-	}
+	x.WorkerConfig.EncryptionKey = encKey
 
 	setupCustomTokenizers()
 	x.Init()

@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -358,11 +359,10 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Get key.
 	config := getEncConfig()
 	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
-	k, err := enc.ReadKey(config)
-	require.NotNil(t, k)
-	require.NoError(t, err)
+	_, encKey := ee.GetKeys(config)
+	require.NotNil(t, encKey)
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k, options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, encKey, options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

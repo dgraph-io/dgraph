@@ -46,6 +46,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/filestore"
 	schemapkg "github.com/dgraph-io/dgraph/schema"
@@ -186,9 +187,8 @@ func init() {
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 	flag.Int64("force-namespace", 0, "Namespace onto which to load the data."+
-		"This flag will be ignored when not logging into galaxy namespace."+
-		"Only guardian of galaxy should use this for loading data into multiple namespaces."+
-		"Setting it to negative value will preserve the namespace.")
+		"Only guardian of galaxy should use this for loading data into multiple namespaces or some"+
+		"specific namespace. Setting it to negative value will preserve the namespace.")
 }
 
 func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {
@@ -714,25 +714,25 @@ func run() error {
 		tmpDir:          Live.Conf.GetString("tmp"),
 	}
 
+	forceNs := Live.Conf.GetInt64("force-namespace")
 	switch creds.GetUint64("namespace") {
 	case x.GalaxyNamespace:
-		ns := Live.Conf.GetInt64("force-namespace")
-		if ns < 0 {
+		if forceNs < 0 {
 			opt.preserveNs = true
 			opt.namespaceToLoad = math.MaxUint64
 		} else {
-			opt.namespaceToLoad = uint64(ns)
+			opt.namespaceToLoad = uint64(forceNs)
 		}
 	default:
+		if Live.Conf.IsSet("force-namespace") && uint64(forceNs) != creds.GetUint64("namespace") {
+			return errors.Errorf("cannot load into namespace %#x", forceNs)
+		}
 		opt.namespaceToLoad = creds.GetUint64("namespace")
 	}
 
 	z.SetTmpDir(opt.tmpDir)
 
-	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return err
-	}
+	_, opt.key = ee.GetKeys(Live.Conf)
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)

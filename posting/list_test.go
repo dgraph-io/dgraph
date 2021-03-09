@@ -977,6 +977,26 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	return ol, commits
 }
 
+func TestLargePlistSplit(t *testing.T) {
+	key := x.DataKey(uuid.New().String(), 1331)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	b := make([]byte, 30<<20)
+	rand.Read(b)
+	for i := 1; i <= 2; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+			Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			Value:   b,
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+	}
+	_, err = ol.Rollup(nil)
+	require.NoError(t, err)
+}
+
 func TestDeleteStarMultiPartList(t *testing.T) {
 	numEdges := 10000
 

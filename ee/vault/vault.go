@@ -1,7 +1,7 @@
 // +build oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,15 @@
  * limitations under the License.
  */
 
-package enc
+package vault
 
 import (
-	"github.com/spf13/pflag"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-// RegisterVaultFlags registers the required flags to integrate with Vault.
-func registerVaultFlags(_ *pflag.FlagSet) {
+func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+	glog.Exit("flags: vault is an enterprise-only feature")
 	return
 }

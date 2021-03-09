@@ -1138,7 +1138,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // RunGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func RunGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 50 * time.Second}
+	client := &http.Client{Timeout: 200 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -60,9 +61,7 @@ func run() {
 		file:   Decrypt.Conf.GetString("file"),
 		output: Decrypt.Conf.GetString("out"),
 	}
-	sensitiveKey, err := enc.ReadKey(Decrypt.Conf)
-	x.Checkf(err, "could not read encryption key file")
-	opts.keyfile = sensitiveKey
+	_, opts.keyfile = ee.GetKeys(Decrypt.Conf)
 	if len(opts.keyfile) == 0 {
 		log.Fatal("Error while reading encryption key: Key is empty")
 	}

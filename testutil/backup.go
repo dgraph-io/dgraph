@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -50,15 +51,12 @@ func openDgraph(pdir string) (*badger.DB, error) {
 		return nil, err
 	}
 	config.Set("encryption_key_file", KeyFile)
-	k, err := enc.ReadKey(config)
-	if err != nil {
-		return nil, err
-	}
+	_, encKey := ee.GetKeys(config)
 
 	opt := badger.DefaultOptions(pdir).
 		WithBlockCacheSize(10 * (1 << 20)).
 		WithIndexCacheSize(10 * (1 << 20)).
-		WithEncryptionKey(k).
+		WithEncryptionKey(encKey).
 		WithNamespaceOffset(x.NamespaceOffset)
 	return badger.OpenManaged(opt)
 }
