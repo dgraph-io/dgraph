@@ -374,29 +374,8 @@ message Posting {
 	uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
-message UidBlock {
-	uint64 base = 1;
-	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
-	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
-	// storing it as a byte slice is a lot cheaper in memory.
-	bytes deltas = 2;
-	// num_uids is the number of UIDs in the block. We are including this because we want to
-	// switch encoding to groupvarint encoding. Current avaialble open source version implements
-	// encoding and decoding for uint32. To use that, we create different blocks for different 32-bit
-	// MSB base uids. That is, if the 32 MSBs are different, we will create a new block irrespective
-	// of whether the block is filled with the block_size or not.
-	// Default Blocksize is 256 so uint32 would be sufficient.
-	uint32 num_uids = 3;
-}
-
-message UidPack {
-	uint32 block_size        = 1;
-	repeated UidBlock blocks = 2;
-	uint64 alloc_ref = 23; // This field should be set to 0 during marshal.
-}
-
 message PostingList {
-	UidPack pack = 1; // Encoded list of uids in this posting list.
+	reserved 1; // It was used for UidPack.
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 

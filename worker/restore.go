@@ -194,7 +194,7 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					return 0, 0, errors.Wrapf(err, "while reading backup posting list")
 				}
 				pl := posting.FromBackupPostingList(backupPl)
-				shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
+				shouldSplit := pl.Size() >= (1<<20)/2
 
 				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 					// This covers two cases.

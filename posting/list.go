@@ -1028,21 +1028,10 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 		return kv
 	}
-	ref := plist.Pack.GetAllocRef()
-	if plist.Pack != nil {
-		// Set allocator to zero for marshal.
-		plist.Pack.AllocRef = 0
-	}
-
-	// bm := codec.FromBytes(plist.Bitmap)
-	// fmt.Printf("MarshalPostingList: %d\n", bm.GetCardinality())
 
 	out := alloc.Allocate(plist.Size())
 	n, err := plist.MarshalToSizedBuffer(out)
 	x.Check(err)
-	if plist.Pack != nil {
-		plist.Pack.AllocRef = ref
-	}
 	kv.Value = out[:n]
 	kv.UserMeta = alloc.Copy([]byte{BitCompletePosting})
 	return kv
@@ -1293,7 +1282,7 @@ func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
 
-	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
+	return len(l.mutationMap) + codec.ApproxLen(l.plist.Bitmap)
 }
 
 func abs(a int) int {

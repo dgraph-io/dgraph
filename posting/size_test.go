@@ -88,18 +88,6 @@ func TestPostingListCalculation(t *testing.T) {
 	require.Equal(t, uint64(144), list.DeepSize())
 }
 
-func TestUidPackCalculation(t *testing.T) {
-	pack = &pb.UidPack{}
-	// 48 is obtained from BenchmarkUidPack
-	require.Equal(t, uint64(48), calculatePackSize(pack))
-}
-
-func TestUidBlockCalculation(t *testing.T) {
-	block = &pb.UidBlock{}
-	// 48 is obtained from BenchmarkUidBlock
-	require.Equal(t, uint64(48), calculateUIDBlock(block))
-}
-
 func TestPostingCalculation(t *testing.T) {
 	posting = &pb.Posting{}
 	// 128 is obtained from BenchmarkPosting
