@@ -777,9 +777,6 @@ func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
 	}
 	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
 	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
-	if len(prefixes) == 0 {
-		return nil
-	}
 	glog.Infof("Deleting indexes for %s", rb.Attr)
 	return pstore.DropPrefix(prefixes...)
 }
@@ -820,10 +817,8 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	// If the old schema is nil, we can treat it as an empty schema. Copy it
 	// first to avoid overwriting it in rb.
 	old := rb.OldSchema
-	if old.Predicate == "" {
-		return indexRebuildInfo{
-			op: indexNoop,
-		}
+	if old == nil {
+		old = &pb.SchemaUpdate{}
 	}
 
 	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_INDEX
@@ -939,6 +934,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	if rebuildInfo.op != indexRebuild {
 		return nil
 	}
+
 	// Exit early if there are no tokenizers to rebuild.
 	if len(rebuildInfo.tokenizersToRebuild) == 0 {
 		return nil
@@ -988,8 +984,8 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	// If the old schema is nil, treat it as an empty schema. Copy it to avoid
 	// overwriting it in rb.
 	old := rb.OldSchema
-	if old.Predicate == "" {
-		return indexNoop
+	if old == nil {
+		old = &pb.SchemaUpdate{}
 	}
 
 	// Do nothing if the schema directive did not change.
@@ -1087,8 +1083,8 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	// If old schema is nil, treat it as an empty schema. Copy it to avoid
 	// overwriting it in rb.
 	old := rb.OldSchema
-	if old.Predicate == "" {
-		return indexNoop
+	if old == nil {
+		old = &pb.SchemaUpdate{}
 	}
 
 	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_REVERSE
@@ -1166,7 +1162,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
-	if rb.OldSchema.Predicate == "" {
+	if rb.OldSchema == nil {
 		return false, nil
 	}
 	if rb.CurrentSchema.List && !rb.OldSchema.List {

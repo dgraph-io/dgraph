@@ -263,11 +263,9 @@ func TestRebuildTokIndex(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	currentSchema, _ := schema.State().Get(context.Background(), x.GalaxyAttr("name2"))
 	rb := IndexRebuild{
-		Attr:    x.GalaxyAttr("name2"),
-		StartTs: 5,
-		// In normal flow, schema for "name2" will aleady be there when its mutations are created.
-		OldSchema: &pb.SchemaUpdate{Predicate: x.GalaxyAttr("name2"),
-			ValueType: pb.Posting_STRING},
+		Attr:          x.GalaxyAttr("name2"),
+		StartTs:       5,
+		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
 	prefixes, err := prefixesForTokIndexes(context.Background(), &rb)
