@@ -2844,12 +2844,6 @@ valid_schemas:
         f1: String! @id @search(by:[exact])
       }
 
-  - name: "field with @id directive having hash index"
-    input: |
-      type X {
-        f1: String! @id @search(by:[hash])
-      }
-
   - name: "Type implements from two interfaces where both have ID"
     input: |
       interface X {
