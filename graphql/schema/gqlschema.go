@@ -1649,20 +1649,11 @@ func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	if id != nil {
 		// If @id directive is applied along with @search, we check if the search has hash as an
 		// arg. If it doesn't and there is no exact arg, then we add hash in it.
-		if !hasIndex(indexes, "hash") && !hasIndex(indexes, "exact") {
+		if !x.HasString(indexes, "hash") && !x.HasString(indexes, "exact") {
 			indexes = append(indexes, "hash")
 		}
 	}
 	return indexes
-}
-
-func hasIndex(indexes []string, indexName string) bool {
-	for _, index := range indexes {
-		if index == indexName {
-			return true
-		}
-	}
-	return false
 }
 
 func getDefaultSearchIndex(fldName string) string {
