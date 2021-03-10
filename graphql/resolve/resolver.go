@@ -85,7 +85,8 @@ type ResolverFactory interface {
 	WithSchemaIntrospection() ResolverFactory
 }
 
-// A ResultCompleter ....
+// A ResultCompleter can take a []byte slice representing an intermediate result
+// in resolving field and applies a completion step.
 type ResultCompleter interface {
 	Complete(ctx context.Context, resolved *Resolved)
 }
@@ -325,8 +326,8 @@ func NewResolverFactory(
 // entitiesCompletion transform the result of the `_entities` query.
 // It changes the order of the result to the order of keyField in the
 // `_representations` argument.
-func entitiesCompletion(ctx context.Context, resolved *Resolved) {
-	// return id Data is not present
+func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
+	// return if Data is not present
 	if len(resolved.Data) == 0 {
 		return
 	}
@@ -339,27 +340,29 @@ func entitiesCompletion(ctx context.Context, resolved *Resolved) {
 	}
 
 	// fetch the keyFieldValueList from the query arguments.
-	_, _, _, keyFieldValueList, err := parseRepresentationsArgument(resolved.Field.(schema.Query))
+	repr, err := parseRepresentationsArgument(resolved.Field.(schema.Query))
 	if err != nil {
 		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
 		return
 	}
 
 	// store the index of the keyField Values present in the argument in a map.
+	// key in the map as there are multiple types like String, Int, Int64 allowed as @id.
 	indexMap := make(map[interface{}]int)
-	for i, key := range keyFieldValueList {
+	for i, key := range repr.keyFieldValueList {
 		indexMap[key] = i
 	}
 
 	// sort the keyField Values in the ascending order.
-	sort.Slice(keyFieldValueList, func(i, j int) bool {
-		return keyFieldValueList[i].(string) < keyFieldValueList[j].(string)
+	sort.Slice(repr.keyFieldValueList, func(i, j int) bool {
+		return repr.keyFieldValueList[i].(string) < repr.keyFieldValueList[j].(string)
 	})
 
 	// create the new output according to the index of the keyFields present in the argument.
-	output := make([]interface{}, len(keyFieldValueList))
-	for i, key := range keyFieldValueList {
-		output[indexMap[key]] = []interface{}(data["_entities"])[i]
+	output := make([]interface{}, len(repr.keyFieldValueList))
+	entitiesQryResp := data["_entities"]
+	for i, key := range repr.keyFieldValueList {
+		output[indexMap[key]] = entitiesQryResp[i]
 	}
 
 	// replace the result obtained from the dgraph and marshal back.
@@ -373,10 +376,6 @@ func entitiesCompletion(ctx context.Context, resolved *Resolved) {
 
 // noopCompletion just passes back it's result and err arguments
 func noopCompletion(ctx context.Context, resolved *Resolved) {}
-
-func entitiesQueryCompletion() CompletionFunc {
-	return entitiesCompletion
-}
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
 	rf.RLock()

@@ -160,11 +160,18 @@ func (qr *queryRewriter) Rewrite(
 	}
 }
 
+type parsedRepresentations struct {
+	keyFieldName      string
+	typeName          string
+	keyFieldIsID      bool
+	keyFieldValueList []interface{}
+}
+
 // parseReporesentationsArgument parses the "_representations" argument in the "_entities" query.
-func parseRepresentationsArgument(field schema.Query) (string, string, bool, []interface{}, error) {
+func parseRepresentationsArgument(field schema.Query) (*parsedRepresentations, error) {
 	representations, ok := field.ArgValue("representations").([]interface{})
 	if !ok {
-		return "", "", false, make([]interface{}, 0), fmt.Errorf("Error parsing `representations` argument")
+		return nil, fmt.Errorf("Error parsing `representations` argument")
 	}
 	typeNames := make(map[string]bool)
 	keyFieldValueList := make([]interface{}, 0)
@@ -174,30 +181,30 @@ func parseRepresentationsArgument(field schema.Query) (string, string, bool, []i
 	for i, rep := range representations {
 		representation, ok := rep.(map[string]interface{})
 		if !ok {
-			return "", "", false, make([]interface{}, 0), fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
+			return nil, fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
 		}
 
 		typename, ok := representation["__typename"].(string)
 		if !ok {
-			return "", "", false, make([]interface{}, 0), fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
+			return nil, fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
 		}
 
 		// Store all the typeNames into an map to perfrom validation at last.
 		typeNames[typename] = true
 		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
 		if err != nil {
-			return "", "", false, make([]interface{}, 0), err
+			return nil, err
 		}
 		keyFieldValue, ok := representation[keyFieldName]
 		if !ok {
-			return "", "", false, make([]interface{}, 0), fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
+			return nil, fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
 		}
 		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
 	}
 
 	// Return error if there was no typename extracted from the `_representations` argument.
 	if len(typeNames) == 0 {
-		return "", "", false, make([]interface{}, 0), fmt.Errorf("Expect one typename in `_representations` argument, got none")
+		return nil, fmt.Errorf("Expect one typename in `_representations` argument, got none")
 	}
 
 	// Since we have restricted that all the typeNames for the inputs in the
@@ -210,7 +217,7 @@ func parseRepresentationsArgument(field schema.Query) (string, string, bool, []i
 			keys[i] = k
 			i++
 		}
-		return "", "", false, make([]interface{}, 0), fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
+		return nil, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
 	}
 
 	var typeName string
@@ -218,7 +225,11 @@ func parseRepresentationsArgument(field schema.Query) (string, string, bool, []i
 		typeName = k
 	}
 
-	return keyFieldName, typeName, keyFieldIsID, keyFieldValueList, nil
+	return &parsedRepresentations{
+		keyFieldName:      keyFieldName,
+		typeName:          typeName,
+		keyFieldIsID:      keyFieldIsID,
+		keyFieldValueList: keyFieldValueList}, nil
 }
 
 // entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
@@ -240,12 +251,12 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// 		...
 	//   ]
 
-	keyFieldName, typeName, keyFieldIsID, keyFieldValueList, err := parseRepresentationsArgument(field)
+	parsedRepr, err := parseRepresentationsArgument(field)
 	if err != nil {
 		return nil, err
 	}
 
-	typeDefn := field.BuildType(typeName)
+	typeDefn := field.BuildType(parsedRepr.typeName)
 	rbac := authRw.evaluateStaticRules(typeDefn)
 
 	dgQuery := &gql.GraphQuery{
@@ -271,10 +282,16 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// If the key field is of ID type and is not an external field
 	// then we query it using the `uid` otherwise we treat it as string
 	// and query using `eq` function.
-	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
-		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
+	// We also don't need to add Order to the query as the results are
+	// automatically returned in the ascending order of the uids.
+	if parsedRepr.keyFieldIsID && !typeDefn.Field(parsedRepr.keyFieldName).IsExternal() {
+		addUIDFunc(dgQuery, convertIDs(parsedRepr.keyFieldValueList))
 	} else {
-		addEqFunc(dgQuery, typeDefn.DgraphPredicate(keyFieldName), keyFieldValueList)
+		addEqFunc(dgQuery, typeDefn.DgraphPredicate(parsedRepr.keyFieldName), parsedRepr.keyFieldValueList)
+		// Add the  ascending Order of the keyField in the query.
+		// The result will be converted into the exact in the resultCompletion step.
+		dgQuery.Order = append(dgQuery.Order,
+			&pb.Order{Attr: typeDefn.DgraphPredicate(parsedRepr.keyFieldName)})
 	}
 	// AddTypeFilter in as the Filter to the Root the Query.
 	// Query will be like :-
@@ -282,11 +299,6 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	//		...
 	// 	}
 	addTypeFilter(dgQuery, typeDefn)
-
-	// Add the  ascending Order of the keyField in the query.
-	// The result will be converted into the exact in the resultCompletion step.
-	dgQuery.Order = append(dgQuery.Order,
-		&pb.Order{Attr: typeDefn.DgraphPredicate(keyFieldName)})
 
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
