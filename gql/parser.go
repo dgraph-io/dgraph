@@ -2407,7 +2407,7 @@ loop:
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return count, item.Errorf("Expected a variable but got comma")
+				return count, item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
@@ -2435,7 +2435,7 @@ loop:
 			break loop
 		case itemComma:
 			if expectArg {
-				return item.Errorf("Expected a variable but got comma")
+				return item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			expectArg = true
 		case itemName:
