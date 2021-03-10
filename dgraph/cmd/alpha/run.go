@@ -590,13 +590,17 @@ func setupServer(closer *z.Closer) {
 
 func run() {
 	var err error
-	if Alpha.Conf.GetBool("enable_sentry") {
+
+	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
+	if telemetry.GetBool("sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
 		x.WrapPanics()
 		x.SentryOptOutNote()
 	}
+
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
@@ -675,8 +679,6 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
-		x.TelemetryDefaults)
 	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
 		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)

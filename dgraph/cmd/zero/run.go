@@ -201,7 +201,9 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	if Zero.Conf.GetBool("enable_sentry") {
+	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
+	if telemetry.GetBool("sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("zero")
@@ -213,8 +215,6 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
-		x.TelemetryDefaults)
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
 	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
