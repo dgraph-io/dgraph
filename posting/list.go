@@ -302,7 +302,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 			if obj.Uid == mpost.Uid {
 				return nil
 			}
-			glog.Info("=============Deleting: ", obj.Uid)
 
 			// Mark all other values as deleted. By the end of the iteration, the
 			// list of postings will contain deleted operations and only one set

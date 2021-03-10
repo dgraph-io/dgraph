@@ -27,9 +27,11 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -194,7 +196,16 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 					return 0, 0, errors.Wrapf(err, "while reading backup posting list")
 				}
 				pl := posting.FromBackupPostingList(backupPl)
-				shouldSplit := pl.Size() >= (1<<20)/2
+
+				shouldSplit := false
+				if pl.Size() >= (1<<20)/2 {
+					r := roaring64.New()
+					err := codec.FromPostingList(r, pl)
+					if err != nil {
+						return 0, 0, errors.Wrap(err, "Failed to de-serialize bitmap")
+					}
+					shouldSplit = r.GetCardinality() > 1
+				}
 
 				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 					// This covers two cases.
