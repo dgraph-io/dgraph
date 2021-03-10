@@ -2435,12 +2435,12 @@ loop:
 			break loop
 		case itemComma:
 			if expectArg {
-				return item.Errorf("Expected a variable but got %s", item.Val)
+				return item.Errorf("Expected a variable but got comma")
 			}
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return item.Errorf("Expected a variable but got comma")
+				return item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			typeList = fmt.Sprintf("%s,%s", typeList, item.Val)
 			expectArg = false
