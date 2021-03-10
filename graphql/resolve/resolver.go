@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -84,6 +85,11 @@ type ResolverFactory interface {
 	WithSchemaIntrospection() ResolverFactory
 }
 
+// A ResultCompleter ....
+type ResultCompleter interface {
+	Complete(ctx context.Context, resolved *Resolved)
+}
+
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -140,6 +146,15 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
+}
+
+// CompletionFunc is an adapter that allows us to compose completions and build a
+// ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
+type CompletionFunc func(ctx context.Context, resolved *Resolved)
+
+// Complete calls cf(ctx, resolved)
+func (cf CompletionFunc) Complete(ctx context.Context, resolved *Resolved) {
+	cf(ctx, resolved)
 }
 
 // NewDgraphExecutor builds a DgraphExecutor for proxying requests through dgraph.
@@ -220,10 +235,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	queries = append(queries, s.Queries(schema.AggregateQuery)...)
-	queries = append(queries, s.Queries(schema.EntitiesQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Ex)
+		})
+	}
+
+	for _, q := range s.Queries(schema.EntitiesQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewEntitiesQueryResolver(fns.Qrw, fns.Ex)
 		})
 	}
 
@@ -300,6 +320,67 @@ func NewResolverFactory(
 		queryError:    queryError,
 		mutationError: mutationError,
 	}
+}
+
+// entitiesCompletion transform the result of the `_entities` query.
+// It changes the order of the result to the order of keyField in the
+// `_representations` argument.
+func entitiesCompletion(ctx context.Context, resolved *Resolved) {
+	// return id Data is not present
+	if len(resolved.Data) == 0 {
+		return
+	}
+
+	var data map[string][]interface{}
+	err := schema.Unmarshal(resolved.Data, &data)
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+		return
+	}
+
+	// fetch the keyFieldValueList from the query arguments.
+	_, _, _, keyFieldValueList, err := parseRepresentationsArgument(resolved.Field.(schema.Query))
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+		return
+	}
+
+	// store the index of the keyField Values present in the argument in a map.
+	indexMap := make(map[interface{}]int)
+	for i, key := range keyFieldValueList {
+		indexMap[key] = i
+	}
+
+	// sort the keyField Values in the ascending order.
+	sort.Slice(keyFieldValueList, func(i, j int) bool {
+		return keyFieldValueList[i].(string) < keyFieldValueList[j].(string)
+	})
+
+	// create the new output according to the index of the keyFields present in the argument.
+	output := make([]interface{}, len(keyFieldValueList))
+	for i, key := range keyFieldValueList {
+		output[indexMap[key]] = []interface{}(data["_entities"])[i]
+	}
+
+	// replace the result obtained from the dgraph and marshal back.
+	data["_entities"] = output
+	resolved.Data, err = json.Marshal(data)
+	if err != nil {
+		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
+	}
+
+}
+
+// noopCompletion just passes back it's result and err arguments
+func noopCompletion(ctx context.Context, resolved *Resolved) {}
+
+// StdQueryCompletion is the completion steps that get run for queries
+func StdQueryCompletion() CompletionFunc {
+	return noopCompletion
+}
+
+func entitiesQueryCompletion() CompletionFunc {
+	return entitiesCompletion
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {

@@ -57,13 +57,19 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 // 1) rewrite the query using qr (return error if failed)
 // 2) execute the rewritten query with ex (return error if failed)
 func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor) QueryResolver {
-	return &queryResolver{queryRewriter: qr, executor: ex}
+	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: CompletionFunc(noopCompletion)}
+}
+
+// NewEntitiesQueryResolver ...
+func NewEntitiesQueryResolver(qr QueryRewriter, ex DgraphExecutor) QueryResolver {
+	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: CompletionFunc(entitiesCompletion)}
 }
 
 // a queryResolver can resolve a single GraphQL query field.
 type queryResolver struct {
-	queryRewriter QueryRewriter
-	executor      DgraphExecutor
+	queryRewriter   QueryRewriter
+	executor        DgraphExecutor
+	resultCompleter ResultCompleter
 }
 
 func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -82,6 +88,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer timer.Stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
+	qr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
 	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved

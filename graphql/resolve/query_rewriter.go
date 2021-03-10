@@ -160,6 +160,67 @@ func (qr *queryRewriter) Rewrite(
 	}
 }
 
+// parseReporesentationsArgument parses the "_representations" argument in the "_entities" query.
+func parseRepresentationsArgument(field schema.Query) (string, string, bool, []interface{}, error) {
+	representations, ok := field.ArgValue("representations").([]interface{})
+	if !ok {
+		return "", "", false, make([]interface{}, 0), fmt.Errorf("Error parsing `representations` argument")
+	}
+	typeNames := make(map[string]bool)
+	keyFieldValueList := make([]interface{}, 0)
+	keyFieldIsID := false
+	keyFieldName := ""
+	var err error
+	for i, rep := range representations {
+		representation, ok := rep.(map[string]interface{})
+		if !ok {
+			return "", "", false, make([]interface{}, 0), fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
+		}
+
+		typename, ok := representation["__typename"].(string)
+		if !ok {
+			return "", "", false, make([]interface{}, 0), fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
+		}
+
+		// Store all the typeNames into an map to perfrom validation at last.
+		typeNames[typename] = true
+		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
+		if err != nil {
+			return "", "", false, make([]interface{}, 0), err
+		}
+		keyFieldValue, ok := representation[keyFieldName]
+		if !ok {
+			return "", "", false, make([]interface{}, 0), fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
+		}
+		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
+	}
+
+	// Return error if there was no typename extracted from the `_representations` argument.
+	if len(typeNames) == 0 {
+		return "", "", false, make([]interface{}, 0), fmt.Errorf("Expect one typename in `_representations` argument, got none")
+	}
+
+	// Since we have restricted that all the typeNames for the inputs in the
+	// representation list should be same, we need to validate it and throw error
+	// if represenation of more than one type exists.
+	if len(typeNames) > 1 {
+		keys := make([]string, len(typeNames))
+		i := 0
+		for k := range typeNames {
+			keys[i] = k
+			i++
+		}
+		return "", "", false, make([]interface{}, 0), fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
+	}
+
+	var typeName string
+	for k := range typeNames {
+		typeName = k
+	}
+
+	return keyFieldName, typeName, keyFieldIsID, keyFieldValueList, nil
+}
+
 // entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
 // This query is sent to the Dgraph service to resolve types `extended` and defined by this service.
 func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
@@ -179,60 +240,9 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// 		...
 	//   ]
 
-	representations, ok := field.ArgValue("representations").([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Error parsing `representations` argument")
-	}
-	typeNames := make(map[string]bool)
-	keyFieldValueList := make([]interface{}, 0)
-	keyFieldIsID := false
-	keyFieldName := ""
-	var err error
-	for i, rep := range representations {
-		representation, ok := rep.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("Error parsing in %dth item in the `_representations` argument", i)
-		}
-
-		typename, ok := representation["__typename"].(string)
-		if !ok {
-			return nil, fmt.Errorf("Unable to extract __typename from %dth item in the `_representations` argument", i)
-		}
-
-		// Store all the typeNames into an map to perfrom validation at last.
-		typeNames[typename] = true
-		keyFieldName, keyFieldIsID, err = field.KeyField(typename)
-		if err != nil {
-			return nil, err
-		}
-		keyFieldValue, ok := representation[keyFieldName]
-		if !ok {
-			return nil, fmt.Errorf("Unable to extract value for key field `%s` from %dth item in the `_representations` argument", keyFieldName, i)
-		}
-		keyFieldValueList = append(keyFieldValueList, keyFieldValue)
-	}
-
-	// Return error if there was no typename extracted from the `_representations` argument.
-	if len(typeNames) == 0 {
-		return nil, fmt.Errorf("Expect one typename in `_representations` argument, got none")
-	}
-
-	// Since we have restricted that all the typeNames for the inputs in the
-	// representation list should be same, we need to validate it and throw error
-	// if represenation of more than one type exists.
-	if len(typeNames) > 1 {
-		keys := make([]string, len(typeNames))
-		i := 0
-		for k := range typeNames {
-			keys[i] = k
-			i++
-		}
-		return nil, fmt.Errorf("Expected only one unique typename in `_representations` argument, got: %v", keys)
-	}
-
-	var typeName string
-	for k := range typeNames {
-		typeName = k
+	keyFieldName, typeName, keyFieldIsID, keyFieldValueList, err := parseRepresentationsArgument(field)
+	if err != nil {
+		return nil, err
 	}
 
 	typeDefn := field.BuildType(typeName)
@@ -272,6 +282,11 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	//		...
 	// 	}
 	addTypeFilter(dgQuery, typeDefn)
+
+	// Add the  ascending Order of the keyField in the query.
+	// The result will be converted into the exact in the resultCompletion step.
+	dgQuery.Order = append(dgQuery.Order,
+		&pb.Order{Attr: typeDefn.DgraphPredicate(keyFieldName)})
 
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
