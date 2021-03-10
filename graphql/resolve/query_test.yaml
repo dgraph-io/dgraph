@@ -1263,6 +1263,28 @@
       }
     }
 
+-
+  name: "Deep filter with multiple order, first and offset"
+  gqlquery: |
+    query {
+      queryAuthor {
+        name
+        posts(filter: { title: { anyofterms: "GraphQL" } }, order: { asc: numLikes, then: { desc: title } }, first: 10, offset: 10) {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts @filter(anyofterms(Post.title, "GraphQL")) (orderasc: Post.numLikes, orderdesc: Post.title, first: 10, offset: 10) {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
 
 -
   name: "All Float filters work"
