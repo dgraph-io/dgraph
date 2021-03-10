@@ -64,7 +64,7 @@ func init() {
 				applyFunc:      upgradeCORS,
 			}},
 			// another change in 21.03.0 version is regarding persistant query that used another
-			// depreciated predicate. This upgrade tool does not upgrade that information.
+			// deprecated predicate. This upgrade tool does not upgrade that information.
 		},
 	}
 }

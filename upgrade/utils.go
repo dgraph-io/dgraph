@@ -30,67 +30,48 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
-// getDgoClient creates a gRPC connection and uses that to create a new dgo client.
-// The gRPC.ClientConn returned by this must be closed after use.
-func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
-	alpha := Upgrade.Conf.GetString(alpha)
-
-	// TODO(Aman): add TLS configuration.
-	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
+// getAccessJwt gets the access jwt token from by logging into the cluster.
+func getAccessJwt() (*api.Jwt, error) {
+	user := Upgrade.Conf.GetString(user)
+	password := Upgrade.Conf.GetString(password)
+	header := http.Header{}
+	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
+	updateSchemaParams := &GraphQLParams{
+		Query: `mutation login($userId: String, $password: String, $namespace: Int) {
+			login(userId: $userId, password: $password, namespace: $namespace) {
+				response {
+					accessJWT
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"userId": user, "password": password,
+			"namespace": x.GalaxyNamespace},
+		Headers: header,
 	}
 
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	resp, err := makeGqlRequest(updateSchemaParams, Upgrade.Conf.GetString(adminUrl))
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Errors) > 0 {
+		return nil, errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
+	}
 
-	if withLogin {
-		userName := Upgrade.Conf.GetString(user)
-		password := Upgrade.Conf.GetString(password)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		// login to cluster. Only guardian of the galaxy can run this operation.
-		if err = dg.LoginIntoNamespace(ctx, userName, password, x.GalaxyNamespace); err != nil {
-			x.Check(conn.Close())
-			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
+	type Response struct {
+		Login struct {
+			Response struct {
+				AccessJWT string
+			}
 		}
 	}
-
-	return dg, conn, nil
-}
-
-// getAuthToken gets the auth token from by logging into the cluster.
-func getAuthToken() (*api.Jwt, error) {
-	alpha := Upgrade.Conf.GetString(alpha)
-
-	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
-	}
-	defer conn.Close()
-
-	dc := api.NewDgraphClient(conn)
-
-	userName := Upgrade.Conf.GetString(user)
-	password := Upgrade.Conf.GetString(password)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	// login to cluster. Only guardian of the galaxy can run this operation.
-	resp, err := dc.Login(ctx, &api.LoginRequest{
-		Userid:    userName,
-		Password:  password,
-		Namespace: x.GalaxyNamespace})
-	if err != nil {
-		return nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
-	}
-
-	jwt := &api.Jwt{}
-	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
+	var r Response
+	if err := json.Unmarshal(resp.Data, &r); err != nil {
 		return nil, err
 	}
 
+	jwt := &api.Jwt{AccessJwt: r.Login.Response.AccessJWT}
 	return jwt, nil
 }
 
@@ -147,7 +128,12 @@ func createGQLPost(params *GraphQLParams, url string) (*http.Request, error) {
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 50 * time.Second}
+	config, err := x.LoadClientTLSConfig(Upgrade.Conf)
+	if err != nil {
+		return nil, err
+	}
+	tr := &http.Transport{TLSClientConfig: config}
+	client := &http.Client{Timeout: 50 * time.Second, Transport: tr}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

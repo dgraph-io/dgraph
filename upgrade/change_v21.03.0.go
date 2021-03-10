@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -67,6 +68,7 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 	// Update the schema.
 	header := http.Header{}
 	header.Set("X-Dgraph-AccessToken", jwt.AccessJwt)
+	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
 	updateSchemaParams := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -79,8 +81,7 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 		Headers:   header,
 	}
 
-	adminUrl := "http://" + Upgrade.Conf.GetString(alphaHttp) + "/admin"
-	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
+	resp, err := makeGqlRequest(updateSchemaParams, Upgrade.Conf.GetString(adminUrl))
 	if err != nil {
 		return err
 	}
@@ -91,57 +92,57 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 	return nil
 }
 
-var depreciatedPreds = map[string]struct{}{
+var deprecatedPreds = map[string]struct{}{
 	"dgraph.cors":                      {},
 	"dgraph.graphql.schema_created_at": {},
 	"dgraph.graphql.schema_history":    {},
 	"dgraph.graphql.p_sha256hash":      {},
 }
 
-var depreciatedTypes = map[string]struct{}{
+var deprecatedTypes = map[string]struct{}{
 	"dgraph.type.cors":       {},
 	"dgraph.graphql.history": {},
 }
 
-func dropDepreciated(dg *dgo.Dgraph) error {
+func dropDeprecated(dg *dgo.Dgraph) error {
 	if !Upgrade.Conf.GetBool("deleteOld") {
 		return nil
 	}
-	for pred := range depreciatedPreds {
+	for pred := range deprecatedPreds {
 		op := &api.Operation{
 			DropOp:    api.Operation_ATTR,
 			DropValue: pred,
 		}
 		if err := alterWithClient(dg, op); err != nil {
-			return fmt.Errorf("error deleting old predicate: %w", err)
+			return errors.Wrapf(err, "error deleting old predicate %s", pred)
 		}
 	}
-	for typ := range depreciatedTypes {
+	for typ := range deprecatedTypes {
 		op := &api.Operation{
 			DropOp:    api.Operation_TYPE,
 			DropValue: typ,
 		}
 		if err := alterWithClient(dg, op); err != nil {
-			return fmt.Errorf("error deleting old predicate: %w", err)
+			return errors.Wrapf(err, "error deleting old type %s", typ)
 		}
 	}
-	fmt.Println("Successfully dropped the depreciated predicates")
+	fmt.Println("Successfully dropped the deprecated predicates")
 	return nil
 }
 
 func upgradeCORS() error {
-	dg, conn, err := getDgoClient(true)
-	if err != nil {
-		return fmt.Errorf("error getting dgo client: %w", err)
-	}
-	defer conn.Close()
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	defer cb()
 
-	jwt, err := getAuthToken()
+	jwt, err := getAccessJwt()
+	if err != nil {
+		return errors.Wrap(err, "while getting jwt auth token")
+	}
 
 	// Get CORS.
 	corsData := make(map[string][]cors)
 	if err = getQueryResult(dg, queryCORS_v21_03_0, &corsData); err != nil {
-		return fmt.Errorf("error querying old ACL rules: %w", err)
+		return errors.Wrap(err, "error querying cors")
 	}
 
 	var corsList []string
@@ -152,9 +153,10 @@ func upgradeCORS() error {
 			return err
 		}
 		if uid > maxUid {
-			uid = maxUid
+			maxUid = uid
 			if len(cors.Cors) == 1 && cors.Cors[0] == "*" {
 				// No need to update the GraphQL schema if all origins are allowed.
+				corsList = corsList[:0]
 				continue
 			}
 			corsList = cors.Cors
@@ -164,7 +166,7 @@ func upgradeCORS() error {
 	// Get GraphQL schema.
 	schemaData := make(map[string][]schema)
 	if err = getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
-		return fmt.Errorf("error querying old ACL rules: %w", err)
+		return errors.Wrap(err, "error querying graphql schema")
 	}
 
 	var gqlSchema string
@@ -175,7 +177,7 @@ func upgradeCORS() error {
 			return err
 		}
 		if uid > maxUid {
-			uid = maxUid
+			maxUid = uid
 			gqlSchema = schema.GQLSchema
 		}
 	}
@@ -185,6 +187,6 @@ func upgradeCORS() error {
 		return err
 	}
 
-	// Drop all the depreciated predicates and types.
-	return dropDepreciated(dg)
+	// Drop all the deprecated predicates and types.
+	return dropDeprecated(dg)
 }

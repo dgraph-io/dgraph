@@ -43,7 +43,9 @@ type versionComparisonResult uint8
 const (
 	dryRun    = "dry-run"
 	alpha     = "alpha"
-	alphaHttp = "alphaHttp"
+	slashGrpc = "slash_grpc_endpoint"
+	authToken = "auth_token"
+	adminUrl  = "admin-url"
 	user      = "user"
 	password  = "password"
 	deleteOld = "deleteOld"
@@ -151,13 +153,23 @@ func init() {
 	Upgrade.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Upgrade.Cmd.Flags()
 	flag.Bool(dryRun, false, "dry-run the upgrade")
-	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.String(alphaHttp, "127.0.0.1:8080", "Dgraph Alpha HTTP server address")
+	flag.StringP(alpha, "a", "127.0.0.1:9080",
+		"Comma separated list of Dgraph Alpha gRPC server address")
+	flag.String(slashGrpc, "", "Path to Slash GraphQL GRPC endpoint. "+
+		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be"+
+		"ignored")
+	flag.String(authToken, "",
+		"The auth token passed to the server for Alter operation of the schema file. "+
+			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
+			"by Slash GraphQL")
+	flag.String(adminUrl, "http://127.0.0.1:8080/admin", "Draph Alpha admin url")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
 	flag.BoolP(deleteOld, "d", true, "Delete the older ACL types/predicates")
 	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
 	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
+
+	x.RegisterClientTLSFlags(flag)
 }
 
 func run() {
@@ -167,10 +179,14 @@ func run() {
 		return
 	}
 
+	// Login using dgo client fetches the information from creds flag.
+	Upgrade.Conf.Set("creds", fmt.Sprintf("user=%s; password=%s; namespace=%d",
+		Upgrade.Conf.GetString(user), Upgrade.Conf.GetString(password), x.GalaxyNamespace))
 	applyChangeList(cmdInput, allChanges)
 }
 
 func validateAndParseInput() (*commandInput, error) {
+	// TODO: Validate flags related to slash as well.
 	_, _, err := net.SplitHostPort(strings.TrimSpace(Upgrade.Conf.GetString(alpha)))
 	if err != nil {
 		return nil, formatAsFlagParsingError(alpha, err)
