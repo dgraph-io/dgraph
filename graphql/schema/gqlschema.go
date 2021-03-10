@@ -1656,9 +1656,9 @@ func addHashIfRequired(fld *ast.FieldDefinition, indexes []string) []string {
 	return indexes
 }
 
-func hasIndex(indexes []string, index string) bool {
-	for i := range indexes {
-		if indexes[i] == index {
+func hasIndex(indexes []string, indexName string) bool {
+	for _, index := range indexes {
+		if index == indexName {
 			return true
 		}
 	}
