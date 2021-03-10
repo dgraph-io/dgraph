@@ -374,11 +374,6 @@ func entitiesCompletion(ctx context.Context, resolved *Resolved) {
 // noopCompletion just passes back it's result and err arguments
 func noopCompletion(ctx context.Context, resolved *Resolved) {}
 
-// StdQueryCompletion is the completion steps that get run for queries
-func StdQueryCompletion() CompletionFunc {
-	return noopCompletion
-}
-
 func entitiesQueryCompletion() CompletionFunc {
 	return entitiesCompletion
 }
