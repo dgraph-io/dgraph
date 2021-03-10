@@ -401,9 +401,9 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
-	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+	// If Dgraph.Authorization header is parsed successfully and JWKUrls is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrls.
+	if metaInfo.authMeta != nil && len(metaInfo.authMeta.JWKUrls) != 0 {
 		metaInfo.authMeta.InitHttpClient()
 		fetchErr := metaInfo.authMeta.FetchJWKs()
 		if fetchErr != nil {
