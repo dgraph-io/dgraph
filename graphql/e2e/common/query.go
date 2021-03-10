@@ -37,7 +37,6 @@ import (
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -466,7 +465,7 @@ func entitiesQuery(t *testing.T) {
     ]
 	  }`
 
-	common.JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
 	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
 	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
