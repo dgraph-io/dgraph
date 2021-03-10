@@ -1075,7 +1075,7 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	return 1, math.MaxUint64
 }
 
-func shouldSplit(plist *pb.PostingList) (bool, error) {
+func ShouldSplit(plist *pb.PostingList) (bool, error) {
 	if plist.Size() >= maxListSize {
 		r := roaring64.New()
 		if err := codec.FromPostingList(r, plist); err != nil {
@@ -1089,7 +1089,7 @@ func shouldSplit(plist *pb.PostingList) (bool, error) {
 func (ro *rollupOutput) runSplits() error {
 top:
 	for startUid, pl := range ro.parts {
-		should, err := shouldSplit(pl)
+		should, err := ShouldSplit(pl)
 		if err != nil {
 			return err
 		}
