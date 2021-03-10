@@ -1220,9 +1220,16 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		return
 	}
 
-	// TODO(Ahsan): resp.Txn.Preds contain predicates of form gid-namespace|attr.
-	// Remove the namespace from the response.
-	// resp.Txn.Preds = x.ParseAttrList(resp.Txn.Preds)
+	// resp.Txn.Preds contain predicates of form gid-namespace|attr, the below code changes
+	// namespace to human-readable integer form.
+	var preds []string
+	for _, p := range resp.Txn.Preds {
+		splits := strings.SplitN(p, "-", 2)
+		x.AssertTrue(len(splits) == 2)
+		pred := splits[0] + "-" + x.FormatNsAttr(splits[1])
+		preds = append(preds, pred)
+	}
+	resp.Txn.Preds = preds
 
 	// TODO(martinmr): Include Transport as part of the latency. Need to do
 	// this separately since it involves modifying the API protos.
