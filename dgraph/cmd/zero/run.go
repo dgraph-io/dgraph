@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/ee/audit"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
@@ -107,9 +108,7 @@ instances to achieve high-availability.
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		String())
 
-	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
-	//       option.
-	flag.String("audit", "", z.NewSuperFlagHelp("").
+	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
