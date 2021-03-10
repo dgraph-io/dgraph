@@ -59,6 +59,8 @@ type IPRange struct {
 // WorkerOptions stores the options for the worker package. It's declared here
 // since it's used by multiple packages.
 type WorkerOptions struct {
+	// TODO(karl): document
+	Telemetry *z.SuperFlag
 	// TmpDir is a directory to store temporary buffers.
 	TmpDir string
 	// ExportPath indicates the folder to which exported data will be saved.

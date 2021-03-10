@@ -564,10 +564,6 @@ func setupServer(closer *z.Closer) {
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
-	if Alpha.Conf.GetBool("telemetry") {
-		go edgraph.PeriodicallyPostTelemetry()
-	}
-
 	go func() {
 		defer x.ServerCloser.Done()
 
@@ -679,10 +675,13 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
+	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
 	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
 		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
+		Telemetry:           telemetry,
 		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -703,6 +702,10 @@ func run() {
 		Badger:              badger,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	if x.WorkerConfig.Telemetry.GetBool("reports") {
+		go edgraph.PeriodicallyPostTelemetry()
+	}
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)

@@ -49,9 +49,10 @@ import (
 )
 
 type options struct {
+	raft              *z.SuperFlag
+	telemetry         *z.SuperFlag
 	bindall           bool
 	portOffset        int
-	Raft              *z.SuperFlag
 	numReplicas       int
 	peer              string
 	w                 string
@@ -154,12 +155,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}
 	s := grpc.NewServer(grpcOpts...)
 
-	nodeId := opts.Raft.GetUint64("idx")
+	nodeId := opts.raft.GetUint64("idx")
 	rc := pb.RaftContext{
 		Id:        nodeId,
 		Addr:      x.WorkerConfig.MyAddr,
 		Group:     0,
-		IsLearner: opts.Raft.GetBool("learner"),
+		IsLearner: opts.raft.GetBool("learner"),
 	}
 	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
 
@@ -212,12 +213,16 @@ func run() {
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
 	x.Check(err)
 
-	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(raftDefaults)
+	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
+	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
+		raftDefaults)
 	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
 	opts = options{
+		telemetry:         telemetry,
+		raft:              raft,
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
-		Raft:              raft,
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
@@ -270,7 +275,7 @@ func run() {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 
-	nodeId := opts.Raft.GetUint64("idx")
+	nodeId := opts.raft.GetUint64("idx")
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}
@@ -308,7 +313,7 @@ func run() {
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
 
-	if Zero.Conf.GetBool("telemetry") {
+	if opts.telemetry.GetBool("reports") {
 		go st.zero.periodicallyPostTelemetry()
 	}
 
