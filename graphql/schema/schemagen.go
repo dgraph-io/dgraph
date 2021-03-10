@@ -93,15 +93,15 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 		parts := strings.Fields(text)
 		const doubleQuotesCode = 34
 
-		if len(parts) < 4 {
-			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
-		}
-		val := strings.Join(parts[3:], " ")
-		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
-			return nil, nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
-				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
-		}
+			if len(parts) < 4 {
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+			}
+			val := strings.Join(parts[3:], " ")
+			if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
+				return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+					"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+			}
 
 		val = strings.Trim(val, `"`)
 		key := strings.Trim(parts[2], `"`)
@@ -485,12 +485,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
-					id := f.Directives.ForName(idDirective)
-					if id != nil {
-						upsertStr = "@upsert "
-						indexes = append(indexes, "hash")
-					}
-
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
@@ -498,6 +492,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						} else {
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
+						}
+					}
+
+					id := f.Directives.ForName(idDirective)
+					if id != nil {
+						upsertStr = "@upsert "
+						if !x.HasString(indexes, "exact") {
+							indexes = append(indexes, "hash")
 						}
 					}
 
