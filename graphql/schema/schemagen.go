@@ -637,6 +637,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
+						if arg != nil {
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
+						} else {
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
+						}
+					}
+
 					id := f.Directives.ForName(idDirective)
 					if id != nil || f.Type.Name() == "ID" {
 						upsertStr = "@upsert "
@@ -646,17 +656,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						case "Float":
 							indexes = append(indexes, "float")
 						case "String", "ID":
-							indexes = append(indexes, "hash")
-						}
-					}
-
-					if search != nil {
-						arg := search.Arguments.ForName(searchArgs)
-						if arg != nil {
-							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
-						} else {
-							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
-								Name()]].dgIndex)
+							if !x.HasString(indexes, "exact") {
+								indexes = append(indexes, "hash")
+							}
 						}
 					}
 

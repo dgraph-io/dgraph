@@ -494,6 +494,25 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
+  - name: "Field with @id directive and a exact arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [exact])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id
+      }
+      A.id: string @index(exact) @upsert .
+      type B {
+        A.id
+        B.correct
+      }
+      B.correct: bool @index(bool) .
+
   -
     name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
     input: |
