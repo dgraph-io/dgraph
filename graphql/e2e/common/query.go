@@ -468,10 +468,10 @@ func entitiesQuery(t *testing.T) {
 	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
 
 	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
-	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
 
 	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
-	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
 
