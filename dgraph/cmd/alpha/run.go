@@ -137,9 +137,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	flag.String("mutations", "allow",
-		"Set mutation mode to allow, disallow, or strict.")
-
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
@@ -201,6 +198,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("normalize-node",
 			"The maximum number of nodes that can be returned in a query that uses the normalize "+
 				"directive.").
+		Flag("mutations",
+			"[allow, disallow, strict] The mutations mode to use.").
 		Flag("mutations-nquad",
 			"The maximum number of nquads that can be inserted in a mutation request.").
 		String())
@@ -654,7 +653,9 @@ func run() {
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
-	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
+	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.LimitDefaults)
+	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
 	case "disallow":
@@ -662,7 +663,7 @@ func run() {
 	case "strict":
 		opts.MutationsMode = worker.StrictMutations
 	default:
-		glog.Error("--mutations argument must be one of allow, disallow, or strict")
+		glog.Error(`--limit "mutations=<mode>;" must be one of allow, disallow, or strict`)
 		os.Exit(1)
 	}
 
@@ -717,8 +718,6 @@ func run() {
 	setupCustomTokenizers()
 	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
-		worker.LimitDefaults)
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 
