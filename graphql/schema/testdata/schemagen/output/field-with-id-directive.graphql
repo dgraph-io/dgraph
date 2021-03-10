@@ -18,7 +18,7 @@ type Author {
 }
 
 type Genre {
-	name: String! @id
+	name: String! @id @search(by: [exact])
 }
 
 #######################
@@ -430,7 +430,7 @@ input AuthorRef {
 }
 
 input GenreFilter {
-	name: StringHashFilter
+	name: StringExactFilter
 	has: [GenreHasFilter]
 	and: [GenreFilter]
 	or: [GenreFilter]
