@@ -383,8 +383,8 @@ func allPosts(t *testing.T) []*post {
 
 func entitiesQuery(t *testing.T) {
 	addSpaceShipParams := &GraphQLParams{
-		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
-			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
+		Query: `mutation addSpaceShip($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
 				spaceShip {
 					id
 					missions {
@@ -395,8 +395,10 @@ func entitiesQuery(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"id1":        "SpaceShip1",
-			"missionId1": "Mission1",
+			"id1": "SpaceShip1",
+			"id2": "SpaceShip2",
+			"id3": "SpaceShip3",
+			"id4": "SpaceShip4",
 		},
 	}
 
@@ -404,8 +406,8 @@ func entitiesQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	entitiesQueryParams := &GraphQLParams{
-		Query: `query _entities($typeName: String!, $id1: String!){
-			_entities(representations: [{__typename: $typeName, id: $id1}]) {
+		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3} ]) {
 				... on SpaceShip {
 					missions(order: {asc: id}){
 						id
@@ -417,6 +419,9 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"typeName": "SpaceShip",
 			"id1":      "SpaceShip1",
+			"id2":      "SpaceShip2",
+			"id3":      "SpaceShip3",
+			"id4":      "SpaceShip4",
 		},
 	}
 
@@ -425,15 +430,39 @@ func entitiesQuery(t *testing.T) {
 
 	expectedJSON := `{
 		"_entities": [
-		  {
-			"missions": [
-			  {
-				"id": "Mission1",
-				"designation": "Apollo1"
-			  }
-			]
-		  }
-		]
+      {
+        "missions": [
+          {
+            "designation": "Apollo4",
+            "id": "Mission4"
+          }
+        ]
+      },
+      {
+        "missions": [
+          {
+            "designation": "Apollo2",
+            "id": "Mission2"
+          }
+        ]
+      },
+      {
+        "missions": [
+          {
+            "designation": "Apollo1",
+            "id": "Mission1"
+          }
+        ]
+      },
+      {
+        "missions": [
+          {
+            "designation": "Apollo3",
+            "id": "Mission3"
+          }
+        ]
+      }
+    ]
 	  }`
 
 	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
