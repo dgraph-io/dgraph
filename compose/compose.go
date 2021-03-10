@@ -175,12 +175,14 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
-	svc.Volumes = append(svc.Volumes, volume{
-		Type:     "bind",
-		Source:   "$GOPATH/bin",
-		Target:   "/gobin",
-		ReadOnly: true,
-	})
+	if opts.LocalBin {
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   "$GOPATH/bin",
+			Target:   "/gobin",
+			ReadOnly: true,
+		})
+	}
 
 	switch {
 	case opts.DataVol:
