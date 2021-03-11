@@ -701,7 +701,7 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              badger,
-		BadgerMaxRetries:    badger.GetInt("max-retries"),
+		BadgerMaxRetries:    int(badger.GetInt64("max-retries")),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
