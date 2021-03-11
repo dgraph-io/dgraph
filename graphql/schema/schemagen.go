@@ -111,7 +111,6 @@ func parseSecrets(sch string) (map[string]string, *authorization.AuthMeta, error
 	if err := scanner.Err(); err != nil {
 		return nil, nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
-
 	if authSecret == "" {
 		return m, nil, nil
 	}
@@ -485,12 +484,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
-					id := f.Directives.ForName(idDirective)
-					if id != nil {
-						upsertStr = "@upsert "
-						indexes = append(indexes, "hash")
-					}
-
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
@@ -498,6 +491,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						} else {
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
+						}
+					}
+
+					id := f.Directives.ForName(idDirective)
+					if id != nil {
+						upsertStr = "@upsert "
+						if !x.HasString(indexes, "exact") {
+							indexes = append(indexes, "hash")
 						}
 					}
 
