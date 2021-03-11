@@ -266,3 +266,76 @@ func lambdaInMutationWithDuplicateId(t *testing.T) {
 	DeleteGqlType(t, "Chapter", GetXidFilter("chapterId", []interface{}{1, 2, 3, 4}), 4, nil)
 	DeleteGqlType(t, "Book", GetXidFilter("bookId", []interface{}{1, 2}), 2, nil)
 }
+
+func lambdaWithApolloFederation(t *testing.T) {
+	addMissionParams := &GraphQLParams{
+		Query: `mutation {
+			addMission(input: [
+				{id: "M1", designation: "Apollo 1", crew: [
+					{id: "14", name: "Gus Grissom", isActive: false}
+					{id: "30", name: "Ed White", isActive: true}
+					{id: "7", name: "Roger B. Chaffee", isActive: false}
+				]}
+			]) {
+				numUids
+			}
+		}`,
+	}
+	resp := addMissionParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	// entities query should get correct bio built using the age & name given in representations
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!) {
+			_entities(representations: [
+				{__typename: $typeName, id: "14", name: "Gus Grissom", age: 70}
+				{__typename: $typeName, id: "30", name: "Ed White", age: 80}
+				{__typename: $typeName, id: "7", name: "An updated name", age: 65}
+			]) {
+				... on Astronaut {
+					name
+					bio
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "Astronaut",
+		},
+	}
+	resp = entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	testutil.CompareJSON(t, `{
+		"_entities": [
+			{"name": "Gus Grissom", "bio": "Name - Gus Grissom, Age - 70, isActive - false"},
+			{"name": "Ed White", "bio": "Name - Ed White, Age - 80, isActive - true"},
+			{"name": "Roger B. Chaffee", "bio": "Name - An updated name, Age - 65, isActive - false"}
+		]
+	}`, string(resp.Data))
+
+	// directly querying from an auto-generated query should give undefined age in bio
+	// name in bio should be from dgraph
+	dgQueryParams := &GraphQLParams{
+		Query: `query {
+			queryAstronaut {
+				name
+				bio
+			}
+		}`,
+	}
+	resp = dgQueryParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	testutil.CompareJSON(t, `{
+		"queryAstronaut": [
+			{"name": "Gus Grissom", "bio": "Name - Gus Grissom, Age - undefined, isActive - false"},
+			{"name": "Ed White", "bio": "Name - Ed White, Age - undefined, isActive - true"},
+			{"name": "Roger B. Chaffee", "bio": "Name - Roger B. Chaffee, Age - undefined, isActive - false"}
+		]
+	}`, string(resp.Data))
+
+	// cleanup
+	DeleteGqlType(t, "Mission", GetXidFilter("id", []interface{}{"M1"}), 1, nil)
+	DeleteGqlType(t, "Astronaut", map[string]interface{}{"id": []interface{}{"14", "30", "7"}}, 3,
+		nil)
+}

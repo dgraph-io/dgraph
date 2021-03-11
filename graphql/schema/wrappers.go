@@ -816,7 +816,7 @@ func nonExternalAndKeyFields(defn *ast.Definition) ast.FieldList {
 }
 
 // externalAndNonKeyField returns true for those fields which have @external directive and
-// are not @key fields and are not an arugment to the @provides directive.
+// are not @key fields and are not an argument to the @provides directive.
 func externalAndNonKeyField(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	return hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name]
 }
