@@ -106,11 +106,11 @@ type request struct {
 	conflicts []uint64
 }
 
-func (l *schema) init(ns uint64) {
+func (l *schema) init(ns uint64, galaxyOperation bool) {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
-		if !opt.preserveNs {
+		if !galaxyOperation {
 			i.Predicate = x.NamespaceAttr(ns, i.Predicate)
 		}
 		l.preds[i.Predicate] = i
@@ -191,7 +191,7 @@ func init() {
 		"specific namespace. Setting it to negative value will preserve the namespace.")
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -206,7 +206,7 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64) (*schem
 	}
 	// If we are not loading data across namespaces, the schema query result will not contain the
 	// namespace information. Set it inside the init function.
-	sch.init(ns)
+	sch.init(opt.namespaceToLoad, galaxyOperation)
 	return &sch, nil
 }
 
@@ -724,8 +724,9 @@ func run() error {
 			opt.namespaceToLoad = uint64(forceNs)
 		}
 	default:
-		if Live.Conf.IsSet("force-namespace") && uint64(forceNs) != creds.GetUint64("namespace") {
-			return errors.Errorf("cannot load into namespace %#x", forceNs)
+		if Live.Conf.IsSet("force-namespace") {
+			return errors.Errorf("cannot force namespace %#x when provided creds are not of"+
+				" guardian of galaxy user", forceNs)
 		}
 		opt.namespaceToLoad = creds.GetUint64("namespace")
 	}
@@ -746,9 +747,11 @@ func run() error {
 		opt.namespaceToLoad != x.GalaxyNamespace {
 		singleNsOp = false
 	}
+	galaxyOperation := false
 	if !singleNsOp {
 		// Attach the galaxy to the context to specify that the query/mutations with this context
 		// will be galaxy-wide.
+		galaxyOperation = true
 		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
 		// We don't support upsert predicate while loading data in multiple namespace.
 		if len(opt.upsertPredicate) > 0 {
@@ -800,7 +803,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	if l.schema, err = getSchema(ctx, dg, opt.namespaceToLoad); err != nil {
+	if l.schema, err = getSchema(ctx, dg, galaxyOperation); err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err
 	}
