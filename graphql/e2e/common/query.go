@@ -407,7 +407,7 @@ func entitiesQuery(t *testing.T) {
 
 	entitiesQueryParams := &GraphQLParams{
 		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
-			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3} ]) {
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
 				... on SpaceShip {
 					missions(order: {asc: id}){
 						id
@@ -428,7 +428,7 @@ func entitiesQuery(t *testing.T) {
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]}]}`
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
 
 	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
