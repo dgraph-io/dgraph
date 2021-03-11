@@ -39,30 +39,8 @@ var (
 	bitMask uint64 = 0xffffffff00000000
 )
 
-// // Encoder is used to convert a list of UIDs into a pb.UidPack object.
-// type Encoder struct {
-// 	roar  *roaring64.Bitmap
-// 	uids  []uint64
-// 	Alloc *z.Allocator
-// 	buf   *bytes.Buffer
-// }
-
-// // Add takes an uid and adds it to the list of UIDs to be encoded.
-// func (e *Encoder) Add(uid uint64) {
-// 	if e.roar == nil {
-// 		e.roar = roaring64.NewBitmap()
-// 	}
-// 	e.roar.Add(uid)
-// }
-
-// // Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
-// func (e *Encoder) Done(w io.Writer) int64 {
-// 	n, err := e.roar.WriteTo(w)
-// 	x.Check(err)
-// 	return n
-// }
-
-func ApproxLen(pack *pb.UidPack) int {
+//TODO(Ahsan): Need to fix this.
+func ApproxLen(bitmap []byte) int {
 	return 0
 }
 
@@ -200,18 +178,6 @@ func RemoveRange(bm *roaring64.Bitmap, from, to uint64) {
 	bm.RemoveRange(from, to)
 	bm.Remove(to)
 }
-
-// // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
-// // need to do more specific things than just return the list back.
-// func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-// 	out := make([]uint64, 0, ApproxLen(pack))
-// 	dec := Decoder{Pack: pack}
-
-// 	for uids := dec.Seek(seek, SeekStart); len(uids) > 0; uids = dec.Next() {
-// 		out = append(out, uids...)
-// 	}
-// 	return out
-// }
 
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
