@@ -32,7 +32,6 @@ import (
 )
 
 const (
-	CDCDefaults       = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 	defaultEventTopic = "dgraph-cdc"
 )
 

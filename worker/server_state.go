@@ -44,7 +44,9 @@ const (
 	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whitelist=;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	LimitDefaults     = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
+	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
+		`client_key=;`
+	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000;`
 	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
