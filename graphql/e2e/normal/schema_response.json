@@ -594,6 +594,20 @@
       "list": true
     },
     {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "hash"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Starship.length",
       "type": "float"
     },
