@@ -105,7 +105,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
-	// --encryption-key-file
+	// --encryption_key_file
 	enc.RegisterFlags(flag)
 
 	flag.String("cache_percentage", "0,65,35,0",
