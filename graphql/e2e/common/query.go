@@ -459,7 +459,7 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	entitiesQueryParams := &GraphQLParams{
-		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
+		Query: `query _entities($typeName: String!, $id1: Int!, $id2: Int!, $id3: Int!, $id4: Int!){
 			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
 				... on Planet {
 					missions(order: {asc: id}){
