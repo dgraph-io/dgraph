@@ -367,24 +367,24 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 		uniqueKeyList = append(uniqueKeyList, k)
 	}
 	sort.Slice(uniqueKeyList, func(i, j int) bool {
-		switch uniqueKeyList[i].(type) {
+		switch val := uniqueKeyList[i].(type) {
 		case string:
-			return uniqueKeyList[i].(string) < uniqueKeyList[j].(string)
+			return val < uniqueKeyList[j].(string)
 		case json.Number:
 			switch keyFieldType {
 			case "Int":
-				val1, _ := uniqueKeyList[i].(json.Number).Int64()
+				val1, _ := val.Int64()
 				val2, _ := uniqueKeyList[j].(json.Number).Int64()
 				return val1 < val2
 			case "Float":
-				val1, _ := uniqueKeyList[i].(json.Number).Float64()
+				val1, _ := val.Float64()
 				val2, _ := uniqueKeyList[j].(json.Number).Float64()
 				return val1 < val2
 			}
 		case int64:
-			return uniqueKeyList[i].(int64) < uniqueKeyList[j].(int64)
+			return val < uniqueKeyList[j].(int64)
 		case float64:
-			return uniqueKeyList[i].(float64) < uniqueKeyList[j].(float64)
+			return val < uniqueKeyList[j].(float64)
 		}
 		return false
 	})
