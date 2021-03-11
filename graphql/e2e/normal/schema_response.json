@@ -598,7 +598,7 @@
       "type": "int",
       "index": true,
       "tokenizer": [
-        "hash"
+        "int"
       ],
       "upsert": true
     },
