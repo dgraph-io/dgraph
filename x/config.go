@@ -59,7 +59,10 @@ type IPRange struct {
 // WorkerOptions stores the options for the worker package. It's declared here
 // since it's used by multiple packages.
 type WorkerOptions struct {
-	// TODO(karl): document
+	// Telemetry options:
+	//
+	// reports bool - send anonymous telemetry data to Dgraph devs
+	// sentry bool - send crash events to Sentry
 	Telemetry *z.SuperFlag
 	// TmpDir is a directory to store temporary buffers.
 	TmpDir string
