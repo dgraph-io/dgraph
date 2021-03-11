@@ -19,6 +19,8 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -181,6 +183,19 @@ func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	return allocate, nil
 }
 
+func decrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, baseIv[:])
+	stream.XORKeyStream(src, src)
+	return src, nil
+}
+
 func (l *LogWriter) rotate() error {
 	if l == nil {
 		return nil
@@ -230,7 +245,11 @@ func (l *LogWriter) open() error {
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
-			if _, err = l.writer.Write(l.baseIv[:]); err != nil {
+			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte("Hello World"))
+			if err != nil {
+				return err
+			}
+			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
 				return err
 			}
 		}
@@ -259,6 +278,15 @@ func (l *LogWriter) open() error {
 		if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
 			_ = f.Close()
 			return openNew()
+		}
+		text := make([]byte, 11)
+		if _, err := f.ReadAt(text, 16); err != nil {
+			if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil &&
+				string(t) != "Hello World" {
+				// different encryption key. Better to open new file here
+				_ = f.Close()
+				return openNew()
+			}
 		}
 	}
 

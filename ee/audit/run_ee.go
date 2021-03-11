@@ -105,23 +105,24 @@ func run() error {
 	stream := cipher.NewCTR(block, iv)
 	stream.XORKeyStream(t, t)
 	if string(t) != "Hello World" {
-		return errors.New("invalid encryption key provided")
+		return errors.New("invalid encryption key provided. Please check your encryption key")
 	}
 
 	var iterator int64 = 16 + 11 // 16 for init vector and 11 for Hello World verification text.
 	for {
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		x.Check2(file.ReadAt(content, iterator))
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(content, content)
-		x.Check2(outfile.Write(content))
 		// if its the end of data. finish decrypting
 		if iterator >= stat.Size() {
 			break
 		}
 		x.Check2(file.ReadAt(iv[12:], iterator))
 		iterator = iterator + 4
+
+		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+		x.Check2(file.ReadAt(content, iterator))
+		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(content, content)
+		x.Check2(outfile.Write(content))
 	}
 	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
 		decryptCmd.Conf.GetString("in"),
