@@ -48,8 +48,6 @@ const (
 		`mutations-nquad=1000000;`
 	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
-	CDCDefaults = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; ` +
-		`client-key=;`
 )
 
 // ServerState holds the state of the Dgraph server.
