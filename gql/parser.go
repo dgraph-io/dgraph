@@ -2407,7 +2407,7 @@ loop:
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return count, item.Errorf("Expected a variable but got comma")
+				return count, item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
@@ -2440,7 +2440,7 @@ loop:
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return item.Errorf("Expected a variable but got comma")
+				return item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			typeList = fmt.Sprintf("%s,%s", typeList, item.Val)
 			expectArg = false
