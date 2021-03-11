@@ -425,6 +425,109 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
+// ReadPostingList constructs the posting list from the disk using the passed iterator.
+// Use forward iterator with allversions enabled in iter options.
+// key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
+// TO BE USED BY GETNEW FUNCTION.
+func readPostingList(key []byte, txn *badger.Txn) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read using using the main key because the information needed
+		// to access the whole list is stored there.
+		// The function returns a nil list instead. This is safe to do because all
+		// public methods of the List object are no-ops and the list is being already
+		// accessed via the main key in the places where this code is reached (e.g rollups).
+		return nil, ErrInvalidKey
+	}
+
+	l := new(List)
+	l.key = key
+	l.plist = new(pb.PostingList)
+
+	// We use the following block of code to trigger incremental rollup on this key.
+	deltaCount := 0
+	defer func() {
+		if deltaCount > 0 {
+			// If deltaCount is high, send it to high priority channel instead.
+			if deltaCount > 500 {
+				IncrRollup.addKeyToBatch(key, 0)
+			} else {
+				IncrRollup.addKeyToBatch(key, 1)
+			}
+		}
+	}()
+
+	items, err := txn.GetValues(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while getting values for key %s", key)
+	}
+	// Iterates from highest Ts to lowest Ts
+	for _, item := range items {
+		x.AssertTrue(bytes.Equal(item.Key(), l.key))
+		// TODO: We probably need DeleteItem here to update maxTs like we do it in ReadPostingList.
+		l.maxTs = x.Max(l.maxTs, item.Version())
+
+		if item.IsDeletedOrExpired() {
+			break
+		}
+
+		switch item.UserMeta() {
+		case BitEmptyPosting:
+			l.minTs = item.Version()
+			return l, nil
+		case BitCompletePosting:
+			if err := unmarshalOrCopy(l.plist, item); err != nil {
+				return nil, err
+			}
+			l.minTs = item.Version()
+
+			// No need to do Next here. The outer loop can take care of skipping
+			// more versions of the same key.
+			return l, nil
+		case BitDeltaPosting:
+			err := item.Value(func(val []byte) error {
+				pl := &pb.PostingList{}
+				if err := pl.Unmarshal(val); err != nil {
+					return err
+				}
+				pl.CommitTs = item.Version()
+				for _, mpost := range pl.Postings {
+					// commitTs, startTs are meant to be only in memory, not
+					// stored on disk.
+					mpost.CommitTs = item.Version()
+				}
+				if l.mutationMap == nil {
+					l.mutationMap = make(map[uint64]*pb.PostingList)
+				}
+				l.mutationMap[pl.CommitTs] = pl
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			deltaCount++
+		case BitSchemaPosting:
+			return nil, errors.Errorf(
+				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
+		default:
+			return nil, errors.Errorf(
+				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+		}
+		if item.DiscardEarlierVersions() {
+			break
+		}
+	}
+	return l, nil
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	cachedVal, ok := lCache.Get(key)
 	if ok {
@@ -450,21 +553,37 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
-	txn := pstore.NewTransactionAt(readTs, false)
-	defer txn.Discard()
 
-	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
-	// issues during txn.Get. Therefore, always iterate.
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	iterOpts.PrefetchValues = false
-	itr := txn.NewKeyIterator(key, iterOpts)
-	defer itr.Close()
-	itr.Seek(key)
-	l, err := ReadPostingList(key, itr)
+	txn1 := pstore.NewTransactionAt(readTs, false)
+	defer txn1.Discard()
+	// readPostingList handles it internally.
+	l1, err := readPostingList(key, txn1)
 	if err != nil {
-		return l, err
+		panic("lol2")
+		return l1, err
 	}
-	lCache.Set(key, l, 0)
-	return l, nil
+
+	// txn := pstore.NewTransactionAt(readTs, false)
+	// defer txn.Discard()
+	// // When we do rollups, an older version would go to the top of the LSM tree, which can cause
+	// // issues during txn.Get. Therefore, always iterate.
+	// iterOpts := badger.DefaultIteratorOptions
+	// iterOpts.AllVersions = true
+	// iterOpts.PrefetchValues = false
+	// itr := txn.NewKeyIterator(key, iterOpts)
+	// defer itr.Close()
+	// itr.Seek(key)
+	// l, err := ReadPostingList(key, itr)
+	// if err != nil {
+	// 	panic("lol1")
+	// 	return l, err
+	// }
+
+	// if l.minTs != l1.minTs || l.maxTs != l1.maxTs {
+	// 	spew.Dump(l, l1, txn.ReadTs(), readTs)
+	// 	spew.Dump(x.Parse(l.key))
+	// 	panic("lol3")
+	// }
+	lCache.Set(key, l1, 0)
+	return l1, nil
 }

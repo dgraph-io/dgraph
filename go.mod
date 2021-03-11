@@ -2,6 +2,8 @@ module github.com/dgraph-io/dgraph
 
 go 1.12
 
+// replace github.com/dgraph-io/badger/v3 => /home/algod/go/src/github.com/dgraph-io/badger
+
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
@@ -14,7 +16,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210309075542-2245c18dfd1f
+	github.com/dgraph-io/badger/v3 v3.0.0-20210311125309-e94357e8f967
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.1.8

@@ -363,7 +363,7 @@ type HttpToken struct {
 // GrootHttpLogin logins using the groot account with the default password
 // and returns the access JWT
 func GrootHttpLogin(endpoint string) *HttpToken {
-	return GrootHttpLoginNamespace(endpoint, 0)
+	return GrootHttpLoginNamespace(endpoint, x.GalaxyNamespace)
 }
 
 func GrootHttpLoginNamespace(endpoint string, namespace uint64) *HttpToken {
