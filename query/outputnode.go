@@ -129,7 +129,7 @@ func newEncoder() *encoder {
 		attrMap: make(map[string]uint16),
 		idSlice: idSlice,
 		arena:   a,
-		alloc:   z.NewAllocator(4 << 10),
+		alloc:   z.NewAllocator(4<<10, "OutputNode.Encoder"),
 	}
 	e.uidAttr = e.idForAttr("uid")
 	return e
