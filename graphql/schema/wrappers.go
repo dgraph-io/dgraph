@@ -140,6 +140,8 @@ type Field interface {
 	//  * seenField: used for skipping when the field has already been seen at the current level
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
+	// ApolloRequiredFields returns the fields names which were specified in @requires.
+	ApolloRequiredFields() []string
 	// CustomRequiredFields returns a map from DgraphAlias to the field definition of the fields
 	// which are required to resolve this custom field.
 	CustomRequiredFields() map[string]FieldDefinition
@@ -292,6 +294,9 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// requiresDirectives stores the mapping of typeName->fieldName->list of fields given in
+	// @requires. It is read-only.
+	requiresDirectives map[string]map[string][]string
 	// remoteResponse stores the mapping of typeName->fieldName->responseName which will be used in result
 	// completion step.
 	remoteResponse map[string]map[string]string
@@ -728,6 +733,36 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func requiresMappings(s *ast.Schema) map[string]map[string][]string {
+	requiresDirectives := make(map[string]map[string][]string)
+
+	for _, typ := range s.Types {
+		for _, f := range typ.Fields {
+			for i, dir := range f.Directives {
+				if dir.Name != apolloRequiresDirective {
+					continue
+				}
+				lastIndex := len(f.Directives) - 1
+				f.Directives[i] = f.Directives[lastIndex]
+				f.Directives = f.Directives[:lastIndex]
+
+				var fieldMap map[string][]string
+				if existingFieldMap, ok := requiresDirectives[typ.Name]; ok {
+					fieldMap = existingFieldMap
+				} else {
+					fieldMap = make(map[string][]string)
+				}
+
+				fieldMap[f.Name] = strings.Fields(dir.Arguments[0].Value.Raw)
+				requiresDirectives[typ.Name] = fieldMap
+
+				break
+			}
+		}
+	}
+	return requiresDirectives
+}
+
 func remoteResponseMapping(s *ast.Schema) map[string]map[string]string {
 	remoteResponse := make(map[string]map[string]string)
 	for _, typ := range s.Types {
@@ -905,13 +940,14 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	remoteResponseDirs := remoteResponseMapping(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:           s,
-		dgraphPredicate:  dgraphPredicate,
-		typeNameAst:      typeMappings(s),
-		customDirectives: customDirs,
-		lambdaDirectives: lambdaDirs,
-		remoteResponse:   remoteResponseDirs,
-		meta:             &metaInfo{}, // initialize with an empty metaInfo
+		schema:             s,
+		dgraphPredicate:    dgraphPredicate,
+		typeNameAst:        typeMappings(s),
+		customDirectives:   customDirs,
+		lambdaDirectives:   lambdaDirs,
+		requiresDirectives: requiresMappings(s),
+		remoteResponse:     remoteResponseDirs,
+		meta:               &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 	// Auth rules can't be effectively validated as part of the normal rules -
@@ -1172,6 +1208,10 @@ func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map
 		res[fieldDef.DgraphAlias()] = fieldDef
 	}
 	return res
+}
+
+func (f *field) ApolloRequiredFields() []string {
+	return f.op.inSchema.requiresDirectives[f.GetObjectName()][f.Name()]
 }
 
 func (f *field) CustomRequiredFields() map[string]FieldDefinition {
@@ -1703,6 +1743,10 @@ func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
+func (q *query) ApolloRequiredFields() []string {
+	return (*field)(q).ApolloRequiredFields()
+}
+
 func (q *query) CustomRequiredFields() map[string]FieldDefinition {
 	return (*field)(q).CustomRequiredFields()
 }
@@ -1972,6 +2016,10 @@ func (m *mutation) SkipField(dgraphTypes []string, seenField map[string]bool) bo
 
 func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
+}
+
+func (m *mutation) ApolloRequiredFields() []string {
+	return (*field)(m).ApolloRequiredFields()
 }
 
 func (m *mutation) CustomRequiredFields() map[string]FieldDefinition {
