@@ -346,10 +346,13 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 		return
 	}
 
+	typeDefn := resolved.Field.(schema.Query).BuildType(repr.typeName)
+	keyFieldType := typeDefn.Field(repr.keyFieldName).Type().Name()
+
 	// store the index of the keyField Values present in the argument in a map.
-	// key in the map as there are multiple types like String, Int, Int64 allowed as @id.
-	// There could be duplicate keys in the representations so the value of map is a list
-	// of integers containing all the indices for a key.
+	// key in the map is of type interface because there are multiple types like String,
+	// Int, Int64 allowed as @id. There could be duplicate keys in the representations
+	// so the value of map is a list of integers containing all the indices for a key.
 	indexMap := make(map[interface{}][]int)
 	uniqueKeyList := make([]interface{}, 0)
 	for i, key := range repr.keyFieldValueList {
@@ -365,14 +368,23 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	}
 	sort.Slice(uniqueKeyList, func(i, j int) bool {
 		switch uniqueKeyList[i].(type) {
+		case string:
+			return uniqueKeyList[i].(string) < uniqueKeyList[j].(string)
+		case json.Number:
+			switch keyFieldType {
+			case "Int":
+				val1, _ := uniqueKeyList[i].(json.Number).Int64()
+				val2, _ := uniqueKeyList[j].(json.Number).Int64()
+				return val1 < val2
+			case "Float":
+				val1, _ := uniqueKeyList[i].(json.Number).Float64()
+				val2, _ := uniqueKeyList[j].(json.Number).Float64()
+				return val1 < val2
+			}
 		case int64:
 			return uniqueKeyList[i].(int64) < uniqueKeyList[j].(int64)
 		case float64:
 			return uniqueKeyList[i].(float64) < uniqueKeyList[j].(float64)
-		case string:
-			return uniqueKeyList[i].(string) < uniqueKeyList[j].(string)
-		case json.Number:
-			return uniqueKeyList[i].(json.Number) < uniqueKeyList[j].(json.Number)
 		}
 		return false
 	})
