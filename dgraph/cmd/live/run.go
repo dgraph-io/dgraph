@@ -191,8 +191,7 @@ func init() {
 		"specific namespace. Setting it to negative value will preserve the namespace.")
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64,
-	galaxyOperation bool) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -207,7 +206,7 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, ns uint64,
 	}
 	// If we are not loading data across namespaces, the schema query result will not contain the
 	// namespace information. Set it inside the init function.
-	sch.init(ns, galaxyOperation)
+	sch.init(opt.namespaceToLoad, galaxyOperation)
 	return &sch, nil
 }
 
@@ -804,7 +803,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	if l.schema, err = getSchema(ctx, dg, opt.namespaceToLoad, galaxyOperation); err != nil {
+	if l.schema, err = getSchema(ctx, dg, galaxyOperation); err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err
 	}
