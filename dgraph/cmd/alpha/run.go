@@ -226,7 +226,7 @@ they form a Raft group and provide synchronous replication.
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
 		String())
 
-	flag.String("cdc", "", z.NewSuperFlagHelp(worker.CDCDefaults).
+	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
 		Head("Change Data Capture options").
 		Flag("file",
 			"The path where audit logs will be stored.").
