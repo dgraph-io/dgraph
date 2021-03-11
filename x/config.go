@@ -84,11 +84,10 @@ type WorkerOptions struct {
 	// Raft stores options related to Raft.
 	Raft *z.SuperFlag
 	// Badger stores options related to Badger.
-	Badger *z.SuperFlag
+	Badger           *z.SuperFlag
+	BadgerMaxRetries int
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
-	// MaxRetries is the maximum number of times to retry a commit before giving up.
-	MaxRetries int
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.
 	StrictMutations bool
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.

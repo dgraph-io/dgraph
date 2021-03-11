@@ -776,7 +776,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
+		err := x.RetryUntilSuccess(x.WorkerConfig.BadgerMaxRetries, 10*time.Millisecond, func() error {
 			err := txn.CommitToDisk(writer, commit)
 			if err == badger.ErrBannedKey {
 				glog.Errorf("Error while writing to banned namespace.")

@@ -125,10 +125,6 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
-	flag.Int("max_retries", -1,
-		"Commits to disk will give up after these number of retries to prevent locking the worker"+
-			" in a failed state. Use -1 to retry infinitely.")
-
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
@@ -148,6 +144,9 @@ they form a Raft group and provide synchronous replication.
 			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -690,7 +689,6 @@ func run() {
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:          aclKey != nil,
 		AbortOlderThan:      abortDur,
