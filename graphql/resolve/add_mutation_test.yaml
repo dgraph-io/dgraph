@@ -3682,6 +3682,173 @@
         }
 
 -
+  name: "Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two different xid fields in a type"
+  gqlmutation: |
+    mutation($input: [AddABCInput!]!) {
+    	addABC(input: $input) {
+    		aBC {
+    			ab
+    			abc
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "ab": "cd",
+                "abc": "d"
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      ABC1(func: eq(ABC.ab, "cd")) @filter(type(ABC)) {
+        uid
+      }
+      ABC2(func: eq(ABC.abc, "d")) @filter(type(ABC)) {
+        uid
+      }
+    }
+  explanation: "We should generate different variables as ABC1 and ABC2 if xidName+xidValue is same as in above case
+  i.e. ab+cd and abc+d both equals to abcd"
+  dgmutations:
+    - setjson: |
+        {
+            "ABC.ab": "cd",
+            "ABC.abc": "d",
+            "dgraph.type": [
+                "ABC"
+            ],
+            "uid":"_:ABC2"
+        }
+
+-
+  name: "Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two different xid fields in different objects"
+  gqlmutation: |
+    mutation($input: [AddABCInput!]!) {
+    	addABC(input: $input) {
+    		aBC {
+    			ab
+    			abc
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "ab": "cd",
+                "abc": "de"
+            },
+            {
+                 "ab": "ef",
+                 "abc": "d"
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      ABC1(func: eq(ABC.ab, "cd")) @filter(type(ABC)) {
+        uid
+      }
+      ABC2(func: eq(ABC.abc, "de")) @filter(type(ABC)) {
+        uid
+      }
+      ABC3(func: eq(ABC.ab, "ef")) @filter(type(ABC)) {
+        uid
+      }
+      ABC4(func: eq(ABC.abc, "d")) @filter(type(ABC)) {
+        uid
+      }
+    }
+  explanation: "We should generate different variables as ABC1 and ABC4 if xidName+xidValue is same in two different objects as in above case
+  i.e. ab+cd and abc+d both equals to abcd"
+  dgmutations:
+    - setjson: |
+        {
+            "ABC.ab": "cd",
+            "ABC.abc": "de",
+            "dgraph.type": [
+                "ABC"
+            ],
+            "uid":"_:ABC2"
+        }
+    - setjson: |
+        {
+            "ABC.ab": "ef",
+            "ABC.abc": "d",
+            "dgraph.type": [
+                "ABC"
+            ],
+            "uid":"_:ABC4"
+        }
+
+-
+  name: "Add mutation with multiple Xid fields shouldn't give error if typeName+xidName+xidVal is equal for two different xid fields in different types"
+  gqlmutation: |
+    mutation($input: [AddABCInput!]!) {
+    	addABC(input: $input) {
+    		aBC {
+    			ab
+    			abc
+                AB {
+                  Cab
+                  Cabc
+                }
+    		}
+    	}
+    }
+
+  gqlvariables: |
+    {
+        "input": [
+            {
+                "ab": "cd",
+                "abc": "de",
+                "AB": {
+                  "Cab": "cde",
+                  "Cabc":"d"
+                }
+            }
+        ]
+    }
+  dgquery: |-
+    query {
+      ABC1(func: eq(ABC.ab, "cd")) @filter(type(ABC)) {
+        uid
+      }
+      ABC2(func: eq(ABC.abc, "de")) @filter(type(ABC)) {
+        uid
+      }
+      AB3(func: eq(AB.Cab, "cde")) @filter(type(AB)) {
+        uid
+      }
+      AB4(func: eq(AB.Cabc, "d")) @filter(type(AB)) {
+        uid
+      }
+    }
+  explanation: "We should generate different variables as ABC1 and AB3, or ABC2 and AB4 if typename+xidName+xidValue is same in two different types as in above case
+  i.e. ABC+ab+cd and AB+Cabc+d both equals to ABCabcd"
+  dgmutations:
+    - setjson: |
+        {
+          "ABC.AB": {
+            "AB.Cab": "cde",
+            "AB.Cabc": "d",
+            "dgraph.type": ["AB"],
+            "uid": "_:AB4"
+          },
+          "ABC.ab": "cd",
+          "ABC.abc": "de",
+          "dgraph.type": ["ABC"],
+          "uid": "_:ABC2"
+        }
+
+
+-
   name: "Add type with multiple Xid fields at deep level"
   gqlmutation: |
     mutation($input: [AddauthorInput!]!) {

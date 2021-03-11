@@ -139,7 +139,20 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	if xidName == "" || xidVal == "" {
 		key = typ.Name()
 	} else {
-		key = typ.FieldOriginatedFrom(xidName) + xidName + xidVal
+		// We add "." between values while generating key to removes duplicate xidError from below type of cases
+		// mutation {
+		//  addABC(input: [{ ab: "cd", abc: "d" }]) {
+		//    aBC {
+		//      ab
+		//      abc
+		//    }
+		//   }
+		// }
+		// The two generated keys for this case will be
+		// ABC.ab.cd and ABC.abc.d
+		// It also ensures that xids from different types gets different variable names
+		// here we are using the assertion that field name or type name can't have "." in them
+		key = typ.FieldOriginatedFrom(xidName) + "." + xidName + "." + xidVal
 	}
 	if varName, ok := v.xidVarNameMap[key]; ok {
 		return varName
