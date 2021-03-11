@@ -348,22 +348,51 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 
 	// store the index of the keyField Values present in the argument in a map.
 	// key in the map as there are multiple types like String, Int, Int64 allowed as @id.
-	indexMap := make(map[interface{}]int)
+	// There could be duplicate keys in the representations so the value of map is a list
+	// of integers containing all the indices for a key.
+	indexMap := make(map[interface{}][]int)
+	uniqueKeyList := make([]interface{}, 0)
 	for i, key := range repr.keyFieldValueList {
-		indexMap[key] = i
+		indexMap[key] = append(indexMap[key], i)
 	}
 
-	// sort the keyField Values in the ascending order.
-	sort.Slice(repr.keyFieldValueList, func(i, j int) bool {
-		return repr.keyFieldValueList[i].(string) < repr.keyFieldValueList[j].(string)
+	// Create a list containing unique keys and then sort in ascending order because this
+	// will be the order in which the data is received.
+	// for eg: for keys: {1, 2, 4, 1, 3} is converted into {1, 2, 4, 3} and then {1, 2, 3, 4}
+	// this will be the order of received data from the dgraph.
+	for k := range indexMap {
+		uniqueKeyList = append(uniqueKeyList, k)
+	}
+	sort.Slice(uniqueKeyList, func(i, j int) bool {
+		switch uniqueKeyList[i].(type) {
+		case int64:
+			return uniqueKeyList[i].(int64) < uniqueKeyList[j].(int64)
+		case float64:
+			return uniqueKeyList[i].(float64) < uniqueKeyList[j].(float64)
+		case string:
+			return uniqueKeyList[i].(string) < uniqueKeyList[j].(string)
+		case json.Number:
+			return uniqueKeyList[i].(json.Number) < uniqueKeyList[j].(json.Number)
+		}
+		return false
 	})
 
 	// create the new output according to the index of the keyFields present in the argument.
-	output := make([]interface{}, len(repr.keyFieldValueList))
 	entitiesQryResp := data["_entities"]
-	for i := 0; i < len(entitiesQryResp); i++ {
-		key := repr.keyFieldValueList[i]
-		output[indexMap[key]] = entitiesQryResp[i]
+
+	// if `entitiesQueryResp` contains less number of elements than the number of unique keys
+	// which is because the object related to certain key is not present in the dgraph.
+	// This will end into an error at the Gateway, so no need to order the result here.
+	if len(entitiesQryResp) < len(uniqueKeyList) {
+		return
+	}
+
+	// Reorder the output response according to the order of the keys in the representations argument.
+	output := make([]interface{}, len(repr.keyFieldValueList))
+	for i, key := range uniqueKeyList {
+		for _, idx := range indexMap[key] {
+			output[idx] = entitiesQryResp[i]
+		}
 	}
 
 	// replace the result obtained from the dgraph and marshal back.
