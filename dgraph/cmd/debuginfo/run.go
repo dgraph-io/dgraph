@@ -57,18 +57,19 @@ var metricMap = map[string]string{
 }
 
 var metricList = []string{
-	"jemalloc",
+	"heap",
+	"cpu",
 	"state",
 	"health",
-	"vars",
+	"jemalloc",
+	"trace",
 	"metrics",
-	"heap",
+	"vars",
+	"trace",
 	"goroutine",
-	"threadcreate",
 	"block",
 	"mutex",
-	"cpu",
-	"trace",
+	"threadcreate",
 }
 
 func init() {
