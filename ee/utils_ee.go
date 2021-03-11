@@ -30,7 +30,7 @@ func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
 	aclKey, encKey := vault.GetKeys(config)
 	var err error
 
-	aclKeyFile := aclSuperFlag.GetString("secret-file")
+	aclKeyFile := aclSuperFlag.GetPath("secret-file")
 	if aclKeyFile != "" {
 		if aclKey != nil {
 			glog.Exit("flags: ACL secret key set in both vault and acl flags")
