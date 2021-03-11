@@ -191,7 +191,7 @@ func decrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	stream := cipher.NewCTR(block, baseIv[:])
+	stream := cipher.NewCTR(block, iv[:])
 	stream.XORKeyStream(src, src)
 	return src, nil
 }
@@ -281,12 +281,14 @@ func (l *LogWriter) open() error {
 		}
 		text := make([]byte, 11)
 		if _, err := f.ReadAt(text, 16); err != nil {
-			if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil &&
-				string(t) != "Hello World" {
-				// different encryption key. Better to open new file here
-				_ = f.Close()
-				return openNew()
-			}
+			_ = f.Close()
+			return openNew()
+		}
+		if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil ||
+			string(t) != "Hello World" {
+			// different encryption key. Better to open new file here
+			_ = f.Close()
+			return openNew()
 		}
 	}
 
