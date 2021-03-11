@@ -105,7 +105,7 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
-	// --encryption_key_file
+	// --encryption-key-file
 	enc.RegisterFlags(flag)
 
 	flag.String("cache_percentage", "0,65,35,0",
@@ -129,9 +129,9 @@ they form a Raft group and provide synchronous replication.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	//Custom plugins.
+	// Custom plugins.
 	flag.String("custom_tokenizers", "",
-		"Comma separated list of tokenizer plugins")
+		"Comma separated list of tokenizer plugins for custom indices.")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
