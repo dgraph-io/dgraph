@@ -148,7 +148,7 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		//    }
 		//   }
 		// }
-		// The two generated kes for this case will be
+		// The two generated keys for this case will be
 		// ABC.ab.cd and ABC.abc.d
 		// It also ensures that xids from different types gets different variable names
 		// here we are using the assertion that field name or type name can't have "." in them
