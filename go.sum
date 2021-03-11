@@ -42,8 +42,6 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/OneOfOne/xxhash v1.2.5 h1:zl/OfRA6nftbBK9qTohYBJ5xvw6C/oNKizR7cZGl3cI=
 github.com/OneOfOne/xxhash v1.2.5/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/RoaringBitmap/roaring v0.4.23/go.mod h1:D0gp8kJQgE1A4LQ5wFLggQEyvDi06Mq5mKs52e1TwOo=
-github.com/RoaringBitmap/roaring v0.5.5 h1:naNqvO1mNnghk2UvcsqnzHDBn9DRbCIRy94GmDTRVTQ=
-github.com/RoaringBitmap/roaring v0.5.5/go.mod h1:puNo5VdzwbaIQxSiDIwfXl4Hnc+fbovcX4IW/dSTtUk=
 github.com/Shopify/goreferrer v0.0.0-20181106222321-ec9c9a553398/go.mod h1:a1uqRtAwp2Xwc6WNPJEufxJ7fx3npB4UV/JOLmbu5I0=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/sarama v1.27.2 h1:1EyY1dsxNDUQEv0O/4TsjosHI2CgB1uo9H/v56xzTxc=
@@ -130,11 +128,8 @@ github.com/dgraph-io/gqlparser/v2 v2.1.8 h1:d4CprjlDyMNGvnZG/pKqe6Oj6qQd4V0TVsuO
 github.com/dgraph-io/gqlparser/v2 v2.1.8/go.mod h1:MYS4jppjyx8b9tuUtjV7jU1UFZK6P9fvO8TsIsQtRKU=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed h1:pgGMBoTtFhR+xkyzINaToLYRurHn+6pxMYffIGmmEPc=
 github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed/go.mod h1:7z3c/5w0sMYYZF5bHsrh8IH4fKwG5O5Y70cPH1ZLLRQ=
-github.com/dgraph-io/ristretto v0.0.4-0.20210309073149-3836124cdc5a/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
-github.com/dgraph-io/ristretto v0.0.4-0.20210309225856-f18e3903e3e0 h1:JfwafU+dBO3Nn7vvNYtp5ACy8QxlpYCrKsyOM0AiFB8=
-github.com/dgraph-io/ristretto v0.0.4-0.20210309225856-f18e3903e3e0/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
-github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5 h1:9t3OKcvsQlxU9Cu0U55tgvNtaRYVGDr6rUb95P8cSbg=
-github.com/dgraph-io/roaring v0.5.6-0.20210227175938-766b897233a5/go.mod h1:I8kxPBtSQW3OdQFWonumQdCx2DTmq2WjdnTjGXz3uTM=
+github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90 h1:arWVlUO9NhZ/2vWprIqpe825GISUPpgJhU/b0ep3j/M=
+github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90/go.mod h1:MIonLggsKgZLUSt414ExgwNtlOL5MuEoAJP514mwGe8=
 github.com/dgraph-io/simdjson-go v0.3.0 h1:h71LO7vR4LHMPUhuoGN8bqGm1VNfGOlAG8BI6iDUKw0=
 github.com/dgraph-io/simdjson-go v0.3.0/go.mod h1:Otpysdjaxj9OGaJusn4pgQV7OFh2bELuHANq0I78uvY=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=

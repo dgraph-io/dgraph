@@ -103,7 +103,7 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
 	}
-	if tlsFlag.GetString("client-cert") == "" || tlsFlag.GetString("client-key") == "" {
+	if tlsFlag.GetPath("client-cert") == "" || tlsFlag.GetPath("client-key") == "" {
 		return nil, errors.Errorf(`Inter-node TLS is enabled but client certs are not provided. ` +
 			`Inter-node TLS is always client authenticated. Please provide --tls ` +
 			`"client-cert=...; client-key=...;"`)
@@ -111,10 +111,10 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("client-cert")
-	conf.Key = tlsFlag.GetString("client-key")
+	conf.Cert = tlsFlag.GetPath("client-cert")
+	conf.Key = tlsFlag.GetPath("client-key")
 	return GenerateClientTLSConfig(conf)
 }
 
@@ -125,16 +125,16 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
 	}
-	if tlsFlag.GetString("server-cert") == "" || tlsFlag.GetString("server-key") == "" {
+	if tlsFlag.GetPath("server-cert") == "" || tlsFlag.GetPath("server-key") == "" {
 		return nil, errors.Errorf(`Inter-node TLS is enabled but server node certs are not provided. ` +
 			`Please provide --tls "server-cert=...; server-key=...;"`)
 	}
 	conf := TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("server-cert")
-	conf.Key = tlsFlag.GetString("server-key")
+	conf.Cert = tlsFlag.GetPath("server-cert")
+	conf.Key = tlsFlag.GetPath("server-key")
 	conf.ClientAuth = "REQUIREANDVERIFY"
 	return GenerateServerTLSConfig(&conf)
 }
@@ -143,15 +143,15 @@ func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 func LoadServerTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
 
-	if tlsFlag.GetString("server-cert") == "" && tlsFlag.GetString("server-key") == "" {
+	if tlsFlag.GetPath("server-cert") == "" && tlsFlag.GetPath("server-key") == "" {
 		return nil, nil
 	}
 
 	conf := TLSHelperConfig{}
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("server-cert")
-	conf.Key = tlsFlag.GetString("server-key")
+	conf.Cert = tlsFlag.GetPath("server-cert")
+	conf.Key = tlsFlag.GetPath("server-key")
 	conf.ClientAuth = tlsFlag.GetString("client-auth-type")
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
 	return GenerateServerTLSConfig(&conf)
@@ -182,7 +182,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls ca-cert="..."; option is specified, the connection will be set up using TLS
 	// instead of plaintext. However the client cert files are optional, depending on whether the
 	// server requires a client certificate.
-	caCert := tlsFlag.GetString("ca-cert")
+	caCert := tlsFlag.GetPath("ca-cert")
 	if caCert != "" {
 		tlsCfg := tls.Config{}
 
@@ -197,8 +197,8 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		tlsCfg.ServerName = tlsFlag.GetString("server-name")
 
 		// 3. optionally load the client cert files
-		certFile := tlsFlag.GetString("client-cert")
-		keyFile := tlsFlag.GetString("client-key")
+		certFile := tlsFlag.GetPath("client-cert")
+		keyFile := tlsFlag.GetPath("client-key")
 		if certFile != "" && keyFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
@@ -213,8 +213,8 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// Viper's own documentation, there's no way to tell whether an option value came from a
 	// command-line option or a built-it default.
 	if tlsFlag.GetString("server-name") != "" ||
-		tlsFlag.GetString("client-cert") != "" ||
-		tlsFlag.GetString("client-key") != "" {
+		tlsFlag.GetPath("client-cert") != "" ||
+		tlsFlag.GetPath("client-key") != "" {
 		return nil, errors.Errorf(`--tls "ca-cert=...;" is required for enabling TLS`)
 	}
 	return nil, nil

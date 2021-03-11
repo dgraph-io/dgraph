@@ -15,7 +15,6 @@ package audit
 import (
 	"io/ioutil"
 	"math"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -64,8 +63,8 @@ func GetAuditConf(conf string) *x.LoggerConf {
 		return nil
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
-	out := auditFlag.GetString("output")
-	x.AssertTruef(out != "", "output flag is not provided for the audit logs")
+	out := auditFlag.GetPath("output")
+	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
@@ -79,15 +78,11 @@ func GetAuditConf(conf string) *x.LoggerConf {
 }
 
 func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
-	encFile := conf.GetString("encrypt-file")
+	encFile := conf.GetPath("encrypt-file")
 	if encFile == "" {
 		return nil, nil
 	}
-	path, err := filepath.Abs(encFile)
-	if err != nil {
-		return nil, err
-	}
-	encKey, err := ioutil.ReadFile(path)
+	encKey, err := ioutil.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}
