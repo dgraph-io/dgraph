@@ -2676,13 +2676,6 @@ invalid_schemas:
 
 
 valid_schemas:
-  - name: "Multiple fields with @id directive should be allowed"
-    input: |
-      type X {
-        f1: String! @id
-        f2: String! @id
-      }
-
   - name: "field with @id directive can have exact index"
     input: |
       type X {
