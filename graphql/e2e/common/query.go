@@ -442,8 +442,8 @@ func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 
 func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 	addPlanetParams := &GraphQLParams{
-		Query: `mutation addPlanet($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
-			addPlanet(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+		Query: `mutation {
+			addPlanet(input: [{id: 1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: 2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: 3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: 4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
 				planet {
 					id
 					missions {
@@ -453,12 +453,6 @@ func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{
-			"id1": "1",
-			"id2": "2",
-			"id3": "3",
-			"id4": "4",
-		},
 	}
 
 	gqlResponse := addPlanetParams.ExecuteAsPost(t, GraphqlURL)

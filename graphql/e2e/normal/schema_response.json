@@ -1362,6 +1362,17 @@
     {
       "fields": [
         {
+          "name": "Planet.missions"
+        },
+        {
+          "name": "Planet.id"
+        }
+      ],
+      "name": "Planet"
+    },
+    {
+      "fields": [
+        {
           "name": "dgraph.graphql.schema"
         },
         {
