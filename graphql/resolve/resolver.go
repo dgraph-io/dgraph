@@ -361,7 +361,8 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	// create the new output according to the index of the keyFields present in the argument.
 	output := make([]interface{}, len(repr.keyFieldValueList))
 	entitiesQryResp := data["_entities"]
-	for i, key := range repr.keyFieldValueList {
+	for i := 0; i < len(entitiesQryResp); i++ {
+		key := repr.keyFieldValueList[i]
 		output[indexMap[key]] = entitiesQryResp[i]
 	}
 

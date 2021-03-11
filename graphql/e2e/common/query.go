@@ -428,42 +428,7 @@ func entitiesQuery(t *testing.T) {
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{
-		"_entities": [
-      {
-        "missions": [
-          {
-            "designation": "Apollo4",
-            "id": "Mission4"
-          }
-        ]
-      },
-      {
-        "missions": [
-          {
-            "designation": "Apollo2",
-            "id": "Mission2"
-          }
-        ]
-      },
-      {
-        "missions": [
-          {
-            "designation": "Apollo1",
-            "id": "Mission1"
-          }
-        ]
-      },
-      {
-        "missions": [
-          {
-            "designation": "Apollo3",
-            "id": "Mission3"
-          }
-        ]
-      }
-    ]
-	  }`
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]}]}`
 
 	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
