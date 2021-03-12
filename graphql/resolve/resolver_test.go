@@ -410,7 +410,7 @@ func TestMutationAlias(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, tcase.gqlQuery, nil,
 				&executor{
-					existenceQueriesResp: `{ "Author1": [{"uid":"0x1"}]}`,
+					existenceQueriesResp: `{ "Author_1": [{"uid":"0x1"}]}`,
 					resp:                 tcase.queryResponse,
 					assigned:             tcase.mutResponse,
 					result:               tcase.mutQryResp,

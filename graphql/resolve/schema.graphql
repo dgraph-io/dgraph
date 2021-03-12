@@ -438,3 +438,11 @@ type AB {
     Cabc: String! @id
 }
 
+type Friend1 {
+    id: String! @id
+    friends: [Friend]
+}
+
+type Friend {
+    id: String! @id
+}

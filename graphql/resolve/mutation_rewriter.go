@@ -154,6 +154,7 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		// here we are using the assertion that field name or type name can't have "." in them
 		key = typ.FieldOriginatedFrom(xidName) + "." + xidName + "." + xidVal
 	}
+
 	if varName, ok := v.xidVarNameMap[key]; ok {
 		return varName
 	}
@@ -162,9 +163,9 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 	v.counter++
 	var varName string
 	if auth {
-		varName = fmt.Sprintf("%sAuth%v", typ.Name(), v.counter)
+		varName = fmt.Sprintf("%s_Auth%v", typ.Name(), v.counter)
 	} else {
-		varName = fmt.Sprintf("%s%v", typ.Name(), v.counter)
+		varName = fmt.Sprintf("%s_%v", typ.Name(), v.counter)
 	}
 
 	// save it, if it was created for xidVal
