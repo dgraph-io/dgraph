@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/badger/v3/y"
@@ -44,6 +46,19 @@ const (
 // This is done to ensure LogWriter always implement io.WriterCloser
 var _ io.WriteCloser = (*LogWriter)(nil)
 
+type logFile struct {
+	*os.File
+}
+
+func (l *logFile) close() error {
+	err := l.Chmod(os.ModePerm)
+	if err != nil {
+		glog.Info("log file error to close", err)
+		return err
+	}
+	return l.Close()
+}
+
 type LogWriter struct {
 	FilePath      string
 	MaxSize       int64
@@ -54,7 +69,7 @@ type LogWriter struct {
 	baseIv      [12]byte
 	mu          sync.Mutex
 	size        int64
-	file        *os.File
+	file        *logFile
 	writer      *bufio.Writer
 	flushTicker *time.Ticker
 	closer      *z.Closer
@@ -135,7 +150,7 @@ func (l *LogWriter) Close() error {
 	l.flush()
 	l.flushTicker.Stop()
 	close(l.manageChannel)
-	_ = l.file.Close()
+	_ = l.file.close()
 	l.writer = nil
 	l.file = nil
 	return nil
@@ -187,7 +202,7 @@ func (l *LogWriter) rotate() error {
 	}
 
 	l.flush()
-	if err := l.file.Close(); err != nil {
+	if err := l.file.close(); err != nil {
 		return err
 	}
 
@@ -221,11 +236,11 @@ func (l *LogWriter) open() error {
 	}
 
 	openNew := func() error {
-		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModeExclusive)
 		if err != nil {
 			return err
 		}
-		l.file = f
+		l.file = &logFile{f}
 		l.writer = bufio.NewWriterSize(f, bufferSize)
 
 		if l.EncryptionKey != nil {
@@ -248,21 +263,21 @@ func (l *LogWriter) open() error {
 		return openNew()
 	}
 
-	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModePerm)
+	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModeExclusive)
 	if err != nil {
 		return openNew()
 	}
 
+	l.file = &logFile{f}
 	if l.EncryptionKey != nil {
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
-		if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
-			_ = f.Close()
+		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
+			_ = l.file.close()
 			return openNew()
 		}
 	}
 
-	l.file = f
 	l.writer = bufio.NewWriterSize(f, bufferSize)
 	l.size = size()
 	return nil
