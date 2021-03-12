@@ -1897,7 +1897,7 @@
       _EntityRoot as var(func: uid(Mission_1), orderasc: Mission.id) @filter(uid(Mission_Auth2))
       Mission_1 as var(func: eq(Mission.id, "0x1", "0x2", "0x3")) @filter(type(Mission))
       Mission_Auth2 as var(func: uid(Mission_1)) @filter(eq(Mission.supervisorName, "user")) @cascade {
-      Mission.id : Mission.id
+        Mission.id : Mission.id
       }
     }
 - name: "Entities query with top level RBAC rule true and level 1 query auth rule"
