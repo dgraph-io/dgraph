@@ -21,15 +21,12 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const (
-	encKeyFile = "encryption_key_file"
-)
-
 // RegisterFlags registers the required encryption flags.
 func RegisterFlags(flag *pflag.FlagSet) {
-	flag.String(encKeyFile, "",
-		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
-			"The key size determines the chosen AES cipher "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	flag.String("encryption_key_file", "",
+		"[Enterprise Feature] Encryption At Rest: The file that stores the symmetric key of "+
+			"length 16, 24, or 32 bytes. The key size determines the chosen AES cipher "+
+			"(AES-128, AES-192, and AES-256 respectively).")
+
 	vault.RegisterFlags(flag)
 }
