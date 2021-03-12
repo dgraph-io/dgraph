@@ -837,27 +837,27 @@
       x as updatePost(func: uid(PostRoot)) {
         uid
       }
-      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth2) AND uid(Question_Auth3)) OR uid(FbPost_Auth4) OR uid(Answer_Auth5)))
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(FbPost_Auth6) OR uid(Answer_Auth8)))
       Post_1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
-      Question_1 as var(func: type(Question))
-      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
         Question.id : uid
       }
-      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
         }
       }
-      FbPost_1 as var(func: type(FbPost))
-      FbPost_Auth4 as var(func: uid(FbPost_1)) @cascade {
+      FbPost_5 as var(func: type(FbPost))
+      FbPost_Auth6 as var(func: uid(FbPost_5)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
         }
       }
-      Answer_1 as var(func: type(Answer))
-      Answer_Auth5 as var(func: uid(Answer_1)) @cascade {
+      Answer_7 as var(func: type(Answer))
+      Answer_Auth8 as var(func: uid(Answer_7)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
@@ -892,17 +892,17 @@
       x as updatePost(func: uid(PostRoot)) {
         uid
       }
-      PostRoot as var(func: uid(Post_1)) @filter((uid(FbPost_Auth2) OR uid(Answer_Auth3)))
+      PostRoot as var(func: uid(Post_1)) @filter((uid(FbPost_Auth3) OR uid(Answer_Auth5)))
       Post_1 as var(func: uid(0x123, 0x456)) @filter(type(Post))
-      FbPost_1 as var(func: type(FbPost))
-      FbPost_Auth2 as var(func: uid(FbPost_1)) @cascade {
+      FbPost_2 as var(func: type(FbPost))
+      FbPost_Auth3 as var(func: uid(FbPost_2)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
         }
       }
-      Answer_1 as var(func: type(Answer))
-      Answer_Auth3 as var(func: uid(Answer_1)) @cascade {
+      Answer_4 as var(func: type(Answer))
+      Answer_Auth5 as var(func: uid(Answer_4)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
@@ -964,8 +964,8 @@
       x as updateA(func: uid(ARoot)) {
         uid
       }
-      ARoot as var(func: uid(A_1)) @filter((uid(B_1) OR uid(C_1)))
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2) OR uid(C_3)))
       A_1 as var(func: uid(0x123, 0x456)) @filter(type(A))
-      B_1 as var(func: type(B))
-      C_1 as var(func: type(C))
+      B_2 as var(func: type(B))
+      C_3 as var(func: type(C))
     }

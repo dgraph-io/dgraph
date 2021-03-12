@@ -671,28 +671,28 @@
            "Author.posts": [
              {"uid": "uid(x)"}
            ],
-           "uid": "uid(Author_5)"
+           "uid": "uid(Author_7)"
          }]
   dgquery: |-
     query {
       x as deletePost(func: uid(PostRoot)) {
         uid
-        Author_5 as Post.author
+        Author_7 as Post.author
       }
-      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth2) AND uid(Question_Auth3)) OR uid(Answer_Auth4)))
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(Answer_Auth6)))
       Post_1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
-      Question_1 as var(func: type(Question))
-      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
         Question.id : uid
       }
-      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
         }
       }
-      Answer_1 as var(func: type(Answer))
-      Answer_Auth4 as var(func: uid(Answer_1)) @cascade {
+      Answer_5 as var(func: type(Answer))
+      Answer_Auth6 as var(func: uid(Answer_5)) @cascade {
         dgraph.type
         Post.author : Post.author @filter(eq(Author.name, "user1")) {
           Author.name : Author.name
@@ -745,9 +745,9 @@
       x as deleteA(func: uid(ARoot)) {
         uid
       }
-      ARoot as var(func: uid(A_1)) @filter((uid(B_1)))
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2)))
       A_1 as var(func: uid(0x1, 0x2)) @filter(type(A))
-      B_1 as var(func: type(B))
+      B_2 as var(func: type(B))
     }
 
 - name: "Delete Type Having Graph Traversal Auth Rules on Interface."
