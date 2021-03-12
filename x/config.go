@@ -85,8 +85,6 @@ type WorkerOptions struct {
 	Badger *z.SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
-	// MaxRetries is the maximum number of times to retry a commit before giving up.
-	MaxRetries int
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.
 	StrictMutations bool
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.

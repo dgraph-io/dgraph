@@ -40,8 +40,6 @@ type TLSHelperConfig struct {
 }
 
 const (
-	// TODO: clean/organize this to make it clearer
-
 	TLSDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
 		`ca-cert=; server-name=; server-cert=; server-key=; client-cert=; client-key=;`
 
@@ -54,7 +52,6 @@ const (
 
 // RegisterServerTLSFlags registers the required flags to set up a TLS server.
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
-	// TODO: clean the default string / location
 	flag.String("tls", "use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false;",
 		z.NewSuperFlagHelp(TLSServerDefaults).
 			Head("TLS Server options").
@@ -81,7 +78,6 @@ func RegisterServerTLSFlags(flag *pflag.FlagSet) {
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
-	// TODO: clean the default string / location
 	flag.String("tls", "use-system-ca=true; internal-port=false;",
 		z.NewSuperFlagHelp(TLSClientDefaults).
 			Head("TLS Client options").

@@ -36,18 +36,20 @@ const (
 	//       than fail during runtime while trying to retrieve an option that isn't there.
 	//
 	//       For easy readability, keep the options without default values (if any) at the end of
-	//       the *Defaults string.
+	//       the *Defaults string. Also, since these strings are printed in --help text, avoid line
+	//       breaks.
 	AclDefaults       = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	AuditDefaults     = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
-	BadgerDefaults    = `compression=snappy; goroutines=8;`
+	BadgerDefaults    = `compression=snappy; goroutines=8; max-retries=-1;`
 	RaftDefaults      = `learner=false; snapshot-after=10000; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whitelist=;`
-	LimitDefaults     = `query-edge=1000000; normalize-node=10000; mutations-nquad=1000000;`
 	LudicrousDefaults = `enabled=false; concurrency=2000;`
-	GraphQLDefaults   = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
+	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
+		`client_key=;`
+	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
+		`mutations-nquad=1000000;`
+	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
-	CDCDefaults = `file=; kafka=; sasl-user=; sasl-password=; ca-cert=; client-cert=; ` +
-		`client-key=;`
 )
 
 // ServerState holds the state of the Dgraph server.
