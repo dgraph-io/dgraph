@@ -433,6 +433,20 @@
       "list": true
     },
     {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "State.capital",
       "type": "string"
     },
@@ -1136,6 +1150,17 @@
         }
       ],
       "name": "SpaceShip"
+    },
+    {
+      "fields": [
+        {
+          "name": "Planet.id"
+        },
+        {
+          "name": "Planet.missions"
+        }
+      ],
+      "name": "Planet"
     },
     {
       "fields": [

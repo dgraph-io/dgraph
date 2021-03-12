@@ -381,10 +381,10 @@ func allPosts(t *testing.T) []*post {
 	return result.QueryPost
 }
 
-func entitiesQuery(t *testing.T) {
+func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
 	addSpaceShipParams := &GraphQLParams{
-		Query: `mutation addSpaceShip($id1: String!, $missionId1: String! ) {
-			addSpaceShip(input: [{id: $id1, missions: [{id: $missionId1, designation: "Apollo1"}]} ]) {
+		Query: `mutation addSpaceShip($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
 				spaceShip {
 					id
 					missions {
@@ -395,8 +395,10 @@ func entitiesQuery(t *testing.T) {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"id1":        "SpaceShip1",
-			"missionId1": "Mission1",
+			"id1": "SpaceShip1",
+			"id2": "SpaceShip2",
+			"id3": "SpaceShip3",
+			"id4": "SpaceShip4",
 		},
 	}
 
@@ -404,8 +406,8 @@ func entitiesQuery(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 
 	entitiesQueryParams := &GraphQLParams{
-		Query: `query _entities($typeName: String!, $id1: String!){
-			_entities(representations: [{__typename: $typeName, id: $id1}]) {
+		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
 				... on SpaceShip {
 					missions(order: {asc: id}){
 						id
@@ -417,32 +419,77 @@ func entitiesQuery(t *testing.T) {
 		Variables: map[string]interface{}{
 			"typeName": "SpaceShip",
 			"id1":      "SpaceShip1",
+			"id2":      "SpaceShip2",
+			"id3":      "SpaceShip3",
+			"id4":      "SpaceShip4",
 		},
 	}
 
 	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, entitiesResp)
 
-	expectedJSON := `{
-		"_entities": [
-		  {
-			"missions": [
-			  {
-				"id": "Mission1",
-				"designation": "Apollo1"
-			  }
-			]
-		  }
-		]
-	  }`
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
 
-	testutil.CompareJSON(t, expectedJSON, string(entitiesResp.Data))
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
 
-	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1"}}}
-	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 1, nil)
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
 
-	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1"}}}
-	DeleteGqlType(t, "Mission", missionDeleteFilter, 1, nil)
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
+
+}
+
+func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
+	addPlanetParams := &GraphQLParams{
+		Query: `mutation {
+			addPlanet(input: [{id: 1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: 2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: 3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: 4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+				planet {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPlanetParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: Int!, $id2: Int!, $id3: Int!, $id4: Int!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
+				... on Planet {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "Planet",
+			"id1":      1,
+			"id2":      2,
+			"id3":      3,
+			"id4":      4,
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
+
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
+
+	planetDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []int{1, 2, 3, 4}}}
+	DeleteGqlType(t, "Planet", planetDeleteFilter, 4, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
 
 }
 
