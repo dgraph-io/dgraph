@@ -535,6 +535,21 @@ func humanBioHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`"My name is Han and I have 10 credits."`)))
 }
 
+func shippingEstimate(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/shippingEstimate",
+		body:      `[{"price":999,"upc":"1","weight":500},{"price":2000,"upc":"2","weight":100}]`,
+	})
+	if err != nil {
+		w.WriteHeader(400)
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	check2(w.Write([]byte(`[250,0]`)))
+}
+
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
 	if _, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
 		urlSuffix: "/noquery",
@@ -1304,6 +1319,9 @@ func main() {
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
 	http.HandleFunc("/humanBio", humanBioHandler)
+
+	// for apollo federation
+	http.HandleFunc("/shippingEstimate", shippingEstimate)
 
 	/*************************************
 	* For testing http with graphql
