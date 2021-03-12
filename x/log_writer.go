@@ -30,8 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/badger/v3/y"
@@ -50,10 +48,9 @@ type logFile struct {
 	*os.File
 }
 
-func (l *logFile) close() error {
+func (l *logFile) closeFile() error {
 	err := l.Chmod(os.ModePerm)
 	if err != nil {
-		glog.Info("log file error to close", err)
 		return err
 	}
 	return l.Close()
@@ -139,7 +136,7 @@ func (l *LogWriter) Close() error {
 	if l == nil {
 		return nil
 	}
-	// close all go routines first before acquiring the lock to avoid contention
+	// closeFile all go routines first before acquiring the lock to avoid contention
 	l.closer.SignalAndWait()
 
 	l.mu.Lock()
@@ -150,7 +147,7 @@ func (l *LogWriter) Close() error {
 	l.flush()
 	l.flushTicker.Stop()
 	close(l.manageChannel)
-	_ = l.file.close()
+	_ = l.file.closeFile()
 	l.writer = nil
 	l.file = nil
 	return nil
@@ -202,7 +199,7 @@ func (l *LogWriter) rotate() error {
 	}
 
 	l.flush()
-	if err := l.file.close(); err != nil {
+	if err := l.file.closeFile(); err != nil {
 		return err
 	}
 
@@ -241,7 +238,7 @@ func (l *LogWriter) open() error {
 			return err
 		}
 		l.file = &logFile{f}
-		l.writer = bufio.NewWriterSize(f, bufferSize)
+		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
@@ -273,12 +270,12 @@ func (l *LogWriter) open() error {
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
 		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
-			_ = l.file.close()
+			_ = l.file.closeFile()
 			return openNew()
 		}
 	}
 
-	l.writer = bufio.NewWriterSize(f, bufferSize)
+	l.writer = bufio.NewWriterSize(l.file, bufferSize)
 	l.size = size()
 	return nil
 }
@@ -309,7 +306,7 @@ func compress(src string) error {
 		os.Remove(src + ".gz")
 		return err
 	}
-	// close the descriptors because we need to delete the file
+	// closeFile the descriptors because we need to delete the file
 	if err := f.Close(); err != nil {
 		return err
 	}
