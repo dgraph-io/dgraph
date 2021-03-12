@@ -160,25 +160,15 @@ func (qr *queryRewriter) Rewrite(
 	}
 }
 
-// entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
-// This query is sent to the Dgraph service to resolve types `extended` and defined by this service.
-func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+type parsedRepresentations struct {
+	keyFieldName      string
+	typeName          string
+	keyFieldIsID      bool
+	keyFieldValueList []interface{}
+}
 
-	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
-	// For this type Extension:-
-	// 	extend type Product @key(fields: "upc") {
-	// 		upc: String @external
-	// 		reviews: [Review]
-	// 	}
-	// Input to the Query will be
-	// "_representations": [
-	// 		{
-	// 		  "__typename": "Product",
-	// 	 	 "upc": "B00005N5PF"
-	// 		},
-	// 		...
-	//   ]
-
+// parseReporesentationsArgument parses the "_representations" argument in the "_entities" query.
+func parseRepresentationsArgument(field schema.Query) (*parsedRepresentations, error) {
 	representations, ok := field.ArgValue("representations").([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("Error parsing `representations` argument")
@@ -235,7 +225,38 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 		typeName = k
 	}
 
-	typeDefn := field.BuildType(typeName)
+	return &parsedRepresentations{
+		keyFieldName:      keyFieldName,
+		typeName:          typeName,
+		keyFieldIsID:      keyFieldIsID,
+		keyFieldValueList: keyFieldValueList}, nil
+}
+
+// entitiesQuery rewrites the Apollo `_entities` Query which is sent from the Apollo gateway to a DQL query.
+// This query is sent to the Dgraph service to resolve types `extended` and defined by this service.
+func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery, error) {
+
+	// Input Argument to the Query is a List of "__typename" and "keyField" pair.
+	// For this type Extension:-
+	// 	extend type Product @key(fields: "upc") {
+	// 		upc: String @external
+	// 		reviews: [Review]
+	// 	}
+	// Input to the Query will be
+	// "_representations": [
+	// 		{
+	// 		  "__typename": "Product",
+	// 	 	 "upc": "B00005N5PF"
+	// 		},
+	// 		...
+	//   ]
+
+	parsedRepr, err := parseRepresentationsArgument(field)
+	if err != nil {
+		return nil, err
+	}
+
+	typeDefn := field.BuildType(parsedRepr.typeName)
 	rbac := authRw.evaluateStaticRules(typeDefn)
 
 	dgQuery := &gql.GraphQuery{
@@ -261,10 +282,16 @@ func entitiesQuery(field schema.Query, authRw *authRewriter) ([]*gql.GraphQuery,
 	// If the key field is of ID type and is not an external field
 	// then we query it using the `uid` otherwise we treat it as string
 	// and query using `eq` function.
-	if keyFieldIsID && !typeDefn.Field(keyFieldName).IsExternal() {
-		addUIDFunc(dgQuery, convertIDs(keyFieldValueList))
+	// We also don't need to add Order to the query as the results are
+	// automatically returned in the ascending order of the uids.
+	if parsedRepr.keyFieldIsID && !typeDefn.Field(parsedRepr.keyFieldName).IsExternal() {
+		addUIDFunc(dgQuery, convertIDs(parsedRepr.keyFieldValueList))
 	} else {
-		addEqFunc(dgQuery, typeDefn.DgraphPredicate(keyFieldName), keyFieldValueList)
+		addEqFunc(dgQuery, typeDefn.DgraphPredicate(parsedRepr.keyFieldName), parsedRepr.keyFieldValueList)
+		// Add the  ascending Order of the keyField in the query.
+		// The result will be converted into the exact in the resultCompletion step.
+		dgQuery.Order = append(dgQuery.Order,
+			&pb.Order{Attr: typeDefn.DgraphPredicate(parsedRepr.keyFieldName)})
 	}
 	// AddTypeFilter in as the Filter to the Root the Query.
 	// Query will be like :-

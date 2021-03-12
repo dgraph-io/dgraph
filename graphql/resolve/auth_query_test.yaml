@@ -1887,14 +1887,14 @@
     USER: "user"
   dgquery: |-
     query {
-      _entities(func: uid(_EntityRoot)) {
+      _entities(func: uid(_EntityRoot), orderasc: Mission.id) {
         dgraph.type
         Mission.id : Mission.id
         Mission.designation : Mission.designation
         Mission.startDate : Mission.startDate
         dgraph.uid : uid
       }
-      _EntityRoot as var(func: uid(Mission_1)) @filter(uid(Mission_Auth2))
+      _EntityRoot as var(func: uid(Mission_1), orderasc: Mission.id) @filter(uid(Mission_Auth2))
       Mission_1 as var(func: eq(Mission.id, "0x1", "0x2", "0x3")) @filter(type(Mission))
       Mission_Auth2 as var(func: uid(Mission_1)) @filter(eq(Mission.supervisorName, "user")) @cascade {
         Mission.id : Mission.id
@@ -1916,7 +1916,7 @@
     USER: "user"
   dgquery: |-
     query {
-      _entities(func: uid(_EntityRoot)) {
+      _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
         dgraph.type
         Astronaut.missions : Astronaut.missions @filter(uid(Mission_1)) {
           Mission.designation : Mission.designation
@@ -1924,7 +1924,7 @@
         }
         dgraph.uid : uid
       }
-      _EntityRoot as var(func: uid(Astronaut_4))
+      _EntityRoot as var(func: uid(Astronaut_4), orderasc: Astronaut.id)
       Astronaut_4 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
       var(func: uid(_EntityRoot)) {
         Mission_2 as Astronaut.missions
@@ -1968,11 +1968,11 @@
     ROLE: "admin"
   dgquery: |-
     query {
-      _entities(func: uid(_EntityRoot)) {
+      _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
         dgraph.type
         dgraph.uid : uid
       }
-      _EntityRoot as var(func: uid(Astronaut_3))
+      _EntityRoot as var(func: uid(Astronaut_3), orderasc: Astronaut.id)
       Astronaut_3 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
     }
 

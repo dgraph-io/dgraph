@@ -3298,7 +3298,7 @@
     }
   dgquery:  |-
     query {
-      _entities(func: eq(Astronaut.id, "0x1", "0x2")) @filter(type(Astronaut)) {
+      _entities(func: eq(Astronaut.id, "0x1", "0x2"), orderasc: Astronaut.id) @filter(type(Astronaut)) {
         dgraph.type
         Astronaut.missions : Astronaut.missions {
           Mission.designation : Mission.designation
@@ -3322,7 +3322,7 @@
     }
   dgquery:  |-
     query {
-      _entities(func: eq(SpaceShip.id, "0x1", "0x2")) @filter(type(SpaceShip)) {
+      _entities(func: eq(SpaceShip.id, "0x1", "0x2"), orderasc: SpaceShip.id) @filter(type(SpaceShip)) {
         dgraph.type
         SpaceShip.missions : SpaceShip.missions {
           Mission.designation : Mission.designation
