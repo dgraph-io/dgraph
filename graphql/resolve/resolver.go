@@ -372,7 +372,7 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 			return val < uniqueKeyList[j].(string)
 		case json.Number:
 			switch keyFieldType {
-			case "Int":
+			case "Int", "Int64":
 				val1, _ := val.Int64()
 				val2, _ := uniqueKeyList[j].(json.Number).Int64()
 				return val1 < val2
