@@ -327,7 +327,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		forceNs: -1,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load into namespace")
+	require.Contains(t, err.Error(), "cannot force namespace")
 
 	err = liveLoadData(t, &liveOpts{
 		rdfs: `_:c <name> "ns hola" .`,
@@ -338,7 +338,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		forceNs: 10,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load into namespace")
+	require.Contains(t, err.Error(), "cannot force namespace")
 
 	require.NoError(t, liveLoadData(t, &liveOpts{
 		rdfs: fmt.Sprintf(`
