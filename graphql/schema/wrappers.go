@@ -73,6 +73,16 @@ type FieldHTTPConfig struct {
 	GraphqlBatchModeArgument string
 }
 
+// EntityRepresentations is the parsed form of the `representations` argument in `_entities` query
+type EntityRepresentations struct {
+	TypeDefn Type            // the type corresponding to __typename in the representations argument
+	KeyField FieldDefinition // the definition of the @key field
+	KeyVals  []interface{}   // the list of values corresponding to the key field
+	// a map of key field value to the input representation for that value. The keys in this map
+	// are the string formatted version of the key field value.
+	KeyValToRepresentation map[string]map[string]interface{}
+}
+
 // Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
@@ -209,8 +219,9 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
-	KeyField(typeName string) (string, bool, error)
-	BuildType(typeName string) Type
+	// RepresentationsArg returns a parsed version of the `representations` argument for `_entities`
+	// query
+	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
 }
 
@@ -1397,16 +1408,6 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 	return
 }
 
-func (q *query) BuildType(typeName string) Type {
-	t := &ast.Type{}
-	t.NamedType = typeName
-	return &astType{
-		typ:             t,
-		inSchema:        q.op.inSchema,
-		dgraphPredicate: q.op.inSchema.dgraphPredicate,
-	}
-}
-
 func (f *field) Type() Type {
 	var t *ast.Type
 	if f.field != nil && f.field.Definition != nil {
@@ -1678,6 +1679,74 @@ func (q *query) GetAuthMeta() *authorization.AuthMeta {
 	return (*field)(q).GetAuthMeta()
 }
 
+func (q *query) RepresentationsArg() (*EntityRepresentations, error) {
+	representations, ok := q.ArgValue("representations").([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error parsing `representations` argument")
+	}
+	if len(representations) == 0 {
+		return nil, fmt.Errorf("expecting at least one item in `representations` argument")
+	}
+	representation, ok := representations[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error parsing %dth item in the `_representations` argument", 0)
+	}
+	typename, ok := representation[Typename].(string)
+	if !ok {
+		return nil, fmt.Errorf("unable to extract __typename from %dth item in the"+
+			" `_representations` argument", 0)
+	}
+	typ := q.op.inSchema.schema.Types[typename]
+	if typ == nil {
+		return nil, fmt.Errorf("type %s not found in the schema", typename)
+	}
+	keyDir := typ.Directives.ForName(apolloKeyDirective)
+	if keyDir == nil {
+		return nil, fmt.Errorf("type %s doesn't have a key Directive", typename)
+	}
+	keyFldName := keyDir.Arguments[0].Value.Raw
+
+	// initialize the struct to return
+	entityReprs := &EntityRepresentations{
+		TypeDefn: &astType{
+			typ:             &ast.Type{NamedType: typename},
+			inSchema:        q.op.inSchema,
+			dgraphPredicate: q.op.inSchema.dgraphPredicate,
+		},
+		KeyVals:                make([]interface{}, 0, len(representations)),
+		KeyValToRepresentation: make(map[string]map[string]interface{}),
+	}
+	entityReprs.KeyField = entityReprs.TypeDefn.Field(keyFldName)
+
+	// iterate over all the representations and parse
+	for i, rep := range representations {
+		representation, ok = rep.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("error parsing %dth item in the `_representations` argument", i)
+		}
+
+		typename, ok = representation[Typename].(string)
+		if !ok {
+			return nil, fmt.Errorf("unable to extract __typename from %dth item in the"+
+				" `_representations` argument", i)
+		}
+		if typename != entityReprs.TypeDefn.Name() {
+			return nil, fmt.Errorf("expected only one unique typename in `_representations`"+
+				" argument, got: [%s, %s]", entityReprs.TypeDefn.Name(), typename)
+		}
+
+		keyVal, ok := representation[keyFldName]
+		if !ok {
+			return nil, fmt.Errorf("unable to extract value for key field `%s` from %dth item in"+
+				" the `_representations` argument", keyFldName, i)
+		}
+		entityReprs.KeyVals = append(entityReprs.KeyVals, keyVal)
+		entityReprs.KeyValToRepresentation[fmt.Sprint(keyVal)] = representation
+	}
+
+	return entityReprs, nil
+}
+
 func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
@@ -1797,20 +1866,6 @@ func (q *query) CustomHTTPConfig() (*FieldHTTPConfig, error) {
 
 func (q *query) EnumValues() []string {
 	return nil
-}
-
-func (q *query) KeyField(typeName string) (string, bool, error) {
-	typ := q.op.inSchema.schema.Types[typeName]
-	if typ == nil {
-		return "", false, fmt.Errorf("Type %s not found in the schema", typeName)
-	}
-	keyDir := typ.Directives.ForName(apolloKeyDirective)
-	if keyDir == nil {
-		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
-	}
-	fldName := keyDir.Arguments[0].Value.Raw
-	fldType := typ.Fields.ForName(fldName).Type
-	return fldName, fldType.Name() == IDType, nil
 }
 
 func (m *mutation) ConstructedFor() Type {
