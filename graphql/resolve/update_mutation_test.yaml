@@ -1891,3 +1891,100 @@
           "Book.publisher": "penguin"
         }
       cond: "@if(gt(len(x), 0))"
+
+-
+  name: "delete json shouldn't be generated for empty remove"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": { "name": "Alice" },
+        "remove": {}
+      }
+    }
+
+  dgquerysec: |-
+    query {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Author.name": "Alice"
+        }
+      cond: "@if(gt(len(x), 0))"
+
+-
+  name: "delete json shouldn't be generated for empty remove and set"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {},
+        "remove": {}
+      }
+    }
+
+  dgquerysec: |-
+    query {
+      x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "uid(x)" }
+      cond: "@if(gt(len(x), 0))"
+
+-
+  name: "delete json shouldn't be generated for empty filter, remove and set"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "patch": {
+        "filter": {
+        },
+        "set": {},
+        "remove": {}
+      }
+    }
+
+  dgquerysec: |-
+    query {
+      x as updateAuthor(func: type(Author)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid": "uid(x)" }
+      cond: "@if(gt(len(x), 0))"
