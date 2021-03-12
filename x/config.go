@@ -59,11 +59,6 @@ type IPRange struct {
 // WorkerOptions stores the options for the worker package. It's declared here
 // since it's used by multiple packages.
 type WorkerOptions struct {
-	// Telemetry options:
-	//
-	// reports bool - send anonymous telemetry data to Dgraph devs
-	// sentry bool - send crash events to Sentry
-	Telemetry *z.SuperFlag
 	// TmpDir is a directory to store temporary buffers.
 	TmpDir string
 	// ExportPath indicates the folder to which exported data will be saved.
@@ -87,8 +82,7 @@ type WorkerOptions struct {
 	// Raft stores options related to Raft.
 	Raft *z.SuperFlag
 	// Badger stores options related to Badger.
-	Badger           *z.SuperFlag
-	BadgerMaxRetries int
+	Badger *z.SuperFlag
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.

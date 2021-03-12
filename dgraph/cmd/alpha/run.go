@@ -683,7 +683,6 @@ func run() {
 		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
-		Telemetry:           telemetry,
 		TmpDir:              Alpha.Conf.GetString("tmp"),
 		ExportPath:          Alpha.Conf.GetString("export"),
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
@@ -701,11 +700,10 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              badger,
-		BadgerMaxRetries:    int(badger.GetInt64("max-retries")),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
-	if x.WorkerConfig.Telemetry.GetBool("reports") {
+	if telemetry.GetBool("reports") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
