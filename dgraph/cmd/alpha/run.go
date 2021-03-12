@@ -125,20 +125,13 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
-	flag.Int("max_retries", -1,
-		"Commits to disk will give up after these number of retries to prevent locking the worker"+
-			" in a failed state. Use -1 to retry infinitely.")
-
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	//Custom plugins.
+	// Custom plugins.
 	flag.String("custom_tokenizers", "",
-		"Comma separated list of tokenizer plugins")
-
-	flag.String("mutations", "allow",
-		"Set mutation mode to allow, disallow, or strict.")
+		"Comma separated list of tokenizer plugins for custom indices.")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
@@ -151,6 +144,9 @@ they form a Raft group and provide synchronous replication.
 			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -201,6 +197,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("normalize-node",
 			"The maximum number of nodes that can be returned in a query that uses the normalize "+
 				"directive.").
+		Flag("mutations",
+			"[allow, disallow, strict] The mutations mode to use.").
 		Flag("mutations-nquad",
 			"The maximum number of nquads that can be inserted in a mutation request.").
 		String())
@@ -208,7 +206,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
 		Head("Ludicrous options").
 		Flag("enabled",
-			"Run Dgraph in Ludicrous mode.").
+			"Set enabled to true to run Dgraph in Ludicrous mode.").
 		Flag("concurrency",
 			"The number of concurrent threads to use in Ludicrous mode.").
 		String())
@@ -228,7 +226,7 @@ they form a Raft group and provide synchronous replication.
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
 		String())
 
-	flag.String("cdc", "", z.NewSuperFlagHelp(worker.CDCDefaults).
+	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
 		Head("Change Data Capture options").
 		Flag("file",
 			"The path where audit logs will be stored.").
@@ -246,7 +244,7 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	flag.String("audit", "", z.NewSuperFlagHelp(worker.AuditDefaults).
+	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
 		Flag("output",
 			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
@@ -564,10 +562,6 @@ func setupServer(closer *z.Closer) {
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
-	if Alpha.Conf.GetBool("telemetry") {
-		go edgraph.PeriodicallyPostTelemetry()
-	}
-
 	go func() {
 		defer x.ServerCloser.Done()
 
@@ -594,13 +588,17 @@ func setupServer(closer *z.Closer) {
 
 func run() {
 	var err error
-	if Alpha.Conf.GetBool("enable_sentry") {
+
+	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
+	if telemetry.GetBool("sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
 		x.WrapPanics()
 		x.SentryOptOutNote()
 	}
+
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
@@ -654,7 +652,9 @@ func run() {
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
-	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
+	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.LimitDefaults)
+	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
 	case "disallow":
@@ -662,7 +662,7 @@ func run() {
 	case "strict":
 		opts.MutationsMode = worker.StrictMutations
 	default:
-		glog.Error("--mutations argument must be one of allow, disallow, or strict")
+		glog.Error(`--limit "mutations=<mode>;" must be one of allow, disallow, or strict`)
 		os.Exit(1)
 	}
 
@@ -688,7 +688,6 @@ func run() {
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
 		AclEnabled:          aclKey != nil,
 		AbortOlderThan:      abortDur,
@@ -704,6 +703,10 @@ func run() {
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
+	if telemetry.GetBool("reports") {
+		go edgraph.PeriodicallyPostTelemetry()
+	}
+
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
@@ -712,8 +715,6 @@ func run() {
 	setupCustomTokenizers()
 	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
-		worker.LimitDefaults)
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 

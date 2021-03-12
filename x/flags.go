@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	TraceDefaults = `ratio=0.01; jaeger=; datadog=;`
+	TraceDefaults     = `ratio=0.01; jaeger=; datadog=;`
+	TelemetryDefaults = `reports=true; sentry=true;`
 )
 
 // FillCommonFlags stores flags common to Alpha and Zero.
@@ -56,7 +57,11 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 	// Cache flags.
 	flag.Int64("cache_mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")
 
-	// Telemetry.
-	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
+	flag.String("telemetry", TelemetryDefaults, z.NewSuperFlagHelp(TelemetryDefaults).
+		Head("Telemetry (diagnostic) options").
+		Flag("reports",
+			"Send anonymous telemetry data to Dgraph devs.").
+		Flag("sentry",
+			"Send crash events to Sentry.").
+		String())
 }

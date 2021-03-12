@@ -60,12 +60,12 @@ type auditLogger struct {
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
-	if conf == "" {
+	if conf == "" || conf == worker.AuditDefaults {
 		return nil
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
 	out := auditFlag.GetString("output")
-	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
+	x.AssertTruef(out != "", "output flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
