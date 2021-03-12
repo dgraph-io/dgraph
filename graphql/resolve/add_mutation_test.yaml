@@ -4385,3 +4385,139 @@
             "dgraph.type":["Foo"],
             "uid":"_:Foo_3"
         }
+
+-
+  name: "Add mutation for Friend, Friend1 should not generated same variable name for existence queries"
+  gqlmutation: |
+    mutation($input: [AddFriend1Input!]!) {
+      addFriend1(input: $input) {
+        friend1 {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "id": "Main Friend",
+          "friends": [
+            { "id": "Friend1" },
+            { "id": "Friend2" },
+            { "id": "Friend3" },
+            { "id": "Friend4" },
+            { "id": "Friend5" },
+            { "id": "Friend6" },
+            { "id": "Friend7" },
+            { "id": "Friend8" },
+            { "id": "Friend9" },
+            { "id": "Friend10" },
+            { "id": "Friend11" }
+          ]
+        }
+      ]
+    }
+  dgquery: |-
+    query {
+      Friend1_1(func: eq(Friend1.id, "Main Friend")) @filter(type(Friend1)) {
+        uid
+      }
+      Friend_2(func: eq(Friend.id, "Friend1")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_3(func: eq(Friend.id, "Friend2")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_4(func: eq(Friend.id, "Friend3")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_5(func: eq(Friend.id, "Friend4")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_6(func: eq(Friend.id, "Friend5")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_7(func: eq(Friend.id, "Friend6")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_8(func: eq(Friend.id, "Friend7")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_9(func: eq(Friend.id, "Friend8")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_10(func: eq(Friend.id, "Friend9")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_11(func: eq(Friend.id, "Friend10")) @filter(type(Friend)) {
+        uid
+      }
+      Friend_12(func: eq(Friend.id, "Friend11")) @filter(type(Friend)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+       {
+          "Friend1.friends":
+            [
+              {
+                "Friend.id":"Friend1",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_2"
+              },
+              {
+                "Friend.id":"Friend2",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_3"
+              },
+              {
+                "Friend.id":"Friend3",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_4"
+              },
+              {
+                "Friend.id":"Friend4",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_5"
+              },
+              {
+                "Friend.id":"Friend5",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_6"
+              },
+              {
+                "Friend.id":"Friend6",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_7"
+              },
+              {
+                "Friend.id":"Friend7",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_8"
+              },
+              {
+                "Friend.id":"Friend8",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_9"
+              },
+              {
+                "Friend.id":"Friend9",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_10"
+              },
+              {
+                "Friend.id":"Friend10",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_11"
+              },
+              {
+                "Friend.id":"Friend11",
+                "dgraph.type":["Friend"],
+                "uid":"_:Friend_12"
+              }
+            ],
+          "Friend1.id":"Main Friend",
+          "dgraph.type":["Friend1"],
+          "uid":"_:Friend1_1"
+       }
