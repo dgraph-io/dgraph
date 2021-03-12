@@ -426,3 +426,23 @@ type Bar {
     id: String! @id
     foo: Foo!
 }
+
+type ABC {
+    ab: String! @id
+    abc: String! @id
+    AB: AB
+}
+
+type AB {
+    Cab: String! @id
+    Cabc: String! @id
+}
+
+type Friend1 {
+    id: String! @id
+    friends: [Friend]
+}
+
+type Friend {
+    id: String! @id
+}

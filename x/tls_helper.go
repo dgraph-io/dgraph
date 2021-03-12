@@ -40,62 +40,74 @@ type TLSHelperConfig struct {
 }
 
 const (
-	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN;`
-	TLSClientDefaults = `use-system-ca=true;`
+	// TODO: clean/organize this to make it clearer
+
+	TLSDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
+		`ca-cert=; server-name=; server-cert=; server-key=; client-cert=; client-key=;`
+
+	TLSServerDefaults = `use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false; ` +
+		`server-cert=; server-key=; ca-cert=; client-cert=; client-key=;`
+
+	TLSClientDefaults = `use-system-ca=true; internal-port=false; server-name=; ca-cert=; ` +
+		`client-cert=; client-key=;`
 )
 
 // RegisterServerTLSFlags registers the required flags to set up a TLS server.
 func RegisterServerTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", TLSServerDefaults, z.NewSuperFlagHelp(TLSServerDefaults).
-		Head("TLS Server options").
-		Flag("internal-port",
-			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		Flag("server-cert",
-			"The server Cert file which is needed to initiate the server in the cluster.").
-		Flag("server-key",
-			"The server Key file which is needed to initiate the server in the cluster.").
-		Flag("ca-cert",
-			"The CA cert file used to verify server certificates. Required for enabling TLS.").
-		Flag("use-system-ca",
-			"Includes System CA into CA Certs.").
-		Flag("client-auth-type",
-			"The TLS client authentication method.").
-		Flag("client-cert",
-			"(Optional) The client Cert file which is needed to connect as a client with the other "+
-				"nodes in the cluster.").
-		Flag("client-key",
-			"(Optional) The private client Key file which is needed to connect as a client with the "+
-				"other nodes in the cluster.").
-		String())
+	// TODO: clean the default string / location
+	flag.String("tls", "use-system-ca=true; client-auth-type=VERIFYIFGIVEN; internal-port=false;",
+		z.NewSuperFlagHelp(TLSServerDefaults).
+			Head("TLS Server options").
+			Flag("internal-port",
+				"(Optional) Enable inter-node TLS encryption between cluster nodes.").
+			Flag("server-cert",
+				"The server Cert file which is needed to initiate the server in the cluster.").
+			Flag("server-key",
+				"The server Key file which is needed to initiate the server in the cluster.").
+			Flag("ca-cert",
+				"The CA cert file used to verify server certificates. Required for enabling TLS.").
+			Flag("use-system-ca",
+				"Includes System CA into CA Certs.").
+			Flag("client-auth-type",
+				"The TLS client authentication method.").
+			Flag("client-cert",
+				"(Optional) The client Cert file which is needed to connect as a client with the other "+
+					"nodes in the cluster.").
+			Flag("client-key",
+				"(Optional) The private client Key file which is needed to connect as a client with the "+
+					"other nodes in the cluster.").
+			String())
 }
 
 // RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls", TLSClientDefaults, z.NewSuperFlagHelp(TLSClientDefaults).
-		Head("TLS Client options").
-		Flag("internal-port",
-			"(Optional) Enable inter-node TLS encryption between cluster nodes.").
-		Flag("server-name",
-			"Used to verify the server hostname.").
-		Flag("ca-cert",
-			"The CA cert file used to verify server certificates. Required for enabling TLS.").
-		Flag("use-system-ca",
-			"Includes System CA into CA Certs.").
-		Flag("client-cert",
-			"(Optional) The Cert file provided by the client to the server.").
-		Flag("client-key",
-			"(Optional) The private Key file provided by the clients to the server.").
-		String())
+	// TODO: clean the default string / location
+	flag.String("tls", "use-system-ca=true; internal-port=false;",
+		z.NewSuperFlagHelp(TLSClientDefaults).
+			Head("TLS Client options").
+			Flag("internal-port",
+				"(Optional) Enable inter-node TLS encryption between cluster nodes.").
+			Flag("server-name",
+				"Used to verify the server hostname.").
+			Flag("ca-cert",
+				"The CA cert file used to verify server certificates. Required for enabling TLS.").
+			Flag("use-system-ca",
+				"Includes System CA into CA Certs.").
+			Flag("client-cert",
+				"(Optional) The Cert file provided by the client to the server.").
+			Flag("client-key",
+				"(Optional) The private Key file provided by the clients to the server.").
+			String())
 }
 
 // LoadClientTLSConfigForInternalPort loads tls config for connecting to internal ports of cluster
 func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSClientDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
 
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
 	}
-	if tlsFlag.GetString("client-cert") == "" || tlsFlag.GetString("client-key") == "" {
+	if tlsFlag.GetPath("client-cert") == "" || tlsFlag.GetPath("client-key") == "" {
 		return nil, errors.Errorf(`Inter-node TLS is enabled but client certs are not provided. ` +
 			`Inter-node TLS is always client authenticated. Please provide --tls ` +
 			`"client-cert=...; client-key=...;"`)
@@ -103,47 +115,47 @@ func LoadClientTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
 
 	conf := &TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("client-cert")
-	conf.Key = tlsFlag.GetString("client-key")
+	conf.Cert = tlsFlag.GetPath("client-cert")
+	conf.Key = tlsFlag.GetPath("client-key")
 	return GenerateClientTLSConfig(conf)
 }
 
 // LoadServerTLSConfigForInternalPort loads the TLS config for the internal ports of the cluster
 func LoadServerTLSConfigForInternalPort(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSServerDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
 
 	if !tlsFlag.GetBool("internal-port") {
 		return nil, nil
 	}
-	if tlsFlag.GetString("server-cert") == "" || tlsFlag.GetString("server-key") == "" {
+	if tlsFlag.GetPath("server-cert") == "" || tlsFlag.GetPath("server-key") == "" {
 		return nil, errors.Errorf(`Inter-node TLS is enabled but server node certs are not provided. ` +
 			`Please provide --tls "server-cert=...; server-key=...;"`)
 	}
 	conf := TLSHelperConfig{}
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("server-cert")
-	conf.Key = tlsFlag.GetString("server-key")
+	conf.Cert = tlsFlag.GetPath("server-cert")
+	conf.Key = tlsFlag.GetPath("server-key")
 	conf.ClientAuth = "REQUIREANDVERIFY"
 	return GenerateServerTLSConfig(&conf)
 }
 
 // LoadServerTLSConfig loads the TLS config into the server with the given parameters.
 func LoadServerTLSConfig(v *viper.Viper) (*tls.Config, error) {
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSServerDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
 
-	if tlsFlag.GetString("server-cert") == "" && tlsFlag.GetString("server-key") == "" {
+	if tlsFlag.GetPath("server-cert") == "" && tlsFlag.GetPath("server-key") == "" {
 		return nil, nil
 	}
 
 	conf := TLSHelperConfig{}
-	conf.RootCACert = tlsFlag.GetString("ca-cert")
+	conf.RootCACert = tlsFlag.GetPath("ca-cert")
 	conf.CertRequired = true
-	conf.Cert = tlsFlag.GetString("server-cert")
-	conf.Key = tlsFlag.GetString("server-key")
+	conf.Cert = tlsFlag.GetPath("server-cert")
+	conf.Key = tlsFlag.GetPath("server-key")
 	conf.ClientAuth = tlsFlag.GetString("client-auth-type")
 	conf.UseSystemCACerts = tlsFlag.GetBool("use-system-ca")
 	return GenerateServerTLSConfig(&conf)
@@ -169,12 +181,12 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		return SlashTLSConfig(v.GetString("slash_grpc_endpoint"))
 	}
 
-	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSClientDefaults)
+	tlsFlag := z.NewSuperFlag(v.GetString("tls")).MergeAndCheckDefault(TLSDefaults)
 
 	// When the --tls ca-cert="..."; option is specified, the connection will be set up using TLS
 	// instead of plaintext. However the client cert files are optional, depending on whether the
 	// server requires a client certificate.
-	caCert := tlsFlag.GetString("ca-cert")
+	caCert := tlsFlag.GetPath("ca-cert")
 	if caCert != "" {
 		tlsCfg := tls.Config{}
 
@@ -189,8 +201,8 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		tlsCfg.ServerName = tlsFlag.GetString("server-name")
 
 		// 3. optionally load the client cert files
-		certFile := tlsFlag.GetString("client-cert")
-		keyFile := tlsFlag.GetString("client-key")
+		certFile := tlsFlag.GetPath("client-cert")
+		keyFile := tlsFlag.GetPath("client-key")
 		if certFile != "" && keyFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
@@ -205,8 +217,8 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// Viper's own documentation, there's no way to tell whether an option value came from a
 	// command-line option or a built-it default.
 	if tlsFlag.GetString("server-name") != "" ||
-		tlsFlag.GetString("client-cert") != "" ||
-		tlsFlag.GetString("client-key") != "" {
+		tlsFlag.GetPath("client-cert") != "" ||
+		tlsFlag.GetPath("client-key") != "" {
 		return nil, errors.Errorf(`--tls "ca-cert=...;" is required for enabling TLS`)
 	}
 	return nil, nil

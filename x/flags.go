@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	TraceDefaults = `ratio=0.01;`
+	TraceDefaults = `ratio=0.01; jaeger=; datadog=;`
 )
 
 // FillCommonFlags stores flags common to Alpha and Zero.

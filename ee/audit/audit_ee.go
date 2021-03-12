@@ -15,20 +15,17 @@ package audit
 import (
 	"io/ioutil"
 	"math"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
 
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-const (
-	FlagDefaults         = "dir=; encrypt-file=; compress=false; days=10; size=100;"
-	defaultAuditFilename = "dgraph_audit.log"
-)
+const defaultAuditFilename = "dgraph_audit.log"
 
 var auditEnabled uint32
 
@@ -65,8 +62,8 @@ func GetAuditConf(conf string) *x.LoggerConf {
 	if conf == "" {
 		return nil
 	}
-	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
-	out := auditFlag.GetString("output")
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
+	out := auditFlag.GetPath("output")
 	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
@@ -81,15 +78,11 @@ func GetAuditConf(conf string) *x.LoggerConf {
 }
 
 func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
-	encFile := conf.GetString("encrypt-file")
+	encFile := conf.GetPath("encrypt-file")
 	if encFile == "" {
 		return nil, nil
 	}
-	path, err := filepath.Abs(encFile)
-	if err != nil {
-		return nil, err
-	}
-	encKey, err := ioutil.ReadFile(path)
+	encKey, err := ioutil.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}
