@@ -530,6 +530,10 @@ func (n *node) proposeNewCID() {
 	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
 	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
+		if len(n.server.cid) > 0 {
+			id = n.server.cid
+		}
+
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 		if err == nil {
 			glog.Infof("CID set for cluster: %v", id)
