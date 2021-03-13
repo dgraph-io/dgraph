@@ -378,7 +378,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if isDropAll(op) {
 		if x.Config.BlockDropAll {
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")
-			return empty, errors.New("Drop all operation in not permitted.")
+			return empty, errors.New("Drop all operation is not permitted.")
 		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
