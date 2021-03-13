@@ -594,6 +594,20 @@
       "list": true
     },
     {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Starship.length",
       "type": "float"
     },
@@ -1358,6 +1372,17 @@
         }
       ],
       "name": "Zoo"
+    },
+    {
+      "fields": [
+        {
+          "name": "Planet.missions"
+        },
+        {
+          "name": "Planet.id"
+        }
+      ],
+      "name": "Planet"
     },
     {
       "fields": [

@@ -327,6 +327,11 @@ type SpaceShip @key(fields: "id") @extends {
     missions: [Mission]
 }
 
+type Planet @key(fields: "id") @extends {
+        id: Int! @id @external
+        missions: [Mission]
+}
+
 type Region {
     id: String! @id
     name: String!

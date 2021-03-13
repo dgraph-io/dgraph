@@ -331,8 +331,8 @@ func TestMutationQueryRewriting(t *testing.T) {
 			mut:         `addPost(input: [{title: "A Post", author: {id: "0x1"}}])`,
 			payloadType: "AddPostPayload",
 			rewriter:    NewAddRewriter,
-			idExistence: map[string]string{"Author1": "0x1"},
-			assigned:    map[string]string{"Post2": "0x4"},
+			idExistence: map[string]string{"Author_1": "0x1"},
+			assigned:    map[string]string{"Post_2": "0x4"},
 		},
 		"Update Post ": {
 			mut: `updatePost(input: {filter: {postID

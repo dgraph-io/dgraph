@@ -2838,6 +2838,12 @@ valid_schemas:
         f2: String! @id
       }
 
+  - name: "field with @id directive can have exact index"
+    input: |
+      type X {
+        f1: String! @id @search(by:[exact])
+      }
+
   - name: "Type implements from two interfaces where both have ID"
     input: |
       interface X {
