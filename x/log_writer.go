@@ -41,6 +41,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
+	VerificationText = "Hello World"
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -245,7 +246,7 @@ func (l *LogWriter) open() error {
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
-			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte("Hello World"))
+			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
 			if err != nil {
 				return err
 			}
@@ -285,7 +286,7 @@ func (l *LogWriter) open() error {
 			return openNew()
 		}
 		if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil ||
-			string(t) != "Hello World" {
+			string(t) != VerificationText {
 			// different encryption key. Better to open new file here
 			_ = f.Close()
 			return openNew()

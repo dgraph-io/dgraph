@@ -97,18 +97,22 @@ func run() error {
 		glog.Info("audit file is empty")
 		return nil
 	}
+	var iterator int64 = 0
 
 	iv := make([]byte, aes.BlockSize)
-	x.Check2(file.ReadAt(iv, 0))
-	t := make([]byte, 11)
-	x.Check2(file.ReadAt(t, 16))
+	x.Check2(file.ReadAt(iv, iterator))
+	iterator = iterator + aes.BlockSize
+
+	t := make([]byte, len(x.VerificationText))
+	x.Check2(file.ReadAt(t, iterator))
+	iterator = iterator + int64(len(x.VerificationText))
+
 	stream := cipher.NewCTR(block, iv)
 	stream.XORKeyStream(t, t)
-	if string(t) != "Hello World" {
+	if string(t) != x.VerificationText {
 		return errors.New("invalid encryption key provided. Please check your encryption key")
 	}
 
-	var iterator int64 = 16 + 11 // 16 for init vector and 11 for Hello World verification text.
 	for {
 		// if its the end of data. finish decrypting
 		if iterator >= stat.Size() {
