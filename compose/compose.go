@@ -474,7 +474,7 @@ func addMetrics(cfg *composeConfig) {
 			},
 			{
 				Type:     "bind",
-				Source:   "$GOPATH/src/github.com/dgraph-io/dgraph/compose/prometheus.yml",
+				Source:   "./prometheus.yml",
 				Target:   "/etc/prometheus/prometheus.yml",
 				ReadOnly: true,
 			},
