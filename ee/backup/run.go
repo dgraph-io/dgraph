@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	"golang.org/x/sync/errgroup"
 
@@ -31,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -58,6 +61,7 @@ var opt struct {
 	destination string
 	format      string
 	verbose     bool
+	fixCors     bool // used by export backup command.
 }
 
 func init() {
@@ -343,6 +347,8 @@ func initExportBackup() {
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
 		"The format of the export output. Accepts a value of either rdf or json")
+	flag.BoolVar(&opt.fixCors, "fix-cors", false,
+		"If true, append the CORS at the end of GraphQL schema.")
 	enc.RegisterFlags(flag)
 }
 
@@ -390,6 +396,23 @@ func runExportBackup() error {
 			fmt.Printf("WARNING WARNING WARNING: unable to get group id from directory "+
 				"inside DB at %s: %v", dir, err)
 			continue
+		}
+		if opt.fixCors && gid == 1 {
+			// Query the cors in badger db and append it at the end of GraphQL schema.
+			// This change was introduced in v21.03. Backups with 20.07 <= version < 21.03
+			// should apply this.
+			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(opt.key))
+			if err != nil {
+				return err
+			}
+			if err := upgrade.FixCors(db); err != nil {
+				return errors.Wrapf(err, "while fixing cors")
+			}
+			if err := db.Close(); err != nil {
+				return err
+			}
 		}
 		eg.Go(func() error {
 			return worker.StoreExport(&pb.ExportRequest{
