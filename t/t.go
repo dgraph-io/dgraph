@@ -145,8 +145,28 @@ func detectRace(prefix string) bool {
 	return zeroRaceDetected || alphaRaceDetected
 }
 
-func stopCluster(composeFile, prefix string, wg *sync.WaitGroup) {
+func outputLogs(prefix string) {
+	printLogs := func(container string) {
+		in := testutil.GetContainerInstance(prefix, container)
+		c := in.GetContainer()
+		logCmd := exec.Command("docker", "logs", c.ID)
+		out, err := logCmd.CombinedOutput()
+		fmt.Printf("Docker logs for %d is %s with error %+v ", c.ID, string(out), err)
+	}
+	for i := 0; i <= 3; i++ {
+		printLogs("zero" + strconv.Itoa(i))
+	}
+
+	for i := 0; i <= 6; i++ {
+		printLogs("alpha" + strconv.Itoa(i))
+	}
+}
+
+func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 	go func() {
+		if err != nil {
+			outputLogs(prefix)
+		}
 		cmd := command("docker-compose", "-f", composeFile, "-p", prefix, "down", "-v")
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
@@ -267,7 +287,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 		wg.Add(1)
-		stopCluster(defaultCompose, prefix, wg)
+		stopCluster(defaultCompose, prefix, wg, nil)
 		stopped = true
 	}
 	defer stop()
@@ -317,21 +337,21 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) (err error) {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
-
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
-	err := startCluster(compose, prefix)
+	err = startCluster(compose, prefix)
 	if err != nil {
-		return err
+		return
 	}
 	if !*keepCluster {
 		wg.Add(1)
-		defer stopCluster(compose, prefix, wg)
+		defer stopCluster(compose, prefix, wg, err)
 	}
 
-	return runTestsFor(ctx, pkg, prefix)
+	err = runTestsFor(ctx, pkg, prefix)
+	return
 }
 
 func findPackagesFor(testName string) []string {

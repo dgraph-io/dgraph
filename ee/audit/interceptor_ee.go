@@ -192,7 +192,7 @@ func maskPasswordFieldsInGQL(req string) string {
 		Input: gqlReq.Query,
 	})
 	if gErr != nil {
-		glog.Errorf("unable to parse gql request %+v", err)
+		glog.Errorf("unable to parse gql request %+v", gErr)
 		return req
 	}
 	if len(query.Operations) == 0 {
