@@ -341,7 +341,7 @@ func (l *LogWriter) manageOldLogs() {
 		return
 	}
 
-	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxSize)
+	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxAge)
 	if err != nil {
 		return
 	}
@@ -373,6 +373,8 @@ func (l *LogWriter) manageOldLogs() {
 	}
 }
 
+// prefixAndExt extracts the filename (without the extension) as well its
+// extension (including the `.`) from a filepath.
 func prefixAndExt(file string) (prefix, ext string) {
 	filename := filepath.Base(file)
 	ext = filepath.Ext(filename)
@@ -393,7 +395,7 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	toRemove := make([]string, 0)
 	toKeep := make([]string, 0)
 
-	diff := time.Duration(int64(24*time.Hour) * int64(maxAge))
+	diff := time.Duration(int64(24*time.Hour) * maxAge)
 	cutoff := time.Now().Add(-1 * diff)
 
 	for _, f := range files {
