@@ -728,8 +728,8 @@ func (authRw *authRewriter) addAuthQueries(
 				continue
 			}
 
-			// Form Query Like Todo1 as var(func: type(Todo))
-			queryVar := object.Name() + "_1"
+			// Form Query Like Todo_1 as var(func: type(Todo))
+			queryVar := authRw.varGen.Next(object, "", "", authRw.isWritingAuth)
 			varQry := &gql.GraphQuery{
 				Attr: "var",
 				Var:  queryVar,
