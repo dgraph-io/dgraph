@@ -44,18 +44,6 @@ const (
 // This is done to ensure LogWriter always implement io.WriterCloser
 var _ io.WriteCloser = (*LogWriter)(nil)
 
-type logFile struct {
-	*os.File
-}
-
-func (l *logFile) closeFile() error {
-	err := l.Chmod(os.ModePerm)
-	if err != nil {
-		return err
-	}
-	return l.Close()
-}
-
 type LogWriter struct {
 	FilePath      string
 	MaxSize       int64
@@ -66,7 +54,7 @@ type LogWriter struct {
 	baseIv      [12]byte
 	mu          sync.Mutex
 	size        int64
-	file        *logFile
+	file        *os.File
 	writer      *bufio.Writer
 	flushTicker *time.Ticker
 	closer      *z.Closer
@@ -147,7 +135,7 @@ func (l *LogWriter) Close() error {
 	l.flush()
 	l.flushTicker.Stop()
 	close(l.manageChannel)
-	_ = l.file.closeFile()
+	_ = l.file.Close()
 	l.writer = nil
 	l.file = nil
 	return nil
@@ -199,7 +187,7 @@ func (l *LogWriter) rotate() error {
 	}
 
 	l.flush()
-	if err := l.file.closeFile(); err != nil {
+	if err := l.file.Close(); err != nil {
 		return err
 	}
 
@@ -237,7 +225,7 @@ func (l *LogWriter) open() error {
 		if err != nil {
 			return err
 		}
-		l.file = &logFile{f}
+		l.file = f
 		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
@@ -265,12 +253,12 @@ func (l *LogWriter) open() error {
 		return openNew()
 	}
 
-	l.file = &logFile{f}
+	l.file = f
 	if l.EncryptionKey != nil {
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
 		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
-			_ = l.file.closeFile()
+			_ = l.file.Close()
 			return openNew()
 		}
 	}

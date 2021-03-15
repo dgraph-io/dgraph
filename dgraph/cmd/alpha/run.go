@@ -599,7 +599,6 @@ func setupServer(closer *z.Closer) {
 		x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
 		break
 	}
-	glog.Info("waiting for the server to get closed aman")
 	x.ServerCloser.Wait()
 }
 
