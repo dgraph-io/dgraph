@@ -4931,7 +4931,7 @@ func idDirectiveWithIntMutation(t *testing.T) {
 			name: "Graphql and more"
 		  },
 		  {
-			chapterId: $chID
+			chapterId: $chId
 			name: "Authorization"
 		  }]) {
 			numUids
