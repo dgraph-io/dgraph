@@ -4889,16 +4889,21 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 		Query: `mutation addBook($bookId: Int64!){
           addBook(input:[
             {
-              bookId: $bookId
+              bookId: 1234567890123
               name: "Graphql"
               desc: "Graphql is the next big thing"
-            }
+            },
+			{
+			  bookId: $bookId
+			  name: "Dgraph"
+			  desc: "A GraphQL database"
+			}
           ]) {
             numUids
           }
         }`,
 		Variables: map[string]interface{}{
-			"bookId": "1234567890123",
+			"bookId": "1234512345",
 		},
 	}
 
@@ -4906,7 +4911,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	RequireNoGQLErrors(t, response)
 	expected := `{
               "addBook": {
-              "numUids": 1
+              "numUids": 2
             }
         }`
 	require.JSONEq(t, expected, string(response.Data))
@@ -4915,21 +4920,25 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 3, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
 	query := &GraphQLParams{
 		Query: `mutation addChapter($chId: Int!){
 		  addChapter(input:[{
-			chapterId: $chId
+			chapterId: 2
 			name: "Graphql and more"
+		  },
+		  {
+			chapterId: $chID
+			name: "Authorization"
 		  }]) {
 			numUids
 		  }
 		}`,
 		Variables: map[string]interface{}{
-			"chId": 2,
+			"chId": 10,
 		},
 	}
 
@@ -4937,7 +4946,7 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	RequireNoGQLErrors(t, response)
 	var expected = `{
             "addChapter": {
-              "numUids": 1
+              "numUids": 2
             }
         }`
 	require.JSONEq(t, expected, string(response.Data))
@@ -4946,7 +4955,7 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 3, nil)
 }
 
 func idDirectiveWithFloatMutation(t *testing.T) {
