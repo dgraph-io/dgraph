@@ -64,7 +64,6 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			Vars:     variables,
 			ReadOnly: true,
 		},
-		doAuth: NoAuthorize,
 	}
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
@@ -117,7 +116,6 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 				},
 				CommitNow: true,
 			},
-			doAuth: NeedAuthorize,
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
