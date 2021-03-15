@@ -98,7 +98,7 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	flag.String("cid", "", "Cid for alphas for cluster management")
+	flag.String("cid", "", "Cluster id for alphas")
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").
