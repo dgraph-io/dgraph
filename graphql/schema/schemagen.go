@@ -339,6 +339,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
+	providesFieldsMap := make(map[string]map[string]bool)
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
@@ -348,6 +349,25 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 			remoteDir := defn.Directives.ForName(remoteDirective)
 			if remoteDir != nil {
 				continue
+			}
+
+			for _, fld := range defn.Fields {
+				providesDir := fld.Directives.ForName(apolloProvidesDirective)
+				if providesDir == nil {
+					continue
+				}
+				arg := providesDir.Arguments.ForName(apolloKeyArg)
+				providesFieldArgs := strings.Fields(arg.Value.Raw)
+				var typeMap map[string]bool
+				if existingTypeMap, ok := providesFieldsMap[fld.Type.Name()]; ok {
+					typeMap = existingTypeMap
+				} else {
+					typeMap = make(map[string]bool)
+				}
+				for _, fldName := range providesFieldArgs {
+					typeMap[fldName] = true
+				}
+				providesFieldsMap[fld.Type.Name()] = typeMap
 			}
 		}
 		typesToComplete = append(typesToComplete, defn.Name)
@@ -374,16 +394,16 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
 	dgSchema := genDgSchema(sch, typesToComplete)
-	completeSchema(sch, typesToComplete, apolloServiceQuery)
+	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
 	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
-	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+	// If Dgraph.Authorization header is parsed successfully and JWKUrls is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrls.
+	if metaInfo.authMeta != nil && len(metaInfo.authMeta.JWKUrls) != 0 {
 		metaInfo.authMeta.InitHttpClient()
 		fetchErr := metaInfo.authMeta.FetchJWKs()
 		if fetchErr != nil {
@@ -617,6 +637,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
+					if search != nil {
+						arg := search.Arguments.ForName(searchArgs)
+						if arg != nil {
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
+						} else {
+							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
+								Name()]].dgIndex)
+						}
+					}
+
 					id := f.Directives.ForName(idDirective)
 					if id != nil || f.Type.Name() == "ID" {
 						upsertStr = "@upsert "
@@ -626,17 +656,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						case "Float":
 							indexes = append(indexes, "float")
 						case "String", "ID":
-							indexes = append(indexes, "hash")
-						}
-					}
-
-					if search != nil {
-						arg := search.Arguments.ForName(searchArgs)
-						if arg != nil {
-							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
-						} else {
-							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
-								Name()]].dgIndex)
+							if !x.HasString(indexes, "exact") {
+								indexes = append(indexes, "hash")
+							}
 						}
 					}
 

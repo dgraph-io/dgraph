@@ -1231,7 +1231,7 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			nil,
-			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
+			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl`/`JWKUrls` `Algo` `Header` `Namespace`"),
 		},
 		{
 			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",

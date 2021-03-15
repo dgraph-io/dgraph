@@ -68,6 +68,10 @@
       "type": "uid"
     },
     {
+      "predicate": "Astronaut.name",
+      "type": "string"
+    },
+    {
       "predicate": "Astronaut.missions",
       "type": "uid",
       "list": true

@@ -820,6 +820,11 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	if pl == nil {
 		return 0, conn.ErrNoConnection
 	}
+
+	// Do de-duplication before sending the request to zero.
+	tc.Keys = x.Unique(tc.Keys)
+	tc.Preds = x.Unique(tc.Preds)
+
 	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 

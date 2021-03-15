@@ -357,7 +357,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 						StreamDone: true,
 					}
 
-					buf := z.NewBuffer(512)
+					buf := z.NewBuffer(512, "Reducer.Write")
 					defer buf.Release()
 					badger.KVToBuffer(doneKV, buf)
 
@@ -437,7 +437,8 @@ func bufferStats(cbuf *z.Buffer) {
 }
 
 func getBuf(dir string) *z.Buffer {
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, filepath.Join(dir, bufferDir))
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
+		filepath.Join(dir, bufferDir), "Reducer.GetBuf")
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
@@ -550,7 +551,7 @@ func (r *reducer) toList(req *encodeRequest) {
 	pl := new(pb.PostingList)
 	writeVersionTs := r.state.writeTs
 
-	kvBuf := z.NewBuffer(260 << 20)
+	kvBuf := z.NewBuffer(260<<20, "Reducer.Buffer.ToList")
 	trackCountIndex := make(map[string]bool)
 
 	var freePostings []*pb.Posting
@@ -568,12 +569,6 @@ func (r *reducer) toList(req *encodeRequest) {
 		p.Reset()
 		freePostings = append(freePostings, p)
 	}
-
-	alloc := z.NewAllocator(16 << 20)
-	defer func() {
-		// We put alloc.Release in defer because we reassign alloc for split posting lists.
-		alloc.Release()
-	}()
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
@@ -601,7 +596,6 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		alloc.Reset()
 		bm := roaring64.New()
 		var lastUid uint64
 		slice, next := []byte{}, start
@@ -657,15 +651,13 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		shouldSplit := pl.Size() >= (1<<20)/2
+		shouldSplit, err := posting.ShouldSplit(pl)
+		x.Check(err)
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
 			l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
-
-			// Assign a new allocator, so we don't reset the one we were using during Rollup.
-			alloc = z.NewAllocator(16 << 20)
 
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
@@ -701,7 +693,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			if kvBuf.LenNoPadding() > 256<<20 {
 				req.listCh <- kvBuf
-				kvBuf = z.NewBuffer(260 << 20)
+				kvBuf = z.NewBuffer(260<<20, "Reducer.Buffer.KVBuffer")
 			}
 		}
 		end = next

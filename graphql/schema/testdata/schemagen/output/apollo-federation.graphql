@@ -5,6 +5,7 @@
 type Reviews @key(fields: "id") {
 	id: ID!
 	review: String!
+	user(filter: UserFilter): User @provides(fields: "age")
 }
 
 type Student @key(fields: "id") {
@@ -15,7 +16,7 @@ type Student @key(fields: "id") {
 
 type School @key(fields: "id") {
 	id: ID!
-	students(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student]
+	students(filter: StudentFilter, order: StudentOrder, first: Int, offset: Int): [Student] @provides(fields: "name")
 	studentsAggregate(filter: StudentFilter): StudentAggregateResult
 }
 
@@ -27,13 +28,16 @@ type Country {
 type Product @key(fields: "id") @extends {
 	id: ID! @external
 	name: String! @external
-	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
+	price: Int @external
+	weight: Int @external
+	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews] @requires(fields: "price weight")
 	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
 }
 
 type User @key(fields: "name") @extends {
 	id: ID! @external
 	name: String! @id @external
+	age: Int! @external
 	reviews(filter: ReviewsFilter, order: ReviewsOrder, first: Int, offset: Int): [Reviews]
 	reviewsAggregate(filter: ReviewsFilter): ReviewsAggregateResult
 }
@@ -312,6 +316,8 @@ type _Service {
 }
 
 directive @external on FIELD_DEFINITION
+directive @requires(fields: _FieldSet!) on FIELD_DEFINITION
+directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
 directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
 directive @extends on OBJECT | INTERFACE
 
@@ -453,6 +459,10 @@ type UserAggregateResult {
 	count: Int
 	nameMin: String
 	nameMax: String
+	ageMin: Int
+	ageMax: Int
+	ageSum: Int
+	ageAvg: Float
 }
 
 #######################
@@ -479,6 +489,7 @@ enum ProductOrderable {
 
 enum ReviewsHasFilter {
 	review
+	user
 }
 
 enum ReviewsOrderable {
@@ -501,11 +512,13 @@ enum StudentOrderable {
 
 enum UserHasFilter {
 	name
+	age
 	reviews
 }
 
 enum UserOrderable {
 	name
+	age
 }
 
 #######################
@@ -524,6 +537,7 @@ input AddProductInput {
 
 input AddReviewsInput {
 	review: String!
+	user: UserRef
 }
 
 input AddSchoolInput {
@@ -537,6 +551,7 @@ input AddStudentInput {
 
 input AddUserInput {
 	name: String!
+	age: Int!
 	reviews: [ReviewsRef]
 }
 
@@ -602,11 +617,13 @@ input ReviewsOrder {
 
 input ReviewsPatch {
 	review: String
+	user: UserRef
 }
 
 input ReviewsRef {
 	id: ID
 	review: String
+	user: UserRef
 }
 
 input SchoolFilter {
@@ -702,11 +719,13 @@ input UserOrder {
 }
 
 input UserPatch {
+	age: Int
 	reviews: [ReviewsRef]
 }
 
 input UserRef {
 	name: String
+	age: Int
 	reviews: [ReviewsRef]
 }
 

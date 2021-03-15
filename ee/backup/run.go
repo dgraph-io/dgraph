@@ -20,7 +20,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/upgrade"
@@ -186,9 +186,7 @@ func runRestoreCmd() error {
 		zc    pb.ZeroClient
 		err   error
 	)
-	if opt.key, err = enc.ReadKey(Restore.Conf); err != nil {
-		return err
-	}
+	_, opt.key = ee.GetKeys(Restore.Conf)
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
@@ -274,14 +272,6 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	var paths []string
-	for path := range manifests {
-		paths = append(paths, path)
-	}
-	sort.Slice(paths, func(i, j int) bool {
-		return paths[i] < paths[j]
-	})
-
 	type backupEntry struct {
 		Path           string              `json:"path"`
 		Since          uint64              `json:"since"`
@@ -296,12 +286,10 @@ func runLsbackupCmd() error {
 	type backupOutput []backupEntry
 
 	var output backupOutput
-	for i := 0; i < len(paths); i++ {
-		path := paths[i]
-		manifest := manifests[path]
+	for _, manifest := range manifests {
 
 		be := backupEntry{
-			Path:      path,
+			Path:      manifest.Path,
 			Since:     manifest.Since,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
@@ -356,11 +344,7 @@ func initExportBackup() {
 }
 
 func runExportBackup() error {
-	var err error
-	if opt.key, err = enc.ReadKey(ExportBackup.Conf); err != nil {
-		return err
-	}
-
+	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}

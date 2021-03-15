@@ -1,7 +1,7 @@
 // +build oss
 
 /*
- * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package ee
+package vault
 
 import (
 	"github.com/dgraph-io/dgraph/x"
@@ -24,10 +24,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
-// this function exits with an error.
-func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
-	glog.Exit("flags: acl / encryption is an enterprise-only feature")
-	return nil, nil
+func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+	glog.Exit("flags: vault is an enterprise-only feature")
+	return
 }

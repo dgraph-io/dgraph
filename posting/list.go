@@ -302,7 +302,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 			if obj.Uid == mpost.Uid {
 				return nil
 			}
-			glog.Info("=============Deleting: ", obj.Uid)
 
 			// Mark all other values as deleted. By the end of the iteration, the
 			// list of postings will contain deleted operations and only one set
@@ -1028,21 +1027,10 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 		return kv
 	}
-	ref := plist.Pack.GetAllocRef()
-	if plist.Pack != nil {
-		// Set allocator to zero for marshal.
-		plist.Pack.AllocRef = 0
-	}
-
-	// bm := codec.FromBytes(plist.Bitmap)
-	// fmt.Printf("MarshalPostingList: %d\n", bm.GetCardinality())
 
 	out := alloc.Allocate(plist.Size())
 	n, err := plist.MarshalToSizedBuffer(out)
 	x.Check(err)
-	if plist.Pack != nil {
-		plist.Pack.AllocRef = ref
-	}
 	kv.Value = out[:n]
 	kv.UserMeta = alloc.Copy([]byte{BitCompletePosting})
 	return kv
@@ -1087,10 +1075,25 @@ func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
 	return 1, math.MaxUint64
 }
 
+func ShouldSplit(plist *pb.PostingList) (bool, error) {
+	if plist.Size() >= maxListSize {
+		r := roaring64.New()
+		if err := codec.FromPostingList(r, plist); err != nil {
+			return false, err
+		}
+		return r.GetCardinality() > 1, nil
+	}
+	return false, nil
+}
+
 func (ro *rollupOutput) runSplits() error {
 top:
 	for startUid, pl := range ro.parts {
-		if pl.Size() >= maxListSize {
+		should, err := ShouldSplit(pl)
+		if err != nil {
+			return err
+		}
+		if should {
 			if err := ro.split(startUid); err != nil {
 				return err
 			}
@@ -1103,7 +1106,6 @@ top:
 
 func (ro *rollupOutput) split(startUid uint64) error {
 	pl := ro.parts[startUid]
-	// x.AssertTrue(pl.Size() >= maxListSize)
 
 	r := roaring64.New()
 	if err := codec.FromPostingList(r, pl); err != nil {
@@ -1135,11 +1137,6 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
 
-	// if startUid == uint64(126) {
-	// 	fmt.Printf("Start Split %d. First Part (%d -> %d, %d). Second (%d -> %d, %d)\n",
-	// 		startUid, r.Minimum(), r.Maximum(), len(newpl.Postings),
-	// 		nr.Minimum(), nr.Maximum(), len(pl.Postings))
-	// }
 	return nil
 }
 
@@ -1284,7 +1281,7 @@ func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
 
-	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
+	return len(l.mutationMap) + codec.ApproxLen(l.plist.Bitmap)
 }
 
 func abs(a int) int {

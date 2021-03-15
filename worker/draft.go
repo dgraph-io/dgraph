@@ -776,14 +776,15 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
-			err := txn.CommitToDisk(writer, commit)
-			if err == badger.ErrBannedKey {
-				glog.Errorf("Error while writing to banned namespace.")
-				return nil
-			}
-			return err
-		})
+		err := x.RetryUntilSuccess(int(x.WorkerConfig.Badger.GetInt64("max-retries")),
+			10*time.Millisecond, func() error {
+				err := txn.CommitToDisk(writer, commit)
+				if err == badger.ErrBannedKey {
+					glog.Errorf("Error while writing to banned namespace.")
+					return nil
+				}
+				return err
+			})
 
 		if err != nil {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
@@ -1755,6 +1756,12 @@ func (n *node) InitAndStartNode() {
 
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
+				m, ok := members[id]
+				if ok {
+					n.Connect(id, m.Addr)
+				}
+			}
+			for _, id := range sp.Metadata.ConfState.Learners {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
