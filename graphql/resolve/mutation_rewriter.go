@@ -1382,7 +1382,7 @@ func rewriteObject(
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				// TODO: Add a function for parsing idVal. This is repeatitive
 				switch xid.Type().Name() {
-				case "Int", "Int64":
+				case "Int":
 					switch xidVal.(type) {
 					case json.Number:
 						val, _ := xidVal.(json.Number).Int64()
@@ -1740,7 +1740,7 @@ func existenceQueries(
 		for _, xid := range xids {
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				switch xid.Type().Name() {
-				case "Int", "Int64":
+				case "Int":
 					switch xidVal.(type) {
 					case json.Number:
 						val, err := xidVal.(json.Number).Int64()
