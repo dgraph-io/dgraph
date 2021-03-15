@@ -203,7 +203,7 @@ they form a Raft group and provide synchronous replication.
 			"The maximum number of nquads that can be inserted in a mutation request.").
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
-				" permits dropping attribute and types.").
+				" allows dropping attributes and types.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
