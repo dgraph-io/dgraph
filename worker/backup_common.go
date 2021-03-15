@@ -71,6 +71,15 @@ type Manifest struct {
 	// DropOperations lists the various DROP operations that took place since the last backup.
 	// These are used during restore to redo those operations before applying the backup.
 	DropOperations []*pb.DropOperation `json:"drop_operations"`
+	// Compression keeps track of the compression that was used for the data.
+	Compression string `json:"compression"`
+}
+
+func (m *Manifest) ValidReadTs() uint64 {
+	if m.ReadTs == 0 {
+		return m.SinceTsDeprecated
+	}
+	return m.ReadTs
 }
 
 type MasterManifest struct {

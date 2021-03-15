@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dustin/go-humanize"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
@@ -64,6 +65,7 @@ type s3Handler struct {
 	creds                    *x.MinioCredentials
 	uri                      *url.URL
 	mc                       *x.MinioClient
+	numWritten               int
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -282,8 +284,8 @@ func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
 	// the progress of read. By definition, it must be the same.
 	n, err := mc.PutObject(h.bucketName, object, h.preader, -1, minio.PutObjectOptions{})
-	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
-		n, time.Since(start).Round(time.Second))
+	glog.V(2).Infof("Backup sent data of size %s. Time elapsed: %s",
+		humanize.IBytes(uint64(n)), time.Since(start).Round(time.Second))
 
 	if err != nil {
 		// This should cause Write to fail as well.
@@ -318,7 +320,13 @@ func (h *s3Handler) flush() error {
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
-	return h.pwriter.Write(b)
+	n, err := h.pwriter.Write(b)
+	h.numWritten += n
+	return n, err
+}
+
+func (h *s3Handler) BytesWritten() int {
+	return h.numWritten
 }
 
 func (h *s3Handler) objectExists(objectPath string) bool {
@@ -328,7 +336,7 @@ func (h *s3Handler) objectExists(objectPath string) bool {
 		if errResponse.Code == "NoSuchKey" {
 			return false
 		} else {
-			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
+			glog.Errorf("Failed to verify object %s existance: %s", objectPath, errResponse.Code)
 			return false
 		}
 	}

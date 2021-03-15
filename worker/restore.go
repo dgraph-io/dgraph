@@ -56,6 +56,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				return 0, 0, err
 			}
 
+			// TODO: This should be based on the compression algorithm used.
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
 				if len(key) != 0 {
@@ -102,6 +103,7 @@ type loadBackupInput struct {
 	preds          predicateSet
 	dropOperations []*pb.DropOperation
 	isOld          bool
+	compression    string
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,

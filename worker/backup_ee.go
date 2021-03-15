@@ -57,10 +57,11 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 		return nil, errors.Wrapf(err, "cannot start backup operation")
 	}
 	defer closer.Done()
+
 	bp := NewBackupProcessor(pstore, req)
 	defer bp.Close()
 
-	return bp.WriteBackup(ctx)
+	return bp.WriteBackup(closer.Ctx())
 }
 
 // BackupGroup backs up the group specified in the backup request.
@@ -191,34 +192,44 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
-	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
+	glog.Infof(
+		"Created backup request: read_ts:%d since_ts:%d unix_ts:%q destination:%q. Groups=%v\n",
+		req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resCh := make(chan BackupRes, len(state.Groups))
-	for _, gid := range groups {
-		br := proto.Clone(req).(*pb.BackupRequest)
-		br.GroupId = gid
-		br.Predicates = predMap[gid]
-		go func(req *pb.BackupRequest) {
-			res, err := BackupGroup(ctx, req)
-			resCh <- BackupRes{res: res, err: err}
-		}(br)
-	}
-
 	var dropOperations []*pb.DropOperation
-	for range groups {
-		if backupRes := <-resCh; backupRes.err != nil {
-			glog.Errorf("Error received during backup: %v", backupRes.err)
-			return backupRes.err
-		} else {
-			dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
+	{ // This is the code which sends out Backup requests and waits for them to finish.
+		resCh := make(chan BackupRes, len(state.Groups))
+		for _, gid := range groups {
+			br := proto.Clone(req).(*pb.BackupRequest)
+			br.GroupId = gid
+			br.Predicates = predMap[gid]
+			go func(req *pb.BackupRequest) {
+				res, err := BackupGroup(ctx, req)
+				resCh <- BackupRes{res: res, err: err}
+			}(br)
+		}
+
+		for range groups {
+			if backupRes := <-resCh; backupRes.err != nil {
+				glog.Errorf("Error received during backup: %v", backupRes.err)
+				return backupRes.err
+			} else {
+				dropOperations = append(dropOperations, backupRes.res.GetDropOperations()...)
+			}
 		}
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	m := Manifest{ReadTs: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
-		DropOperations: dropOperations, Path: dir}
+	m := Manifest{
+		ReadTs:         req.ReadTs,
+		Groups:         predMap,
+		Version:        x.DgraphVersion,
+		DropOperations: dropOperations,
+		Path:           dir,
+		Compression:    "snappy",
+	}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)
@@ -231,6 +242,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
 
 	bp := NewBackupProcessor(nil, req)
+	defer bp.Close()
 	err = bp.CompleteBackup(ctx, &m)
 
 	if err != nil {

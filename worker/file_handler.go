@@ -31,7 +31,8 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp *os.File
+	fp         *os.File
+	numWritten int
 }
 
 // readManifest reads a manifest file at path using the handler.
@@ -180,13 +181,13 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 	var since uint64
 	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
-		if manifest.SinceTsDeprecated == 0 || len(manifest.Groups) == 0 {
+		if manifest.ValidReadTs() == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 
 		path := filepath.Join(uri.Path, manifests[i].Path)
 		for gid := range manifest.Groups {
-			file := filepath.Join(path, backupName(manifest.SinceTsDeprecated, gid))
+			file := filepath.Join(path, backupName(manifest.ValidReadTs(), gid))
 			fp, err := os.Open(file)
 			if err != nil {
 				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
@@ -198,8 +199,13 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
 			groupMaxUid, groupMaxNsId, err := fn(gid,
-				&loadBackupInput{r: fp, preds: predSet, dropOperations: manifest.DropOperations,
-					isOld: manifest.Version == 0})
+				&loadBackupInput{
+					r:              fp,
+					preds:          predSet,
+					dropOperations: manifest.DropOperations,
+					isOld:          manifest.Version == 0,
+					compression:    manifest.Compression,
+				})
 			if err != nil {
 				return LoadResult{Err: err}
 			}
@@ -235,7 +241,13 @@ func (h *fileHandler) Close() error {
 }
 
 func (h *fileHandler) Write(b []byte) (int, error) {
-	return h.fp.Write(b)
+	n, err := h.fp.Write(b)
+	h.numWritten += n
+	return n, err
+}
+
+func (h *fileHandler) BytesWritten() int {
+	return h.numWritten
 }
 
 // pathExist checks if a path (file or dir) is found at target.
