@@ -55,7 +55,6 @@ type Server struct {
 	Node *node
 	orc  *Oracle
 
-	cid         string
 	NumReplicas int
 	state       *pb.MembershipState
 	nextRaftId  uint64
