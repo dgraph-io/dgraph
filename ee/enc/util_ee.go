@@ -16,117 +16,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"io"
-	"io/ioutil"
 
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
-
-const (
-	encKeyFile = "encryption_key_file"
-)
-
-// RegisterFlags registers the required encryption flags.
-func RegisterFlags(flag *pflag.FlagSet) {
-	flag.String(encKeyFile, "",
-		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
-			"The key size determines the chosen AES cipher "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
-
-	// Register options for Vault stuff.
-	registerVaultFlags(flag)
-}
-
-type keyReader interface {
-	readKey() (x.SensitiveByteSlice, error)
-}
-
-// localKeyReader implements the keyReader interface. It reads the key from local files.
-type localKeyReader struct {
-	keyFile string
-}
-
-func (lkr *localKeyReader) readKey() (x.SensitiveByteSlice, error) {
-	if lkr == nil {
-		return nil, errors.Errorf("nil localKeyReader")
-	}
-	if lkr.keyFile == "" {
-		return nil, errors.Errorf("bad localKeyReader")
-	}
-	k, err := ioutil.ReadFile(lkr.keyFile)
-	if err != nil {
-		return nil, errors.Errorf("error reading file %v", err)
-	}
-	// len must be 16,24,32 bytes if given. All other lengths are invalid.
-	klen := len(k)
-	if klen != 16 && klen != 24 && klen != 32 {
-		return nil, errors.Errorf("invalid key length %d", klen)
-	}
-	return k, nil
-}
-
-// ReadKey obtains the key using the configured options.
-func ReadKey(cfg *viper.Viper) (x.SensitiveByteSlice, error) {
-	var (
-		kr  keyReader
-		err error
-	)
-	// Get the keyReader interface.
-	if kr, err = newKeyReader(cfg); err != nil {
-		return nil, err
-	}
-	var key x.SensitiveByteSlice
-	if kr != nil {
-		// Get the key using the interface method readKey().
-		if key, err = kr.readKey(); err != nil {
-			return nil, err
-		}
-	}
-	return key, nil
-}
-
-// newKeyReader returns a keyReader interface based on the configuration options.
-// Valid KeyReaders are:
-// 1. Local to read key from local filesystem. .
-// 2. Vault to read key from vault.
-// 3. Nil when encryption is turned off.
-func newKeyReader(cfg *viper.Viper) (keyReader, error) {
-	var keyReaders int
-	var keyReader keyReader
-	var err error
-
-	vaultFlag := z.NewSuperFlag(cfg.GetString("vault")).MergeAndCheckDefault(VaultDefaults)
-
-	keyFile := cfg.GetString(encKeyFile)
-	roleID := vaultFlag.GetString("role-id-file")
-	secretID := vaultFlag.GetString("secret-id-file")
-
-	if keyFile != "" {
-		keyReader = &localKeyReader{
-			keyFile: keyFile,
-		}
-		keyReaders++
-	}
-	if roleID != "" || secretID != "" {
-		keyReader, err = newVaultKeyReader(vaultFlag)
-		if err != nil {
-			return nil, err
-		}
-		keyReaders++
-	}
-	if keyReaders == 2 {
-		return nil, errors.Errorf("cannot have local and vault key readers. " +
-			"re-check the configuration")
-	}
-	return keyReader, nil
-}
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
 func GetWriter(key x.SensitiveByteSlice, w io.Writer) (io.Writer, error) {

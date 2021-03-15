@@ -857,10 +857,10 @@
     }
   dgquerysec: |-
     query {
-      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+      State1 as State1(func: uid(0x11)) @filter(type(State)) {
         uid
       }
-      State3 as addState(func: uid(0x13)) @filter(type(State)) {
+      State3 as State3(func: uid(0x13)) @filter(type(State)) {
         uid
       }
       var(func: uid(State1)) {
@@ -951,7 +951,7 @@
     }
   dgquerysec: |-
     query {
-      Book2 as addBook(func: uid(0x11)) @filter(type(Book)) {
+      Book2 as Book2(func: uid(0x11)) @filter(type(Book)) {
         uid
       }
     }
@@ -1000,7 +1000,7 @@
     }
   dgquerysec: |-
     query {
-      Book2 as addBook(func: uid(0x11)) @filter(type(Book)) {
+      Book2 as Book2(func: uid(0x11)) @filter(type(Book)) {
         uid
       }
     }
@@ -1058,7 +1058,7 @@
     }
   dgquerysec: |-
     query {
-      State1 as addState(func: uid(0x11)) @filter(type(State)) {
+      State1 as State1(func: uid(0x11)) @filter(type(State)) {
         uid
       }
       var(func: uid(State1)) {

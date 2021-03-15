@@ -21,14 +21,12 @@ import (
 
 	"github.com/dgraph-io/ristretto/z"
 
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-const (
-	FlagDefaults         = "dir=; encrypt-file=; compress=false; days=10; size=100;"
-	defaultAuditFilename = "dgraph_audit.log"
-)
+const defaultAuditFilename = "dgraph_audit.log"
 
 var auditEnabled uint32
 
@@ -62,12 +60,12 @@ type auditLogger struct {
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
-	if conf == "" {
+	if conf == "" || conf == worker.AuditDefaults {
 		return nil
 	}
-	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
 	out := auditFlag.GetString("output")
-	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
+	x.AssertTruef(out != "", "output flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{

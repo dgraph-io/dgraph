@@ -54,6 +54,7 @@ func init() {
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
+	flag.String("cloud", "", "addr: xxx; jwt: xxx")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
@@ -182,8 +183,18 @@ func run(conf *viper.Viper) {
 	// Do a sanity check on the passed credentials.
 	_ = z.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
-	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
-	defer closeFunc()
+	var dg *dgo.Dgraph
+	sf := z.NewSuperFlag(conf.GetString("cloud"))
+	if addr := sf.GetString("addr"); len(addr) > 0 {
+		conn, err := dgo.DialSlashEndpoint(addr, sf.GetString("jwt"))
+		x.Check(err)
+		dc := api.NewDgraphClient(conn)
+		dg = dgo.NewDgraphClient(dc)
+	} else {
+		dgTmp, closeFunc := x.GetDgraphClient(Increment.Conf, true)
+		defer closeFunc()
+		dg = dgTmp
+	}
 
 	for num > 0 {
 		txnStart := time.Now() // Start time of transaction

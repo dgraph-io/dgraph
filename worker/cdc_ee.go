@@ -32,7 +32,6 @@ import (
 )
 
 const (
-	defaultCDCConfig  = "file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; client_key="
 	defaultEventTopic = "dgraph-cdc"
 )
 
@@ -64,14 +63,14 @@ type CDC struct {
 }
 
 func newCDC() *CDC {
-	if Config.ChangeDataConf == "" {
+	if Config.ChangeDataConf == "" || Config.ChangeDataConf == CDCDefaults {
 		return nil
 	}
 	if x.WorkerConfig.LudicrousEnabled {
 		x.Fatalf("cdc is not supported in ludicrous mode")
 	}
 
-	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(defaultCDCConfig)
+	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(CDCDefaults)
 	sink, err := GetSink(cdcFlag)
 	x.Check(err)
 	cdc := &CDC{

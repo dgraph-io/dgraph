@@ -1,0 +1,4 @@
+extend type Product @key(fields: "id") {
+    id: String! @id @external
+    name: String!
+}

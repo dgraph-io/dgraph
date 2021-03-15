@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Tests in this file require a cluster running with the --mutations=<mode> option.
+// Tests in this file require a cluster running with the --limit "mutations=<mode>;" flag.
 
 func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 	return func(t *testing.T) {

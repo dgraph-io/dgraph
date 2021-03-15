@@ -464,7 +464,7 @@ func (mrw *AddRewriter) Rewrite(
 			// State1 as addState(func: uid(0x11)) @filter(type(State)) {
 			// 		uid
 			// }
-			upsertQuery = append(upsertQuery, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, idExistence[upsertVar])...)
+			upsertQuery = append(upsertQuery, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, upsertVar, idExistence[upsertVar])...)
 			// Add upsert condition to ensure that the upsert takes place only when the node
 			// exists and has proper auth permission.
 			// Example condition:  cond: "@if(gt(len(State1), 0))"
@@ -585,7 +585,7 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, "")
+	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
 	srcUID := MutationQueryVarUID
 
 	if setArg == nil && delArg == nil {
@@ -719,6 +719,18 @@ func (mrw *AddRewriter) FromMutationResult(
 			fragment.(map[string]interface{})["uid"].(string), "_:")
 		val, ok := assigned[node]
 		if !ok {
+			// node was not part of assigned map. It is likely going to be part of Updated UIDs map.
+			// Extract and add any updated uids. This is done for upsert With Add Mutation.
+			// We extract out the variable name, eg. Project1 from uid(Project1)
+			uidVar := frag[0].fragment.(map[string]interface{})["uid"].(string)
+			uidVar = strings.TrimPrefix(uidVar, "uid(")
+			uidVar = strings.TrimSuffix(uidVar, ")")
+			updated := extractMutated(result, uidVar)
+			updateUids, err := extractUidsFromMutated(updated)
+			if err != nil {
+				return nil, err
+			}
+			uids = append(uids, updateUids...)
 			continue
 		}
 		uid, err := strconv.ParseUint(val, 0, 64)
@@ -732,24 +744,9 @@ func (mrw *AddRewriter) FromMutationResult(
 		uids = append(uids, uid)
 	}
 
-	// Extract and add any updated uids. This is done for upsert With Add Mutation.
-	// In this case, it may happen that no new node is created, but there may still
-	// be some updated nodes. We get these nodes over here and add to uid list.
-	mutated := extractMutated(result, mutation.Name())
-	if len(mutated) > 0 {
-		// This is the case of a conditional upsert where we should get uids from mutated.
-		for _, id := range mutated {
-			uid, err := strconv.ParseUint(id, 0, 64)
-			if err != nil {
-				return nil, schema.GQLWrapf(err,
-					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-						"uint64", id)
-			}
-			uids = append(uids, uid)
-		}
-	}
-
 	// Find out if its an upsert with Add mutation.
+	// In this case, it may happen that no new node is created, but there may still
+	// be some updated nodes. We don't throw an error in this case.
 	upsert := false
 	upsertVal := mutation.ArgValue(schema.UpsertArgName)
 	if upsertVal != nil {
@@ -797,18 +794,9 @@ func (urw *UpdateRewriter) FromMutationResult(
 
 	mutated := extractMutated(result, mutation.Name())
 
-	var uids []uint64
-	if len(mutated) > 0 {
-		// This is the case of a conditional upsert where we should get uids from mutated.
-		for _, id := range mutated {
-			uid, err := strconv.ParseUint(id, 0, 64)
-			if err != nil {
-				return nil, schema.GQLWrapf(err,
-					"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-						"uint64", id)
-			}
-			uids = append(uids, uid)
-		}
+	uids, err := extractUidsFromMutated(mutated)
+	if err != nil {
+		return nil, err
 	}
 
 	customClaims, err := mutation.GetAuthMeta().ExtractCustomClaims(ctx)
@@ -838,8 +826,21 @@ func extractMutated(result map[string]interface{}, mutatedField string) []string
 			}
 		}
 	}
-
 	return mutated
+}
+
+func extractUidsFromMutated(mutated []string) ([]uint64, error) {
+	var ret []uint64
+	for _, id := range mutated {
+		uid, err := strconv.ParseUint(id, 0, 64)
+		if err != nil {
+			return ret, schema.GQLWrapf(err,
+				"received %s as an updated uid from Dgraph, but couldn't parse it as "+
+					"uint64", id)
+		}
+		ret = append(ret, uid)
+	}
+	return ret, nil
 }
 
 func addUpdateCondition(frags []*mutationFragment) {
@@ -890,11 +891,12 @@ func RewriteUpsertQueryFromMutation(
 	m schema.Mutation,
 	authRw *authRewriter,
 	mutationQueryVar string,
+	queryAttribute string,
 	nodeID string) []*gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := []*gql.GraphQuery{{
 		Var:  mutationQueryVar,
-		Attr: m.Name(),
+		Attr: queryAttribute,
 	}}
 
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
@@ -1021,7 +1023,7 @@ func (drw *deleteRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	dgQry := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, "")
+	dgQry := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
 	qry := dgQry[0]
 
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}

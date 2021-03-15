@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -478,7 +479,7 @@ func rollupKey(db *badger.DB) {
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 	x.Check(err)
 
-	alloc := z.NewAllocator(32 << 20)
+	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
 	kvs, err := pl.Rollup(alloc)
@@ -898,10 +899,7 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return
-	}
+	_, opt.key = ee.GetKeys(Debug.Conf)
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)
