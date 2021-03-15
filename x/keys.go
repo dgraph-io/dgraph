@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -118,6 +119,11 @@ func IsReverseAttr(attr string) bool {
 		return true
 	}
 	return false
+}
+
+func FormatNsAttr(attr string) string {
+	ns, attr := ParseNamespaceAttr(attr)
+	return strconv.FormatUint(ns, 10) + "-" + attr
 }
 
 func writeAttr(buf []byte, attr string) []byte {
