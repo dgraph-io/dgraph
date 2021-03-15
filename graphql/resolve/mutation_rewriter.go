@@ -328,16 +328,18 @@ func (urw *UpdateRewriter) RewriteQueries(
 	// Write existence queries for set
 	if setArg != nil {
 		obj := setArg.(map[string]interface{})
-		queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
-		if len(errs) > 0 {
-			var gqlErrors x.GqlErrorList
-			for _, err := range errs {
-				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+		if len(obj) != 0 {
+			queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
+			if len(errs) > 0 {
+				var gqlErrors x.GqlErrorList
+				for _, err := range errs {
+					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+				}
+				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+					"failed to rewrite mutation payload"))
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-				"failed to rewrite mutation payload"))
+			ret = append(ret, queries...)
 		}
-		ret = append(ret, queries...)
 	}
 
 	// Write existence queries for remove
@@ -604,6 +606,8 @@ func (urw *UpdateRewriter) Rewrite(
 	srcUID := MutationQueryVarUID
 	objDel, okDelArg := delArg.(map[string]interface{})
 	objSet, okSetArg := setArg.(map[string]interface{})
+	// if set and remove arguments in update patch are not present or they are empty
+	// then we return from here
 	if (setArg == nil || (len(objSet) == 0 && okSetArg)) && (delArg == nil || (len(objDel) == 0 && okDelArg)) {
 		return ret, nil
 	}
