@@ -302,7 +302,7 @@ func (l *LogWriter) open() error {
 func backupName(name string) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().Format(backupTimeFormat)
+	timestamp := time.Now().UTC().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 
@@ -407,7 +407,7 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 
 		_, e := prefixAndExt(fp)
 		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
-		ts, err := time.ParseInLocation(backupTimeFormat, tsString, time.Local)
+		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue
 		}
