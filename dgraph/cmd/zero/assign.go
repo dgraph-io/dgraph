@@ -85,6 +85,12 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		glog.Infof("Got lease request for Type: %v. Num: %+v\n", typ, num)
 	}
 
+	if typ == pb.Num_UID && num.Val > opts.uidLeaseLimit {
+		return &emptyAssignedIds,
+			errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
+				num.Val, opts.uidLeaseLimit)
+	}
+
 	s.leaseLock.Lock()
 	defer s.leaseLock.Unlock()
 

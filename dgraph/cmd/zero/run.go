@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -57,6 +58,7 @@ type options struct {
 	numReplicas       int
 	peer              string
 	w                 string
+	uidLeaseLimit     uint64
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
 	audit             *x.LoggerConf
@@ -98,6 +100,8 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	flag.Uint64("uid_lease_limit", math.MaxUint64,
+		"The maximum number of UIDs that can be leased in a single request.")
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").
@@ -225,6 +229,7 @@ func run() {
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
+		uidLeaseLimit:     Zero.Conf.GetUint64("uid_lease_limit"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
 		audit:             conf,
