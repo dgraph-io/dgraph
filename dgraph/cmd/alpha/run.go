@@ -201,8 +201,9 @@ they form a Raft group and provide synchronous replication.
 			"[allow, disallow, strict] The mutations mode to use.").
 		Flag("mutations-nquad",
 			"The maximum number of nquads that can be inserted in a mutation request.").
-		Flag("disallow-dropall",
-			"Set disallow-dropall to true to block drop-all operation.").
+		Flag("disallow-drop",
+			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
+				" allows dropping attributes and types.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -719,7 +720,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
-	x.Config.BlockDropAll = x.Config.Limit.GetBool("disallow-dropall")
+	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
