@@ -23,8 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/golang/glog"
@@ -68,7 +66,6 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		},
 		doAuth: NoAuthorize,
 	}
-	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
@@ -120,11 +117,10 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 				},
 				CommitNow: true,
 			},
-			doAuth: NoAuthorize,
+			doAuth: NeedAuthorize,
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		_, err := (&Server{}).doQuery(ctx, req)
 		return err
 
