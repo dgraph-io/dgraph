@@ -3315,3 +3315,4 @@ valid_schemas:
         shippingEstimate: Int @requires(fields: "price weight") @lambda
         reviews: [Review]
       }
+
