@@ -3926,7 +3926,7 @@ func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 		variables map[string]interface{}
 		expected  string
 	}{{
-		name: "update mutation without set, Remove",
+		name: "update mutation without set and Remove",
 		query: `mutation updateCountry($id: ID!){
             updateCountry(input: {filter: {id: [$id]}}) {
                 numUids
@@ -3946,7 +3946,7 @@ func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 	}, {
 		name: "update mutation with empty remove",
 		query: `mutation updateCountry($id: ID!){
-            updateCountry(input: {filter: {id: [$id]},remove:{}}) {
+            updateCountry(input: {filter: {id: [$id]}, remove:{} }) {
                 numUids
                 country {
                     id
@@ -3964,7 +3964,25 @@ func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 	}, {
 		name: "update mutation with empty set and remove",
 		query: `mutation updateCountry($id: ID!){
-            updateCountry(input: {filter: {id: [$id]},remove:{},set: {}}) {
+            updateCountry(input: {filter: {id: [$id]}, remove:{}, set: {} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, set:{} }) {
                 numUids
                 country {
                     id
