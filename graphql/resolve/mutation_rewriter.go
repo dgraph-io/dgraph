@@ -1382,12 +1382,24 @@ func rewriteObject(
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				// TODO: Add a function for parsing idVal. This is repeatitive
 				switch xid.Type().Name() {
-				case "Int":
-					val, _ := xidVal.(int64)
-					xidString = strconv.FormatInt(val, 10)
+				case "Int", "Int64":
+					switch xidVal.(type) {
+					case json.Number:
+						val, _ := xidVal.(json.Number).Int64()
+						xidString = strconv.FormatInt(val, 10)
+					default:
+						val, _ := xidVal.(int64)
+						xidString = strconv.FormatInt(val, 10)
+					}
 				case "Float":
-					val, _ := xidVal.(float64)
-					xidString = strconv.FormatFloat(val, 'f', -1, 64)
+					switch xidVal.(type) {
+					case json.Number:
+						val, _ := xidVal.(json.Number).Float64()
+						xidString = strconv.FormatFloat(val, 'f', -1, 64)
+					default:
+						val, _ := xidVal.(float64)
+						xidString = strconv.FormatFloat(val, 'f', -1, 64)
+					}
 				default:
 					xidString, _ = xidVal.(string)
 				}
@@ -1728,22 +1740,42 @@ func existenceQueries(
 		for _, xid := range xids {
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 				switch xid.Type().Name() {
-				case "Int":
-					val, ok := xidVal.(int64)
-					if !ok {
-						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
-						return nil, retErrors
+				case "Int", "Int64":
+					switch xidVal.(type) {
+					case json.Number:
+						val, err := xidVal.(json.Number).Int64()
+						if err != nil {
+							retErrors = append(retErrors, err)
+							return nil, retErrors
+						}
+						xidString = strconv.FormatInt(val, 10)
+					default:
+						val, ok := xidVal.(int64)
+						if !ok {
+							retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+								"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
+							return nil, retErrors
+						}
+						xidString = strconv.FormatInt(val, 10)
 					}
-					xidString = strconv.FormatInt(val, 10)
 				case "Float":
-					val, ok := xidVal.(float64)
-					if !ok {
-						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
-						return nil, retErrors
+					switch xidVal.(type) {
+					case json.Number:
+						val, err := xidVal.(json.Number).Float64()
+						if err != nil {
+							retErrors = append(retErrors, err)
+							return nil, retErrors
+						}
+						xidString = strconv.FormatFloat(val, 'f', -1, 64)
+					default:
+						val, ok := xidVal.(float64)
+						if !ok {
+							retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+								"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
+							return nil, retErrors
+						}
+						xidString = strconv.FormatFloat(val, 'f', -1, 64)
 					}
-					xidString = strconv.FormatFloat(val, 'f', -1, 64)
 				default:
 					xidString, ok = xidVal.(string)
 					if !ok {

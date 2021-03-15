@@ -4886,10 +4886,10 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addBook($bookId: Int64!){
           addBook(input:[
             {
-              bookId: 1234567890123
+              bookId: $bookId
               name: "Graphql"
               desc: "Graphql is the next big thing"
             }
@@ -4897,6 +4897,9 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
             numUids
           }
         }`,
+		Variables: map[string]interface{}{
+			"bookId": 1234567890123,
+		}
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
