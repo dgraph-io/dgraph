@@ -1927,7 +1927,7 @@
       cond: "@if(gt(len(x), 0))"
 
 -
-  name: "delete json shouldn't be generated for empty remove and set"
+  name: "set json shouldn't be generated for empty set"
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1943,7 +1943,7 @@
           "id": ["0x123"]
         },
         "set": {},
-        "remove": {}
+        "remove": {"name": "Alice"}
       }
     }
 
@@ -1954,37 +1954,8 @@
       }
     }
   dgmutations:
-    - setjson: |
-        { "uid": "uid(x)" }
-      cond: "@if(gt(len(x), 0))"
-
--
-  name: "delete json shouldn't be generated for empty filter, remove and set"
-  gqlmutation: |
-    mutation updateAuthor($patch: UpdateAuthorInput!) {
-      updateAuthor(input: $patch) {
-        author {
-          id
+    - deletejson: |
+        { "uid": "uid(x)",
+          "Author.name": "Alice"
         }
-      }
-    }
-  gqlvariables: |
-    {
-      "patch": {
-        "filter": {
-        },
-        "set": {},
-        "remove": {}
-      }
-    }
-
-  dgquerysec: |-
-    query {
-      x as updateAuthor(func: type(Author)) {
-        uid
-      }
-    }
-  dgmutations:
-    - setjson: |
-        { "uid": "uid(x)" }
       cond: "@if(gt(len(x), 0))"
