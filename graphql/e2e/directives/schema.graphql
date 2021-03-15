@@ -319,6 +319,9 @@ type Mission @key(fields: "id") {
 type Astronaut @key(fields: "id") @extends {
     id: ID! @external
     name: String @external
+    age: Int @external
+    isActive: Boolean
+    bio: String @requires(fields: "name age") @lambda
     missions: [Mission]
 }
 

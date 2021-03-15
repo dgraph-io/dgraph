@@ -73,6 +73,16 @@ type FieldHTTPConfig struct {
 	GraphqlBatchModeArgument string
 }
 
+// EntityRepresentations is the parsed form of the `representations` argument in `_entities` query
+type EntityRepresentations struct {
+	TypeDefn Type            // the type corresponding to __typename in the representations argument
+	KeyField FieldDefinition // the definition of the @key field
+	KeyVals  []interface{}   // the list of values corresponding to the key field
+	// a map of key field value to the input representation for that value. The keys in this map
+	// are the string formatted version of the key field value.
+	KeyValToRepresentation map[string]map[string]interface{}
+}
+
 // Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
@@ -140,6 +150,8 @@ type Field interface {
 	//  * seenField: used for skipping when the field has already been seen at the current level
 	SkipField(dgraphTypes []string, seenField map[string]bool) bool
 	Cascade() []string
+	// ApolloRequiredFields returns the fields names which were specified in @requires.
+	ApolloRequiredFields() []string
 	// CustomRequiredFields returns a map from DgraphAlias to the field definition of the fields
 	// which are required to resolve this custom field.
 	CustomRequiredFields() map[string]FieldDefinition
@@ -207,8 +219,9 @@ type Query interface {
 	QueryType() QueryType
 	DQLQuery() string
 	Rename(newName string)
-	KeyField(typeName string) (string, bool, error)
-	BuildType(typeName string) Type
+	// RepresentationsArg returns a parsed version of the `representations` argument for `_entities`
+	// query
+	RepresentationsArg() (*EntityRepresentations, error)
 	AuthFor(jwtVars map[string]interface{}) Query
 }
 
@@ -292,6 +305,9 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// requiresDirectives stores the mapping of typeName->fieldName->list of fields given in
+	// @requires. It is read-only.
+	requiresDirectives map[string]map[string][]string
 	// remoteResponse stores the mapping of typeName->fieldName->responseName which will be used in result
 	// completion step.
 	remoteResponse map[string]map[string]string
@@ -728,6 +744,36 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 	return customDirectives, lambdaDirectives
 }
 
+func requiresMappings(s *ast.Schema) map[string]map[string][]string {
+	requiresDirectives := make(map[string]map[string][]string)
+
+	for _, typ := range s.Types {
+		for _, f := range typ.Fields {
+			for i, dir := range f.Directives {
+				if dir.Name != apolloRequiresDirective {
+					continue
+				}
+				lastIndex := len(f.Directives) - 1
+				f.Directives[i] = f.Directives[lastIndex]
+				f.Directives = f.Directives[:lastIndex]
+
+				var fieldMap map[string][]string
+				if existingFieldMap, ok := requiresDirectives[typ.Name]; ok {
+					fieldMap = existingFieldMap
+				} else {
+					fieldMap = make(map[string][]string)
+				}
+
+				fieldMap[f.Name] = strings.Fields(dir.Arguments[0].Value.Raw)
+				requiresDirectives[typ.Name] = fieldMap
+
+				break
+			}
+		}
+	}
+	return requiresDirectives
+}
+
 func remoteResponseMapping(s *ast.Schema) map[string]map[string]string {
 	remoteResponse := make(map[string]map[string]string)
 	for _, typ := range s.Types {
@@ -816,7 +862,7 @@ func nonExternalAndKeyFields(defn *ast.Definition) ast.FieldList {
 }
 
 // externalAndNonKeyField returns true for those fields which have @external directive and
-// are not @key fields and are not an arugment to the @provides directive.
+// are not @key fields and are not an argument to the @provides directive.
 func externalAndNonKeyField(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	return hasExternal(fld) && !isKeyField(fld, defn) && !providesTypeMap[fld.Name]
 }
@@ -905,13 +951,14 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	remoteResponseDirs := remoteResponseMapping(s)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
-		schema:           s,
-		dgraphPredicate:  dgraphPredicate,
-		typeNameAst:      typeMappings(s),
-		customDirectives: customDirs,
-		lambdaDirectives: lambdaDirs,
-		remoteResponse:   remoteResponseDirs,
-		meta:             &metaInfo{}, // initialize with an empty metaInfo
+		schema:             s,
+		dgraphPredicate:    dgraphPredicate,
+		typeNameAst:        typeMappings(s),
+		customDirectives:   customDirs,
+		lambdaDirectives:   lambdaDirs,
+		requiresDirectives: requiresMappings(s),
+		remoteResponse:     remoteResponseDirs,
+		meta:               &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 	// Auth rules can't be effectively validated as part of the normal rules -
@@ -1174,6 +1221,10 @@ func toRequiredFieldDefs(requiredFieldNames map[string]bool, sibling *field) map
 	return res
 }
 
+func (f *field) ApolloRequiredFields() []string {
+	return f.op.inSchema.requiresDirectives[f.GetObjectName()][f.Name()]
+}
+
 func (f *field) CustomRequiredFields() map[string]FieldDefinition {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
@@ -1355,16 +1406,6 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 	}
 
 	return
-}
-
-func (q *query) BuildType(typeName string) Type {
-	t := &ast.Type{}
-	t.NamedType = typeName
-	return &astType{
-		typ:             t,
-		inSchema:        q.op.inSchema,
-		dgraphPredicate: q.op.inSchema.dgraphPredicate,
-	}
 }
 
 func (f *field) Type() Type {
@@ -1638,6 +1679,74 @@ func (q *query) GetAuthMeta() *authorization.AuthMeta {
 	return (*field)(q).GetAuthMeta()
 }
 
+func (q *query) RepresentationsArg() (*EntityRepresentations, error) {
+	representations, ok := q.ArgValue("representations").([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error parsing `representations` argument")
+	}
+	if len(representations) == 0 {
+		return nil, fmt.Errorf("expecting at least one item in `representations` argument")
+	}
+	representation, ok := representations[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error parsing %dth item in the `_representations` argument", 0)
+	}
+	typename, ok := representation[Typename].(string)
+	if !ok {
+		return nil, fmt.Errorf("unable to extract __typename from %dth item in the"+
+			" `_representations` argument", 0)
+	}
+	typ := q.op.inSchema.schema.Types[typename]
+	if typ == nil {
+		return nil, fmt.Errorf("type %s not found in the schema", typename)
+	}
+	keyDir := typ.Directives.ForName(apolloKeyDirective)
+	if keyDir == nil {
+		return nil, fmt.Errorf("type %s doesn't have a key Directive", typename)
+	}
+	keyFldName := keyDir.Arguments[0].Value.Raw
+
+	// initialize the struct to return
+	entityReprs := &EntityRepresentations{
+		TypeDefn: &astType{
+			typ:             &ast.Type{NamedType: typename},
+			inSchema:        q.op.inSchema,
+			dgraphPredicate: q.op.inSchema.dgraphPredicate,
+		},
+		KeyVals:                make([]interface{}, 0, len(representations)),
+		KeyValToRepresentation: make(map[string]map[string]interface{}),
+	}
+	entityReprs.KeyField = entityReprs.TypeDefn.Field(keyFldName)
+
+	// iterate over all the representations and parse
+	for i, rep := range representations {
+		representation, ok = rep.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("error parsing %dth item in the `_representations` argument", i)
+		}
+
+		typename, ok = representation[Typename].(string)
+		if !ok {
+			return nil, fmt.Errorf("unable to extract __typename from %dth item in the"+
+				" `_representations` argument", i)
+		}
+		if typename != entityReprs.TypeDefn.Name() {
+			return nil, fmt.Errorf("expected only one unique typename in `_representations`"+
+				" argument, got: [%s, %s]", entityReprs.TypeDefn.Name(), typename)
+		}
+
+		keyVal, ok := representation[keyFldName]
+		if !ok {
+			return nil, fmt.Errorf("unable to extract value for key field `%s` from %dth item in"+
+				" the `_representations` argument", keyFldName, i)
+		}
+		entityReprs.KeyVals = append(entityReprs.KeyVals, keyVal)
+		entityReprs.KeyValToRepresentation[fmt.Sprint(keyVal)] = representation
+	}
+
+	return entityReprs, nil
+}
+
 func (q *query) AuthFor(jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
 	return &query{
@@ -1703,6 +1812,10 @@ func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
+func (q *query) ApolloRequiredFields() []string {
+	return (*field)(q).ApolloRequiredFields()
+}
+
 func (q *query) CustomRequiredFields() map[string]FieldDefinition {
 	return (*field)(q).CustomRequiredFields()
 }
@@ -1753,20 +1866,6 @@ func (q *query) CustomHTTPConfig() (*FieldHTTPConfig, error) {
 
 func (q *query) EnumValues() []string {
 	return nil
-}
-
-func (q *query) KeyField(typeName string) (string, bool, error) {
-	typ := q.op.inSchema.schema.Types[typeName]
-	if typ == nil {
-		return "", false, fmt.Errorf("Type %s not found in the schema", typeName)
-	}
-	keyDir := typ.Directives.ForName(apolloKeyDirective)
-	if keyDir == nil {
-		return "", false, fmt.Errorf("Type %s  doesn't have a key Directive", typeName)
-	}
-	fldName := keyDir.Arguments[0].Value.Raw
-	fldType := typ.Fields.ForName(fldName).Type
-	return fldName, fldType.Name() == IDType, nil
 }
 
 func (m *mutation) ConstructedFor() Type {
@@ -1972,6 +2071,10 @@ func (m *mutation) SkipField(dgraphTypes []string, seenField map[string]bool) bo
 
 func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
+}
+
+func (m *mutation) ApolloRequiredFields() []string {
+	return (*field)(m).ApolloRequiredFields()
 }
 
 func (m *mutation) CustomRequiredFields() map[string]FieldDefinition {

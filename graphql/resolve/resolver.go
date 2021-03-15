@@ -331,6 +331,11 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	if len(resolved.Data) == 0 {
 		return
 	}
+	query, ok := resolved.Field.(schema.Query)
+	if !ok {
+		// this function shouldn't be called for anything other than a query
+		return
+	}
 
 	var data map[string][]interface{}
 	err := schema.Unmarshal(resolved.Data, &data)
@@ -340,14 +345,12 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	}
 
 	// fetch the keyFieldValueList from the query arguments.
-	repr, err := parseRepresentationsArgument(resolved.Field.(schema.Query))
+	repr, err := query.RepresentationsArg()
 	if err != nil {
 		resolved.Err = schema.AppendGQLErrs(resolved.Err, err)
 		return
 	}
-
-	typeDefn := resolved.Field.(schema.Query).BuildType(repr.typeName)
-	keyFieldType := typeDefn.Field(repr.keyFieldName).Type().Name()
+	keyFieldType := repr.KeyField.Type().Name()
 
 	// store the index of the keyField Values present in the argument in a map.
 	// key in the map is of type interface because there are multiple types like String,
@@ -355,7 +358,7 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	// so the value of map is a list of integers containing all the indices for a key.
 	indexMap := make(map[interface{}][]int)
 	uniqueKeyList := make([]interface{}, 0)
-	for i, key := range repr.keyFieldValueList {
+	for i, key := range repr.KeyVals {
 		indexMap[key] = append(indexMap[key], i)
 	}
 
@@ -400,7 +403,7 @@ func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {
 	}
 
 	// Reorder the output response according to the order of the keys in the representations argument.
-	output := make([]interface{}, len(repr.keyFieldValueList))
+	output := make([]interface{}, len(repr.KeyVals))
 	for i, key := range uniqueKeyList {
 		for _, idx := range indexMap[key] {
 			output[idx] = entitiesQryResp[i]
