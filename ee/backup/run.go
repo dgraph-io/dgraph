@@ -287,7 +287,7 @@ func runLsbackupCmd() error {
 
 		be := backupEntry{
 			Path:      manifest.Path,
-			Since:     manifest.Since,
+			Since:     manifest.SinceTsDeprecated,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
 			Encrypted: manifest.Encrypted,

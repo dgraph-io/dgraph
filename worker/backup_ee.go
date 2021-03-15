@@ -148,8 +148,13 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		return err
 	}
 
-	req.SinceTs = latestManifest.Since
+	req.SinceTs = latestManifest.ReadTs
+	if latestManifest.ReadTs == 0 {
+		req.SinceTs = latestManifest.SinceTsDeprecated
+	}
+
 	if forceFull {
+		// To force a full backup we'll set the sinceTs to zero.
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {
@@ -212,7 +217,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	m := Manifest{Since: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
+	m := Manifest{ReadTs: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
 		DropOperations: dropOperations, Path: dir}
 	if req.SinceTs == 0 {
 		m.Type = "full"

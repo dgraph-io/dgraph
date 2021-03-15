@@ -13,7 +13,6 @@
 package worker
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -56,6 +55,7 @@ type threadLocal struct {
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
 	itr   *badger.Iterator
+	buf   *z.Buffer
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -68,8 +68,12 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
+		buf, err := z.NewBufferWith(32<<20, 32<<30, z.UseCalloc, "Codec.DecodeToBuffer")
+		x.Check(err)
+		buf.AutoMmapAfter(1 << 30)
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
+			buf:     buf,
 		}
 		if bp.txn != nil {
 			iopt := badger.DefaultIteratorOptions
@@ -94,13 +98,15 @@ type LoadResult struct {
 }
 
 func (pr *BackupProcessor) Close() {
-	if pr.txn == nil {
-		return
-	}
 	for _, th := range pr.threads {
-		th.itr.Close()
+		if pr.txn != nil {
+			th.itr.Close()
+		}
+		th.buf.Release()
 	}
-	pr.txn.Discard()
+	if pr.txn != nil {
+		pr.txn.Discard()
+	}
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
@@ -137,11 +143,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	var maxVersion uint64
 
-	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
+	gzWriter, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
 		return &response, err
 	}
-	gzWriter := gzip.NewWriter(newhandler)
+	// gzWriter := gzip.NewWriter(newhandler)
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
@@ -280,10 +286,10 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
-	if err = gzWriter.Close(); err != nil {
-		glog.Errorf("While closing gzipped writer: %v", err)
-		return &response, err
-	}
+	// if err = gzWriter.Close(); err != nil {
+	// 	glog.Errorf("While closing gzipped writer: %v", err)
+	// 	return &response, err
+	// }
 
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
@@ -330,7 +336,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
 	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
-		m.Since, m.Groups, m.Encrypted)
+		m.SinceTsDeprecated, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
@@ -356,7 +362,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		}
 
 		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
-		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc, tl.buf)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while rolling up list")
 		}

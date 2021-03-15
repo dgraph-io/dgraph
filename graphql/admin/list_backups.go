@@ -107,7 +107,7 @@ func convertManifests(manifests []*worker.Manifest) []*manifest {
 	for i, m := range manifests {
 		res[i] = &manifest{
 			Type:      m.Type,
-			Since:     m.Since,
+			Since:     m.SinceTsDeprecated,
 			BackupId:  m.BackupId,
 			BackupNum: m.BackupNum,
 			Path:      m.Path,

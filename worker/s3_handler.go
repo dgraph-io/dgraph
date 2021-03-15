@@ -218,13 +218,13 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 	// otherwise this is a failure and the user must remedy.
 	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.SinceTsDeprecated == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 
 		path := manifests[i].Path
 		for gid := range manifest.Groups {
-			object := filepath.Join(path, backupName(manifest.Since, gid))
+			object := filepath.Join(path, backupName(manifest.SinceTsDeprecated, gid))
 			reader, err := h.mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return LoadResult{Err: errors.Wrapf(err, "Failed to get %q", object)}
@@ -257,7 +257,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 				maxNsId = groupMaxNsId
 			}
 		}
-		since = manifest.Since
+		since = manifest.SinceTsDeprecated
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}

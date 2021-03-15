@@ -180,13 +180,13 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 	var since uint64
 	var maxUid, maxNsId uint64
 	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.SinceTsDeprecated == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
 
 		path := filepath.Join(uri.Path, manifests[i].Path)
 		for gid := range manifest.Groups {
-			file := filepath.Join(path, backupName(manifest.Since, gid))
+			file := filepath.Join(path, backupName(manifest.SinceTsDeprecated, gid))
 			fp, err := os.Open(file)
 			if err != nil {
 				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
@@ -206,7 +206,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			maxUid = x.Max(maxUid, groupMaxUid)
 			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
-		since = manifest.Since
+		since = manifest.SinceTsDeprecated
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
