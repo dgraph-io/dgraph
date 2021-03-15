@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -89,7 +89,7 @@ func NewAlpha(ms *pb.MembershipState) *Telemetry {
 
 // Post reports the Telemetry to the stats server.
 func (t *Telemetry) Post() error {
-	t.EEFeaturesList = ee.GetEEFeaturesList()
+	t.EEFeaturesList = worker.GetEEFeaturesList()
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
