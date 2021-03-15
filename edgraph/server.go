@@ -376,6 +376,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-all because it is not permitted.")
+			return empty, errors.New("Drop all operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
 				" galaxy")
@@ -405,6 +409,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-data because it is not permitted.")
+			return empty, errors.New("Drop data operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
 				" galaxy")
@@ -1036,7 +1044,16 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates.
+		// For galaxy namespace, we don't want to filter out the predicates. We only format the
+		// namespace to human readable form.
+		for _, group := range ms.Groups {
+			tablets := make(map[string]*pb.Tablet)
+			for tabletName, tablet := range group.Tablets {
+				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
+				tablets[x.FormatNsAttr(tabletName)] = tablet
+			}
+			group.Tablets = tablets
+		}
 		return nil
 	}
 	for _, group := range ms.GetGroups() {

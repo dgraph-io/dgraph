@@ -59,7 +59,7 @@ type auditLogger struct {
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
-	if conf == "" {
+	if conf == "" || conf == worker.AuditDefaults {
 		return nil
 	}
 	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)

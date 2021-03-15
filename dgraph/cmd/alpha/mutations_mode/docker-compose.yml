@@ -1,5 +1,5 @@
 # Auto-generated with: [/home/mrjn/go/bin/compose -a3 -z3 --mem= --names=false -o=0 --expose_ports=false]
-# And manually modified to add --mutations flags in Alphas.
+# And manually modified to add --limit "mutations=<mode>;" flags in Alphas.
 #
 version: "3.5"
 services:
@@ -17,8 +17,9 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080
-      --logtostderr -v=2 --mutations=disallow
+      --logtostderr -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --limit "mutations=disallow;"
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
@@ -33,8 +34,9 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080
-      --logtostderr -v=2 --mutations=strict 
+      --logtostderr -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --limit "mutations=strict;"
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
@@ -49,8 +51,9 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080
-      --logtostderr -v=2 --mutations=strict
+      --logtostderr -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --limit "mutations=strict;"
   zero1:
     image: dgraph/dgraph:latest
     working_dir: /data/zero1
@@ -64,7 +67,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --raft="idx=1" --my=zero1:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=1 --logtostderr
       -v=2 --bindall
   zero2:
     image: dgraph/dgraph:latest
@@ -81,7 +84,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --raft="idx=2" --my=zero2:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero --raft "idx=2;" --my=zero2:5080 --replicas=1 --logtostderr
       -v=2 --peer=zero1:5080
   zero3:
     image: dgraph/dgraph:latest
@@ -98,6 +101,6 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero --raft="idx=3" --my=zero3:5080 --replicas=1 --logtostderr
+    command: /gobin/dgraph zero --raft "idx=3;" --my=zero3:5080 --replicas=1 --logtostderr
       -v=2 --peer=zero1:5080
 volumes: {}

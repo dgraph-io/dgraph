@@ -329,31 +329,35 @@ func (urw *UpdateRewriter) RewriteQueries(
 	// Write existence queries for set
 	if setArg != nil {
 		obj := setArg.(map[string]interface{})
-		queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
-		if len(errs) > 0 {
-			var gqlErrors x.GqlErrorList
-			for _, err := range errs {
-				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+		if len(obj) != 0 {
+			queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
+			if len(errs) > 0 {
+				var gqlErrors x.GqlErrorList
+				for _, err := range errs {
+					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+				}
+				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+					"failed to rewrite mutation payload"))
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-				"failed to rewrite mutation payload"))
+			ret = append(ret, queries...)
 		}
-		ret = append(ret, queries...)
 	}
 
 	// Write existence queries for remove
 	if delArg != nil {
 		obj := delArg.(map[string]interface{})
-		queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
-		if len(errs) > 0 {
-			var gqlErrors x.GqlErrorList
-			for _, err := range errs {
-				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+		if len(obj) != 0 {
+			queries, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
+			if len(errs) > 0 {
+				var gqlErrors x.GqlErrorList
+				for _, err := range errs {
+					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+				}
+				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+					"failed to rewrite mutation payload"))
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-				"failed to rewrite mutation payload"))
+			ret = append(ret, queries...)
 		}
-		ret = append(ret, queries...)
 	}
 	return ret, retErrors
 }
@@ -601,46 +605,50 @@ func (urw *UpdateRewriter) Rewrite(
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
 	srcUID := MutationQueryVarUID
-
-	if setArg == nil && delArg == nil {
+	objDel, okDelArg := delArg.(map[string]interface{})
+	objSet, okSetArg := setArg.(map[string]interface{})
+	// if set and remove arguments in update patch are not present or they are empty
+	// then we return from here
+	if (setArg == nil || (len(objSet) == 0 && okSetArg)) && (delArg == nil || (len(objDel) == 0 && okDelArg)) {
 		return ret, nil
 	}
 
 	if setArg != nil {
-		obj := setArg.(map[string]interface{})
-		fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithSet)
-		if len(errs) > 0 {
-			var gqlErrors x.GqlErrorList
-			for _, err := range errs {
-				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+		if len(objSet) != 0 {
+			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objSet, xidMetadata, idExistence, UpdateWithSet)
+			if len(errs) > 0 {
+				var gqlErrors x.GqlErrorList
+				for _, err := range errs {
+					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+				}
+				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+					"failed to rewrite mutation payload"))
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-				"failed to rewrite mutation payload"))
-		}
-		if fragment != nil {
-			setFrag = append(setFrag, fragment)
-			urw.setFrags = append(urw.setFrags, fragment)
+			if fragment != nil {
+				setFrag = append(setFrag, fragment)
+				urw.setFrags = append(urw.setFrags, fragment)
+			}
 		}
 	}
 
 	if delArg != nil {
-		obj := delArg.(map[string]interface{})
-		// Set additional deletes to false
-		fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, obj, xidMetadata, idExistence, UpdateWithRemove)
-		if len(errs) > 0 {
-			var gqlErrors x.GqlErrorList
-			for _, err := range errs {
-				gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+		if len(objDel) != 0 {
+			// Set additional deletes to false
+			fragment, _, errs := rewriteObject(ctx, mutatedType, nil, srcUID, varGen, objDel, xidMetadata, idExistence, UpdateWithRemove)
+			if len(errs) > 0 {
+				var gqlErrors x.GqlErrorList
+				for _, err := range errs {
+					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+				}
+				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+					"failed to rewrite mutation payload"))
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-				"failed to rewrite mutation payload"))
-		}
-		if fragment != nil {
-			delFrag = append(delFrag, fragment)
-			urw.delFrags = append(urw.delFrags, fragment)
+			if fragment != nil {
+				delFrag = append(delFrag, fragment)
+				urw.delFrags = append(urw.delFrags, fragment)
+			}
 		}
 	}
-
 	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
 		queries := upsertQuery
@@ -669,22 +677,24 @@ func (urw *UpdateRewriter) Rewrite(
 		}
 
 		if delArg != nil {
-			addUpdateCondition(delFrag)
-			var errDel error
-			mutDel, errDel = mutationsFromFragments(
-				delFrag,
-				func(frag *mutationFragment) ([]byte, error) {
-					return nil, nil
-				},
-				func(frag *mutationFragment) ([]byte, error) {
-					return json.Marshal(frag.fragment)
-				})
+			if len(objDel) != 0 {
+				addUpdateCondition(delFrag)
+				var errDel error
+				mutDel, errDel = mutationsFromFragments(
+					delFrag,
+					func(frag *mutationFragment) ([]byte, error) {
+						return nil, nil
+					},
+					func(frag *mutationFragment) ([]byte, error) {
+						return json.Marshal(frag.fragment)
+					})
 
-			retErrors = schema.AppendGQLErrs(retErrors, errDel)
+				retErrors = schema.AppendGQLErrs(retErrors, errDel)
 
-			q2 := queryFromFragments(delFrag)
-			if q2 != nil {
-				queries = append(queries, q2.Children...)
+				q2 := queryFromFragments(delFrag)
+				if q2 != nil {
+					queries = append(queries, q2.Children...)
+				}
 			}
 		}
 

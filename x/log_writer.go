@@ -19,6 +19,8 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -39,6 +41,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
+	VerificationText = "Hello World"
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -181,6 +184,19 @@ func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	return allocate, nil
 }
 
+func decrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, iv[:])
+	stream.XORKeyStream(src, src)
+	return src, nil
+}
+
 func (l *LogWriter) rotate() error {
 	if l == nil {
 		return nil
@@ -230,7 +246,11 @@ func (l *LogWriter) open() error {
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
-			if _, err = l.writer.Write(l.baseIv[:]); err != nil {
+			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
+			if err != nil {
+				return err
+			}
+			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
 				return err
 			}
 		}
@@ -257,6 +277,17 @@ func (l *LogWriter) open() error {
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
 		if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
+			_ = f.Close()
+			return openNew()
+		}
+		text := make([]byte, 11)
+		if _, err := f.ReadAt(text, 16); err != nil {
+			_ = f.Close()
+			return openNew()
+		}
+		if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil ||
+			string(t) != VerificationText {
+			// different encryption key. Better to open new file here
 			_ = f.Close()
 			return openNew()
 		}

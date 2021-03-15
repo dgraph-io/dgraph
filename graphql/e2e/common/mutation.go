@@ -3918,11 +3918,16 @@ func mutationsWithAlias(t *testing.T) {
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
 }
 
-func updateMutationWithoutSetRemove(t *testing.T) {
+func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 	country := addCountry(t, postExecutor)
-
-	updateCountryParams := &GraphQLParams{
-		Query: `mutation updateCountry($id: ID!){
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{{
+		name: "update mutation without set and Remove",
+		query: `mutation updateCountry($id: ID!){
             updateCountry(input: {filter: {id: [$id]}}) {
                 numUids
                 country {
@@ -3931,19 +3936,82 @@ func updateMutationWithoutSetRemove(t *testing.T) {
                 }
             }
         }`,
-		Variables: map[string]interface{}{"id": country.ID},
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set and remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{}, set: {} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, set:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	},
 	}
-	gqlResponse := updateCountryParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	require.JSONEq(t, `{
-        "updateCountry": {
-            "numUids": 0,
-            "country": []
-        }
-    }`, string(gqlResponse.Data))
-
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
 	// cleanup
+	// expectedNumUids:1 will ensures that no node has been deleted because of remove {}
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
 
