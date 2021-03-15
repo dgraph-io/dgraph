@@ -302,7 +302,7 @@ func (l *LogWriter) open() error {
 func backupName(name string) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().Format(backupTimeFormat)
+	timestamp := time.Now().UTC().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 
@@ -341,7 +341,7 @@ func (l *LogWriter) manageOldLogs() {
 		return
 	}
 
-	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxSize)
+	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxAge)
 	if err != nil {
 		return
 	}
@@ -373,6 +373,8 @@ func (l *LogWriter) manageOldLogs() {
 	}
 }
 
+// prefixAndExt extracts the filename and extension from a filepath.
+// eg. prefixAndExt("/home/foo/file.ext") would return ("file", ".ext").
 func prefixAndExt(file string) (prefix, ext string) {
 	filename := filepath.Base(file)
 	ext = filepath.Ext(filename)
@@ -393,8 +395,8 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	toRemove := make([]string, 0)
 	toKeep := make([]string, 0)
 
-	diff := time.Duration(int64(24*time.Hour) * int64(maxAge))
-	cutoff := time.Now().Add(-1 * diff)
+	diff := 24 * time.Hour * time.Duration(maxAge)
+	cutoff := time.Now().Add(-diff)
 
 	for _, f := range files {
 		if f.IsDir() || // f is directory
@@ -404,7 +406,8 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 		}
 
 		_, e := prefixAndExt(fp)
-		ts, err := time.Parse(backupTimeFormat, f.Name()[len(defPrefix):len(f.Name())-len(e)])
+		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
+		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue
 		}

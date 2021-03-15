@@ -2572,13 +2572,16 @@ func TestCustomDQL(t *testing.T) {
 	common.SafelyDropAll(t)
 
 	schema := `
-	type Tweets {
+	interface Node {
+		id: ID!
+	}
+	type Tweets implements Node {
 		id: ID!
 		text: String! @search(by: [fulltext, exact])
 		user: User
 		timestamp: DateTime! @search
 	}
-	type User {
+	type User implements Node {
 		screen_name: String! @id
 		followers: Int @search
 		tweets: [Tweets] @hasInverse(field: user)
@@ -2596,6 +2599,17 @@ func TestCustomDQL(t *testing.T) {
 	}
 
 	type Query {
+	  queryNodeR: [Node] @custom(dql: """
+		query {
+			queryNodeR(func: type(Node), orderasc: User.screen_name) @filter(eq(Tweets.text, "Hello DQL!") OR eq(User.screen_name, "abhimanyu")) {
+				dgraph.type
+				id: uid
+				text: Tweets.text
+				screen_name: User.screen_name
+			}
+		}
+	  """)
+
 	  getFirstUserByFollowerCount(count: Int!): User @custom(dql: """
 		query getFirstUserByFollowerCount($count: int) {
 			getFirstUserByFollowerCount(func: eq(User.followers, $count),orderdesc: User.screen_name, first: 1) {
@@ -2708,6 +2722,11 @@ func TestCustomDQL(t *testing.T) {
 	params = &common.GraphQLParams{
 		Query: `
 		query ($count: Int!) {
+		  queryNodeR {
+			__typename
+			... on User { screen_name }
+			... on Tweets { text }
+		  }
 		  queryWithVar: getFirstUserByFollowerCount(count: $count) {
 			screen_name
 			followers
@@ -2740,6 +2759,10 @@ func TestCustomDQL(t *testing.T) {
 	common.RequireNoGQLErrors(t, result)
 
 	require.JSONEq(t, `{
+		"queryNodeR": [
+			{"__typename": "User", "screen_name": "abhimanyu"},
+			{"__typename": "Tweets", "text": "Hello DQL!"}
+		],
 		"queryWithVar": {
 			"screen_name": "abhimanyu",
 			"followers": 5

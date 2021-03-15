@@ -72,6 +72,7 @@ func Unmarshal(data []byte, v interface{}) error {
 // At present, it is only used for building custom results by:
 //  * Admin Server
 //  * @custom(http: {...}) query/mutation
+//  * @custom(dql: ...) queries
 //
 // fields are all the fields from this bracketed level in the GraphQL  query, e.g:
 //  {
@@ -117,12 +118,18 @@ func CompleteObject(
 	seenField := make(map[string]bool)
 
 	x.Check2(buf.WriteRune('{'))
-	// @custom(http: {...}) query/mutation results may return __typename in response for abstract
-	// fields, lets use that information if present.
-	typename, ok := res[Typename].(string)
 	var dgraphTypes []string
-	if ok && len(typename) > 0 {
+	if typename, ok := res[Typename].(string); ok && len(typename) > 0 {
+		// @custom(http: {...}) query/mutation results may return __typename in response for
+		// abstract fields, lets use that information if present.
 		dgraphTypes = []string{typename}
+	} else if dgTypeVals, ok := res["dgraph.type"].([]interface{}); ok {
+		// @custom(dql: ...) query results may return dgraph.type in response for abstract fields
+		for _, val := range dgTypeVals {
+			if typename, ok = val.(string); ok {
+				dgraphTypes = append(dgraphTypes, typename)
+			}
+		}
 	}
 
 	for _, f := range fields {

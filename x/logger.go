@@ -86,7 +86,7 @@ func (l *Logger) AuditI(msg string, args ...interface{}) {
 	if l == nil {
 		return
 	}
-	flds := make([]zap.Field, 0)
+	flds := make([]zap.Field, 0, len(args))
 	for i := 0; i < len(args); i = i + 2 {
 		flds = append(flds, zap.Any(args[i].(string), args[i+1]))
 	}
@@ -97,7 +97,7 @@ func (l *Logger) AuditE(msg string, args ...interface{}) {
 	if l == nil {
 		return
 	}
-	flds := make([]zap.Field, 0)
+	flds := make([]zap.Field, 0, len(args))
 	for i := 0; i < len(args); i = i + 2 {
 		flds = append(flds, zap.Any(args[i].(string), args[i+1]))
 	}
