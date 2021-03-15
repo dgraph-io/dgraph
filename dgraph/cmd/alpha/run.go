@@ -589,6 +589,17 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
+	// Audit needs groupId and nodeId to initialize audit files
+	// Therefore we wait for the cluster initialization to be done.
+	for {
+		if atomic.LoadUint32(&initDone) < 2 {
+			continue
+		}
+		// Audit is enterprise feature.
+		x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
+		break
+	}
+	glog.Info("waiting for the server to get closed aman")
 	x.ServerCloser.Wait()
 }
 
@@ -739,9 +750,6 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
-
-	// Audit is enterprise feature.
-	x.Check(audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled))
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.
