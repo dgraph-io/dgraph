@@ -50,7 +50,7 @@ const (
 	Http             = "Http"
 )
 
-var auditor *auditLogger = &auditLogger{}
+var auditor = &auditLogger{}
 
 type auditLogger struct {
 	log    *x.Logger
