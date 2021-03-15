@@ -1391,6 +1391,17 @@ func rewriteObject(
 						val, _ := xidVal.(int64)
 						xidString = strconv.FormatInt(val, 10)
 					}
+				case "Int64":
+					switch xidVal.(type) {
+					case json.Number:
+						val, _ := xidVal.(json.Number).Int64()
+						xidString = strconv.FormatInt(val, 10)
+					case int64:
+						val, _ := xidVal.(int64)
+						xidString = strconv.FormatInt(val, 10)
+					default:
+						xidString, _ = xidVal.(string)
+					}
 				case "Float":
 					switch xidVal.(type) {
 					case json.Number:
@@ -1758,6 +1769,31 @@ func existenceQueries(
 						}
 						xidString = strconv.FormatInt(val, 10)
 					}
+				case "Int64":
+					switch xidVal.(type) {
+					case json.Number:
+						val, err := xidVal.(json.Number).Int64()
+						if err != nil {
+							retErrors = append(retErrors, err)
+							return nil, retErrors
+						}
+						xidString = strconv.FormatInt(val, 10)
+					case int64:
+						val, ok := xidVal.(int64)
+						if !ok {
+							retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+								"a Int64 but data type in schema is Int64", xid.Name(), xid.Type().Name())))
+							return nil, retErrors
+						}
+						xidString = strconv.FormatInt(val, 10)
+					default:
+						xidString, ok = xidVal.(string)
+						if !ok {
+							retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+								"a Int64", xid.Name(), xid.Type().Name())))
+							return nil, retErrors
+						}
+					}
 				case "Float":
 					switch xidVal.(type) {
 					case json.Number:
@@ -1780,7 +1816,7 @@ func existenceQueries(
 					xidString, ok = xidVal.(string)
 					if !ok {
 						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a String or Int64", xid.Name(), xid.Type().Name())))
+							"a String", xid.Name(), xid.Type().Name())))
 						return nil, retErrors
 					}
 				}
