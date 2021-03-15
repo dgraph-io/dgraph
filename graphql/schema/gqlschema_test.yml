@@ -2660,6 +2660,7 @@ invalid_schemas:
     errlist: [
           { "message": "Field I3.name can only be defined once.", "locations": [ { "line": 2, "column": 5 } ] },
           ]
+
   - name: "@external directive can only be used on fields of Type Extension"
     input: |
       type Product @key(fields: "id") {
@@ -2669,6 +2670,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product: Field id: @external directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 2, "column": 14 } ] },
       ]
+
   - name: "@key directive defined more than once"
     input: |
       type Product @key(fields: "id") @key(fields: "name") {
@@ -2679,6 +2681,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product; @key directive should not be defined more than once.", "locations": [ { "line": 1, "column": 34 } ] },
       ]
+
   - name: "Argument inside @key directive uses field not defined in the type"
     input: |
       type Product @key(fields: "username") {
@@ -2689,6 +2692,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product; @key directive uses a field username which is not defined inside the type.", "locations": [ { "line": 1, "column":19 } ] },
       ]
+
   - name: "Argument inside @key directive must have ID field or field with @id directive"
     input: |
       extend type Product @key(fields: "name") {
@@ -2699,6 +2703,7 @@ invalid_schemas:
     errlist: [
         { "message": "Type Product: Field name: used inside @key directive should be of type ID or have @id directive.", "locations": [ { "line": 1, "column": 26 } ] },
       ]
+
   - name: "@extends directive without @key directive"
     input: |
       type Product  @extends{
@@ -2714,6 +2719,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product; Type Extension cannot be defined without @key directive", "locations": [ { "line": 13, "column": 12} ] },
     ]
+
   - name: "@remote directive with @key"
     input: |
       type Product  @remote @key(fields: "id"){
@@ -2729,6 +2735,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product; @remote directive cannot be defined with @key directive", "locations": [ { "line": 174, "column": 12} ] },
     ]
+
   - name: "directives defined on @external fields that are not @key."
     input: |
       extend type Product @key(fields: "id"){
@@ -2744,6 +2751,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product: Field name: @search directive can not be defined on @external fields that are not @key.", "locations": [ { "line": 3, "column": 18} ] },
     ]
+
   - name: "@requires directive defined on type definitions"
     input: |
       type Product @key(fields: "id"){
@@ -2758,6 +2766,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product: Field reviews: @requires directive can only be defined on fields in type extensions. i.e., the type must have `@extends` or use `extend` keyword.", "locations": [ { "line": 4, "column": 23} ] }
     ]
+
   - name: "argument inside @requires directive is not an @external field."
     input: |
       extend type Product @key(fields: "id"){
@@ -2772,9 +2781,10 @@ invalid_schemas:
     errlist: [
       {"message": "Type Product; Field name must be @external.", "locations": [ { "line": 4, "column": 23} ] }
     ]
+
   - name: "@provides directive used on field with type that does not have a @key."
     input: |
-      type Product @key(fields: "id"){
+      type Product @key(fields: "id") {
         id: ID!
         name: String!
         reviews: [Reviews] @provides(fields: "name")
@@ -2787,7 +2797,19 @@ invalid_schemas:
       {"message": "Type Product; Field reviews does not return a type that has a @key.", "locations": [ { "line": 4, "column": 23} ] }
     ]
 
-    
+  - name: "@provides directive uses a field that is not defined in the extended type"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+      }
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        reviews: [Review]
+      }
+    errlist: [
+      {"message": "Type Review; Field author: @provides field username doesn't exist for type User.", "locations": [ { "line": 3, "column": 17} ] }
+    ]
 
   - name: "@withSubscription on custom http query"
     input: |
@@ -3270,3 +3292,27 @@ valid_schemas:
         id: ID!
         name: String
       }
+
+  - name: "A valid federation schema"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+        product: Product
+      }
+
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        username: String! @external
+        reviews: [Review]
+      }
+
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @lambda
+        reviews: [Review]
+      }
+

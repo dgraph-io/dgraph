@@ -295,7 +295,12 @@ directive @generate(
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
 `
-
+	// see: https://www.apollographql.com/docs/federation/gateway/#custom-directive-support
+	// So, we should only add type system directives here.
+	// Even with type system directives, there is a bug in Apollo Federation due to which the
+	// directives having non-scalar args cause issues in schema stitching in gateway.
+	// See: https://github.com/apollographql/apollo-server/issues/3655
+	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
@@ -305,9 +310,7 @@ directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
-directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
-directive @cacheControl(maxAge: Int!) on QUERY
 `
 	filterInputs = `
 input IntFilter {

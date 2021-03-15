@@ -834,6 +834,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query id directive with float", idDirectiveWithFloat)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -913,6 +914,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
+	t.Run("lambda with apollo federation", lambdaWithApolloFederation)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -1179,6 +1181,10 @@ func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 		debug.PrintStack()
 		t.FailNow()
 	}
+}
+
+func (gqlRes *GraphQLResponse) RequireNoGQLErrors(t *testing.T) {
+	RequireNoGQLErrors(t, gqlRes)
 }
 
 func PopulateGraphQLData(client *dgo.Dgraph, data []byte) error {
