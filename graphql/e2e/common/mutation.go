@@ -4899,7 +4899,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
         }`,
 		Variables: map[string]interface{}{
 			"bookId": 1234567890123,
-		}
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
