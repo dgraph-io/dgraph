@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	input  = flag.String("input", "/Users/anand/demos/neo4jcsv/example.csv", "Please provide the input csv file.")
-	output = flag.String("output", "/Users/anand/demos/neo4jcsv/", "Where to place the output?")
+	input  = flag.String("input", "/demos/neo4jcsv/example.csv", "Please provide the input csv file.")
+	output = flag.String("output", "/demos/neo4jcsv/", "Where to place the output?")
 )
 
 var inputPath, outputPath string
@@ -31,14 +31,14 @@ func main() {
 	var inpDir, outputDir string
 
 	fmt.Println("CSV to convert: " + inputPath + " ?[y/n] ")
-	_,err:=fmt.Scanf("%s", &inpDir)
-	if err != nil{
+	_, err := fmt.Scanf("%s", &inpDir)
+	if err != nil {
 		log.Fatal("Error reading input path")
 	}
 
 	fmt.Println("Output directory wanted: " + outputPath + " ?[y/n] ")
-	_,err=fmt.Scanf("%s", &outputDir)
-	if err != nil{
+	_, err = fmt.Scanf("%s", &outputDir)
+	if err != nil {
 		log.Fatal("Error reading input path")
 	}
 	if inpDir != "y" || outputDir != "y" {
@@ -66,8 +66,8 @@ func processCSV(inputFile string, outputPath string, ts int64) {
 	var rdfLines bytes.Buffer
 
 	header := make(map[int]string)
-	var positionOfStart=-1
-	var startPositionOfProperty=-1
+	var positionOfStart = -1
+	var startPositionOfProperty = -1
 	count := 0
 
 	lineNumber := 0
@@ -82,10 +82,10 @@ func processCSV(inputFile string, outputPath string, ts int64) {
 			for position, fieldName := range line {
 				header[position] = fieldName
 
-				if fieldName == "_start"{
-					positionOfStart=position
-				}else if fieldName == "_type"{
-					startPositionOfProperty = position+1
+				if fieldName == "_start" {
+					positionOfStart = position
+				} else if fieldName == "_type" {
+					startPositionOfProperty = position + 1
 				}
 
 			}
@@ -99,55 +99,55 @@ func processCSV(inputFile string, outputPath string, ts int64) {
 				log.Fatal(err)
 			}
 			for _, line := range records {
-				linkStartNode:=""
-				linkEndNode:=""
-				linkName:=""
-				facets:= make(map[string] string)
-				for position:=0;position < len(line); position++{
+				linkStartNode := ""
+				linkEndNode := ""
+				linkName := ""
+				facets := make(map[string]string)
+				for position := 0; position < len(line); position++ {
 
-					if len(line[0])>0{
-						bn:=fmt.Sprintf("<_:k_%s>",line[0])
+					if len(line[0]) > 0 {
+						bn := fmt.Sprintf("<_:k_%s>", line[0])
 						if position < positionOfStart {
-							if position>0{
-								rdfLines.WriteString(fmt.Sprintf("%s <%s> \"%s\" .\n",bn,header[position],line[position]))
+							if position > 0 {
+								rdfLines.WriteString(fmt.Sprintf("%s <%s> \"%s\" .\n", bn, header[position], line[position]))
 							}
 						}
-					}else{
-						if position >= positionOfStart{
-							if header[position] == "_start"{
-								linkStartNode = fmt.Sprintf("<_:k_%s>",line[position])
-							} else if header[position] == "_end"{
-								linkEndNode = fmt.Sprintf("<_:k_%s>",line[position])
-							} else if header[position] == "_type"{
-								linkName = fmt.Sprintf("<%s>",line[position])
-							} else if position>=startPositionOfProperty{
+					} else {
+						if position >= positionOfStart {
+							if header[position] == "_start" {
+								linkStartNode = fmt.Sprintf("<_:k_%s>", line[position])
+							} else if header[position] == "_end" {
+								linkEndNode = fmt.Sprintf("<_:k_%s>", line[position])
+							} else if header[position] == "_type" {
+								linkName = fmt.Sprintf("<%s>", line[position])
+							} else if position >= startPositionOfProperty {
 								facets[header[position]] = line[position]
 							}
 						}
 					}
 				}
 				//write the link
-				if len(linkName) >0 {
-					facetLine:=""
+				if len(linkName) > 0 {
+					facetLine := ""
 					atleastOneFacetExists := false
-					for facetName,facetValue := range facets{
-						if len(facetValue) ==0{
+					for facetName, facetValue := range facets {
+						if len(facetValue) == 0 {
 							continue
-						}else{
+						} else {
 							//strip [ ], and assume only one value
-							facetValue=strings.Replace(facetValue,"[","",1)
-							facetValue=strings.Replace(facetValue,"]","",1)
+							facetValue = strings.Replace(facetValue, "[", "", 1)
+							facetValue = strings.Replace(facetValue, "]", "", 1)
 						}
-						if atleastOneFacetExists{
-							facetLine=fmt.Sprintf("%s, ", facetLine)
+						if atleastOneFacetExists {
+							facetLine = fmt.Sprintf("%s, ", facetLine)
 						}
-						facetLine=fmt.Sprintf("%s %s=%s",facetLine,facetName, facetValue)
-						atleastOneFacetExists=true
+						facetLine = fmt.Sprintf("%s %s=%s", facetLine, facetName, facetValue)
+						atleastOneFacetExists = true
 					}
-					if atleastOneFacetExists{
-						facetLine=fmt.Sprintf("( %s )", facetLine)
+					if atleastOneFacetExists {
+						facetLine = fmt.Sprintf("( %s )", facetLine)
 					}
-					rdfLines.WriteString(fmt.Sprintf("%s %s %s %s.\n", linkStartNode, linkName, linkEndNode,facetLine))
+					rdfLines.WriteString(fmt.Sprintf("%s %s %s %s.\n", linkStartNode, linkName, linkEndNode, facetLine))
 				}
 
 				count++
@@ -164,7 +164,6 @@ func processCSV(inputFile string, outputPath string, ts int64) {
 	err = file.Close()
 
 }
-
 
 func writeToFile(outputPath, filename, lines string) {
 
