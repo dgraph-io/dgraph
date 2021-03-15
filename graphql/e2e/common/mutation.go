@@ -4929,7 +4929,7 @@ func idDirectiveWithIntMutation(t *testing.T) {
 		  }
 		}`,
 		Variables: map[string]interface{}{
-			"chId": 1,
+			"chId": 2,
 		},
 	}
 
