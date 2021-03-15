@@ -2282,7 +2282,7 @@ func (fd *fieldDefinition) Name() string {
 }
 
 func (fd *fieldDefinition) DgraphAlias() string {
-	return fd.parentType.Name() + "." + fd.fieldDef.Name
+	return fd.parentType.Name() + "._." + fd.fieldDef.Name
 }
 
 func (fd *fieldDefinition) DgraphPredicate() string {

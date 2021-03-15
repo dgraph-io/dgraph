@@ -2609,8 +2609,9 @@
         Comment.author : Comment.author
         Comment.title : Comment.title
         Comment.ups : Comment.ups
-        Comment.id : uid
-        Comment.url : Comment.url
+        Comment._.author : Comment.author
+        Comment._.id : uid
+        Comment._.url : Comment.url
       }
     }
 
@@ -2619,6 +2620,7 @@
     query {
       getComment(id: "0x1") {
         content
+        author
         relatedUsers {
           name
         }
@@ -2628,8 +2630,9 @@
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
         Comment.author : Comment.author
-        Comment.id : uid
-        Comment.url : Comment.url
+        Comment._.author : Comment.author
+        Comment._.id : uid
+        Comment._.url : Comment.url
       }
     }
 - name: "Rewrite without custom fields deep"
@@ -2660,6 +2663,9 @@
           Comment.title : Comment.title
           Comment.ups : Comment.ups
           Comment.url : Comment.url
+          Comment._.author : Comment.author
+          Comment._.id : uid
+          Comment._.url : Comment.url
         }
       }
     }
@@ -2687,8 +2693,9 @@
           Comment.author : Comment.author
           Comment.title : Comment.title
           Comment.ups : Comment.ups
-          Comment.id : uid
-          Comment.url : Comment.url
+          Comment._.author : Comment.author
+          Comment._.id : uid
+          Comment._.url : Comment.url
         }
       }
     }
