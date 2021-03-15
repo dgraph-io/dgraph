@@ -339,6 +339,7 @@ func initExportBackup() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 
+	ExportBackup.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := ExportBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		`Sets the location of the backup. Both file URIs and s3 are supported.
@@ -348,7 +349,9 @@ func initExportBackup() {
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
 		"The format of the export output. Accepts a value of either rdf or json")
 	flag.BoolVar(&opt.fixCors, "fix-cors", false,
-		"If true, append the CORS at the end of GraphQL schema.")
+		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
+		It also deletes the deprecated types and predicated.
+		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
 	enc.RegisterFlags(flag)
 }
 

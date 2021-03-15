@@ -41,6 +41,7 @@ var (
 type versionComparisonResult uint8
 
 const (
+	acl       = "acl"
 	dryRun    = "dry-run"
 	alpha     = "alpha"
 	slashGrpc = "slash_grpc_endpoint"
@@ -152,6 +153,7 @@ func init() {
 	}
 	Upgrade.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := Upgrade.Cmd.Flags()
+	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
 	flag.Bool(dryRun, false, "dry-run the upgrade")
 	flag.StringP(alpha, "a", "127.0.0.1:9080",
 		"Comma separated list of Dgraph Alpha gRPC server address")
@@ -186,7 +188,11 @@ func run() {
 }
 
 func validateAndParseInput() (*commandInput, error) {
-	// TODO: Validate flags related to slash as well.
+	if !Upgrade.Conf.GetBool(acl) {
+		return nil, formatAsFlagParsingError(acl,
+			fmt.Errorf("we only support acl upgrade as of now"))
+	}
+
 	_, _, err := net.SplitHostPort(strings.TrimSpace(Upgrade.Conf.GetString(alpha)))
 	if err != nil {
 		return nil, formatAsFlagParsingError(alpha, err)
