@@ -4898,7 +4898,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
           }
         }`,
 		Variables: map[string]interface{}{
-			"bookId": 1234567890123,
+			"bookId": "1234567890123",
 		},
 	}
 
@@ -4920,14 +4920,17 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 
 func idDirectiveWithIntMutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addChapter($chId: Int!){
 		  addChapter(input:[{
-			chapterId: 2
+			chapterId: $chId
 			name: "Graphql and more"
 		  }]) {
 			numUids
 		  }
 		}`,
+		Variables: map[string]interface{}{
+			"chId": 1,
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
