@@ -193,7 +193,7 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 	predMap := make(map[uint32][]string)
 	for gid, group := range state.Groups {
 		groups = append(groups, gid)
-		preds := make([]string, len(group.Tablets))
+		preds := make([]string, 0, len(group.Tablets))
 		for pred := range group.Tablets {
 			preds = append(preds, pred)
 		}
@@ -260,6 +260,5 @@ func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCred
 		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
-	res := append([]*Manifest(nil), manifests...)
-	return res, nil
+	return manifests, nil
 }
