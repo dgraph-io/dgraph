@@ -2272,8 +2272,8 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 		case int64:
 			return strconv.FormatInt(xVal, 10), nil
 		default:
-			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-				"a Int but data type in schema is Int", xidName, typeName))
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Int but data type in schema is Int", xidName, typeName)
 		}
 	case "Int64":
 		switch xVal := xidVal.(type) {
@@ -2289,8 +2289,8 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 		case string:
 			return xVal, nil
 		default:
-			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-				"a Int64 but data type in schema is Int64", xidName, typeName))
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Int64 but data type in schema is Int64", xidName, typeName)
 		}
 	case "Float":
 		switch xVal := xidVal.(type) {
@@ -2303,19 +2303,19 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 		case float64:
 			return strconv.FormatFloat(xVal, 'f', -1, 64), nil
 		default:
-			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-				"a Float but data type in schema is Float", xidName, typeName))
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Float but data type in schema is Float", xidName, typeName)
 		}
 		// "ID" is given as input for the @extended type mutation.
 	case "String", "ID":
 		xidString, ok := xidVal.(string)
 		if !ok {
-			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-				"a String", xidName, typeName))
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a String", xidName, typeName)
 		}
 		return xidString, nil
 	default:
-		return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't"+
-			"allowed as Xid", xidName, typeName))
+		return "", fmt.Errorf("encountered an XID %s with %s that isn't"+
+			"allowed as Xid", xidName, typeName)
 	}
 }
