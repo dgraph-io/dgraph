@@ -2259,6 +2259,7 @@ func copyTypeMap(from, to map[string]schema.Type) {
 }
 
 func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
+	fmt.Println(typeName)
 	switch typeName {
 	case "Int":
 		switch xVal := xidVal.(type) {
@@ -2305,7 +2306,8 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
 				"a Float but data type in schema is Float", xidName, typeName))
 		}
-	case "String":
+		// "ID" is given as input for the @extended type mutation.
+	case "String", "ID":
 		xidString, ok := xidVal.(string)
 		if !ok {
 			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
