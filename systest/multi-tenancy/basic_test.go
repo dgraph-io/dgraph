@@ -369,11 +369,11 @@ func TestLiveLoadMulti(t *testing.T) {
 		{"name": "ns hola"}]}`
 		err = json.Unmarshal([]byte(expected), &o1)
 		if err != nil {
-			return fmt.Errorf("Error mashalling string 1 :: %s", err.Error())
+			return fmt.Errorf("error unmarshalling string 1 :: %s", err.Error())
 		}
 		err = json.Unmarshal([]byte(string(resp)), &o2)
 		if err != nil {
-			return fmt.Errorf("Error mashalling string 2 :: %s", err.Error())
+			return fmt.Errorf("error unmarshalling string 2 :: %s", err.Error())
 		}
 
 		if reflect.DeepEqual(o1, o2) {
