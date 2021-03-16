@@ -242,6 +242,8 @@ func runRestoreCmd() error {
 				return nil
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			// Offline restore does not have ACL enabled, hence attach Galaxy namespace.
+			ctx = x.AttachNamespaceOutgoing(ctx, x.GalaxyNamespace)
 			defer cancel()
 			if _, err = zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ}); err != nil {
 				fmt.Printf("Failed to assign %s %d in Zero: %v\n",

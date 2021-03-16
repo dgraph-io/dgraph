@@ -463,6 +463,28 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	return metadata.NewIncomingContext(ctx, md)
 }
 
+// AttachNamespaceOutgoing adds given namespace to the metadata of the outgoing context.
+func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
+	if !WorkerConfig.AclEnabled {
+		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
+	}
+	ns, err := ExtractJWTNamespace(ctx)
+	if err != nil {
+		return ctx, err
+	}
+	return AttachNamespaceOutgoing(ctx, ns), nil
+}
+
+func AttachNamespaceOutgoing(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	ns := strconv.FormatUint(namespace, 10)
+	md.Set("namespace", ns)
+	return metadata.NewOutgoingContext(ctx, md)
+}
+
 // AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
 func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
@@ -1378,4 +1400,56 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 		})
 	}
 	return matches
+}
+
+type RateLimiter struct {
+	sync.RWMutex
+	limiter     map[uint64]uint64
+	maxTokens   uint64
+	refillAfter time.Duration
+	closer      *z.Closer
+}
+
+func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
+	return &RateLimiter{
+		limiter:     make(map[uint64]uint64),
+		maxTokens:   maxTokens,
+		refillAfter: refillAfter,
+		closer:      closer,
+	}
+}
+
+func (r *RateLimiter) Allow(ns, count uint64) bool {
+	r.Lock()
+	defer r.Unlock()
+
+	if _, ok := r.limiter[ns]; !ok {
+		r.limiter[ns] = r.maxTokens // make this configurable.
+	}
+	if r.limiter[ns] < count {
+		return false
+	}
+	r.limiter[ns] -= count
+	return true
+}
+
+func (r *RateLimiter) RefillPeriodically() {
+	defer r.closer.Done()
+	refill := func() {
+		r.Lock()
+		defer r.Unlock()
+		for ns := range r.limiter {
+			r.limiter[ns] = r.maxTokens
+		}
+	}
+
+	ticker := time.NewTicker(r.refillAfter)
+	for {
+		select {
+		case <-r.closer.HasBeenClosed():
+			return
+		case <-ticker.C:
+			refill()
+		}
+	}
 }

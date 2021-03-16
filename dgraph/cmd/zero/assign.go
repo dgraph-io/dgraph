@@ -18,8 +18,10 @@ package zero
 
 import (
 	"context"
+	"time"
 
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -83,12 +85,6 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 	}
 	if glog.V(3) {
 		glog.Infof("Got lease request for Type: %v. Num: %+v\n", typ, num)
-	}
-
-	if typ == pb.Num_UID && num.Val > opts.uidLeaseLimit {
-		return &emptyAssignedIds,
-			errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
-				num.Val, opts.uidLeaseLimit)
 	}
 
 	s.leaseLock.Lock()
@@ -184,10 +180,36 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	ctx, span := otrace.StartSpan(ctx, "Zero.AssignIds")
 	defer span.End()
 
+	validateAndGetToken := func() error {
+		if num.GetType() != pb.Num_UID {
+			return nil
+		}
+
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil || ns == x.GalaxyNamespace {
+			return err
+		}
+		if num.Val > opts.limit.GetUint64("uid-lease") {
+			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
+				num.Val, opts.limit.GetUint64("uid-lease"))
+		}
+		for {
+			if s.rateLimiter.Allow(ns, num.Val) {
+				break
+			}
+			// TODO: Fix this busy waiting.
+			time.Sleep(opts.limit.GetDuration("refill-interval"))
+		}
+		return nil
+	}
+
 	reply := &emptyAssignedIds
 	lease := func() error {
 		var err error
 		if s.Node.AmLeader() {
+			if err := validateAndGetToken(); err != nil {
+				return err
+			}
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num)
 			return err
@@ -206,6 +228,10 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())
 		num.Forwarded = true
+		// pass on the incoming metadata to the zero leader.
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			ctx = metadata.NewOutgoingContext(ctx, md)
+		}
 		reply, err = zc.AssignIds(ctx, num)
 		return err
 	}

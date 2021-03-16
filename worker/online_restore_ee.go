@@ -378,6 +378,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				if val == 0 {
 					return nil
 				}
+				// Backups can only be triggered by guardian of galaxy.
+				ctx = x.AttachNamespaceOutgoing(ctx, x.GalaxyNamespace)
 				_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
 				return err
 			}

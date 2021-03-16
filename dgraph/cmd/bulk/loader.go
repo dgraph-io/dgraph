@@ -189,6 +189,7 @@ func (ld *loader) leaseNamespaces() {
 	client := pb.NewZeroClient(ld.zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx = x.AttachNamespaceOutgoing(ctx, x.GalaxyNamespace)
 		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
 		cancel()
 		if err == nil {
@@ -234,7 +235,7 @@ func (ld *loader) mapStage() {
 		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
-	ld.xids = xidmap.New(ld.zero, db, filepath.Join(ld.opt.TmpDir, bufferDir))
+	ld.xids = xidmap.New(ld.zero, nil, x.GalaxyNamespace, db, filepath.Join(ld.opt.TmpDir, bufferDir))
 
 	fs := filestore.NewFileStore(ld.opt.DataFiles)
 

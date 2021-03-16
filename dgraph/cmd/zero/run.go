@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -53,12 +52,12 @@ import (
 type options struct {
 	raft              *z.SuperFlag
 	telemetry         *z.SuperFlag
+	limit             *z.SuperFlag
 	bindall           bool
 	portOffset        int
 	numReplicas       int
 	peer              string
 	w                 string
-	uidLeaseLimit     uint64
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
 	audit             *x.LoggerConf
@@ -100,8 +99,15 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	flag.Uint64("uid_lease_limit", math.MaxUint64,
-		"The maximum number of UIDs that can be leased in a single request.")
+
+	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
+		Head("Limit options").
+		Flag("uid-lease",
+			`The maximum number of UIDs that can be leased by non-galaxy user in an interval
+			specified by refill-interval.`).
+		Flag("refill-interval",
+			"The interval after which the tokens for UID lease are replenished,").
+		String())
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").
@@ -221,15 +227,17 @@ func run() {
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
 	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
+	limit := z.NewSuperFlag(Zero.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.ZeroLimitsDefaults)
 	opts = options{
 		telemetry:         telemetry,
 		raft:              raft,
+		limit:             limit,
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
-		uidLeaseLimit:     Zero.Conf.GetUint64("uid_lease_limit"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
 		audit:             conf,
@@ -361,9 +369,10 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
-	st.zero.closer.AddRunning(2)
+	st.zero.closer.AddRunning(3)
 	go x.MonitorMemoryMetrics(st.zero.closer)
 	go x.MonitorDiskMetrics("wal_fs", opts.w, st.zero.closer)
+	go st.zero.rateLimiter.RefillPeriodically()
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()

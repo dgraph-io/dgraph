@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -38,6 +39,8 @@ import (
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
+	dg         *dgo.Dgraph
+	ns         uint64
 	shards     []*shard
 	newRanges  chan *pb.AssignedIds
 	zc         pb.ZeroClient
@@ -82,12 +85,14 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations. XidMap creates the temporary buffers inside dir directory. The caller must
 // ensure that the dir exists.
-func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
+func New(zero *grpc.ClientConn, dg *dgo.Dgraph, ns uint64, db *badger.DB, dir string) *XidMap {
 	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 		kvChan:    make(chan []kv, 64),
+		dg:        dg,
+		ns:        ns,
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -138,6 +143,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx = xm.attachNamespace(ctx)
 			assigned, err := xm.zc.AssignIds(ctx, &pb.Num{Val: 1e5, Type: pb.Num_UID})
 			glog.V(2).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
@@ -156,6 +162,14 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		}
 	}()
 	return xm
+}
+
+func (m *XidMap) attachNamespace(ctx context.Context) context.Context {
+	if m.dg != nil {
+		ctx = m.dg.AttachJwt(ctx) // Need to attach JWT because slash uses alpha as zero proxy.
+	}
+	// TODO: Will require retry with re-login.
+	return x.AttachNamespaceOutgoing(ctx, m.ns)
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
@@ -255,6 +269,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 		glog.V(1).Infof("Bumping up to %v", uid)
 		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx = m.attachNamespace(ctx)
 		assigned, err := m.zc.AssignIds(ctx, &pb.Num{Val: num, Type: pb.Num_UID})
 		cancel()
 		if err == nil {

@@ -67,6 +67,8 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 
 	num := &pb.Num{Val: uint64(val)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Consider all the request coming through /assign belong to GalaxyNamespace.
+	ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 	defer cancel()
 
 	var ids *pb.AssignedIds

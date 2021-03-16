@@ -631,7 +631,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db, "")
+	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
+	alloc := xidmap.New(connzero, dc, creds.GetUint64("namespace"), db, "")
 	l := &loader{
 		opts:       opts,
 		dc:         dc,
