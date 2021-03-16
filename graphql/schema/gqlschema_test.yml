@@ -239,7 +239,7 @@ invalid_schemas:
     errlist: [
       { "message": "Type Z; Field f: Field f is of type U, but @hasInverse directive only applies to fields with object types.", "locations": [{"line":9, "column":3}]},
       { "message": "Type Z; Field f: has the @search directive but fields of type U can't have the @search directive.", "locations": [{"line":9, "column":34}]},
-      { "message": "Type Z; Field f: with @id directive must be of type String!, Int!, Int64! or Float!, not U", "locations": [{"line":9, "column":42}]}
+      { "message": "Type Z; Field f: with @id directive must be of type String!, Int! or Int64!, not U", "locations": [{"line":9, "column":42}]}
     ]
 
   -
@@ -622,8 +622,19 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not [String]",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not [String]",
       "locations":[{"line":2, "column":17}]}
+      ]
+
+  -
+    name: "@id directive can't be applied on field with Float type"
+    input: |
+      type X {
+        f1: Float! @id
+      }
+    errlist: [
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not Float!",
+      "locations":[{"line":2, "column":15}]}
       ]
 
   -
@@ -633,7 +644,7 @@ invalid_schemas:
         f1: String @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int!, Int64! or Float!, not String",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not String",
       "locations":[{"line":2, "column":15}]}
       ]
 

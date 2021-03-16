@@ -563,27 +563,6 @@
       "type": "string"
     },
     {
-      "predicate": "Section.chapterId",
-      "type": "int",
-      "index": true,
-      "tokenizer": [
-        "int"
-      ]
-    },
-    {
-      "predicate": "Section.name",
-      "type": "string"
-    },
-    {
-      "predicate": "Section.sectionId",
-      "type": "float",
-      "index": true,
-      "tokenizer": [
-        "float"
-      ],
-      "upsert": true
-    },
-    {
       "predicate": "SpaceShip.id",
       "type": "string",
       "index": true,
@@ -1226,20 +1205,6 @@
         }
       ],
       "name": "Region"
-    },
-    {
-      "fields": [
-        {
-          "name": "Section.sectionId"
-        },
-        {
-          "name": "Section.name"
-        },
-        {
-          "name": "Section.chapterId"
-        }
-      ],
-      "name": "Section"
     },
     {
       "fields": [
