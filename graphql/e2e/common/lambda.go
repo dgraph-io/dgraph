@@ -29,7 +29,7 @@ func lambdaOnTypeField(t *testing.T) {
 	query := `
 		query {
 			queryAuthor {
-				name
+				dob : name
 				bio
 				rank
 			}
@@ -41,17 +41,17 @@ func lambdaOnTypeField(t *testing.T) {
 	expectedResponse := `{
 		"queryAuthor": [
 			{
-				"name":"Three Author",
+				"dob":"Three Author",
 				"bio":"My name is Three Author and I was born on 2001-01-01T00:00:00Z.",
 				"rank":1
 			},
 			{
-				"name":"Ann Author",
+				"dob":"Ann Author",
 				"bio":"My name is Ann Author and I was born on 2000-01-01T00:00:00Z.",
 				"rank":3
 			},
 			{
-				"name":"Ann Other Author",
+				"dob":"Ann Other Author",
 				"bio":"My name is Ann Other Author and I was born on 1988-01-01T00:00:00Z.",
 				"rank":2
 			}
