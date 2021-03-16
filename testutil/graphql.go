@@ -249,7 +249,12 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string, closedByDefault b
 }
 
 func AppendAuthInfoWithJWKUrl(schema []byte) ([]byte, error) {
-	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7"]}`
+	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurl":"https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json", "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":[ "HhaXkQVRBn5e0K3DmMp2zbjI8i1wcv2e"]}`
+	return append(schema, []byte(authInfo)...), nil
+}
+
+func AppendAuthInfoWithMultipleJWKUrls(schema []byte) ([]byte, error) {
+	authInfo := `#   Dgraph.Authorization {"VerificationKey":"","Header":"X-Test-Auth","jwkurls":["https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com","https://dev-hr2kugfp.us.auth0.com/.well-known/jwks.json"], "Namespace":"https://xyz.io/jwt/claims","Algo":"","Audience":["fir-project1-259e7", "HhaXkQVRBn5e0K3DmMp2zbjI8i1wcv2e"]}`
 	return append(schema, []byte(authInfo)...), nil
 }
 
