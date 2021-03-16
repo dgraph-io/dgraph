@@ -728,44 +728,14 @@ func (arw *AddRewriter) FromMutationResult(
 
 	var errs error
 
-	// This stores a list of added or updated uids.
-	uids := make([]uint64, 0)
-
 	for _, frag := range arw.frags {
 		err := checkResult(frag, result)
 		errs = schema.AppendGQLErrs(errs, err)
-		if err != nil {
-			continue
-		}
-
-		node := strings.TrimPrefix(frag[0].
-			fragment.(map[string]interface{})["uid"].(string), "_:")
-		val, ok := assigned[node]
-		if !ok {
-			// node was not part of assigned map. It is likely going to be part of Updated UIDs map.
-			// Extract and add any updated uids. This is done for upsert With Add Mutation.
-			// We extract out the variable name, eg. Project1 from uid(Project1)
-			uidVar := frag[0].fragment.(map[string]interface{})["uid"].(string)
-			uidVar = strings.TrimPrefix(uidVar, "uid(")
-			uidVar = strings.TrimSuffix(uidVar, ")")
-			updated := extractMutated(result, uidVar)
-			updateUids, err := extractUidsFromMutated(updated)
-			if err != nil {
-				return nil, err
-			}
-			uids = append(uids, updateUids...)
-			continue
-		}
-		uid, err := strconv.ParseUint(val, 0, 64)
-		if err != nil {
-			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-				"received %s as an assigned uid from Dgraph,"+
-					" but couldn't parse it as uint64",
-				assigned[node]))
-		}
-
-		uids = append(uids, uid)
 	}
+
+	// Find any newly added/updated rootUIDs.
+	uids, err := convertIDsWithErr(arw.MutatedRootUIDs(mutation, assigned, result))
+	errs = schema.AppendGQLErrs(errs, err)
 
 	// Find out if its an upsert with Add mutation.
 	// In this case, it may happen that no new node is created, but there may still
@@ -815,9 +785,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		return nil, err
 	}
 
-	mutated := extractMutated(result, mutation.Name())
-
-	uids, err := extractUidsFromMutated(mutated)
+	uids, err := convertIDsWithErr(urw.MutatedRootUIDs(mutation, assigned, result))
 	if err != nil {
 		return nil, err
 	}
@@ -844,20 +812,21 @@ func (arw *AddRewriter) MutatedRootUIDs(
 
 	var rootUIDs []string // This stores a list of added or updated rootUIDs.
 
-	// Add any newly added rootUIDs.
 	for _, frag := range arw.frags {
-		blankNodeName := strings.TrimPrefix(frag[0].
-			fragment.(map[string]interface{})["uid"].(string), "_:")
+		fragUid := frag[0].fragment.(map[string]interface{})["uid"].(string)
+		blankNodeName := strings.TrimPrefix(fragUid, "_:")
 		uid, ok := assigned[blankNodeName]
 		if ok {
+			// any newly added uids will be present in assigned map
 			rootUIDs = append(rootUIDs, uid)
+		} else {
+			// node was not part of assigned map. It is likely going to be part of Updated UIDs map.
+			// Extract and add any updated uids. This is done for upsert With Add Mutation.
+			// We extract out the variable name, eg. Project1 from uid(Project1)
+			uidVar := strings.TrimSuffix(strings.TrimPrefix(fragUid, "uid("), ")")
+			rootUIDs = append(rootUIDs, extractMutated(result, uidVar)...)
 		}
 	}
-
-	// Extract and add any updated rootUIDs. This is done for upsert With Add Mutation.
-	// In this case, it may happen that no new node is created, but there may still
-	// be some updated nodes. We get these nodes over here and add to uid list.
-	rootUIDs = append(rootUIDs, extractMutated(result, mutation.Name())...)
 
 	return rootUIDs
 }
@@ -868,25 +837,6 @@ func (urw *UpdateRewriter) MutatedRootUIDs(
 	result map[string]interface{}) []string {
 
 	return extractMutated(result, mutation.Name())
-}
-
-func convertIDsWithErr(uidSlice []string) ([]uint64, error) {
-	var errs error
-	uids := make([]uint64, 0, len(uidSlice))
-
-	if len(uidSlice) > 0 {
-		for _, id := range uidSlice {
-			uid, err := strconv.ParseUint(id, 0, 64)
-			if err != nil {
-				errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-					"received %s as a uid from Dgraph, but couldn't parse it as uint64", id))
-				continue
-			}
-			uids = append(uids, uid)
-		}
-	}
-
-	return uids, errs
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {
@@ -904,18 +854,20 @@ func extractMutated(result map[string]interface{}, mutatedField string) []string
 	return mutated
 }
 
-func extractUidsFromMutated(mutated []string) ([]uint64, error) {
-	var ret []uint64
-	for _, id := range mutated {
+// convertIDsWithErr is similar to convertIDs, except that it also returns the errors, if any.
+func convertIDsWithErr(uidSlice []string) ([]uint64, error) {
+	var errs error
+	ret := make([]uint64, 0, len(uidSlice))
+	for _, id := range uidSlice {
 		uid, err := strconv.ParseUint(id, 0, 64)
 		if err != nil {
-			return ret, schema.GQLWrapf(err,
-				"received %s as an updated uid from Dgraph, but couldn't parse it as "+
-					"uint64", id)
+			errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
+				"received %s as a uid from Dgraph, but couldn't parse it as uint64", id))
+			continue
 		}
 		ret = append(ret, uid)
 	}
-	return ret, nil
+	return ret, errs
 }
 
 func addUpdateCondition(frags []*mutationFragment) {
