@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -47,6 +48,14 @@ const (
 			}
 		}
 	`
+	queryPersistedQuery_v21_03_0 = `{
+			pquery(func: type(dgraph.graphql.persisted_query)) {
+				uid
+				dgraph.graphql.p_query
+				dgraph.graphql.p_sha256hash
+			}
+		}
+	`
 )
 
 type cors struct {
@@ -54,9 +63,15 @@ type cors struct {
 	Cors []string `json:"dgraph.cors,omitempty"`
 }
 
-type schema struct {
+type sch struct {
 	UID       string `json:"uid"`
 	GQLSchema string `json:"dgraph.graphql.schema"`
+}
+
+type pquery struct {
+	UID   string `json:"uid"`
+	Query string `json:"dgraph.graphql.p_query,omitempty"`
+	SHA   string `json:"dgraph.graphql.p_sha256hash,omitempty"`
 }
 
 func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
@@ -86,7 +101,8 @@ func updateGQLSchema(jwt *api.Jwt, gqlSchema string, corsList []string) error {
 		Headers:   header,
 	}
 
-	resp, err := makeGqlRequest(updateSchemaParams, Upgrade.Conf.GetString(adminUrl))
+	adminUrl := Upgrade.Conf.GetString(alphaHttp) + "/admin"
+	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
 	if err != nil {
 		return err
 	}
@@ -110,7 +126,7 @@ var deprecatedTypes = map[string]struct{}{
 }
 
 func dropDeprecated(dg *dgo.Dgraph) error {
-	if !Upgrade.Conf.GetBool("deleteOld") {
+	if !Upgrade.Conf.GetBool(deleteOld) {
 		return nil
 	}
 	for pred := range deprecatedPreds {
@@ -169,7 +185,7 @@ func upgradeCORS() error {
 	}
 
 	// Get GraphQL schema.
-	schemaData := make(map[string][]schema)
+	schemaData := make(map[string][]sch)
 	if err = getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
 		return errors.Wrap(err, "error querying graphql schema")
 	}
@@ -276,7 +292,10 @@ func updateGqlSchema(db *badger.DB, cors [][]byte) error {
 func getCors(db *badger.DB) ([][]byte, error) {
 	var corsVals [][]byte
 	err := getData(db, "dgraph.cors", func(item *badger.Item) error {
-		val, _ := item.ValueCopy(nil)
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
 		pl := pb.PostingList{}
 		if err := pl.Unmarshal(val); err != nil {
 			return err
@@ -301,9 +320,9 @@ func dropDepreciated(db *badger.DB) error {
 	return db.DropPrefix(prefixes...)
 }
 
-// FixCors removes the internal predicates from the restored backup. This also appends CORS from
+// fixCors removes the internal predicates from the restored backup. This also appends CORS from
 // dgraph.cors to GraphQL schema.
-func FixCors(db *badger.DB) error {
+func fixCors(db *badger.DB) error {
 	glog.Infof("Fixing cors information in the restored backup.")
 	cors, err := getCors(db)
 	if err != nil {
@@ -313,4 +332,118 @@ func FixCors(db *badger.DB) error {
 		return errors.Wrapf(err, "Error while updating GraphQL schema.")
 	}
 	return errors.Wrapf(dropDepreciated(db), "Error while dropping depreciated preds/types.")
+}
+
+// fixPersistedQuery, for the schema related to persisted query removes the deprecated field from
+// the type and updates the index tokenizer for the predicate.
+func fixPersistedQuery(db *badger.DB) error {
+	glog.Infof("Fixing persisted query schema in restored backup.")
+	update := func(entry *badger.Entry) error {
+		txn := db.NewTransactionAt(math.MaxUint64, true)
+		defer txn.Discard()
+		if err := txn.SetEntry(entry); err != nil {
+			return err
+		}
+		// Schema is written at version 1.
+		return txn.CommitAt(1, nil)
+	}
+
+	// Update the tokenizer in the schema.
+	su := pb.SchemaUpdate{
+		Predicate: x.GalaxyAttr("dgraph.graphql.p_query"),
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"sha256"},
+	}
+	data, err := su.Marshal()
+	if err != nil {
+		return err
+	}
+	entry := &badger.Entry{}
+	entry.Key = x.SchemaKey(x.GalaxyAttr("dgraph.graphql.p_query"))
+	entry.Value = data
+	entry.UserMeta = posting.BitSchemaPosting
+	if err := update(entry); err != nil {
+		return errors.Wrap(err, "while updating persisted query's schema")
+	}
+
+	// Update the type.
+	tu := pb.TypeUpdate{
+		TypeName: x.GalaxyAttr("dgraph.graphql.persisted_query"),
+		Fields:   []*pb.SchemaUpdate{&su},
+	}
+	data, err = tu.Marshal()
+	if err != nil {
+		return err
+	}
+	entry = &badger.Entry{}
+	entry.Key = x.TypeKey(x.GalaxyAttr("dgraph.graphql.persisted_query"))
+	entry.Value = data
+	entry.UserMeta = posting.BitSchemaPosting
+	if err := update(entry); err != nil {
+		return errors.Wrap(err, "while updating persisted query's type")
+	}
+	return nil
+}
+
+// UpgradeFrom2011To2103 upgrades a p directory restored from backup of 20.11 to the changes in
+// 21.03. It fixes the cors, schema and drops the deprecated types/predicates.
+func UpgradeFrom2011To2103(db *badger.DB) error {
+	if err := fixPersistedQuery(db); err != nil {
+		return errors.Wrapf(err, "while upgrading persisted query")
+	}
+	return errors.Wrapf(fixCors(db), "while upgrading cors")
+}
+
+func upgradePersitentQuery() error {
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	defer cb()
+
+	jwt, err := getAccessJwt()
+	if err != nil {
+		return errors.Wrap(err, "while getting jwt auth token")
+	}
+
+	// Get persisted queries.
+	queryData := make(map[string][]pquery)
+	if err := getQueryResult(dg, queryPersistedQuery_v21_03_0, &queryData); err != nil {
+		return errors.Wrap(err, "error querying persisted queries")
+	}
+
+	// Update the schema with new indexer for persisted query.
+	updatedSchema := `
+		<dgraph.graphql.p_query>: string @index(sha256) .
+		type <dgraph.graphql.persisted_query> {
+			<dgraph.graphql.p_query>
+		}
+			`
+	if err := alterWithClient(dg, &api.Operation{Schema: updatedSchema}); err != nil {
+		return fmt.Errorf("error updating the schema for persistent query, %w", err)
+	}
+
+	// Reinsert these queries. Note that upsert won't work here as 'dgraph.graphql.p_query' is
+	// graphql reserved type.
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", jwt.AccessJwt)
+	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
+	graphqlUrl := Upgrade.Conf.GetString(alphaHttp) + "/graphql"
+	for _, pquery := range queryData["pquery"] {
+		updateSchemaParams := &GraphQLParams{
+			Query: pquery.Query,
+			Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+				Sha256Hash: pquery.SHA,
+			}},
+			Headers: header,
+		}
+
+		resp, err := makeGqlRequest(updateSchemaParams, graphqlUrl)
+		if err != nil {
+			return err
+		}
+		if len(resp.Errors) > 0 {
+			return errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
+		}
+	}
+
+	return nil
 }

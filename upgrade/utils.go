@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -51,7 +52,8 @@ func getAccessJwt() (*api.Jwt, error) {
 		Headers: header,
 	}
 
-	resp, err := makeGqlRequest(updateSchemaParams, Upgrade.Conf.GetString(adminUrl))
+	adminUrl := Upgrade.Conf.GetString(alphaHttp) + "/admin"
+	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -76,9 +78,10 @@ func getAccessJwt() (*api.Jwt, error) {
 }
 
 type GraphQLParams struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query         string                    `json:"query"`
+	OperationName string                    `json:"operationName"`
+	Variables     map[string]interface{}    `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
 	Headers       http.Header
 }
 
