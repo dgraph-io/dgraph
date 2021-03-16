@@ -405,12 +405,12 @@ func TestPersistentQuery(t *testing.T) {
 	p1 := "query {queryProduct{productID}}"
 	sha1 := "7a8ff7a69169371c1eb52a8921387079ca281bb2d55feb4b535cbf0ab3896be5"
 	resp := postPersistentQuery(t, p1, sha1, galaxyToken.AccessJwt)
-	require.Zerof(t, len(resp.Errors), resp.Errors.Error())
+	common.RequireNoGQLErrors(t, resp)
 
 	p2 := "query {queryProduct{name}}"
 	sha2 := "0efcdde144167b1046360b73c7f6bec325d9f555099a2ae9b820a13328d270e4"
 	resp = postPersistentQuery(t, p2, sha2, token.AccessJwt)
-	require.Zerof(t, len(resp.Errors), resp.Errors.Error())
+	common.RequireNoGQLErrors(t, resp)
 
 	// User cannnot see persistent query from other namespace.
 	resp = postPersistentQuery(t, "", sha2, galaxyToken.AccessJwt)
