@@ -3,6 +3,8 @@ services:
   zero1:
     image: dgraph/dgraph:${DGRAPH_VERSION}
     command: dgraph zero --my=zero1:5080 --replicas 1 --idx 1
+    ports:
+      - 6080:6080
     container_name: zero1
 
   alpha1:
@@ -20,7 +22,7 @@ services:
     container_name: alpha1
 
   vault:
-    image: vault:${DGRAPH_VERSION}
+    image: vault:1.6.3
     container_name: vault
     ports:
       - 8200:8200
