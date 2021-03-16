@@ -160,7 +160,7 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 				}
 			}
 		case "Int64":
-			if value.Kind == ast.IntValue {
+			if value.Kind == ast.IntValue || value.Kind == ast.StringValue {
 				_, err := strconv.ParseInt(value.Raw, 10, 64)
 				if err != nil {
 					if errors.Is(err, strconv.ErrRange) {
