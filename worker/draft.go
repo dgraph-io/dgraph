@@ -1761,6 +1761,12 @@ func (n *node) InitAndStartNode() {
 					n.Connect(id, m.Addr)
 				}
 			}
+			for _, id := range sp.Metadata.ConfState.Learners {
+				m, ok := members[id]
+				if ok {
+					n.Connect(id, m.Addr)
+				}
+			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
 		glog.V(2).Infoln("Restart node complete")
