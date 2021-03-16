@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +29,8 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -356,6 +359,70 @@ func TestLiveLoadMulti(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
 		{"name": "ns dan"},{"name":"ns eon"}, {"name": "ns free"},{"name":"ns gary"},
 		{"name": "ns hola"}]}`, string(resp))
+}
+
+func postGqlSchema(t *testing.T, schema string, accessJwt string) {
+	groupOneHTTP := testutil.ContainerAddr("alpha1", 8080)
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", accessJwt)
+	common.SafelyUpdateGQLSchema(t, groupOneHTTP, schema, header)
+}
+
+func postPersistentQuery(t *testing.T, query, sha, accessJwt string) *common.GraphQLResponse {
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", accessJwt)
+	queryCountryParams := &common.GraphQLParams{
+		Query: query,
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: sha,
+		}},
+		Headers: header,
+	}
+	url := "http://" + testutil.ContainerAddr("alpha1", 8080) + "/graphql"
+	return queryCountryParams.ExecuteAsPost(t, url)
+}
+
+func TestPersistentQuery(t *testing.T) {
+	prepare(t)
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	sch := `type Product {
+			productID: ID!
+			name: String @search(by: [term])
+		}`
+	postGqlSchema(t, sch, galaxyToken.AccessJwt)
+	postGqlSchema(t, sch, token.AccessJwt)
+
+	p1 := "query {queryProduct{productID}}"
+	sha1 := "7a8ff7a69169371c1eb52a8921387079ca281bb2d55feb4b535cbf0ab3896be5"
+	resp := postPersistentQuery(t, p1, sha1, galaxyToken.AccessJwt)
+	common.RequireNoGQLErrors(t, resp)
+
+	p2 := "query {queryProduct{name}}"
+	sha2 := "0efcdde144167b1046360b73c7f6bec325d9f555099a2ae9b820a13328d270e4"
+	resp = postPersistentQuery(t, p2, sha2, token.AccessJwt)
+	common.RequireNoGQLErrors(t, resp)
+
+	// User cannnot see persistent query from other namespace.
+	resp = postPersistentQuery(t, "", sha2, galaxyToken.AccessJwt)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+
+	resp = postPersistentQuery(t, "", sha1, token.AccessJwt)
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "PersistedQueryNotFound")
+
+	resp = postPersistentQuery(t, "", sha1, "")
+	require.Equal(t, 1, len(resp.Errors))
+	require.Contains(t, resp.Errors[0].Message, "no accessJwt available")
 }
 
 func TestMain(m *testing.M) {
