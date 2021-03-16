@@ -5032,40 +5032,6 @@ func idDirectiveWithIntMutation(t *testing.T) {
 	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 3, nil)
 }
 
-func idDirectiveWithFloatMutation(t *testing.T) {
-	query := &GraphQLParams{
-		Query: `mutation {
-          addSection(input:[{
-            chapterId: 2
-            name: "Graphql: Introduction"
-            sectionId: 2.1
-          },
-          {
-            chapterId: 2
-            name: "Graphql Available Data Types"
-            sectionId: 2.2
-          }]) {
-            numUids
-          }
-        }`,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, response)
-	var expected = `{
-            "addSection": {
-              "numUids": 2
-            }
-        }`
-	require.JSONEq(t, expected, string(response.Data))
-
-	// adding same mutation again should result in error because of duplicate id
-	response = query.ExecuteAsPost(t, GraphqlURL)
-	require.Contains(t, response.Errors.Error(), "already exists")
-
-	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
-}
-
 func addMutationWithDeepExtendedTypeObjects(t *testing.T) {
 	varMap1 := map[string]interface{}{
 		"missionId":   "Mission1",

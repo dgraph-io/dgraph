@@ -655,8 +655,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						switch f.Type.Name() {
 						case "Int", "Int64":
 							indexes = append(indexes, "int")
-						case "Float":
-							indexes = append(indexes, "float")
 						case "String", "ID":
 							if !x.HasString(indexes, "exact") {
 								indexes = append(indexes, "hash")

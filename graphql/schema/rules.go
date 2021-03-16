@@ -2048,13 +2048,12 @@ func idValidation(sch *ast.Schema,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
-		field.Type.String() == "Int64!" ||
-		field.Type.String() == "Float!" {
+		field.Type.String() == "Int64!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 

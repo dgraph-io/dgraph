@@ -835,7 +835,6 @@ func RunAll(t *testing.T) {
 	t.Run("checkUserPassword query", passwordTest)
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
-	t.Run("query id directive with float", idDirectiveWithFloat)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 
 	// mutation tests
@@ -886,7 +885,6 @@ func RunAll(t *testing.T) {
 	t.Run("filter in update mutations with array for AND/OR", filterInUpdateMutationsWithFilterAndOr)
 	t.Run("mutation id directive with int", idDirectiveWithIntMutation)
 	t.Run("mutation id directive with int64", idDirectiveWithInt64Mutation)
-	t.Run("mutation id directive with float", idDirectiveWithFloatMutation)
 	t.Run("add mutation on extended type with field of ID type as key field", addMutationOnExtendedTypeWithIDasKeyField)
 	t.Run("add mutation with deep extended type objects", addMutationWithDeepExtendedTypeObjects)
 	t.Run("three level double XID mutation", threeLevelDoubleXID)
