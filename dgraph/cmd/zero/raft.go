@@ -531,8 +531,8 @@ func (n *node) proposeNewCID() {
 	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
 
-		if zero_cid := Zero.Conf.GetString("cid"); len(zero_cid) > 0 {
-			id = zero_cid
+		if zeroCid := Zero.Conf.GetString("cid"); len(zeroCid) > 0 {
+			id = zeroCid
 		}
 
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
