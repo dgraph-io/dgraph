@@ -597,7 +597,7 @@ func setupServer(closer *z.Closer) {
 			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	x.ServerCloser.Wait()
 }
