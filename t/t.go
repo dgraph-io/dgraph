@@ -149,6 +149,9 @@ func outputLogs(prefix string) {
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
+		if c == nil {
+			return
+		}
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
 		fmt.Printf("Docker logs for %d is %s with error %+v ", c.ID, string(out), err)
@@ -251,7 +254,7 @@ func hasTestFiles(pkg string) bool {
 
 var _threadId int32
 
-func runTests(taskCh chan task, closer *z.Closer) error {
+func runTests(taskCh chan task, closer *z.Closer) (err error) {
 	threadId := atomic.AddInt32(&_threadId, 1)
 
 	{
@@ -287,7 +290,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 		wg.Add(1)
-		stopCluster(defaultCompose, prefix, wg, nil)
+		stopCluster(defaultCompose, prefix, wg, err)
 		stopped = true
 	}
 	defer stop()
@@ -297,7 +300,8 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	for task := range taskCh {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			err = ctx.Err()
+			return
 		}
 		if !hasTestFiles(task.pkg.ID) {
 			continue
@@ -309,16 +313,16 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				continue
 			}
 			start()
-			if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
 				return err
 			}
 		} else {
-			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
-				return err
+			if err = runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
+				return
 			}
 		}
 	}
-	return nil
+	return
 }
 
 func getGlobalPrefix() string {
