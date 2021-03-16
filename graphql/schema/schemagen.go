@@ -393,7 +393,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema := genDgSchema(sch, typesToComplete)
+	dgSchema := genDgSchema(sch, typesToComplete, providesFieldsMap)
 	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
@@ -509,7 +509,8 @@ func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
+func genDgSchema(gqlSch *ast.Schema, definitions []string,
+	providesFieldsMap map[string]map[string]bool) string {
 	var typeStrings []string
 
 	type dgPred struct {
@@ -567,7 +568,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				}
 
 				// Ignore @external fields which are not @key
-				if hasExternal(f) && !isKeyField(f, def) {
+				if externalAndNonKeyField(f, def, providesFieldsMap[def.Name]) {
 					continue
 				}
 

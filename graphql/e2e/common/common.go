@@ -797,7 +797,8 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
-	t.Run("entitites Query on extended type", entitiesQuery)
+	t.Run("entitites Query on extended type with key field of type String", entitiesQueryWithKeyFieldOfTypeString)
+	t.Run("entitites Query on extended type with key field of type Int", entitiesQueryWithKeyFieldOfTypeInt)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -833,6 +834,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query id directive with float", idDirectiveWithFloat)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)
@@ -870,7 +872,7 @@ func RunAll(t *testing.T) {
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
 	t.Run("three level deep", threeLevelDeepMutation)
-	t.Run("update mutation without set & remove", updateMutationWithoutSetRemove)
+	t.Run("update mutation without set & remove", updateMutationTestsWithDifferentSetRemoveCases)
 	t.Run("Input coercing for int64 type", int64BoundaryTesting)
 	t.Run("List of integers", intWithList)
 	t.Run("Check cascade with mutation without ID field", checkCascadeWithMutationWithoutIDField)
@@ -912,6 +914,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
+	t.Run("lambda with apollo federation", lambdaWithApolloFederation)
 }
 
 func gunzipData(data []byte) ([]byte, error) {
@@ -1178,6 +1181,10 @@ func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 		debug.PrintStack()
 		t.FailNow()
 	}
+}
+
+func (gqlRes *GraphQLResponse) RequireNoGQLErrors(t *testing.T) {
+	RequireNoGQLErrors(t, gqlRes)
 }
 
 func PopulateGraphQLData(client *dgo.Dgraph, data []byte) error {

@@ -243,7 +243,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			return err
 		}
 
-		old, _ := schema.State().Get(ctx, su.Predicate)
+		old, ok := schema.State().Get(ctx, su.Predicate)
 		rebuild := posting.IndexRebuild{
 			Attr:          su.Predicate,
 			StartTs:       startTs,
@@ -258,6 +258,9 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 		// TODO(Aman): If we return an error, we may not have right schema reflected.
 		setup := func() error {
+			if !ok {
+				return nil
+			}
 			if err := rebuild.DropIndexes(ctx); err != nil {
 				return err
 			}
@@ -269,7 +272,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			return err
 		}
 
-		if rebuild.NeedIndexRebuild() {
+		if ok && rebuild.NeedIndexRebuild() {
 			go buildIndexes(su, rebuild)
 		} else if err := updateSchema(su); err != nil {
 			return err

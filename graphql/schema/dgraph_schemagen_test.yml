@@ -773,6 +773,7 @@ schemas:
       }
       T.id: float @index(float) @upsert .
       T.value: string .
+
   - name: "type extension having @external field of ID type which is @key"
     input: |
       extend type Product @key(fields: "id") {
@@ -790,6 +791,7 @@ schemas:
       Product.id: string @index(hash) @upsert .
       Product.name: string .
       Product.reviews: [string] .
+
   - name: "type extension having @external field of non ID type which is @key"
     input: |
       extend type Product @key(fields: "name") {
@@ -804,4 +806,52 @@ schemas:
       }
       Product.name: string @index(hash) @upsert .
       Product.reviews: [string] .
+
+  - name: "A full valid federation schema"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+        product: Product
+      }
+
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        username: String! @external
+        reviews: [Review]
+      }
+
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @lambda
+        reviews: [Review]
+      }
+    output: |
+      type Review {
+        Review.body
+        Review.author
+        Review.product
+      }
+      Review.body: string .
+      Review.author: uid .
+      Review.product: uid .
+      type Product {
+        Product.upc
+        Product.inStock
+        Product.reviews
+      }
+      Product.upc: string @index(hash) @upsert .
+      Product.inStock: bool .
+      Product.reviews: [uid] .
+      type User {
+        User.id
+        User.username
+        User.reviews
+      }
+      User.id: string @index(hash) @upsert .
+      User.username: string .
+      User.reviews: [uid] .
 

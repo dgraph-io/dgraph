@@ -35,9 +35,12 @@ type Options struct {
 	// normalize-node int - maximum number of nodes that can be returned in a query that uses the
 	//                      normalize directive
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
+	// BlockDropAll bool - if set to true, the drop all operation will be rejected by the server.
 	Limit               *z.SuperFlag
 	LimitMutationsNquad int
 	LimitQueryEdge      uint64
+	BlockClusterWideDrop        bool
+
 	// GraphQL options:
 	//
 	// extensions bool - Will be set to see extensions in GraphQL results

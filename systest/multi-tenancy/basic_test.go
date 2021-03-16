@@ -74,7 +74,7 @@ func TestAclBasic(t *testing.T) {
 	testutil.CompareJSON(t, `{"me": []}`, string(resp))
 
 	// Login to namespace 1 via groot and create new user alice.
-	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: 1})
+	token := testutil.Login(t, &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
 	testutil.CreateUser(t, token, "alice", "newpassword")
 
 	// Alice should not be able to see data added by groot in namespace 1
@@ -327,7 +327,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		forceNs: -1,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load into namespace")
+	require.Contains(t, err.Error(), "cannot force namespace")
 
 	err = liveLoadData(t, &liveOpts{
 		rdfs: `_:c <name> "ns hola" .`,
@@ -338,7 +338,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		forceNs: 10,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load into namespace")
+	require.Contains(t, err.Error(), "cannot force namespace")
 
 	require.NoError(t, liveLoadData(t, &liveOpts{
 		rdfs: fmt.Sprintf(`

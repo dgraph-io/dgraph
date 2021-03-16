@@ -50,6 +50,10 @@
       "type": "string"
     },
     {
+      "predicate": "Astronaut.isActive",
+      "type": "bool"
+    },
+    {
       "predicate": "Astronaut.missions",
       "type": "uid",
       "list": true
@@ -594,6 +598,20 @@
       "list": true
     },
     {
+      "predicate": "Planet.id",
+      "type": "int",
+      "index": true,
+      "tokenizer": [
+        "int"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "Planet.missions",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Starship.length",
       "type": "float"
     },
@@ -776,6 +794,12 @@
       "fields": [
         {
           "name": "Astronaut.id"
+        },
+        {
+          "name": "Astronaut.name"
+        },
+        {
+          "name": "Astronaut.isActive"
         },
         {
           "name": "Astronaut.missions"
@@ -1358,6 +1382,17 @@
         }
       ],
       "name": "Zoo"
+    },
+    {
+      "fields": [
+        {
+          "name": "Planet.missions"
+        },
+        {
+          "name": "Planet.id"
+        }
+      ],
+      "name": "Planet"
     },
     {
       "fields": [
