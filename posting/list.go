@@ -1209,12 +1209,6 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot iterate through the list")
 	}
-	if len(out.parts) > 1 {
-		for start, part := range out.parts {
-			r := codec.FromBytes(part.Bitmap)
-			glog.Infof("Start: %d. Bitmap: %+v\n", start, r.ToArray())
-		}
-	}
 	return nil
 }
 
