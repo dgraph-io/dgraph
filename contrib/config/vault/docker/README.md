@@ -10,8 +10,8 @@ Overview:
 5. Create the dgraph role with an attached policy
 6. Save secrets using admin role
 7. Retrieve the dgraph token and save role_id and secret_id
-7. Verify access using dgraph secrets
-8. Launch dgraph
+8. Verify access using dgraph secrets
+9. Launch dgraph
 
 ## Prerequisites
 
@@ -75,14 +75,16 @@ curl --silent \
 
 ## create the admin role with an attached policy
 curl --silent \
- --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
- --request POST \
- --data '{ "token_policies": "admin", "token_ttl": "1h", "token_max_ttl": "4h" }' \
- http://$VAULT_ADDRESS/v1/auth/approle/role/admin
+  --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
+  --request POST \
+  --data '{ "token_policies": "admin", "token_ttl": "1h", "token_max_ttl": "4h" }' \
+  http://$VAULT_ADDRESS/v1/auth/approle/role/admin
 
 ## verify the role
-curl --silent --header "X-Vault-Token: $VAULT_ROOT_TOKEN" --request GET \
- http://$VAULT_ADDRESS/v1/auth/approle/role/admin | jq
+curl --silent \
+  --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
+  --request GET \
+  http://$VAULT_ADDRESS/v1/auth/approle/role/admin | jq
 ```
 
 ### Retrieve the admin token
@@ -101,7 +103,8 @@ VAULT_ADMIN_SECRET_ID=$(curl --silent \
   http://$VAULT_ADDRESS/v1/auth/approle/role/admin/secret-id | jq -r '.data.secret_id'
 )
 
-export VAULT_ADMIN_TOKEN=$(curl --silent --request POST \
+export VAULT_ADMIN_TOKEN=$(curl --silent \
+  --request POST \
   --data "{ \"role_id\": \"$VAULT_ADMIN_ROLE_ID\", \"secret_id\": \"$VAULT_ADMIN_SECRET_ID\" }" \
   http://$VAULT_ADDRESS/v1/auth/approle/login | jq -r '.auth.client_token'
 )
@@ -131,7 +134,8 @@ curl --silent \
  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph
 
 ## verify the role
-curl --silent --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" --request GET \
+curl --silent \
+  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" --request GET \
  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph | jq
 ```
 
@@ -159,7 +163,8 @@ VAULT_DGRAPH_SECRET_ID=$(curl --silent \
   http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph/secret-id | jq -r '.data.secret_id'
 )
 
-export VAULT_DGRAPH_TOKEN=$(curl --silent --request POST \
+export VAULT_DGRAPH_TOKEN=$(curl --silent \
+  --request POST \
   --data "{ \"role_id\": \"$VAULT_DGRAPH_ROLE_ID\", \"secret_id\": \"$VAULT_DGRAPH_SECRET_ID\" }" \
   http://$VAULT_ADDRESS/v1/auth/approle/login | jq -r '.auth.client_token'
 )
@@ -186,4 +191,10 @@ curl --silent \
 ```bash
 export DGRAPH_VERSION="<desired-dgraph-version>" # default 'latest'
 docker-compose up --detach
+```
+
+You can verify encryption features are enabled with:
+
+```bash
+curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
 ```
