@@ -4894,16 +4894,22 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
               desc: "Graphql is the next big thing"
             },
 			{
-			  bookId: $bookId
+			  bookId: $bookId2
 			  name: "Dgraph"
 			  desc: "A GraphQL database"
-			}
+			},
+			{
+				bookId: $bookId3
+				name: "DQL"
+				desc: "Query Language for Dgraph"
+			  }
           ]) {
             numUids
           }
         }`,
 		Variables: map[string]interface{}{
-			"bookId": "1234512345",
+			"bookId2": "1234512345",
+			"bookId3": 5432154321,
 		},
 	}
 
@@ -4911,7 +4917,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	RequireNoGQLErrors(t, response)
 	expected := `{
               "addBook": {
-              "numUids": 2
+              "numUids": 3
             }
         }`
 	require.JSONEq(t, expected, string(response.Data))
@@ -4920,7 +4926,7 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Book", map[string]interface{}{}, 3, nil)
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 4, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
