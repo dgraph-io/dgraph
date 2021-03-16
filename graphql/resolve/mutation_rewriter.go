@@ -2261,68 +2261,59 @@ func copyTypeMap(from, to map[string]schema.Type) {
 func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 	switch typeName {
 	case "Int":
-		switch xidVal.(type) {
+		switch xVal := xidVal.(type) {
 		case json.Number:
-			val, err := xidVal.(json.Number).Int64()
-			if err != nil {
-				return "", err
-			}
-			return strconv.FormatInt(val, 10), nil
-		default:
-			val, ok := xidVal.(int64)
-			if !ok {
-				return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-					"a Int but data type in schema is Int", xidName, typeName))
-			}
-			return strconv.FormatInt(val, 10), nil
-		}
-	case "Int64":
-		switch xidVal.(type) {
-		case json.Number:
-			val, err := xidVal.(json.Number).Int64()
+			val, err := xVal.Int64()
 			if err != nil {
 				return "", err
 			}
 			return strconv.FormatInt(val, 10), nil
 		case int64:
-			val, ok := xidVal.(int64)
-			if !ok {
-				return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-					"a Int64 but data type in schema is Int64", xidName, typeName))
+			return strconv.FormatInt(xVal, 10), nil
+		default:
+			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+				"a Int but data type in schema is Int", xidName, typeName))
+		}
+	case "Int64":
+		switch xVal := xidVal.(type) {
+		case json.Number:
+			val, err := xVal.Int64()
+			if err != nil {
+				return "", err
 			}
 			return strconv.FormatInt(val, 10), nil
-		// If the xid field is of type Int64, both String and Int forms are allowed as per spec.
-		// The default case handles id xid is passed as string.
+		case int64:
+			return strconv.FormatInt(xVal, 10), nil
+		// If the xid field is of type Int64, both String and Int forms are allowed.
+		case string:
+			return xVal, nil
 		default:
-			xidString, ok := xidVal.(string)
-			if !ok {
-				return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-					"a Int64", xidName, typeName))
-			}
-			return xidString, nil
+			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+				"a Int64 but data type in schema is Int64", xidName, typeName))
 		}
 	case "Float":
-		switch xidVal.(type) {
+		switch xVal := xidVal.(type) {
 		case json.Number:
-			val, err := xidVal.(json.Number).Float64()
+			val, err := xVal.Float64()
 			if err != nil {
 				return "", err
 			}
 			return strconv.FormatFloat(val, 'f', -1, 64), nil
+		case float64:
+			return strconv.FormatFloat(xVal, 'f', -1, 64), nil
 		default:
-			val, ok := xidVal.(float64)
-			if !ok {
-				return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-					"a Float but data type in schema is Float", xidName, typeName))
-			}
-			return strconv.FormatFloat(val, 'f', -1, 64), nil
+			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
+				"a Float but data type in schema is Float", xidName, typeName))
 		}
-	default:
+	case "String":
 		xidString, ok := xidVal.(string)
 		if !ok {
 			return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
 				"a String", xidName, typeName))
 		}
 		return xidString, nil
+	default:
+		return "", errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't"+
+			"allowed as Xid", xidName, typeName))
 	}
 }
