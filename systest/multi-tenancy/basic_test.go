@@ -358,7 +358,7 @@ func TestLiveLoadMulti(t *testing.T) {
 		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
 	}))
 
-	err = x.RetryUntilSuccess(100, 1*time.Second, func() error {
+	err = x.RetryUntilSuccess(10, time.Second, func() error {
 		resp = testutil.QueryData(t, dc1, query3)
 		var o1 interface{}
 		var o2 interface{}
