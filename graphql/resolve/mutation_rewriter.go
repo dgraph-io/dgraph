@@ -1406,17 +1406,7 @@ func rewriteObject(
 		for _, xid := range xids {
 			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-				// TODO: Add a function for parsing idVal. This is repeatitive
-				switch xid.Type().Name() {
-				case "Int":
-					val, _ := xidVal.(int64)
-					xidString = strconv.FormatInt(val, 10)
-				case "Float":
-					val, _ := xidVal.(float64)
-					xidString = strconv.FormatFloat(val, 'f', -1, 64)
-				default:
-					xidString, _ = xidVal.(string)
-				}
+				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 
 				// Three cases:
@@ -1750,33 +1740,13 @@ func existenceQueries(
 
 	xids := typ.XIDFields()
 	var xidString string
+	var err error
 	if len(xids) != 0 {
 		for _, xid := range xids {
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
-				switch xid.Type().Name() {
-				case "Int":
-					val, ok := xidVal.(int64)
-					if !ok {
-						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a Int but data type in schema is Int", xid.Name(), xid.Type().Name())))
-						return nil, retErrors
-					}
-					xidString = strconv.FormatInt(val, 10)
-				case "Float":
-					val, ok := xidVal.(float64)
-					if !ok {
-						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a Float but data type in schema is Float", xid.Name(), xid.Type().Name())))
-						return nil, retErrors
-					}
-					xidString = strconv.FormatFloat(val, 'f', -1, 64)
-				default:
-					xidString, ok = xidVal.(string)
-					if !ok {
-						retErrors = append(retErrors, errors.New(fmt.Sprintf("encountered an XID %s with %s that isn't "+
-							"a String or Int64", xid.Name(), xid.Type().Name())))
-						return nil, retErrors
-					}
+				xidString, err = extractVal(xidVal, xid.Name(), xid.Type().Name())
+				if err != nil {
+					return nil, append(retErrors, err)
 				}
 				variable := varGen.Next(typ, xid.Name(), xidString, false)
 				// There are two cases:
@@ -2311,5 +2281,67 @@ func newFragment(f interface{}) *mutationFragment {
 func copyTypeMap(from, to map[string]schema.Type) {
 	for name, typ := range from {
 		to[name] = typ
+	}
+}
+
+func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
+	fmt.Println(typeName)
+	switch typeName {
+	case "Int":
+		switch xVal := xidVal.(type) {
+		case json.Number:
+			val, err := xVal.Int64()
+			if err != nil {
+				return "", err
+			}
+			return strconv.FormatInt(val, 10), nil
+		case int64:
+			return strconv.FormatInt(xVal, 10), nil
+		default:
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Int but data type in schema is Int", xidName, typeName)
+		}
+	case "Int64":
+		switch xVal := xidVal.(type) {
+		case json.Number:
+			val, err := xVal.Int64()
+			if err != nil {
+				return "", err
+			}
+			return strconv.FormatInt(val, 10), nil
+		case int64:
+			return strconv.FormatInt(xVal, 10), nil
+		// If the xid field is of type Int64, both String and Int forms are allowed.
+		case string:
+			return xVal, nil
+		default:
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Int64 but data type in schema is Int64", xidName, typeName)
+		}
+	case "Float":
+		switch xVal := xidVal.(type) {
+		case json.Number:
+			val, err := xVal.Float64()
+			if err != nil {
+				return "", err
+			}
+			return strconv.FormatFloat(val, 'f', -1, 64), nil
+		case float64:
+			return strconv.FormatFloat(xVal, 'f', -1, 64), nil
+		default:
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a Float but data type in schema is Float", xidName, typeName)
+		}
+		// "ID" is given as input for the @extended type mutation.
+	case "String", "ID":
+		xidString, ok := xidVal.(string)
+		if !ok {
+			return "", fmt.Errorf("encountered an XID %s with %s that isn't "+
+				"a String", xidName, typeName)
+		}
+		return xidString, nil
+	default:
+		return "", fmt.Errorf("encountered an XID %s with %s that isn't"+
+			"allowed as Xid", xidName, typeName)
 	}
 }
