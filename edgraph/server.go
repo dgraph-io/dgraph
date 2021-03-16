@@ -46,7 +46,6 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
@@ -63,7 +62,6 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
-	groupFile    = "group_id"
 )
 
 type GraphqlContextKey int
@@ -378,6 +376,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
 	if isDropAll(op) {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-all because it is not permitted.")
+			return empty, errors.New("Drop all operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop all can only be called by the guardian of the"+
 				" galaxy")
@@ -407,6 +409,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
+		if x.Config.BlockClusterWideDrop {
+			glog.V(2).Info("Blocked drop-data because it is not permitted.")
+			return empty, errors.New("Drop data operation is not permitted.")
+		}
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
 			return empty, errors.Wrapf(err, "Drop data can only be called by the guardian of the"+
 				" galaxy")
@@ -1016,7 +1022,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
-		EeFeatures:  ee.GetEEFeaturesList(),
+		EeFeatures:  worker.GetEEFeaturesList(),
 		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 
@@ -1038,7 +1044,16 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
 	if namespace == x.GalaxyNamespace {
-		// For galaxy namespace, we don't want to filter out the predicates.
+		// For galaxy namespace, we don't want to filter out the predicates. We only format the
+		// namespace to human readable form.
+		for _, group := range ms.Groups {
+			tablets := make(map[string]*pb.Tablet)
+			for tabletName, tablet := range group.Tablets {
+				tablet.Predicate = x.FormatNsAttr(tablet.Predicate)
+				tablets[x.FormatNsAttr(tabletName)] = tablet
+			}
+			group.Tablets = tablets
+		}
 		return nil
 	}
 	for _, group := range ms.GetGroups() {
@@ -1340,8 +1355,10 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		// If the list of UIDs is empty but the map of values is not,
 		// we need to get the UIDs from the keys in the map.
 		var uidList []uint64
-		if v.Uids != nil && len(v.Uids.Uids) > 0 {
-			uidList = v.Uids.Uids
+		if v.OrderedUIDs != nil && len(v.OrderedUIDs.Uids) > 0 {
+			uidList = v.OrderedUIDs.Uids
+		} else if !v.UidMap.IsEmpty() {
+			uidList = v.UidMap.ToArray()
 		} else {
 			uidList = make([]uint64, 0, len(v.Vals))
 			for uid := range v.Vals {

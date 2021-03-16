@@ -488,7 +488,7 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	if out.GroupId == groups().groupId() {
-		glog.Infof("Serving tablet for: %v\n", tablet.GetPredicate())
+		glog.Infof("Serving tablet for: %v\n", x.FormatNsAttr(tablet.GetPredicate()))
 	}
 	return out, nil
 }
@@ -1054,6 +1054,30 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 		}
 	}
+}
+
+// GetEEFeaturesList returns a list of Enterprise Features that are available.
+func GetEEFeaturesList() []string {
+	if !EnterpriseEnabled() {
+		return nil
+	}
+	var ee []string
+	if len(Config.HmacSecret) > 0 {
+		ee = append(ee, "acl")
+		ee = append(ee, "multi_tenancy")
+	}
+	if x.WorkerConfig.EncryptionKey != nil {
+		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
+	} else {
+		ee = append(ee, "backup_restore")
+	}
+	if x.WorkerConfig.Audit {
+		ee = append(ee, "audit")
+	}
+	if Config.ChangeDataConf != "" {
+		ee = append(ee, "cdc")
+	}
+	return ee
 }
 
 // EnterpriseEnabled returns whether enterprise features can be used or not.

@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package bulk
+package x
 
 import (
 	"golang.org/x/sys/unix"
 )
 
-func queryMaxOpenFiles() (int, error) {
+func QueryMaxOpenFiles() (int, error) {
 	var rl unix.Rlimit
 	err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rl)
 	return int(rl.Cur), err

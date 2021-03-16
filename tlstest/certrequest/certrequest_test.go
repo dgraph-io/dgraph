@@ -22,8 +22,8 @@ func TestAccessOverPlaintext(t *testing.T) {
 
 func TestAccessWithCaCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s;",
+		// ca-cert
 		"../tls/ca.crt",
 		// server-name
 		"node"))

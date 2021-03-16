@@ -59,7 +59,7 @@ func GetSink(conf *z.SuperFlag) (Sink, error) {
 	switch {
 	case conf.GetString("kafka") != "":
 		return newKafkaSink(conf)
-	case conf.GetString("file") != "":
+	case conf.GetPath("file") != "":
 		return newFileSink(conf)
 	}
 	return nil, errors.New("sink config is not provided")
@@ -83,14 +83,14 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 	saramaConf.Producer.Return.Successes = true
 	saramaConf.Producer.Return.Errors = true
 
-	if config.GetString("ca-cert") != "" {
+	if config.GetPath("ca-cert") != "" {
 		tlsCfg := &tls.Config{}
 		var pool *x509.CertPool
 		var err error
 		if pool, err = x509.SystemCertPool(); err != nil {
 			return nil, err
 		}
-		caFile, err := ioutil.ReadFile(config.GetString("ca-cert"))
+		caFile, err := ioutil.ReadFile(config.GetPath("ca-cert"))
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to read ca cert file")
 		}
@@ -98,8 +98,8 @@ func newKafkaSink(config *z.SuperFlag) (Sink, error) {
 			return nil, errors.New("not able to append certificates")
 		}
 		tlsCfg.RootCAs = pool
-		cert := config.GetString("client-cert")
-		key := config.GetString("client-key")
+		cert := config.GetPath("client-cert")
+		key := config.GetPath("client-key")
 		if cert != "" && key != "" {
 			cert, err := tls.LoadX509KeyPair(cert, key)
 			if err != nil {
@@ -173,7 +173,7 @@ func (f *fileSink) Close() error {
 }
 
 func newFileSink(path *z.SuperFlag) (Sink, error) {
-	dir := path.GetString("file")
+	dir := path.GetPath("file")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, errors.Wrap(err, "unable to create directory for file sink")
 	}

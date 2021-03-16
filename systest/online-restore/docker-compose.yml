@@ -32,7 +32,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=1;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha1.crt; key=/dgraph-tls/client.alpha1.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
   alpha2:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha2
@@ -67,7 +67,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=2;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha2.crt; key=/dgraph-tls/client.alpha2.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
   alpha3:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha3
@@ -102,7 +102,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=3;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha3.crt; key=/dgraph-tls/client.alpha3.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
   alpha4:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha4
@@ -137,7 +137,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha4:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=4;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha4.crt; key=/dgraph-tls/client.alpha4.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha4.crt; client-key=/dgraph-tls/client.alpha4.key;"
   alpha5:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha5
@@ -172,7 +172,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha5:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=5;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha5.crt; key=/dgraph-tls/client.alpha5.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
   alpha6:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha6
@@ -207,7 +207,7 @@ services:
     command: /gobin/dgraph alpha --my=alpha6:7080 --zero=zero1:5080
       --logtostderr -v=2 --raft "idx=6;" --encryption_key_file /data/keys/enc_key
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.alpha6.crt; key=/dgraph-tls/client.alpha6.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha6.crt; client-key=/dgraph-tls/client.alpha6.key;"
   ratel:
     image: dgraph/dgraph:latest
     ports:
@@ -231,6 +231,6 @@ services:
       target: /dgraph-tls
       read_only: true
     command: /gobin/dgraph zero --raft "idx=1;" --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall
-      --tls "cacert=/dgraph-tls/ca.crt; node-cert=/dgraph-tls/node.crt; node-key=/dgraph-tls/node.key; internal-port-enabled=true; cert=/dgraph-tls/client.zero1.crt; key=/dgraph-tls/client.zero1.key;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;"
 volumes:
   backup: {}

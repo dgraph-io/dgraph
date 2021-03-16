@@ -17,7 +17,12 @@
 package worker
 
 import (
+	"context"
+	"math"
 	"sync"
+
+	"github.com/dgraph-io/badger/v3"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -59,14 +64,17 @@ type Manifest struct {
 	// versions (<= 20.11), the predicates in Group map do not have namespace. Version will be zero
 	// for older versions.
 	Version int `json:"version"`
-	// Path is the path to the manifest file. This field is only used during
-	// processing and is not written to disk.
-	Path string `json:"-"`
+	// Path is the name of the backup directory to which this manifest belongs to.
+	Path string `json:"path"`
 	// Encrypted indicates whether this backup was encrypted or not.
 	Encrypted bool `json:"encrypted"`
 	// DropOperations lists the various DROP operations that took place since the last backup.
 	// These are used during restore to redo those operations before applying the backup.
 	DropOperations []*pb.DropOperation `json:"drop_operations"`
+}
+
+type MasterManifest struct {
+	Manifests []*Manifest
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -94,4 +102,22 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *x.MinioCredentials {
 		SessionToken: req.GetSessionToken(),
 		Anonymous:    req.GetAnonymous(),
 	}
+}
+
+func StoreExport(request *pb.ExportRequest, dir string, key x.SensitiveByteSlice) error {
+	db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+		WithSyncWrites(false).
+		WithValueThreshold(1 << 10).
+		WithNumVersionsToKeep(math.MaxInt32).
+		WithEncryptionKey(key))
+
+	if err != nil {
+		return err
+	}
+
+	_, err = exportInternal(context.Background(), request, db, true)
+	// It is important to close the db before sending err to ch. Else, we will see a memory
+	// leak.
+	db.Close()
+	return errors.Wrapf(err, "cannot export data inside DB at %s", dir)
 }

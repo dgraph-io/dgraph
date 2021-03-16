@@ -93,23 +93,40 @@ func run() error {
 	block, err := aes.NewCipher(key)
 	stat, err := os.Stat(decryptCmd.Conf.GetString("in"))
 	x.Check(err)
-	iv := make([]byte, aes.BlockSize)
-	x.Check2(file.ReadAt(iv, 0))
+	if stat.Size() == 0 {
+		glog.Info("audit file is empty")
+		return nil
+	}
+	var iterator int64 = 0
 
-	var iterator int64 = 16
+	iv := make([]byte, aes.BlockSize)
+	x.Check2(file.ReadAt(iv, iterator))
+	iterator = iterator + aes.BlockSize
+
+	t := make([]byte, len(x.VerificationText))
+	x.Check2(file.ReadAt(t, iterator))
+	iterator = iterator + int64(len(x.VerificationText))
+
+	stream := cipher.NewCTR(block, iv)
+	stream.XORKeyStream(t, t)
+	if string(t) != x.VerificationText {
+		return errors.New("invalid encryption key provided. Please check your encryption key")
+	}
+
 	for {
-		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
-		x.Check2(file.ReadAt(content, iterator))
-		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(content, content)
-		x.Check2(outfile.Write(content))
 		// if its the end of data. finish decrypting
 		if iterator >= stat.Size() {
 			break
 		}
 		x.Check2(file.ReadAt(iv[12:], iterator))
 		iterator = iterator + 4
+
+		content := make([]byte, binary.BigEndian.Uint32(iv[12:]))
+		x.Check2(file.ReadAt(content, iterator))
+		iterator = iterator + int64(binary.BigEndian.Uint32(iv[12:]))
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(content, content)
+		x.Check2(outfile.Write(content))
 	}
 	glog.Infof("Decryption of Audit file %s is Done. Decrypted file is %s",
 		decryptCmd.Conf.GetString("in"),

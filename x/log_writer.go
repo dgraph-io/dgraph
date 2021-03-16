@@ -19,6 +19,8 @@ package x
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -39,6 +41,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
+	VerificationText = "Hello World"
 )
 
 // This is done to ensure LogWriter always implement io.WriterCloser
@@ -63,6 +66,10 @@ type LogWriter struct {
 }
 
 func (l *LogWriter) Init() (*LogWriter, error) {
+	if l == nil {
+		return nil, nil
+	}
+
 	l.manageOldLogs()
 	if err := l.open(); err != nil {
 		return nil, fmt.Errorf("not able to create new file %v", err)
@@ -87,6 +94,10 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 }
 
 func (l *LogWriter) Write(p []byte) (int, error) {
+	if l == nil {
+		return 0, nil
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -113,6 +124,9 @@ func (l *LogWriter) Write(p []byte) (int, error) {
 }
 
 func (l *LogWriter) Close() error {
+	if l == nil {
+		return nil
+	}
 	// close all go routines first before acquiring the lock to avoid contention
 	l.closer.SignalAndWait()
 
@@ -132,6 +146,9 @@ func (l *LogWriter) Close() error {
 
 // flushPeriodic periodically flushes the log file buffers.
 func (l *LogWriter) flushPeriodic() {
+	if l == nil {
+		return
+	}
 	defer l.closer.Done()
 	for {
 		select {
@@ -147,6 +164,10 @@ func (l *LogWriter) flushPeriodic() {
 
 // LogWriter should be locked while calling this
 func (l *LogWriter) flush() {
+	if l == nil {
+		return
+	}
+
 	_ = l.writer.Flush()
 	_ = l.file.Sync()
 }
@@ -163,7 +184,24 @@ func encrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
 	return allocate, nil
 }
 
+func decrypt(key []byte, baseIv [12]byte, src []byte) ([]byte, error) {
+	iv := make([]byte, 16)
+	copy(iv, baseIv[:])
+	binary.BigEndian.PutUint32(iv[12:], uint32(len(src)))
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, iv[:])
+	stream.XORKeyStream(src, src)
+	return src, nil
+}
+
 func (l *LogWriter) rotate() error {
+	if l == nil {
+		return nil
+	}
+
 	l.flush()
 	if err := l.file.Close(); err != nil {
 		return err
@@ -182,6 +220,10 @@ func (l *LogWriter) rotate() error {
 }
 
 func (l *LogWriter) open() error {
+	if l == nil {
+		return nil
+	}
+
 	if err := os.MkdirAll(filepath.Dir(l.FilePath), 0755); err != nil {
 		return err
 	}
@@ -204,7 +246,11 @@ func (l *LogWriter) open() error {
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
-			if _, err = l.writer.Write(l.baseIv[:]); err != nil {
+			bytes, err := encrypt(l.EncryptionKey, l.baseIv, []byte(VerificationText))
+			if err != nil {
+				return err
+			}
+			if _, err = l.writer.Write(append(l.baseIv[:], bytes[:]...)); err != nil {
 				return err
 			}
 		}
@@ -234,6 +280,17 @@ func (l *LogWriter) open() error {
 			_ = f.Close()
 			return openNew()
 		}
+		text := make([]byte, 11)
+		if _, err := f.ReadAt(text, 16); err != nil {
+			_ = f.Close()
+			return openNew()
+		}
+		if t, err := decrypt(l.EncryptionKey, l.baseIv, text); err != nil ||
+			string(t) != VerificationText {
+			// different encryption key. Better to open new file here
+			_ = f.Close()
+			return openNew()
+		}
 	}
 
 	l.file = f
@@ -245,7 +302,7 @@ func (l *LogWriter) open() error {
 func backupName(name string) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().Format(backupTimeFormat)
+	timestamp := time.Now().UTC().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 
@@ -280,7 +337,11 @@ func compress(src string) error {
 
 // this should be called in a serial order
 func (l *LogWriter) manageOldLogs() {
-	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxSize)
+	if l == nil {
+		return
+	}
+
+	toRemove, toKeep, err := processOldLogFiles(l.FilePath, l.MaxAge)
 	if err != nil {
 		return
 	}
@@ -312,6 +373,8 @@ func (l *LogWriter) manageOldLogs() {
 	}
 }
 
+// prefixAndExt extracts the filename and extension from a filepath.
+// eg. prefixAndExt("/home/foo/file.ext") would return ("file", ".ext").
 func prefixAndExt(file string) (prefix, ext string) {
 	filename := filepath.Base(file)
 	ext = filepath.Ext(filename)
@@ -332,8 +395,8 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 	toRemove := make([]string, 0)
 	toKeep := make([]string, 0)
 
-	diff := time.Duration(int64(24*time.Hour) * int64(maxAge))
-	cutoff := time.Now().Add(-1 * diff)
+	diff := 24 * time.Hour * time.Duration(maxAge)
+	cutoff := time.Now().Add(-diff)
 
 	for _, f := range files {
 		if f.IsDir() || // f is directory
@@ -343,7 +406,8 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 		}
 
 		_, e := prefixAndExt(fp)
-		ts, err := time.Parse(backupTimeFormat, f.Name()[len(defPrefix):len(f.Name())-len(e)])
+		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
+		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue
 		}

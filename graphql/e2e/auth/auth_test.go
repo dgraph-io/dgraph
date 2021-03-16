@@ -707,6 +707,31 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 	}
 }
 
+func TestBearerToken(t *testing.T) {
+	queryProjectParams := &common.GraphQLParams{
+		Query: `
+		query {
+			queryProject {
+				name
+			}
+		}`,
+		Headers: http.Header{},
+	}
+
+	// querying with a bad bearer token should give back an error
+	queryProjectParams.Headers.Set(metaInfo.Header, "Bearer bad token")
+	resp := queryProjectParams.ExecuteAsPost(t, common.GraphqlURL)
+	require.Contains(t, resp.Errors.Error(), "invalid Bearer-formatted header value for JWT (Bearer bad token)")
+	require.Nil(t, resp.Data)
+
+	// querying with a correct bearer token should give back expected results
+	queryProjectParams.Headers.Set(metaInfo.Header, "Bearer "+common.GetJWT(t, "user1", "",
+		metaInfo).Get(metaInfo.Header))
+	resp = queryProjectParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{"queryProject":[{"name":"Project1"}]}`, string(resp.Data))
+}
+
 func TestOrderAndOffset(t *testing.T) {
 	tasks := Tasks{
 		Task{

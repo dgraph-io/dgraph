@@ -13,8 +13,8 @@ import (
 
 func TestAccessWithoutClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s;",
+		// ca-cert
 		"../tls/ca.crt",
 		// server-name
 		"node"))
@@ -27,14 +27,14 @@ func TestAccessWithoutClientCert(t *testing.T) {
 
 func TestAccessWithClientCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls", fmt.Sprintf("cacert=%s; server-name=%s; cert=%s; key=%s;",
-		// cacert
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; client-cert=%s; client-key=%s;",
+		// ca-cert
 		"../tls/ca.crt",
 		// server-name
 		"node",
-		// cert
+		// client-cert
 		"../tls/client.acl.crt",
-		// key
+		// client-key
 		"../tls/client.acl.key"))
 
 	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)

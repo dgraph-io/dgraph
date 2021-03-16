@@ -81,15 +81,24 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, errUpdatingGraphQLSchemaOnNonGroupOneLeader
 	}
 
-	// lock here so that only one request is served at a time by group 1 leader
-	schemaLock.Lock()
-	defer schemaLock.Unlock()
-
 	ctx = x.AttachJWTNamespace(ctx)
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While updating gql schema")
 	}
+
+	waitStart := time.Now()
+
+	// lock here so that only one request is served at a time by group 1 leader
+	schemaLock.Lock()
+	defer schemaLock.Unlock()
+
+	waitDuration := time.Since(waitStart)
+	if waitDuration > 500*time.Millisecond {
+		glog.Warningf("GraphQL schema update for namespace %d waited for %s as another schema"+
+			" update was in progress.", namespace, waitDuration.String())
+	}
+
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    x.NamespaceAttr(namespace, GqlSchemaPred),

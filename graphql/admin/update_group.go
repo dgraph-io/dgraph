@@ -48,7 +48,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, "")
+	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, m.Name(), "")
 	srcUID := resolve.MutationQueryVarUID
 
 	var errSet, errDel error

@@ -16,12 +16,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"sort"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dgraph-io/badger/v3/options"
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -175,9 +183,7 @@ func runRestoreCmd() error {
 		zc    pb.ZeroClient
 		err   error
 	)
-	if opt.key, err = enc.ReadKey(Restore.Conf); err != nil {
-		return err
-	}
+	_, opt.key = ee.GetKeys(Restore.Conf)
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
@@ -263,14 +269,6 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	var paths []string
-	for path := range manifests {
-		paths = append(paths, path)
-	}
-	sort.Slice(paths, func(i, j int) bool {
-		return paths[i] < paths[j]
-	})
-
 	type backupEntry struct {
 		Path           string              `json:"path"`
 		Since          uint64              `json:"since"`
@@ -285,12 +283,10 @@ func runLsbackupCmd() error {
 	type backupOutput []backupEntry
 
 	var output backupOutput
-	for i := 0; i < len(paths); i++ {
-		path := paths[i]
-		manifest := manifests[path]
+	for _, manifest := range manifests {
 
 		be := backupEntry{
-			Path:      path,
+			Path:      manifest.Path,
 			Since:     manifest.Since,
 			BackupId:  manifest.BackupId,
 			BackupNum: manifest.BackupNum,
@@ -330,7 +326,8 @@ func initExportBackup() {
 
 	flag := ExportBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
-		"Sets the location of the backup. Only file URIs are supported for now.")
+		`Sets the location of the backup. Both file URIs and s3 are supported.
+		This command will take care of all the full + incremental backups present in the location.`)
 	flag.StringVarP(&opt.destination, "destination", "d", "",
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
@@ -339,11 +336,65 @@ func initExportBackup() {
 }
 
 func runExportBackup() error {
-	var err error
-	if opt.key, err = enc.ReadKey(ExportBackup.Conf); err != nil {
-		return err
+	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	if opt.format != "json" && opt.format != "rdf" {
+		return errors.Errorf("invalid format %s", opt.format)
+	}
+	// Create exportDir and temporary folder to store the restored backup.
+	exportDir, err := filepath.Abs(opt.destination)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
+	tmpDir, err := ioutil.TempDir("", "export_backup")
+	if err != nil {
+		return errors.Wrapf(err, "cannot create temp dir")
 	}
 
-	exporter := worker.BackupExporter{}
-	return exporter.ExportBackup(opt.location, opt.destination, opt.format, opt.key)
+	restore := worker.RunRestore(tmpDir, opt.location, "", opt.key, options.None, 0)
+	if restore.Err != nil {
+		return restore.Err
+	}
+
+	files, err := ioutil.ReadDir(tmpDir)
+	if err != nil {
+		return err
+	}
+	// Export the data from the p directories produced by the last step.
+	eg, _ := errgroup.WithContext(context.Background())
+	for _, f := range files {
+		if !f.IsDir() {
+			continue
+		}
+
+		dir := filepath.Join(filepath.Join(tmpDir, f.Name()))
+		gid, err := strconv.ParseUint(strings.TrimPrefix(f.Name(), "p"), 32, 10)
+		if err != nil {
+			fmt.Printf("WARNING WARNING WARNING: unable to get group id from directory "+
+				"inside DB at %s: %v", dir, err)
+			continue
+		}
+		eg.Go(func() error {
+			return worker.StoreExport(&pb.ExportRequest{
+				GroupId:     uint32(gid),
+				ReadTs:      restore.Version,
+				UnixTs:      time.Now().Unix(),
+				Format:      opt.format,
+				Destination: exportDir,
+			}, dir, opt.key)
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return errors.Wrapf(err, "error while exporting data")
+	}
+
+	// Clean up temporary directory.
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
+	}
+
+	return nil
 }

@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -36,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -125,20 +125,13 @@ they form a Raft group and provide synchronous replication.
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"Comma separated list of Dgraph Zero addresses of the form IP_ADDRESS:PORT.")
 
-	flag.Int("max_retries", -1,
-		"Commits to disk will give up after these number of retries to prevent locking the worker"+
-			" in a failed state. Use -1 to retry infinitely.")
-
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	//Custom plugins.
+	// Custom plugins.
 	flag.String("custom_tokenizers", "",
-		"Comma separated list of tokenizer plugins")
-
-	flag.String("mutations", "allow",
-		"Set mutation mode to allow, disallow, or strict.")
+		"Comma separated list of tokenizer plugins for custom indices.")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
@@ -146,11 +139,14 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
 		Head("Badger options").
 		Flag("compression",
-			"Specifies the compression algorithm and compression level (if applicable) for the "+
-				`postings directory. "none" would disable compression, while "zstd:1" would set `+
-				"zstd compression at level 1.").
+			`[none, zstd:level, snappy] Specifies the compression algorithm and
+			compression level (if applicable) for the postings directory."none" would disable
+			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -201,14 +197,19 @@ they form a Raft group and provide synchronous replication.
 		Flag("normalize-node",
 			"The maximum number of nodes that can be returned in a query that uses the normalize "+
 				"directive.").
+		Flag("mutations",
+			"[allow, disallow, strict] The mutations mode to use.").
 		Flag("mutations-nquad",
 			"The maximum number of nquads that can be inserted in a mutation request.").
+		Flag("disallow-drop",
+			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
+				" allows dropping attributes and types.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
 		Head("Ludicrous options").
 		Flag("enabled",
-			"Run Dgraph in Ludicrous mode.").
+			"Set enabled to true to run Dgraph in Ludicrous mode.").
 		Flag("concurrency",
 			"The number of concurrent threads to use in Ludicrous mode.").
 		String())
@@ -228,7 +229,7 @@ they form a Raft group and provide synchronous replication.
 			"The URL of a lambda server that implements custom GraphQL Javascript resolvers.").
 		String())
 
-	flag.String("cdc", "", z.NewSuperFlagHelp("").
+	flag.String("cdc", worker.CDCDefaults, z.NewSuperFlagHelp(worker.CDCDefaults).
 		Head("Change Data Capture options").
 		Flag("file",
 			"The path where audit logs will be stored.").
@@ -246,12 +247,12 @@ they form a Raft group and provide synchronous replication.
 			"The path to client key file for TLS encryption.").
 		String())
 
-	// NOTE: audit needs an empty default string otherwise it would panic with an empty "dir"
-	//       option.
-	flag.String("audit", "", z.NewSuperFlagHelp("").
+	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
-		Flag("dir",
-			"The path where audit logs will be stored.").
+		Flag("output",
+			`[stdout, /path/to/dir] This specifies where audit logs should be output to.
+			"stdout" is for standard output. You can also specify the directory where audit logs
+			will be saved. When stdout is specified as output other fields will be ignored.`).
 		Flag("compress",
 			"Enables the compression of old audit logs.").
 		Flag("encrypt-file",
@@ -534,28 +535,8 @@ func setupServer(closer *z.Closer) {
 		mainServer.HTTPHandler().ServeHTTP(w, r)
 	})
 
-	baseMux.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
-		// lazy load the schema so that just by making a probe request,
-		// one can boot up GraphQL for their namespace
-		namespace := x.ExtractNamespaceHTTP(r)
-		admin.LazyLoadSchema(namespace)
+	baseMux.Handle("/probe/graphql", graphqlProbeHandler(gqlHealthStore, globalEpoch))
 
-		healthStatus := gqlHealthStore.GetHealth()
-		httpStatusCode := http.StatusOK
-		if !healthStatus.Healthy {
-			httpStatusCode = http.StatusServiceUnavailable
-		}
-		w.Header().Set("Content-Type", "application/json")
-		x.AddCorsHeaders(w)
-		w.WriteHeader(httpStatusCode)
-		e = globalEpoch[namespace]
-		var counter uint64
-		if e != nil {
-			counter = atomic.LoadUint64(e)
-		}
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s","schemaUpdateCounter":%d}`,
-			healthStatus.StatusMsg, counter))))
-	})
 	baseMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
@@ -567,55 +548,7 @@ func setupServer(closer *z.Closer) {
 			http.MethodOptions: true,
 		}, adminAuthHandler(adminServer.HTTPHandler())).ServeHTTP(w, r)
 	})
-
-	baseMux.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(
-		w http.ResponseWriter,
-		r *http.Request) {
-		adminSchemaHandler(w, r, adminServer)
-	})))
-
-	baseMux.HandleFunc("/admin/schema/validate", func(w http.ResponseWriter,
-		r *http.Request) {
-		schema := readRequest(w, r)
-		w.Header().Set("Content-Type", "application/json")
-
-		err := admin.SchemaValidate(string(schema))
-		if err == nil {
-			w.WriteHeader(http.StatusOK)
-			x.SetStatus(w, "success", "Schema is valid")
-			return
-		}
-
-		w.WriteHeader(http.StatusBadRequest)
-		errs := strings.Split(strings.TrimSpace(err.Error()), "\n")
-		x.SetStatusWithErrors(w, x.ErrorInvalidRequest, errs)
-	})
-
-	baseMux.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.
-		MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			shutDownHandler(w, r, adminServer)
-		}))))
-
-	baseMux.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
-		http.MethodPut:  true,
-		http.MethodPost: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		drainingHandler(w, r, adminServer)
-	}))))
-
-	baseMux.Handle("/admin/export", allowedMethodsHandler(
-		allowedMethods{http.MethodGet: true},
-		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			exportHandler(w, r, adminServer)
-		}))))
-
-	baseMux.Handle("/admin/config/cache_mb", allowedMethodsHandler(allowedMethods{
-		http.MethodGet: true,
-		http.MethodPut: true,
-	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		memoryLimitHandler(w, r, adminServer)
-	}))))
+	baseMux.Handle("/admin/", getAdminMux())
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
@@ -631,10 +564,6 @@ func setupServer(closer *z.Closer) {
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
-
-	if Alpha.Conf.GetBool("telemetry") {
-		go edgraph.PeriodicallyPostTelemetry()
-	}
 
 	go func() {
 		defer x.ServerCloser.Done()
@@ -662,13 +591,17 @@ func setupServer(closer *z.Closer) {
 
 func run() {
 	var err error
-	if Alpha.Conf.GetBool("enable_sentry") {
+
+	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
+		x.TelemetryDefaults)
+	if telemetry.GetBool("sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
 		x.WrapPanics()
 		x.SentryOptOutNote()
 	}
+
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
@@ -711,25 +644,20 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
-	secretFile := acl.GetString("secret-file")
-	if secretFile != "" {
-		hmacSecret, err := ioutil.ReadFile(secretFile)
-		if err != nil {
-			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
-		}
-		if len(hmacSecret) < 32 {
-			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
-		}
+	aclKey, encKey := ee.GetKeys(Alpha.Conf)
+	if aclKey != nil {
+		opts.HmacSecret = aclKey
 
-		opts.HmacSecret = hmacSecret
+		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 
-		glog.Info("HMAC secret loaded successfully.")
+		glog.Info("ACL secret key loaded successfully.")
 	}
 
-	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
+	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.LimitDefaults)
+	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
 	case "disallow":
@@ -737,7 +665,7 @@ func run() {
 	case "strict":
 		opts.MutationsMode = worker.StrictMutations
 	default:
-		glog.Error("--mutations argument must be one of allow, disallow, or strict")
+		glog.Error(`--limit "mutations=<mode>;" must be one of allow, disallow, or strict`)
 		os.Exit(1)
 	}
 
@@ -763,9 +691,8 @@ func run() {
 		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
-		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          secretFile != "",
+		AclEnabled:          aclKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
@@ -779,21 +706,21 @@ func run() {
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
+	if telemetry.GetBool("reports") {
+		go edgraph.PeriodicallyPostTelemetry()
+	}
+
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
-	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
-		glog.Infof("unable to read key %v", err)
-		return
-	}
+	x.WorkerConfig.EncryptionKey = encKey
 
 	setupCustomTokenizers()
 	x.Init()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
-		worker.LimitDefaults)
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
+	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

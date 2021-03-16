@@ -15,20 +15,17 @@ package audit
 import (
 	"io/ioutil"
 	"math"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/ristretto/z"
 
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-const (
-	FlagDefaults         = "dir=; encrypt-file=; compress=false; days=10; size=100;"
-	defaultAuditFilename = "dgraph_audit.log"
-)
+const defaultAuditFilename = "dgraph_audit.log"
 
 var auditEnabled uint32
 
@@ -53,7 +50,7 @@ const (
 	Http             = "Http"
 )
 
-var auditor *auditLogger = &auditLogger{}
+var auditor = &auditLogger{}
 
 type auditLogger struct {
 	log    *x.Logger
@@ -62,33 +59,30 @@ type auditLogger struct {
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
-	if conf == "" {
+	if conf == "" || conf == worker.AuditDefaults {
 		return nil
 	}
-	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(FlagDefaults)
-	dir := auditFlag.GetString("dir")
-	x.AssertTruef(dir != "", "dir flag is not provided for the audit logs")
+	auditFlag := z.NewSuperFlag(conf).MergeAndCheckDefault(worker.AuditDefaults)
+	out := auditFlag.GetPath("output")
+	x.AssertTruef(out != "", "out flag is not provided for the audit logs")
 	encBytes, err := readAuditEncKey(auditFlag)
 	x.Check(err)
 	return &x.LoggerConf{
 		Compress:      auditFlag.GetBool("compress"),
-		Dir:           dir,
+		Output:        out,
 		EncryptionKey: encBytes,
 		Days:          auditFlag.GetInt64("days"),
 		Size:          auditFlag.GetInt64("size"),
+		MessageKey:    "endpoint",
 	}
 }
 
 func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
-	encFile := conf.GetString("encrypt-file")
+	encFile := conf.GetPath("encrypt-file")
 	if encFile == "" {
 		return nil, nil
 	}
-	path, err := filepath.Abs(encFile)
-	if err != nil {
-		return nil, err
-	}
-	encKey, err := ioutil.ReadFile(path)
+	encKey, err := ioutil.ReadFile(encFile)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +169,7 @@ func Close() {
 
 func (a *auditLogger) Audit(event *AuditEvent) {
 	a.log.AuditI(event.Endpoint,
+		"level", "AUDIT",
 		"user", event.User,
 		"namespace", event.Namespace,
 		"server", event.ServerHost,

@@ -1,7 +1,5 @@
-// +build windows
-
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +14,9 @@
  * limitations under the License.
  */
 
-package bulk
+// +build tools
+package tools
 
-import "github.com/pkg/errors"
-
-func queryMaxOpenFiles() (int, error) {
-	return 0, errors.New("Cannot detect max open files on this platform")
-}
+import (
+	_ "src.techknowlogick.com/xgo"
+)

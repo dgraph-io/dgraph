@@ -116,7 +116,7 @@ func verifyLogs(t *testing.T, path string, cmds []string) {
 	require.Nil(t, err)
 
 	type log struct {
-		Msg string `json:"msg"`
+		Msg string `json:"endpoint"`
 	}
 	logMap := make(map[string]bool)
 

@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -413,11 +414,17 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
-			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
-				for _, uid := range uids {
+				r.GetCardinality(), len(plist.Bitmap))
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
 					fmt.Fprintf(&buf, " Uid = %d\n", uid)
 				}
 			}
@@ -472,7 +479,7 @@ func rollupKey(db *badger.DB) {
 	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 	x.Check(err)
 
-	alloc := z.NewAllocator(32 << 20)
+	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
 	defer alloc.Release()
 
 	kvs, err := pl.Rollup(alloc)
@@ -892,10 +899,7 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return
-	}
+	_, opt.key = ee.GetKeys(Debug.Conf)
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)

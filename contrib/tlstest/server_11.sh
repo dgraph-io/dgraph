@@ -1,3 +1,3 @@
 #!/bin/bash
 
-../../dgraph/dgraph alpha --tls "cacert=ca.crt; cert=server.crt; key=server.key;" --zero 127.0.0.1:5080
+../../dgraph/dgraph alpha --tls "ca-cert=ca.crt; client-cert=server.crt; client-key=server.key;" --zero 127.0.0.1:5080

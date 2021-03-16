@@ -494,6 +494,25 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
+  - name: "Field with @id directive and a exact arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [exact])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id
+      }
+      A.id: string @index(exact) @upsert .
+      type B {
+        A.id
+        B.correct
+      }
+      B.correct: bool @index(bool) .
+
   -
     name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
     input: |
@@ -787,6 +806,54 @@ schemas:
       }
       Product.name: string @index(hash) @upsert .
       Product.reviews: [string] .
+
+  - name: "A full valid federation schema"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+        product: Product
+      }
+
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        username: String! @external
+        reviews: [Review]
+      }
+
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @lambda
+        reviews: [Review]
+      }
+    output: |
+      type Review {
+        Review.body
+        Review.author
+        Review.product
+      }
+      Review.body: string .
+      Review.author: uid .
+      Review.product: uid .
+      type Product {
+        Product.upc
+        Product.inStock
+        Product.reviews
+      }
+      Product.upc: string @index(hash) @upsert .
+      Product.inStock: bool .
+      Product.reviews: [uid] .
+      type User {
+        User.id
+        User.username
+        User.reviews
+      }
+      User.id: string @index(hash) @upsert .
+      User.username: string .
+      User.reviews: [uid] .
 
   - name: "nothing is added in dgraph schema with lambdaOnMutate"
     input: |
