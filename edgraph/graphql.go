@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -48,6 +49,16 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		return nil
 	}
 
+	if x.WorkerConfig.AclEnabled {
+		accessJwt, err := x.ExtractJwt(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := validateToken(accessJwt[0]); err != nil {
+			return err
+		}
+	}
+
 	join := sha256Hash + query
 
 	queryForSHA := `query Me($join: string){
@@ -64,6 +75,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 			Vars:     variables,
 			ReadOnly: true,
 		},
+		doAuth: NoAuthorize,
 	}
 	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
@@ -116,6 +128,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 				},
 				CommitNow: true,
 			},
+			doAuth: NoAuthorize,
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
