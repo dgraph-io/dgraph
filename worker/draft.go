@@ -696,6 +696,8 @@ func (n *node) processApplyCh() {
 			// WARNING: This would cause the leader and the follower to diverge in the timestamp
 			// they use to commit the same thing.
 			// TODO: This is broken. We need to find a way to fix this.
+			//
+			// NOTE(karl): possibly related to DGRAPH-2492
 			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
@@ -795,6 +797,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
+	// NOTE(karl): possibly related to DGRAPH-2492, maybe return err here?
 	if x.WorkerConfig.LudicrousEnabled {
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting to commit: +%v", err)
@@ -1319,6 +1322,8 @@ func (n *node) Run() {
 								// mutations.
 								// TODO: This should not be done here. Instead, it should be done
 								// within the ludicrous mode scheduler.
+								//
+								// NOTE(karl): possibly related to DGRAPH-2492
 								n.Proposals.Done(key, nil)
 							}
 						}
