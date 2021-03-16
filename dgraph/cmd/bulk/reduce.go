@@ -19,7 +19,6 @@ package bulk
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -46,6 +45,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/dustin/go-humanize"
+	"github.com/golang/snappy"
 )
 
 type reducer struct {
@@ -223,11 +223,10 @@ func (mi *mapIterator) Close() error {
 func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 	fd, err := os.Open(filename)
 	x.Check(err)
-	gzReader, err := gzip.NewReader(fd)
-	x.Check(err)
+	r := snappy.NewReader(fd)
 
 	// Read the header size.
-	reader := bufio.NewReaderSize(gzReader, 16<<10)
+	reader := bufio.NewReaderSize(r, 16<<10)
 	headerLenBuf := make([]byte, 4)
 	x.Check2(io.ReadFull(reader, headerLenBuf))
 	headerLen := binary.BigEndian.Uint32(headerLenBuf)
