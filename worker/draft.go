@@ -1759,6 +1759,7 @@ func (n *node) InitAndStartNode() {
 			// zero-member Raft group.
 			n.SetConfState(&sp.Metadata.ConfState)
 
+			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
 				m, ok := members[id]
