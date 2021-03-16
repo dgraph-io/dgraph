@@ -75,7 +75,6 @@ var (
 
 	// need this here to refer it in admin_backup.go
 	adminServer admin.IServeGraphQL
-	initDone    uint32
 )
 
 func init() {
@@ -588,16 +587,15 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
-	atomic.AddUint32(&initDone, 1)
 	// Audit needs groupId and nodeId to initialize audit files
 	// Therefore we wait for the cluster initialization to be done.
 	for {
-		if atomic.LoadUint32(&initDone) < 2 {
-			continue
+		if x.HealthCheck() == nil {
+			// Audit is enterprise feature.
+			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
+			break
 		}
-		// Audit is enterprise feature.
-		x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
-		break
+		time.Sleep(500 * time.Millisecond)
 	}
 	x.ServerCloser.Wait()
 }
@@ -790,7 +788,7 @@ func run() {
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
 
 			switch {
-			case atomic.LoadUint32(&initDone) < 2:
+			case x.HealthCheck() != nil:
 				// Forcefully kill alpha if we haven't finish server initialization.
 				glog.Infoln("Stopped before initialization completed")
 				os.Exit(1)
@@ -804,8 +802,6 @@ func run() {
 	updaters := z.NewCloser(2)
 	go func() {
 		worker.StartRaftNodes(worker.State.WALstore, bindall)
-		atomic.AddUint32(&initDone, 1)
-
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl(updaters)

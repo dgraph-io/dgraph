@@ -630,7 +630,7 @@ func GroupId() uint32 {
 
 // NodeId returns the raft id of the node.
 func NodeId() uint64 {
-	return groups().Node.RaftContext.Id
+	return groups().Node.Id
 }
 
 func (g *groupi) triggerMembershipSync() {

@@ -124,7 +124,7 @@ func (l *LogWriter) Close() error {
 	if l == nil {
 		return nil
 	}
-	// closeFile all go routines first before acquiring the lock to avoid contention
+	// close all go routines first before acquiring the lock to avoid contention
 	l.closer.SignalAndWait()
 
 	l.mu.Lock()
@@ -221,7 +221,7 @@ func (l *LogWriter) open() error {
 	}
 
 	openNew := func() error {
-		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModeExclusive)
+		f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -248,7 +248,7 @@ func (l *LogWriter) open() error {
 		return openNew()
 	}
 
-	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModeExclusive)
+	f, err := os.OpenFile(l.FilePath, os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return openNew()
 	}
@@ -294,7 +294,7 @@ func compress(src string) error {
 		os.Remove(src + ".gz")
 		return err
 	}
-	// closeFile the descriptors because we need to delete the file
+	// close the descriptors because we need to delete the file
 	if err := f.Close(); err != nil {
 		return err
 	}

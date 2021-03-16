@@ -26,7 +26,11 @@ import (
 	"github.com/golang/glog"
 )
 
-const defaultAuditFilenamef = "dgraph_audit_%d_%d.log"
+const (
+	defaultAuditFilenameF = "%s_audit_%d_%d.log"
+	NodeTypeAlpha         = "alpha"
+	NodeTypeZero          = "zero"
+)
 
 var auditEnabled uint32
 
@@ -112,9 +116,13 @@ func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 // This method doesnt keep track of whether cluster is part of enterprise edition or not.
 // Client has to keep track of that.
 func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
+	ntype := NodeTypeAlpha
+	if gId == 0 {
+		ntype = NodeTypeZero
+	}
 	var err error
 	if auditor.log, err = x.InitLogger(conf,
-		fmt.Sprintf(defaultAuditFilenamef, gId, nId)); err != nil {
+		fmt.Sprintf(defaultAuditFilenameF, ntype, gId, nId)); err != nil {
 		return err
 	}
 	atomic.StoreUint32(&auditEnabled, 1)
@@ -140,7 +148,8 @@ func trackIfEEValid(conf *x.LoggerConf, eeEnabledFunc func() bool) {
 
 			if atomic.LoadUint32(&auditEnabled) != 1 {
 				if auditor.log, err = x.InitLogger(conf,
-					fmt.Sprintf(defaultAuditFilenamef, worker.GroupId(), worker.NodeId())); err != nil {
+					fmt.Sprintf(defaultAuditFilenameF, NodeTypeAlpha, worker.GroupId(),
+						worker.NodeId())); err != nil {
 					continue
 				}
 				atomic.StoreUint32(&auditEnabled, 1)
