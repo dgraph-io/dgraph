@@ -4886,7 +4886,7 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation addBook($bookId: Int64!){
+		Query: `mutation addBook($bookId2: Int64!, $bookId3: Int64!){
           addBook(input:[
             {
               bookId: 1234567890123
