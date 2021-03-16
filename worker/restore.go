@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/golang/glog"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -49,22 +50,11 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
 		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
-
+			bReader, err := in.getReader(key)
+			if err != nil {
+				return 0, 0, errors.Wrap(err, "failed to get reader for restore")
+			}
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-			r, err := enc.GetReader(key, in.r)
-			if err != nil {
-				return 0, 0, err
-			}
-
-			// TODO: This should be based on the compression algorithm used.
-			gzReader, err := gzip.NewReader(r)
-			if err != nil {
-				if len(key) != 0 {
-					err = errors.Wrap(err,
-						"Unable to read the backup. Ensure the encryption key is correct.")
-				}
-				return 0, 0, err
-			}
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
@@ -84,11 +74,12 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				fmt.Println("Creating new db:", dir)
 			}
 			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
-				r:              gzReader,
+				r:              bReader,
 				restoreTs:      0,
 				preds:          in.preds,
 				dropOperations: in.dropOperations,
 				isOld:          in.isOld,
+				compression:    in.compression,
 			})
 			if err != nil {
 				return 0, 0, err
@@ -104,6 +95,28 @@ type loadBackupInput struct {
 	dropOperations []*pb.DropOperation
 	isOld          bool
 	compression    string
+}
+
+func (l *loadBackupInput) getReader(key x.SensitiveByteSlice) (io.Reader, error) {
+	r, err := enc.GetReader(key, l.r)
+	if err != nil {
+		return nil, err
+	}
+	switch l.compression {
+	case "":
+		gzReader, err := gzip.NewReader(r)
+		if err != nil && len(key) != 0 {
+			err = errors.Wrap(err,
+				"Unable to read the backup. Ensure the encryption key is correct.")
+		}
+		return gzReader, err
+	case "snappy":
+		// Snappy doesn't return an error. If the data is encrypted, we will
+		// get an error while reading it.
+		return snappy.NewReader(r), nil
+	default:
+		return nil, errors.Errorf("Invalid compression in backup %q", l.compression)
+	}
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
