@@ -102,24 +102,35 @@ func TestParallelIndexing(t *testing.T) {
 	}
 
 	fmt.Println("building indexes in background for int and string data")
-	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: `
+	// Wait until previous indexing is complete.
+	for {
+		if err := dg.Alter(context.Background(), &api.Operation{
+			Schema: `
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-		RunInBackground: true,
-	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
-		t.Fatalf("error in adding indexes :: %v\n", err)
+			RunInBackground: true,
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
+			t.Fatalf("error in adding indexes :: %v\n", err)
+		} else if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
-
-	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: `
+	// Wait until previous indexing is complete.
+	for {
+		if err := dg.Alter(context.Background(), &api.Operation{
+			Schema: `
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-		RunInBackground: true,
-	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
-		t.Fatalf("error in adding indexes :: %v\n", err)
+			RunInBackground: true,
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
+			t.Fatalf("error in adding indexes :: %v\n", err)
+		} else if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
 
 	// Wait until previous indexing is complete.
