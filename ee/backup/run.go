@@ -394,7 +394,7 @@ func runExportBackup() error {
 			if err != nil {
 				return err
 			}
-			if err := upgrade.UpgradeFrom2011To2103(db); err != nil {
+			if err := upgrade.OfflineUpgradeFrom2011To2103(db); err != nil {
 				return errors.Wrapf(err, "while fixing cors")
 			}
 			if err := db.Close(); err != nil {

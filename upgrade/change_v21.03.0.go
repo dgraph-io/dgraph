@@ -151,6 +151,59 @@ func dropDeprecated(dg *dgo.Dgraph) error {
 	return nil
 }
 
+func upgradePersitentQuery() error {
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	defer cb()
+
+	jwt, err := getAccessJwt()
+	if err != nil {
+		return errors.Wrap(err, "while getting jwt auth token")
+	}
+
+	// Get persisted queries.
+	queryData := make(map[string][]pquery)
+	if err := getQueryResult(dg, queryPersistedQuery_v21_03_0, &queryData); err != nil {
+		return errors.Wrap(err, "error querying persisted queries")
+	}
+
+	// Update the schema with new indexer for persisted query.
+	updatedSchema := `
+		<dgraph.graphql.p_query>: string @index(sha256) .
+		type <dgraph.graphql.persisted_query> {
+			<dgraph.graphql.p_query>
+		}
+			`
+	if err := alterWithClient(dg, &api.Operation{Schema: updatedSchema}); err != nil {
+		return fmt.Errorf("error updating the schema for persistent query, %w", err)
+	}
+
+	// Reinsert these queries. Note that upsert won't work here as 'dgraph.graphql.p_query' is
+	// graphql reserved type.
+	header := http.Header{}
+	header.Set("X-Dgraph-AccessToken", jwt.AccessJwt)
+	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
+	graphqlUrl := Upgrade.Conf.GetString(alphaHttp) + "/graphql"
+	for _, pquery := range queryData["pquery"] {
+		updateSchemaParams := &GraphQLParams{
+			Query: pquery.Query,
+			Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+				Sha256Hash: pquery.SHA,
+			}},
+			Headers: header,
+		}
+
+		resp, err := makeGqlRequest(updateSchemaParams, graphqlUrl)
+		if err != nil {
+			return err
+		}
+		if len(resp.Errors) > 0 {
+			return errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
+		}
+	}
+
+	return nil
+}
+
 func upgradeCORS() error {
 	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
 	defer cb()
@@ -212,6 +265,10 @@ func upgradeCORS() error {
 	return dropDeprecated(dg)
 }
 
+//////////////////////////////////////
+// BELOW CODE IS FOR OFFLINE UPGRADE.
+//////////////////////////////////////
+
 func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error {
 	return db.View(func(txn *badger.Txn) error {
 		attr = x.GalaxyAttr(attr)
@@ -240,7 +297,7 @@ func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error
 	})
 }
 
-func updateGqlSchema(db *badger.DB, cors [][]byte) error {
+func updateGQLSchemaOffline(db *badger.DB, cors [][]byte) error {
 	entry := &badger.Entry{}
 	var version uint64
 	err := getData(db, "dgraph.graphql.schema", func(item *badger.Item) error {
@@ -328,7 +385,7 @@ func fixCors(db *badger.DB) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error while getting cors from db.")
 	}
-	if err := updateGqlSchema(db, cors); err != nil {
+	if err := updateGQLSchemaOffline(db, cors); err != nil {
 		return errors.Wrapf(err, "Error while updating GraphQL schema.")
 	}
 	return errors.Wrapf(dropDepreciated(db), "Error while dropping depreciated preds/types.")
@@ -386,64 +443,11 @@ func fixPersistedQuery(db *badger.DB) error {
 	return nil
 }
 
-// UpgradeFrom2011To2103 upgrades a p directory restored from backup of 20.11 to the changes in
-// 21.03. It fixes the cors, schema and drops the deprecated types/predicates.
-func UpgradeFrom2011To2103(db *badger.DB) error {
+// OfflineUpgradeFrom2011To2103 upgrades a p directory restored from backup of 20.11 to the changes
+// in 21.03. It fixes the cors, schema and drops the deprecated types/predicates.
+func OfflineUpgradeFrom2011To2103(db *badger.DB) error {
 	if err := fixPersistedQuery(db); err != nil {
 		return errors.Wrapf(err, "while upgrading persisted query")
 	}
 	return errors.Wrapf(fixCors(db), "while upgrading cors")
-}
-
-func upgradePersitentQuery() error {
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
-	defer cb()
-
-	jwt, err := getAccessJwt()
-	if err != nil {
-		return errors.Wrap(err, "while getting jwt auth token")
-	}
-
-	// Get persisted queries.
-	queryData := make(map[string][]pquery)
-	if err := getQueryResult(dg, queryPersistedQuery_v21_03_0, &queryData); err != nil {
-		return errors.Wrap(err, "error querying persisted queries")
-	}
-
-	// Update the schema with new indexer for persisted query.
-	updatedSchema := `
-		<dgraph.graphql.p_query>: string @index(sha256) .
-		type <dgraph.graphql.persisted_query> {
-			<dgraph.graphql.p_query>
-		}
-			`
-	if err := alterWithClient(dg, &api.Operation{Schema: updatedSchema}); err != nil {
-		return fmt.Errorf("error updating the schema for persistent query, %w", err)
-	}
-
-	// Reinsert these queries. Note that upsert won't work here as 'dgraph.graphql.p_query' is
-	// graphql reserved type.
-	header := http.Header{}
-	header.Set("X-Dgraph-AccessToken", jwt.AccessJwt)
-	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
-	graphqlUrl := Upgrade.Conf.GetString(alphaHttp) + "/graphql"
-	for _, pquery := range queryData["pquery"] {
-		updateSchemaParams := &GraphQLParams{
-			Query: pquery.Query,
-			Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
-				Sha256Hash: pquery.SHA,
-			}},
-			Headers: header,
-		}
-
-		resp, err := makeGqlRequest(updateSchemaParams, graphqlUrl)
-		if err != nil {
-			return err
-		}
-		if len(resp.Errors) > 0 {
-			return errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
-		}
-	}
-
-	return nil
 }
