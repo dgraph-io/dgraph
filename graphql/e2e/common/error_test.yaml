@@ -174,24 +174,24 @@
     } ]
 
 -
-  name: "String value is Incompatible with Int64 type"
+  name: "String value is Incompatible with Int32 type given in variable"
   gqlrequest: |
-    mutation {
-      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:"180143985094"}]){
+    mutation($numLikes:Int) {
+      addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:$numLikes}]){
         post{
           title
-          numLikes
-          author{
-            name
+            numLikes
+            author{
+              name
+            }
           }
         }
       }
-    }
   gqlvariables: |
-    { }
+    { "numLikes": "21474836" }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094`, expected: Int64, got: 'String'",
-        "locations": [ { "line": 2, "column": 64 } ] } ]
+    [ { "message": "cannot use string as Int",
+        "path": [ "variable","numLikes" ] } ]
 
 -
   name: "Float value is Incompatible with Int64 type"

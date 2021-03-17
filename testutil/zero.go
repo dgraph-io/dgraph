@@ -41,6 +41,9 @@ type Member struct {
 // StateResponse represents the structure of the JSON object returned by calling
 // the /state endpoint in zero.
 type StateResponse struct {
+	Zeros map[string]struct {
+		Id string `json:"id"`
+	} `json:"zeros"`
 	Groups map[string]struct {
 		Members map[string]Member `json:"members"`
 		Tablets map[string]struct {

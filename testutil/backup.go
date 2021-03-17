@@ -17,7 +17,9 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -61,21 +63,77 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	return badger.OpenManaged(opt)
 }
 
+func StartBackupHttps(t *testing.T, backupDst string, forceFull bool) {
+	const backupRequest = `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "https://" + SockAddrHttp + "/admin"
+	params := GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDst,
+			"ff":  forceFull,
+		},
+	}
+
+	var buffer bytes.Buffer
+	err := json.NewEncoder(&buffer).Encode(params)
+	require.NoError(t, err)
+
+	client := GetHttpsClient(t)
+	response, err := client.Post(adminUrl, "application/json", &buffer)
+	require.NoError(t, err)
+
+	responseBody, err := ioutil.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(responseBody), "Backup queued successfully")
+}
+
+func WaitForBackup(t *testing.T) {
+	healthUrl := "http://" + SockAddrHttp + "/health"
+	for {
+		health := func() []pb.HealthInfo {
+			response, err := http.Get(healthUrl)
+			require.NoError(t, err)
+			defer response.Body.Close()
+
+			var health []pb.HealthInfo
+			decoder := json.NewDecoder(response.Body)
+			err = decoder.Decode(&health)
+			require.NoError(t, err)
+			require.Len(t, health, 1)
+
+			return health
+		}()
+
+		status := health[0].LastBackup
+		if strings.HasPrefix(status, "COMPLETED: ") {
+			break
+		}
+		require.True(t, status == "" || strings.HasPrefix(status, "STARTED: "),
+			"backup failed: status: %s", status)
+
+		time.Sleep(4 * time.Second)
+	}
+}
+
 func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
-	restoreDone := false
 	for {
 		resp, err := http.Get("http://" + SockAddrHttp + "/health")
 		require.NoError(t, err)
 		buf, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
-		sbuf := string(buf)
-		if !strings.Contains(sbuf, "opRestore") {
-			restoreDone = true
+		if !strings.Contains(string(buf), "opRestore") {
 			break
 		}
 		time.Sleep(4 * time.Second)
 	}
-	require.True(t, restoreDone)
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
@@ -91,7 +149,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 	   }}`)
 
 		if err == nil {
-			numSuccess += 1
+			numSuccess++
 		} else {
 			require.Contains(t, err.Error(), "the server is in draining mode")
 			numSuccess = 0
@@ -103,7 +161,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
 			// The server has been responsive three times in a row.
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Second)
 	}
 }
 

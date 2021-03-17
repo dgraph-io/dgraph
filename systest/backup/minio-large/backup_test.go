@@ -146,15 +146,17 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
+	backupUrl := "https://" + testutil.SockAddrHttp + "/admin/backup"
 	client := testutil.GetHttpsClient(t)
-	resp, err := client.PostForm("https://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
+	resp, err := client.PostForm(backupUrl, url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+	require.Contains(t, string(buf), "Backup queued successfully")
+	testutil.WaitForBackup(t)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)

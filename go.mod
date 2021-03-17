@@ -17,7 +17,7 @@ require (
 	github.com/dgraph-io/badger/v3 v3.0.0-20210309075542-2245c18dfd1f
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210212152539-e0a5bde40ba2
 	github.com/dgraph-io/gqlgen v0.13.2
-	github.com/dgraph-io/gqlparser/v2 v2.1.8
+	github.com/dgraph-io/gqlparser/v2 v2.1.9
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
 	github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90
 	github.com/dgraph-io/simdjson-go v0.3.0
@@ -71,4 +71,5 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	gopkg.in/yaml.v2 v2.2.4
+	src.techknowlogick.com/xgo v1.4.1-0.20210311222705-d25c33fcd864
 )
