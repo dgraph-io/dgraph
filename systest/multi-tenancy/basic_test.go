@@ -18,14 +18,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
@@ -358,32 +355,10 @@ func TestLiveLoadMulti(t *testing.T) {
 		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
 	}))
 
-	err = x.RetryUntilSuccess(10, time.Second, func() error {
-		resp = testutil.QueryData(t, dc1, query3)
-		var o1 interface{}
-		var o2 interface{}
-
-		var err error
-		expected := `{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
+	resp = testutil.QueryData(t, dc1, query3)
+	testutil.CompareJSON(t, `{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
 		{"name": "ns dan"},{"name":"ns eon"}, {"name": "ns free"},{"name":"ns gary"},
-		{"name": "ns hola"}]}`
-		err = json.Unmarshal([]byte(expected), &o1)
-		if err != nil {
-			return fmt.Errorf("error unmarshalling string 1 :: %s", err.Error())
-		}
-		err = json.Unmarshal([]byte(string(resp)), &o2)
-		if err != nil {
-			return fmt.Errorf("error unmarshalling string 2 :: %s", err.Error())
-		}
-
-		if reflect.DeepEqual(o1, o2) {
-			return nil
-		}
-
-		return errors.New(fmt.Sprintf("Expected and actual doesnt match. "+
-			"Expected %s \n Actual %s \n", expected, string(resp)))
-	})
-	require.Nil(t, err)
+		{"name": "ns hola"}]}`, string(resp))
 }
 
 func postGqlSchema(t *testing.T, schema string, accessJwt string) {
