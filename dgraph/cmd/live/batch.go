@@ -164,9 +164,10 @@ func (l *loader) infinitelyRetry(req *request) {
 
 func (l *loader) mutate(req *request) error {
 	txn := l.dc.NewTxn()
-	req.CommitNow = true
+	defer txn.Commit(l.opts.Ctx)
+	req.CommitNow = false
 	request := &api.Request{
-		CommitNow: true,
+		CommitNow: false,
 		Mutations: []*api.Mutation{req.Mutation},
 	}
 	_, err := txn.Do(l.opts.Ctx, request)

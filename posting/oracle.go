@@ -45,7 +45,8 @@ func init() {
 
 // Txn represents a transaction.
 type Txn struct {
-	StartTs uint64
+	StartTs   uint64
+	Namespace uint64
 
 	// atomic
 	shouldAbort uint32

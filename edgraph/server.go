@@ -1460,6 +1460,30 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+var check, total uint64
+
+func checkPermissions(ctx context.Context, startTs uint64) error {
+	glog.Infof("==> check:%d, total: %d", atomic.LoadUint64(&check), atomic.LoadUint64(&total))
+	atomic.AddUint64(&total, 1)
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		panic("lol")
+		return err
+	}
+	txn := posting.Oracle().GetTxn(startTs)
+	if txn == nil {
+		return nil
+	}
+
+	atomic.AddUint64(&check, 1)
+	if txn.Namespace != ns {
+		panic("lol")
+		// TODO: Throw an error log as well.
+		return errors.New("Please log in into correct namespace.")
+	}
+	return nil
+}
+
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
@@ -1467,6 +1491,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	if err := x.HealthCheck(); err != nil {
 		return &api.TxnContext{}, err
+	}
+
+	if x.WorkerConfig.AclEnabled {
+		if err := checkPermissions(ctx, tc.StartTs); err != nil {
+			return &api.TxnContext{}, err
+		}
 	}
 
 	tctx := &api.TxnContext{}
