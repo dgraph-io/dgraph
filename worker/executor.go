@@ -68,22 +68,28 @@ func newExecutor(applied *y.WaterMark, conc int) *executor {
 }
 
 func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint64, error) {
-	keys := make([]uint64, 0, len(tokenizers))
+	keys := make([]uint64, 0)
 	errs := make([]string, 0)
-	for _, token := range tokenizers {
-		storageVal := types.Val{
-			Tid:   types.TypeID(nq.GetValueType()),
-			Value: nq.GetValue(),
-		}
+	storageVal := types.Val{
+		Tid:   types.TypeID(nq.GetValueType()),
+		Value: nq.GetValue(),
+	}
+	stt, ok := schema.State().Get(context.Background(), nq.Attr)
+	if !ok { // predicate definition is not available
+		return keys, nil
+	}
+	schemaVal, err := types.Convert(storageVal, types.TypeID(stt.GetValueType()))
+	// In case value cannot be type casted into correct format, no need
+	// to generate tokens as they will be either invalid or fail.
+	if err != nil {
+		return keys, err
+	}
 
-		schemaVal, err := types.Convert(storageVal, types.TypeID(nq.GetValueType()))
+	for _, token := range tokenizers {
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token, nq.Lang))
 		if err != nil {
 			errs = append(errs, err.Error())
-		}
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token,
-			nq.Lang))
-		if err != nil {
-			errs = append(errs, err.Error())
+			continue
 		}
 
 		for _, t := range toks {
@@ -97,10 +103,38 @@ func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint6
 	return keys, nil
 }
 
+// generateConflictKeys aims to generate a set of conflict keys for a given subMutation p
+// such that dependent graph can be build efficiently.
+//
+// 0 is used as a special key. It means all further mutations will be dependent.
+//
+// 1. In case of predicate having hasCount and IsReverse index, 0 conflict key will be returned
+// 2. In case of Delete all for a predicate, 0 conflict key is returned
 func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct{} {
 	keys := make(map[uint64]struct{})
 
 	for _, edge := range p.edges {
+		isReverse := schema.State().IsReversed(ctx, edge.Attr)
+		hasCount := schema.State().HasCount(ctx, edge.Attr)
+		isIndexed := schema.State().IsIndexed(ctx, edge.Attr)
+
+		// <uid> pred val1 --> Set [0, asdfghjkl, abc]
+		// <uid1> pred val2 >> Set hasCount=true [0, asdfgh, abc]->true
+
+		//  abc(m1) --- m3 (2) - wait m1, m2 -> m3
+		//	bce(m2) --- m3
+
+		//  0(m1 --> m2)  ---- m3 -m1 and m2 wait
+		//  abc(m1) --- m3 (2) - wait m1, m2 -> m3
+		//	bce(m2) --- m3
+		// send key 0 if we want to make all mutations dependent
+		if hasCount || // has count index
+			isReverse || // has Reverse Index
+			// if the predicate is indexed and the operation delete all
+			(isIndexed && edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star) {
+			return map[uint64]struct{}{0: {}}
+		}
+
 		key := x.DataKey(edge.Attr, edge.Entity)
 		pk, err := x.Parse(key)
 		if err != nil {
@@ -109,14 +143,7 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 		}
 
 		keys[posting.GetConflictKey(pk, key, edge)] = struct{}{}
-		stt, _ := schema.State().Get(ctx, edge.Attr)
 		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
-		isReverse := schema.State().IsReversed(ctx, edge.Attr)
-
-		if stt.Count || isReverse {
-			keys[0] = struct{}{}
-		}
-
 		tokens, err := generateTokenKeys(edge, tokenizers)
 		for _, token := range tokens {
 			keys[token] = struct{}{}
@@ -211,11 +238,13 @@ func (e *executor) worker(mut *mutation) {
 	}
 }
 
+// processMutationCh process mutations for each predicate.
+// generate a set of conflict keys for the given subMutation m.
+// If subMutation m conflicts with any other previous subMutation,
+// add it to the dependent graph. If not, send the mutation to process.
 func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) {
 	defer e.closer.Done()
-
 	g := newGraph()
-
 	for payload := range ch {
 		conflicts := generateConflictKeys(ctx, payload)
 		m := &mutation{
@@ -225,29 +254,7 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			graph:              g,
 		}
 
-		isDependent := false
-		g.Lock()
-		for c := range conflicts {
-			l, ok := g.conflicts[c]
-			if !ok {
-				g.conflicts[c] = []*mutation{m}
-				continue
-			}
-
-			for _, dependent := range l {
-				_, ok := dependent.dependentMutations[m.sm.startTs]
-				if !ok {
-					isDependent = true
-					atomic.AddInt64(&m.inDeg, 1)
-					dependent.dependentMutations[m.sm.startTs] = m
-				}
-			}
-
-			l = append(l, m)
-			g.conflicts[c] = l
-		}
-		g.Unlock()
-
+		isDependent := detectConflicts(g, m, conflicts)
 		// If this mutation doesn't depend on any other mutation then process it right now.
 		// Otherwise, don't process it. It will be called for processing when the last mutation on
 		// which it depends is completed.
@@ -256,6 +263,48 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			go e.worker(m)
 		}
 	}
+}
+
+// detectConflicts detect if there is any conflict within the
+// graph with the given set of conflict keys.
+func detectConflicts(g *graph, m *mutation, conflicts map[uint64]struct{}) bool {
+	g.Lock()
+	defer g.Unlock()
+
+	isDependent := false
+	addToDependent := func(key uint64, mutations []*mutation) {
+		for _, dependent := range mutations {
+			_, ok := dependent.dependentMutations[m.sm.startTs]
+			if !ok {
+				isDependent = true
+				atomic.AddInt64(&m.inDeg, 1)
+				dependent.dependentMutations[m.sm.startTs] = m
+			}
+		}
+
+		mutations = append(mutations, m)
+		g.conflicts[key] = mutations
+	}
+
+	// 0 is the special conflict key,
+	// if 0 is already there in the dependency graph make all mutations dependent
+	if l, ok := g.conflicts[0]; ok {
+		addToDependent(0, l)
+	} else if _, ok := conflicts[0]; ok {
+		// if the mutation has 0 as the key, add that to the graph and
+		// that will make all further mutations dependent
+		g.conflicts[0] = []*mutation{m}
+	} else {
+		for c := range conflicts {
+			l, ok := g.conflicts[c]
+			if !ok {
+				g.conflicts[c] = []*mutation{m}
+				continue
+			}
+			addToDependent(c, l)
+		}
+	}
+	return isDependent
 }
 
 func (e *executor) shutdown() {

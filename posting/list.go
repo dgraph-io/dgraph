@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"github.com/golang/glog"
 	"log"
 	"math"
 	"sort"
