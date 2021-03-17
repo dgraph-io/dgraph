@@ -87,38 +87,6 @@ type UriHandler interface {
 	CreatePath(path string) error
 	CreateFile(path string) error
 	Rename(src, dst string) error
-	// GetManifest returns the master manifest, containing information about all the
-	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
-	// then it will return a consolidated master manifest.
-	// GetManifest(*url.URL) (*MasterManifest, error)
-
-	// // GetManifests returns the list of manifest for the given backup series ID
-	// // and backup number at the specified location. If backupNum is set to zero,
-	// // all the manifests for the backup series will be returned. If it's greater
-	// // than zero, manifests from one to backupNum will be returned.
-	// GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
-
-	// // GetLatestManifest reads the manifests at the given URL and returns the
-	// // latest manifest.
-	// GetLatestManifest(*url.URL) (*Manifest, error)
-
-	// // CreateBackupFile prepares the object or file to save the backup file.
-	// CreateBackupFile(*url.URL, *pb.BackupRequest) error
-
-	// // CreateManifest creates the given manifest.
-	// CreateManifest(*url.URL, *MasterManifest) error
-
-	// // Load will scan location URI for backup files, then load them via loadFn.
-	// // It optionally takes the name of the last directory to consider. Any backup directories
-	// // created after will be ignored.
-	// // Objects implementing this function will be used for retrieving (dowload) backup files
-	// // and loading the data into a DB. The restore CLI command uses this call.
-	// Load(*url.URL, string, uint64, loadFn) LoadResult
-
-	// // Verify checks that the specified backup can be restored to a cluster with the
-	// // given groups. The last manifest of that backup should have the same number of
-	// // groups as given list of groups.
-	// Verify(*url.URL, *pb.RestoreRequest, []uint32) error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -192,7 +160,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 		return errors.Wrap(err, "VerifyBackup")
 	}
 
-	return canRestore(h, uri, req, currentGroups)
+	return verifyRequest(h, uri, req, currentGroups)
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
@@ -276,30 +244,6 @@ func verifyManifests(manifests []*Manifest) error {
 
 func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
-}
-
-// verifyRequest verifies the manifests satisfy the requirements to process the given
-// restore request.
-func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups []uint32) error {
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
-	}
-
-	if err := verifyManifests(manifests); err != nil {
-		return err
-	}
-
-	lastManifest := manifests[len(manifests)-1]
-	if len(currentGroups) != len(lastManifest.Groups) {
-		return errors.Errorf("groups in cluster and latest backup manifest differ")
-	}
-
-	for _, group := range currentGroups {
-		if _, ok := lastManifest.Groups[group]; !ok {
-			return errors.Errorf("groups in cluster and latest backup manifest differ")
-		}
-	}
-	return nil
 }
 
 func getFilteredManifests(manifests []*Manifest, backupId string,
@@ -728,102 +672,6 @@ func (h *fileHandler) Rename(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
-// readManifest reads a manifest file at path using the handler.
-// Returns nil on success, otherwise an error.
-func (h *fileHandler) readManifest(path string, m *Manifest) error {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, m)
-}
-
-// readMasterManifest reads the master manifest file at path using the handler.
-// Returns nil on success, otherwise an error.
-func (h *fileHandler) readMasterManifest(path string, m *MasterManifest) error {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, m)
-}
-
-func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName string) error {
-	var dir, path string
-
-	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.UnixTs))
-	err := os.Mkdir(dir, 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	path = filepath.Join(dir, fileName)
-	h.fp, err = os.Create(path)
-	if err != nil {
-		return err
-	}
-	glog.V(2).Infof("Using file path: %q", path)
-	return nil
-}
-
-// GetLatestManifest reads the manifests at the given URL and returns the
-// latest manifest.
-func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Wrap(err, "Get latest manifest failed:")
-	}
-
-	manifest, err := getConsolidatedManifest(h, uri)
-	if err != nil {
-		return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
-	}
-	if len(manifest.Manifests) == 0 {
-		return &Manifest{}, nil
-	}
-	return manifest.Manifests[len(manifest.Manifests)-1], nil
-}
-
-func createIfNotExists(path string) error {
-	if pathExist(path) {
-		return nil
-	}
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return errors.Errorf("The path %q does not exist or it is inaccessible."+
-			" While trying to create it, got error: %v", path, err)
-	}
-	return nil
-}
-
-// CreateBackupFile prepares the a path to save the backup file.
-func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return errors.Errorf("while CreateBackupFile: %v", err)
-	}
-
-	fileName := backupName(req.ReadTs, req.GroupId)
-	return h.createFiles(uri, req, fileName)
-}
-
-// CreateManifest completes the backup by writing the manifest to a file.
-func (h *fileHandler) CreateManifest(uri *url.URL, manifest *MasterManifest) error {
-	var err error
-	if err = createIfNotExists(uri.Path); err != nil {
-		return errors.Errorf("while WriteManifest: %v", err)
-	}
-
-	tmpPath := filepath.Join(uri.Path, tmpManifest)
-	if h.fp, err = os.Create(tmpPath); err != nil {
-		return err
-	}
-	if err = json.NewEncoder(h).Encode(manifest); err != nil {
-		return err
-	}
-
-	// Move the tmpManifest to backupManifest
-	path := filepath.Join(uri.Path, backupManifest)
-	return os.Rename(tmpPath, path)
-}
-
 // GetManifest returns the master manifest, if the directory doesn't contain
 // a master manifest, then it will try to return a master manifest by consolidating
 // the manifests.
@@ -1116,12 +964,33 @@ func Load(h UriHandler, uri *url.URL, backupId string, backupNum uint64, fn load
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
 }
 
-func canRestore(h UriHandler, uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
+// verifyRequest verifies that the manifest satisfies the requirements to process the given
+// restore request.
+func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
 	manifests, err := getManifestsToRestore(h, uri, req.GetBackupId(), req.GetBackupNum())
 	if err != nil {
 		return errors.Wrapf(err, "while retrieving manifests")
 	}
-	return verifyRequest(req, manifests, currentGroups)
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
+	}
+
+	// TODO: Do we need to verify the manifests again here?
+	if err := verifyManifests(manifests); err != nil {
+		return err
+	}
+
+	lastManifest := manifests[len(manifests)-1]
+	if len(currentGroups) != len(lastManifest.Groups) {
+		return errors.Errorf("groups in cluster and latest backup manifest differ")
+	}
+
+	for _, group := range currentGroups {
+		if _, ok := lastManifest.Groups[group]; !ok {
+			return errors.Errorf("groups in cluster and latest backup manifest differ")
+		}
+	}
+	return nil
 }
 
 func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
