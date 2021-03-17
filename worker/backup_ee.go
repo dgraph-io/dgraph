@@ -154,7 +154,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	latestManifest, err := handler.GetLatestManifest(uri)
+	defer handler.Close()
+
+	latestManifest, err := getLatestManifest(handler, uri)
 	if err != nil {
 		return err
 	}
@@ -350,7 +352,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		return &response, err
 	}
 
-	if err := handler.CreateBackupFile(uri, pr.Request); err != nil {
+	if err := createBackupFile(handler, uri, pr.Request); err != nil {
 		return &response, err
 	}
 
@@ -535,14 +537,14 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 		return err
 	}
 
-	manifest, err := handler.GetManifest(uri)
+	manifest, err := getManifest(handler, uri)
 	if err != nil {
 		return err
 	}
 
 	manifest.Manifests = append(manifest.Manifests, m)
 
-	if err := handler.CreateManifest(uri, manifest); err != nil {
+	if err := createManifest(handler, uri, manifest); err != nil {
 		return errors.Wrap(err, "Complete backup failed")
 	}
 
