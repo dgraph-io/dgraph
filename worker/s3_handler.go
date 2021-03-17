@@ -250,12 +250,8 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 			if err != nil {
 				return LoadResult{Err: err}
 			}
-			if groupMaxUid > maxUid {
-				maxUid = groupMaxUid
-			}
-			if groupMaxNsId > maxNsId {
-				maxNsId = groupMaxNsId
-			}
+			maxUid = x.Max(maxUid, groupMaxUid)
+			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
 		since = manifest.Since
 	}
