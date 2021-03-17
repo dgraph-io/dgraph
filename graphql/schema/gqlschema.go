@@ -1060,13 +1060,20 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
+	// Delete input type which contains no fields.
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
+	}
+
 	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
 	// input UpdateTypeInput {
 	//		filter: TypeFilter!
 	// }
 	// In this case, UpdateTypeInput should also be deleted.
-	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
-		delete(sch.Types, def.Name)
+	if strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1 {
+		if def.Fields[0].Name == "filter" {
+			delete(sch.Types, def.Name)
+		}
 	}
 }
 
