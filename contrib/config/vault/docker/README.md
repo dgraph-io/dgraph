@@ -7,15 +7,15 @@ This shows how to setup a local staging server for HashiCorp Vault and Dgraph.  
 
 Overview:
 
-1. Launch unsealed Vault server
-2. Enable AppRole Auth and KV Secrets
-3. Create the admin role with an attached policy
-4. Retrieve the admin token
-5. Create the dgraph role with an attached policy
-6. Save secrets using admin persona
-7. Retrieve the dgraph token and save credentials
-8. Verify secrets access using app persona
-9. Launch dgraph
+1. [Launch unsealed Vault server](#Launch-unsealed-Vault-server)
+2. [Enable AppRole Auth and KV Secrets](#Enable-AppRole-Auth-and-KV-Secrets)
+3. [Create the admin role with an attached policy](#Create-the-admin-role-with-an-attached-policy)
+4. [Retrieve the admin token](#Retrieve-the-admin-token)
+5. [Create the `dgraph` role with an attached policy](#Create-the-dgraph-role-with-an-attached-policy)
+6. [Save secrets using admin persona](#Save-secrets-using-admin-persona)
+7. [Retrieve the `dgraph` token and save credentials](#Retrieve-the-dgraph-token-and-save-credentials)
+8. [Verify secrets access using app persona](#Verify-secrets-access-using-app-persona)
+9. [Launch Dgraph](#Launch-Dgraph)
 
 ## Prerequisites
 
