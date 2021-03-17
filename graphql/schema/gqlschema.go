@@ -1927,6 +1927,14 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 		})
 	}
 	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "xid argument for get query on interface is being deprecated," +
+							" please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
