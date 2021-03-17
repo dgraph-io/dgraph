@@ -58,7 +58,7 @@ curl --silent \
   --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
   --request POST \
   --data '{ "type": "kv-v2" }' \
-  $VAULT_ADDRESS/v1/sys/mounts/secret  
+  $VAULT_ADDRESS/v1/sys/mounts/secret
 ```
 
 ### Create the admin role with an attached policy
