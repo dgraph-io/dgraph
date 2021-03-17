@@ -131,8 +131,9 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request,
 
 }
 
-func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (ex *executor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 func complete(t *testing.T, gqlSchema schema.Schema, gqlQuery, dgResponse string) *schema.Response {

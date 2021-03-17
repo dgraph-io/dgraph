@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -107,13 +109,22 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 
 	b, err := json.Marshal(payload)
 	if err != nil {
+		glog.Error(errors.Wrap(err, "error marshalling webhook payload"))
 		// don't care to send the payload if there are JSON marshalling errors
 		return
 	}
 
+	// send the request
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
-	// don't care for the response/errors, if any.
-	_, _ = schema.MakeHttpRequest(nil, http.MethodPost, x.Config.GraphQL.GetString("lambda-url"),
-		headers, b)
+	resp, err := schema.MakeHttpRequest(nil, http.MethodPost,
+		x.Config.GraphQL.GetString("lambda-url"), headers, b)
+
+	// just log the response errors, if any.
+	if err != nil {
+		glog.V(3).Info(errors.Wrap(err, "unable to send webhook event"))
+	}
+	if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
+		glog.V(3).Info(errors.Errorf("got unsuccessful status from webhook: %s", resp.Status))
+	}
 }
