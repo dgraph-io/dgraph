@@ -154,7 +154,6 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	defer handler.Close()
 
 	latestManifest, err := getLatestManifest(handler, uri)
 	if err != nil {

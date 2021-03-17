@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -20,11 +21,11 @@ import (
 )
 
 func TestFileHandler(t *testing.T) {
-	h := &fileHandler{}
+	h := NewFileHandler(&url.URL{Path: "Test"})
 	path := "./TestPath/Child"
 	err := h.CreatePath(path)
 	require.NoError(t, err)
-	require.Equal(t, true, h.Exists(path))
+	require.Equal(t, true, h.DirExists(path))
 
 	file := filepath.Join(path, "filename.txt")
 	err = h.CreateFile(file)
@@ -33,7 +34,7 @@ func TestFileHandler(t *testing.T) {
 	paths := h.Walk("./TestPath", func(path string, isDir bool) bool {
 		return true
 	})
-	expected := []string{"./TestPath", "TestPath/Child", "TestPath/Child/filename.txt"}
+	expected := []string{"Test/TestPath", "Test/TestPath/Child", "Test/TestPath/Child/filename.txt"}
 	require.ElementsMatch(t, expected, paths)
 }
 

@@ -44,6 +44,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 		return LoadResult{Err: err}
 	}
 
+	fmt.Println("RunRestore called on location: ", location)
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return LoadBackup(location, backupId, 0, nil,
