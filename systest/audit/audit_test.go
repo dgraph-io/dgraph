@@ -30,7 +30,10 @@ import (
 )
 
 func TestZeroAudit(t *testing.T) {
-	defer os.RemoveAll("audit_dir/za/dgraph_audit.log")
+	state, err := testutil.GetState()
+	require.NoError(t, err)
+	nId := state.Zeros["1"].Id
+	defer os.RemoveAll(fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId))
 	zeroCmd := map[string][]string{
 		"/removeNode": []string{`--location`, "--request", "GET",
 			fmt.Sprintf("%s/removeNode?id=3&group=1", testutil.SockAddrZeroHttp)},
@@ -52,10 +55,16 @@ func TestZeroAudit(t *testing.T) {
 		}
 	}
 
-	verifyLogs(t, "./audit_dir/za/dgraph_audit.log", msgs)
+	verifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
 func TestAlphaAudit(t *testing.T) {
-	defer os.Remove("audit_dir/aa/dgraph_audit.log")
+	state, err := testutil.GetState()
+	require.NoError(t, err)
+	var nId string
+	for key := range state.Groups["1"].Members {
+		nId = key
+	}
+	defer os.Remove(fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId))
 	testCommand := map[string][]string{
 		"/admin": []string{"--location", "--request", "POST",
 			fmt.Sprintf("%s/admin", testutil.SockAddrHttp),
@@ -106,7 +115,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 			}
 		}
 	}
-	verifyLogs(t, "./audit_dir/aa/dgraph_audit.log", msgs)
+	verifyLogs(t, fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId), msgs)
 }
 
 func verifyLogs(t *testing.T, path string, cmds []string) {

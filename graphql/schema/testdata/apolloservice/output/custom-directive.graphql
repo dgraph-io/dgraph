@@ -189,9 +189,7 @@ directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
-directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
-directive @cacheControl(maxAge: Int!) on QUERY
 
 input IntFilter {
 	eq: Int

@@ -3918,11 +3918,16 @@ func mutationsWithAlias(t *testing.T) {
 	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
 }
 
-func updateMutationWithoutSetRemove(t *testing.T) {
+func updateMutationTestsWithDifferentSetRemoveCases(t *testing.T) {
 	country := addCountry(t, postExecutor)
-
-	updateCountryParams := &GraphQLParams{
-		Query: `mutation updateCountry($id: ID!){
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		expected  string
+	}{{
+		name: "update mutation without set and Remove",
+		query: `mutation updateCountry($id: ID!){
             updateCountry(input: {filter: {id: [$id]}}) {
                 numUids
                 country {
@@ -3931,19 +3936,82 @@ func updateMutationWithoutSetRemove(t *testing.T) {
                 }
             }
         }`,
-		Variables: map[string]interface{}{"id": country.ID},
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set and remove",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, remove:{}, set: {} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	}, {
+		name: "update mutation with empty set",
+		query: `mutation updateCountry($id: ID!){
+            updateCountry(input: {filter: {id: [$id]}, set:{} }) {
+                numUids
+                country {
+                    id
+                    name
+                }
+            }
+        }`,
+		variables: map[string]interface{}{"id": country.ID},
+		expected: `{
+             "updateCountry": {
+               "numUids": 0,
+               "country": []
+             }
+        }`,
+	},
 	}
-	gqlResponse := updateCountryParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	require.JSONEq(t, `{
-        "updateCountry": {
-            "numUids": 0,
-            "country": []
-        }
-    }`, string(gqlResponse.Data))
-
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.expected, string(resp.Data))
+		})
+	}
 	// cleanup
+	// expectedNumUids:1 will ensures that no node has been deleted because of remove {}
 	deleteCountry(t, map[string]interface{}{"id": []string{country.ID}}, 1, nil)
 }
 
@@ -4886,24 +4954,38 @@ func filterInUpdateMutationsWithFilterAndOr(t *testing.T) {
 
 func idDirectiveWithInt64Mutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addBook($bookId2: Int64!, $bookId3: Int64!){
           addBook(input:[
             {
               bookId: 1234567890123
               name: "Graphql"
               desc: "Graphql is the next big thing"
-            }
+            },
+			{
+			  bookId: $bookId2
+			  name: "Dgraph"
+			  desc: "A GraphQL database"
+			},
+			{
+				bookId: $bookId3
+				name: "DQL"
+				desc: "Query Language for Dgraph"
+			  }
           ]) {
             numUids
           }
         }`,
+		Variables: map[string]interface{}{
+			"bookId2": "1234512345",
+			"bookId3": 5432154321,
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	expected := `{
               "addBook": {
-              "numUids": 1
+              "numUids": 3
             }
         }`
 	require.JSONEq(t, expected, string(response.Data))
@@ -4912,59 +4994,32 @@ func idDirectiveWithInt64Mutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Book", map[string]interface{}{}, 2, nil)
+	DeleteGqlType(t, "Book", map[string]interface{}{}, 4, nil)
 }
 
 func idDirectiveWithIntMutation(t *testing.T) {
 	query := &GraphQLParams{
-		Query: `mutation {
+		Query: `mutation addChapter($chId: Int!){
 		  addChapter(input:[{
 			chapterId: 2
 			name: "Graphql and more"
+		  },
+		  {
+			chapterId: $chId
+			name: "Authorization"
 		  }]) {
 			numUids
 		  }
 		}`,
+		Variables: map[string]interface{}{
+			"chId": 10,
+		},
 	}
 
 	response := query.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, response)
 	var expected = `{
             "addChapter": {
-              "numUids": 1
-            }
-        }`
-	require.JSONEq(t, expected, string(response.Data))
-
-	// adding same mutation again should result in error because of duplicate id
-	response = query.ExecuteAsPost(t, GraphqlURL)
-	require.Contains(t, response.Errors.Error(), "already exists")
-
-	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 2, nil)
-}
-
-func idDirectiveWithFloatMutation(t *testing.T) {
-	query := &GraphQLParams{
-		Query: `mutation {
-          addSection(input:[{
-            chapterId: 2
-            name: "Graphql: Introduction"
-            sectionId: 2.1
-          },
-          {
-            chapterId: 2
-            name: "Graphql Available Data Types"
-            sectionId: 2.2
-          }]) {
-            numUids
-          }
-        }`,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, response)
-	var expected = `{
-            "addSection": {
               "numUids": 2
             }
         }`
@@ -4974,7 +5029,7 @@ func idDirectiveWithFloatMutation(t *testing.T) {
 	response = query.ExecuteAsPost(t, GraphqlURL)
 	require.Contains(t, response.Errors.Error(), "already exists")
 
-	DeleteGqlType(t, "Section", map[string]interface{}{}, 4, nil)
+	DeleteGqlType(t, "Chapter", map[string]interface{}{}, 3, nil)
 }
 
 func addMutationWithDeepExtendedTypeObjects(t *testing.T) {

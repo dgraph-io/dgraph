@@ -35,9 +35,8 @@ import (
 
 const (
 	errGraphQLSchemaCommitFailed = "error occurred updating GraphQL schema, please retry"
-	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph" +
-		" schema - this indicates a bug in Dgraph schema generation. Please let us know by" +
-		" filing an issue. Don't forget to post your old and new schemas in the issue description."
+	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph schema - " +
+		"GraphQL layer may exhibit unexpected behaviour, reapplying the old GraphQL schema may prevent any issues"
 
 	GqlSchemaPred    = "dgraph.graphql.schema"
 	gqlSchemaXidPred = "dgraph.graphql.xid"

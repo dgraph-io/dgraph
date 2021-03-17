@@ -149,6 +149,9 @@ func outputLogs(prefix string) {
 	printLogs := func(container string) {
 		in := testutil.GetContainerInstance(prefix, container)
 		c := in.GetContainer()
+		if c == nil {
+			return
+		}
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
 		fmt.Printf("Docker logs for %d is %s with error %+v ", c.ID, string(out), err)
@@ -252,6 +255,7 @@ func hasTestFiles(pkg string) bool {
 var _threadId int32
 
 func runTests(taskCh chan task, closer *z.Closer) error {
+	var err error
 	threadId := atomic.AddInt32(&_threadId, 1)
 
 	{
@@ -287,7 +291,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			return
 		}
 		wg.Add(1)
-		stopCluster(defaultCompose, prefix, wg, nil)
+		stopCluster(defaultCompose, prefix, wg, err)
 		stopped = true
 	}
 	defer stop()
@@ -297,7 +301,8 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	for task := range taskCh {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			err = ctx.Err()
+			return err
 		}
 		if !hasTestFiles(task.pkg.ID) {
 			continue
@@ -309,16 +314,18 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				continue
 			}
 			start()
-			if err := runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
 				return err
 			}
 		} else {
-			if err := runCustomClusterTest(ctx, task.pkg.ID, wg); err != nil {
-				return err
+			// we are not using err variable here because we dont want to
+			// print logs of default cluster in case of custom test fail.
+			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg); cerr != nil {
+				return cerr
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 func getGlobalPrefix() string {
@@ -337,13 +344,14 @@ func getClusterPrefix() string {
 	return fmt.Sprintf("%s%03d-%d", getGlobalPrefix(), procId, id)
 }
 
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) (err error) {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
+	var err error
 	compose := composeFileFor(pkg)
 	prefix := getClusterPrefix()
 	err = startCluster(compose, prefix)
 	if err != nil {
-		return
+		return err
 	}
 	if !*keepCluster {
 		wg.Add(1)
@@ -351,7 +359,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) (
 	}
 
 	err = runTestsFor(ctx, pkg, prefix)
-	return
+	return err
 }
 
 func findPackagesFor(testName string) []string {

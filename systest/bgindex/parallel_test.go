@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -63,10 +66,13 @@ func TestParallelIndexing(t *testing.T) {
 		t.Fatalf("error in assignig UIDs :: %v", err)
 	}
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	var dg *dgo.Dgraph
+	err := x.RetryUntilSuccess(10, time.Second, func() error {
+		var err error
+		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+		return err
+	})
+	require.Nil(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
@@ -96,24 +102,35 @@ func TestParallelIndexing(t *testing.T) {
 	}
 
 	fmt.Println("building indexes in background for int and string data")
-	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: `
+	// Wait until previous indexing is complete.
+	for {
+		if err := dg.Alter(context.Background(), &api.Operation{
+			Schema: `
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-		RunInBackground: true,
-	}); err != nil {
-		t.Fatalf("error in adding indexes :: %v\n", err)
+			RunInBackground: true,
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
+			t.Fatalf("error in adding indexes :: %v\n", err)
+		} else if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
-
-	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: `
+	// Wait until previous indexing is complete.
+	for {
+		if err := dg.Alter(context.Background(), &api.Operation{
+			Schema: `
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-		RunInBackground: true,
-	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
-		t.Fatalf("error in adding indexes :: %v\n", err)
+			RunInBackground: true,
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
+			t.Fatalf("error in adding indexes :: %v\n", err)
+		} else if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
 
 	// Wait until previous indexing is complete.

@@ -80,16 +80,16 @@ func NewZero(ms *pb.MembershipState) *Telemetry {
 // NewAlpha returns a Telemetry struct that holds information about the state of alpha server.
 func NewAlpha(ms *pb.MembershipState) *Telemetry {
 	return &Telemetry{
-		Cid:     ms.GetCid(),
-		Version: x.Version(),
-		OS:      runtime.GOOS,
-		Arch:    runtime.GOARCH,
+		Cid:            ms.GetCid(),
+		Version:        x.Version(),
+		OS:             runtime.GOOS,
+		Arch:           runtime.GOARCH,
+		EEFeaturesList: worker.GetEEFeaturesList(),
 	}
 }
 
 // Post reports the Telemetry to the stats server.
 func (t *Telemetry) Post() error {
-	t.EEFeaturesList = worker.GetEEFeaturesList()
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err

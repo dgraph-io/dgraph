@@ -307,12 +307,6 @@ type Chapter {
         book: Book
 }
 
-type Section {
-        sectionId: Float! @id
-        name: String!
-        chapterId: Int! @search
-}
-
 # multiple fields with @id directive
 type Worker {
         name: String!
@@ -325,6 +319,7 @@ type Employer {
         worker: [Worker]
 }
 
+# sample data: https://github.com/mandiwise/space-camp-federation-demo/blob/master/db.json
 type Mission @key(fields: "id") {
     id: String! @id
     crew: [Astronaut] @provides(fields: "name") @hasInverse(field: missions)
@@ -337,6 +332,9 @@ type Mission @key(fields: "id") {
 type Astronaut @key(fields: "id") @extends {
     id: ID! @external
     name: String! @external
+    age: Int @external
+    isActive: Boolean
+    bio: String @requires(fields: "name age") @lambda
     missions: [Mission]
 }
 
