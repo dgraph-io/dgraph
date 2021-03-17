@@ -79,38 +79,45 @@ type UriHandler interface {
 	// CreateFile(...)
 	// Stream(*url.URL)
 
+	PathJoin(left, right string) string
+	Exists(path string) bool
+	Read(path string) ([]byte, error)
+	// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+	// end to release resources appropriately.
+	Stream(path string) (io.ReadCloser, error)
+
 	// GetManifest returns the master manifest, containing information about all the
 	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
 	// then it will return a consolidated master manifest.
-	GetManifest(*url.URL) (*MasterManifest, error)
+	// GetManifest(*url.URL) (*MasterManifest, error)
 
-	// GetManifests returns the list of manifest for the given backup series ID
-	// and backup number at the specified location. If backupNum is set to zero,
-	// all the manifests for the backup series will be returned. If it's greater
-	// than zero, manifests from one to backupNum will be returned.
-	GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
+	// // GetManifests returns the list of manifest for the given backup series ID
+	// // and backup number at the specified location. If backupNum is set to zero,
+	// // all the manifests for the backup series will be returned. If it's greater
+	// // than zero, manifests from one to backupNum will be returned.
+	// GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
 
-	// GetLatestManifest reads the manifests at the given URL and returns the
-	// latest manifest.
-	GetLatestManifest(*url.URL) (*Manifest, error)
+	// // GetLatestManifest reads the manifests at the given URL and returns the
+	// // latest manifest.
+	// GetLatestManifest(*url.URL) (*Manifest, error)
 
-	// CreateBackupFile prepares the object or file to save the backup file.
-	CreateBackupFile(*url.URL, *pb.BackupRequest) error
+	// // CreateBackupFile prepares the object or file to save the backup file.
+	// CreateBackupFile(*url.URL, *pb.BackupRequest) error
 
-	// CreateManifest creates the given manifest.
-	CreateManifest(*url.URL, *MasterManifest) error
+	// // CreateManifest creates the given manifest.
+	// CreateManifest(*url.URL, *MasterManifest) error
 
-	// Load will scan location URI for backup files, then load them via loadFn.
-	// It optionally takes the name of the last directory to consider. Any backup directories
-	// created after will be ignored.
-	// Objects implementing this function will be used for retrieving (dowload) backup files
-	// and loading the data into a DB. The restore CLI command uses this call.
-	Load(*url.URL, string, uint64, loadFn) LoadResult
+	// // Load will scan location URI for backup files, then load them via loadFn.
+	// // It optionally takes the name of the last directory to consider. Any backup directories
+	// // created after will be ignored.
+	// // Objects implementing this function will be used for retrieving (dowload) backup files
+	// // and loading the data into a DB. The restore CLI command uses this call.
+	// Load(*url.URL, string, uint64, loadFn) LoadResult
 
-	// Verify checks that the specified backup can be restored to a cluster with the
-	// given groups. The last manifest of that backup should have the same number of
-	// groups as given list of groups.
-	Verify(*url.URL, *pb.RestoreRequest, []uint32) error
+	// // Verify checks that the specified backup can be restored to a cluster with the
+	// // given groups. The last manifest of that backup should have the same number of
+	// // groups as given list of groups.
+	// Verify(*url.URL, *pb.RestoreRequest, []uint32) error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -204,6 +211,12 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, erro
 		return nil, err
 	}
 	return m.Manifests, nil
+}
+
+func GetManifest(h *UriHandler, uri *url.URL) error {
+	if !h.Exists(uri.Path) {
+		return fmt.Errorf("uri: %+v not found", uri)
+	}
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests
@@ -689,6 +702,16 @@ type fileHandler struct {
 	fp *os.File
 }
 
+func (h *fileHandler) Exists(uri *url.URL) bool {
+	return pathExist(uri.Path)
+}
+func (h *fileHandler) Read(uri *url.URL) ([]byte, error) {
+	return ioutil.ReadFile(uri.Path)
+}
+func (h *fileHandler) Stream(uri *url.URL) (io.ReadCloser, error) {
+	return os.Open(uri.Path)
+}
+
 // readManifest reads a manifest file at path using the handler.
 // Returns nil on success, otherwise an error.
 func (h *fileHandler) readManifest(path string, m *Manifest) error {
@@ -904,15 +927,20 @@ func pathExist(path string) bool {
 }
 
 // getConsolidatedManifest walks over all the backup directories and generates a master manifest.
-func (h *fileHandler) getConsolidatedManifest(uri *url.URL) (*MasterManifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Wrap(err, "While GetLatestManifest")
+func getConsolidatedManifest(h *UriHandler, uri *url.URL) (*MasterManifest, error) {
+	if !h.Exists(uri.Path) {
+		return nil, fmt.Errorf("uri: %+v not found", uri)
 	}
+	// if err := createIfNotExists(uri.Path); err != nil {
+	// 	return nil, errors.Wrap(err, "While GetLatestManifest")
+	// }
 
 	var manifest MasterManifest
 
 	// If there is a master manifest already, we just return it.
 	path := filepath.Join(uri.Path, backupManifest)
+	h.PathJoin(uri.Path, backupManifest)
+	uri.Path = filepath.Join(uri.Path, backupManifest)
 	if pathExist(path) {
 		if err := h.readMasterManifest(path, &manifest); err != nil {
 			return nil, errors.Wrap(err, "Get latest manifest failed to read master manifest: ")
