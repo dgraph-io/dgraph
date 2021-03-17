@@ -1904,7 +1904,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1926,7 +1926,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{

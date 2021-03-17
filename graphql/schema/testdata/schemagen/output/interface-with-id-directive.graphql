@@ -457,6 +457,7 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
+	getLibraryItem(refID: String!): LibraryItem
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book
