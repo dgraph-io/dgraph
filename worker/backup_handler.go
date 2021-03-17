@@ -189,7 +189,7 @@ func (h *s3Handler) DirExists(path string) bool   { return true }
 func (h *s3Handler) CreatePath(path string) error { return nil }
 
 func (h *s3Handler) FileExists(path string) bool {
-	path = h.trimBucketPrefix(path)
+	fmt.Println("[DEBUG] FileExists called: path: ", path)
 	objectPath := h.getObjectPath(path)
 	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
 	if err != nil {
@@ -197,7 +197,7 @@ func (h *s3Handler) FileExists(path string) bool {
 		if errResponse.Code == "NoSuchKey" {
 			return false
 		} else {
-			glog.Errorf("Failed to verify object existence: %s", errResponse.Code)
+			glog.Errorf("Failed to verify object existence: %v", err)
 			return false
 		}
 	}
@@ -209,7 +209,7 @@ func (h *s3Handler) JoinPath(path string) string {
 }
 
 func (h *s3Handler) Read(path string) ([]byte, error) {
-	path = h.trimBucketPrefix(path)
+	fmt.Println("[DEBUG] read called: ", path)
 	objectPath := h.getObjectPath(path)
 	var buf bytes.Buffer
 
@@ -226,9 +226,8 @@ func (h *s3Handler) Read(path string) ([]byte, error) {
 }
 
 func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
-	path = h.trimBucketPrefix(path)
 	objectPath := h.getObjectPath(path)
-	glog.Info("[DEBUG] Stream, path is: ", path)
+	fmt.Println("[DEBUG] Stream, path is: ", path)
 	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
@@ -237,7 +236,7 @@ func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
 }
 
 func (h *s3Handler) Walk(root string, f func(string, bool) bool) []string {
-	root = h.trimBucketPrefix(root)
+	fmt.Println("[DEBUG] walk called: ", root)
 	var paths []string
 	done := make(chan struct{})
 	defer close(done)
@@ -250,15 +249,8 @@ func (h *s3Handler) Walk(root string, f func(string, bool) bool) []string {
 	return paths
 }
 
-func (h *s3Handler) trimBucketPrefix(path string) string {
-	// TODO: We should do something better here?
-	prefix := filepath.Join(string(filepath.Separator), h.bucketName, h.objectPrefix)
-	prefix = prefix + string(filepath.Separator)
-	return strings.TrimPrefix(path, prefix)
-}
-
 func (h *s3Handler) CreateFile(path string) error {
-	path = h.trimBucketPrefix(path)
+	fmt.Println("[DEBUG] Create file called:  ", path)
 	objectPath := h.getObjectPath(path)
 
 	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, objectPath)
@@ -273,9 +265,7 @@ func (h *s3Handler) CreateFile(path string) error {
 
 func (h *s3Handler) Rename(srcPath, dstPath string) error {
 
-	srcPath = h.trimBucketPrefix(srcPath)
-	dstPath = h.trimBucketPrefix(dstPath)
-	glog.Infof("[DEBUG] RENAME, srcPath %s, dstPath %s\n", srcPath, dstPath)
+	fmt.Println("[DEBUG] RENAME, srcPath %s, dstPath %s\n", srcPath, dstPath)
 	src := minio.NewSourceInfo(h.bucketName, srcPath, nil)
 	dst, err := minio.NewDestinationInfo(h.bucketName, dstPath, nil, nil)
 	if err != nil {
@@ -584,7 +574,7 @@ func Load(h UriHandler, uri *url.URL, backupId string, backupNum uint64, fn load
 		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
 	}
 
-	glog.Info("[DEBUG] Load, restore manifests are: ", manifests)
+	fmt.Println("[DEBUG] Load, restore manifests are: ", manifests)
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
@@ -666,7 +656,15 @@ func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
 
 	var filtered []*Manifest
 	for _, m := range manifest.Manifests {
-		if h.FileExists(m.Path) {
+		missingFiles := false
+		for g, _ := range m.Groups {
+			path := filepath.Join(m.Path, backupName(m.Since, g))
+			if !h.FileExists(path) {
+				missingFiles = true
+				break
+			}
+		}
+		if !missingFiles {
 			filtered = append(filtered, m)
 		}
 	}
@@ -683,12 +681,13 @@ type loadFn func(groupId uint32, in *loadBackupInput) (uint64, uint64, error)
 func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCredentials,
 	fn loadFn) LoadResult {
 
+	fmt.Println("DEBUG ======== LoadBackup called")
 	uri, err := url.Parse(location)
 	if err != nil {
 		return LoadResult{Err: err}
 	}
 
-	glog.Info("DEBUG ======== LoadBackup called for uri.path: ", uri.Path)
+	fmt.Println("DEBUG ======== LoadBackup called for uri.path: ", uri.Path)
 	h, err := NewUriHandler(uri, creds)
 	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}

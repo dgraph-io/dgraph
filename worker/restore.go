@@ -47,7 +47,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 	fmt.Println("RunRestore called on location: ", location)
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return LoadBackup(location, backupId, 0, nil,
+	lr := LoadBackup(location, backupId, 0, nil,
 		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
@@ -94,6 +94,8 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 			}
 			return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
+	fmt.Println("Returning: ", lr)
+	return lr
 }
 
 type loadBackupInput struct {
