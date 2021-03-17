@@ -945,7 +945,7 @@ func pathExist(path string) bool {
 // getConsolidatedManifest walks over all the backup directories and generates a master manifest.
 func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.Exists(uri.Path) {
-		return nil, fmt.Errorf("uri: %+v not found", uri)
+		return &MasterManifest{}, fmt.Errorf("uri: %+v not found", uri)
 	}
 
 	// If there is a master manifest already, we just return it.
@@ -953,7 +953,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 	if h.Exists(path) {
 		manifest, err := readMasterManifest(h, path)
 		if err != nil {
-			return nil, errors.Wrap(err, "Get latest manifest failed to read master manifest: ")
+			return &MasterManifest{}, errors.Wrap(err, "Failed to read master manifest: ")
 		}
 		return manifest, nil
 	}
@@ -1132,7 +1132,7 @@ func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
 
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
-		return manifest.Manifests, errors.Wrap(err, "GetManifests failed to get consolidated manifest: ")
+		return manifest.Manifests, errors.Wrap(err, "Failed to get consolidated manifest: ")
 	}
 
 	var filtered []*Manifest
