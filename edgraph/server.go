@@ -857,7 +857,7 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 	}
 	return nil
 }
@@ -909,9 +909,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
+			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 			}
 		}
 	}

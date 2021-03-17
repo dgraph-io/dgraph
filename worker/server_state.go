@@ -48,8 +48,8 @@ const (
 		`client_key=;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000; disallow-drop=false;`
-  ZeroLimitsDefaults = `uid-lease=100000; refill-interval=30s`
-	GraphQLDefaults = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
+	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s`
+	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 )
 

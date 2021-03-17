@@ -1404,6 +1404,12 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 	return matches
 }
 
+// LimiterConf is the configuration options for LimiterConf.
+type LimiterConf struct {
+	UidLeaseLimit uint64
+	RefillAfter   time.Duration
+}
+
 type lockedMap struct {
 	sync.Mutex
 	mp map[uint64]uint64
@@ -1438,6 +1444,7 @@ func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Close
 func (r *RateLimiter) Allow(ns, count uint64) bool {
 	r.limiter.Lock()
 	defer r.limiter.Unlock()
+	glog.Infof("Request: ns:%d, count:%d, avail:%d", ns, count, r.limiter.mp[ns])
 
 	if _, ok := r.limiter.mp[ns]; !ok {
 		r.limiter.mp[ns] = r.maxTokens // make this configurable.

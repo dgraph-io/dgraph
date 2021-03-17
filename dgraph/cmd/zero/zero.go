@@ -101,8 +101,8 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
-	s.rateLimiter = x.NewRateLimiter(opts.limit.GetUint64("uid-lease"),
-		opts.limit.GetDuration("refill-interval"), s.closer)
+	s.rateLimiter = x.NewRateLimiter(opts.limiterConfig.UidLeaseLimit,
+		opts.limiterConfig.RefillAfter, s.closer)
 
 	go s.rebalanceTablets()
 }

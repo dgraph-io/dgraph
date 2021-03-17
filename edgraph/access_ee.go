@@ -406,6 +406,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -417,6 +418,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
 		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
