@@ -153,8 +153,8 @@ curl --silent \
 curl --silent \
   --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
   --request POST \
-  --data @./vault/payload_enc_key.json \
-  http://$VAULT_ADDRESS/v1/secret/data/dgraph/enc_key | jq
+  --data @./vault/payload_alpha_secrets.json \
+  http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
 ### Retrieve the dgraph token and save credentials
@@ -191,7 +191,7 @@ echo $VAULT_DGRAPH_SECRET_ID > ./vault/secret_id
 curl --silent \
   --header "X-Vault-Token: $VAULT_DGRAPH_TOKEN" \
   --request GET \
-  http://$VAULT_ADDRESS/v1/secret/data/dgraph/enc_key | jq
+  http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
 ### Launch Dgraph
