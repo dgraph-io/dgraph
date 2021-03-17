@@ -25,14 +25,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/systest/backup/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
@@ -344,25 +342,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &result))
 	require.Contains(t, result.Backup.Response.Message, "Backup queued successfully")
-
-	for {
-		time.Sleep(5 * time.Second)
-		client := testutil.GetHttpsClient(t)
-		resp, err := client.Get(testutil.HealthUrl())
-		require.NoError(t, err)
-
-		var health []pb.HealthInfo
-		decoder := json.NewDecoder(resp.Body)
-		err = decoder.Decode(&health)
-		require.NoError(t, err)
-		require.Len(t, health, 1)
-
-		status := health[0].LastBackup
-		if strings.HasPrefix(status, "COMPLETED: ") {
-			break
-		}
-		require.True(t, status == "" || strings.HasPrefix(status, "STARTED: "), "backup status: %s", status)
-	}
+	testutil.WaitForBackup(t)
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)
