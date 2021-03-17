@@ -154,7 +154,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	latestManifest, err := handler.GetLatestManifest(uri)
+	latestManifest, err := getLatestManifest(handler, uri)
 	if err != nil {
 		return err
 	}
@@ -334,38 +334,25 @@ func (pr *BackupProcessor) Close() {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
-	var response pb.BackupResponse
-
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
 	uri, err := url.Parse(pr.Request.Destination)
 	if err != nil {
-		return &response, err
+		return nil, err
 	}
-
 	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
-		return &response, err
+		return nil, err
 	}
-
-	if err := handler.CreateBackupFile(uri, pr.Request); err != nil {
-		return &response, err
+	if err := createBackupFile(handler, uri, pr.Request); err != nil {
+		return nil, err
 	}
-
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
-
-	predMap := make(map[string]struct{})
-	for _, pred := range pr.Request.Predicates {
-		predMap[pred] = struct{}{}
-	}
-
-	var maxVersion uint64
 
 	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
-		return &response, err
+		return nil, err
 	}
 	gzWriter := gzip.NewWriter(newhandler)
 
@@ -378,6 +365,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	stream.SinceTs = pr.Request.SinceTs
 	stream.Prefix = []byte{x.ByteData}
 
+	var response pb.BackupResponse
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		tl := pr.threads[itr.ThreadId]
 		tl.alloc = itr.Alloc
@@ -401,10 +389,15 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		return kvList, nil
 	}
 
+	predMap := make(map[string]struct{})
+	for _, pred := range pr.Request.Predicates {
+		predMap[pred] = struct{}{}
+	}
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
-			glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
+			glog.Errorf("error %v while parsing key %v during backup. Skipping...",
+				err, hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -421,6 +414,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		_, ok := predMap[parsedKey.Attr]
 		return ok
 	}
+
+	var maxVersion uint64
 	stream.Send = func(buf *z.Buffer) error {
 		list, err := badger.BufferToKVList(buf)
 		if err != nil {
@@ -434,6 +429,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		return writeKVList(list, gzWriter)
 	}
 
+	// This is where the execution happens.
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &response, err
@@ -465,7 +461,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			}
 			parsedKey, err := x.Parse(item.Key())
 			if err != nil {
-				glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
+				glog.Errorf("error %v while parsing key %v during backup. Skipping...",
+					err, hex.EncodeToString(item.Key()))
 				continue
 			}
 			// This check makes sense only for the schema keys. The types are not stored in it.
@@ -535,14 +532,14 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 		return err
 	}
 
-	manifest, err := handler.GetManifest(uri)
+	manifest, err := getManifest(handler, uri)
 	if err != nil {
 		return err
 	}
 
 	manifest.Manifests = append(manifest.Manifests, m)
 
-	if err := handler.CreateManifest(uri, manifest); err != nil {
+	if err := createManifest(handler, uri, manifest); err != nil {
 		return errors.Wrap(err, "Complete backup failed")
 	}
 

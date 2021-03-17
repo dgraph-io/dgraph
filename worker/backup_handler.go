@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,98 +63,227 @@ const (
 	tmpManifest = `manifest_tmp.json`
 )
 
-// UriHandler interface is implemented by URI scheme handlers.
-// When adding new scheme handles, for example 'azure://', an object will implement
-// this interface to supply Dgraph with a way to create or load backup files into DB.
-// For all methods below, the URL object is parsed as described in `newHandler' and
-// the Processor object has the DB, estimated tablets size, and backup parameters.
-type UriHandler interface {
-	// Handlers must know how to Write to their URI location.
-	// These function calls are used by both Create and Load.
-	io.WriteCloser
+// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
+func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+	// If there is a master manifest already, we just return it.
+	if h.FileExists(backupManifest) {
+		manifest, err := readMasterManifest(h, backupManifest)
+		if err != nil {
+			return &MasterManifest{}, errors.Wrap(err, "Failed to read master manifest")
+		}
+		return manifest, nil
+	}
 
-	// TODO: This is what we need
-	// GetFiles(*url.URL, "MANIFEST") // sort of like file.Walk in Go.
-	//
-	// Or, ideally, just GetFile(...)
-	// CreateFile(...)
-	// Stream(*url.URL)
+	// Otherwise, we create a master manifest by going through all the backup directories.
+	paths := h.ListPaths("")
 
-	PathJoin(left, right string) string
-	Exists(path string) bool
-	Read(path string) ([]byte, error)
-	// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
-	// end to release resources appropriately.
-	Stream(path string) (io.ReadCloser, error)
+	var manifestPaths []string
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	for _, p := range paths {
+		if strings.HasSuffix(p, suffix) {
+			manifestPaths = append(manifestPaths, p)
+		}
+	}
 
-	// GetManifest returns the master manifest, containing information about all the
-	// backups. If the backup directory is using old formats (version < 21.03) of manifests,
-	// then it will return a consolidated master manifest.
-	// GetManifest(*url.URL) (*MasterManifest, error)
+	sort.Strings(manifestPaths)
+	var mlist []*Manifest
 
-	// // GetManifests returns the list of manifest for the given backup series ID
-	// // and backup number at the specified location. If backupNum is set to zero,
-	// // all the manifests for the backup series will be returned. If it's greater
-	// // than zero, manifests from one to backupNum will be returned.
-	// GetManifests(*url.URL, string, uint64) ([]*Manifest, error)
-
-	// // GetLatestManifest reads the manifests at the given URL and returns the
-	// // latest manifest.
-	// GetLatestManifest(*url.URL) (*Manifest, error)
-
-	// // CreateBackupFile prepares the object or file to save the backup file.
-	// CreateBackupFile(*url.URL, *pb.BackupRequest) error
-
-	// // CreateManifest creates the given manifest.
-	// CreateManifest(*url.URL, *MasterManifest) error
-
-	// // Load will scan location URI for backup files, then load them via loadFn.
-	// // It optionally takes the name of the last directory to consider. Any backup directories
-	// // created after will be ignored.
-	// // Objects implementing this function will be used for retrieving (dowload) backup files
-	// // and loading the data into a DB. The restore CLI command uses this call.
-	// Load(*url.URL, string, uint64, loadFn) LoadResult
-
-	// // Verify checks that the specified backup can be restored to a cluster with the
-	// // given groups. The last manifest of that backup should have the same number of
-	// // groups as given list of groups.
-	// Verify(*url.URL, *pb.RestoreRequest, []uint32) error
+	for _, path := range manifestPaths {
+		path = filepath.Dir(path)
+		_, path = filepath.Split(path)
+		m, err := readManifest(h, filepath.Join(path, backupManifest))
+		if err != nil {
+			return nil, errors.Wrap(err, "While Getting latest manifest")
+		}
+		m.Path = path
+		mlist = append(mlist, m)
+	}
+	return &MasterManifest{Manifests: mlist}, nil
 }
 
-// NewUriHandler parses the requested URI and finds the corresponding UriHandler.
-// If the passed credentials are not nil, they will be used to override the
-// default credentials (only for backups to minio or S3).
-// Target URI formats:
-//   [scheme]://[host]/[path]?[args]
-//   [scheme]:///[path]?[args]
-//   /[path]?[args] (only for local or NFS)
-//
-// Target URI parts:
-//   scheme - service handler, one of: "file", "s3", "minio"
-//     host - remote address. ex: "dgraph.s3.amazonaws.com"
-//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
-//     args - specific arguments that are ok to appear in logs.
-//
-// Global args (if supported by the handler):
-//     secure - true|false turn on/off TLS.
-//      trace - true|false turn on/off HTTP tracing.
-//   compress - true|false turn on/off data compression.
-//    encrypt - true|false turn on/off data encryption.
-//
-// Examples:
-//   s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
-//   minio://localhost:9000/dgraph?secure=true
-//   file:///tmp/dgraph/backups
-//   /tmp/dgraph/backups?compress=gzip
-func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
-	switch uri.Scheme {
-	case "file", "":
-		return &fileHandler{}, nil
-	case "minio", "s3":
-		return NewS3Handler(uri, creds)
+func readManifest(h UriHandler, path string) (*Manifest, error) {
+	var m Manifest
+	b, err := h.Read(path)
+	if err != nil {
+		return &m, errors.Wrap(err, "readManifest failed to read the file: ")
 	}
-	return nil, errors.Errorf("Unable to handle url: %s", uri)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return &m, errors.Wrap(err, "readManifest failed to unmarshal: ")
+	}
+	return &m, nil
+}
 
+func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
+	var m MasterManifest
+	b, err := h.Read(path)
+	if err != nil {
+		return &m, errors.Wrap(err, "readMasterManifest failed to read the file: ")
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return &m, errors.Wrap(err, "readMasterManifest failed to unmarshal: ")
+	}
+	return &m, nil
+}
+
+func getLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
+	if !h.DirExists("./") {
+		return &Manifest{}, errors.Errorf("getLatestManifest: The uri path: %q doesn't exists",
+			uri.Path)
+	}
+	manifest, err := getConsolidatedManifest(h, uri)
+	if err != nil {
+		return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
+	}
+	if len(manifest.Manifests) == 0 {
+		return &Manifest{}, nil
+	}
+	return manifest.Manifests[len(manifest.Manifests)-1], nil
+}
+
+func getManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+	if !h.DirExists("") {
+		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
+			uri.Path)
+	}
+	manifest, err := getConsolidatedManifest(h, uri)
+	if err != nil {
+		return manifest, errors.Wrap(err, "Failed to get consolidated manifest: ")
+	}
+	return manifest, nil
+}
+
+func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
+	var err error
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
+			return errors.Wrap(err, "createManifest failed to create path")
+		}
+	}
+
+	if err := h.CreateFile(tmpManifest); err != nil {
+		return errors.Wrap(err, "createManifest failed to create tmp path")
+	}
+	if err = json.NewEncoder(h).Encode(manifest); err != nil {
+		return err
+	}
+	if err := h.WaitForWrite(); err != nil {
+		return err
+	}
+	// Move the tmpManifest to backupManifest, this operation is not atomic for s3.
+	// We try our best to move the file but if it fails then the user must move it manually.
+	err = h.Rename(tmpManifest, backupManifest)
+	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!\n"+
+		"It is possible that the manifest would have been corrupted. You must move "+
+		"the file: %s to: %s in order to "+
+		"fix the backup manifest.", tmpManifest, backupManifest)
+
+}
+
+func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) error {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
+			return errors.Wrap(err, "while creating backup file")
+		}
+	}
+	fileName := backupName(req.ReadTs, req.GroupId)
+	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
+	if err := h.CreateDir(dir); err != nil {
+		return errors.Wrap(err, "while creating backup file")
+	}
+	backupFile := filepath.Join(dir, fileName)
+	if err := h.CreateFile(backupFile); err != nil {
+		return errors.Wrap(err, "while creating backup file")
+	}
+	return nil
+}
+
+func Load(h UriHandler, uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
+	manifests, err := getManifestsToRestore(h, uri, backupId, backupNum)
+	if err != nil {
+		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
+	}
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	var since uint64
+	var maxUid, maxNsId uint64
+	for i, manifest := range manifests {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+			continue
+		}
+
+		path := manifests[i].Path
+		for gid := range manifest.Groups {
+			file := filepath.Join(path, backupName(manifest.Since, gid))
+			reader, err := h.Stream(file)
+			if err != nil {
+				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
+			}
+			defer reader.Close()
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+
+			groupMaxUid, groupMaxNsId, err := fn(gid,
+				&loadBackupInput{r: reader, preds: predSet, dropOperations: manifest.DropOperations,
+					isOld: manifest.Version == 0})
+			if err != nil {
+				return LoadResult{Err: err}
+			}
+			maxUid = x.Max(maxUid, groupMaxUid)
+			maxNsId = x.Max(maxNsId, groupMaxNsId)
+		}
+		since = manifest.Since
+	}
+
+	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
+}
+
+// verifyRequest verifies that the manifest satisfies the requirements to process the given
+// restore request.
+func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
+	currentGroups []uint32) error {
+
+	manifests, err := getManifestsToRestore(h, uri, req.GetBackupId(), req.GetBackupNum())
+	if err != nil {
+		return errors.Wrapf(err, "while retrieving manifests")
+	}
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
+	}
+
+	// TODO(Ahsan): Do we need to verify the manifests again here?
+	if err := verifyManifests(manifests); err != nil {
+		return err
+	}
+
+	lastManifest := manifests[len(manifests)-1]
+	if len(currentGroups) != len(lastManifest.Groups) {
+		return errors.Errorf("groups in cluster and latest backup manifest differ")
+	}
+
+	for _, group := range currentGroups {
+		if _, ok := lastManifest.Groups[group]; !ok {
+			return errors.Errorf("groups in cluster and latest backup manifest differ")
+		}
+	}
+	return nil
+}
+
+func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
+	backupNum uint64) ([]*Manifest, error) {
+	if !h.DirExists("") {
+		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exists",
+			uri.Path)
+	}
+
+	manifest, err := getConsolidatedManifest(h, uri)
+	if err != nil {
+		return manifest.Manifests, errors.Wrap(err, "Failed to get consolidated manifest: ")
+	}
+	return getFilteredManifests(h, manifest.Manifests, backupId, backupNum)
 }
 
 // loadFn is a function that will receive the current file being read.
@@ -169,13 +299,12 @@ func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCrede
 	if err != nil {
 		return LoadResult{Err: err}
 	}
-
 	h, err := NewUriHandler(uri, creds)
 	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
-	return h.Load(uri, backupId, backupNum, fn)
+	return Load(h, uri, backupId, backupNum, fn)
 }
 
 // VerifyBackup will access the backup location and verify that the specified backup can
@@ -191,7 +320,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 		return errors.Wrap(err, "VerifyBackup")
 	}
 
-	return h.Verify(uri, req, currentGroups)
+	return verifyRequest(h, uri, req, currentGroups)
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
@@ -206,17 +335,11 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, erro
 		return nil, errors.Wrap(err, "ListBackupManifests")
 	}
 
-	m, err := h.GetManifest(uri)
+	m, err := getManifest(h, uri)
 	if err != nil {
 		return nil, err
 	}
 	return m.Manifests, nil
-}
-
-func GetManifest(h *UriHandler, uri *url.URL) error {
-	if !h.Exists(uri.Path) {
-		return fmt.Errorf("uri: %+v not found", uri)
-	}
 }
 
 // filterManifests takes a list of manifests and returns the list of manifests
@@ -283,34 +406,25 @@ func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
 }
 
-// verifyRequest verifies the manifests satisfy the requirements to process the given
-// restore request.
-func verifyRequest(req *pb.RestoreRequest, manifests []*Manifest, currentGroups []uint32) error {
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
-	}
-
-	if err := verifyManifests(manifests); err != nil {
-		return err
-	}
-
-	lastManifest := manifests[len(manifests)-1]
-	if len(currentGroups) != len(lastManifest.Groups) {
-		return errors.Errorf("groups in cluster and latest backup manifest differ")
-	}
-
-	for _, group := range currentGroups {
-		if _, ok := lastManifest.Groups[group]; !ok {
-			return errors.Errorf("groups in cluster and latest backup manifest differ")
-		}
-	}
-	return nil
-}
-
-func getManifests(manifests []*Manifest, backupId string,
+func getFilteredManifests(h UriHandler, manifests []*Manifest, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
 
-	manifests, err := filterManifests(manifests, backupId)
+	// validManifests are the ones for which the corresponding backup files exists.
+	var validManifests []*Manifest
+	for _, m := range manifests {
+		missingFiles := false
+		for g, _ := range m.Groups {
+			path := filepath.Join(m.Path, backupName(m.Since, g))
+			if !h.FileExists(path) {
+				missingFiles = true
+				break
+			}
+		}
+		if !missingFiles {
+			validManifests = append(validManifests, m)
+		}
+	}
+	manifests, err := filterManifests(validManifests, backupId)
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +443,163 @@ func getManifests(manifests []*Manifest, backupId string,
 		manifests = manifests[:backupNum]
 	}
 	return manifests, nil
+}
+
+// UriHandler interface is implemented by URI scheme handlers.
+// When adding new scheme handles, for example 'azure://', an object will implement
+// this interface to supply Dgraph with a way to create or load backup files into DB.
+// For all methods below, the URL object is parsed as described in `newHandler' and
+// the Processor object has the DB, estimated tablets size, and backup parameters.
+type UriHandler interface {
+	// Handlers must know how to Write to their URI location.
+	// These function calls are used by both Create and Load.
+	io.WriteCloser
+
+	// CreateDir creates a directory relative to the root path of the handler.
+	CreateDir(path string) error
+	// CreateFile creates a file relative to the root path of the handler. It also makes the
+	// handler's descriptor to point to this file.
+	CreateFile(path string) error
+	// DirExists returns true if the directory relative to the root path of the handler exists.
+	DirExists(path string) bool
+	// FileExists returns true if the file relative to the root path of the handler exists.
+	FileExists(path string) bool
+	// JoinPath appends the given path to the root path of the handler.
+	JoinPath(path string) string
+	// ListPaths returns a list of all the valid paths from the given root path. The given root path
+	// should be relative to the handler's root path.
+	ListPaths(path string) []string
+	// Read reads the file at given relative path and returns the read bytes.
+	Read(path string) ([]byte, error)
+	// Rename renames the src file to the destination file.
+	Rename(src, dst string) error
+	// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
+	// end to release resources appropriately.
+	Stream(path string) (io.ReadCloser, error)
+	// WaitForWrite waits for the write to complete. It is meaningful for s3 uploads.
+	WaitForWrite() error
+}
+
+// NewUriHandler parses the requested URI and finds the corresponding UriHandler.
+// If the passed credentials are not nil, they will be used to override the
+// default credentials (only for backups to minio or S3).
+// Target URI formats:
+//   [scheme]://[host]/[path]?[args]
+//   [scheme]:///[path]?[args]
+//   /[path]?[args] (only for local or NFS)
+//
+// Target URI parts:
+//   scheme - service handler, one of: "file", "s3", "minio"
+//     host - remote address. ex: "dgraph.s3.amazonaws.com"
+//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
+//     args - specific arguments that are ok to appear in logs.
+//
+// Global args (if supported by the handler):
+//     secure - true|false turn on/off TLS.
+//      trace - true|false turn on/off HTTP tracing.
+//   compress - true|false turn on/off data compression.
+//    encrypt - true|false turn on/off data encryption.
+//
+// Examples:
+//   s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
+//   minio://localhost:9000/dgraph?secure=true
+//   file:///tmp/dgraph/backups
+//   /tmp/dgraph/backups?compress=gzip
+func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
+	switch uri.Scheme {
+	case "file", "":
+		return NewFileHandler(uri), nil
+	case "minio", "s3":
+		return NewS3Handler(uri, creds)
+	}
+	return nil, errors.Errorf("Unable to handle url: %s", uri)
+}
+
+// fileHandler is used for 'file:' URI scheme.
+type fileHandler struct {
+	fp      *os.File
+	rootDir string
+	prefix  string
+}
+
+func NewFileHandler(uri *url.URL) *fileHandler {
+	h := &fileHandler{}
+	h.rootDir, h.prefix = filepath.Split(uri.Path)
+	return h
+}
+
+func (h *fileHandler) JoinPath(path string) string {
+	return filepath.Join(h.rootDir, h.prefix, path)
+}
+
+func (h *fileHandler) DirExists(path string) bool {
+	path = h.JoinPath(path)
+	return pathExist(path)
+}
+func (h *fileHandler) FileExists(path string) bool {
+	path = h.JoinPath(path)
+	return pathExist(path)
+}
+func (h *fileHandler) Read(path string) ([]byte, error) {
+	path = h.JoinPath(path)
+	return ioutil.ReadFile(path)
+}
+func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
+	path = h.JoinPath(path)
+	return os.Open(path)
+}
+
+func (h *fileHandler) ListPaths(path string) []string {
+	path = h.JoinPath(path)
+	return x.WalkPathFunc(path, func(path string, isDis bool) bool {
+		return true
+	})
+}
+
+func (h *fileHandler) CreateDir(path string) error {
+	path = h.JoinPath(path)
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return errors.Errorf("Create path failed to create path %s, got error: %v", path, err)
+	}
+	return nil
+}
+
+func (h *fileHandler) CreateFile(path string) error {
+	path = h.JoinPath(path)
+	var err error
+	h.fp, err = os.Create(path)
+	return errors.Wrapf(err, "File handler failed to create file %s", path)
+}
+
+func (h *fileHandler) Rename(src, dst string) error {
+	src = h.JoinPath(src)
+	dst = h.JoinPath(dst)
+	return os.Rename(src, dst)
+}
+
+func (h *fileHandler) WaitForWrite() error         { return nil }
+func (h *fileHandler) Write(b []byte) (int, error) { return h.fp.Write(b) }
+
+func (h *fileHandler) Close() error {
+	if h.fp == nil {
+		return nil
+	}
+	if err := h.fp.Sync(); err != nil {
+		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
+		x.Ignore(h.fp.Close())
+		return err
+	}
+	return h.fp.Close()
+}
+
+// pathExist checks if a path (file or dir) is found at target.
+// Returns true if found, false otherwise.
+func pathExist(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	return !os.IsNotExist(err) && !os.IsPermission(err)
 }
 
 // S3 Handler.
@@ -368,8 +639,8 @@ type s3Handler struct {
 	mc                       *x.MinioClient
 }
 
-// setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
-// setup also fills in values used by the handler in subsequent calls.
+// NewS3Handler creates a new session, checks valid bucket at uri.Path, and configures a
+// minio client. It also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
 	h := &s3Handler{
@@ -385,194 +656,122 @@ func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
 	return h, nil
 }
 
-func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
+func (h *s3Handler) CreateDir(path string) error { return nil }
+func (h *s3Handler) DirExists(path string) bool  { return true }
 
-	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-	object := filepath.Join(h.objectPrefix, objectPath)
-	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, object)
+func (h *s3Handler) FileExists(path string) bool {
+	objectPath := h.getObjectPath(path)
+	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
+	if err != nil {
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" {
+			return false
+		} else {
+			glog.Errorf("Failed to verify object existence: %v", err)
+			return false
+		}
+	}
+	return true
+}
+
+func (h *s3Handler) JoinPath(path string) string {
+	return filepath.Join(h.bucketName, h.objectPrefix, path)
+}
+
+func (h *s3Handler) Read(path string) ([]byte, error) {
+	objectPath := h.getObjectPath(path)
+	var buf bytes.Buffer
+
+	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		return buf.Bytes(), errors.Wrap(err, "Failed to read s3 object")
+	}
+	defer reader.Close()
+
+	if _, err := buf.ReadFrom(reader); err != nil {
+		return buf.Bytes(), errors.Wrap(err, "Failed to read the s3 object")
+	}
+	return buf.Bytes(), nil
+}
+
+func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
+	objectPath := h.getObjectPath(path)
+	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
+
+func (h *s3Handler) ListPaths(path string) []string {
+	var paths []string
+	done := make(chan struct{})
+	defer close(done)
+	path = h.getObjectPath(path)
+	for object := range h.mc.ListObjects(h.bucketName, path, true, done) {
+		paths = append(paths, object.Key)
+	}
+	return paths
+}
+
+func (h *s3Handler) CreateFile(path string) error {
+	objectPath := h.getObjectPath(path)
+	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, objectPath)
 
 	h.cerr = make(chan error, 1)
 	h.preader, h.pwriter = io.Pipe()
 	go func() {
-		h.cerr <- h.upload(mc, object)
+		h.cerr <- h.upload(h.mc, objectPath)
 	}()
-}
-
-// GetLatestManifest reads the manifests at the given URL and returns the
-// latest manifest.
-func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	manifest, err := h.getConsolidatedManifest()
-	if err != nil {
-		errors.Wrap(err, "GetLatestManifest failed to get consolidated manifests: ")
-	}
-	if len(manifest.Manifests) == 0 {
-		return &Manifest{}, nil
-	}
-	return manifest.Manifests[len(manifest.Manifests)-1], nil
-}
-
-// CreateBackupFile creates a new session and prepares the data stream for the backup.
-// URI formats:
-//   minio://<host>/bucket/folder1.../folderN?secure=true|false
-//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
-//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
-//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
-
-	fileName := backupName(req.ReadTs, req.GroupId)
-	objectPath := filepath.Join(fmt.Sprintf(backupPathFmt, req.UnixTs), fileName)
-	h.createObject(h.mc, objectPath)
 	return nil
 }
 
-// CreateManifest finishes a backup by creating an object to store the manifest.
-func (h *s3Handler) CreateManifest(uri *url.URL, manifest *MasterManifest) error {
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
-
-	// If there is already a consolidated manifest, write the manifest to a temp file, which
-	// will be used to replace original manifest.
-	objectPath := filepath.Join(h.objectPrefix, backupManifest)
-	if h.objectExists(objectPath) {
-		h.createObject(h.mc, tmpManifest)
-		if err := json.NewEncoder(h).Encode(manifest); err != nil {
-			return err
-		}
-		if err := h.flush(); err != nil {
-			return errors.Wrap(err, "CreateManifest failed to flush the handler")
-		}
-
-		// At this point, a temporary manifest is successfully created, we need to replace the
-		// original manifest with this temporary manifest.
-		object := filepath.Join(h.objectPrefix, backupManifest)
-		tmpObject := filepath.Join(h.objectPrefix, tmpManifest)
-		src := minio.NewSourceInfo(h.bucketName, tmpObject, nil)
-		dst, err := minio.NewDestinationInfo(h.bucketName, object, nil, nil)
-		if err != nil {
-			return errors.Wrap(err, "CreateManifest failed to create dstInfo")
-		}
-
-		// We try copying 100 times, if it still fails, the user should manually copy the
-		// tmpManifest to the original manifest.
-		err = x.RetryUntilSuccess(100, time.Second, func() error {
-			if err := h.mc.CopyObject(dst, src); err != nil {
-				return errors.Wrapf(err, "COPYING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!!!\n"+
-					"It is possible that the manifest would have been corrupted. You must copy "+
-					"the file: %s to: %s (present in the backup s3 bucket),  in order to "+
-					"fix the backup manifest.", tmpManifest, backupManifest)
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		err = h.mc.RemoveObject(h.bucketName, tmpObject)
-		return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
+func (h *s3Handler) Rename(srcPath, dstPath string) error {
+	src := minio.NewSourceInfo(h.bucketName, srcPath, nil)
+	dst, err := minio.NewDestinationInfo(h.bucketName, dstPath, nil, nil)
+	if err != nil {
+		return errors.Wrap(err, "Rename failed to create dstInfo")
 	}
-	h.createObject(h.mc, backupManifest)
-	err := json.NewEncoder(h).Encode(manifest)
-	return errors.Wrap(err, "CreateManifest failed to create a new master manifest")
+	// We try copying 100 times, if it still fails, then the user should manually rename.
+	err = x.RetryUntilSuccess(100, time.Second, func() error {
+		if err := h.mc.CopyObject(dst, src); err != nil {
+			return errors.Wrapf(err, "While renaming object in s3, copy failed ")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = h.mc.RemoveObject(h.bucketName, srcPath)
+	return errors.Wrap(err, "Rename failed to remove temporary file")
 }
 
-// GetManifest returns the master manifest, if the directory doesn't contain
-// a master manifest, then it will try to return a master manifest by consolidating
-// the manifests.
-func (h *s3Handler) GetManifest(uri *url.URL) (*MasterManifest, error) {
-	manifest, err := h.getConsolidatedManifest()
-	if err != nil {
-		return manifest, errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
+func (h *s3Handler) WaitForWrite() error {
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}
-	return manifest, nil
-
+	glog.V(2).Infof("Waiting for upload to complete.")
+	// We are setting this to nil, so that closing the handler after FinishWrite is a no-op.
+	h.pwriter = nil
+	return <-h.cerr
 }
 
-func (h *s3Handler) GetManifests(uri *url.URL, backupId string,
-	backupNum uint64) ([]*Manifest, error) {
-	manifest, err := h.getConsolidatedManifest()
-	if err != nil {
-		return manifest.Manifests, errors.Wrap(err, "GetManifest failed to get consolidated manifests: ")
-	}
+func (h *s3Handler) Write(b []byte) (int, error) { return h.pwriter.Write(b) }
 
-	var filtered []*Manifest
-	for _, m := range manifest.Manifests {
-		path := filepath.Join(uri.Path, m.Path)
-		if h.objectExists(path) {
-			filtered = append(filtered, m)
-		}
+func (h *s3Handler) Close() error {
+	if h.pwriter == nil {
+		return nil
 	}
-	return getManifests(manifest.Manifests, backupId, backupNum)
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	glog.V(2).Infof("Backup waiting for upload to complete.")
+	return <-h.cerr
 }
 
-// Load creates a new session, scans for backup objects in a bucket, then tries to
-// load any backup objects found.
-// Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId, backupNum)
-	if err != nil {
-		return LoadResult{Err: errors.Wrapf(err, "while retrieving manifests")}
-	}
-	// since is returned with the max manifest Since value found.
-	var since uint64
-
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup manifests for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	var maxUid, maxNsId uint64
-	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
-			continue
-		}
-
-		path := manifests[i].Path
-		for gid := range manifest.Groups {
-			object := filepath.Join(path, backupName(manifest.Since, gid))
-			reader, err := h.mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
-			if err != nil {
-				return LoadResult{Err: errors.Wrapf(err, "Failed to get %q", object)}
-			}
-			defer reader.Close()
-
-			st, err := reader.Stat()
-			if err != nil {
-				return LoadResult{Err: errors.Wrapf(err, "Stat failed %q", object)}
-			}
-			if st.Size <= 0 {
-				return LoadResult{Err: errors.Errorf("Remote object is empty or inaccessible: %s",
-					object)}
-			}
-
-			// Only restore the predicates that were assigned to this group at the time
-			// of the last backup.
-			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
-
-			groupMaxUid, groupMaxNsId, err := fn(gid,
-				&loadBackupInput{r: reader, preds: predSet, dropOperations: manifest.DropOperations,
-					isOld: manifest.Version == 0})
-			if err != nil {
-				return LoadResult{Err: err}
-			}
-			if groupMaxUid > maxUid {
-				maxUid = groupMaxUid
-			}
-			if groupMaxNsId > maxNsId {
-				maxNsId = groupMaxNsId
-			}
-		}
-		since = manifest.Since
-	}
-
-	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
-}
-
-// Verify performs basic checks to decide whether the specified backup can be restored
-// to a live cluster.
-func (h *s3Handler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
-	if err != nil {
-		return errors.Wrapf(err, "while retrieving manifests")
-	}
-	return verifyRequest(req, manifests, currentGroups)
+func (h *s3Handler) getObjectPath(path string) string {
+	return filepath.Join(h.objectPrefix, path)
 }
 
 // upload will block until it's done or an error occurs.
@@ -598,379 +797,4 @@ func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
 		}
 	}
 	return err
-}
-
-func (h *s3Handler) Close() error {
-	// Done buffering, send EOF.
-	if h.pwriter == nil {
-		return nil
-	}
-	return h.flush()
-}
-
-func (h *s3Handler) flush() error {
-	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
-		glog.Errorf("Unexpected error when closing pipe: %v", err)
-	}
-	glog.V(2).Infof("Backup waiting for upload to complete.")
-	// We are setting this to nil, so that closing the handler after flushing is a no-op.
-	h.pwriter = nil
-	return <-h.cerr
-
-}
-
-func (h *s3Handler) Write(b []byte) (int, error) {
-	return h.pwriter.Write(b)
-}
-
-func (h *s3Handler) objectExists(objectPath string) bool {
-	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
-	if err != nil {
-		errResponse := minio.ToErrorResponse(err)
-		if errResponse.Code == "NoSuchKey" {
-			return false
-		} else {
-			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
-			return false
-		}
-	}
-	return true
-}
-
-func (h *s3Handler) readManifest(path string, m *Manifest) error {
-	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(m)
-}
-
-func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
-	path := filepath.Join(h.objectPrefix, backupManifest)
-	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(m)
-}
-
-// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
-func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
-	var manifest MasterManifest
-
-	// If there is a master manifest already, we just return it.
-	objectPath := filepath.Join(h.objectPrefix, backupManifest)
-	if h.objectExists(objectPath) {
-		if err := h.readMasterManifest(&manifest); err != nil {
-			return nil, err
-		}
-		return &manifest, nil
-	}
-
-	// Otherwise, we consolidate the manifests to make a master manifest.
-	var paths []string
-	done := make(chan struct{})
-	defer close(done)
-	suffix := "/" + backupManifest
-	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-		if strings.HasSuffix(object.Key, suffix) {
-			paths = append(paths, object.Key)
-		}
-	}
-
-	sort.Strings(paths)
-	var mlist []*Manifest
-
-	for _, path := range paths {
-		var m Manifest
-		if err := h.readManifest(path, &m); err != nil {
-			return nil, errors.Wrap(err, "While Getting latest manifest")
-		}
-		path = filepath.Dir(path)
-		_, path = filepath.Split(path)
-		m.Path = path
-		mlist = append(mlist, &m)
-	}
-	manifest.Manifests = mlist
-	return &manifest, nil
-}
-
-// fileHandler is used for 'file:' URI scheme.
-type fileHandler struct {
-	fp *os.File
-}
-
-func (h *fileHandler) Exists(uri *url.URL) bool {
-	return pathExist(uri.Path)
-}
-func (h *fileHandler) Read(uri *url.URL) ([]byte, error) {
-	return ioutil.ReadFile(uri.Path)
-}
-func (h *fileHandler) Stream(uri *url.URL) (io.ReadCloser, error) {
-	return os.Open(uri.Path)
-}
-
-// readManifest reads a manifest file at path using the handler.
-// Returns nil on success, otherwise an error.
-func (h *fileHandler) readManifest(path string, m *Manifest) error {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, m)
-}
-
-// readMasterManifest reads the master manifest file at path using the handler.
-// Returns nil on success, otherwise an error.
-func (h *fileHandler) readMasterManifest(path string, m *MasterManifest) error {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, m)
-}
-
-func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName string) error {
-	var dir, path string
-
-	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.UnixTs))
-	err := os.Mkdir(dir, 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	path = filepath.Join(dir, fileName)
-	h.fp, err = os.Create(path)
-	if err != nil {
-		return err
-	}
-	glog.V(2).Infof("Using file path: %q", path)
-	return nil
-}
-
-// GetLatestManifest reads the manifests at the given URL and returns the
-// latest manifest.
-func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Wrap(err, "Get latest manifest failed:")
-	}
-
-	manifest, err := h.getConsolidatedManifest(uri)
-	if err != nil {
-		return nil, errors.Wrap(err, "Get latest manifest failed while consolidation: ")
-	}
-	if len(manifest.Manifests) == 0 {
-		return &Manifest{}, nil
-	}
-	return manifest.Manifests[len(manifest.Manifests)-1], nil
-}
-
-func createIfNotExists(path string) error {
-	if pathExist(path) {
-		return nil
-	}
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return errors.Errorf("The path %q does not exist or it is inaccessible."+
-			" While trying to create it, got error: %v", path, err)
-	}
-	return nil
-}
-
-// CreateBackupFile prepares the a path to save the backup file.
-func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return errors.Errorf("while CreateBackupFile: %v", err)
-	}
-
-	fileName := backupName(req.ReadTs, req.GroupId)
-	return h.createFiles(uri, req, fileName)
-}
-
-// CreateManifest completes the backup by writing the manifest to a file.
-func (h *fileHandler) CreateManifest(uri *url.URL, manifest *MasterManifest) error {
-	var err error
-	if err = createIfNotExists(uri.Path); err != nil {
-		return errors.Errorf("while WriteManifest: %v", err)
-	}
-
-	tmpPath := filepath.Join(uri.Path, tmpManifest)
-	if h.fp, err = os.Create(tmpPath); err != nil {
-		return err
-	}
-	if err = json.NewEncoder(h).Encode(manifest); err != nil {
-		return err
-	}
-
-	// Move the tmpManifest to backupManifest
-	path := filepath.Join(uri.Path, backupManifest)
-	return os.Rename(tmpPath, path)
-}
-
-// GetManifest returns the master manifest, if the directory doesn't contain
-// a master manifest, then it will try to return a master manifest by consolidating
-// the manifests.
-func (h *fileHandler) GetManifest(uri *url.URL) (*MasterManifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Errorf("while GetLatestManifest: %v", err)
-	}
-	manifest, err := h.getConsolidatedManifest(uri)
-	if err != nil {
-		return manifest, errors.Wrap(err, "GetManifest failed to get consolidated manifest: ")
-	}
-	return manifest, nil
-}
-
-func (h *fileHandler) GetManifests(uri *url.URL, backupId string,
-	backupNum uint64) ([]*Manifest, error) {
-	if err := createIfNotExists(uri.Path); err != nil {
-		return nil, errors.Errorf("while GetManifests: %v", err)
-	}
-
-	manifest, err := h.getConsolidatedManifest(uri)
-	if err != nil {
-		return manifest.Manifests, errors.Wrap(err, "GetManifests failed to get consolidated manifest: ")
-	}
-
-	var filtered []*Manifest
-	for _, m := range manifest.Manifests {
-		path := filepath.Join(uri.Path, m.Path)
-		if pathExist(path) {
-			filtered = append(filtered, m)
-		}
-	}
-
-	return getManifests(filtered, backupId, backupNum)
-}
-
-// Load uses tries to load any backup files found.
-// Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
-	manifests, err := h.GetManifests(uri, backupId, backupNum)
-	if err != nil {
-		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
-	}
-
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	var since uint64
-	var maxUid, maxNsId uint64
-	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
-			continue
-		}
-
-		path := filepath.Join(uri.Path, manifests[i].Path)
-		for gid := range manifest.Groups {
-			file := filepath.Join(path, backupName(manifest.Since, gid))
-			fp, err := os.Open(file)
-			if err != nil {
-				return LoadResult{Err: errors.Wrapf(err, "Failed to open %q", file)}
-			}
-			defer fp.Close()
-
-			// Only restore the predicates that were assigned to this group at the time
-			// of the last backup.
-			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
-
-			groupMaxUid, groupMaxNsId, err := fn(gid,
-				&loadBackupInput{r: fp, preds: predSet, dropOperations: manifest.DropOperations,
-					isOld: manifest.Version == 0})
-			if err != nil {
-				return LoadResult{Err: err}
-			}
-			maxUid = x.Max(maxUid, groupMaxUid)
-			maxNsId = x.Max(maxNsId, groupMaxNsId)
-		}
-		since = manifest.Since
-	}
-
-	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
-}
-
-// Verify performs basic checks to decide whether the specified backup can be restored
-// to a live cluster.
-func (h *fileHandler) Verify(uri *url.URL, req *pb.RestoreRequest, currentGroups []uint32) error {
-	manifests, err := h.GetManifests(uri, req.GetBackupId(), req.GetBackupNum())
-	if err != nil {
-		return errors.Wrapf(err, "while retrieving manifests")
-	}
-	return verifyRequest(req, manifests, currentGroups)
-}
-
-func (h *fileHandler) Close() error {
-	if h.fp == nil {
-		return nil
-	}
-	if err := h.fp.Sync(); err != nil {
-		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
-		x.Ignore(h.fp.Close())
-		return err
-	}
-	return h.fp.Close()
-}
-
-func (h *fileHandler) Write(b []byte) (int, error) {
-	return h.fp.Write(b)
-}
-
-// pathExist checks if a path (file or dir) is found at target.
-// Returns true if found, false otherwise.
-func pathExist(path string) bool {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true
-	}
-	return !os.IsNotExist(err) && !os.IsPermission(err)
-}
-
-// getConsolidatedManifest walks over all the backup directories and generates a master manifest.
-func getConsolidatedManifest(h *UriHandler, uri *url.URL) (*MasterManifest, error) {
-	if !h.Exists(uri.Path) {
-		return nil, fmt.Errorf("uri: %+v not found", uri)
-	}
-	// if err := createIfNotExists(uri.Path); err != nil {
-	// 	return nil, errors.Wrap(err, "While GetLatestManifest")
-	// }
-
-	var manifest MasterManifest
-
-	// If there is a master manifest already, we just return it.
-	path := filepath.Join(uri.Path, backupManifest)
-	h.PathJoin(uri.Path, backupManifest)
-	uri.Path = filepath.Join(uri.Path, backupManifest)
-	if pathExist(path) {
-		if err := h.readMasterManifest(path, &manifest); err != nil {
-			return nil, errors.Wrap(err, "Get latest manifest failed to read master manifest: ")
-		}
-		return &manifest, nil
-	}
-
-	// Otherwise, we create a master manifest by going through all the backup directories.
-	var paths []string
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		if !isdir && strings.HasSuffix(path, suffix) {
-			paths = append(paths, path)
-		}
-		return false
-	})
-
-	sort.Strings(paths)
-	var mlist []*Manifest
-
-	for _, path := range paths {
-		var m Manifest
-		if err := h.readManifest(path, &m); err != nil {
-			return nil, errors.Wrap(err, "While Getting latest manifest")
-		}
-		path = filepath.Dir(path)
-		_, path = filepath.Split(path)
-		m.Path = path
-		mlist = append(mlist, &m)
-	}
-	manifest.Manifests = mlist
-	return &manifest, nil
 }
