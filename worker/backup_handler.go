@@ -87,8 +87,8 @@ type UriHandler interface {
 	// end to release resources appropriately.
 	Stream(path string) (io.ReadCloser, error)
 
-	Walk(root string, f func(path string, isDir bool) bool) []string
-	CreatePath(path string) error
+	ListPaths(root string) []string
+	CreateDir(path string) error
 	CreateFile(path string) error
 	Rename(src, dst string) error
 	WaitForWrite() error
@@ -185,11 +185,10 @@ func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
 	return h, nil
 }
 
-func (h *s3Handler) DirExists(path string) bool   { return true }
-func (h *s3Handler) CreatePath(path string) error { return nil }
+func (h *s3Handler) DirExists(path string) bool  { return true }
+func (h *s3Handler) CreateDir(path string) error { return nil }
 
 func (h *s3Handler) FileExists(path string) bool {
-	fmt.Println("[DEBUG] FileExists called: path: ", path)
 	objectPath := h.getObjectPath(path)
 	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
 	if err != nil {
@@ -209,7 +208,6 @@ func (h *s3Handler) JoinPath(path string) string {
 }
 
 func (h *s3Handler) Read(path string) ([]byte, error) {
-	fmt.Println("[DEBUG] read called: ", path)
 	objectPath := h.getObjectPath(path)
 	var buf bytes.Buffer
 
@@ -227,7 +225,6 @@ func (h *s3Handler) Read(path string) ([]byte, error) {
 
 func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
 	objectPath := h.getObjectPath(path)
-	fmt.Println("[DEBUG] Stream, path is: ", path)
 	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
@@ -235,24 +232,19 @@ func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
 	return reader, nil
 }
 
-func (h *s3Handler) Walk(root string, f func(string, bool) bool) []string {
-	fmt.Println("[DEBUG] walk called: ", root)
+func (h *s3Handler) ListPaths(path string) []string {
 	var paths []string
 	done := make(chan struct{})
 	defer close(done)
-	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-		// TODO: Need to check if making isDir false is right thing to do.
-		if f(object.Key, false) {
-			paths = append(paths, object.Key)
-		}
+	path = h.getObjectPath(path)
+	for object := range h.mc.ListObjects(h.bucketName, path, true, done) {
+		paths = append(paths, object.Key)
 	}
 	return paths
 }
 
 func (h *s3Handler) CreateFile(path string) error {
-	fmt.Println("[DEBUG] Create file called:  ", path)
 	objectPath := h.getObjectPath(path)
-
 	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, objectPath)
 
 	h.cerr = make(chan error, 1)
@@ -264,8 +256,6 @@ func (h *s3Handler) CreateFile(path string) error {
 }
 
 func (h *s3Handler) Rename(srcPath, dstPath string) error {
-
-	fmt.Println("[DEBUG] RENAME, srcPath %s, dstPath %s\n", srcPath, dstPath)
 	src := minio.NewSourceInfo(h.bucketName, srcPath, nil)
 	dst, err := minio.NewDestinationInfo(h.bucketName, dstPath, nil, nil)
 	if err != nil {
@@ -274,10 +264,7 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 	// We try copying 100 times, if it still fails, then the user should manually rename.
 	err = x.RetryUntilSuccess(100, time.Second, func() error {
 		if err := h.mc.CopyObject(dst, src); err != nil {
-			return errors.Wrapf(err, "COPYING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!!!\n"+
-				"It is possible that the manifest would have been corrupted. You must copy "+
-				"the file: %s to: %s (present in the backup s3 bucket),  in order to "+
-				"fix the backup manifest.", tmpManifest, backupManifest)
+			return errors.Wrapf(err, "While renaming object in s3, copy failed ")
 		}
 		return nil
 	})
@@ -359,39 +346,31 @@ func (h *fileHandler) JoinPath(path string) string {
 }
 
 func (h *fileHandler) DirExists(path string) bool {
-	glog.Info("[DEBUG] DirExists called: path: ", path)
 	path = h.JoinPath(path)
 	return pathExist(path)
 }
 func (h *fileHandler) FileExists(path string) bool {
-	glog.Info("[DEBUG] FileExists called: path: ", path)
 	path = h.JoinPath(path)
 	return pathExist(path)
 }
 func (h *fileHandler) Read(path string) ([]byte, error) {
-	glog.Info("[DEBUG] read called: ", path)
 	path = h.JoinPath(path)
-	glog.Info("[DEBUG] reading: ", path)
 	return ioutil.ReadFile(path)
 }
 func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
-	glog.Info("[DEBUG] stream called: ", path)
 	path = h.JoinPath(path)
-	glog.Info("[DEBUG] streaming: ", path)
 	return os.Open(path)
 }
 
-func (h *fileHandler) Walk(path string, f func(string, bool) bool) []string {
-	glog.Info("[DEBUG] walk called: ", path)
+func (h *fileHandler) ListPaths(path string) []string {
 	path = h.JoinPath(path)
-	glog.Info("[DEBUG] walking:  ", path)
-	return x.WalkPathFunc(path, f)
+	return x.WalkPathFunc(path, func(path string, isDis bool) bool {
+		return true
+	})
 }
 
-func (h *fileHandler) CreatePath(path string) error {
-	glog.Info("[DEBUG] create Path called: ", path)
+func (h *fileHandler) CreateDir(path string) error {
 	path = h.JoinPath(path)
-	glog.Info("[DEBUG] create Path creating path: ", path)
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return errors.Errorf("Create path failed to create path %s, got error: %v", path, err)
 	}
@@ -399,9 +378,7 @@ func (h *fileHandler) CreatePath(path string) error {
 }
 
 func (h *fileHandler) CreateFile(path string) error {
-	glog.Info("[DEBUG] Create file called:  ", path)
 	path = h.JoinPath(path)
-	glog.Info("[DEBUG] Creating file:  ", path)
 	var err error
 	h.fp, err = os.Create(path)
 	return errors.Wrapf(err, "File handler failed to create file %s", path)
@@ -450,18 +427,20 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 	}
 
 	// Otherwise, we create a master manifest by going through all the backup directories.
-	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	paths := h.Walk("", func(path string, isdir bool) bool {
-		if !isdir && strings.HasSuffix(path, suffix) {
-			return true
-		}
-		return false
-	})
+	paths := h.ListPaths("")
 
-	sort.Strings(paths)
+	var manifestPaths []string
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	for _, p := range paths {
+		if strings.HasSuffix(p, suffix) {
+			manifestPaths = append(manifestPaths, p)
+		}
+	}
+
+	sort.Strings(manifestPaths)
 	var mlist []*Manifest
 
-	for _, path := range paths {
+	for _, path := range manifestPaths {
 		path = filepath.Dir(path)
 		_, path = filepath.Split(path)
 		m, err := readManifest(h, filepath.Join(path, backupManifest))
@@ -476,7 +455,6 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 
 func readManifest(h UriHandler, path string) (*Manifest, error) {
 	var m Manifest
-	glog.Info("[DEBUG] readManifest path: ", path)
 	b, err := h.Read(path)
 	if err != nil {
 		return &m, errors.Wrap(err, "readManifest failed to read the file: ")
@@ -489,7 +467,6 @@ func readManifest(h UriHandler, path string) (*Manifest, error) {
 
 func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 	var m MasterManifest
-	glog.Info("[DEBUG] readMasterManifest path: ", path)
 	b, err := h.Read(path)
 	if err != nil {
 		return &m, errors.Wrap(err, "readMasterManifest failed to read the file: ")
@@ -501,9 +478,8 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 }
 
 func getLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
-	glog.Info("[DEBUG] getLatestManifest uri.path: ", uri.Path)
-	if !h.DirExists("") {
-		if err := h.CreatePath(""); err != nil {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
 			return &Manifest{}, errors.Wrap(err, "While getLatestManifest ")
 		}
 	}
@@ -530,8 +506,8 @@ func getManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 
 func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
-	if !h.DirExists("") {
-		if err := h.CreatePath(""); err != nil {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
 			return errors.Wrap(err, "createManifest failed to create path")
 		}
 	}
@@ -545,20 +521,25 @@ func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 	if err := h.WaitForWrite(); err != nil {
 		return err
 	}
-	// Move the tmpManifest to backupManifest
-	return h.Rename(tmpManifest, backupManifest)
+	// Move the tmpManifest to backupManifest, this operation is not atomic for s3.
+	// We try our best to move the file but if it fails then the user must move it manually.
+	err = h.Rename(tmpManifest, backupManifest)
+	return errors.Wrapf(err, "MOVING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!\n"+
+		"It is possible that the manifest would have been corrupted. You must move "+
+		"the file: %s to: %s (present in the s3 bucket), in order to "+
+		"fix the backup manifest.", tmpManifest, backupManifest)
+
 }
 
 func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) error {
-	glog.Info("[DEBUG] create backupFile called")
-	if !h.DirExists("") {
-		if err := h.CreatePath(""); err != nil {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
 			return errors.Wrap(err, "while creating backup file")
 		}
 	}
 	fileName := backupName(req.ReadTs, req.GroupId)
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	if err := h.CreatePath(dir); err != nil {
+	if err := h.CreateDir(dir); err != nil {
 		return errors.Wrap(err, "while creating backup file")
 	}
 	backupFile := filepath.Join(dir, fileName)
@@ -574,7 +555,6 @@ func Load(h UriHandler, uri *url.URL, backupId string, backupNum uint64, fn load
 		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
 	}
 
-	fmt.Println("[DEBUG] Load, restore manifests are: ", manifests)
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
@@ -653,22 +633,7 @@ func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
 	if err != nil {
 		return manifest.Manifests, errors.Wrap(err, "Failed to get consolidated manifest: ")
 	}
-
-	var filtered []*Manifest
-	for _, m := range manifest.Manifests {
-		missingFiles := false
-		for g, _ := range m.Groups {
-			path := filepath.Join(m.Path, backupName(m.Since, g))
-			if !h.FileExists(path) {
-				missingFiles = true
-				break
-			}
-		}
-		if !missingFiles {
-			filtered = append(filtered, m)
-		}
-	}
-	return getFilteredManifests(filtered, backupId, backupNum)
+	return getFilteredManifests(h, manifest.Manifests, backupId, backupNum)
 }
 
 // loadFn is a function that will receive the current file being read.
@@ -680,14 +645,10 @@ type loadFn func(groupId uint32, in *loadBackupInput) (uint64, uint64, error)
 // sequentially. Returns the maximum Since value on success, otherwise an error.
 func LoadBackup(location, backupId string, backupNum uint64, creds *x.MinioCredentials,
 	fn loadFn) LoadResult {
-
-	fmt.Println("DEBUG ======== LoadBackup called")
 	uri, err := url.Parse(location)
 	if err != nil {
 		return LoadResult{Err: err}
 	}
-
-	fmt.Println("DEBUG ======== LoadBackup called for uri.path: ", uri.Path)
 	h, err := NewUriHandler(uri, creds)
 	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
@@ -795,10 +756,25 @@ func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
 }
 
-func getFilteredManifests(manifests []*Manifest, backupId string,
+func getFilteredManifests(h UriHandler, manifests []*Manifest, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
 
-	manifests, err := filterManifests(manifests, backupId)
+	// validManifests are the ones for which the corresponding backup files exists.
+	var validManifests []*Manifest
+	for _, m := range manifests {
+		missingFiles := false
+		for g, _ := range m.Groups {
+			path := filepath.Join(m.Path, backupName(m.Since, g))
+			if !h.FileExists(path) {
+				missingFiles = true
+				break
+			}
+		}
+		if !missingFiles {
+			validManifests = append(validManifests, m)
+		}
+	}
+	manifests, err := filterManifests(validManifests, backupId)
 	if err != nil {
 		return nil, err
 	}

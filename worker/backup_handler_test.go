@@ -13,30 +13,10 @@
 package worker
 
 import (
-	"net/url"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func TestFileHandler(t *testing.T) {
-	h := NewFileHandler(&url.URL{Path: "Test"})
-	path := "./TestPath/Child"
-	err := h.CreatePath(path)
-	require.NoError(t, err)
-	require.Equal(t, true, h.DirExists(path))
-
-	file := filepath.Join(path, "filename.txt")
-	err = h.CreateFile(file)
-	require.NoError(t, err)
-
-	paths := h.Walk("./TestPath", func(path string, isDir bool) bool {
-		return true
-	})
-	expected := []string{"Test/TestPath", "Test/TestPath/Child", "Test/TestPath/Child/filename.txt"}
-	require.ElementsMatch(t, expected, paths)
-}
 
 func TestFilterManifestDefault(t *testing.T) {
 	manifests := []*Manifest{
