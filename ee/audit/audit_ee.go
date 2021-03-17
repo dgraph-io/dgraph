@@ -101,10 +101,8 @@ func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 	if conf == nil {
 		return nil
 	}
-	if eeEnabled() {
-		if err := InitAuditor(conf, uint64(worker.GroupId()), worker.NodeId()); err != nil {
-			return err
-		}
+	if err := InitAuditor(conf, uint64(worker.GroupId()), worker.NodeId()); err != nil {
+		return err
 	}
 	auditor.tick = time.NewTicker(time.Minute * 5)
 	auditor.closer = z.NewCloser(1)
