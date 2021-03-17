@@ -32,7 +32,7 @@ func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
 	return nil
 }
 
-func InitAuditor(conf *x.LoggerConf) error {
+func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
 	return nil
 }
 

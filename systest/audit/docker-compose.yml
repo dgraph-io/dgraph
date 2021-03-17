@@ -3,8 +3,6 @@ services:
   alpha1:
     image: dgraph/dgraph:latest
     working_dir: /data/alpha1
-    labels:
-      cluster: test
     ports:
       - "8080"
       - "9080"
@@ -16,8 +14,8 @@ services:
       - type: bind
         source: ./audit_dir/aa
         target: /audit_dir
-    command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      --audit "output=/audit_dir;" -v=2
+    command: /gobin/dgraph alpha --raft="idx=1;group=1" --my=alpha1:7080 --zero=zero1:5080
+      --logtostderr --audit "output=/audit_dir;" -v=2
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   zero1:
     image: dgraph/dgraph:latest
