@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,10 +23,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
 
 	"github.com/pkg/errors"
@@ -87,6 +90,7 @@ type UriHandler interface {
 	CreatePath(path string) error
 	CreateFile(path string) error
 	Rename(src, dst string) error
+	WaitForWrite() error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -118,8 +122,8 @@ func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) 
 	switch uri.Scheme {
 	case "file", "":
 		return &fileHandler{}, nil
-		// case "minio", "s3":
-		// 	return NewS3Handler(uri, creds)
+	case "minio", "s3":
+		return NewS3Handler(uri, creds)
 	}
 	return nil, errors.Errorf("Unable to handle url: %s", uri)
 
@@ -296,46 +300,144 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 	return nil
 }
 
-// // s3Handler is used for 's3:' and 'minio:' URI schemes.
-// type s3Handler struct {
-// 	bucketName, objectPrefix string
-// 	pwriter                  *io.PipeWriter
-// 	preader                  *io.PipeReader
-// 	cerr                     chan error
-// 	creds                    *x.MinioCredentials
-// 	uri                      *url.URL
-// 	mc                       *x.MinioClient
-// }
+// s3Handler is used for 's3:' and 'minio:' URI schemes.
+type s3Handler struct {
+	bucketName, objectPrefix string
+	pwriter                  *io.PipeWriter
+	preader                  *io.PipeReader
+	cerr                     chan error
+	creds                    *x.MinioCredentials
+	uri                      *url.URL
+	mc                       *x.MinioClient
+}
 
-// // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
-// // setup also fills in values used by the handler in subsequent calls.
-// // Returns a new S3 minio client, otherwise a nil client with an error.
-// func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
-// 	h := &s3Handler{
-// 		creds: creds,
-// 		uri:   uri,
-// 	}
-// 	mc, err := x.NewMinioClient(uri, creds)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	h.mc = mc
-// 	h.bucketName, h.objectPrefix = mc.ParseBucketAndPrefix(uri.Path)
-// 	return h, nil
-// }
+// setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
+// setup also fills in values used by the handler in subsequent calls.
+// Returns a new S3 minio client, otherwise a nil client with an error.
+func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
+	h := &s3Handler{
+		creds: creds,
+		uri:   uri,
+	}
+	mc, err := x.NewMinioClient(uri, creds)
+	if err != nil {
+		return nil, err
+	}
+	h.mc = mc
+	h.bucketName, h.objectPrefix = mc.ParseBucketAndPrefix(uri.Path)
+	return h, nil
+}
 
-// func (h *s3Handler) createObject(mc *x.MinioClient, objectPath string) {
+func (h *s3Handler) Exists(path string) bool {
+	objectPath := h.getObjectPath(path)
+	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
+	if err != nil {
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" {
+			return false
+		} else {
+			glog.Errorf("Failed to verify object existence: %s", errResponse.Code)
+			return false
+		}
+	}
+	return true
+}
 
-// 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-// 	object := filepath.Join(h.objectPrefix, objectPath)
-// 	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, object)
+func (h *s3Handler) Read(path string) ([]byte, error) {
+	objectPath := h.getObjectPath(path)
+	var buf bytes.Buffer
 
-// 	h.cerr = make(chan error, 1)
-// 	h.preader, h.pwriter = io.Pipe()
-// 	go func() {
-// 		h.cerr <- h.upload(mc, object)
-// 	}()
-// }
+	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		return buf.Bytes(), errors.Wrap(err, "Failed to read s3 object")
+	}
+	defer reader.Close()
+
+	if _, err := buf.ReadFrom(reader); err != nil {
+		return buf.Bytes(), errors.Wrap(err, "Failed to read the s3 object")
+	}
+	return buf.Bytes(), nil
+}
+
+func (h *s3Handler) Stream(path string) (io.ReadCloser, error) {
+	objectPath := h.getObjectPath(path)
+	reader, err := h.mc.GetObject(h.bucketName, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
+
+func (h *s3Handler) Walk(root string, f func(string, bool) bool) []string {
+	var paths []string
+	done := make(chan struct{})
+	defer close(done)
+	for object := range h.mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+		// TODO: Need to check if making isDir false is right thing to do.
+		if f(object.Key, false) {
+			paths = append(paths, object.Key)
+		}
+	}
+	return paths
+}
+
+func (h *s3Handler) CreatePath(path string) error {
+	return nil
+}
+
+func (h *s3Handler) CreateFile(path string) error {
+	objectPath := h.getObjectPath(path)
+
+	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, objectPath)
+
+	h.cerr = make(chan error, 1)
+	h.preader, h.pwriter = io.Pipe()
+	go func() {
+		h.cerr <- h.upload(h.mc, objectPath)
+	}()
+	return nil
+}
+
+func (h *s3Handler) Rename(srcPath, dstPath string) error {
+
+	h.CreateFile(dstPath)
+
+	src := minio.NewSourceInfo(h.bucketName, srcPath, nil)
+	dst, err := minio.NewDestinationInfo(h.bucketName, dstPath, nil, nil)
+	if err != nil {
+		return errors.Wrap(err, "Rename failed to create dstInfo")
+	}
+	// We try copying 100 times, if it still fails, then the user should manually rename.
+	err = x.RetryUntilSuccess(100, time.Second, func() error {
+		if err := h.mc.CopyObject(dst, src); err != nil {
+			return errors.Wrapf(err, "COPYING TEMPORARY MANIFEST TO MAIN MANIFEST FAILED!!!\n"+
+				"It is possible that the manifest would have been corrupted. You must copy "+
+				"the file: %s to: %s (present in the backup s3 bucket),  in order to "+
+				"fix the backup manifest.", tmpManifest, backupManifest)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = h.mc.RemoveObject(h.bucketName, srcPath)
+	return errors.Wrap(err, "CreateManifest failed to remove temporary manifest")
+}
+
+func (h *s3Handler) WaitForWrite() error {
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	glog.V(2).Infof("Waiting for upload to complete.")
+	// We are setting this to nil, so that closing the handler after FinishWrite is a no-op.
+	h.pwriter = nil
+	return <-h.cerr
+}
+
+func (h *s3Handler) getObjectPath(path string) string {
+	return filepath.Join(h.objectPrefix, path)
+}
 
 // // GetLatestManifest reads the manifests at the given URL and returns the
 // // latest manifest.
@@ -350,12 +452,12 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 // 	return manifest.Manifests[len(manifest.Manifests)-1], nil
 // }
 
-// // CreateBackupFile creates a new session and prepares the data stream for the backup.
-// // URI formats:
-// //   minio://<host>/bucket/folder1.../folderN?secure=true|false
-// //   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
-// //   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
-// //   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
+// CreateBackupFile creates a new session and prepares the data stream for the backup.
+// URI formats:
+//   minio://<host>/bucket/folder1.../folderN?secure=true|false
+//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
+//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
+//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
 // func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
 // 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
@@ -514,86 +616,72 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 // 	return verifyRequest(req, manifests, currentGroups)
 // }
 
-// // upload will block until it's done or an error occurs.
-// func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
-// 	start := time.Now()
+// upload will block until it's done or an error occurs.
+func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
+	start := time.Now()
 
-// 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
-// 	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
-// 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
-// 	// the progress of read. By definition, it must be the same.
-// 	n, err := mc.PutObject(h.bucketName, object, h.preader, -1, minio.PutObjectOptions{})
-// 	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
-// 		n, time.Since(start).Round(time.Second))
+	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
+	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
+	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
+	// the progress of read. By definition, it must be the same.
+	n, err := mc.PutObject(h.bucketName, object, h.preader, -1, minio.PutObjectOptions{})
+	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
+		n, time.Since(start).Round(time.Second))
 
-// 	if err != nil {
-// 		// This should cause Write to fail as well.
-// 		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
-// 		if err := h.pwriter.Close(); err != nil {
-// 			return err
-// 		}
-// 		if err := h.preader.Close(); err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return err
-// }
+	if err != nil {
+		// This should cause Write to fail as well.
+		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
+		if err := h.pwriter.Close(); err != nil {
+			return err
+		}
+		if err := h.preader.Close(); err != nil {
+			return err
+		}
+	}
+	return err
+}
 
-// func (h *s3Handler) Close() error {
-// 	// Done buffering, send EOF.
-// 	if h.pwriter == nil {
-// 		return nil
-// 	}
-// 	return h.flush()
-// }
+func (h *s3Handler) Close() error {
+	// Done buffering, send EOF.
+	if h.pwriter == nil {
+		return nil
+	}
+	return h.flush()
+}
 
-// func (h *s3Handler) flush() error {
-// 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
-// 		glog.Errorf("Unexpected error when closing pipe: %v", err)
-// 	}
-// 	glog.V(2).Infof("Backup waiting for upload to complete.")
-// 	// We are setting this to nil, so that closing the handler after flushing is a no-op.
-// 	h.pwriter = nil
-// 	return <-h.cerr
+func (h *s3Handler) flush() error {
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	glog.V(2).Infof("Backup waiting for upload to complete.")
+	// We are setting this to nil, so that closing the handler after flushing is a no-op.
+	h.pwriter = nil
+	return <-h.cerr
 
-// }
+}
 
-// func (h *s3Handler) Write(b []byte) (int, error) {
-// 	return h.pwriter.Write(b)
-// }
+func (h *s3Handler) Write(b []byte) (int, error) {
+	return h.pwriter.Write(b)
+}
 
-// func (h *s3Handler) objectExists(objectPath string) bool {
-// 	_, err := h.mc.StatObject(h.bucketName, objectPath, minio.StatObjectOptions{})
-// 	if err != nil {
-// 		errResponse := minio.ToErrorResponse(err)
-// 		if errResponse.Code == "NoSuchKey" {
-// 			return false
-// 		} else {
-// 			glog.Errorf("Failed to verify object existance: %s", errResponse.Code)
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
+func (h *s3Handler) readManifest(path string, m *Manifest) error {
+	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(m)
+}
 
-// func (h *s3Handler) readManifest(path string, m *Manifest) error {
-// 	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer reader.Close()
-// 	return json.NewDecoder(reader).Decode(m)
-// }
-
-// func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
-// 	path := filepath.Join(h.objectPrefix, backupManifest)
-// 	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer reader.Close()
-// 	return json.NewDecoder(reader).Decode(m)
-// }
+func (h *s3Handler) readMasterManifest(m *MasterManifest) error {
+	path := filepath.Join(h.objectPrefix, backupManifest)
+	reader, err := h.mc.GetObject(h.bucketName, path, minio.GetObjectOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(m)
+}
 
 // // getConsolidatedManifest walks over all the backup directories and generates a master manifest.
 // func (h *s3Handler) getConsolidatedManifest() (*MasterManifest, error) {
@@ -601,7 +689,7 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 
 // 	// If there is a master manifest already, we just return it.
 // 	objectPath := filepath.Join(h.objectPrefix, backupManifest)
-// 	if h.objectExists(objectPath) {
+// 	if h.Exists(objectPath) {
 // 		if err := h.readMasterManifest(&manifest); err != nil {
 // 			return nil, err
 // 		}
@@ -644,9 +732,11 @@ type fileHandler struct {
 func (h *fileHandler) Exists(path string) bool {
 	return pathExist(path)
 }
+
 func (h *fileHandler) Read(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
+
 func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
 	return os.Open(path)
 }
@@ -670,6 +760,10 @@ func (h *fileHandler) CreateFile(path string) error {
 
 func (h *fileHandler) Rename(src, dst string) error {
 	return os.Rename(src, dst)
+}
+
+func (h *fileHandler) WaitForWrite() error {
+	return nil
 }
 
 // GetManifest returns the master manifest, if the directory doesn't contain
@@ -894,6 +988,10 @@ func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 		return errors.Wrap(err, "createManifest failed to create tmp path")
 	}
 	if err = json.NewEncoder(h).Encode(manifest); err != nil {
+		return err
+	}
+
+	if err := h.WaitForWrite(); err != nil {
 		return err
 	}
 
