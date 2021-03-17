@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -35,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -146,15 +148,37 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
+	backupUrl := "https://" + testutil.SockAddrHttp + "/admin/backup"
+	healthUrl := "https://" + testutil.SockAddrHttp + "/health"
+
 	client := testutil.GetHttpsClient(t)
-	resp, err := client.PostForm("https://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
+	resp, err := client.PostForm(backupUrl, url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+	require.Contains(t, string(buf), "Backup queued successfully")
+
+	for {
+		time.Sleep(5 * time.Second)
+		client := testutil.GetHttpsClient(t)
+		resp, err := client.Get(healthUrl)
+		require.NoError(t, err)
+
+		var health []pb.HealthInfo
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&health)
+		require.NoError(t, err)
+		require.Len(t, health, 1)
+
+		status := health[0].LastBackup
+		if strings.HasPrefix(status, "COMPLETED: ") {
+			break
+		}
+		require.True(t, status == "" || strings.HasPrefix(status, "STARTED: "), "backup status: %s", status)
+	}
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)

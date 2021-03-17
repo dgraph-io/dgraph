@@ -394,7 +394,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+	require.Contains(t, string(buf), "Backup queued successfully")
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)

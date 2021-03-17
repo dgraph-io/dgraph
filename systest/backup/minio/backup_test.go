@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -290,6 +291,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}`
 
 	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
+	healthUrl := "https://" + testutil.SockAddrHttp + "/health"
 	params := testutil.GraphQLParams{
 		Query: backupRequest,
 		Variables: map[string]interface{}{
@@ -305,7 +307,26 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+	require.Contains(t, string(buf), "Backup queued successfully")
+
+	for {
+		time.Sleep(5 * time.Second)
+		client := testutil.GetHttpsClient(t)
+		resp, err := client.Get(healthUrl)
+		require.NoError(t, err)
+
+		var health []pb.HealthInfo
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&health)
+		require.NoError(t, err)
+		require.Len(t, health, 1)
+
+		status := health[0].LastBackup
+		if strings.HasPrefix(status, "COMPLETED: ") {
+			break
+		}
+		require.True(t, status == "" || strings.HasPrefix(status, "STARTED: "), "backup status: %s", status)
+	}
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
