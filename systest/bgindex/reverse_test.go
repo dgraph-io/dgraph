@@ -30,6 +30,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -37,10 +40,13 @@ import (
 
 func TestReverseIndex(t *testing.T) {
 	total := 100000
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	var dg *dgo.Dgraph
+	err := x.RetryUntilSuccess(10, time.Second, func() error {
+		var err error
+		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+		return err
+	})
+	require.Nil(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
