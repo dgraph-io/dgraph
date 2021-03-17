@@ -431,7 +431,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
 		if state.License.Enabled && opts.audit != nil {
-			if err := audit.InitAuditor(opts.audit); err != nil {
+			if err := audit.InitAuditor(opts.audit, 0, n.Id); err != nil {
 				glog.Errorf("error while initializing audit logs %+v", err)
 			}
 		}
