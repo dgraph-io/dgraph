@@ -46,6 +46,10 @@ docker exec -ti vault vault operator unseal
 Using the root token copied from `vault operator init`, we can enable these features:
 
 ```bash
+export VAULT_ROOT_TOKEN="<root-token>"
+```
+
+```bash
 export VAULT_ADDRESS="127.0.0.1:8200"
 
 curl --silent \
