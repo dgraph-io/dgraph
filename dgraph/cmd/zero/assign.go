@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"math/rand"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -193,12 +194,12 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
 				num.Val, opts.limit.GetUint64("uid-lease"))
 		}
-		for {
-			if s.rateLimiter.Allow(ns, num.Val) {
-				break
-			}
-			// TODO: Fix this busy waiting.
-			time.Sleep(opts.limit.GetDuration("refill-interval"))
+		if !s.rateLimiter.Allow(ns, num.Val) {
+			// Return error after random delay.
+			delay := rand.Intn(int(opts.limit.GetDuration("refill-interval")))
+			time.Sleep(time.Duration(delay) * time.Second)
+			return errors.New("Cannot lease UID because UID lease for the namespace is exhausted." +
+				" Please retry after some time.")
 		}
 		return nil
 	}

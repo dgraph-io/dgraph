@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200"
@@ -34,6 +35,15 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
+
+// XidMapOptions specifies the options for creating a new xidmap.
+type XidMapOptions struct {
+	Zero      *grpc.ClientConn
+	DgClient  *dgo.Dgraph
+	Namespace uint64
+	DB        *badger.DB
+	Dir       string
+}
 
 // XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
 // manner. It's memory friendly because the mapping is stored on disk, but fast
@@ -85,14 +95,14 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations. XidMap creates the temporary buffers inside dir directory. The caller must
 // ensure that the dir exists.
-func New(zero *grpc.ClientConn, dg *dgo.Dgraph, ns uint64, db *badger.DB, dir string) *XidMap {
+func New(opts XidMapOptions) *XidMap {
 	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 		kvChan:    make(chan []kv, 64),
-		dg:        dg,
-		ns:        ns,
+		dg:        opts.DgClient,
+		ns:        opts.Namespace,
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -100,16 +110,16 @@ func New(zero *grpc.ClientConn, dg *dgo.Dgraph, ns uint64, db *badger.DB, dir st
 		}
 	}
 
-	if db != nil {
+	if opts.DB != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
-		xm.writer = db.NewWriteBatch()
+		xm.writer = opts.DB.NewWriteBatch()
 
 		for i := 0; i < 16; i++ {
 			xm.wg.Add(1)
 			go xm.dbWriter()
 		}
 
-		err := db.View(func(txn *badger.Txn) error {
+		err := opts.DB.View(func(txn *badger.Txn) error {
 			var count int
 			opt := badger.DefaultIteratorOptions
 			opt.PrefetchValues = false
@@ -135,7 +145,7 @@ func New(zero *grpc.ClientConn, dg *dgo.Dgraph, ns uint64, db *badger.DB, dir st
 		})
 		x.Check(err)
 	}
-	xm.zc = pb.NewZeroClient(zero)
+	xm.zc = pb.NewZeroClient(opts.Zero)
 
 	go func() {
 		const initBackoff = 10 * time.Millisecond
@@ -166,7 +176,13 @@ func New(zero *grpc.ClientConn, dg *dgo.Dgraph, ns uint64, db *badger.DB, dir st
 
 func (m *XidMap) attachNamespace(ctx context.Context) context.Context {
 	if m.dg != nil {
-		ctx = m.dg.AttachJwt(ctx) // Need to attach JWT because slash uses alpha as zero proxy.
+		// Need to attach JWT because slash uses alpha as zero proxy.
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+		md.Set("accessJwt", m.dg.GetJwt().AccessJwt)
+		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 	// TODO: Will require retry with re-login.
 	return x.AttachNamespaceOutgoing(ctx, m.ns)

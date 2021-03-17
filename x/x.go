@@ -435,19 +435,19 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 // AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
 // it attaches the galaxy namespace.
 func AttachJWTNamespace(ctx context.Context) context.Context {
-	if WorkerConfig.AclEnabled {
-		ns, err := ExtractJWTNamespace(ctx)
-		if err != nil {
-			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
-		} else {
-			// Attach the namespace only if we got one from JWT.
-			// This preserves any namespace directly present in the context which is needed for
-			// requests originating from dgraph internal code like server.go::GetGQLSchema() where
-			// context is created by hand.
-			ctx = AttachNamespace(ctx, ns)
-		}
+	if !WorkerConfig.AclEnabled {
+		return AttachNamespace(ctx, GalaxyNamespace)
+	}
+
+	ns, err := ExtractJWTNamespace(ctx)
+	if err != nil {
+		glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
 	} else {
-		ctx = AttachNamespace(ctx, GalaxyNamespace)
+		// Attach the namespace only if we got one from JWT.
+		// This preserves any namespace directly present in the context which is needed for
+		// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+		// context is created by hand.
+		ctx = AttachNamespace(ctx, ns)
 	}
 	return ctx
 }
@@ -463,7 +463,8 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	return metadata.NewIncomingContext(ctx, md)
 }
 
-// AttachNamespaceOutgoing adds given namespace to the metadata of the outgoing context.
+// AttachJWTNamespaceOutgoing attaches the namespace in the JWT claims to the outgoing metadata of
+// the context.
 func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	if !WorkerConfig.AclEnabled {
 		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
@@ -475,6 +476,7 @@ func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	return AttachNamespaceOutgoing(ctx, ns), nil
 }
 
+// AttachNamespaceOutgoing adds given namespace in the outgoing metadata of the context.
 func AttachNamespaceOutgoing(ctx context.Context, namespace uint64) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -1402,44 +1404,59 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 	return matches
 }
 
+type lockedMap struct {
+	sync.Mutex
+	mp map[uint64]uint64
+}
+
+// RateLimiter implements a basic rate limiter.
 type RateLimiter struct {
-	sync.RWMutex
-	limiter     map[uint64]uint64
+	limiter     lockedMap
 	maxTokens   uint64
 	refillAfter time.Duration
 	closer      *z.Closer
 }
 
+// NewRateLimiter creates a rate limiter that limits lease by maxTokens in an interval specified by
+// refillAfter.
 func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
-	return &RateLimiter{
-		limiter:     make(map[uint64]uint64),
+	r := &RateLimiter{
+		limiter: lockedMap{
+			mp: make(map[uint64]uint64),
+		},
 		maxTokens:   maxTokens,
 		refillAfter: refillAfter,
 		closer:      closer,
 	}
+	r.closer.AddRunning(1)
+	r.RefillPeriodically()
+	return r
 }
 
+// Allow checks if the request for count number of tokens can be allowed for a given namespace.
+// If request is allowed, it subtracts the count from the available tokens.
 func (r *RateLimiter) Allow(ns, count uint64) bool {
-	r.Lock()
-	defer r.Unlock()
+	r.limiter.Lock()
+	defer r.limiter.Unlock()
 
-	if _, ok := r.limiter[ns]; !ok {
-		r.limiter[ns] = r.maxTokens // make this configurable.
+	if _, ok := r.limiter.mp[ns]; !ok {
+		r.limiter.mp[ns] = r.maxTokens // make this configurable.
 	}
-	if r.limiter[ns] < count {
+	if r.limiter.mp[ns] < count {
 		return false
 	}
-	r.limiter[ns] -= count
+	r.limiter.mp[ns] -= count
 	return true
 }
 
+// RefillPeriodically refills the tokens of all the namespaces to maxTokens periodically .
 func (r *RateLimiter) RefillPeriodically() {
 	defer r.closer.Done()
 	refill := func() {
-		r.Lock()
-		defer r.Unlock()
-		for ns := range r.limiter {
-			r.limiter[ns] = r.maxTokens
+		r.limiter.Lock()
+		defer r.limiter.Unlock()
+		for ns := range r.limiter.mp {
+			r.limiter.mp[ns] = r.maxTokens
 		}
 	}
 

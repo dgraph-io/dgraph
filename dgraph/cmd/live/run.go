@@ -632,7 +632,13 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
-	alloc := xidmap.New(connzero, dc, creds.GetUint64("namespace"), db, "")
+	alloc := xidmap.New(xidmap.XidMapOptions{
+		Zero: connzero,
+		DgClient:   dc,
+		Namespace:   creds.GetUint64("namespace"),
+		DB:   db,
+		Dir:  "",
+	})
 	l := &loader{
 		opts:       opts,
 		dc:         dc,

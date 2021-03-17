@@ -407,7 +407,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx, err := AttachJwtWithNamespace(ctx, x.GalaxyNamespace)
+		ctx, err := attachJwtWithNamespace(ctx, x.GalaxyNamespace)
 		if err != nil {
 			return
 		}
@@ -422,7 +422,7 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx, err := AttachJwtWithNamespace(ctx, x.GalaxyNamespace)
+		ctx, err := attachJwtWithNamespace(ctx, x.GalaxyNamespace)
 		if err != nil {
 			return
 		}
@@ -1361,7 +1361,8 @@ func removeGroupBy(gbAttrs []gql.GroupByAttr,
 	return filteredGbAttrs
 }
 
-func AttachJwtWithNamespace(ctx context.Context, ns uint64) (context.Context, error) {
+// attachJwtWithNamespace attaches a dummy jwt with claim for namespace ns if ACL is enabled.
+func attachJwtWithNamespace(ctx context.Context, ns uint64) (context.Context, error) {
 	if !x.WorkerConfig.AclEnabled {
 		return ctx, nil
 	}

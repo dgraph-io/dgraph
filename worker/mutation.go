@@ -541,7 +541,7 @@ func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 // AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	// pass on the incoming metadata to the zero. namespace from the metadata is required by zero.
+	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}

@@ -103,8 +103,8 @@ instances to achieve high-availability.
 	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
 		Head("Limit options").
 		Flag("uid-lease",
-			`The maximum number of UIDs that can be leased by non-galaxy user in an interval
-			specified by refill-interval.`).
+			`The maximum number of UIDs that can be leased by namespace (except default namespace)
+			in an interval specified by refill-interval.`).
 		Flag("refill-interval",
 			"The interval after which the tokens for UID lease are replenished,").
 		String())
@@ -369,10 +369,9 @@ func run() {
 		x.RemoveCidFile()
 	}()
 
-	st.zero.closer.AddRunning(3)
+	st.zero.closer.AddRunning(2)
 	go x.MonitorMemoryMetrics(st.zero.closer)
 	go x.MonitorDiskMetrics("wal_fs", opts.w, st.zero.closer)
-	go st.zero.rateLimiter.RefillPeriodically()
 
 	glog.Infoln("Running Dgraph Zero...")
 	st.zero.closer.Wait()
