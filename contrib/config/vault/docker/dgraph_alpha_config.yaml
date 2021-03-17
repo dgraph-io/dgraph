@@ -1,0 +1,6 @@
+vault_addr: http://vault:8200
+vault_field: enc_key
+vault_format: raw
+vault_path: secret/data/dgraph/enc_key
+vault_roleid_file: /dgraph/vault/role_id
+vault_secretid_file: /dgraph/vault/secret_id
