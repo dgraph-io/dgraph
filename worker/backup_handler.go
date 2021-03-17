@@ -989,7 +989,7 @@ func readManifest(h UriHandler, path string) (*Manifest, error) {
 	if err != nil {
 		return &m, errors.Wrap(err, "readManifest failed to read the file: ")
 	}
-	if err := json.Unmarshal(b, m); err != nil {
+	if err := json.Unmarshal(b, &m); err != nil {
 		return &m, errors.Wrap(err, "readManifest failed to unmarshal: ")
 	}
 	return &m, nil
@@ -1001,7 +1001,7 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 	if err != nil {
 		return &m, errors.Wrap(err, "readMasterManifest failed to read the file: ")
 	}
-	if err := json.Unmarshal(b, m); err != nil {
+	if err := json.Unmarshal(b, &m); err != nil {
 		return &m, errors.Wrap(err, "readMasterManifest failed to unmarshal: ")
 	}
 	return &m, nil
