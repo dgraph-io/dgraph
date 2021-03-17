@@ -38,7 +38,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -407,10 +406,6 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx, err := attachJwtWithNamespace(ctx, x.GalaxyNamespace)
-		if err != nil {
-			return
-		}
 		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -422,10 +417,6 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		ctx, err := attachJwtWithNamespace(ctx, x.GalaxyNamespace)
-		if err != nil {
-			return
-		}
 		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
@@ -1359,32 +1350,4 @@ func removeGroupBy(gbAttrs []gql.GroupByAttr,
 		filteredGbAttrs = append(filteredGbAttrs, gbAttr)
 	}
 	return filteredGbAttrs
-}
-
-// attachJwtWithNamespace attaches a dummy jwt with claim for namespace ns if ACL is enabled.
-func attachJwtWithNamespace(ctx context.Context, ns uint64) (context.Context, error) {
-	if !x.WorkerConfig.AclEnabled {
-		return ctx, nil
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"namespace": ns,
-		// set the jwt exp according to the ttl
-		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
-	})
-
-	accessJwt, err := token.SignedString([]byte(worker.Config.HmacSecret))
-	if err != nil {
-		return ctx, errors.Errorf("unable to encode jwt to string: %v", err)
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
-
-	namespace := strconv.FormatUint(ns, 10)
-	md.Set("namespace", namespace)
-	md.Append("accessJwt", accessJwt)
-	ctx = metadata.NewIncomingContext(ctx, md)
-	return ctx, nil
 }

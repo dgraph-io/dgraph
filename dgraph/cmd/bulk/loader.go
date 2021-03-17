@@ -189,7 +189,6 @@ func (ld *loader) leaseNamespaces() {
 	client := pb.NewZeroClient(ld.zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ctx = x.AttachNamespaceOutgoing(ctx, x.GalaxyNamespace)
 		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
 		cancel()
 		if err == nil {
@@ -236,11 +235,11 @@ func (ld *loader) mapStage() {
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 	ld.xids = xidmap.New(xidmap.XidMapOptions{
-		Zero: ld.zero,
-		DgClient:   nil,
-		Namespace:   x.GalaxyNamespace,
-		DB:   db,
-		Dir:  filepath.Join(ld.opt.TmpDir, bufferDir),
+		Zero:      ld.zero,
+		DgClient:  nil,
+		Namespace: x.GalaxyNamespace,
+		DB:        db,
+		Dir:       filepath.Join(ld.opt.TmpDir, bufferDir),
 	})
 
 	fs := filestore.NewFileStore(ld.opt.DataFiles)
