@@ -351,12 +351,11 @@ func TestLiveLoadMulti(t *testing.T) {
 `,
 		creds: &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns},
 	}))
+
 	resp = testutil.QueryData(t, dc1, query3)
-	testutil.CompareJSON(t,
-		`{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
+	testutil.CompareJSON(t, `{"me": [{"name":"ns alice"}, {"name": "ns bob"},{"name":"ns chew"},
 		{"name": "ns dan"},{"name":"ns eon"}, {"name": "ns free"},{"name":"ns gary"},
 		{"name": "ns hola"}]}`, string(resp))
-
 }
 
 func TestMain(m *testing.M) {
