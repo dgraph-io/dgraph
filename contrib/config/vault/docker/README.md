@@ -1,9 +1,9 @@
 # HashiCorp Vault Integration: Docker
 
-This shows how to setup a local staging server for HashiCorp Vault and Dgraph.  This demonstrates using best practices with two personas:
+This shows how to set up a local staging server for HashiCorp Vault and Dgraph. This demonstrates using best practices with two personas:
 
 * `admin` persona with privileged permissions to configure an auth method
-* `app` persona (`dgraph`) - consumer of secrets stored in Vault
+* `app` persona (`dgraph`) - a consumer of secrets stored in Vault
 
 Overview:
 
@@ -43,7 +43,7 @@ docker exec -ti vault vault operator unseal
 
 ### Enable AppRole Auth and KV Secrets
 
-Using the root token copied from `vault operator init`, we can enabled these features:
+Using the root token copied from `vault operator init`, we can enable these features:
 
 ```bash
 export VAULT_ADDRESS="127.0.0.1:8200"
