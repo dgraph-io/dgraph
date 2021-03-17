@@ -1429,7 +1429,7 @@ func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Close
 		closer:      closer,
 	}
 	r.closer.AddRunning(1)
-	r.RefillPeriodically()
+	go r.RefillPeriodically()
 	return r
 }
 

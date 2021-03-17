@@ -184,7 +184,6 @@ func (m *XidMap) attachNamespace(ctx context.Context) context.Context {
 		md.Set("accessJwt", m.dg.GetJwt().AccessJwt)
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
-	// TODO: Will require retry with re-login.
 	return x.AttachNamespaceOutgoing(ctx, m.ns)
 }
 
@@ -287,6 +286,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		ctx = m.attachNamespace(ctx)
 		assigned, err := m.zc.AssignIds(ctx, &pb.Num{Val: num, Type: pb.Num_UID})
+		// TODO: Relogin is required if token is expired.
 		cancel()
 		if err == nil {
 			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)

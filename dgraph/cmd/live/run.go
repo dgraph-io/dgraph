@@ -633,11 +633,11 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 	alloc := xidmap.New(xidmap.XidMapOptions{
-		Zero: connzero,
-		DgClient:   dc,
-		Namespace:   creds.GetUint64("namespace"),
-		DB:   db,
-		Dir:  "",
+		Zero:      connzero,
+		DgClient:  dc,
+		Namespace: creds.GetUint64("namespace"),
+		DB:        db,
+		Dir:       "",
 	})
 	l := &loader{
 		opts:       opts,

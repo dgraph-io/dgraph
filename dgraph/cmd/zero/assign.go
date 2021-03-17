@@ -183,17 +183,19 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 
 	validateAndGetToken := func() error {
 		if num.GetType() != pb.Num_UID {
+			// We only rate limit lease of UIDs.
 			return nil
 		}
-
 		ns, err := x.ExtractNamespace(ctx)
 		if err != nil || ns == x.GalaxyNamespace {
+			// There is no rate limiting for GalaxyNamespace.
 			return err
 		}
 		if num.Val > opts.limit.GetUint64("uid-lease") {
 			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
 				num.Val, opts.limit.GetUint64("uid-lease"))
 		}
+
 		if !s.rateLimiter.Allow(ns, num.Val) {
 			// Return error after random delay.
 			delay := rand.Intn(int(opts.limit.GetDuration("refill-interval")))
