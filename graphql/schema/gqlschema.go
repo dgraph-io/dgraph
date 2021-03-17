@@ -1070,8 +1070,18 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	//		filter: TypeFilter!
 	// }
 	// In this case, UpdateTypeInput should also be deleted.
-	if strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1 {
-		if def.Fields[0].Name == "filter" {
+	if strings.HasPrefix(def.Name, "Update") &&
+		strings.HasSuffix(def.Name, "Input") &&
+		len(def.Fields) == 1 {
+		// Obtain T from UpdateTInput
+		typeDef := sch.Types[def.Name[6:len(def.Name)-5]]
+		if typeDef != nil &&
+			typeDef.Directives.ForName(remoteDirective) == nil &&
+			(typeDef.Kind == ast.Object || typeDef.Kind == ast.Interface) {
+			// this ensures that it was Dgraph who generated the `UpdateTInput`
+			// and allows users to still be able to define a type `UpdateT1Input` with a field named
+			//`filter` in that input type and not get cleaned up.
+			// It checks if the type T exists in schema and is an Object or Interface.
 			delete(sch.Types, def.Name)
 		}
 	}
