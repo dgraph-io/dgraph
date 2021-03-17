@@ -200,9 +200,9 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
-			"X-App-Token":   []string{"app-token"},
-			"X-User-Id":     []string{"123"},
-			"Random-header": []string{"random"},
+			"X-App-Token":   {"app-token"},
+			"X-User-Id":     {"123"},
+			"Random-header": {"random"},
 		},
 	}
 
@@ -238,9 +238,9 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
-			"App":           []string{"app-token"},
-			"X-User-Id":     []string{"123"},
-			"Random-header": []string{"random"},
+			"App":           {"app-token"},
+			"X-User-Id":     {"123"},
+			"Random-header": {"random"},
 		},
 	}
 
@@ -2618,7 +2618,7 @@ func TestCustomDQL(t *testing.T) {
 			}
 		}
 		""")
-		
+
 	  dqlTweetsByAuthorFollowers: [Tweets] @custom(dql: """
 		query {
 			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "DQL")) {
@@ -2634,7 +2634,7 @@ func TestCustomDQL(t *testing.T) {
 			}
 		}
 		""")
-		
+
 	  filteredTweetsByAuthorFollowers(search: String!): [Tweets] @custom(dql: """
 		query t($search: string) {
 			var(func: type(Tweets)) @filter(anyoftext(Tweets.text, $search)) {
@@ -2859,7 +2859,7 @@ func TestCustomGetQuerywithRESTError(t *testing.T) {
 func TestCustomFieldsWithRestError(t *testing.T) {
 	schema := `
     type Car @remote {
-		id: ID! 
+		id: ID!
 		name: String!
 	}
 
@@ -2883,7 +2883,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
 			body: "{uid: $id}"
 			mode: BATCH,
 			}
-	      )		
+	      )
   	}
   `
 
@@ -2931,7 +2931,7 @@ func TestCustomFieldsWithRestError(t *testing.T) {
           "age": 10,
           "cars": {
             "name": "car-0x1"
-          }	
+          }
         }
       ]
     }`
@@ -3005,7 +3005,7 @@ func TestCustomResolverInInterfaceImplFrag(t *testing.T) {
 		id: ID!
 		name: String! @id
 	}
-	
+
 	type Human implements Character {
 		totalCredits: Int
 		bio: String @custom(http: {
@@ -3079,23 +3079,23 @@ func TestCustomFieldIsResolvedWhenNoModeGiven(t *testing.T) {
 		skipIntrospection: true,
 	  })
 	}
-	
+
 	type Blueprint {
 	  blueprintId: String! @id
 	  shallowProducts: [ItemType]
 	  deepProducts: [BlueprintProduct]
 	}
-	
+
 	type BlueprintProduct {
 	  itemType: ItemType
 	  amount: Int
 	}
-	
+
 	type MarketStats  {
 	  typeId: String! @id
-	  price: Float 
+	  price: Float
 	}
-	
+
 	type MarketStatsR @remote {
 	  typeId: String
 	  price: Float
