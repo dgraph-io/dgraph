@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -58,10 +57,10 @@ func init() {
 
 	flag.String("cloud", "", "addr: xxx; jwt: xxx")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
-	flag.Int("num", 1, "How many times to run.")
+	flag.Int("num", 1, "How many times to run per goroutine.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.Int("conc", 1, "How many concurrent tasks to run")
+	flag.Int("conc", 1, "How many goroutines to run.")
 
 	flag.String("creds", "",
 		`Various login credentials if login is required.
@@ -180,7 +179,7 @@ func run(conf *viper.Viper) {
 	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
 
 	waitDur := conf.GetDuration("wait")
-	num := int64(conf.GetInt("num"))
+	num := conf.GetInt("num")
 	conc := int(conf.GetInt("conc"))
 	format := "0102 03:04:05.999"
 
@@ -203,32 +202,33 @@ func run(conf *viper.Viper) {
 	_, err := process(dg, conf)
 	x.Check(err)
 
-	var count int64
 	var wg sync.WaitGroup
+	f := func(i int) {
+		defer wg.Done()
+		count := 0
+		for count < num {
+			txnStart := time.Now() // Start time of transaction
+			cnt, err := process(dg, conf)
+			now := time.Now().UTC().Format(format)
+			if err != nil {
+				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			serverLat := cnt.qLatency + cnt.mLatency
+			clientLat := time.Since(txnStart).Round(time.Millisecond)
+			fmt.Printf(
+				"[%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+				i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+				serverLat, clientLat, clientLat-serverLat)
+			time.Sleep(waitDur)
+			count++
+		}
+	}
+
 	for i := 0; i < conc; i++ {
 		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			for {
-				txnStart := time.Now() // Start time of transaction
-				cnt, err := process(dg, conf)
-				now := time.Now().UTC().Format(format)
-				if err != nil {
-					fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
-					time.Sleep(time.Second)
-					continue
-				}
-				serverLat := cnt.qLatency + cnt.mLatency
-				clientLat := time.Since(txnStart).Round(time.Millisecond)
-				fmt.Printf("[%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
-					i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
-					serverLat, clientLat, clientLat-serverLat)
-				if cur := atomic.AddInt64(&count, 1); cur > num {
-					return
-				}
-				time.Sleep(waitDur)
-			}
-		}(i)
+		go f(i)
 	}
 	wg.Wait()
 }

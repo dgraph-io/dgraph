@@ -1119,7 +1119,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 var pendingQueries int64
 var maxPendingQueries int64
-var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests.")
+var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
 
 func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
@@ -1127,7 +1127,9 @@ func Init() {
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (
 	resp *api.Response, rerr error) {
-
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	defer atomic.AddInt64(&pendingQueries, -1)
 	if val := atomic.AddInt64(&pendingQueries, 1); val > maxPendingQueries {
 		return nil, serverOverloadErr
@@ -1142,10 +1144,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
-	}
-
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
 	}
 
 	l := &query.Latency{}
