@@ -1931,8 +1931,9 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			qry.Directives = append(
 				qry.Directives, &ast.Directive{Name: deprecatedDirective,
 					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
-						Value: &ast.Value{Raw: "xid argument for get query on interface is being deprecated," +
-							" please update your query to not use that argument",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in 21.11, " +
+							"please update your query to not use that argument",
 							Kind: ast.StringValue}}}})
 		}
 		for _, fld := range defn.Fields {
