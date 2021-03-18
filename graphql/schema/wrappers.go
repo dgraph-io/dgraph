@@ -692,7 +692,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 //	 })
 //	 So, by constructing an appropriate custom directive for @lambda fields,
 //	 we just reuse logic from @custom.
-func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
+func customAndLambdaMappings(s *ast.Schema, ns uint64) (map[string]map[string]*ast.Directive,
 	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
 	lambdaDirectives := make(map[string]map[string]bool)
@@ -729,7 +729,7 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 						// then, build a custom directive with correct semantics to be put
 						// into custom directives map at this field
 						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
-							dir, func(f *ast.FieldDefinition) bool {
+							dir, ns, func(f *ast.FieldDefinition) bool {
 								// Need to skip the fields which have a @custom/@lambda from
 								// going in body template. The field itself may not have the
 								// directive anymore because the directive may have been removed by
@@ -882,7 +882,8 @@ func externalAndNonKeyField(fld *ast.FieldDefinition, defn *ast.Definition, prov
 //	   mode: BATCH (set only if @lambda was on a non query/mutation field)
 //	})
 func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
-	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
+	lambdaDir *ast.Directive, ns uint64, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.
+	Directive {
 	comma := ""
 	var bodyTemplate strings.Builder
 
@@ -917,7 +918,7 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 
 	// build the children for http argument
 	httpArgChildrens := []*ast.ChildValue{
-		getChildValue(httpUrl, x.Config.GraphQL.GetString("lambda-url"), ast.StringValue, lambdaDir.Position),
+		getChildValue(httpUrl, x.LambdaUrl(ns), ast.StringValue, lambdaDir.Position),
 		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
 		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
 	}
@@ -969,8 +970,8 @@ func lambdaOnMutateMappings(s *ast.Schema) map[string]bool {
 }
 
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) (Schema, error) {
-	customDirs, lambdaDirs := customAndLambdaMappings(s)
+func AsSchema(s *ast.Schema, ns uint64) (Schema, error) {
+	customDirs, lambdaDirs := customAndLambdaMappings(s, ns)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:             s,

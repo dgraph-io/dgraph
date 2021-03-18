@@ -90,7 +90,7 @@ func TestSchemaString(t *testing.T) {
 
 			newSchemaStr := schHandler.GQLSchema()
 
-			_, err = FromString(newSchemaStr)
+			_, err = FromString(newSchemaStr, x.GalaxyNamespace)
 			require.NoError(t, err)
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
@@ -121,7 +121,7 @@ func TestApolloServiceQueryResult(t *testing.T) {
 
 			apolloServiceResult := schHandler.GQLSchemaWithoutApolloExtras()
 
-			_, err = FromString(schHandler.GQLSchema())
+			_, err = FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
@@ -150,7 +150,7 @@ func TestSchemas(t *testing.T) {
 
 				newSchemaStr := schHandler.GQLSchema()
 
-				_, err = FromString(newSchemaStr)
+				_, err = FromString(newSchemaStr, x.GalaxyNamespace)
 				require.NoError(t, err)
 			})
 		}
@@ -161,7 +161,7 @@ func TestSchemas(t *testing.T) {
 			t.Run(sch.Name, func(t *testing.T) {
 				schHandler, errlist := NewHandler(sch.Input, false)
 				if errlist == nil {
-					_, errlist = FromString(schHandler.GQLSchema())
+					_, errlist = FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 				}
 				if diff := cmp.Diff(sch.Errlist, errlist, cmpopts.IgnoreUnexported(gqlerror.Error{})); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
@@ -191,7 +191,7 @@ func TestAuthSchemas(t *testing.T) {
 				schHandler, errlist := NewHandler(sch.Input, false)
 				require.NoError(t, errlist, sch.Name)
 
-				_, authError := FromString(schHandler.GQLSchema())
+				_, authError := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 				require.NoError(t, authError, sch.Name)
 			})
 		}
@@ -203,7 +203,7 @@ func TestAuthSchemas(t *testing.T) {
 				schHandler, errlist := NewHandler(sch.Input, false)
 				require.NoError(t, errlist, sch.Name)
 
-				_, authError := FromString(schHandler.GQLSchema())
+				_, authError := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 
 				if diff := cmp.Diff(authError, sch.Errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)

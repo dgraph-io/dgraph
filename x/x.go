@@ -1379,3 +1379,9 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 	}
 	return matches
 }
+
+// LambdaUrl returns the correct lambda-url for the given namespace
+func LambdaUrl(ns uint64) string {
+	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
+		10), 1)
+}
