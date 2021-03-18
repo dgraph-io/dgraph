@@ -1020,6 +1020,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		Version:     x.Version(),
 		Uptime:      int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho:    time.Now().Unix(),
+		LastBackup:  worker.LastBackupStatus.Load().(string),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
 		EeFeatures:  worker.GetEEFeaturesList(),
