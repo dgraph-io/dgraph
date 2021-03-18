@@ -34,7 +34,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
@@ -503,14 +502,14 @@ func handleAbort(ctx context.Context, startTs uint64) (map[string]interface{}, e
 		Aborted: true,
 	}
 
-	_, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
-	switch err {
-	case dgo.ErrAborted:
+	tctx, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
+	switch {
+	case tctx.Aborted == true:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 		}, nil
-	case nil:
+	case err == nil:
 		return nil, errors.Errorf("transaction could not be aborted")
 	default:
 		return nil, err

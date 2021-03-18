@@ -1460,7 +1460,7 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-func checkPermissions(ctx context.Context, startTs uint64) error {
+func validateNamespace(ctx context.Context, startTs uint64) error {
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
@@ -1487,7 +1487,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 
 	if x.WorkerConfig.AclEnabled {
-		if err := checkPermissions(ctx, tc.StartTs); err != nil {
+		if err := validateNamespace(ctx, tc.StartTs); err != nil {
 			return &api.TxnContext{}, err
 		}
 	}
@@ -1504,11 +1504,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if err == dgo.ErrAborted {
 		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
 		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		tctx.Aborted = true
 		if tc.Aborted {
 			return tctx, nil
 		}
 
-		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs
