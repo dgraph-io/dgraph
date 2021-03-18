@@ -199,8 +199,12 @@ func run(conf *viper.Viper) {
 		dg = dgTmp
 	}
 
-	_, err := process(dg, conf)
-	x.Check(err)
+	// Run things serially first.
+	for i := 0; i < conc; i++ {
+		_, err := process(dg, conf)
+		x.Check(err)
+		num--
+	}
 
 	var wg sync.WaitGroup
 	f := func(i int) {
