@@ -699,6 +699,11 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return tctx, errors.Wrapf(err, "while mutating over network")
+		}
+		mu.Namespace = ns
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 

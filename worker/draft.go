@@ -478,14 +478,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	ns, err := x.ExtractNamespace(ctx)
-	if err != nil {
-		panic("lol")
-		return err
-	}
-
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	txn.Namespace = ns // Register the namespace as well. To be used in CommitOverNetwork.
+	txn.Namespace = m.Namespace // Register the namespace as well. To be used in CommitOrAbort.
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return x.ErrConflict

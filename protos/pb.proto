@@ -250,6 +250,7 @@ message Mutations {
 	string drop_value = 8;
 
 	Metadata metadata = 9;
+	uint64 namespace = 10;
 }
 
 message Metadata {
