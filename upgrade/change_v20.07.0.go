@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -128,19 +129,16 @@ func upgradeAclTypeNames() error {
 	}
 
 	// get dgo client
-	dg, conn, err := getDgoClient(true)
-	if err != nil {
-		return fmt.Errorf("error getting dgo client: %w", err)
-	}
-	defer conn.Close()
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	defer cb()
 
 	// apply upgrades for old ACL type names, one by one.
 	for _, typeNameInfo := range aclTypeNameInfo {
-		if err = typeNameInfo.updateTypeName(dg); err != nil {
+		if err := typeNameInfo.updateTypeName(dg); err != nil {
 			return fmt.Errorf("error upgrading ACL type name from `%s` to `%s`: %w",
 				typeNameInfo.oldTypeName, typeNameInfo.newTypeName, err)
 		}
-		if err = typeNameInfo.updateTypeSchema(dg); err != nil {
+		if err := typeNameInfo.updateTypeSchema(dg); err != nil {
 			return fmt.Errorf("error upgrading schema for old ACL type `%s`: %w",
 				typeNameInfo.oldTypeName, err)
 		}
