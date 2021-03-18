@@ -691,6 +691,7 @@ func run() {
 			return
 		}
 	}
+	edgraph.Init()
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

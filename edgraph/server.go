@@ -1009,20 +1009,37 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	return s.doQuery(ctx, req, NoAuthorize)
 }
 
+<<<<<<< HEAD
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
+=======
+var pendingQueries int64
+var maxPendingQueries int64
+var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
+
+func Init() {
+	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
+}
+
+func (s *Server) doQuery(ctx context.Context, req *Request) (
+>>>>>>> 1450f8100... feat(query): Add mechanism to have a limit on number of pending queries (#7603)
 	resp *api.Response, rerr error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	defer atomic.AddInt64(&pendingQueries, -1)
+	if val := atomic.AddInt64(&pendingQueries, 1); val > maxPendingQueries {
+		return nil, serverOverloadErr
+	}
+
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}
+
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
-	}
-
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
 	}
 
 	l := &query.Latency{}
