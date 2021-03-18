@@ -223,7 +223,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
-		// TODO: Do we need to append the context metadata here?
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
 		}

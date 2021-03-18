@@ -479,7 +479,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	txn.Namespace = m.Namespace // Register the namespace as well. To be used in CommitOrAbort.
+	txn.Namespace = m.Namespace // This is used to authorize the user to CommitOrAbort transaction.
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return x.ErrConflict
