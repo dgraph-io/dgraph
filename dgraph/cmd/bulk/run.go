@@ -47,7 +47,7 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
-const BulkBadgerDefaults = worker.BadgerDefaults +
+const BulkBadgerDefaults = "compression=snappy; goroutines=8;" +
 	" cache_mb=64; cache_percentage=70,30;"
 
 func init() {
@@ -142,7 +142,8 @@ func init() {
 }
 
 func run() {
-	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(BulkBadgerDefaults)
+	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
+		BulkBadgerDefaults)
 	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),

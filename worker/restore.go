@@ -63,6 +63,10 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				}
 				return 0, 0, err
 			}
+
+			if !pathExist(dir) {
+				fmt.Println("Creating new db:", dir)
+			}
 			// The badger DB should be opened only after creating the backup
 			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
@@ -78,9 +82,6 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				return 0, 0, err
 			}
 			defer db.Close()
-			if !pathExist(dir) {
-				fmt.Println("Creating new db:", dir)
-			}
 			maxUid, maxNsId, err := loadFromBackup(db, &loadBackupInput{
 				r:              gzReader,
 				restoreTs:      0,
@@ -174,12 +175,8 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 			}
 
 			// Update the max uid and namespace id that has been seen while restoring this backup.
-			if parsedKey.Uid > maxUid {
-				maxUid = parsedKey.Uid
-			}
-			if namespace > maxNsId {
-				maxNsId = namespace
-			}
+			maxUid = x.Max(maxUid, parsedKey.Uid)
+			maxNsId = x.Max(maxNsId, namespace)
 
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.

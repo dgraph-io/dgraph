@@ -87,7 +87,8 @@ func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 		resp = MakeRequest(t, token, params)
 		if len(resp.Errors) > 0 {
 			// retry if necessary
-			if strings.Contains(resp.Errors.Error(), "Predicate dgraph.xid is not indexed") {
+			if strings.Contains(resp.Errors.Error(), "Predicate dgraph.xid is not indexed") ||
+				strings.Contains(resp.Errors.Error(), "opIndexing is already running") {
 				glog.Warningf("error while creating namespace %v", resp.Errors)
 				time.Sleep(100 * time.Millisecond)
 				continue

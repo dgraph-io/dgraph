@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -47,14 +48,11 @@ type rule struct {
 type rules []rule
 
 func upgradeACLRules() error {
-	dg, conn, err := getDgoClient(true)
-	if err != nil {
-		return fmt.Errorf("error getting dgo client: %w", err)
-	}
-	defer conn.Close()
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	defer cb()
 
 	data := make(map[string][]group)
-	if err = getQueryResult(dg, queryACLGroupsBefore_v20_03_0, &data); err != nil {
+	if err := getQueryResult(dg, queryACLGroupsBefore_v20_03_0, &data); err != nil {
 		return fmt.Errorf("error querying old ACL rules: %w", err)
 	}
 
@@ -118,7 +116,7 @@ func upgradeACLRules() error {
 
 	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	if deleteOld {
-		err = alterWithClient(dg, &api.Operation{
+		err := alterWithClient(dg, &api.Operation{
 			DropOp:    api.Operation_ATTR,
 			DropValue: "dgraph.group.acl",
 		})

@@ -1352,6 +1352,9 @@ Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
 
