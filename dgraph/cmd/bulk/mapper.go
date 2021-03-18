@@ -17,9 +17,7 @@
 package bulk
 
 import (
-	"bufio"
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -42,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/snappy"
 )
 
 type mapper struct {
@@ -167,12 +166,9 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		x.Check(f.Close())
 	}()
 
-	gzWriter := gzip.NewWriter(f)
-	w := bufio.NewWriterSize(gzWriter, 4<<20)
+	w := snappy.NewBufferedWriter(f)
 	defer func() {
-		x.Check(w.Flush())
-		x.Check(gzWriter.Flush())
-		x.Check(gzWriter.Close())
+		x.Check(w.Close())
 	}()
 
 	// Create partition keys for the map file.

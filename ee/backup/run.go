@@ -17,21 +17,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
+	"golang.org/x/sync/errgroup"
 
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -59,6 +61,7 @@ var opt struct {
 	destination string
 	format      string
 	verbose     bool
+	upgrade     bool // used by export backup command.
 }
 
 func init() {
@@ -324,6 +327,7 @@ func initExportBackup() {
 		Annotations: map[string]string{"group": "tool"},
 	}
 
+	ExportBackup.Cmd.SetHelpTemplate(x.NonRootTemplate)
 	flag := ExportBackup.Cmd.Flags()
 	flag.StringVarP(&opt.location, "location", "l", "",
 		`Sets the location of the backup. Both file URIs and s3 are supported.
@@ -332,6 +336,10 @@ func initExportBackup() {
 		"The folder to which export the backups.")
 	flag.StringVarP(&opt.format, "format", "f", "rdf",
 		"The format of the export output. Accepts a value of either rdf or json")
+	flag.BoolVar(&opt.upgrade, "upgrade", false,
+		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
+		It also deletes the deprecated types and predicates.
+		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
 	enc.RegisterFlags(flag)
 }
 
@@ -375,6 +383,23 @@ func runExportBackup() error {
 			fmt.Printf("WARNING WARNING WARNING: unable to get group id from directory "+
 				"inside DB at %s: %v", dir, err)
 			continue
+		}
+		if opt.upgrade && gid == 1 {
+			// Query the cors in badger db and append it at the end of GraphQL schema.
+			// This change was introduced in v21.03. Backups with 20.07 <= version < 21.03
+			// should apply this.
+			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(opt.key))
+			if err != nil {
+				return err
+			}
+			if err := upgrade.OfflineUpgradeFrom2011To2103(db); err != nil {
+				return errors.Wrapf(err, "while fixing cors")
+			}
+			if err := db.Close(); err != nil {
+				return err
+			}
 		}
 		eg.Go(func() error {
 			return worker.StoreExport(&pb.ExportRequest{
