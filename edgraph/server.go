@@ -1469,11 +1469,12 @@ func validateNamespace(ctx context.Context, startTs uint64) error {
 
 	txn := posting.Oracle().GetTxn(startTs)
 	if txn == nil {
-		return nil
+		return errors.Errorf("No transaction found for with startTs: %d", startTs)
 	}
 
 	if txn.Namespace != ns {
-		return errors.New("Please log in into correct namespace.")
+		return errors.Errorf("Please login into correct namespace. "+
+			"Currently logged in namespace %#x", ns)
 	}
 	return nil
 }

@@ -504,7 +504,7 @@ func handleAbort(ctx context.Context, startTs uint64) (map[string]interface{}, e
 
 	tctx, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
 	switch {
-	case tctx.Aborted == true:
+	case tctx.Aborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
