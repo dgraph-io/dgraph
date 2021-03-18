@@ -346,7 +346,12 @@ func lambdaWithApolloFederation(t *testing.T) {
 		nil)
 }
 
+// TODO(GRAPHQL-1123): need to find a way to make it work on TeamCity machines.
+// The host `172.17.0.1` used to connect to host machine from within docker, doesn't seem to
+// work in teamcity machines, neither does `host.docker.internal` works there. So, we are
+// skipping the related test for now.
 func lambdaOnMutateHooks(t *testing.T) {
+	t.Skipf("can't reach host machine from within docker")
 	// let's listen to the changes coming in from the lambda hook and store them in this array
 	var changelog []string
 	server := http.Server{Addr: lambdaHookServerAddr, Handler: http.NewServeMux()}
