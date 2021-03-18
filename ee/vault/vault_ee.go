@@ -194,7 +194,7 @@ func parseFlags(flag *z.SuperFlag) (*config, error) {
 	if err := validateRequired(flagSecretIdFile, secretIdFile); err != nil {
 		return nil, err
 	}
-	path := flag.GetPath(flagPath)
+	path := flag.GetString(flagPath)
 	if err := validateRequired(flagPath, path); err != nil {
 		return nil, err
 	}
