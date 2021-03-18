@@ -966,8 +966,11 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 
 	ol := out.plist
 	bm := roaring64.New()
-	if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
-		return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+
+	if ol.Bitmap != nil {
+		if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
+			return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+		}
 	}
 
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
@@ -1189,6 +1192,8 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 
 		out.parts[startUid] = plist
 	}
+
+	out.plist.Bitmap = codec.ToBytes(bm)
 
 	// Now pick up all the postings.
 	startUid, endUid := out.getRange(1)
