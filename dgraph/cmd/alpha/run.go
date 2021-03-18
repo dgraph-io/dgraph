@@ -204,6 +204,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
 				" allows dropping attributes and types.").
+		Flag("max-pending-queries",
+			"Number of maximum pending queries before we reject them as too many requests.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -737,6 +739,7 @@ func run() {
 			return
 		}
 	}
+	edgraph.Init()
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

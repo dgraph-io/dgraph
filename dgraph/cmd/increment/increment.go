@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -56,9 +57,10 @@ func init() {
 
 	flag.String("cloud", "", "addr: xxx; jwt: xxx")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
-	flag.Int("num", 1, "How many times to run.")
+	flag.Int("num", 1, "How many times to run per goroutine.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
+	flag.Int("conc", 1, "How many goroutines to run.")
 
 	flag.String("creds", "",
 		`Various login credentials if login is required.
@@ -178,6 +180,7 @@ func run(conf *viper.Viper) {
 
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
+	conc := int(conf.GetInt("conc"))
 	format := "0102 03:04:05.999"
 
 	// Do a sanity check on the passed credentials.
@@ -196,20 +199,40 @@ func run(conf *viper.Viper) {
 		dg = dgTmp
 	}
 
-	for num > 0 {
-		txnStart := time.Now() // Start time of transaction
-		cnt, err := process(dg, conf)
-		now := time.Now().UTC().Format(format)
-		if err != nil {
-			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
-			time.Sleep(time.Second)
-			continue
-		}
-		serverLat := cnt.qLatency + cnt.mLatency
-		clientLat := time.Since(txnStart).Round(time.Millisecond)
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n", now, cnt.Val,
-			cnt.startTs, cnt.qLatency, cnt.mLatency, serverLat, clientLat, clientLat-serverLat)
+	// Run things serially first.
+	for i := 0; i < conc; i++ {
+		_, err := process(dg, conf)
+		x.Check(err)
 		num--
-		time.Sleep(waitDur)
 	}
+
+	var wg sync.WaitGroup
+	f := func(i int) {
+		defer wg.Done()
+		count := 0
+		for count < num {
+			txnStart := time.Now() // Start time of transaction
+			cnt, err := process(dg, conf)
+			now := time.Now().UTC().Format(format)
+			if err != nil {
+				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			serverLat := cnt.qLatency + cnt.mLatency
+			clientLat := time.Since(txnStart).Round(time.Millisecond)
+			fmt.Printf(
+				"[%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+				i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+				serverLat, clientLat, clientLat-serverLat)
+			time.Sleep(waitDur)
+			count++
+		}
+	}
+
+	for i := 0; i < conc; i++ {
+		wg.Add(1)
+		go f(i)
+	}
+	wg.Wait()
 }
