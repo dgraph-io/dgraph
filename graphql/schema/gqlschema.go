@@ -1737,7 +1737,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition) {
 func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription bool) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 
@@ -1760,7 +1760,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, generateSubscription 
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in v21.11.0, " +
+							"please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		name, dtype := xidTypeFor(defn)
 		qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 			Name: name,
