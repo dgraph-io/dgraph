@@ -1,6 +1,8 @@
 # HashiCorp Vault Integration: Docker
 
-This shows how to set up a local staging server for HashiCorp Vault and Dgraph. This demonstrates using best practices with two personas:
+This shows how to set up a local staging server for HashiCorp Vault and Dgraph. Through these steps below, you can create secrets for [Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and [Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).  You can change the example secrets in [vault/payload_alpha_secrets.json](vault/payload_alpha_secrets.json) file.
+
+This guide will demonstrate using best practices with two personas:
 
 * `admin` persona with privileged permissions to configure an auth method
 * `app` persona (`dgraph`) - a consumer of secrets stored in Vault
@@ -148,6 +150,8 @@ curl --silent \
 ```
 
 ### Save secrets using admin persona
+
+This will save secrets for both [Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and [Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).
 
 ```bash
 curl --silent \
