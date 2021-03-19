@@ -39,7 +39,7 @@ type Options struct {
 	Limit               *z.SuperFlag
 	LimitMutationsNquad int
 	LimitQueryEdge      uint64
-	BlockDropAll        bool
+	BlockClusterWideDrop        bool
 
 	// GraphQL options:
 	//

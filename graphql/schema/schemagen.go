@@ -393,7 +393,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema := genDgSchema(sch, typesToComplete)
+	dgSchema := genDgSchema(sch, typesToComplete, providesFieldsMap)
 	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
@@ -401,9 +401,9 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	// If Dgraph.Authorization header is parsed successfully and JWKUrl is present
-	// then initialise the http client and Fetch the JWKs from the JWKUrl
-	if metaInfo.authMeta != nil && metaInfo.authMeta.JWKUrl != "" {
+	// If Dgraph.Authorization header is parsed successfully and JWKUrls is present
+	// then initialise the http client and Fetch the JWKs from the JWKUrls.
+	if metaInfo.authMeta != nil && len(metaInfo.authMeta.JWKUrls) != 0 {
 		metaInfo.authMeta.InitHttpClient()
 		fetchErr := metaInfo.authMeta.FetchJWKs()
 		if fetchErr != nil {
@@ -509,7 +509,8 @@ func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
+func genDgSchema(gqlSch *ast.Schema, definitions []string,
+	providesFieldsMap map[string]map[string]bool) string {
 	var typeStrings []string
 
 	type dgPred struct {
@@ -567,7 +568,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				}
 
 				// Ignore @external fields which are not @key
-				if hasExternal(f) && !isKeyField(f, def) {
+				if externalAndNonKeyField(f, def, providesFieldsMap[def.Name]) {
 					continue
 				}
 
@@ -653,8 +654,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						switch f.Type.Name() {
 						case "Int", "Int64":
 							indexes = append(indexes, "int")
-						case "Float":
-							indexes = append(indexes, "float")
 						case "String", "ID":
 							if !x.HasString(indexes, "exact") {
 								indexes = append(indexes, "hash")

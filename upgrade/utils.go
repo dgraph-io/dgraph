@@ -17,45 +17,151 @@
 package upgrade
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
+	"github.com/pkg/errors"
 )
 
-// getDgoClient creates a gRPC connection and uses that to create a new dgo client.
-// The gRPC.ClientConn returned by this must be closed after use.
-func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
-	alpha := Upgrade.Conf.GetString(alpha)
-
-	// TODO(Aman): add TLS configuration.
-	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
+// getAccessJwt gets the access jwt token from by logging into the cluster.
+func getAccessJwt() (*api.Jwt, error) {
+	user := Upgrade.Conf.GetString(user)
+	password := Upgrade.Conf.GetString(password)
+	header := http.Header{}
+	header.Set("X-Dgraph-AuthToken", Upgrade.Conf.GetString(authToken))
+	updateSchemaParams := &GraphQLParams{
+		Query: `mutation login($userId: String, $password: String, $namespace: Int) {
+			login(userId: $userId, password: $password, namespace: $namespace) {
+				response {
+					accessJWT
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"userId": user, "password": password,
+			"namespace": x.GalaxyNamespace},
+		Headers: header,
 	}
 
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	adminUrl := Upgrade.Conf.GetString(alphaHttp) + "/admin"
+	resp, err := makeGqlRequest(updateSchemaParams, adminUrl)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Errors) > 0 {
+		return nil, errors.Errorf("Error while updating the schema %s\n", resp.Errors.Error())
+	}
 
-	if withLogin {
-		userName := Upgrade.Conf.GetString(user)
-		password := Upgrade.Conf.GetString(password)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		// login to cluster
-		//TODO(Ahsan): What should be the namespace here?
-		if err = dg.LoginIntoNamespace(ctx, userName, password, x.GalaxyNamespace); err != nil {
-			x.Check(conn.Close())
-			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
+	type Response struct {
+		Login struct {
+			Response struct {
+				AccessJWT string
+			}
 		}
 	}
+	var r Response
+	if err := json.Unmarshal(resp.Data, &r); err != nil {
+		return nil, err
+	}
 
-	return dg, conn, nil
+	jwt := &api.Jwt{AccessJwt: r.Login.Response.AccessJWT}
+	return jwt, nil
+}
+
+type GraphQLParams struct {
+	Query         string                    `json:"query"`
+	OperationName string                    `json:"operationName"`
+	Variables     map[string]interface{}    `json:"variables"`
+	Extensions    *schema.RequestExtensions `json:"extensions,omitempty"`
+	Headers       http.Header
+}
+
+// GraphQLResponse GraphQL response structure.
+// see https://graphql.github.io/graphql-spec/June2018/#sec-Response
+type GraphQLResponse struct {
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func makeGqlRequest(params *GraphQLParams, url string) (*GraphQLResponse, error) {
+	req, err := createGQLPost(params, url)
+	if err != nil {
+		return nil, err
+	}
+	for h := range params.Headers {
+		req.Header.Set(h, params.Headers.Get(h))
+	}
+	res, err := runGQLRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result *GraphQLResponse
+	if err := json.Unmarshal(res, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func createGQLPost(params *GraphQLParams, url string) (*http.Request, error) {
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
+func runGQLRequest(req *http.Request) ([]byte, error) {
+	config, err := x.LoadClientTLSConfig(Upgrade.Conf)
+	if err != nil {
+		return nil, err
+	}
+	tr := &http.Transport{TLSClientConfig: config}
+	client := &http.Client{Timeout: 50 * time.Second, Transport: tr}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// GraphQL server should always return OK, even when there are errors
+	if status := resp.StatusCode; status != http.StatusOK {
+		return nil, errors.Errorf("unexpected status code: %v", status)
+	}
+
+	if strings.ToLower(resp.Header.Get("Content-Type")) != "application/json" {
+		return nil, errors.Errorf("unexpected content type: %v", resp.Header.Get("Content-Type"))
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		return nil, errors.Errorf("cors headers weren't set in response")
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Errorf("unable to read response body: %v", err)
+	}
+
+	return body, nil
 }
 
 // getQueryResult executes the given query and unmarshals the result in given pointer queryResPtr.

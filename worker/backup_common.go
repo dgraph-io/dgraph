@@ -20,6 +20,7 @@ import (
 	"context"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
@@ -28,12 +29,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	unknownStatus    = "UNKNOWN"
-	inProgressStatus = "IN_PROGRESS"
-	okStatus         = "OK"
-	errStatus        = "ERR"
-)
+var LastBackupStatus atomic.Value
+
+func init() {
+	LastBackupStatus.Store("")
+}
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
 type predicateSet map[string]struct{}

@@ -201,8 +201,9 @@ they form a Raft group and provide synchronous replication.
 			"[allow, disallow, strict] The mutations mode to use.").
 		Flag("mutations-nquad",
 			"The maximum number of nquads that can be inserted in a mutation request.").
-		Flag("disallow-dropall",
-			"Set disallow-dropall to true to block drop-all operation.").
+		Flag("disallow-drop",
+			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
+				" allows dropping attributes and types.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -585,6 +586,16 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
+	// Audit needs groupId and nodeId to initialize audit files
+	// Therefore we wait for the cluster initialization to be done.
+	for {
+		if x.HealthCheck() == nil {
+			// Audit is enterprise feature.
+			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 	x.ServerCloser.Wait()
 }
 
@@ -719,7 +730,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
-	x.Config.BlockDropAll = x.Config.Limit.GetBool("disallow-dropall")
+	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
@@ -743,9 +754,6 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
-
-	// Audit is enterprise feature.
-	x.Check(audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled))
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.

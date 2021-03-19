@@ -44,6 +44,9 @@ const (
 	acl       = "acl"
 	dryRun    = "dry-run"
 	alpha     = "alpha"
+	slashGrpc = "slash_grpc_endpoint"
+	authToken = "auth_token"
+	alphaHttp = "alpha-http"
 	user      = "user"
 	password  = "password"
 	deleteOld = "deleteOld"
@@ -152,12 +155,23 @@ func init() {
 	flag := Upgrade.Cmd.Flags()
 	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
 	flag.Bool(dryRun, false, "dry-run the upgrade")
-	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
+	flag.StringP(alpha, "a", "127.0.0.1:9080",
+		"Comma separated list of Dgraph Alpha gRPC server address")
+	flag.String(slashGrpc, "", "Path to Slash GraphQL GRPC endpoint. "+
+		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be "+
+		"ignored")
+	flag.String(authToken, "",
+		"The auth token passed to the server for Alter operation of the schema file. "+
+			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
+			"by Slash GraphQL")
+	flag.String(alphaHttp, "http://127.0.0.1:8080", "Draph Alpha HTTP(S) endpoint.")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
 	flag.BoolP(deleteOld, "d", true, "Delete the older ACL types/predicates")
 	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
 	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
+
+	x.RegisterClientTLSFlags(flag)
 }
 
 func run() {
@@ -167,6 +181,9 @@ func run() {
 		return
 	}
 
+	// Login using dgo client fetches the information from creds flag.
+	Upgrade.Conf.Set("creds", fmt.Sprintf("user=%s; password=%s; namespace=%d",
+		Upgrade.Conf.GetString(user), Upgrade.Conf.GetString(password), x.GalaxyNamespace))
 	applyChangeList(cmdInput, allChanges)
 }
 

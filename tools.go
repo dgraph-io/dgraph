@@ -1,5 +1,3 @@
-// +build oss
-
 /*
  * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
@@ -16,26 +14,9 @@
  * limitations under the License.
  */
 
-package audit
+// +build tools
+package tools
 
-import "github.com/dgraph-io/dgraph/x"
-
-type AuditConf struct {
-	Dir string
-}
-
-func GetAuditConf(conf string) *x.LoggerConf {
-	return nil
-}
-
-func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
-	return nil
-}
-
-func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
-	return nil
-}
-
-func Close() {
-	return
-}
+import (
+	_ "src.techknowlogick.com/xgo"
+)

@@ -70,6 +70,10 @@ func AdminUrl() string {
 	return "http://" + SockAddrHttp + "/admin"
 }
 
+func HealthUrl() string {
+	return "http://" + SockAddrHttp + "/health"
+}
+
 // This allows running (most) tests against dgraph running on the default ports, for example.
 // Only the GRPC ports are needed and the others are deduced.
 func init() {

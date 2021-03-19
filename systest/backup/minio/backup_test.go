@@ -16,7 +16,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -279,33 +278,8 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
-
-	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
-		backup(input: {destination: $dst, forceFull: $ff}) {
-			response {
-				code
-				message
-			}
-		}
-	}`
-
-	adminUrl := "https://" + testutil.SockAddrHttp + "/admin"
-	params := testutil.GraphQLParams{
-		Query: backupRequest,
-		Variables: map[string]interface{}{
-			"dst": backupDst,
-			"ff":  forceFull,
-		},
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	client := testutil.GetHttpsClient(t)
-	resp, err := client.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-	buf, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(buf), "Backup completed.")
+	testutil.StartBackupHttps(t, backupDst, forceFull)
+	testutil.WaitForBackup(t)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
@@ -320,7 +294,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	b, err = ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
+	b, err := ioutil.ReadFile(filepath.Join(backupDir, "manifest.json"))
 	require.NoError(t, err)
 
 	var manifest worker.MasterManifest

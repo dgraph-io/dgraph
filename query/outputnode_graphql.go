@@ -53,6 +53,8 @@ type graphQLEncoder struct {
 	// customFieldResultCh is used to process the fastJson tree updates resulting from custom
 	// field resolution
 	customFieldResultCh chan customFieldResult
+	// entityRepresentations stores the representations for the `_entities` query
+	entityRepresentations *gqlSchema.EntityRepresentations
 }
 
 // customFieldResult represents the fastJson tree updates for custom fields.
@@ -661,6 +663,11 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			}
 			wg.Done()
 		}()
+		// extract the representations for Apollo _entities query and store them in GraphQL encoder
+		if q, ok := field.(gqlSchema.Query); ok && q.QueryType() == gqlSchema.EntitiesQuery {
+			// ignore the error here, as that should have been taken care of during query rewriting
+			genc.entityRepresentations, _ = q.RepresentationsArg()
+		}
 		// start resolving the custom fields
 		genc.resolveCustomFields(field.SelectionSet(), []fastJsonNode{genc.children(n)})
 		// close the error and result channels, to terminate the goroutines started above
@@ -799,6 +806,24 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 				// this case can't happen as ID or @id fields are not list values
 				continue
 			}
+
+			// let's see if this field also had @requires directive. If so, we need to get the data
+			// for the fields specified in @requires from the correct object from representations
+			// list argument in the _entities query and pass that data to rfData.
+			// This would override any data returned for that field from dgraph.
+			apolloRequiredFields := childField.ApolloRequiredFields()
+			if len(apolloRequiredFields) > 0 && genc.entityRepresentations != nil {
+				keyFldName := genc.entityRepresentations.KeyField.Name()
+				// key fields will always have a non-list value, so it must be json.RawMessage
+				keyFldVal := toString(rfData[keyFldName].(json.RawMessage))
+				representation, ok := genc.entityRepresentations.KeyValToRepresentation[keyFldVal]
+				if ok {
+					for _, fName := range apolloRequiredFields {
+						rfData[fName] = representation[fName]
+					}
+				}
+			}
+
 			// add rfData to uniqueParents only if we haven't encountered any parentNode before
 			// with this idFieldValue
 			if len(parentNodes[idFieldValue]) == 0 {

@@ -115,10 +115,7 @@ func ParseAttrList(attrs []string) []string {
 
 func IsReverseAttr(attr string) bool {
 	AssertTrue(len(attr) >= 8)
-	if attr[8] == '~' {
-		return true
-	}
-	return false
+	return attr[8] == '~'
 }
 
 func FormatNsAttr(attr string) string {

@@ -295,7 +295,12 @@ directive @generate(
 	mutation: GenerateMutationParams,
 	subscription: Boolean) on OBJECT | INTERFACE
 `
-
+	// see: https://www.apollographql.com/docs/federation/gateway/#custom-directive-support
+	// So, we should only add type system directives here.
+	// Even with type system directives, there is a bug in Apollo Federation due to which the
+	// directives having non-scalar args cause issues in schema stitching in gateway.
+	// See: https://github.com/apollographql/apollo-server/issues/3655
+	// So, such directives have to be missed too.
 	apolloSupportedDirectiveDefs = `
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
@@ -305,9 +310,7 @@ directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
-directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
-directive @cacheControl(maxAge: Int!) on QUERY
 `
 	filterInputs = `
 input IntFilter {
@@ -1057,13 +1060,30 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
+	// Delete input type which contains no fields.
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
+	}
+
 	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
 	// input UpdateTypeInput {
 	//		filter: TypeFilter!
 	// }
 	// In this case, UpdateTypeInput should also be deleted.
-	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
-		delete(sch.Types, def.Name)
+	if strings.HasPrefix(def.Name, "Update") &&
+		strings.HasSuffix(def.Name, "Input") &&
+		len(def.Fields) == 1 {
+		// Obtain T from UpdateTInput
+		typeDef := sch.Types[def.Name[6:len(def.Name)-5]]
+		if typeDef != nil &&
+			typeDef.Directives.ForName(remoteDirective) == nil &&
+			(typeDef.Kind == ast.Object || typeDef.Kind == ast.Interface) {
+			// this ensures that it was Dgraph who generated the `UpdateTInput`
+			// and allows users to still be able to define a type `UpdateT1Input` with a field named
+			//`filter` in that input type and not get cleaned up.
+			// It checks if the type T exists in schema and is an Object or Interface.
+			delete(sch.Types, def.Name)
+		}
 	}
 }
 
@@ -1904,7 +1924,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1926,7 +1946,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in v21.11.0, " +
+							"please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
