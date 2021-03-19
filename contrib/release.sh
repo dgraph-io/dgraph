@@ -117,7 +117,11 @@ jemallocXgoFlags=
 
 # Get xgo and docker image
 if [[ $GOVERSION =~ ^1\.16.* ]]; then
-  docker build -f release/xgo.Dockerfile -t dgraph/xgo:go-${GOVERSION} .
+  # BSD sed compatible operation
+  sed "s/go-1.16.0/go-$GOVERSION/" release/xgo.Dockerfile > release/Dockerfile.${GOVERSION}
+  # Build with updated Dockerfile
+  docker build -f release/Dockerfile.${GOVERSION} -t dgraph/xgo:go-${GOVERSION} .
+  # Instruct xgo to use alternative image
   export DGRAPH_BUILD_XGO_IMAGE="-image dgraph/xgo:go-${GOVERSION}"
 fi
 go install src.techknowlogick.com/xgo
