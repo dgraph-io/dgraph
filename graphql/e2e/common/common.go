@@ -914,6 +914,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on interface field", lambdaOnInterfaceField)
 	t.Run("lambda on query using dql", lambdaOnQueryUsingDql)
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
+	t.Run("lambda on query with no unique parents", lambdaOnQueryWithNoUniqueParents)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 	t.Run("lambda with apollo federation", lambdaWithApolloFederation)
 	t.Run("lambdaOnMutate hooks", lambdaOnMutateHooks)
