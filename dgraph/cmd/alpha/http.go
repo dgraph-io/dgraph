@@ -133,10 +133,10 @@ func parseBool(r *http.Request, name string) (bool, error) {
 
 // parseDuration reads the value for given URL parameter from request and
 // parses it into time.Duration, empty string is converted into zero value
-func parseDuration(r *http.Request, name string, defaultVal time.Duration) (time.Duration, error) {
+func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	value := r.URL.Query().Get(name)
 	if value == "" {
-		return defaultVal, nil
+		return 0, nil
 	}
 
 	durationValue, err := time.ParseDuration(value)
@@ -159,7 +159,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	queryTimeout, err := parseDuration(r, "timeout", x.Config.QueryTimeout)
+	queryTimeout, err := parseDuration(r, "timeout")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
