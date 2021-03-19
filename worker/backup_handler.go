@@ -481,9 +481,8 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 
 func getLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 	if !h.DirExists("./") {
-		if err := h.CreateDir("./"); err != nil {
-			return &Manifest{}, errors.Wrap(err, "While getLatestManifest ")
-		}
+		return &Manifest{}, errors.Errorf("getLatestManifest: The uri path: %q doesn't exists",
+			uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
@@ -497,7 +496,8 @@ func getLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 
 func getManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
-		return &MasterManifest{}, errors.Errorf("The uri path: %s doesn't exists", uri.Path)
+		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
+			uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
 	if err != nil {
@@ -627,7 +627,8 @@ func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest, currentGr
 func getManifestsToRestore(h UriHandler, uri *url.URL, backupId string,
 	backupNum uint64) ([]*Manifest, error) {
 	if !h.DirExists("") {
-		return nil, errors.Errorf("The given path %s doesn't exists", uri.Path)
+		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exists",
+			uri.Path)
 	}
 
 	manifest, err := getConsolidatedManifest(h, uri)
