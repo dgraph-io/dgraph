@@ -199,6 +199,24 @@ func lambdaOnMutationUsingGraphQL(t *testing.T) {
 	deleteAuthors(t, []string{addResp.AuthorID}, nil)
 }
 
+func lambdaOnQueryWithNoUniqueParents(t *testing.T) {
+	queryBookParams := &GraphQLParams{Query: `
+	query{
+		getBook(bookId: 1){
+		  name
+		  desc
+		  summary
+		}
+	  }
+	`}
+
+	resp := queryBookParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{
+		"getBook": null
+	}`, string(resp.Data))
+}
+
 // See: https://discuss.dgraph.io/t/slash-graphql-lambda-bug/12233
 func lambdaInMutationWithDuplicateId(t *testing.T) {
 	addStudentParams := &GraphQLParams{Query: `
