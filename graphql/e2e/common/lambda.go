@@ -207,9 +207,7 @@ func lambdaOnQueryWithNoUniqueParents(t *testing.T) {
 	resp := queryBookParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, resp)
 	testutil.CompareJSON(t, `{
-		"getBook": {
-			null
-		}
+		"getBook": null
 	}`, string(resp.Data))
 }
 
