@@ -51,7 +51,7 @@ type handler struct {
 
 // FromString builds a GraphQL Schema from input string, or returns any parsing
 // or validation errors.
-func FromString(schema string) (Schema, error) {
+func FromString(schema string, ns uint64) (Schema, error) {
 	// validator.Prelude includes a bunch of predefined types which help with schema introspection
 	// queries, hence we include it as part of the schema.
 	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: schema})
@@ -64,7 +64,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema)
+	return AsSchema(gqlSchema, ns)
 }
 
 func (s *handler) MetaInfo() *metaInfo {
@@ -187,7 +187,8 @@ type metaInfo struct {
 	// allowedCorsOrigins stores allowed CORS origins extracted from # Dgraph.Allow-Origin.
 	// They are returned to the client as part of Access-Control-Allow-Origin.
 	allowedCorsOrigins map[string]bool
-	// authMeta stores the authorization meta info extracted from # Dgraph.Authorization
+	// authMeta stores the authorization meta info extracted from `# Dgraph.Authorization` if any,
+	// otherwise it is nil.
 	authMeta *authorization.AuthMeta
 }
 

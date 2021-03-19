@@ -397,7 +397,7 @@ func SchemaValidate(sch string) error {
 		return err
 	}
 
-	_, err = schema.FromString(schHandler.GQLSchema())
+	_, err = schema.FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	return err
 }
 
@@ -460,7 +460,7 @@ type adminServer struct {
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	closer *z.Closer) (IServeGraphQL, IServeGraphQL, *GraphQLHealthStore) {
-	gqlSchema, err := schema.FromString("")
+	gqlSchema, err := schema.FromString("", x.GalaxyNamespace)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -493,7 +493,7 @@ func newAdminResolver(
 	epoch map[uint64]*uint64,
 	closer *z.Closer) *resolve.RequestResolver {
 
-	adminSchema, err := schema.FromString(graphqlAdminSchema)
+	adminSchema, err := schema.FromString(graphqlAdminSchema, x.GalaxyNamespace)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -561,7 +561,7 @@ func newAdminResolver(
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
-			gqlSchema, err = generateGQLSchema(newSchema)
+			gqlSchema, err = generateGQLSchema(newSchema, ns)
 			if err != nil {
 				glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 				return
@@ -659,13 +659,13 @@ func getCurrentGraphQLSchema(namespace uint64) (*gqlSchema, error) {
 	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 }
 
-func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
+func generateGQLSchema(sch *gqlSchema, ns uint64) (schema.Schema, error) {
 	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
 	sch.GeneratedSchema = schHandler.GQLSchema()
-	generatedSchema, err := schema.FromString(sch.GeneratedSchema)
+	generatedSchema, err := schema.FromString(sch.GeneratedSchema, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -709,7 +709,7 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		generatedSchema, err := generateGQLSchema(sch)
+		generatedSchema, err := generateGQLSchema(sch, x.GalaxyNamespace)
 		if err != nil {
 			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
@@ -818,7 +818,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// introspection operations, and set GQL schema to empty.
 	if gqlSchema == nil {
 		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
-		gqlSchema, _ = schema.FromString("")
+		gqlSchema, _ = schema.FromString("", ns)
 	} else {
 		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
 			WithConventionResolvers(gqlSchema, as.fns)
@@ -874,7 +874,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 		return
 	}
 
-	generatedSchema, err := generateGQLSchema(sch)
+	generatedSchema, err := generateGQLSchema(sch, namespace)
 	if err != nil {
 		glog.Infof("Error processing GraphQL schema: %s.", err)
 		return
