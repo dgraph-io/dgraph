@@ -417,7 +417,7 @@ const adminTypes = `
 	}
 
 	type NamespacePayload {
-		namespaceId: Int
+		namespaceId: UInt64
 		message: String
 	}
 
@@ -430,7 +430,7 @@ const adminTypes = `
 	type ResetPasswordPayload {
 		userId: String
 		message: String
-		namespace: Int
+		namespace: UInt64
 	}
 	`
 

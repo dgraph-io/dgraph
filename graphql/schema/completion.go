@@ -429,6 +429,7 @@ func coerceScalar(val interface{}, field Field, path []interface{}) (interface{}
 		default:
 			return nil, valueCoercionError(v)
 		}
+	// UInt64 is present only in admin schema.
 	case "UInt64":
 		switch v := val.(type) {
 		case json.Number:

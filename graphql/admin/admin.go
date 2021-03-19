@@ -54,7 +54,7 @@ const (
 
     """
 	The UInt64 scalar type represents a unsigned 64‐bit numeric non‐fractional value.
-	UInt64 can represent values in range [-(2^64),(2^64 - 1)].
+	UInt64 can represent values in range [0,(2^64 - 1)].
 	""" 
     scalar UInt64
 	
