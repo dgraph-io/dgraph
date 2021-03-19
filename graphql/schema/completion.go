@@ -429,6 +429,16 @@ func coerceScalar(val interface{}, field Field, path []interface{}) (interface{}
 		default:
 			return nil, valueCoercionError(v)
 		}
+	case "UInt64":
+		switch v := val.(type) {
+		case json.Number:
+			if _, err := strconv.ParseUint(v.String(), 10, 64); err != nil {
+				return nil, valueCoercionError(v)
+			}
+			// do nothing, as val is already a valid number in UInt64 range
+		default:
+			return nil, valueCoercionError(v)
+		}
 	case "Float":
 		switch v := val.(type) {
 		case bool:
