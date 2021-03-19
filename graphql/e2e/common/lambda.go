@@ -206,6 +206,11 @@ func lambdaOnQueryWithNoUniqueParents(t *testing.T) {
 
 	resp := queryBookParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{
+		"getBook": {
+			null
+		}
+	}`, string(resp.Data))
 }
 
 // See: https://discuss.dgraph.io/t/slash-graphql-lambda-bug/12233
