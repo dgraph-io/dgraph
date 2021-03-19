@@ -178,7 +178,8 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return aex.dg.Execute(ctx, req, field)
 }
 
-func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
@@ -187,7 +188,8 @@ func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return de.dg.Execute(ctx, req, field)
 }
 
-func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return de.dg.CommitOrAbort(ctx, tc)
 }
 

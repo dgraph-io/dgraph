@@ -165,8 +165,9 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 	panic("test failed")
 }
 
-func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (ex *authExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 func TestStringCustomClaim(t *testing.T) {
