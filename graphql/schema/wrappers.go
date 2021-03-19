@@ -211,6 +211,7 @@ type Mutation interface {
 	MutatedType() Type
 	QueryField() Field
 	NumUidsField() Field
+	HasLambdaOnMutate() bool
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -305,6 +306,10 @@ type schema struct {
 	// lambdaDirectives stores the mapping of typeName->fieldName->true, if the field has @lambda.
 	// It is read-only.
 	lambdaDirectives map[string]map[string]bool
+	// lambdaOnMutate stores the mapping of mutationName -> true, if the config of @lambdaOnMutate
+	// enables lambdas for that mutation.
+	// It is read-only.
+	lambdaOnMutate map[string]bool
 	// requiresDirectives stores the mapping of typeName->fieldName->list of fields given in
 	// @requires. It is read-only.
 	requiresDirectives map[string]map[string][]string
@@ -687,7 +692,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 //	 })
 //	 So, by constructing an appropriate custom directive for @lambda fields,
 //	 we just reuse logic from @custom.
-func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directive,
+func customAndLambdaMappings(s *ast.Schema, ns uint64) (map[string]map[string]*ast.Directive,
 	map[string]map[string]bool) {
 	customDirectives := make(map[string]map[string]*ast.Directive)
 	lambdaDirectives := make(map[string]map[string]bool)
@@ -724,7 +729,7 @@ func customAndLambdaMappings(s *ast.Schema) (map[string]map[string]*ast.Directiv
 						// then, build a custom directive with correct semantics to be put
 						// into custom directives map at this field
 						customFieldMap[field.Name] = buildCustomDirectiveForLambda(typ, field,
-							dir, func(f *ast.FieldDefinition) bool {
+							dir, ns, func(f *ast.FieldDefinition) bool {
 								// Need to skip the fields which have a @custom/@lambda from
 								// going in body template. The field itself may not have the
 								// directive anymore because the directive may have been removed by
@@ -827,8 +832,8 @@ func (m *mutation) IsExternal() bool {
 	return (*field)(m).IsExternal()
 }
 
-func (f *fieldDefinition) IsExternal() bool {
-	return hasExternal(f.fieldDef)
+func (fd *fieldDefinition) IsExternal() bool {
+	return hasExternal(fd.fieldDef)
 }
 
 func hasCustomOrLambda(f *ast.FieldDefinition) bool {
@@ -877,7 +882,8 @@ func externalAndNonKeyField(fld *ast.FieldDefinition, defn *ast.Definition, prov
 //	   mode: BATCH (set only if @lambda was on a non query/mutation field)
 //	})
 func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinition,
-	lambdaDir *ast.Directive, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.Directive {
+	lambdaDir *ast.Directive, ns uint64, skipInBodyTemplate func(f *ast.FieldDefinition) bool) *ast.
+	Directive {
 	comma := ""
 	var bodyTemplate strings.Builder
 
@@ -912,7 +918,7 @@ func buildCustomDirectiveForLambda(defn *ast.Definition, field *ast.FieldDefinit
 
 	// build the children for http argument
 	httpArgChildrens := []*ast.ChildValue{
-		getChildValue(httpUrl, x.Config.GraphQL.GetString("lambda-url"), ast.StringValue, lambdaDir.Position),
+		getChildValue(httpUrl, x.LambdaUrl(ns), ast.StringValue, lambdaDir.Position),
 		getChildValue(httpMethod, http.MethodPost, ast.EnumValue, lambdaDir.Position),
 		getChildValue(httpBody, bodyTemplate.String(), ast.StringValue, lambdaDir.Position),
 	}
@@ -945,10 +951,27 @@ func getChildValue(name, raw string, kind ast.ValueKind, position *ast.Position)
 	}
 }
 
+func lambdaOnMutateMappings(s *ast.Schema) map[string]bool {
+	result := make(map[string]bool)
+	for _, typ := range s.Types {
+		dir := typ.Directives.ForName(lambdaOnMutateDirective)
+		if dir == nil {
+			continue
+		}
+
+		for _, arg := range dir.Arguments {
+			value, _ := arg.Value.Value(nil)
+			if val, ok := value.(bool); ok && val {
+				result[arg.Name+typ.Name] = true
+			}
+		}
+	}
+	return result
+}
+
 // AsSchema wraps a github.com/dgraph-io/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) (Schema, error) {
-	customDirs, lambdaDirs := customAndLambdaMappings(s)
-	remoteResponseDirs := remoteResponseMapping(s)
+func AsSchema(s *ast.Schema, ns uint64) (Schema, error) {
+	customDirs, lambdaDirs := customAndLambdaMappings(s, ns)
 	dgraphPredicate := dgraphMapping(s)
 	sch := &schema{
 		schema:             s,
@@ -956,8 +979,9 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:        typeMappings(s),
 		customDirectives:   customDirs,
 		lambdaDirectives:   lambdaDirs,
+		lambdaOnMutate:     lambdaOnMutateMappings(s),
 		requiresDirectives: requiresMappings(s),
-		remoteResponse:     remoteResponseDirs,
+		remoteResponse:     remoteResponseMapping(s),
 		meta:               &metaInfo{}, // initialize with an empty metaInfo
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
@@ -2136,6 +2160,10 @@ func (m *mutation) NumUidsField() Field {
 		}
 	}
 	return nil
+}
+
+func (m *mutation) HasLambdaOnMutate() bool {
+	return m.op.inSchema.lambdaOnMutate[m.Name()]
 }
 
 func (m *mutation) Location() x.Location {

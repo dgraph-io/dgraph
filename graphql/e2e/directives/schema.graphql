@@ -341,7 +341,8 @@ type Region {
     district: District
 }
 
-type District {
+type District @lambdaOnMutate(add: true, update: true, delete: true) {
+    dgId: ID!
     id: String! @id
     name: String!
 }

@@ -301,18 +301,18 @@ func GetForceNamespace(ctx context.Context) string {
 	return ns[0]
 }
 
-func ExtractJwt(ctx context.Context) ([]string, error) {
+func ExtractJwt(ctx context.Context) (string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 
-	return accessJwt, nil
+	return accessJwt[0], nil
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
@@ -1381,4 +1381,10 @@ func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
 		})
 	}
 	return matches
+}
+
+// LambdaUrl returns the correct lambda-url for the given namespace
+func LambdaUrl(ns uint64) string {
+	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
+		10), 1)
 }

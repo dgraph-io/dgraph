@@ -51,6 +51,9 @@ var (
 	dgraphHealthURL = "http://" + Alpha1HTTP + "/health?all"
 	dgraphStateURL  = "http://" + Alpha1HTTP + "/state"
 
+	// this port is used on the host machine to spin up a test HTTP server
+	lambdaHookServerAddr = ":8888"
+
 	retryableUpdateGQLSchemaErrors = []string{
 		"errIndexingInProgress",
 		"is already running",
@@ -797,8 +800,8 @@ func RunAll(t *testing.T) {
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", querynestedOnlyTypename)
 	t.Run("test onlytypename for interface types", onlytypenameForInterface)
-	t.Run("entitites Query on extended type with key field of type String", entitiesQueryWithKeyFieldOfTypeString)
-	t.Run("entitites Query on extended type with key field of type Int", entitiesQueryWithKeyFieldOfTypeInt)
+	t.Run("entities Query on extended type with key field of type String", entitiesQueryWithKeyFieldOfTypeString)
+	t.Run("entities Query on extended type with key field of type Int", entitiesQueryWithKeyFieldOfTypeInt)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -915,6 +918,7 @@ func RunAll(t *testing.T) {
 	t.Run("lambda on mutation using graphql", lambdaOnMutationUsingGraphQL)
 	t.Run("query lambda field in a mutation with duplicate @id", lambdaInMutationWithDuplicateId)
 	t.Run("lambda with apollo federation", lambdaWithApolloFederation)
+	t.Run("lambdaOnMutate hooks", lambdaOnMutateHooks)
 }
 
 func gunzipData(data []byte) ([]byte, error) {

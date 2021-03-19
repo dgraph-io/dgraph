@@ -855,3 +855,15 @@ schemas:
       User.username: string .
       User.reviews: [uid] .
 
+  - name: "nothing is added in dgraph schema with lambdaOnMutate"
+    input: |
+      type T @lambdaOnMutate(add: true, update: true, delete: true) {
+        id : ID!
+        value: String
+      }
+    output: |
+      type T {
+        T.value
+      }
+      T.value: string .
+

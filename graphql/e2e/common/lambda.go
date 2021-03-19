@@ -17,8 +17,14 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -338,4 +344,171 @@ func lambdaWithApolloFederation(t *testing.T) {
 	DeleteGqlType(t, "Mission", GetXidFilter("id", []interface{}{"M1"}), 1, nil)
 	DeleteGqlType(t, "Astronaut", map[string]interface{}{"id": []interface{}{"14", "30", "7"}}, 3,
 		nil)
+}
+
+// TODO(GRAPHQL-1123): need to find a way to make it work on TeamCity machines.
+// The host `172.17.0.1` used to connect to host machine from within docker, doesn't seem to
+// work in teamcity machines, neither does `host.docker.internal` works there. So, we are
+// skipping the related test for now.
+func lambdaOnMutateHooks(t *testing.T) {
+	t.Skipf("can't reach host machine from within docker")
+	// let's listen to the changes coming in from the lambda hook and store them in this array
+	var changelog []string
+	server := http.Server{Addr: lambdaHookServerAddr, Handler: http.NewServeMux()}
+	defer server.Shutdown(context.Background())
+	go func() {
+		serverMux := server.Handler.(*http.ServeMux)
+		serverMux.HandleFunc("/changelog", func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			b, err := ioutil.ReadAll(r.Body)
+			require.NoError(t, err)
+
+			var event map[string]interface{}
+			require.NoError(t, json.Unmarshal(b, &event))
+			require.Greater(t, event["commitTs"], float64(0))
+			delete(event, "commitTs")
+
+			b, err = json.Marshal(event)
+			require.NoError(t, err)
+
+			changelog = append(changelog, string(b))
+		})
+		t.Log(server.ListenAndServe())
+	}()
+
+	// wait a bit to make sure the server has started
+	time.Sleep(2 * time.Second)
+
+	// 1. Add 2 districts: D1, D2
+	addDistrictParams := &GraphQLParams{
+		Query: `mutation ($input: [AddDistrictInput!]!, $upsert: Boolean){
+			addDistrict(input: $input, upsert: $upsert) {
+				district {
+					dgId
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": []interface{}{
+				map[string]interface{}{"id": "D1", "name": "Dist-1"},
+				map[string]interface{}{"id": "D2", "name": "Dist-2"},
+			},
+			"upsert": false,
+		},
+	}
+	resp := addDistrictParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	var addResp struct {
+		AddDistrict struct{ District []struct{ DgId, Id string } }
+	}
+	require.NoError(t, json.Unmarshal(resp.Data, &addResp))
+	require.Len(t, addResp.AddDistrict.District, 2)
+
+	// find the uid for each district, to be used later in comparing expectation with reality
+	var d1Uid, d2Uid string
+	for _, dist := range addResp.AddDistrict.District {
+		switch dist.Id {
+		case "D1":
+			d1Uid = dist.DgId
+		case "D2":
+			d2Uid = dist.DgId
+		}
+	}
+
+	// 2. Upsert the district D1 with an updated name
+	addDistrictParams.Variables = map[string]interface{}{
+		"input": []interface{}{
+			map[string]interface{}{"id": "D1", "name": "Dist_1"},
+		},
+		"upsert": true,
+	}
+	resp = addDistrictParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	// 3. Update the name for district D2
+	updateDistrictParams := &GraphQLParams{
+		Query: `mutation {
+			updateDistrict(input: {
+				filter: { id: {eq: "D2"}}
+				set: {name: "Dist_2"}
+				remove: {name: "Dist-2"}
+			}) {
+				numUids
+			}
+		}`,
+	}
+	resp = updateDistrictParams.ExecuteAsPost(t, GraphqlURL)
+	resp.RequireNoGQLErrors(t)
+
+	// 4. Delete both the Districts
+	DeleteGqlType(t, "District", GetXidFilter("id", []interface{}{"D1", "D2"}), 2, nil)
+
+	// let's wait for at least 5 secs to get all the updates from the lambda hook
+	time.Sleep(5 * time.Second)
+
+	// compare the expected vs the actual ones
+	testutil.CompareJSON(t, fmt.Sprintf(`{"changelog": [
+	  {
+		"__typename": "District",
+		"operation": "add",
+		"add": {
+		  "rootUIDs": [
+			"%s",
+			"%s"
+		  ],
+		  "input": [
+			{
+			  "id": "D1",
+			  "name": "Dist-1"
+			},
+			{
+			  "id": "D2",
+			  "name": "Dist-2"
+			}
+		  ]
+		}
+	  },
+	  {
+		"__typename": "District",
+		"operation": "add",
+		"add": {
+		  "rootUIDs": [
+			"%s"
+		  ],
+		  "input": [
+			{
+			  "name": "Dist_1"
+			}
+		  ]
+		}
+	  },
+	  {
+		"__typename": "District",
+		"operation": "update",
+		"update": {
+		  "rootUIDs": [
+			"%s"
+		  ],
+		  "setPatch": {
+			"name": "Dist_2"
+		  },
+		  "removePatch": {
+			"name": "Dist-2"
+		  }
+		}
+	  },
+	  {
+		"__typename": "District",
+		"operation": "delete",
+		"delete": {
+		  "rootUIDs": [
+			"%s",
+			"%s"
+		  ]
+		}
+	  }
+	]}`, d1Uid, d2Uid, d1Uid, d2Uid, d1Uid, d2Uid),
+		`{"changelog": [`+strings.Join(changelog, ",")+"]}")
 }

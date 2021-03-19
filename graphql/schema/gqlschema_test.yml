@@ -2852,6 +2852,34 @@ invalid_schemas:
       { "message": "Type TwitterUser: Field name: @remoteResponse directive can only be defined on fields of @remote type.", "locations": [{"line": 3, "column": 17}]}
     ]
 
+  - name: "@lambdaOnMutate with bad arg values"
+    input: |
+      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false", badArg: true) {
+        id: ID!
+        name: String
+      }
+    errlist: [
+      { "message": "Type TwitterUser; update argument in @lambdaOnMutate directive can only be true/false, found: `badValue`.", "locations": [{"line": 1, "column": 45}]},
+      { "message": "Type TwitterUser; delete argument in @lambdaOnMutate directive can only be true/false, found: `\"false\"`.", "locations": [{"line": 1, "column": 63}]},
+      { "message": "Type TwitterUser; @lambdaOnMutate directive doesn't support argument named: `badArg`.", "locations": [{"line": 1, "column": 80}]}
+    ]
+
+  - name: "@lambdaOnMutate isn't allowed on @remote types"
+    input: |
+      type TwitterUser @remote @lambdaOnMutate(add: true) {
+        id: ID!
+        name: String
+      }
+      type Query{
+        getCustomTwitterUser(name: String!): TwitterUser @custom(http:{
+            url: "https://api.twitter.com/1.1/users/show.json?screen_name=$name"
+            method: "GET"
+        })
+      }
+    errlist: [
+      { "message": "Type TwitterUser; @lambdaOnMutate directive not allowed along with @remote directive.", "locations": [{"line": 1, "column": 27}]}
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3314,5 +3342,19 @@ valid_schemas:
         inStock: Boolean
         shippingEstimate: Int @requires(fields: "price weight") @lambda
         reviews: [Review]
+      }
+
+
+
+  - name: "@lambdaOnMutate is allowed on types and interfaces"
+    input: |
+      interface Post @lambdaOnMutate(add: true, delete: false) {
+        id: ID!
+        title: String
+      }
+
+      type Question implements Post @lambdaOnMutate(add: true, update: true) {
+        id: ID!
+        questionText: String
       }
 

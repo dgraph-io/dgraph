@@ -87,7 +87,7 @@ type Starship {
 
 	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
-	sch, err := FromString(schHandler.GQLSchema())
+	sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	s, ok := sch.(*schema)
@@ -272,7 +272,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
-	sch, err := FromString(schHandler.GQLSchema())
+	sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	s, ok := sch.(*schema)
@@ -408,7 +408,7 @@ func TestCheckNonNulls(t *testing.T) {
 		req: String!
 		notReq: String
 		alsoReq: String!
-	}`)
+	}`, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	tcases := map[string]struct {
@@ -918,7 +918,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			schHandler, errs := NewHandler(tcase.GQLSchema, false)
 			require.NoError(t, errs)
-			sch, err := FromString(schHandler.GQLSchema())
+			sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 
 			var vars map[string]interface{}
@@ -958,7 +958,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
 			require.NoError(t, errs)
-			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
+			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 
 			// Validate the generated query against the remote schema.
@@ -1018,7 +1018,7 @@ func TestAllowedHeadersList(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			schHandler, errs := NewHandler(test.schemaStr, false)
 			require.NoError(t, errs)
-			_, err := FromString(schHandler.GQLSchema())
+			_, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 			require.Equal(t, strings.Join([]string{x.AccessControlAllowedHeaders, test.expected},
 				","), schHandler.MetaInfo().AllowedCorsHeaders())

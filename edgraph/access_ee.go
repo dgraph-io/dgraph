@@ -579,7 +579,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return validateToken(accessJwt[0])
+	return validateToken(accessJwt)
 }
 
 type authPredResult struct {

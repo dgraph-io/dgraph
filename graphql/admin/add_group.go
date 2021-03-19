@@ -60,6 +60,13 @@ func (mrw *addGroupRewriter) FromMutationResult(
 	return ((*resolve.AddRewriter)(mrw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
+func (mrw *addGroupRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+	return ((*resolve.AddRewriter)(mrw)).MutatedRootUIDs(mutation, assigned, result)
+}
+
 // removeDuplicateRuleRef removes duplicate rules based on predicate value.
 // for duplicate rules, only the last rule with duplicate predicate name is preserved.
 func removeDuplicateRuleRef(rules []interface{}) ([]interface{}, x.GqlErrorList) {
