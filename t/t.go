@@ -108,7 +108,7 @@ func command(args ...string) *exec.Cmd {
 func startCluster(composeFile, prefix string) error {
 	cmd := command(
 		"docker-compose", "-f", composeFile, "-p", prefix,
-		"up", "--force-recreate", "--remove-orphans", "--detach")
+		"up", "--force-recreate", "--build", "--remove-orphans", "--detach")
 	cmd.Stderr = nil
 
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
