@@ -4,8 +4,7 @@ vault:
   acl_format: raw
   enc_field: enc_key
   enc_format: raw
-  # workaround for https://discuss.dgraph.io/t/vault-path-is-altered-causing-403-permission-denied/13264
-  path: /secret/data/dgraph/alpha
+  path: secret/data/dgraph/alpha
   role_id_file: /dgraph/vault/role_id
   secret_id_file: /dgraph/vault/secret_id
 security:
