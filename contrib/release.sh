@@ -83,7 +83,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION=${GOVERSION:-"1.16.0"}
+GOVERSION=${GOVERSION:-"1.16.2"}
 
 TAG=$1
 
@@ -117,7 +117,9 @@ jemallocXgoFlags=
 
 # Get xgo and docker image
 if [[ $GOVERSION =~ ^1\.16.* ]]; then
-  docker build -f release/xgo.Dockerfile -t dgraph/xgo:go-${GOVERSION} .
+  # Build xgo docker image with 'go env -w GO111MODULE=auto' to support 1.16.x
+  docker build -f release/xgo.Dockerfile -t dgraph/xgo:go-${GOVERSION} --build-arg GOVERSION=${GOVERSION} .
+  # Instruct xgo to use alternative image
   export DGRAPH_BUILD_XGO_IMAGE="-image dgraph/xgo:go-${GOVERSION}"
 fi
 go install src.techknowlogick.com/xgo
