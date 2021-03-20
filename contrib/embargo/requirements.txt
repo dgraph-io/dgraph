@@ -11,7 +11,7 @@ greenlet==0.4.15
 httpie==2.1.0
 idna==2.9
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 MarkupSafe==1.1.1
 Pygments==2.6.1
 PyYAML==5.3.1
