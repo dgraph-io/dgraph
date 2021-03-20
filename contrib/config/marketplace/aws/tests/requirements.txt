@@ -14,7 +14,7 @@ docker==4.2.0
 docutils==0.15.2
 dulwich==0.19.15
 idna==2.9
-Jinja2==2.11.2
+Jinja2==2.11.3
 jmespath==0.9.5
 jsonpatch==1.25
 jsonpointer==2.0
