@@ -345,12 +345,13 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	if err != nil {
 		return nil, err
 	}
-	if err := createBackupFile(handler, uri, pr.Request); err != nil {
+	w, err := createBackupFile(handler, uri, pr.Request)
+	if err != nil {
 		return nil, err
 	}
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
-	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
+	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, w)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +509,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 		return &response, err
 	}
 
-	if err = handler.Close(); err != nil {
+	if err = w.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &response, err
 	}
@@ -521,12 +522,10 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-
 	uri, err := url.Parse(pr.Request.Destination)
 	if err != nil {
 		return err
 	}
-
 	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return err
@@ -536,15 +535,10 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 	if err != nil {
 		return err
 	}
-
 	manifest.Manifests = append(manifest.Manifests, m)
 
 	if err := createManifest(handler, uri, manifest); err != nil {
 		return errors.Wrap(err, "Complete backup failed")
-	}
-
-	if err = handler.Close(); err != nil {
-		return err
 	}
 	glog.Infof("Backup completed OK.")
 	return nil

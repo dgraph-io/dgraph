@@ -160,13 +160,14 @@ func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 		}
 	}
 
-	if err := h.CreateFile(tmpManifest); err != nil {
+	w, err := h.CreateFile(tmpManifest)
+	if err != nil {
 		return errors.Wrap(err, "createManifest failed to create tmp path")
 	}
-	if err = json.NewEncoder(h).Encode(manifest); err != nil {
+	if err = json.NewEncoder(w).Encode(manifest); err != nil {
 		return err
 	}
-	if err := h.WaitForWrite(); err != nil {
+	if err := w.Close(); err != nil {
 		return err
 	}
 	// Move the tmpManifest to backupManifest, this operation is not atomic for s3.
@@ -176,25 +177,22 @@ func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 		"It is possible that the manifest would have been corrupted. You must move "+
 		"the file: %s to: %s in order to "+
 		"fix the backup manifest.", tmpManifest, backupManifest)
-
 }
 
-func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) error {
+func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {
-			return errors.Wrap(err, "while creating backup file")
+			return nil, errors.Wrap(err, "while creating backup file")
 		}
 	}
 	fileName := backupName(req.ReadTs, req.GroupId)
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	if err := h.CreateDir(dir); err != nil {
-		return errors.Wrap(err, "while creating backup file")
+		return nil, errors.Wrap(err, "while creating backup file")
 	}
 	backupFile := filepath.Join(dir, fileName)
-	if err := h.CreateFile(backupFile); err != nil {
-		return errors.Wrap(err, "while creating backup file")
-	}
-	return nil
+	w, err := h.CreateFile(backupFile)
+	return w, errors.Wrap(err, "while creating backup file")
 }
 
 func Load(h UriHandler, uri *url.URL, backupId string, backupNum uint64, fn loadFn) LoadResult {
@@ -451,15 +449,11 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest, backupId string,
 // For all methods below, the URL object is parsed as described in `newHandler' and
 // the Processor object has the DB, estimated tablets size, and backup parameters.
 type UriHandler interface {
-	// Handlers must know how to Write to their URI location.
-	// These function calls are used by both Create and Load.
-	io.WriteCloser
-
 	// CreateDir creates a directory relative to the root path of the handler.
 	CreateDir(path string) error
 	// CreateFile creates a file relative to the root path of the handler. It also makes the
 	// handler's descriptor to point to this file.
-	CreateFile(path string) error
+	CreateFile(path string) (io.WriteCloser, error)
 	// DirExists returns true if the directory relative to the root path of the handler exists.
 	DirExists(path string) bool
 	// FileExists returns true if the file relative to the root path of the handler exists.
@@ -476,8 +470,6 @@ type UriHandler interface {
 	// Stream would stream the path via an instance of io.ReadCloser. Close must be called at the
 	// end to release resources appropriately.
 	Stream(path string) (io.ReadCloser, error)
-	// WaitForWrite waits for the write to complete. It is meaningful for s3 uploads.
-	WaitForWrite() error
 }
 
 // NewUriHandler parses the requested URI and finds the corresponding UriHandler.
@@ -517,7 +509,6 @@ func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) 
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp      *os.File
 	rootDir string
 	prefix  string
 }
@@ -528,34 +519,22 @@ func NewFileHandler(uri *url.URL) *fileHandler {
 	return h
 }
 
+func (h *fileHandler) DirExists(path string) bool       { return pathExist(h.JoinPath(path)) }
+func (h *fileHandler) FileExists(path string) bool      { return pathExist(h.JoinPath(path)) }
+func (h *fileHandler) Read(path string) ([]byte, error) { return ioutil.ReadFile(h.JoinPath(path)) }
+
 func (h *fileHandler) JoinPath(path string) string {
 	return filepath.Join(h.rootDir, h.prefix, path)
 }
-
-func (h *fileHandler) DirExists(path string) bool {
-	path = h.JoinPath(path)
-	return pathExist(path)
-}
-func (h *fileHandler) FileExists(path string) bool {
-	path = h.JoinPath(path)
-	return pathExist(path)
-}
-func (h *fileHandler) Read(path string) ([]byte, error) {
-	path = h.JoinPath(path)
-	return ioutil.ReadFile(path)
-}
 func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
-	path = h.JoinPath(path)
-	return os.Open(path)
+	return os.Open(h.JoinPath(path))
 }
-
 func (h *fileHandler) ListPaths(path string) []string {
 	path = h.JoinPath(path)
 	return x.WalkPathFunc(path, func(path string, isDis bool) bool {
 		return true
 	})
 }
-
 func (h *fileHandler) CreateDir(path string) error {
 	path = h.JoinPath(path)
 	if err := os.MkdirAll(path, 0755); err != nil {
@@ -564,32 +543,29 @@ func (h *fileHandler) CreateDir(path string) error {
 	return nil
 }
 
-func (h *fileHandler) CreateFile(path string) error {
+type fileSyncer struct {
+	fp *os.File
+}
+
+func (fs *fileSyncer) Write(p []byte) (n int, err error) { return fs.fp.Write(p) }
+func (fs *fileSyncer) Close() error {
+	if err := fs.fp.Sync(); err != nil {
+		return errors.Wrapf(err, "while syncing file: %s", fs.fp.Name())
+	}
+	err := fs.fp.Close()
+	return errors.Wrapf(err, "while closing file: %s", fs.fp.Name())
+}
+
+func (h *fileHandler) CreateFile(path string) (io.WriteCloser, error) {
 	path = h.JoinPath(path)
-	var err error
-	h.fp, err = os.Create(path)
-	return errors.Wrapf(err, "File handler failed to create file %s", path)
+	fp, err := os.Create(path)
+	return &fileSyncer{fp}, errors.Wrapf(err, "File handler failed to create file %s", path)
 }
 
 func (h *fileHandler) Rename(src, dst string) error {
 	src = h.JoinPath(src)
 	dst = h.JoinPath(dst)
 	return os.Rename(src, dst)
-}
-
-func (h *fileHandler) WaitForWrite() error         { return nil }
-func (h *fileHandler) Write(b []byte) (int, error) { return h.fp.Write(b) }
-
-func (h *fileHandler) Close() error {
-	if h.fp == nil {
-		return nil
-	}
-	if err := h.fp.Sync(); err != nil {
-		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
-		x.Ignore(h.fp.Close())
-		return err
-	}
-	return h.fp.Close()
 }
 
 // pathExist checks if a path (file or dir) is found at target.
@@ -631,9 +607,6 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 // s3Handler is used for 's3:' and 'minio:' URI schemes.
 type s3Handler struct {
 	bucketName, objectPrefix string
-	pwriter                  *io.PipeWriter
-	preader                  *io.PipeReader
-	cerr                     chan error
 	creds                    *x.MinioCredentials
 	uri                      *url.URL
 	mc                       *x.MinioClient
@@ -714,16 +687,67 @@ func (h *s3Handler) ListPaths(path string) []string {
 	return paths
 }
 
-func (h *s3Handler) CreateFile(path string) error {
+type s3Writer struct {
+	pwriter    *io.PipeWriter
+	preader    *io.PipeReader
+	bucketName string
+	cerr       chan error
+}
+
+func (sw *s3Writer) Write(p []byte) (n int, err error) { return sw.pwriter.Write(p) }
+func (sw *s3Writer) Close() error {
+	if sw.pwriter == nil {
+		return nil
+	}
+	if err := sw.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
+	}
+	sw.pwriter = nil
+	glog.V(2).Infof("Backup waiting for upload to complete.")
+	return <-sw.cerr
+}
+
+// upload will block until it's done or an error occurs.
+func (sw *s3Writer) upload(mc *x.MinioClient, object string) {
+	f := func() error {
+		start := time.Now()
+
+		// We don't need to have a progress object, because we're using a Pipe. A write to Pipe
+		// would block until it can be fully read. So, the rate of the writes here would be equal to
+		// the rate of upload. We're already tracking progress of the writes in stream.Lists, so no
+		// need to track the progress of read. By definition, it must be the same.
+		//
+		// PutObject would block until sw.preader returns EOF.
+		n, err := mc.PutObject(sw.bucketName, object, sw.preader, -1, minio.PutObjectOptions{})
+		glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
+			n, time.Since(start).Round(time.Second))
+
+		if err != nil {
+			// This should cause Write to fail as well.
+			glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
+			if err := sw.pwriter.Close(); err != nil {
+				return err
+			}
+			if err := sw.preader.Close(); err != nil {
+				return err
+			}
+		}
+		return err
+	}
+	sw.cerr <- f()
+}
+
+func (h *s3Handler) CreateFile(path string) (io.WriteCloser, error) {
 	objectPath := h.getObjectPath(path)
 	glog.V(2).Infof("Sending data to %s blob %q ...", h.uri.Scheme, objectPath)
 
-	h.cerr = make(chan error, 1)
-	h.preader, h.pwriter = io.Pipe()
-	go func() {
-		h.cerr <- h.upload(h.mc, objectPath)
-	}()
-	return nil
+	sw := &s3Writer{
+		bucketName: h.bucketName,
+		cerr:       make(chan error, 1),
+	}
+	sw.preader, sw.pwriter = io.Pipe()
+	go sw.upload(h.mc, objectPath)
+	return sw, nil
 }
 
 func (h *s3Handler) Rename(srcPath, dstPath string) error {
@@ -747,54 +771,6 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 	return errors.Wrap(err, "Rename failed to remove temporary file")
 }
 
-func (h *s3Handler) WaitForWrite() error {
-	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
-		glog.Errorf("Unexpected error when closing pipe: %v", err)
-	}
-	glog.V(2).Infof("Waiting for upload to complete.")
-	// We are setting this to nil, so that closing the handler after FinishWrite is a no-op.
-	h.pwriter = nil
-	return <-h.cerr
-}
-
-func (h *s3Handler) Write(b []byte) (int, error) { return h.pwriter.Write(b) }
-
-func (h *s3Handler) Close() error {
-	if h.pwriter == nil {
-		return nil
-	}
-	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
-		glog.Errorf("Unexpected error when closing pipe: %v", err)
-	}
-	glog.V(2).Infof("Backup waiting for upload to complete.")
-	return <-h.cerr
-}
-
 func (h *s3Handler) getObjectPath(path string) string {
 	return filepath.Join(h.objectPrefix, path)
-}
-
-// upload will block until it's done or an error occurs.
-func (h *s3Handler) upload(mc *x.MinioClient, object string) error {
-	start := time.Now()
-
-	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
-	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
-	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
-	// the progress of read. By definition, it must be the same.
-	n, err := mc.PutObject(h.bucketName, object, h.preader, -1, minio.PutObjectOptions{})
-	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
-		n, time.Since(start).Round(time.Second))
-
-	if err != nil {
-		// This should cause Write to fail as well.
-		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
-		if err := h.pwriter.Close(); err != nil {
-			return err
-		}
-		if err := h.preader.Close(); err != nil {
-			return err
-		}
-	}
-	return err
 }
