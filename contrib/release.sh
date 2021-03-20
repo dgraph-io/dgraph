@@ -83,7 +83,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION=${GOVERSION:-"1.16.0"}
+GOVERSION=${GOVERSION:-"1.16.2"}
 
 TAG=$1
 
