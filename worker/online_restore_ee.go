@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -225,7 +226,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := handler.GetManifests(uri, req.BackupId, req.BackupNum)
+	manifests, err := getManifestsToRestore(handler, uri, req.BackupId, req.BackupNum)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
