@@ -13,7 +13,6 @@
 package worker
 
 import (
-	"compress/gzip"
 	"context"
 	"fmt"
 	"net/url"
@@ -24,7 +23,6 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -226,7 +224,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := getManifestsToRestore(handler, uri, req.BackupId, req.BackupNum)
+	manifests, err := getManifestsToRestore(handler, uri, req)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
@@ -261,9 +259,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Write restored values to disk and update the UID lease.
-	if err := writeBackup(ctx, req); err != nil {
+	if err := ProcessRestore(req); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
+	// TODO: Load to DB.
 
 	// Load schema back.
 	if err := schema.LoadFromDb(); err != nil {
@@ -330,75 +329,18 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredential
 	}
 }
 
-func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
-	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
-		getCredentialsFromRestoreRequest(req),
-		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
-			if groupId != req.GroupId {
-				// LoadBackup will try to call the backup function for every group.
-				// Exit here if the group is not the one indicated by the request.
-				return 0, 0, nil
-			}
+// zc := pb.NewZeroClient(pl.Get())
+// leaseID := func(val uint64, typ pb.NumLeaseType) error {
+// 	if val == 0 {
+// 		return nil
+// 	}
+// 	_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
+// 	return err
+// }
 
-			cfg, err := getEncConfig(req)
-			if err != nil {
-				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
-			}
-			_, encKey := ee.GetKeys(cfg)
-			in.r, err = enc.GetReader(encKey, in.r)
-			if err != nil {
-				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
-			}
-			gzReader, err := gzip.NewReader(in.r)
-			if err != nil {
-				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
-			}
-
-			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
-				r:              gzReader,
-				restoreTs:      req.RestoreTs,
-				preds:          in.preds,
-				dropOperations: in.dropOperations,
-				isOld:          in.isOld,
-			})
-			if err != nil {
-				return 0, 0, errors.Wrapf(err, "cannot write backup")
-			}
-
-			if maxUid == 0 {
-				// No need to update the lease, return here.
-				return 0, 0, nil
-			}
-
-			// Use the value of maxUid to update the uid lease.
-			pl := groups().connToZeroLeader()
-			if pl == nil {
-				return 0, 0, errors.Errorf(
-					"cannot update uid lease due to no connection to zero leader")
-			}
-
-			zc := pb.NewZeroClient(pl.Get())
-			leaseID := func(val uint64, typ pb.NumLeaseType) error {
-				if val == 0 {
-					return nil
-				}
-				_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
-				return err
-			}
-
-			if err := leaseID(maxUid, pb.Num_UID); err != nil {
-				return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
-			}
-			if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
-				return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
-			}
-
-			// We return the maxUid/maxNsId to enforce the signature of the method but it will
-			// be ignored as the uid lease was updated above.
-			return maxUid, maxNsId, nil
-		})
-	if res.Err != nil {
-		return errors.Wrapf(res.Err, "cannot write backup")
-	}
-	return nil
-}
+// if err := leaseID(maxUid, pb.Num_UID); err != nil {
+// 	return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
+// }
+// if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
+// 	return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
+// }

@@ -25,10 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
 	"golang.org/x/sync/errgroup"
-
-	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -39,7 +36,6 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
 
 // Restore is the sub-command used to restore a backup.
@@ -56,7 +52,7 @@ var opt struct {
 	location    string
 	pdir        string
 	zero        string
-	key         x.SensitiveByteSlice
+	key         x.Sensitive
 	forceZero   bool
 	destination string
 	format      string
@@ -119,10 +115,12 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Restore.Conf).Stop()
-			if err := runRestoreCmd(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
+			panic("This is not implemented")
+			// TODO: Remote this later.
+			// if err := runRestoreCmd(); err != nil {
+			// 	fmt.Fprintln(os.Stderr, err)
+			// 	os.Exit(1)
+			// }
 		},
 		Annotations: map[string]string{"group": "data-load"},
 	}
@@ -178,92 +176,6 @@ func initBackupLs() {
 	flag.BoolVar(&opt.verbose, "verbose", false,
 		"Outputs additional info in backup list.")
 	_ = LsBackup.Cmd.MarkFlagRequired("location")
-}
-
-func runRestoreCmd() error {
-	var (
-		start time.Time
-		zc    pb.ZeroClient
-		err   error
-	)
-	_, opt.key = ee.GetKeys(Restore.Conf)
-	fmt.Println("Restoring backups from:", opt.location)
-	fmt.Println("Writing postings to:", opt.pdir)
-
-	if opt.zero == "" && opt.forceZero {
-		return errors.Errorf("No Dgraph Zero address passed. Use the --force_zero option if you " +
-			"meant to do this")
-	}
-
-	if opt.zero != "" {
-		fmt.Println("Updating Zero timestamp at:", opt.zero)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
-		x.Checkf(err, "Unable to generate helper TLS config")
-		callOpts := []grpc.DialOption{grpc.WithBlock()}
-		if tlsConfig != nil {
-			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
-		} else {
-			callOpts = append(callOpts, grpc.WithInsecure())
-		}
-
-		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
-		if err != nil {
-			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
-		}
-		zc = pb.NewZeroClient(zero)
-	}
-
-	badger := z.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
-	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
-
-	start = time.Now()
-	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key, ctype, clevel)
-	if result.Err != nil {
-		return result.Err
-	}
-	if result.Version == 0 {
-		return errors.Errorf("Failed to obtain a restore version")
-	}
-	fmt.Printf("Restore version: %d\n", result.Version)
-	fmt.Printf("Restore max uid: %d\n", result.MaxLeaseUid)
-
-	if zc != nil {
-		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
-		defer cancelTs()
-
-		if _, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version}); err != nil {
-			fmt.Printf("Failed to assign timestamp %d in Zero: %v", result.Version, err)
-			return err
-		}
-
-		leaseID := func(val uint64, typ pb.NumLeaseType) error {
-			// MaxLeaseUid can be zero if the backup was taken on an empty DB.
-			if val == 0 {
-				return nil
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
-			if _, err = zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ}); err != nil {
-				fmt.Printf("Failed to assign %s %d in Zero: %v\n",
-					pb.NumLeaseType_name[int32(typ)], val, err)
-				return err
-			}
-			return nil
-		}
-
-		if err := leaseID(result.MaxLeaseUid, pb.Num_UID); err != nil {
-			return errors.Wrapf(err, "cannot update max uid lease after restore.")
-		}
-		if err := leaseID(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
-			return errors.Wrapf(err, "cannot update max namespace lease after restore.")
-		}
-	}
-
-	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
-	return nil
 }
 
 func runLsbackupCmd() error {
@@ -343,6 +255,7 @@ func initExportBackup() {
 	enc.RegisterFlags(flag)
 }
 
+// TODO: This function is broken. Needs to be re-written.
 func runExportBackup() error {
 	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	if opt.format != "json" && opt.format != "rdf" {
@@ -361,10 +274,11 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot create temp dir")
 	}
 
-	restore := worker.RunRestore(tmpDir, opt.location, "", opt.key, options.None, 0)
-	if restore.Err != nil {
-		return restore.Err
-	}
+	// TODO: This needs to be re-written.
+	// restore := worker.RunRestore(tmpDir, opt.location, "", opt.key, options.None, 0)
+	// if restore.Err != nil {
+	// 	return restore.Err
+	// }
 
 	files, err := ioutil.ReadDir(tmpDir)
 	if err != nil {
@@ -403,8 +317,8 @@ func runExportBackup() error {
 		}
 		eg.Go(func() error {
 			return worker.StoreExport(&pb.ExportRequest{
-				GroupId:     uint32(gid),
-				ReadTs:      restore.Version,
+				GroupId: uint32(gid),
+				// ReadTs:      restore.Version,
 				UnixTs:      time.Now().Unix(),
 				Format:      opt.format,
 				Destination: exportDir,

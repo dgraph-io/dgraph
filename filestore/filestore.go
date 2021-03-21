@@ -31,7 +31,7 @@ type FileStore interface {
 	Open(path string) (io.ReadCloser, error)
 	Exists(path string) bool
 	FindDataFiles(str string, ext []string) []string
-	ChunkReader(file string, key x.SensitiveByteSlice) (*bufio.Reader, func())
+	ChunkReader(file string, key x.Sensitive) (*bufio.Reader, func())
 }
 
 // NewFileStore returns a new file storage. If remote, it's backed by an x.MinioClient

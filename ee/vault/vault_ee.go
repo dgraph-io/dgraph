@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
+func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 	// Avoid querying Vault unless the flag has been explicitly set.
 	if !config.IsSet(flagVault) {
 		return
@@ -91,7 +91,7 @@ func getKvStore(client *api.Client, path string) (kvStore, error) {
 }
 
 // getSensitiveBytes retrieves a value from a kvStore, decoding it if necessary.
-func (kv kvStore) getSensitiveBytes(field, format string) (x.SensitiveByteSlice, error) {
+func (kv kvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
 	value, ok := kv[field]
 	if !ok {
 		return nil, fmt.Errorf("vault: key '%s' not found", field)
@@ -103,7 +103,7 @@ func (kv kvStore) getSensitiveBytes(field, format string) (x.SensitiveByteSlice,
 	}
 
 	// Decode value if necessary.
-	var valueBytes x.SensitiveByteSlice
+	var valueBytes x.Sensitive
 	var err error
 	if format == "base64" {
 		valueBytes, err = base64.StdEncoding.DecodeString(valueString)
@@ -112,7 +112,7 @@ func (kv kvStore) getSensitiveBytes(field, format string) (x.SensitiveByteSlice,
 				"vault: key '%s' could not be decoded as a base64 string: %s", field, err)
 		}
 	} else {
-		valueBytes = x.SensitiveByteSlice(valueString)
+		valueBytes = x.Sensitive(valueString)
 	}
 
 	return valueBytes, nil
