@@ -154,18 +154,34 @@ func newBuffer() *z.Buffer {
 	return buf
 }
 
-// mapEntry stores 1 uint32, which store the length of the key, followed by the key itself.
+// mapEntry stores uint16 (2 bytes), which store the length of the key, followed by the key itself.
 // The rest of the mapEntry stores the marshalled KV.
-// We store the key outside of the protobuf, to make it easier to parse for comparison.
+// We store the key alongside the protobuf, to make it easier to parse for comparison.
 type mapEntry []byte
 
 func (me mapEntry) Key() []byte {
-	sz := binary.BigEndian.Uint32(me[0:4])
-	return me[4 : 4+sz]
+	sz := binary.BigEndian.Uint32(me[0:2])
+	return me[2 : 2+sz]
 }
 func (me mapEntry) Data() []byte {
-	sz := binary.BigEndian.Uint32(me[0:4])
-	return me[4+sz:]
+	sz := binary.BigEndian.Uint32(me[0:2])
+	return me[2+sz:]
+}
+
+func (mw *mapper) Set(kv *bpb.KV) error {
+	key := y.KeyWithTs(kv.Key, kv.Version)
+	sz := kv.Size()
+	buf := mw.buf.SliceAllocate(2 + len(key) + sz)
+
+	binary.BigEndian.PutUint16(buf[0:2], uint16(len(key)))
+	x.AssertTrue(copy(buf[2:], key) == len(key))
+	if _, err := kv.MarshalToSizedBuffer(buf[2+len(key):]); err != nil {
+		return err
+	}
+	if mw.buf.LenNoPadding() <= mapFileSz {
+		return nil
+	}
+	return mw.sendForWriting()
 }
 
 func (mw *mapper) openOutputFile() (*os.File, error) {
@@ -245,23 +261,6 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		return errors.Wrap(err, "file.Sync")
 	}
 	return f.Close()
-}
-
-func (mw *mapper) Set(kv *bpb.KV) error {
-	key := kv.Key
-	kv.Key = nil // Save some space, considering we're putting the key outside anyway.
-	sz := kv.Size()
-	buf := mw.buf.SliceAllocate(2 + len(kv.Key) + sz)
-
-	binary.BigEndian.PutUint16(buf[0:2], uint16(len(kv.Key)))
-	x.AssertTrue(copy(buf[2:], key) == len(key))
-	if _, err := kv.MarshalToSizedBuffer(buf[2+len(key):]); err != nil {
-		return err
-	}
-	if mw.buf.LenNoPadding() <= mapFileSz {
-		return nil
-	}
-	return mw.sendForWriting()
 }
 
 func (mw *mapper) sendForWriting() error {
