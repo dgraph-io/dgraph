@@ -20,10 +20,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -184,7 +187,7 @@ func (mw *mapper) Set(kv *bpb.KV) error {
 	return mw.sendForWriting()
 }
 
-func (mw *mapper) openOutputFile() (*os.File, error) {
+func (mw *mapper) newMapFile() (*os.File, error) {
 	fileNum := atomic.AddUint32(&mw.nextId, 1)
 	filename := filepath.Join(
 		x.WorkerConfig.TmpDir,
@@ -206,7 +209,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 		return bytes.Compare(lme.Key(), rme.Key()) < 0
 	})
 
-	f, err := m.openOutputFile()
+	f, err := m.newMapFile()
 	if err != nil {
 		return errors.Wrap(err, "openOutputFile")
 	}
@@ -622,4 +625,238 @@ func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
 		}
 	}
 	return nil
+}
+
+type mapIterator struct {
+	fd     *os.File
+	reader *bufio.Reader
+	meBuf  []byte
+}
+
+func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) error {
+	readMapEntry := func() error {
+		if len(mi.meBuf) > 0 {
+			return nil
+		}
+		r := mi.reader
+		sizeBuf, err := r.Peek(binary.MaxVarintLen64)
+		if err != nil {
+			return err
+		}
+		sz, n := binary.Uvarint(sizeBuf)
+		if n <= 0 {
+			log.Fatalf("Could not read uvarint: %d", n)
+		}
+		x.Check2(r.Discard(n))
+		if cap(mi.meBuf) < int(sz) {
+			mi.meBuf = make([]byte, int(sz))
+		}
+		mi.meBuf = mi.meBuf[:int(sz)]
+		x.Check2(io.ReadFull(r, mi.meBuf))
+		return nil
+	}
+	for {
+		if err := readMapEntry(); err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		key := mapEntry(mi.meBuf).Key()
+
+		if len(partitionKey) == 0 || bytes.Compare(key, partitionKey) < 0 {
+			b := cbuf.SliceAllocate(len(mi.meBuf))
+			copy(b, mi.meBuf)
+			mi.meBuf = mi.meBuf[:0]
+			// map entry is already part of cBuf.
+			continue
+		}
+		// Current key is not part of this batch so track that we have already read the key.
+		return nil
+	}
+	return nil
+}
+
+func (mi *mapIterator) Close() error {
+	return mi.fd.Close()
+}
+
+func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
+	fd, err := os.Open(filename)
+	x.Check(err)
+	r := snappy.NewReader(fd)
+
+	// Read the header size.
+	reader := bufio.NewReaderSize(r, 16<<10)
+	headerLenBuf := make([]byte, 4)
+	x.Check2(io.ReadFull(reader, headerLenBuf))
+	headerLen := binary.BigEndian.Uint32(headerLenBuf)
+	// Reader the map header.
+	headerBuf := make([]byte, headerLen)
+
+	x.Check2(io.ReadFull(reader, headerBuf))
+	header := &pb.MapHeader{}
+	err = header.Unmarshal(headerBuf)
+	x.Check(err)
+
+	itr := &mapIterator{
+		fd:     fd,
+		reader: reader,
+	}
+	return header, itr
+}
+
+func getBuf() *z.Buffer {
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
+		filepath.Join(x.WorkerConfig.TmpDir, "buffer"), "Restore.GetBuf")
+	x.Check(err)
+	cbuf.AutoMmapAfter(1 << 30)
+	return cbuf
+}
+
+type reducer struct {
+	mapItrs       []*mapIterator
+	partitionKeys [][]byte
+	bufferCh      chan *z.Buffer
+}
+
+func (r *reducer) init() error {
+	var files []string
+	f := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(info.Name(), ".map") {
+			files = append(files, info.Name())
+		}
+		return nil
+	}
+
+	if err := filepath.Walk(filepath.Join(x.WorkerConfig.TmpDir, restoreMapDir), f); err != nil {
+		return err
+	}
+	glog.Infof("Got files: %+v\n", files)
+
+	// Pick up map iterators and partition keys.
+	partitions := make(map[string]struct{})
+	for _, fname := range files {
+		header, itr := newMapIterator(fname)
+		for _, k := range header.PartitionKeys {
+			if len(k) == 0 {
+				continue
+			}
+			partitions[string(k)] = struct{}{}
+		}
+		r.mapItrs = append(r.mapItrs, itr)
+	}
+
+	keys := make([][]byte, 0, len(partitions))
+	for k := range partitions {
+		keys = append(keys, []byte(k))
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return bytes.Compare(keys[i], keys[j]) < 0
+	})
+	// Append nil for the last entries.
+	keys = append(keys, nil)
+	r.partitionKeys = keys
+
+	errCh := make(chan error, 2)
+	go func() {
+		errCh <- r.blockingRead()
+	}()
+
+	var db *badger.DB
+	go func() {
+		errCh <- r.writeToDB(db)
+	}()
+
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *reducer) blockingRead() error {
+	cbuf := getBuf()
+
+	for _, pkey := range r.partitionKeys {
+		for _, itr := range r.mapItrs {
+			if err := itr.Next(cbuf, pkey); err != nil {
+				cbuf.Release()
+				return err
+			}
+		}
+		if cbuf.LenNoPadding() < 256<<20 {
+			// Pick up more data.
+			continue
+		}
+		r.bufferCh <- cbuf
+	}
+
+	if !cbuf.IsEmpty() {
+		r.bufferCh <- cbuf
+	} else {
+		cbuf.Release()
+	}
+	close(r.bufferCh)
+	return nil
+}
+
+func (r *reducer) writeToDB(db *badger.DB) error {
+	writeCh := make(chan *z.Buffer, 3)
+
+	toStreamWriter := func() error {
+		writer := db.NewStreamWriter()
+		x.Check(writer.Prepare())
+
+		for buf := range writeCh {
+			if err := writer.Write(buf); err != nil {
+				return err
+			}
+			buf.Release()
+		}
+		return writer.Flush()
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- toStreamWriter()
+	}()
+
+	kvBuf := getBuf()
+	for cbuf := range r.bufferCh {
+		cbuf.SortSlice(func(ls, rs []byte) bool {
+			lme := mapEntry(ls)
+			rme := mapEntry(rs)
+			return bytes.Compare(lme.Key(), rme.Key()) < 0
+		})
+
+		var lastKey []byte
+		err := cbuf.SliceIterate(func(s []byte) error {
+			me := mapEntry(s)
+			key := y.ParseKey(me.Key())
+
+			// Don't need to pick multiple versions of the same key.
+			if bytes.Equal(key, lastKey) {
+				return nil
+			}
+			lastKey = append(lastKey[:0], key...)
+
+			kvBuf.WriteSlice(me.Data())
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		writeCh <- kvBuf
+		// Reuse cbuf for the next kvBuf.
+		cbuf.Reset()
+		kvBuf = cbuf
+	}
+	close(writeCh)
+	kvBuf.Release()
+	return <-errCh
 }
