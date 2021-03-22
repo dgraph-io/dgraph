@@ -30,6 +30,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -152,7 +153,7 @@ const (
 
 func newBuffer() *z.Buffer {
 	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap,
-		filepath.Join(x.WorkerConfig.TmpDir, restoreTmpDir), "Restore.Buffer")
+		"", "Restore.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -163,11 +164,11 @@ func newBuffer() *z.Buffer {
 type mapEntry []byte
 
 func (me mapEntry) Key() []byte {
-	sz := binary.BigEndian.Uint32(me[0:2])
+	sz := binary.BigEndian.Uint16(me[0:2])
 	return me[2 : 2+sz]
 }
 func (me mapEntry) Data() []byte {
-	sz := binary.BigEndian.Uint32(me[0:2])
+	sz := binary.BigEndian.Uint16(me[0:2])
 	return me[2+sz:]
 }
 
@@ -577,7 +578,7 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 			}
 		}
 	}
-	return mapper.Close()
+	return nil
 }
 
 // VerifyBackup will access the backup location and verify that the specified backup can
@@ -713,6 +714,13 @@ func getBuf() *z.Buffer {
 	return cbuf
 }
 
+func reduceRestore() error {
+	r := &reducer{
+		bufferCh: make(chan *z.Buffer, 1000),
+	}
+	return r.init()
+}
+
 type reducer struct {
 	mapItrs       []*mapIterator
 	partitionKeys [][]byte
@@ -726,7 +734,7 @@ func (r *reducer) init() error {
 			return err
 		}
 		if strings.HasSuffix(info.Name(), ".map") {
-			files = append(files, info.Name())
+			files = append(files, path)
 		}
 		return nil
 	}
@@ -753,6 +761,7 @@ func (r *reducer) init() error {
 	for k := range partitions {
 		keys = append(keys, []byte(k))
 	}
+	spew.Dump("keys", keys)
 	sort.Slice(keys, func(i, j int) bool {
 		return bytes.Compare(keys[i], keys[j]) < 0
 	})
@@ -765,9 +774,9 @@ func (r *reducer) init() error {
 		errCh <- r.blockingRead()
 	}()
 
-	var db *badger.DB
+	// var db *badger.DB
 	go func() {
-		errCh <- r.writeToDB(db)
+		errCh <- r.writeToDB(pstore)
 	}()
 
 	for i := 0; i < 2; i++ {
@@ -780,7 +789,10 @@ func (r *reducer) init() error {
 
 func (r *reducer) blockingRead() error {
 	cbuf := getBuf()
-
+	glog.Info("BlockingRead() =================")
+	defer func() {
+		glog.Info("BlockingRead returned =================")
+	}()
 	for _, pkey := range r.partitionKeys {
 		for _, itr := range r.mapItrs {
 			if err := itr.Next(cbuf, pkey); err != nil {
@@ -806,6 +818,10 @@ func (r *reducer) blockingRead() error {
 
 func (r *reducer) writeToDB(db *badger.DB) error {
 	writeCh := make(chan *z.Buffer, 3)
+	glog.Info("writeToDB =================")
+	defer func() {
+		glog.Info("writeToDB returned =================")
+	}()
 
 	toStreamWriter := func() error {
 		writer := db.NewStreamWriter()
