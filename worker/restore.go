@@ -303,7 +303,7 @@ func (mw *mapper) Close() error {
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func (m *mapper) Map(in *loadBackupInput) error {
+func (m *mapper) Map(in *loadBackupInput, toKeep map[string]struct{}) error {
 	br := bufio.NewReaderSize(in.r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
@@ -349,6 +349,10 @@ func (m *mapper) Map(in *loadBackupInput) error {
 			}
 			// TODO: Does this belong here?
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+				continue
+			}
+
+			if _, ok := toKeep[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
 
@@ -533,10 +537,53 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 	}
 	defer mapper.Close()
 
+	dropAll := false
+	dropData := false
+	dropAttr := make(map[string]struct{})
+	toKeep := make([]map[string]struct{}, len(manifests))
+
+	getPreds := func(m *Manifest) []string {
+		var preds []string
+		for _, gPreds := range m.Groups {
+			preds = append(preds, gPreds...)
+		}
+		return preds
+	}
+	for i := len(manifests) - 1; i >= 0; i-- {
+		preds := getPreds(manifests[i])
+		predMap := make(map[string]struct{})
+
+		// TODO: Including dropData here will break the schema restore.
+		if dropAll || dropData {
+			toKeep[i] = predMap
+			continue
+		}
+		for _, p := range preds {
+			if _, ok := dropAttr[p]; !ok {
+				predMap[p] = struct{}{}
+			}
+		}
+		toKeep[i] = predMap
+		if i == len(manifests)-1 {
+			for _, op := range manifests[i].DropOperations {
+				switch op.DropOp {
+				case pb.DropOperation_ALL:
+					dropAll = true
+				case pb.DropOperation_DATA:
+					dropData = true
+				case pb.DropOperation_ATTR:
+					dropAttr[op.DropValue] = struct{}{}
+				}
+			}
+
+		}
+	}
+
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
 	//
+
 	// TODO: Consider making manifest processing concurrent.
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
@@ -569,7 +616,7 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
-			if err := mapper.Map(in); err != nil {
+			if err := mapper.Map(in, toKeep[i]); err != nil {
 				return errors.Wrap(err, "mapper.Map")
 			}
 
@@ -716,9 +763,9 @@ func getBuf() *z.Buffer {
 
 func reduceRestore() error {
 	r := &reducer{
-		bufferCh: make(chan *z.Buffer, 1000),
+		bufferCh: make(chan *z.Buffer, 10),
 	}
-	return r.init()
+	return r.reduce()
 }
 
 type reducer struct {
@@ -727,7 +774,7 @@ type reducer struct {
 	bufferCh      chan *z.Buffer
 }
 
-func (r *reducer) init() error {
+func (r *reducer) reduce() error {
 	var files []string
 	f := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -789,10 +836,6 @@ func (r *reducer) init() error {
 
 func (r *reducer) blockingRead() error {
 	cbuf := getBuf()
-	glog.Info("BlockingRead() =================")
-	defer func() {
-		glog.Info("BlockingRead returned =================")
-	}()
 	for _, pkey := range r.partitionKeys {
 		for _, itr := range r.mapItrs {
 			if err := itr.Next(cbuf, pkey); err != nil {
@@ -818,10 +861,6 @@ func (r *reducer) blockingRead() error {
 
 func (r *reducer) writeToDB(db *badger.DB) error {
 	writeCh := make(chan *z.Buffer, 3)
-	glog.Info("writeToDB =================")
-	defer func() {
-		glog.Info("writeToDB returned =================")
-	}()
 
 	toStreamWriter := func() error {
 		writer := db.NewStreamWriter()
