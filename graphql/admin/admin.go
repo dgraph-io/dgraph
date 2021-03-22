@@ -39,7 +39,7 @@ import (
 const (
 	errMsgServerNotReady = "Unavailable: Server not ready."
 
-	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
+	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph. " +
 		"Use the /admin API to add a GraphQL schema"
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
 		"this indicates a resolver or validation bug. Please let us know by filing an issue."
@@ -814,15 +814,19 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
-func (as *adminServer) incrementSchemaUpdateCounter(ns uint64) {
-	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
-	// will match against global epoch to terminate the current subscriptions.
+func (as *adminServer) getGlobalEpoch(ns uint64) *uint64 {
 	e := as.globalEpoch[ns]
 	if e == nil {
 		e = new(uint64)
 		as.globalEpoch[ns] = e
 	}
-	atomic.AddUint64(e, 1)
+	return e
+}
+
+func (as *adminServer) incrementSchemaUpdateCounter(ns uint64) {
+	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
+	// will match against global epoch to terminate the current subscriptions.
+	atomic.AddUint64(as.getGlobalEpoch(ns), 1)
 }
 
 func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
@@ -830,7 +834,10 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	mainHealthStore.updatingSchema()
 
 	var resolverFactory resolve.ResolverFactory
-	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
+	// gqlSchema can be nil in following cases:
+	// * after DROP_ALL
+	// * if the schema hasn't yet been set even once for a non-Galaxy namespace
+	// If schema is nil then do not attach Resolver for
 	// introspection operations, and set GQL schema to empty.
 	if gqlSchema == nil {
 		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
@@ -863,7 +870,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	as.gqlServer.Set(ns, as.globalEpoch[ns], resolvers)
+	as.gqlServer.Set(ns, as.getGlobalEpoch(ns), resolvers)
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
@@ -885,15 +892,18 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 		return
 	}
 
+	var generatedSchema schema.Schema
 	if sch.Schema == "" {
+		// if there was no schema stored in Dgraph, we still need to attach resolvers to the main
+		// graphql server which should just return errors for any incoming request.
+		// generatedSchema will be nil in this case
 		glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
-		return
-	}
-
-	generatedSchema, err := generateGQLSchema(sch, namespace)
-	if err != nil {
-		glog.Infof("Error processing GraphQL schema: %s.", err)
-		return
+	} else {
+		generatedSchema, err = generateGQLSchema(sch, namespace)
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.", err)
+			return
+		}
 	}
 
 	as.mux.Lock()
@@ -902,7 +912,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
-	glog.Infof("Successfully lazy-loaded GraphQL schema. Serving GraphQL API.")
+	glog.Infof("Successfully lazy-loaded GraphQL schema.")
 }
 
 func LazyLoadSchema(namespace uint64) {
