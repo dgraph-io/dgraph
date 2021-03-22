@@ -1731,7 +1731,8 @@ func (n *node) InitAndStartNode() {
 	_, restart, err := n.PastLife()
 	x.Check(err)
 
-	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
+	_, hasPeer := groups().MyPeer()
+	if !restart && hasPeer {
 		// The node has other peers, it might have crashed after joining the cluster and before
 		// writing a snapshot. Check from leader, if it is part of the cluster. Consider this a
 		// restart if it is part of the cluster, else start a new node.
@@ -1742,6 +1743,10 @@ func (n *node) InitAndStartNode() {
 			glog.Errorf("Error while calling hasPeer: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 		}
+	}
+
+	if n.RaftContext.IsLearner && !hasPeer {
+		glog.Fatal("Cannot start a learner node without peer alpha nodes")
 	}
 
 	if restart {
@@ -1756,6 +1761,7 @@ func (n *node) InitAndStartNode() {
 			// zero-member Raft group.
 			n.SetConfState(&sp.Metadata.ConfState)
 
+			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
 				m, ok := members[id]

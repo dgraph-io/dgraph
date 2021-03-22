@@ -350,7 +350,11 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			}
 
 			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
-				r: bReader, restoreTs: req.RestoreTs, preds: in.preds, dropOperations: in.dropOperations,
+				r:              bReader,
+				restoreTs:      req.RestoreTs,
+				preds:          in.preds,
+				dropOperations: in.dropOperations,
+				isOld:          in.isOld,
 			})
 			if err != nil {
 				return 0, 0, errors.Wrapf(err, "cannot write backup")

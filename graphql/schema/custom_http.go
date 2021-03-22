@@ -41,11 +41,11 @@ type graphqlResp struct {
 	Data   map[string]interface{} `json:"data,omitempty"`
 }
 
-// makeHttpRequest sends an HTTP request using the provided inputs. It returns the response body
-// and status code along with any errors that were encountered.
+// MakeHttpRequest sends an HTTP request using the provided inputs. It returns the HTTP response
+// along with any errors that were encountered.
 // If no client is provided, it uses the defaultHttpClient which has a timeout of 1 minute.
-func makeHttpRequest(client *http.Client, method, url string, header http.Header,
-	body []byte) ([]byte, int, error) {
+func MakeHttpRequest(client *http.Client, method, url string, header http.Header,
+	body []byte) (*http.Response, error) {
 	var reqBody io.Reader
 	if len(body) == 0 {
 		reqBody = http.NoBody
@@ -55,22 +55,14 @@ func makeHttpRequest(client *http.Client, method, url string, header http.Header
 
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, http.StatusBadRequest, err
+		return nil, err
 	}
 	req.Header = header
 
 	if client == nil {
 		client = defaultHttpClient
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, http.StatusBadRequest, err
-	}
-
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
-
-	return b, resp.StatusCode, err
+	return client.Do(req)
 }
 
 // MakeAndDecodeHTTPRequest sends an HTTP request using the given url and body and then decodes the
@@ -94,7 +86,13 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 	}
 
 	// Make the request to external HTTP endpoint using the URL and body
-	b, statusCode, err := makeHttpRequest(client, fconf.Method, url, fconf.ForwardHeaders, b)
+	resp, err := MakeHttpRequest(client, fconf.Method, url, fconf.ForwardHeaders, b)
+	if err != nil {
+		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
+	}
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 	}
@@ -118,7 +116,7 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 		}
 	} else {
 		// this was a REST request
-		if statusCode >= 200 && statusCode < 300 {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			// if this was a successful request, lets try to unmarshal the response
 			if err = Unmarshal(b, &response); err != nil {
 				return nil, nil, x.GqlErrorList{jsonUnmarshalError(err, field)}
@@ -128,7 +126,7 @@ func (fconf *FieldHTTPConfig) MakeAndDecodeHTTPRequest(client *http.Client, url 
 			// if we get unsuccessful response from the REST api, lets try to see if
 			// it sent any errors in the form expected for GraphQL errors.
 			if err = Unmarshal(b, &graphqlResp); err != nil {
-				err = fmt.Errorf("unexpected error with: %v", statusCode)
+				err = fmt.Errorf("unexpected error with: %v", resp.StatusCode)
 				return nil, nil, x.GqlErrorList{externalRequestError(err, field)}
 			} else {
 				return nil, nil, graphqlResp.Errors
@@ -164,11 +162,14 @@ func externalRequestError(err error, f Field) *x.GqlError {
 
 func GetBodyForLambda(ctx context.Context, field Field, parents,
 	args interface{}) map[string]interface{} {
-	body := make(map[string]interface{})
-	body["resolver"] = field.GetObjectName() + "." + field.Name()
-	body["authHeader"] = map[string]interface{}{
-		"key":   field.GetAuthMeta().GetHeader(),
-		"value": authorization.GetJwtToken(ctx),
+	accessJWT, _ := x.ExtractJwt(ctx)
+	body := map[string]interface{}{
+		"resolver":             field.GetObjectName() + "." + field.Name(),
+		"X-Dgraph-AccessToken": accessJWT,
+		"authHeader": map[string]interface{}{
+			"key":   field.GetAuthMeta().GetHeader(),
+			"value": authorization.GetJwtToken(ctx),
+		},
 	}
 	if parents != nil {
 		body["parents"] = parents

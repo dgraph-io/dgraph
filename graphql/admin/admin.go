@@ -46,6 +46,22 @@ const (
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
+	"""
+	The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+	Int64 can represent values in range [-(2^63),(2^63 - 1)].
+	"""
+	scalar Int64
+
+    """
+	The UInt64 scalar type represents a unsigned 64‐bit numeric non‐fractional value.
+	UInt64 can represent values in range [0,(2^64 - 1)].
+	""" 
+    scalar UInt64
+	
+	"""
+	The DateTime scalar type represents date and time as a string in RFC3339 format.
+	For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+	"""
 	scalar DateTime
 
 	"""
@@ -100,12 +116,12 @@ const (
 		"""
 		Time in nanoseconds since the node started.
 		"""
-		uptime: Int
+		uptime: Int64
 
 		"""
 		Time in Unix epoch time that the node was last contacted by another Zero or Alpha node.
 		"""
-		lastEcho: Int
+		lastEcho: Int64
 
 		"""
 		List of ongoing operations in the background.
@@ -124,51 +140,51 @@ const (
 	}
 
 	type MembershipState {
-		counter: Int
+		counter: UInt64
 		groups: [ClusterGroup]
 		zeros: [Member]
-		maxUID: Int
-		maxNsID: Int
-		maxTxnTs: Int
-		maxRaftId: Int
+		maxUID: UInt64
+		maxNsID: UInt64
+		maxTxnTs: UInt64
+		maxRaftId: UInt64
 		removed: [Member]
 		cid: String
 		license: License
 	}
 
 	type ClusterGroup {
-		id: Int
+		id: UInt64
 		members: [Member]
 		tablets: [Tablet]
-		snapshotTs: Int
-		checksum: Int
+		snapshotTs: UInt64
+		checksum: UInt64
 	}
 
 	type Member {
-		id: Int
-		groupId: Int
+		id: UInt64
+		groupId: UInt64
 		addr: String
 		leader: Boolean
 		amDead: Boolean
-		lastUpdate: Int
+		lastUpdate: UInt64
 		clusterInfoOnly: Boolean
 		forceGroupId: Boolean
 	}
 
 	type Tablet {
-		groupId: Int
+		groupId: UInt64
 		predicate: String
 		force: Boolean
 		space: Int
 		remove: Boolean
 		readOnly: Boolean
-		moveTs: Int
+		moveTs: UInt64
 	}
 
 	type License {
 		user: String
-		maxNodes: Int
-		expiryTs: Int
+		maxNodes: UInt64
+		expiryTs: Int64
 		enabled: Boolean
 	}
 
@@ -397,7 +413,7 @@ func SchemaValidate(sch string) error {
 		return err
 	}
 
-	_, err = schema.FromString(schHandler.GQLSchema())
+	_, err = schema.FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	return err
 }
 
@@ -460,7 +476,7 @@ type adminServer struct {
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch map[uint64]*uint64,
 	closer *z.Closer) (IServeGraphQL, IServeGraphQL, *GraphQLHealthStore) {
-	gqlSchema, err := schema.FromString("")
+	gqlSchema, err := schema.FromString("", x.GalaxyNamespace)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -493,7 +509,7 @@ func newAdminResolver(
 	epoch map[uint64]*uint64,
 	closer *z.Closer) *resolve.RequestResolver {
 
-	adminSchema, err := schema.FromString(graphqlAdminSchema)
+	adminSchema, err := schema.FromString(graphqlAdminSchema, x.GalaxyNamespace)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -561,7 +577,7 @@ func newAdminResolver(
 		var gqlSchema schema.Schema
 		// on drop_all, we will receive an empty string as the schema update
 		if newSchema.Schema != "" {
-			gqlSchema, err = generateGQLSchema(newSchema)
+			gqlSchema, err = generateGQLSchema(newSchema, ns)
 			if err != nil {
 				glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 				return
@@ -659,13 +675,13 @@ func getCurrentGraphQLSchema(namespace uint64) (*gqlSchema, error) {
 	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 }
 
-func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
+func generateGQLSchema(sch *gqlSchema, ns uint64) (schema.Schema, error) {
 	schHandler, err := schema.NewHandler(sch.Schema, false)
 	if err != nil {
 		return nil, err
 	}
 	sch.GeneratedSchema = schHandler.GQLSchema()
-	generatedSchema, err := schema.FromString(sch.GeneratedSchema)
+	generatedSchema, err := schema.FromString(sch.GeneratedSchema, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -709,7 +725,7 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		generatedSchema, err := generateGQLSchema(sch)
+		generatedSchema, err := generateGQLSchema(sch, x.GalaxyNamespace)
 		if err != nil {
 			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
@@ -818,7 +834,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	// introspection operations, and set GQL schema to empty.
 	if gqlSchema == nil {
 		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
-		gqlSchema, _ = schema.FromString("")
+		gqlSchema, _ = schema.FromString("", ns)
 	} else {
 		resolverFactory = resolverFactoryWithErrorMsg(errResolverNotFound).
 			WithConventionResolvers(gqlSchema, as.fns)
@@ -874,7 +890,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 		return
 	}
 
-	generatedSchema, err := generateGQLSchema(sch)
+	generatedSchema, err := generateGQLSchema(sch, namespace)
 	if err != nil {
 		glog.Infof("Error processing GraphQL schema: %s.", err)
 		return
