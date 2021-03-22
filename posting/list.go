@@ -962,11 +962,9 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
-	// defer out.free()
 
 	ol := out.plist
 	bm := roaring64.New()
-
 	if ol.Bitmap != nil {
 		if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
 			return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
@@ -1192,8 +1190,6 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 
 		out.parts[startUid] = plist
 	}
-
-	out.plist.Bitmap = codec.ToBytes(bm)
 
 	// Now pick up all the postings.
 	startUid, endUid := out.getRange(1)
@@ -1637,7 +1633,8 @@ func (out *rollupOutput) updateSplits() {
 	out.plist.Splits = splits
 }
 
-// finalize updates the split list by removing empty posting lists' startUids.
+// finalize updates the split list by removing empty posting lists' startUids. In case there is
+// only part, then that part is set to main plist.
 func (out *rollupOutput) finalize() {
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
