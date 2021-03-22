@@ -207,6 +207,10 @@ func applyPow(a, b, c *types.Val) error {
 		c.Tid = types.FloatID
 
 	case FLOAT:
+		if a.Value.(float64) < 0 && b.Value.(float64) > 0 && b.Value.(float64) < 1 {
+			return errors.Errorf("Illegal operands for pow: %v, %v",
+				a.Value.(float64), b.Value.(float64))
+		}
 		c.Value = math.Pow(a.Value.(float64), b.Value.(float64))
 
 	case DEFAULT:
@@ -219,10 +223,18 @@ func applyLog(a, b, c *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
+		if a.Value.(int64) < 0 || b.Value.(int64) <= 0 {
+			return errors.Errorf("Illegal operands for logbase: %v, %v",
+				a.Value.(int64), b.Value.(int64))
+		}
 		c.Value = math.Log(float64(a.Value.(int64))) / math.Log(float64(b.Value.(int64)))
 		c.Tid = types.FloatID
 
 	case FLOAT:
+		if a.Value.(float64) < 0 || b.Value.(float64) <= 0 {
+			return errors.Errorf("Illegal operands for logbase: %v, %v",
+				a.Value.(float64), b.Value.(float64))
+		}
 		c.Value = math.Log(a.Value.(float64)) / math.Log(b.Value.(float64))
 
 	case DEFAULT:
@@ -261,10 +273,16 @@ func applyLn(a, res *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
+		if a.Value.(int64) < 0 {
+			return errors.Errorf("Illegal operand for ln: %v", a.Value.(int64))
+		}
 		res.Value = math.Log(float64(a.Value.(int64)))
 		res.Tid = types.FloatID
 
 	case FLOAT:
+		if a.Value.(float64) < 0 {
+			return errors.Errorf("Illegal operand for ln: %v", a.Value.(float64))
+		}
 		res.Value = math.Log(a.Value.(float64))
 
 	case DEFAULT:
@@ -308,10 +326,16 @@ func applySqrt(a, res *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
+		if a.Value.(int64) < 0 {
+			return errors.Errorf("Illegal operand for sqrt: %v", a.Value.(int64))
+		}
 		res.Value = math.Sqrt(float64(a.Value.(int64)))
 		res.Tid = types.FloatID
 
 	case FLOAT:
+		if a.Value.(float64) < 0 {
+			return errors.Errorf("Illegal operand for sqrt: %v", a.Value.(float64))
+		}
 		res.Value = math.Sqrt(a.Value.(float64))
 
 	case DEFAULT:
