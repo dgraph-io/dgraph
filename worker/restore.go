@@ -31,7 +31,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
@@ -46,94 +45,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// RunRestore calls badger.Load and tries to load data into a new DB.
-// TODO: Do we need RunRestore. We're doing live restores now.
-func RunRestore(pdir, location, backupId string, key x.Sensitive,
-	ctype options.CompressionType, clevel int) LoadResult {
-	// Create the pdir if it doesn't exist.
-	if err := os.MkdirAll(pdir, 0700); err != nil {
-		return LoadResult{Err: err}
-	}
-
-	return LoadResult{}
-	// Scan location for backup files and load them. Each file represents a node group,
-	// and we create a new p dir for each.
-	// return LoadBackup(location, backupId, 0, nil,
-	// 	func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
-
-	// 		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-	// 		r, err := enc.GetReader(key, in.r)
-	// 		if err != nil {
-	// 			return 0, 0, err
-	// 		}
-
-	// 		gzReader, err := gzip.NewReader(r)
-	// 		if err != nil {
-	// 			if len(key) != 0 {
-	// 				err = errors.Wrap(err,
-	// 					"Unable to read the backup. Ensure the encryption key is correct.")
-	// 			}
-	// 			return 0, 0, err
-	// 		}
-
-	// 		if !pathExist(dir) {
-	// 			fmt.Println("Creating new db:", dir)
-	// 		}
-	// 		// The badger DB should be opened only after creating the backup
-	// 		// file reader and verifying the encryption in the backup file.
-	// 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-	// 			WithCompression(ctype).
-	// 			WithZSTDCompressionLevel(clevel).
-	// 			WithSyncWrites(false).
-	// 			WithBlockCacheSize(100 * (1 << 20)).
-	// 			WithIndexCacheSize(100 * (1 << 20)).
-	// 			WithNumVersionsToKeep(math.MaxInt32).
-	// 			WithEncryptionKey(key).
-	// 			WithNamespaceOffset(x.NamespaceOffset))
-	// 		if err != nil {
-	// 			return 0, 0, err
-	// 		}
-	// 		defer db.Close()
-	// 		maxUid, maxNsId, err := mapToDisk(db, &loadBackupInput{
-	// 			r:              gzReader,
-	// 			restoreTs:      0,
-	// 			preds:          in.preds,
-	// 			dropOperations: in.dropOperations,
-	// 			isOld:          in.isOld,
-	// 		})
-	// 		if err != nil {
-	// 			return 0, 0, err
-	// 		}
-	// 		return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
-	// 	})
-}
-
 type loadBackupInput struct {
 	r              io.Reader
 	restoreTs      uint64
 	preds          predicateSet
 	dropOperations []*pb.DropOperation
 	isOld          bool
-}
-
-func reduceToDB(db *badger.DB) error {
-	// TODO: Any drop operations should be done before mapping to disk ideally.
-	// Otherwise, we could just not write those keys during reduce.
-
-	// if there were any DROP operations that need to be applied before loading the backup into
-	// the db, then apply them here
-	// if err := applyDropOperationsBeforeRestore(db, in.dropOperations); err != nil {
-	// 	return 0, 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
-	// }
-
-	// Delete schemas and types. Each backup file should have a complete copy of the schema.
-	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
-		return err
-	}
-	if err := db.DropPrefix([]byte{x.ByteType}); err != nil {
-		return err
-	}
-	return nil
 }
 
 type mapper struct {
@@ -152,7 +69,7 @@ const (
 
 func newBuffer() *z.Buffer {
 	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap,
-		filepath.Join(x.WorkerConfig.TmpDir, restoreTmpDir), "Restore.Buffer")
+		x.WorkerConfig.TmpDir, "Restore.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -163,11 +80,11 @@ func newBuffer() *z.Buffer {
 type mapEntry []byte
 
 func (me mapEntry) Key() []byte {
-	sz := binary.BigEndian.Uint32(me[0:2])
+	sz := binary.BigEndian.Uint16(me[0:2])
 	return me[2 : 2+sz]
 }
 func (me mapEntry) Data() []byte {
-	sz := binary.BigEndian.Uint32(me[0:2])
+	sz := binary.BigEndian.Uint16(me[0:2])
 	return me[2+sz:]
 }
 
@@ -302,7 +219,7 @@ func (mw *mapper) Close() error {
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func (m *mapper) Map(in *loadBackupInput) error {
+func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 	br := bufio.NewReaderSize(in.r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
@@ -346,7 +263,10 @@ func (m *mapper) Map(in *loadBackupInput) error {
 			if err != nil {
 				return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
-			// TODO: Does this belong here?
+			if !keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
+				continue
+			}
+			// TODO: Why do we exclude type keys here?
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
@@ -532,17 +452,19 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 	}
 	defer mapper.Close()
 
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	//
-	// TODO: Consider making manifest processing concurrent.
+	dropAll := false
+	dropAttr := make(map[string]struct{})
+
+	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+		// A dropAll or DropData operation is encountered. No need to restore previous backups.
+		if dropAll {
+			break
+		}
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
-
-		path := manifests[i].Path
+		path := manifest.Path
 		for gid := range manifest.Groups {
 			if gid != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
@@ -553,12 +475,18 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
-			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+			predSet := manifests[0].getPredsInGroup(gid)
 			br, err := newBackupReader(h, file, encKey)
 			if err != nil {
 				return errors.Wrap(err, "newBackupReader")
 			}
 
+			// Only map the predicates which haven't been dropped yet.
+			for p, _ := range predSet {
+				if _, ok := dropAttr[p]; ok {
+					delete(predSet, p)
+				}
+			}
 			in := &loadBackupInput{
 				r:              br,
 				preds:          predSet,
@@ -566,18 +494,30 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 				isOld:          manifest.Version == 0,
 			}
 
+			// Only map the schema keys corresponding to the latest backup.
+			keepSchema := i == 0
+
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
-			if err := mapper.Map(in); err != nil {
+			if err := mapper.Map(in, keepSchema); err != nil {
 				return errors.Wrap(err, "mapper.Map")
 			}
-
 			if err := br.Close(); err != nil {
 				return errors.Wrap(err, "br.Close")
 			}
 		}
+		for _, op := range manifest.DropOperations {
+			switch op.DropOp {
+			case pb.DropOperation_ALL:
+				dropAll = true
+			case pb.DropOperation_DATA:
+				dropAll = true
+			case pb.DropOperation_ATTR:
+				dropAttr[op.DropValue] = struct{}{}
+			}
+		}
 	}
-	return mapper.Close()
+	return nil
 }
 
 // VerifyBackup will access the backup location and verify that the specified backup can
@@ -713,20 +653,30 @@ func getBuf() *z.Buffer {
 	return cbuf
 }
 
+func reduceToDB(db *badger.DB) error {
+	// TODO: What should be the size of bufferCh?
+	r := &reducer{
+		bufferCh: make(chan *z.Buffer, 10),
+		db:       pstore,
+	}
+	return r.reduce()
+}
+
 type reducer struct {
 	mapItrs       []*mapIterator
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
+	db            *badger.DB
 }
 
-func (r *reducer) init() error {
+func (r *reducer) reduce() error {
 	var files []string
 	f := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasSuffix(info.Name(), ".map") {
-			files = append(files, info.Name())
+			files = append(files, path)
 		}
 		return nil
 	}
@@ -764,10 +714,8 @@ func (r *reducer) init() error {
 	go func() {
 		errCh <- r.blockingRead()
 	}()
-
-	var db *badger.DB
 	go func() {
-		errCh <- r.writeToDB(db)
+		errCh <- r.writeToDB()
 	}()
 
 	for i := 0; i < 2; i++ {
@@ -780,7 +728,6 @@ func (r *reducer) init() error {
 
 func (r *reducer) blockingRead() error {
 	cbuf := getBuf()
-
 	for _, pkey := range r.partitionKeys {
 		for _, itr := range r.mapItrs {
 			if err := itr.Next(cbuf, pkey); err != nil {
@@ -804,11 +751,11 @@ func (r *reducer) blockingRead() error {
 	return nil
 }
 
-func (r *reducer) writeToDB(db *badger.DB) error {
+func (r *reducer) writeToDB() error {
 	writeCh := make(chan *z.Buffer, 3)
 
 	toStreamWriter := func() error {
-		writer := db.NewStreamWriter()
+		writer := r.db.NewStreamWriter()
 		x.Check(writer.Prepare())
 
 		for buf := range writeCh {

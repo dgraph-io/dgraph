@@ -232,7 +232,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
 
-	lastManifest := manifests[len(manifests)-1]
+	lastManifest := manifests[0]
 	preds, ok := lastManifest.Groups[req.GroupId]
 
 	// Version is 0 if the backup was taken on an old version (v20.11).
@@ -262,7 +262,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if err := ProcessRestore(req); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
-	// TODO: Load to DB.
+
+	if err := reduceToDB(pstore); err != nil {
+		return errors.Wrap(err, "failed to reduce restore map")
+	}
 
 	// Load schema back.
 	if err := schema.LoadFromDb(); err != nil {
