@@ -264,7 +264,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 				maxNsId = groupMaxNsId
 			}
 		}
-		since = manifest.SinceTsDeprecated
+		since = manifest.ReadTs
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}

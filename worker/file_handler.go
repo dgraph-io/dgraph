@@ -212,7 +212,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, backupNum uint64, fn l
 			maxUid = x.Max(maxUid, groupMaxUid)
 			maxNsId = x.Max(maxNsId, groupMaxNsId)
 		}
-		since = manifest.SinceTsDeprecated
+		since = manifest.ReadTs
 	}
 
 	return LoadResult{Version: since, MaxLeaseUid: maxUid, MaxLeaseNsId: maxNsId}
