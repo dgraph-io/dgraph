@@ -175,17 +175,37 @@ func TestGraphQLResponse(t *testing.T) {
 
 	header := http.Header{}
 	header.Set(accessJwtHeader, testutil.GrootHttpLogin(groupOneAdminServer).AccessJwt)
+
+	ns := common.CreateNamespace(t, header)
+	header1 := http.Header{}
+	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
+		ns).AccessJwt)
+
+	// initially, when no schema is set, we should get error: `there is no GraphQL schema in Dgraph`
+	// for both the namespaces
+	query := `
+	query {
+		queryAuthor {
+			name
+		}
+	}`
+	resp0 := (&common.GraphQLParams{Query: query, Headers: header}).ExecuteAsPost(t,
+		groupOneGraphQLServer)
+	resp1 := (&common.GraphQLParams{Query: query, Headers: header1}).ExecuteAsPost(t,
+		groupOneGraphQLServer)
+	expectedErrs := x.GqlErrorList{{Message: "Not resolving queryAuthor. " +
+		"There's no GraphQL schema in Dgraph. Use the /admin API to add a GraphQL schema"}}
+	require.Equal(t, expectedErrs, resp0.Errors)
+	require.Equal(t, expectedErrs, resp1.Errors)
+	require.Nil(t, resp0.Data)
+	require.Nil(t, resp1.Data)
+
 	schema := `
 	type Author {
 		id: ID!
 		name: String!
 	}`
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
-
-	ns := common.CreateNamespace(t, header)
-	header1 := http.Header{}
-	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
-		ns).AccessJwt)
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header1)
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
@@ -207,12 +227,6 @@ func TestGraphQLResponse(t *testing.T) {
 			}
 		}`)
 
-	query := `
-	query {
-		queryAuthor {
-			name
-		}
-	}`
 	graphqlHelper(t, query, header,
 		`{
 			"queryAuthor": [
