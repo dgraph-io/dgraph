@@ -39,7 +39,8 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
-		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation, apolloExtendsValidation)
+		remoteTypeValidation, generateDirectiveValidation, apolloKeyValidation,
+		apolloExtendsValidation, lambdaOnMutateValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective, fieldDirectiveCheck)
 
@@ -1231,7 +1232,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
-	if x.Config.GraphQL.GetString("lambda-url") == "" {
+	if x.LambdaUrl(x.GalaxyNamespace) == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
 				`--graphql "lambda-url=...;" flag wasn't specified during alpha startup.`,
@@ -1239,10 +1240,59 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	}
 	// reuse @custom directive validation
 	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
-		dir, func(f *ast.FieldDefinition) bool { return false }), secrets)
+		dir, x.GalaxyNamespace, func(f *ast.FieldDefinition) bool { return false }), secrets)
 	for _, err := range errs {
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
+	return errs
+}
+
+func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {
+	dir := typ.Directives.ForName(lambdaOnMutateDirective)
+	if dir == nil {
+		return nil
+	}
+
+	var errs []*gqlerror.Error
+
+	// lambda url must be specified during alpha startup
+	if x.LambdaUrl(x.GalaxyNamespace) == "" {
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
+			"Type %s: has the @lambdaOnMutate directive, but the "+
+				"`--graphql_lambda_url` flag wasn't specified during alpha startup.", typ.Name))
+	}
+
+	if typ.Directives.ForName(remoteDirective) != nil {
+		errs = append(errs, gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; @lambdaOnMutate directive not allowed along with @remote directive.",
+			typ.Name))
+	}
+
+	for _, arg := range dir.Arguments {
+		switch arg.Name {
+		case "add":
+		case "update":
+		case "delete":
+			// do nothing
+		default:
+			errs = append(errs, gqlerror.ErrorPosf(
+				arg.Position,
+				"Type %s; @lambdaOnMutate directive doesn't support argument named: `%s`.",
+				typ.Name, arg.Name))
+			continue // to next arg
+		}
+
+		// validate add/update/delete args
+		if arg.Value.Kind != ast.BooleanValue {
+			errs = append(errs, gqlerror.ErrorPosf(
+				arg.Position,
+				"Type %s; %s argument in @lambdaOnMutate directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, arg.Name, arg.Value.String()))
+		}
+	}
+
 	return errs
 }
 

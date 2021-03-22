@@ -638,7 +638,7 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 			// * a linear search to find the correct fastJson node for a custom field, or
 			// * first fix the order of custom fastJson nodes and then continue the encoding, or
 			// * create a map from custom fastJson node attr to the custom fastJson node,
-			//   so that whenever a custom field in encountered in the selection set,
+			//   so that whenever a custom field is encountered in the selection set,
 			//   just use the map to find out the fastJson node for that field.
 			// The last option seems better.
 
@@ -834,6 +834,10 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 			// build the response for all the duplicate parents
 			parentNodes[idFieldValue] = append(parentNodes[idFieldValue], parentNode)
 		}
+	}
+
+	if len(uniqueParents) == 0 {
+		return
 	}
 
 	switch fconf.Mode {

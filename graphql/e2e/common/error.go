@@ -319,8 +319,9 @@ func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
 	return nil, nil
 }
 
-func (dg *panicClient) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (dg *panicClient) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
