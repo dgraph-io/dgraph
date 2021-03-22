@@ -39,7 +39,7 @@ import (
 const (
 	errMsgServerNotReady = "Unavailable: Server not ready."
 
-	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
+	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph. " +
 		"Use the /admin API to add a GraphQL schema"
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
 		"this indicates a resolver or validation bug. Please let us know by filing an issue."

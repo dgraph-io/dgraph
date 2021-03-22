@@ -194,7 +194,7 @@ func TestGraphQLResponse(t *testing.T) {
 	resp1 := (&common.GraphQLParams{Query: query, Headers: header1}).ExecuteAsPost(t,
 		groupOneGraphQLServer)
 	expectedErrs := x.GqlErrorList{{Message: "Not resolving queryAuthor. " +
-		"There's no GraphQL schema in Dgraph.  Use the /admin API to add a GraphQL schema"}}
+		"There's no GraphQL schema in Dgraph. Use the /admin API to add a GraphQL schema"}}
 	require.Equal(t, expectedErrs, resp0.Errors)
 	require.Equal(t, expectedErrs, resp1.Errors)
 	require.Nil(t, resp0.Data)
