@@ -44,6 +44,7 @@ type group struct {
 type manifest struct {
 	Type      string   `json:"type,omitempty"`
 	Since     uint64   `json:"since,omitempty"`
+	ReadTs    uint64   `json:"read_ts,omitempty"`
 	Groups    []*group `json:"groups,omitempty"`
 	BackupId  string   `json:"backupId,omitempty"`
 	BackupNum uint64   `json:"backupNum,omitempty"`
@@ -108,6 +109,7 @@ func convertManifests(manifests []*worker.Manifest) []*manifest {
 		res[i] = &manifest{
 			Type:      m.Type,
 			Since:     m.SinceTsDeprecated,
+			ReadTs:    m.ReadTs,
 			BackupId:  m.BackupId,
 			BackupNum: m.BackupNum,
 			Path:      m.Path,

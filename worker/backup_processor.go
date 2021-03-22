@@ -345,8 +345,8 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
-		m.SinceTsDeprecated, m.Groups, m.Encrypted)
+	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v, Encrypted: %v}`,
+		m.SinceTsDeprecated, m.ReadTs, m.Groups, m.Encrypted)
 }
 
 func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (

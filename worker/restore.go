@@ -82,7 +82,7 @@ func RunRestore(pdir, location, backupId string, key x.SensitiveByteSlice,
 				compression:    in.compression,
 			})
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, errors.Wrap(err, "loadFromBackup failed")
 			}
 			return maxUid, maxNsId, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
@@ -151,7 +151,7 @@ func loadFromBackup(db *badger.DB, in *loadBackupInput) (uint64, uint64, error) 
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return 0, 0, err
+			return 0, 0, errors.Wrap(err, "read failed")
 		}
 
 		if cap(unmarshalBuf) < int(sz) {

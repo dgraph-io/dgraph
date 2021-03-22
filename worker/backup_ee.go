@@ -162,10 +162,9 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 		return err
 	}
 
-	req.SinceTs = latestManifest.ReadTs
-	if latestManifest.ReadTs == 0 {
-		req.SinceTs = latestManifest.SinceTsDeprecated
-	}
+	// Use the readTs as the sinceTs for the next backup. If not found, use the
+	// SinceTsDeprecated value from the latest manifest.
+	req.SinceTs = latestManifest.ValidReadTs()
 
 	if forceFull {
 		// To force a full backup we'll set the sinceTs to zero.
