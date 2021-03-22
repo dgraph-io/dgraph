@@ -262,14 +262,11 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if err := ProcessRestore(req); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
-	// TODO: Load to DB.
-	glog.Info("map Done ===============")
 
 	if err := reduceRestore(); err != nil {
 		return errors.Wrap(err, "Failed to reduce restore map")
 	}
 
-	glog.Info("reduce Done ===============")
 	// Load schema back.
 	if err := schema.LoadFromDb(); err != nil {
 		return errors.Wrapf(err, "cannot load schema after restore")

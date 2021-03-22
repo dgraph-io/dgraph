@@ -30,7 +30,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
@@ -153,7 +152,7 @@ const (
 
 func newBuffer() *z.Buffer {
 	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap,
-		"", "Restore.Buffer")
+		x.WorkerConfig.TmpDir, "Restore.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -303,7 +302,7 @@ func (mw *mapper) Close() error {
 // If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func (m *mapper) Map(in *loadBackupInput, toKeep map[string]struct{}) error {
+func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 	br := bufio.NewReaderSize(in.r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
@@ -351,8 +350,7 @@ func (m *mapper) Map(in *loadBackupInput, toKeep map[string]struct{}) error {
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
-
-			if _, ok := toKeep[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+			if !keepSchema && parsedKey.IsSchema() {
 				continue
 			}
 
@@ -553,7 +551,6 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 		preds := getPreds(manifests[i])
 		predMap := make(map[string]struct{})
 
-		// TODO: Including dropData here will break the schema restore.
 		if dropAll || dropData {
 			toKeep[i] = predMap
 			continue
@@ -564,18 +561,16 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 			}
 		}
 		toKeep[i] = predMap
-		if i == len(manifests)-1 {
-			for _, op := range manifests[i].DropOperations {
-				switch op.DropOp {
-				case pb.DropOperation_ALL:
-					dropAll = true
-				case pb.DropOperation_DATA:
-					dropData = true
-				case pb.DropOperation_ATTR:
-					dropAttr[op.DropValue] = struct{}{}
-				}
-			}
 
+		for _, op := range manifests[i].DropOperations {
+			switch op.DropOp {
+			case pb.DropOperation_ALL:
+				dropAll = true
+			case pb.DropOperation_DATA:
+				dropData = true
+			case pb.DropOperation_ATTR:
+				dropAttr[op.DropValue] = struct{}{}
+			}
 		}
 	}
 
@@ -586,7 +581,7 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 
 	// TODO: Consider making manifest processing concurrent.
 	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 || len(toKeep[i]) == 0 {
 			continue
 		}
 
@@ -606,7 +601,11 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 			if err != nil {
 				return errors.Wrap(err, "newBackupReader")
 			}
-
+			for p, _ := range predSet {
+				if _, ok := toKeep[i][p]; !ok {
+					delete(predSet, p)
+				}
+			}
 			in := &loadBackupInput{
 				r:              br,
 				preds:          predSet,
@@ -614,9 +613,10 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 				isOld:          manifest.Version == 0,
 			}
 
+			keepSchema := i == len(manifests)-1
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
-			if err := mapper.Map(in, toKeep[i]); err != nil {
+			if err := mapper.Map(in, keepSchema); err != nil {
 				return errors.Wrap(err, "mapper.Map")
 			}
 
@@ -808,7 +808,6 @@ func (r *reducer) reduce() error {
 	for k := range partitions {
 		keys = append(keys, []byte(k))
 	}
-	spew.Dump("keys", keys)
 	sort.Slice(keys, func(i, j int) bool {
 		return bytes.Compare(keys[i], keys[j]) < 0
 	})
