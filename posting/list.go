@@ -1444,8 +1444,8 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not read list part with key %s",
-			hex.EncodeToString(key))
+		return nil, errors.Wrapf(err, "could not read list part with key %s, l.minTs %d",
+			hex.EncodeToString(key), l.minTs)
 	}
 	part := &pb.PostingList{}
 	if err := unmarshalOrCopy(part, item); err != nil {
