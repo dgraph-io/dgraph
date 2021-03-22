@@ -536,38 +536,64 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 	defer mapper.Close()
 
 	dropAll := false
-	dropData := false
 	dropAttr := make(map[string]struct{})
 	toKeep := make([]map[string]struct{}, len(manifests))
 
-	getPreds := func(m *Manifest) []string {
-		var preds []string
-		for _, gPreds := range m.Groups {
-			preds = append(preds, gPreds...)
+	// manifests are ordered as: incremental..full
+	for i, manifest := range manifests {
+		if dropAll {
+			break
 		}
-		return preds
-	}
-	for i := len(manifests) - 1; i >= 0; i-- {
-		preds := getPreds(manifests[i])
-		predMap := make(map[string]struct{})
-
-		if dropAll || dropData {
-			toKeep[i] = predMap
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
-		for _, p := range preds {
-			if _, ok := dropAttr[p]; !ok {
-				predMap[p] = struct{}{}
+
+		path := manifest.Path
+		for gid := range manifest.Groups {
+			if gid != req.GroupId {
+				// LoadBackup will try to call the backup function for every group.
+				// Exit here if the group is not the one indicated by the request.
+				continue
+			}
+			file := filepath.Join(path, backupName(manifest.Since, gid))
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[0].getPredsInGroup(gid)
+			br, err := newBackupReader(h, file, encKey)
+			if err != nil {
+				return errors.Wrap(err, "newBackupReader")
+			}
+			for p, _ := range predSet {
+				if _, ok := dropAttr[p]; ok {
+					delete(predSet, p)
+				}
+			}
+			in := &loadBackupInput{
+				r:              br,
+				preds:          predSet,
+				dropOperations: manifest.DropOperations,
+				isOld:          manifest.Version == 0,
+			}
+
+			keepSchema := i == 0
+			// This would stream the backups from the source, and map them in
+			// Dgraph compatible format on disk.
+			if err := mapper.Map(in, keepSchema); err != nil {
+				return errors.Wrap(err, "mapper.Map")
+			}
+
+			if err := br.Close(); err != nil {
+				return errors.Wrap(err, "br.Close")
 			}
 		}
-		toKeep[i] = predMap
 
-		for _, op := range manifests[i].DropOperations {
+		for _, op := range manifest.DropOperations {
 			switch op.DropOp {
 			case pb.DropOperation_ALL:
 				dropAll = true
 			case pb.DropOperation_DATA:
-				dropData = true
+				dropAll = true
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
 			}

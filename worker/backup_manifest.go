@@ -29,24 +29,25 @@ func verifyManifests(manifests []*Manifest) error {
 		return nil
 	}
 
-	if manifests[0].BackupNum != 1 {
+	lastIndex := len(manifests) - 1
+	if manifests[lastIndex].BackupNum != 1 {
 		return errors.Errorf("expected a BackupNum value of 1 for first manifest but got %d",
-			manifests[0].BackupNum)
+			manifests[lastIndex].BackupNum)
 	}
 
-	backupId := manifests[0].BackupId
-	var backupNum uint64
+	backupId := manifests[lastIndex].BackupId
+	backupNum := uint64(len(manifests))
 	for _, manifest := range manifests {
 		if manifest.BackupId != backupId {
 			return errors.Errorf("found a manifest with backup ID %s but expected %s",
 				manifest.BackupId, backupId)
 		}
 
-		backupNum++
 		if manifest.BackupNum != backupNum {
 			return errors.Errorf("found a manifest with backup number %d but expected %d",
 				manifest.BackupNum, backupNum)
 		}
+		backupNum--
 	}
 
 	return nil
@@ -88,11 +89,6 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 			}
 		}
 
-		// Reverse the filtered lists since the original iteration happened in reverse.
-		for i := len(out)/2 - 1; i >= 0; i-- {
-			opp := len(out) - 1 - i
-			out[i], out[opp] = out[opp], out[i]
-		}
 		if err := verifyManifests(out); err != nil {
 			return nil, err
 		}
@@ -119,18 +115,12 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 		return nil, err
 	}
 
-	// Sort manifests in the ascending order of their BackupNum so that the first
-	// manifest corresponds to the first full backup and so on.
-	sort.Slice(manifests, func(i, j int) bool {
-		return manifests[i].BackupNum < manifests[j].BackupNum
-	})
-
 	if req.BackupNum > 0 {
 		if len(manifests) < int(req.BackupNum) {
 			return nil, errors.Errorf("not enough backups to restore manifest with backupNum %d",
 				req.BackupNum)
 		}
-		manifests = manifests[:req.BackupNum]
+		manifests = manifests[len(manifests)-int(req.BackupNum):]
 	}
 	return manifests, nil
 }
