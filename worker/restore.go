@@ -537,10 +537,10 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 
 	dropAll := false
 	dropAttr := make(map[string]struct{})
-	toKeep := make([]map[string]struct{}, len(manifests))
 
-	// manifests are ordered as: incremental..full
+	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
+		// A dropAll or DropData operation is encountered. No need to restore previous backups.
 		if dropAll {
 			break
 		}
@@ -564,6 +564,8 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 			if err != nil {
 				return errors.Wrap(err, "newBackupReader")
 			}
+
+			// Only map the predicates which haven't been dropped yet.
 			for p, _ := range predSet {
 				if _, ok := dropAttr[p]; ok {
 					delete(predSet, p)
@@ -576,7 +578,9 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 				isOld:          manifest.Version == 0,
 			}
 
+			// Only map the schema keys corresponding to the latest backup.
 			keepSchema := i == 0
+
 			// This would stream the backups from the source, and map them in
 			// Dgraph compatible format on disk.
 			if err := mapper.Map(in, keepSchema); err != nil {
@@ -596,58 +600,6 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 				dropAll = true
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
-			}
-		}
-	}
-
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	//
-
-	// TODO: Consider making manifest processing concurrent.
-	for i, manifest := range manifests {
-		if manifest.Since == 0 || len(manifest.Groups) == 0 || len(toKeep[i]) == 0 {
-			continue
-		}
-
-		path := manifests[i].Path
-		for gid := range manifest.Groups {
-			if gid != req.GroupId {
-				// LoadBackup will try to call the backup function for every group.
-				// Exit here if the group is not the one indicated by the request.
-				continue
-			}
-			file := filepath.Join(path, backupName(manifest.Since, gid))
-
-			// Only restore the predicates that were assigned to this group at the time
-			// of the last backup.
-			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
-			br, err := newBackupReader(h, file, encKey)
-			if err != nil {
-				return errors.Wrap(err, "newBackupReader")
-			}
-			for p, _ := range predSet {
-				if _, ok := toKeep[i][p]; !ok {
-					delete(predSet, p)
-				}
-			}
-			in := &loadBackupInput{
-				r:              br,
-				preds:          predSet,
-				dropOperations: manifest.DropOperations,
-				isOld:          manifest.Version == 0,
-			}
-
-			keepSchema := i == len(manifests)-1
-			// This would stream the backups from the source, and map them in
-			// Dgraph compatible format on disk.
-			if err := mapper.Map(in, keepSchema); err != nil {
-				return errors.Wrap(err, "mapper.Map")
-			}
-
-			if err := br.Close(); err != nil {
-				return errors.Wrap(err, "br.Close")
 			}
 		}
 	}
