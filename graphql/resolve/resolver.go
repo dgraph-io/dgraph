@@ -533,7 +533,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Field: q,
 							Err:   err,
 						}
-					})
+					}, gqlReq.Query)
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
