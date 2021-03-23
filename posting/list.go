@@ -567,11 +567,11 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-// 	pl.Iterate(..., func(p *pb.posting) error {
-//    // Use posting p
-//    return nil // to continue iteration.
-//    return errStopIteration // to break iteration.
-//  })
+//		pl.Iterate(..., func(p *pb.posting) error {
+//	   // Use posting p
+//	   return nil // to continue iteration.
+//	   return errStopIteration // to break iteration.
+//	 })
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
@@ -865,6 +865,7 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator,
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
+
 	defer out.free()
 
 	ol := out.plist
@@ -950,6 +951,70 @@ func (out *rollupOutput) free() {
 	for _, part := range out.parts {
 		codec.FreePack(part.Pack)
 	}
+	/*
+	   	<<<<<<< HEAD
+
+	   =======
+
+	   		return false, nil
+	   	}
+
+	   func (ro *rollupOutput) runSplits() error {
+	   top:
+
+	   		for startUid, pl := range ro.parts {
+	   			should, err := ShouldSplit(pl)
+	   			if err != nil {
+	   				return err
+	   			}
+	   			if should {
+	   				if err := ro.split(startUid); err != nil {
+	   					return err
+	   				}
+	   				// Had to split something. Let's run again.
+	   				goto top
+	   			}
+	   		}
+	   		return nil
+	   	}
+
+	   	func (ro *rollupOutput) split(startUid uint64) error {
+	   		pl := ro.parts[startUid]
+
+	   		r := roaring64.New()
+	   		if err := codec.FromPostingList(r, pl); err != nil {
+	   			return errors.Wrapf(err, "split codec.FromPostingList")
+	   		}
+
+	   		num := r.GetCardinality()
+	   		uid, err := r.Select(num / 2)
+	   		if err != nil {
+	   			return errors.Wrapf(err, "split Select rank: %d", num/2)
+	   		}
+
+	   		newpl := &pb.PostingList{}
+	   		ro.parts[uid] = newpl
+
+	   		// Remove everything from startUid to uid.
+	   		nr := r.Clone()
+	   		nr.RemoveRange(0, uid) // Keep all uids >= uid.
+	   		newpl.Bitmap = codec.ToBytes(nr)
+
+	   		// Take everything from the first posting where posting.Uid >= uid.
+	   		idx := sort.Search(len(pl.Postings), func(i int) bool {
+	   			return pl.Postings[i].Uid >= uid
+	   		})
+	   		newpl.Postings = pl.Postings[idx:]
+
+	   		// Update pl as well. Keeps the lower UIDs.
+	   		codec.RemoveRange(r, uid, math.MaxUint64)
+	   		pl.Bitmap = codec.ToBytes(r)
+	   		pl.Postings = pl.Postings[:idx]
+
+	   		return nil
+
+	   >>>>>>> d9ffc2cfe (Fix(rollups): Fix splits in roll-up (#7609))
+	*/
 }
 
 /*
@@ -1553,8 +1618,14 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	return []uint64{lowUid, midUid}, []*pb.PostingList{lowPl, highPl}
 }
 
+// <<<<<<< HEAD
 // removeEmptySplits updates the split list by removing empty posting lists' startUids.
 func (out *rollupOutput) removeEmptySplits() {
+	// =======
+	// finalize updates the split list by removing empty posting lists' startUids. In case there is
+	// only part, then that part is set to main plist.
+	//func (out *rollupOutput) finalize() {
+	//>>>>>>> d9ffc2cfe (Fix(rollups): Fix splits in roll-up (#7609))
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
 		// have a split starting with UID 1.
@@ -1588,8 +1659,14 @@ func (out *rollupOutput) splits() []uint64 {
 	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
+	//<<<<<<< HEAD
 	sortSplits(splits)
 	return splits
+	// =======
+	//
+	//	out.updateSplits()
+	//
+	// >>>>>>> d9ffc2cfe (Fix(rollups): Fix splits in roll-up (#7609))
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are
