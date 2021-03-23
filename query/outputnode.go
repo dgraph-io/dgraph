@@ -812,11 +812,44 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			if paCopy == nil {
 				paCopy = caCopy
 			} else {
-				temp := paCopy
+				tempPa := paCopy
+				var leftStartPtr fastJsonNode
+				var leftEndPtr fastJsonNode
+				for caCopy != nil {
+					var exist bool
+					nn := enc.copySingleNode(caCopy)
+					for paCopy != nil {
+						if enc.getAttr(paCopy) == enc.getAttr(caCopy) {
+							temp := paCopy.next
+							nn.next = temp
+							paCopy.next = nn
+							exist = true
+							break
+						} else {
+							paCopy = paCopy.next
+						}
+					}
+					if !exist {
+						if leftStartPtr == nil {
+							leftStartPtr = nn
+							leftEndPtr = nn
+
+						} else {
+							leftEndPtr.next = nn
+							leftEndPtr = nn
+						}
+					}
+					caCopy = caCopy.next
+					paCopy = tempPa
+				}
+				temp := tempPa
 				for temp.next != nil {
 					temp = temp.next
 				}
-				temp.next = caCopy
+				temp.next = leftStartPtr
+				paCopy = tempPa
+				// iterate over nodes of ca
+				// if it's inside p then add it next to it
 			}
 			mergedList = append(mergedList, paCopy)
 		}
