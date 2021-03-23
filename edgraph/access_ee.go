@@ -584,16 +584,12 @@ func upsertGroot(ctx context.Context, passwd string) error {
 }
 
 // extract the userId, groupIds from the accessJwt in the context
-func extractUserAndGroups(ctx context.Context) ([]string, error) {
+func extractUserAndGroups(ctx context.Context) (*userData, error) {
 	accessJwt, err := x.ExtractJwt(ctx)
 	if err != nil {
 		return nil, err
 	}
-	userData, err := validateToken(accessJwt)
-	if err != nil {
-		return nil, err
-	}
-	return append([]string{userData.userId}, userData.groupIds...), nil
+	return validateToken(accessJwt)
 }
 
 type authPredResult struct {
@@ -601,15 +597,15 @@ type authPredResult struct {
 	blocked map[string]struct{}
 }
 
-func authorizePreds(ctx context.Context, userData, preds []string,
+func authorizePreds(ctx context.Context, userData *userData, preds []string,
 	aclOp *acl.Operation) (*authPredResult, error) {
 
 	ns, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While authorizing preds")
 	}
-	userId := userData[0]
-	groupIds := userData[1:]
+	userId := userData.userId
+	groupIds := userData.groupIds
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
 		nsPred := x.NamespaceAttr(ns, pred)
@@ -676,8 +672,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
@@ -790,8 +786,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardians group are allowed to mutate anything
@@ -943,8 +939,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			return nil, nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
@@ -1032,7 +1028,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		groupIds := userData[1:]
+		groupIds := userData.groupIds
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
@@ -1108,8 +1104,8 @@ func AuthorizeGuardians(ctx context.Context) error {
 	case err != nil:
 		return status.Error(codes.Unauthenticated, err.Error())
 	default:
-		userId := userData[0]
-		groupIds := userData[1:]
+		userId := userData.userId
+		groupIds := userData.groupIds
 
 		if !x.IsGuardian(groupIds) {
 			// Deny access for members of non-guardian groups
