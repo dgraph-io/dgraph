@@ -155,6 +155,13 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
+func (urw *updateGroupRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+	return ((*resolve.UpdateRewriter)(urw)).MutatedRootUIDs(mutation, assigned, result)
+}
+
 // addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
 // based on its predicate value.
 func addAclRuleQuery(upsertQuery []*gql.GraphQuery, predicate, variable string) {

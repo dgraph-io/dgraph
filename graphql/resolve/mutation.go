@@ -112,6 +112,11 @@ type MutationRewriter interface {
 		m schema.Mutation,
 		assigned map[string]string,
 		result map[string]interface{}) ([]*gql.GraphQuery, error)
+	// MutatedRootUIDs returns a list of Root UIDs that were mutated as part of the mutation.
+	MutatedRootUIDs(
+		mutation schema.Mutation,
+		assigned map[string]string,
+		result map[string]interface{}) []string
 }
 
 // A DgraphExecutor can execute a query/mutation and returns the request response and any errors.
@@ -120,7 +125,7 @@ type DgraphExecutor interface {
 	// occurs, that indicates that the execution failed in some way significant enough
 	// way as to not continue processing this query/mutation or others in the same request.
 	Execute(ctx context.Context, req *dgoapi.Request, field schema.Field) (*dgoapi.Response, error)
-	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error)
 }
 
 // An UpsertMutation is the query and mutations needed for a Dgraph upsert.
@@ -215,9 +220,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	defer func() {
 		if !commit && mutResp != nil && mutResp.Txn != nil {
 			mutResp.Txn.Aborted = true
-			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			_, err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 			if err != nil {
-				glog.Errorf("Error occured while aborting transaction: %s", err)
+				glog.Errorf("Error occurred while aborting transaction: %s", err)
 			}
 		}
 	}()
@@ -414,13 +419,19 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(queryErrs), resolverFailed
 	}
 
-	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	txnCtx, err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 	if err != nil {
 		return emptyResult(
 				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
 			resolverFailed
 	}
 	commit = true
+
+	// once committed, send async updates to configured webhooks, if any.
+	if mutation.HasLambdaOnMutate() {
+		rootUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
+		go sendWebhookEvent(ctx, mutation, txnCtx.CommitTs, rootUIDs)
+	}
 
 	// For delete mutation, we would have already populated qryResp if query field was requested.
 	if mutation.MutationType() != schema.DeleteMutation {

@@ -73,6 +73,7 @@ type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
 	Password      string  `json:"dgraph.password"`
+	Namespace     uint64  `json:"namespace"`
 	PasswordMatch bool    `json:"password_match"`
 	Groups        []Group `json:"dgraph.user.group"`
 }

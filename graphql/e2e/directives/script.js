@@ -53,3 +53,19 @@ async function rank({parents}) {
 self.addMultiParentGraphQLResolvers({
     "Author.rank": rank
 })
+
+async function districtWebhook({ dql, graphql, authHeader, event }) {
+    // forward the event to the changelog server running on the host machine
+    await fetch(`http://172.17.0.1:8888/changelog`, {
+        method: "POST",
+        body: JSON.stringify(event)
+    })
+    // just return, nothing else to do with response
+}
+
+self.addWebHookResolvers({
+    "District.add": districtWebhook,
+    "District.update": districtWebhook,
+    "District.delete": districtWebhook,
+})
+

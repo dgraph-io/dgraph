@@ -61,7 +61,7 @@ func ExtractJWTNamespace(ctx context.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	claims, err := ParseJWT(jwtString[0])
+	claims, err := ParseJWT(jwtString)
 	if err != nil {
 		return 0, err
 	}
