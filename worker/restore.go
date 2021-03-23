@@ -326,11 +326,10 @@ func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 			if err != nil {
 				return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
-			// TODO: Does this belong here?
-			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+			if !keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 				continue
 			}
-			if !keepSchema && parsedKey.IsSchema() {
+			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
 

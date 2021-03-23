@@ -232,7 +232,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
 
-	lastManifest := manifests[len(manifests)-1]
+	lastManifest := manifests[0]
 	preds, ok := lastManifest.Groups[req.GroupId]
 
 	// Version is 0 if the backup was taken on an old version (v20.11).
