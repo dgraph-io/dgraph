@@ -2296,7 +2296,6 @@ func copyTypeMap(from, to map[string]schema.Type) {
 }
 
 func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
-	fmt.Println(typeName)
 	switch typeName {
 	case "Int":
 		switch xVal := xidVal.(type) {

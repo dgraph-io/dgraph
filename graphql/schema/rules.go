@@ -1270,19 +1270,6 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	}
 
 	for _, arg := range dir.Arguments {
-		switch arg.Name {
-		case "add":
-		case "update":
-		case "delete":
-			// do nothing
-		default:
-			errs = append(errs, gqlerror.ErrorPosf(
-				arg.Position,
-				"Type %s; @lambdaOnMutate directive doesn't support argument named: `%s`.",
-				typ.Name, arg.Name))
-			continue // to next arg
-		}
-
 		// validate add/update/delete args
 		if arg.Value.Kind != ast.BooleanValue {
 			errs = append(errs, gqlerror.ErrorPosf(
