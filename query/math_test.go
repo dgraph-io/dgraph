@@ -17,6 +17,7 @@
 package query
 
 import (
+	"math"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -227,6 +228,226 @@ func TestProcessBinary(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, tc.in.Const)
 	}
+
+	errorTests := []struct {
+		name string
+		in   *mathTree
+		err  error
+	}{
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775800)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(10)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Addition integer overflow",
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-10)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(-9223372036854775800)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Addition integer underflow",
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(math.MaxFloat64)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(math.MaxFloat64)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Addition float overflow",
+		},
+		{in: &mathTree{
+			Fn: "+",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-math.MaxFloat64)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-math.MaxFloat64)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Addition float underflow",
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775800)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(-10)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Subtraction integer overflow",
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-10)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775800)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Subtraction integer underflow",
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
+				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Subtraction float overflow",
+		},
+		{in: &mathTree{
+			Fn: "-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
+				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Subtraction float underflow",
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(10000)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Multiplication integer overflow",
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-10000)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Multiplication integer underflow",
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(10.2)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Multiplication float overflow",
+		},
+		{in: &mathTree{
+			Fn: "*",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(10.23)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Multiplication float underflow",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(23)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(0)}},
+			}},
+			err:  ErrorDivisionByZero,
+			name: "Division int zero",
+		},
+		{in: &mathTree{
+			Fn: "/",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(23)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(0)}},
+			}},
+			err:  ErrorDivisionByZero,
+			name: "Division float zero",
+		},
+		{in: &mathTree{
+			Fn: "%",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(23)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(0)}},
+			}},
+			err:  ErrorModuloByZero,
+			name: "Modulo int zero",
+		},
+		{in: &mathTree{
+			Fn: "%",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(23)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(0)}},
+			}},
+			err:  ErrorModuloByZero,
+			name: "Modulo float zero",
+		},
+		{in: &mathTree{
+			Fn: "pow",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-2)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1.7)}},
+			}},
+			err:  ErrorFractionalPower,
+			name: "Fractional negative power",
+		},
+		{in: &mathTree{
+			Fn: "pow",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(200)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(1231424123)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Power overflow",
+		},
+		{in: &mathTree{
+			Fn: "pow",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(200)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(1231424123)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Power overflow float",
+		},
+		{in: &mathTree{
+			Fn: "logbase",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-2)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Log negative integer numerator",
+		},
+		{in: &mathTree{
+			Fn: "logbase",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
+				{Const: types.Val{Tid: types.IntID, Value: int64(-2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Log negative integer denominator",
+		},
+		{in: &mathTree{
+			Fn: "logbase",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-2)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Log negative float numerator",
+		},
+		{in: &mathTree{
+			Fn: "logbase",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(2)}},
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Log negative float denominator",
+		},
+	}
+
+	for _, tc := range errorTests {
+		t.Logf("Test %s", tc.name)
+		err := processBinary(tc.in)
+		require.EqualError(t, err, tc.err.Error())
+	}
 }
 
 func TestProcessUnary(t *testing.T) {
@@ -282,6 +503,91 @@ func TestProcessUnary(t *testing.T) {
 		err := processUnary(tc.in)
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, tc.in.Const)
+	}
+
+	errorTests := []struct {
+		name string
+		in   *mathTree
+		err  error
+	}{
+		{in: &mathTree{
+			Fn: "ln",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Negative int ln",
+		},
+		{in: &mathTree{
+			Fn: "ln",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-2)}},
+			}},
+			err:  ErrorNegativeLog,
+			name: "Negative float ln",
+		},
+		{in: &mathTree{
+			Fn: "exp",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(800)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Exp int overflow",
+		},
+		{in: &mathTree{
+			Fn: "exp",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-800)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Exp int underflow",
+		},
+		{in: &mathTree{
+			Fn: "exp",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(800)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Exp float overflow",
+		},
+		{in: &mathTree{
+			Fn: "exp",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-800)}},
+			}},
+			err:  ErrorFloatOverflow,
+			name: "Exp float underflow",
+		},
+		{in: &mathTree{
+			Fn: "u-",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(math.MinInt64)}},
+			}},
+			err:  ErrorIntOverflow,
+			name: "Negation int overflow",
+		},
+		{in: &mathTree{
+			Fn: "sqrt",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.IntID, Value: int64(-2)}},
+			}},
+			err:  ErrorNegativeRoot,
+			name: "Negative int sqrt",
+		},
+		{in: &mathTree{
+			Fn: "sqrt",
+			Child: []*mathTree{
+				{Const: types.Val{Tid: types.FloatID, Value: float64(-2)}},
+			}},
+			err:  ErrorNegativeRoot,
+			name: "Negative float sqrt",
+		},
+	}
+
+	for _, tc := range errorTests {
+		t.Logf("Test %s", tc.name)
+		err := processUnary(tc.in)
+		require.EqualError(t, err, tc.err.Error())
 	}
 }
 

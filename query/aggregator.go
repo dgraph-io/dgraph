@@ -116,10 +116,30 @@ func applyAdd(a, b, c *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
-		c.Value = a.Value.(int64) + b.Value.(int64)
+		aVal, bVal := a.Value.(int64), b.Value.(int64)
+
+		if aVal > 0 && bVal > math.MaxInt64-aVal {
+			return ErrorIntOverflow
+		}
+
+		if aVal < 0 && bVal < math.MinInt64-aVal {
+			return ErrorIntOverflow
+		}
+
+		c.Value = aVal + bVal
 
 	case FLOAT:
-		c.Value = a.Value.(float64) + b.Value.(float64)
+		aVal, bVal := a.Value.(float64), b.Value.(float64)
+
+		if aVal > 0 && bVal > math.MaxFloat64-aVal {
+			return ErrorFloatOverflow
+		}
+
+		if aVal < 0 && bVal < math.MaxFloat64-aVal {
+			return ErrorFloatOverflow
+		}
+
+		c.Value = aVal + bVal
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func +", a.Tid)
@@ -131,10 +151,30 @@ func applySub(a, b, c *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
-		c.Value = a.Value.(int64) - b.Value.(int64)
+		aVal, bVal := a.Value.(int64), b.Value.(int64)
+
+		if bVal < 0 && aVal > math.MaxInt64+bVal {
+			return ErrorIntOverflow
+		}
+
+		if bVal > 0 && aVal < math.MinInt64+bVal {
+			return ErrorIntOverflow
+		}
+
+		c.Value = aVal - bVal
 
 	case FLOAT:
-		c.Value = a.Value.(float64) - b.Value.(float64)
+		aVal, bVal := a.Value.(float64), b.Value.(float64)
+
+		if bVal < 0 && aVal > math.MaxFloat64+bVal {
+			return ErrorFloatOverflow
+		}
+
+		if bVal > 0 && aVal < -math.MaxFloat64+bVal {
+			return ErrorFloatOverflow
+		}
+
+		c.Value = aVal - bVal
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func -", a.Tid)
@@ -146,10 +186,26 @@ func applyMul(a, b, c *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
-		c.Value = a.Value.(int64) * b.Value.(int64)
+		aVal, bVal := a.Value.(int64), b.Value.(int64)
+		c.Value = aVal * bVal
+
+		if aVal == 0 || bVal == 0 || aVal == 1 || bVal == 1 {
+			return nil
+		} else if aVal == math.MinInt64 || bVal == math.MinInt64 || c.Value.(int64)/bVal != aVal {
+			// TODO: Check if +- INF should be returned
+			return ErrorIntOverflow
+		}
 
 	case FLOAT:
-		c.Value = a.Value.(float64) * b.Value.(float64)
+		aVal, bVal := a.Value.(float64), b.Value.(float64)
+		c.Value = aVal * bVal
+
+		if aVal == 0 || bVal == 0 || aVal == 1 || bVal == 1 {
+			return nil
+		} else if math.Abs(c.Value.(float64)/bVal)-aVal > 0.001 {
+			// TODO: Check if +- INF should be returned
+			return ErrorFloatOverflow
+		}
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func *", a.Tid)
@@ -162,13 +218,13 @@ func applyDiv(a, b, c *types.Val) error {
 	switch vBase {
 	case INT:
 		if b.Value.(int64) == 0 {
-			return errors.Errorf("Division by zero")
+			return ErrorDivisionByZero
 		}
 		c.Value = a.Value.(int64) / b.Value.(int64)
 
 	case FLOAT:
 		if b.Value.(float64) == 0 {
-			return errors.Errorf("Division by zero")
+			return ErrorDivisionByZero
 		}
 		c.Value = a.Value.(float64) / b.Value.(float64)
 
@@ -183,13 +239,13 @@ func applyMod(a, b, c *types.Val) error {
 	switch vBase {
 	case INT:
 		if b.Value.(int64) == 0 {
-			return errors.Errorf("Module by zero")
+			return ErrorModuloByZero
 		}
 		c.Value = a.Value.(int64) % b.Value.(int64)
 
 	case FLOAT:
 		if b.Value.(float64) == 0 {
-			return errors.Errorf("Module by zero")
+			return ErrorModuloByZero
 		}
 		c.Value = math.Mod(a.Value.(float64), b.Value.(float64))
 
@@ -204,14 +260,26 @@ func applyPow(a, b, c *types.Val) error {
 	switch vBase {
 	case INT:
 		c.Value = math.Pow(float64(a.Value.(int64)), float64(b.Value.(int64)))
+		// TODO: Check if +- INF should be returned
+		if math.IsInf(c.Value.(float64), 0) {
+			return ErrorFloatOverflow
+		}
+
 		c.Tid = types.FloatID
 
 	case FLOAT:
-		if a.Value.(float64) < 0 && b.Value.(float64) > 0 && b.Value.(float64) < 1 {
-			return errors.Errorf("Illegal operands for pow: %v, %v",
-				a.Value.(float64), b.Value.(float64))
+		// TODO: Check if +- INF should be returned
+		// Fractional power of -ve numbers should not be returned.
+		if a.Value.(float64) < 0 &&
+			math.Ceil(b.Value.(float64))-b.Value.(float64) > 0 {
+			return ErrorFractionalPower
 		}
 		c.Value = math.Pow(a.Value.(float64), b.Value.(float64))
+
+		// TODO: Check if +- INF should be returned
+		if math.IsInf(c.Value.(float64), 0) {
+			return ErrorFloatOverflow
+		}
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func ^", a.Tid)
@@ -223,17 +291,17 @@ func applyLog(a, b, c *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
-		if a.Value.(int64) < 0 || b.Value.(int64) <= 0 {
-			return errors.Errorf("Illegal operands for logbase: %v, %v",
-				a.Value.(int64), b.Value.(int64))
+		// TODO: Check if +- INF should be returned, log(0?, 0?)
+		if a.Value.(int64) < 0 || b.Value.(int64) < 0 {
+			return ErrorNegativeLog
 		}
 		c.Value = math.Log(float64(a.Value.(int64))) / math.Log(float64(b.Value.(int64)))
 		c.Tid = types.FloatID
 
 	case FLOAT:
-		if a.Value.(float64) < 0 || b.Value.(float64) <= 0 {
-			return errors.Errorf("Illegal operands for logbase: %v, %v",
-				a.Value.(float64), b.Value.(float64))
+		// TODO: Check if +- INF should be returned, log(0?, 0?)
+		if a.Value.(float64) < 0 || b.Value.(float64) < 0 {
+			return ErrorNegativeLog
 		}
 		c.Value = math.Log(a.Value.(float64)) / math.Log(b.Value.(float64))
 
@@ -274,14 +342,14 @@ func applyLn(a, res *types.Val) error {
 	switch vBase {
 	case INT:
 		if a.Value.(int64) < 0 {
-			return errors.Errorf("Illegal operand for ln: %v", a.Value.(int64))
+			return ErrorNegativeLog
 		}
 		res.Value = math.Log(float64(a.Value.(int64)))
 		res.Tid = types.FloatID
 
 	case FLOAT:
 		if a.Value.(float64) < 0 {
-			return errors.Errorf("Illegal operand for ln: %v", a.Value.(float64))
+			return ErrorNegativeLog
 		}
 		res.Value = math.Log(a.Value.(float64))
 
@@ -292,13 +360,27 @@ func applyLn(a, res *types.Val) error {
 }
 
 func applyExp(a, res *types.Val) error {
+	//  For IEEE double
+	//    if x >  7.09782712893383973096e+02 then exp(x) overflow
+	//    if x < -7.45133219101941108420e+02 then exp(x) underflow
+	const (
+		Overflow  = 7.09782712893383973096e+02
+		Underflow = -7.45133219101941108420e+02
+	)
+
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
+		if float64(a.Value.(int64)) > Overflow || float64(a.Value.(int64)) < Underflow {
+			return ErrorFloatOverflow
+		}
 		res.Value = math.Exp(float64(a.Value.(int64)))
 		res.Tid = types.FloatID
 
 	case FLOAT:
+		if a.Value.(float64) > Overflow || a.Value.(float64) < Underflow {
+			return ErrorFloatOverflow
+		}
 		res.Value = math.Exp(a.Value.(float64))
 
 	case DEFAULT:
@@ -311,6 +393,10 @@ func applyNeg(a, res *types.Val) error {
 	vBase := getValType(a)
 	switch vBase {
 	case INT:
+		// -ve of math.MinInt64 is evaluated as itself (due to overflow)
+		if a.Value.(int64) == math.MinInt64 {
+			return ErrorIntOverflow
+		}
 		res.Value = -a.Value.(int64)
 
 	case FLOAT:
@@ -327,14 +413,14 @@ func applySqrt(a, res *types.Val) error {
 	switch vBase {
 	case INT:
 		if a.Value.(int64) < 0 {
-			return errors.Errorf("Illegal operand for sqrt: %v", a.Value.(int64))
+			return ErrorNegativeRoot
 		}
 		res.Value = math.Sqrt(float64(a.Value.(int64)))
 		res.Tid = types.FloatID
 
 	case FLOAT:
 		if a.Value.(float64) < 0 {
-			return errors.Errorf("Illegal operand for sqrt: %v", a.Value.(float64))
+			return ErrorNegativeRoot
 		}
 		res.Value = math.Sqrt(a.Value.(float64))
 
