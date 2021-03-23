@@ -1380,7 +1380,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 
 		// Apply pagination after the @cascade.
-		if len(child.Params.Cascade.Fields) > 0 && child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
+		if len(child.Params.Cascade.Fields) > 0 && (child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
 				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
@@ -2864,7 +2864,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// first time at the root here.
 
 			// Apply pagination at the root after @cascade.
-			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.Offset != 0 {
+			if len(sg.Params.Cascade.Fields) > 0 && (sg.Params.Cascade.First != 0 || sg.Params.Cascade.Offset != 0) {
 				sg.updateUidMatrix()
 				for i := 0; i < len(sg.uidMatrix); i++ {
 					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
