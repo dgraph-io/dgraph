@@ -116,26 +116,6 @@ type loadBackupInput struct {
 	isOld          bool
 }
 
-func reduceToDB(db *badger.DB) error {
-	// TODO: Any drop operations should be done before mapping to disk ideally.
-	// Otherwise, we could just not write those keys during reduce.
-
-	// if there were any DROP operations that need to be applied before loading the backup into
-	// the db, then apply them here
-	// if err := applyDropOperationsBeforeRestore(db, in.dropOperations); err != nil {
-	// 	return 0, 0, errors.Wrapf(err, "cannot apply DROP operations while loading backup")
-	// }
-
-	// Delete schemas and types. Each backup file should have a complete copy of the schema.
-	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
-		return err
-	}
-	if err := db.DropPrefix([]byte{x.ByteType}); err != nil {
-		return err
-	}
-	return nil
-}
-
 type mapper struct {
 	once   sync.Once
 	buf    *z.Buffer
@@ -739,9 +719,10 @@ func getBuf() *z.Buffer {
 	return cbuf
 }
 
-func reduceRestore() error {
+func reduceToDB(db *badger.DB) error {
 	r := &reducer{
 		bufferCh: make(chan *z.Buffer, 10),
+		db:       pstore,
 	}
 	return r.reduce()
 }
@@ -750,6 +731,7 @@ type reducer struct {
 	mapItrs       []*mapIterator
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
+	db            *badger.DB
 }
 
 func (r *reducer) reduce() error {
@@ -797,10 +779,8 @@ func (r *reducer) reduce() error {
 	go func() {
 		errCh <- r.blockingRead()
 	}()
-
-	// var db *badger.DB
 	go func() {
-		errCh <- r.writeToDB(pstore)
+		errCh <- r.writeToDB()
 	}()
 
 	for i := 0; i < 2; i++ {
@@ -836,11 +816,11 @@ func (r *reducer) blockingRead() error {
 	return nil
 }
 
-func (r *reducer) writeToDB(db *badger.DB) error {
+func (r *reducer) writeToDB() error {
 	writeCh := make(chan *z.Buffer, 3)
 
 	toStreamWriter := func() error {
-		writer := db.NewStreamWriter()
+		writer := r.db.NewStreamWriter()
 		x.Check(writer.Prepare())
 
 		for buf := range writeCh {
