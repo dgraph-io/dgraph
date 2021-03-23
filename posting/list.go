@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -865,9 +866,14 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator,
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
-	defer out.free()
 
 	ol := out.plist
+	bm := roaring64.New()
+	if ol.Bitmap != nil {
+		if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
+			return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+		}
+	}
 
 	// Encode uids to []byte instead of []uint64. This helps improve memory usage.
 	buf.Reset()
@@ -950,6 +956,92 @@ func (out *rollupOutput) free() {
 	for _, part := range out.parts {
 		codec.FreePack(part.Pack)
 	}
+
+	for i := 0; i < len(splits); i++ {
+		end := uint64(math.MaxUint64)
+		if i < len(splits)-1 {
+			end = splits[i+1] - 1
+		}
+		start := splits[i]
+		ro.sranges[start] = end
+	}
+	if len(ro.sranges) == 0 {
+		ro.sranges[1] = math.MaxUint64
+	}
+}
+
+func (ro *rollupOutput) getRange(uid uint64) (uint64, uint64) {
+	for start, end := range ro.sranges {
+		if uid >= start && uid < end {
+			return start, end
+		}
+	}
+	return 1, math.MaxUint64
+}
+
+func ShouldSplit(plist *pb.PostingList) (bool, error) {
+	if plist.Size() >= maxListSize {
+		r := roaring64.New()
+		if err := codec.FromPostingList(r, plist); err != nil {
+			return false, err
+		}
+		return r.GetCardinality() > 1, nil
+	}
+	return false, nil
+}
+
+func (ro *rollupOutput) runSplits() error {
+top:
+	for startUid, pl := range ro.parts {
+		should, err := ShouldSplit(pl)
+		if err != nil {
+			return err
+		}
+		if should {
+			if err := ro.split(startUid); err != nil {
+				return err
+			}
+			// Had to split something. Let's run again.
+			goto top
+		}
+	}
+	return nil
+}
+
+func (ro *rollupOutput) split(startUid uint64) error {
+	pl := ro.parts[startUid]
+
+	r := roaring64.New()
+	if err := codec.FromPostingList(r, pl); err != nil {
+		return errors.Wrapf(err, "split codec.FromPostingList")
+	}
+
+	num := r.GetCardinality()
+	uid, err := r.Select(num / 2)
+	if err != nil {
+		return errors.Wrapf(err, "split Select rank: %d", num/2)
+	}
+
+	newpl := &pb.PostingList{}
+	ro.parts[uid] = newpl
+
+	// Remove everything from startUid to uid.
+	nr := r.Clone()
+	nr.RemoveRange(0, uid) // Keep all uids >= uid.
+	newpl.Bitmap = codec.ToBytes(nr)
+
+	// Take everything from the first posting where posting.Uid >= uid.
+	idx := sort.Search(len(pl.Postings), func(i int) bool {
+		return pl.Postings[i].Uid >= uid
+	})
+	newpl.Postings = pl.Postings[idx:]
+
+	// Update pl as well. Keeps the lower UIDs.
+	codec.RemoveRange(r, uid, math.MaxUint64)
+	pl.Bitmap = codec.ToBytes(r)
+	pl.Postings = pl.Postings[:idx]
+
+	return nil
 }
 
 /*
@@ -1553,8 +1645,9 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 	return []uint64{lowUid, midUid}, []*pb.PostingList{lowPl, highPl}
 }
 
-// removeEmptySplits updates the split list by removing empty posting lists' startUids.
-func (out *rollupOutput) removeEmptySplits() {
+// finalize updates the split list by removing empty posting lists' startUids. In case there is
+// only part, then that part is set to main plist.
+func (out *rollupOutput) finalize() {
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
 		// have a split starting with UID 1.
@@ -1588,8 +1681,7 @@ func (out *rollupOutput) splits() []uint64 {
 	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
-	sortSplits(splits)
-	return splits
+	out.updateSplits()
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are
