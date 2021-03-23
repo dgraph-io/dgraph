@@ -999,12 +999,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, dql: "random")
       }
     errlist: [
     {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly one of `http` or `dql` arguments.",
      "locations":[{"line":7, "column":32}]},
-    {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
     ]
 
   - name: "@custom directive without http or dql argument"
@@ -1018,7 +1017,7 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor1: one of `http` or `dql` arguments must be present for @custom directive.",
+      {"message": "https is not supported as an argument for custom directive.",
       "locations":[{"line":7, "column":32}]},
     ]
 
@@ -2865,14 +2864,13 @@ invalid_schemas:
 
   - name: "@lambdaOnMutate with bad arg values"
     input: |
-      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false", badArg: true) {
+      type TwitterUser @lambdaOnMutate(add: true, update: badValue, delete: "false") {
         id: ID!
         name: String
       }
     errlist: [
       { "message": "Type TwitterUser; update argument in @lambdaOnMutate directive can only be true/false, found: `badValue`.", "locations": [{"line": 1, "column": 45}]},
       { "message": "Type TwitterUser; delete argument in @lambdaOnMutate directive can only be true/false, found: `\"false\"`.", "locations": [{"line": 1, "column": 63}]},
-      { "message": "Type TwitterUser; @lambdaOnMutate directive doesn't support argument named: `badArg`.", "locations": [{"line": 1, "column": 80}]}
     ]
 
   - name: "@lambdaOnMutate isn't allowed on @remote types"
