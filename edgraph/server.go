@@ -1461,21 +1461,24 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-func validateNamespace(ctx context.Context, startTs uint64) error {
+func validateNamespace(ctx context.Context, preds []string) error {
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
 	}
 
-	txn := posting.Oracle().GetTxn(startTs)
-	if txn == nil {
-		return errors.Errorf("No transaction found for with startTs: %d", startTs)
+	// Do a basic validation that all the predicates passed in transaction context matches the
+	// claimed namespace and user is not accidently commiting a transaction that it did not create.
+	for _, pred := range preds {
+		if len(pred) < 8 {
+			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
+		}
+		if parsedNs := x.ParseNamespace(pred); parsedNs != ns {
+			return errors.Errorf("Please login into correct namespace. "+
+				"Currently logged in namespace %#x", ns)
+		}
 	}
 
-	if txn.Namespace != ns {
-		return errors.Errorf("Please login into correct namespace. "+
-			"Currently logged in namespace %#x", ns)
-	}
 	return nil
 }
 
@@ -1489,7 +1492,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 
 	if x.WorkerConfig.AclEnabled {
-		if err := validateNamespace(ctx, tc.StartTs); err != nil {
+		if err := validateNamespace(ctx, tc.Preds); err != nil {
 			return &api.TxnContext{}, err
 		}
 	}
