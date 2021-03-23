@@ -926,11 +926,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 
 	for _, slice := range parentSlice {
 		// From every slice we need to remove node with attribute "uid".
-		slice1 := slice
-		for slice1 != nil {
-			glog.Infof("%v", enc.getAttr(slice1))
-			slice1 = slice1.next
-		}
 		var prev, cur fastJsonNode
 		cur = slice
 		for cur != nil {
