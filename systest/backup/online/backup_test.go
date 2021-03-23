@@ -94,7 +94,7 @@ func TestBackupWithMoveTablet(t *testing.T) {
 	common.DirCleanup(t)
 }
 
-func TestBackupSchema(t *testing.T) {
+func TestBackupBasic(t *testing.T) {
 	common.DirSetup(t)
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -124,6 +124,7 @@ func TestBackupSchema(t *testing.T) {
 
 	testutil.DropAll(t, dg)
 	runRestore(t)
+	// TODO: Remove this sleep and use retry.
 	time.Sleep(5 * time.Second)
 
 	q := `{q(func: has(name)){ name }}`

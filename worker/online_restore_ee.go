@@ -264,7 +264,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	if err := reduceToDB(pstore); err != nil {
-		return errors.Wrap(err, "Failed to reduce restore map")
+		return errors.Wrap(err, "failed to reduce restore map")
 	}
 
 	// Load schema back.
