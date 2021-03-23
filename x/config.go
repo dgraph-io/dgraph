@@ -36,10 +36,12 @@ type Options struct {
 	//                      normalize directive
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
 	// BlockDropAll bool - if set to true, the drop all operation will be rejected by the server.
+	// query-timeout duration - Maximum time after which a query execution will fail.
 	Limit                *z.SuperFlag
 	LimitMutationsNquad  int
 	LimitQueryEdge       uint64
 	BlockClusterWideDrop bool
+	QueryTimeout         time.Duration
 
 	// GraphQL options:
 	//

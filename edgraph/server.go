@@ -1114,6 +1114,16 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "abort_older_than".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
