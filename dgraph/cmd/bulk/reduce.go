@@ -356,7 +356,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 						StreamDone: true,
 					}
 
-					buf := z.NewBuffer(512)
+					buf := z.NewBuffer(512, "Reducer.Write")
 					defer buf.Release()
 					badger.KVToBuffer(doneKV, buf)
 
@@ -436,7 +436,8 @@ func bufferStats(cbuf *z.Buffer) {
 }
 
 func getBuf(dir string) *z.Buffer {
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, filepath.Join(dir, bufferDir))
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
+		filepath.Join(dir, bufferDir), "Reducer.GetBuf")
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
@@ -549,7 +550,7 @@ func (r *reducer) toList(req *encodeRequest) {
 	pl := new(pb.PostingList)
 	writeVersionTs := r.state.writeTs
 
-	kvBuf := z.NewBuffer(260 << 20)
+	kvBuf := z.NewBuffer(260<<20, "Reducer.Buffer.ToList")
 	trackCountIndex := make(map[string]bool)
 
 	var freePostings []*pb.Posting
@@ -567,6 +568,12 @@ func (r *reducer) toList(req *encodeRequest) {
 		p.Reset()
 		freePostings = append(freePostings, p)
 	}
+
+	alloc := z.NewAllocator(16<<20, "Reducer.ToList")
+	defer func() {
+		// We put alloc.Release in defer because we reassign alloc for split posting lists.
+		alloc.Release()
+	}()
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
 	appendToList := func() {
@@ -594,7 +601,8 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		enc := codec.Encoder{BlockSize: 256}
+		alloc.Reset()
+		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
 		var lastUid uint64
 		slice, next := []byte{}, start
 		for next >= 0 && (next < end || end == -1) {
@@ -628,7 +636,7 @@ func (r *reducer) toList(req *encodeRequest) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		if numUids == 0 {
-			codec.FreePack(pl.Pack)
+			// No need to FrePack here because we are reusing alloc.
 			return
 		}
 
@@ -656,6 +664,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			kvs, err := l.Rollup(nil)
 			x.Check(err)
 
+			// Assign a new allocator, so we don't reset the one we were using during Rollup.
+			alloc = z.NewAllocator(16<<20, "Reducer.AppendToList")
+
 			for _, kv := range kvs {
 				kv.StreamId = r.streamIdFor(pk.Attr)
 			}
@@ -665,7 +676,7 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		} else {
 			kv := posting.MarshalPostingList(pl, nil)
-			codec.FreePack(pl.Pack)
+			// No need to FreePack here, because we are reusing alloc.
 
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs
@@ -690,7 +701,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			if kvBuf.LenNoPadding() > 256<<20 {
 				req.listCh <- kvBuf
-				kvBuf = z.NewBuffer(260 << 20)
+				kvBuf = z.NewBuffer(260<<20, "Reducer.Buffer.KVBuffer")
 			}
 		}
 		end = next

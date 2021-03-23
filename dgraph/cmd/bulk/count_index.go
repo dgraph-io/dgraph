@@ -132,10 +132,13 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		fmt.Printf("Writing count index for %q rev=%v\n", pk.Attr, pk.IsReverse())
 	}
 
-	var pl pb.PostingList
-	encoder := codec.Encoder{BlockSize: 256}
+	alloc := z.NewAllocator(8<<20, "CountIndexer.WriteIndex")
+	defer alloc.Release()
 
-	outBuf := z.NewBuffer(5 << 20)
+	var pl pb.PostingList
+	encoder := codec.Encoder{BlockSize: 256, Alloc: alloc}
+
+	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
 	defer outBuf.Release()
 	encode := func() {
 		pl.Pack = encoder.Done()
@@ -144,13 +147,13 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		}
 
 		kv := posting.MarshalPostingList(&pl, nil)
-		codec.FreePack(pl.Pack)
 		kv.Key = append([]byte{}, lastCe.Key()...)
 		kv.Version = c.state.writeTs
 		kv.StreamId = streamId
 		badger.KVToBuffer(kv, outBuf)
 
-		encoder = codec.Encoder{BlockSize: 256}
+		alloc.Reset()
+		encoder = codec.Encoder{BlockSize: 256, Alloc: alloc}
 		pl.Reset()
 
 		// Flush out the buffer.

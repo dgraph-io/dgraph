@@ -428,6 +428,7 @@ func getPackages() []task {
 	}
 
 	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+
 	moveSlowToFront := func(list []task) []task {
 		// These packages typically take over a minute to run.
 		left := 0
@@ -474,7 +475,7 @@ func getPackages() []task {
 		}
 
 		if !isValidPackageForSuite(pkg.ID) {
-			fmt.Printf("Skipping pacakge %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
+			fmt.Printf("Skipping package %s as its not valid for the selected suite %s \n", pkg.ID, *suite)
 			continue
 		}
 

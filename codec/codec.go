@@ -47,7 +47,7 @@ type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
 	uids      []uint64
-	alloc     *z.Allocator
+	Alloc     *z.Allocator
 	buf       *bytes.Buffer
 }
 
@@ -70,7 +70,7 @@ func (e *Encoder) packBlock() {
 	}
 
 	// Allocate blocks manually.
-	b := e.alloc.AllocateAligned(blockSize)
+	b := e.Alloc.AllocateAligned(blockSize)
 	block := (*pb.UidBlock)(unsafe.Pointer(&b[0]))
 
 	block.Base = e.uids[0]
@@ -106,7 +106,7 @@ func (e *Encoder) packBlock() {
 	}
 
 	sz := len(e.buf.Bytes())
-	block.Deltas = e.alloc.Allocate(sz)
+	block.Deltas = e.Alloc.Allocate(sz)
 	x.AssertTrue(sz == copy(block.Deltas, e.buf.Bytes()))
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
@@ -117,9 +117,11 @@ var tagEncoder string = "enc"
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
-		e.alloc = z.NewAllocator(1024)
-		e.alloc.Tag = tagEncoder
 		e.buf = new(bytes.Buffer)
+	}
+	if e.Alloc == nil {
+		e.Alloc = z.NewAllocator(1024, "Encoder.Add")
+		e.Alloc.Tag = tagEncoder
 	}
 
 	size := len(e.uids)
@@ -138,8 +140,8 @@ func (e *Encoder) Add(uid uint64) {
 // Done returns the final output of the encoder. This UidPack MUST BE FREED via a call to FreePack.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
-	if e.pack != nil && e.alloc != nil {
-		e.pack.AllocRef = e.alloc.Ref
+	if e.pack != nil && e.Alloc != nil {
+		e.pack.AllocRef = e.Alloc.Ref
 	}
 	return e.pack
 }
@@ -405,7 +407,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
 func DecodeToBuffer(pack *pb.UidPack, seek uint64) *z.Buffer {
-	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc)
+	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc, "Codec.DecodeToBuffer")
 	x.Check(err)
 	buf.AutoMmapAfter(1 << 30)
 

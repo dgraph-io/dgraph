@@ -282,7 +282,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return err
 		}
-		buf := z.NewBuffer(1024)
+		buf := z.NewBuffer(1024, "PredicateMove.MovePredicateHelper")
 		defer buf.Release()
 
 		kv := &bpb.KV{}

@@ -34,7 +34,7 @@ type Trie struct {
 // NewTrie would return back a Trie backed by the provided Arena. Trie would assume ownership of the
 // Arena. Release must be called at the end to release Arena's resources.
 func NewTrie() *Trie {
-	buf, err := z.NewBufferWith(32<<20, math.MaxUint32, z.UseMmap)
+	buf, err := z.NewBufferWith(32<<20, math.MaxUint32, z.UseMmap, "Trie")
 	x.Check(err)
 	// Add additional 8 bytes at the start, because offset=0 is used for checking non-existing node.
 	// Therefore we can't keep root at 0 offset.
