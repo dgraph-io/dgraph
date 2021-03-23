@@ -46,6 +46,15 @@ type Options struct {
 	// extensions bool - Will be set to see extensions in GraphQL results
 	// debug bool - Will enable debug mode in GraphQL.
 	// lambda-url string - Stores the URL of lambda functions for custom GraphQL resolvers
+	// 			The configured lambda-url can have a parameter `$ns`,
+	//			which should be replaced with the correct namespace value at runtime.
+	// 	===========================================================================================
+	// 	|                lambda-url                | $ns |           namespacedLambdaUrl          |
+	// 	|==========================================|=====|========================================|
+	// 	| http://localhost:8686/graphql-worker/$ns |  1  | http://localhost:8686/graphql-worker/1 |
+	// 	| http://localhost:8686/graphql-worker     |  1  | http://localhost:8686/graphql-worker   |
+	// 	|=========================================================================================|
+	//
 	// poll-interval duration - The polling interval for graphql subscription.
 	GraphQL      *z.SuperFlag
 	GraphQLDebug bool

@@ -172,7 +172,7 @@ const adminTypes = `
 		"""
 		The ID of the cluster group.
 		"""
-		groupId: Int
+		groupId: UInt64
 
 		"""
 		List of predicates assigned to the group.
@@ -189,7 +189,7 @@ const adminTypes = `
 		"""
 		Number of this backup within the backup series. The full backup always has a value of one.
 		"""
-		backupNum: Int
+		backupNum: UInt64
 
 		"""
 		Whether this backup was encrypted.
@@ -210,7 +210,7 @@ const adminTypes = `
 		The timestamp at which this backup was taken. The next incremental backup will
 		start from this timestamp.
 		"""
-		since: Int
+		since: UInt64
 
 		"""
 		The type of backup, either full or incremental.
@@ -417,7 +417,7 @@ const adminTypes = `
 	}
 
 	type NamespacePayload {
-		namespaceId: Int
+		namespaceId: UInt64
 		message: String
 	}
 
@@ -430,7 +430,7 @@ const adminTypes = `
 	type ResetPasswordPayload {
 		userId: String
 		message: String
-		namespace: Int
+		namespace: UInt64
 	}
 	`
 

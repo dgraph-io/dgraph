@@ -589,7 +589,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	userData, err := validateToken(accessJwt[0])
+	userData, err := validateToken(accessJwt)
 	if err != nil {
 		return nil, err
 	}
