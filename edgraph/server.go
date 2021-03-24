@@ -1480,6 +1480,12 @@ func validateNamespace(ctx context.Context, preds []string) error {
 	// Do a basic validation that all the predicates passed in transaction context matches the
 	// claimed namespace and user is not accidently commiting a transaction that it did not create.
 	for _, pred := range preds {
+		// Format for Preds in TxnContext is gid-<namespace><pred> (see fillPreds in posting pkg)
+		splits := strings.Split(pred, "-")
+		if len(splits) < 2 {
+			return errors.Errorf("Unable to find group id in %s", pred)
+		}
+		pred = strings.Join(splits[1:], "-")
 		if len(pred) < 8 {
 			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
 		}
