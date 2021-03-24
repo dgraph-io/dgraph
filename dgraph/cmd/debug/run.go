@@ -69,7 +69,7 @@ type flagOptions struct {
 	sizeHistogram bool
 	noKeys        bool
 	key           x.SensitiveByteSlice
-	decodeKey     string
+	parseKey      string
 
 	// Options related to the WAL.
 	wdir           string
@@ -110,7 +110,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
-	flag.StringVar(&opt.decodeKey, "decode_key", "", "Decode hex key.")
+	flag.StringVar(&opt.parseKey, "parse_key", "", "Parse hex key.")
 	enc.RegisterFlags(flag)
 }
 
@@ -888,8 +888,8 @@ func run() {
 		}
 	}()
 
-	if opt.decodeKey != "" {
-		k, err := hex.DecodeString(opt.decodeKey)
+	if opt.parseKey != "" {
+		k, err := hex.DecodeString(opt.parseKey)
 		if err != nil {
 			log.Fatalf("Error while decoding hex key: %v\n", err)
 		}
