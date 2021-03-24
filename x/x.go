@@ -38,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/badger/v3"
@@ -1482,4 +1483,15 @@ func (r *RateLimiter) RefillPeriodically() {
 func LambdaUrl(ns uint64) string {
 	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
 		10), 1)
+}
+
+// IsJwtExpired returns true if the error indicates that the jwt has expired.
+func IsJwtExpired(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unauthenticated &&
+		strings.Contains(err.Error(), "Token is expired")
 }

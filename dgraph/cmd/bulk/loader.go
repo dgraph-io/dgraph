@@ -235,11 +235,9 @@ func (ld *loader) mapStage() {
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 	ld.xids = xidmap.New(xidmap.XidMapOptions{
-		Zero:      ld.zero,
-		DgClient:  nil,
-		Namespace: x.GalaxyNamespace,
-		DB:        db,
-		Dir:       filepath.Join(ld.opt.TmpDir, bufferDir),
+		Zero: ld.zero,
+		DB:   db,
+		Dir:  filepath.Join(ld.opt.TmpDir, bufferDir),
 	})
 
 	fs := filestore.NewFileStore(ld.opt.DataFiles)

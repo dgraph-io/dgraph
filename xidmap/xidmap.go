@@ -38,11 +38,10 @@ import (
 
 // XidMapOptions specifies the options for creating a new xidmap.
 type XidMapOptions struct {
-	Zero      *grpc.ClientConn
-	DgClient  *dgo.Dgraph
-	Namespace uint64
-	DB        *badger.DB
-	Dir       string
+	Zero     *grpc.ClientConn
+	DgClient *dgo.Dgraph
+	DB       *badger.DB
+	Dir      string
 }
 
 // XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
@@ -50,7 +49,6 @@ type XidMapOptions struct {
 // because it uses an LRU cache.
 type XidMap struct {
 	dg         *dgo.Dgraph
-	ns         uint64
 	shards     []*shard
 	newRanges  chan *pb.AssignedIds
 	zc         pb.ZeroClient
@@ -102,7 +100,6 @@ func New(opts XidMapOptions) *XidMap {
 		shards:    make([]*shard, numShards),
 		kvChan:    make(chan []kv, 64),
 		dg:        opts.DgClient,
-		ns:        opts.Namespace,
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -168,6 +165,12 @@ func New(opts XidMapOptions) *XidMap {
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
+
+			if x.IsJwtExpired(err) {
+				if err := xm.relogin(); err != nil {
+					glog.Errorf("While trying to relogin: %v", err)
+				}
+			}
 			time.Sleep(backoff)
 		}
 	}()
@@ -175,16 +178,28 @@ func New(opts XidMapOptions) *XidMap {
 }
 
 func (m *XidMap) attachNamespace(ctx context.Context) context.Context {
-	if m.dg != nil {
-		// Need to attach JWT because slash uses alpha as zero proxy.
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			md = metadata.New(nil)
-		}
-		md.Set("accessJwt", m.dg.GetJwt().AccessJwt)
-		ctx = metadata.NewOutgoingContext(ctx, md)
+	if m.dg == nil {
+		return ctx
 	}
-	return x.AttachNamespaceOutgoing(ctx, m.ns)
+
+	// Need to attach JWT because slash uses alpha as zero proxy.
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	md.Set("accessJwt", m.dg.GetJwt().AccessJwt)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return ctx
+}
+
+func (m *XidMap) relogin() error {
+	if m.dg == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return m.dg.RetryLogin(ctx)
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
@@ -286,7 +301,6 @@ func (m *XidMap) BumpTo(uid uint64) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		ctx = m.attachNamespace(ctx)
 		assigned, err := m.zc.AssignIds(ctx, &pb.Num{Val: num, Type: pb.Num_UID})
-		// TODO: Relogin is required if token is expired.
 		cancel()
 		if err == nil {
 			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
@@ -294,6 +308,11 @@ func (m *XidMap) BumpTo(uid uint64) {
 			return
 		}
 		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
+		if x.IsJwtExpired(err) {
+			if err := m.relogin(); err != nil {
+				glog.Errorf("While trying to relogin: %v", err)
+			}
+		}
 	}
 }
 
