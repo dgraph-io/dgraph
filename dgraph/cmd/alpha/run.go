@@ -501,7 +501,8 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/alter", alterHandler)
 	baseMux.HandleFunc("/health", healthCheck)
 	baseMux.HandleFunc("/state", stateHandler)
-	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/debug/z")
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -556,9 +557,6 @@ func setupServer(closer *z.Closer) {
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
-
-	// Add OpenCensus z-pages.
-	zpages.Handle(baseMux, "/z")
 
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
