@@ -897,7 +897,22 @@ func run() {
 		if err != nil {
 			log.Fatalf("Error while parsing key: %v\n", err)
 		}
-		fmt.Printf("Key: %+v\n", pk)
+		if pk.IsData() {
+			fmt.Printf("{d}")
+		}
+		if pk.IsIndex() {
+			fmt.Printf("{i}")
+		}
+		if pk.IsCountOrCountRev() {
+			fmt.Printf("{c}")
+		}
+		if pk.IsSchema() {
+			fmt.Printf("{s}")
+		}
+		if pk.IsReverse() {
+			fmt.Printf("{r}")
+		}
+		fmt.Printf(" Key: %+v\n", pk)
 		return
 	}
 
