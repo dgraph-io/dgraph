@@ -1485,6 +1485,33 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+func validateNamespace(ctx context.Context, preds []string) error {
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Do a basic validation that all the predicates passed in transaction context matches the
+	// claimed namespace and user is not accidently commiting a transaction that it did not create.
+	for _, pred := range preds {
+		// Format for Preds in TxnContext is gid-<namespace><pred> (see fillPreds in posting pkg)
+		splits := strings.Split(pred, "-")
+		if len(splits) < 2 {
+			return errors.Errorf("Unable to find group id in %s", pred)
+		}
+		pred = strings.Join(splits[1:], "-")
+		if len(pred) < 8 {
+			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
+		}
+		if parsedNs := x.ParseNamespace(pred); parsedNs != ns {
+			return errors.Errorf("Please login into correct namespace. "+
+				"Currently logged in namespace %#x", ns)
+		}
+	}
+
+	return nil
+}
+
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
@@ -1492,6 +1519,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	if err := x.HealthCheck(); err != nil {
 		return &api.TxnContext{}, err
+	}
+
+	if x.WorkerConfig.AclEnabled {
+		if err := validateNamespace(ctx, tc.Preds); err != nil {
+			return &api.TxnContext{}, err
+		}
 	}
 
 	tctx := &api.TxnContext{}
@@ -1506,11 +1539,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if err == dgo.ErrAborted {
 		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
 		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		tctx.Aborted = true
 		if tc.Aborted {
 			return tctx, nil
 		}
 
-		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs
