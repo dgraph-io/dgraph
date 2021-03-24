@@ -1,5 +1,0 @@
-interface Student {
-    rollNo: String! @id
-    regNo: ID!
-    name: String!
-}

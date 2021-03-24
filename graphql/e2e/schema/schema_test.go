@@ -319,7 +319,7 @@ func TestIntrospectionQueryAfterDropAll(t *testing.T) {
 	introspectionResult := introspect.ExecuteAsPost(t, groupOneGraphQLServer)
 	require.Len(t, introspectionResult.Errors, 1)
 	gotErrorMessage := introspectionResult.Errors[0].Message
-	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph.  Use the /admin API to add a GraphQL schema"
+	expectedErrorMessage := "Not resolving __schema. There's no GraphQL schema in Dgraph. Use the /admin API to add a GraphQL schema"
 	require.Equal(t, expectedErrorMessage, gotErrorMessage)
 }
 

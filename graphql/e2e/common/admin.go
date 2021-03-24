@@ -434,6 +434,7 @@ func adminState(t *testing.T) {
 					user
 					expiryTs
 					enabled
+					maxNodes
 				}
 			}
 		}`,
@@ -460,6 +461,7 @@ func adminState(t *testing.T) {
 				User     string
 				ExpiryTs int64
 				Enabled  bool
+				MaxNodes uint64
 			}
 		}
 	}
@@ -512,5 +514,6 @@ func adminState(t *testing.T) {
 	require.Equal(t, state.Cid, result.State.Cid)
 	require.Equal(t, state.License.User, result.State.License.User)
 	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
+	require.Equal(t, state.License.MaxNodes, result.State.License.MaxNodes)
 	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
 }

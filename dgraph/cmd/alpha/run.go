@@ -204,6 +204,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
 				" allows dropping attributes and types.").
+		Flag("query-timeout",
+			"Maximum time after which a query execution will fail. If set to"+
+				" 0, the timeout is infinite.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -498,7 +501,8 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/alter", alterHandler)
 	baseMux.HandleFunc("/health", healthCheck)
 	baseMux.HandleFunc("/state", stateHandler)
-	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/debug/z")
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -553,9 +557,6 @@ func setupServer(closer *z.Closer) {
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
-
-	// Add OpenCensus z-pages.
-	zpages.Handle(baseMux, "/z")
 
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
@@ -732,6 +733,7 @@ func run() {
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
+	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

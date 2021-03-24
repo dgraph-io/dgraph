@@ -46,6 +46,7 @@ const (
 	remoteDirective         = "remote" // types with this directive are not stored in Dgraph.
 	remoteResponseDirective = "remoteResponse"
 	lambdaDirective         = "lambda"
+	lambdaOnMutateDirective = "lambdaOnMutate"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -289,6 +290,7 @@ directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @cascade(fields: [String]) on FIELD
 directive @lambda on FIELD_DEFINITION
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
 	query: GenerateQueryParams,
@@ -311,6 +313,7 @@ directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
 directive @lambda on FIELD_DEFINITION
+directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 `
 	filterInputs = `
 input IntFilter {
@@ -566,6 +569,7 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:         ValidatorNoOp,
 	deprecatedDirective:     ValidatorNoOp,
 	lambdaDirective:         lambdaDirectiveValidation,
+	lambdaOnMutateDirective: ValidatorNoOp,
 	generateDirective:       ValidatorNoOp,
 	apolloKeyDirective:      ValidatorNoOp,
 	apolloExtendsDirective:  ValidatorNoOp,
@@ -588,10 +592,16 @@ var directiveLocationMap = map[string]map[ast.DefinitionKind]bool{
 	customDirective:       nil,
 	remoteDirective: {ast.Object: true, ast.Interface: true, ast.Union: true,
 		ast.InputObject: true, ast.Enum: true},
-	cascadeDirective:        nil,
+	lambdaDirective:         nil,
+	lambdaOnMutateDirective: {ast.Object: true, ast.Interface: true},
 	generateDirective:       {ast.Object: true, ast.Interface: true},
+	apolloKeyDirective:      {ast.Object: true, ast.Interface: true},
+	apolloExtendsDirective:  {ast.Object: true, ast.Interface: true},
+	apolloExternalDirective: nil,
 	apolloRequiresDirective: nil,
 	apolloProvidesDirective: nil,
+	remoteResponseDirective: nil,
+	cascadeDirective:        nil,
 }
 
 // Struct to store parameters of @generate directive
@@ -1924,7 +1934,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1946,7 +1956,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in v21.11.0, " +
+							"please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{

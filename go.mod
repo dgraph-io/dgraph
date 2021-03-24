@@ -17,7 +17,7 @@ require (
 	github.com/dgraph-io/badger/v3 v3.0.0-20210309075542-2245c18dfd1f
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210317085229-0f33ed234292
 	github.com/dgraph-io/gqlgen v0.13.2
-	github.com/dgraph-io/gqlparser/v2 v2.1.9
+	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed
 	github.com/dgraph-io/ristretto v0.0.4-0.20210310100713-a4346e5d1f90
 	github.com/dgraph-io/simdjson-go v0.3.0

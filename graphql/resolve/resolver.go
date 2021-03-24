@@ -178,7 +178,8 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return aex.dg.Execute(ctx, req, field)
 }
 
-func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
@@ -187,7 +188,8 @@ func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request, fiel
 	return de.dg.Execute(ctx, req, field)
 }
 
-func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
 	return de.dg.CommitOrAbort(ctx, tc)
 }
 
@@ -454,7 +456,7 @@ func New(s schema.Schema, resolverFactory ResolverFactory) *RequestResolver {
 // r.GqlReq should be set with a request before Resolve is called
 // and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
-func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (resp *schema.Response) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
@@ -470,7 +472,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	startTime := time.Now()
-	resp := &schema.Response{
+	resp = &schema.Response{
 		Extensions: &schema.Extensions{
 			Tracing: &schema.Trace{
 				Version:   1,
@@ -479,6 +481,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		},
 	}
 	defer func() {
+		// Panic Handler for mutation. This ensures that the mutation which causes panic
+		// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
+		// used in recoveryHandler in admin/http.go
+		api.PanicHandler(
+			func(err error) {
+				resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
+			}, gqlReq.Query)
+
 		endTime := time.Now()
 		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
 		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
@@ -488,13 +498,15 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	// Pass in GraphQL @auth information
 	ctx, err := r.schema.Meta().AuthMeta().AttachAuthorizationJwt(ctx, gqlReq.Header)
 	if err != nil {
-		return schema.ErrorResponse(err)
+		resp.Errors = schema.AsGQLErrors(err)
+		return
 	}
 
 	ctx = x.AttachJWTNamespace(ctx)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
-		return schema.ErrorResponse(err)
+		resp.Errors = schema.AsGQLErrors(err)
+		return
 	}
 
 	if glog.V(3) {
@@ -531,7 +543,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Field: q,
 							Err:   err,
 						}
-					})
+					}, gqlReq.Query)
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}

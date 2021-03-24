@@ -54,7 +54,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		if err != nil {
 			return err
 		}
-		if _, err := validateToken(accessJwt[0]); err != nil {
+		if _, err := validateToken(accessJwt); err != nil {
 			return err
 		}
 	}

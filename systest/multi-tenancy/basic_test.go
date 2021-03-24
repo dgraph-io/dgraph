@@ -425,7 +425,26 @@ func TestPersistentQuery(t *testing.T) {
 	require.Contains(t, resp.Errors[0].Message, "no accessJwt available")
 }
 
+func TestTokenExpired(t *testing.T) {
+	prepare(t)
+	galaxyToken := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace})
+
+	// Create a new namespace
+	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
+	require.NoError(t, err)
+	token := testutil.Login(t,
+		&testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: ns})
+
+	// Relogin using refresh JWT.
+	token = testutil.Login(t,
+		&testutil.LoginParams{RefreshJwt: token.RefreshToken})
+	_, err = testutil.CreateNamespaceWithRetry(t, token)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only guardian of galaxy is allowed to do this operation")
+}
+
 func TestMain(m *testing.M) {
-	fmt.Printf("Using adminEndpoint : %s for multy-tenancy test.\n", testutil.AdminUrl())
+	fmt.Printf("Using adminEndpoint : %s for multi-tenancy test.\n", testutil.AdminUrl())
 	os.Exit(m.Run())
 }

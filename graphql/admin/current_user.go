@@ -35,7 +35,7 @@ func extractName(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return x.ExtractUserName(accessJwt[0])
+	return x.ExtractUserName(accessJwt)
 }
 
 func (gsr *currentUserResolver) Rewrite(ctx context.Context,
