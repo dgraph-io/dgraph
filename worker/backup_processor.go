@@ -126,9 +126,12 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
-		return &response, err
+		return &response, errors.Wrap(err, "failed to get encWriter")
 	}
-	gzWriter := gzip.NewWriter(newhandler)
+	gzWriter, err := gzip.NewWriterLevel(newhandler, gzip.BestSpeed)
+	if err != nil {
+		return &response, errors.Wrap(err, "failed to create new gzip writer")
+	}
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
