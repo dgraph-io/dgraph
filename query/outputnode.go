@@ -812,17 +812,19 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			if paCopy == nil {
 				paCopy = caCopy
 			} else {
-				// This code merge child and parent lists such that nodes with same attribute id's comes together in merged list
+				// This code merge child and parent lists such that nodes with same attribute id's
+				// comes together in merged list
 				tempPa := paCopy
-				//  unmatchedNodesStartPtr and unmatchedNodesEndPtr stores start and end pointer of child list nodes whose attribute id's
-				//  doesn't match with attribute id's of some nodes in parent list
+				//  unmatchedNodesStartPtr and unmatchedNodesEndPtr stores start and end pointer of whose attribute
+				//  id's  doesn't match with attribute id's of some nodes in parent list
 				var unmatchedNodesStartPtr fastJsonNode
 				var unmatchedNodesEndPtr fastJsonNode
 				for caCopy != nil {
 					var exist bool
 					caCopyNext := caCopy.next
 					for paCopy != nil {
-						// Merge child nodes in parent list whose attribute id's matched with attribute id's of some nodes in parent list
+						// Merge child nodes in parent list whose attribute id's matched with attribute id's of
+						// some nodes in parent list
 						if enc.getAttr(paCopy) == enc.getAttr(caCopy) {
 							temp := paCopy.next
 							caCopy.next = temp
