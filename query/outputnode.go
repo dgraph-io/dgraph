@@ -812,17 +812,21 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			if paCopy == nil {
 				paCopy = caCopy
 			} else {
+				// This code merge child and parent lists such that nodes with same attribute id's comes together in merged list
 				tempPa := paCopy
-				var leftStartPtr fastJsonNode
-				var leftEndPtr fastJsonNode
+				//  unmatchedNodesStartPtr and unmatchedNodesEndPtr stores start and end pointer of child list nodes whose attribute id's
+				//  doesn't match with attribute id's of some nodes in parent list
+				var unmatchedNodesStartPtr fastJsonNode
+				var unmatchedNodesEndPtr fastJsonNode
 				for caCopy != nil {
 					var exist bool
-					nn := enc.copySingleNode(caCopy)
+					caCopyNext := caCopy.next
 					for paCopy != nil {
+						// Merge child nodes in parent list whose attribute id's matched with attribute id's of some nodes in parent list
 						if enc.getAttr(paCopy) == enc.getAttr(caCopy) {
 							temp := paCopy.next
-							nn.next = temp
-							paCopy.next = nn
+							caCopy.next = temp
+							paCopy.next = caCopy
 							exist = true
 							break
 						} else {
@@ -830,26 +834,25 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 						}
 					}
 					if !exist {
-						if leftStartPtr == nil {
-							leftStartPtr = nn
-							leftEndPtr = nn
+						if unmatchedNodesStartPtr == nil {
+							unmatchedNodesStartPtr = caCopy
+							unmatchedNodesEndPtr = caCopy
 
 						} else {
-							leftEndPtr.next = nn
-							leftEndPtr = nn
+							unmatchedNodesEndPtr.next = caCopy
+							unmatchedNodesEndPtr = caCopy
 						}
 					}
-					caCopy = caCopy.next
+					caCopy = caCopyNext
 					paCopy = tempPa
 				}
+				// Merge all unmatched nodes at the end of parent List
 				temp := tempPa
 				for temp.next != nil {
 					temp = temp.next
 				}
-				temp.next = leftStartPtr
+				temp.next = unmatchedNodesStartPtr
 				paCopy = tempPa
-				// iterate over nodes of ca
-				// if it's inside p then add it next to it
 			}
 			mergedList = append(mergedList, paCopy)
 		}
