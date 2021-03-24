@@ -34,13 +34,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
@@ -471,9 +469,10 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := x.AttachAccessJwt(context.Background(), r)
 	var response map[string]interface{}
 	if abort {
-		response, err = handleAbort(startTs)
+		response, err = handleAbort(ctx, startTs)
 	} else {
 		// Keys are sent as an array in the body.
 		reqText := readRequest(w, r)
@@ -481,7 +480,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response, err = handleCommit(startTs, reqText)
+		response, err = handleCommit(ctx, startTs, reqText)
 	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -497,27 +496,28 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = x.WriteResponse(w, r, js)
 }
 
-func handleAbort(startTs uint64) (map[string]interface{}, error) {
+func handleAbort(ctx context.Context, startTs uint64) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 		Aborted: true,
 	}
 
-	_, err := worker.CommitOverNetwork(context.Background(), tc)
-	switch err {
-	case dgo.ErrAborted:
+	tctx, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
+	switch {
+	case tctx.Aborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 		}, nil
-	case nil:
+	case err == nil:
 		return nil, errors.Errorf("transaction could not be aborted")
 	default:
 		return nil, err
 	}
 }
 
-func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+func handleCommit(ctx context.Context, startTs uint64, reqText []byte) (map[string]interface{},
+	error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 	}
@@ -540,14 +540,13 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 		tc.Preds = reqMap["preds"]
 	}
 
-	cts, err := worker.CommitOverNetwork(context.Background(), tc)
+	tc, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &api.Response{}
 	resp.Txn = tc
-	resp.Txn.CommitTs = cts
 	e := query.Extensions{
 		Txn: resp.Txn,
 	}
