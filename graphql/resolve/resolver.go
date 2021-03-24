@@ -456,7 +456,7 @@ func New(s schema.Schema, resolverFactory ResolverFactory) *RequestResolver {
 // r.GqlReq should be set with a request before Resolve is called
 // and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
-func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (resp *schema.Response) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
@@ -472,19 +472,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	startTime := time.Now()
-	resp := &schema.Response{
-		Extensions: &schema.Extensions{
-			Tracing: &schema.Trace{
-				Version:   1,
-				StartTime: startTime.Format(time.RFC3339Nano),
-			},
-		},
-	}
-	defer func() {
-		endTime := time.Now()
-		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
-		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
-	}()
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
 	// Pass in GraphQL @auth information
@@ -498,6 +485,20 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
+
+	resp = &schema.Response{
+		Extensions: &schema.Extensions{
+			Tracing: &schema.Trace{
+				Version:   1,
+				StartTime: startTime.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	defer func() {
+		endTime := time.Now()
+		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
+		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
+	}()
 
 	if glog.V(3) {
 		// don't log the introspection queries they are sent too frequently
@@ -562,6 +563,13 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		}
 		resolveQueries()
 	case op.IsMutation():
+		// Panic Handler for mutation. This ensures that the mutation which causes panic
+		// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
+		// used in recoveryHandler in admin/http.go
+		defer api.PanicHandler(
+			func(err error) {
+				resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
+			}, gqlReq.Query)
 		// A mutation operation can contain any number of mutation fields.  Those should be executed
 		// serially.
 		// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
