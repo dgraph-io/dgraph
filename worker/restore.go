@@ -20,7 +20,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -31,6 +33,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
@@ -45,10 +48,76 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// RunRestore calls badger.Load and tries to load data into a new DB.
+func RunRestore(dir, location, backupId string, keyFile string,
+	ctype options.CompressionType, clevel int) LoadResult {
+	// Create the pdir if it doesn't exist.
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return LoadResult{Err: err}
+	}
+
+	uri, err := url.Parse(location)
+	if err != nil {
+		return LoadResult{Err: err}
+	}
+
+	h, err := NewUriHandler(uri, nil)
+	if err != nil {
+		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
+	}
+	manifest, err := GetLatestManifest(h, uri)
+	if err != nil {
+		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
+	}
+	var key x.Sensitive
+	if len(keyFile) > 0 {
+		key, err = ioutil.ReadFile(keyFile)
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "RunRestore failed to read enc-key")}
+		}
+	}
+
+	for gid := range manifest.Groups {
+		req := &pb.RestoreRequest{
+			Location:          location,
+			GroupId:           gid,
+			BackupId:          backupId,
+			EncryptionKeyFile: keyFile,
+		}
+		if err := MapBackup(req); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
+		}
+		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
+		db, err := badger.OpenManaged(badger.DefaultOptions(pdir).
+			WithCompression(ctype).
+			WithZSTDCompressionLevel(clevel).
+			WithSyncWrites(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
+		if err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
+
+		}
+		defer db.Close()
+		if err := reduceToDB(db); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
+		}
+		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
+		}
+	}
+	// TODO: Fix this return value.
+	return LoadResult{Version: manifest.Since}
+}
+
 type loadBackupInput struct {
 	r              io.Reader
 	restoreTs      uint64
 	preds          predicateSet
+	dropPrefixes   [][]byte
 	dropOperations []*pb.DropOperation
 	isOld          bool
 }
@@ -68,8 +137,10 @@ const (
 )
 
 func newBuffer() *z.Buffer {
+	path := filepath.Join(x.WorkerConfig.TmpDir, restoreTmpDir)
+	x.Check(os.MkdirAll(path, 0750))
 	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap,
-		x.WorkerConfig.TmpDir, "Restore.Buffer")
+		path, "Restore.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -111,6 +182,7 @@ func (mw *mapper) newMapFile() (*os.File, error) {
 		restoreMapDir,
 		fmt.Sprintf("%06d.map", fileNum),
 	)
+	glog.Infof("Creating new backup map file at: %q", filename)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
@@ -123,7 +195,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	buf.SortSlice(func(ls, rs []byte) bool {
 		lme := mapEntry(ls)
 		rme := mapEntry(rs)
-		return bytes.Compare(lme.Key(), rme.Key()) < 0
+		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
 
 	f, err := m.newMapFile()
@@ -222,7 +294,6 @@ func (mw *mapper) Close() error {
 func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 	br := bufio.NewReaderSize(in.r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
-
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
@@ -268,6 +339,16 @@ func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 			}
 			// TODO: Why do we exclude type keys here?
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+				continue
+			}
+			shouldSkip := false
+			for _, p := range in.dropPrefixes {
+				glog.Info("Checking: ", parsedKey.Attr, string(p))
+				if strings.HasPrefix(parsedKey.Attr, string(p)) {
+					shouldSkip = true
+				}
+			}
+			if shouldSkip {
 				continue
 			}
 
@@ -359,30 +440,20 @@ func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 	return nil
 }
 
-func applyDropOperationsBeforeRestore(db *badger.DB, dropOperations []*pb.DropOperation) error {
-	for _, operation := range dropOperations {
-		switch operation.DropOp {
-		case pb.DropOperation_ALL:
-			return db.DropAll()
-		case pb.DropOperation_DATA:
-			return db.DropPrefix([]byte{x.DefaultPrefix})
-		case pb.DropOperation_ATTR:
-			return db.DropPrefix(x.PredicatePrefix(operation.DropValue))
-		case pb.DropOperation_NS:
-			ns, err := strconv.ParseUint(operation.DropValue, 0, 64)
-			x.Check(err)
-			return db.BanNamespace(ns)
-		}
-	}
-	return nil
-}
-
 func fromBackupKey(key []byte) ([]byte, uint64, error) {
 	backupKey := &pb.BackupKey{}
 	if err := backupKey.Unmarshal(key); err != nil {
 		return nil, 0, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
 	}
 	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
+}
+
+func compareKeys(key1, key2 []byte) int {
+	if cmp := bytes.Compare(key1[:len(key1)-8], key2[:len(key2)-8]); cmp != 0 {
+		return cmp
+	}
+	// We are keeping the largest version first in the sort result.
+	return bytes.Compare(key2[len(key2)-8:], key1[len(key1)-8:])
 }
 
 type backupReader struct {
@@ -423,7 +494,7 @@ func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupRead
 	return br, nil
 }
 
-func ProcessRestore(req *pb.RestoreRequest) error {
+func MapBackup(req *pb.RestoreRequest) error {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
 		return err
@@ -440,6 +511,8 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot retrieve manifests")
 	}
 
+	fmt.Printf("Got %d backups to restore ", len(manifests))
+
 	cfg, err := getEncConfig(req)
 	if err != nil {
 		return errors.Wrapf(err, "unable to get encryption config")
@@ -454,6 +527,7 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 
 	dropAll := false
 	dropAttr := make(map[string]struct{})
+	var predPrefixes [][]byte
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
@@ -490,6 +564,7 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 			in := &loadBackupInput{
 				r:              br,
 				preds:          predSet,
+				dropPrefixes:   predPrefixes,
 				dropOperations: manifest.DropOperations,
 				isOld:          manifest.Version == 0,
 			}
@@ -514,6 +589,16 @@ func ProcessRestore(req *pb.RestoreRequest) error {
 				dropAll = true
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
+			case pb.DropOperation_NS:
+				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
+				if err != nil {
+					return errors.Wrap(err, "Map phase failed to parse namespace")
+				}
+				// TODO: Banning the namespace should be sufficient. No need to filter prefixes.
+				if err := pstore.BanNamespace(ns); err != nil {
+					return errors.Wrap(err, "Failed to ban namespace while restore")
+				}
+				predPrefixes = append(predPrefixes, x.NamespaceToBytes(ns))
 			}
 		}
 	}
@@ -554,7 +639,7 @@ func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
 		return err
 	}
 
-	lastManifest := manifests[len(manifests)-1]
+	lastManifest := manifests[0]
 	if len(currentGroups) != len(lastManifest.Groups) {
 		return errors.Errorf("groups in cluster and latest backup manifest differ")
 	}
@@ -603,7 +688,7 @@ func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) error {
 		}
 		key := mapEntry(mi.meBuf).Key()
 
-		if len(partitionKey) == 0 || bytes.Compare(key, partitionKey) < 0 {
+		if len(partitionKey) == 0 || y.CompareKeys(key, partitionKey) < 0 {
 			b := cbuf.SliceAllocate(len(mi.meBuf))
 			copy(b, mi.meBuf)
 			mi.meBuf = mi.meBuf[:0]
@@ -646,20 +731,12 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 }
 
 func getBuf() *z.Buffer {
-	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
-		filepath.Join(x.WorkerConfig.TmpDir, "buffer"), "Restore.GetBuf")
+	path := filepath.Join(x.WorkerConfig.TmpDir, "buffer")
+	x.Check(os.MkdirAll(path, 0750))
+	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc, path, "Restore.GetBuf")
 	x.Check(err)
 	cbuf.AutoMmapAfter(1 << 30)
 	return cbuf
-}
-
-func reduceToDB(db *badger.DB) error {
-	// TODO: What should be the size of bufferCh?
-	r := &reducer{
-		bufferCh: make(chan *z.Buffer, 10),
-		db:       pstore,
-	}
-	return r.reduce()
 }
 
 type reducer struct {
@@ -667,9 +744,27 @@ type reducer struct {
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
 	db            *badger.DB
+	writeCh       chan *z.Buffer
 }
 
-func (r *reducer) reduce() error {
+func reduceToDB(db *badger.DB) error {
+	r := NewBackupReducer(db)
+	return r.Reduce()
+}
+
+func NewBackupReducer(db *badger.DB) *reducer {
+	return &reducer{
+		db:       db,
+		bufferCh: make(chan *z.Buffer, 10),
+		writeCh:  make(chan *z.Buffer, 10),
+	}
+}
+
+func (r *reducer) WriteCh() chan *z.Buffer {
+	return r.writeCh
+}
+
+func (r *reducer) Reduce() error {
 	var files []string
 	f := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -681,7 +776,9 @@ func (r *reducer) reduce() error {
 		return nil
 	}
 
-	if err := filepath.Walk(filepath.Join(x.WorkerConfig.TmpDir, restoreMapDir), f); err != nil {
+	mapDir := filepath.Join(x.WorkerConfig.TmpDir, restoreMapDir)
+	defer os.RemoveAll(mapDir)
+	if err := filepath.Walk(mapDir, f); err != nil {
 		return err
 	}
 	glog.Infof("Got files: %+v\n", files)
@@ -704,7 +801,7 @@ func (r *reducer) reduce() error {
 		keys = append(keys, []byte(k))
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return bytes.Compare(keys[i], keys[j]) < 0
+		return y.CompareKeys(keys[i], keys[j]) < 0
 	})
 	// Append nil for the last entries.
 	keys = append(keys, nil)
@@ -740,6 +837,7 @@ func (r *reducer) blockingRead() error {
 			continue
 		}
 		r.bufferCh <- cbuf
+		cbuf = getBuf()
 	}
 
 	if !cbuf.IsEmpty() {
@@ -752,13 +850,14 @@ func (r *reducer) blockingRead() error {
 }
 
 func (r *reducer) writeToDB() error {
-	writeCh := make(chan *z.Buffer, 3)
-
 	toStreamWriter := func() error {
+		if r.db == nil {
+			return nil
+		}
 		writer := r.db.NewStreamWriter()
 		x.Check(writer.Prepare())
 
-		for buf := range writeCh {
+		for buf := range r.writeCh {
 			if err := writer.Write(buf); err != nil {
 				return err
 			}
@@ -773,24 +872,23 @@ func (r *reducer) writeToDB() error {
 	}()
 
 	kvBuf := getBuf()
+	var lastKey []byte
 	for cbuf := range r.bufferCh {
 		cbuf.SortSlice(func(ls, rs []byte) bool {
 			lme := mapEntry(ls)
 			rme := mapEntry(rs)
-			return bytes.Compare(lme.Key(), rme.Key()) < 0
+			return y.CompareKeys(lme.Key(), rme.Key()) < 0
 		})
 
-		var lastKey []byte
 		err := cbuf.SliceIterate(func(s []byte) error {
 			me := mapEntry(s)
-			key := y.ParseKey(me.Key())
+			key := me.Key()
 
 			// Don't need to pick multiple versions of the same key.
-			if bytes.Equal(key, lastKey) {
+			if y.SameKey(key, lastKey) {
 				return nil
 			}
 			lastKey = append(lastKey[:0], key...)
-
 			kvBuf.WriteSlice(me.Data())
 			return nil
 		})
@@ -798,12 +896,13 @@ func (r *reducer) writeToDB() error {
 			return err
 		}
 
-		writeCh <- kvBuf
+		glog.Info("Sent buffer to write channel")
+		r.writeCh <- kvBuf
 		// Reuse cbuf for the next kvBuf.
 		cbuf.Reset()
 		kvBuf = cbuf
 	}
-	close(writeCh)
+	close(r.writeCh)
 	kvBuf.Release()
 	return <-errCh
 }

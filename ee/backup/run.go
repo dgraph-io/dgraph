@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,10 +26,16 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
@@ -115,12 +122,11 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Restore.Conf).Stop()
-			panic("This is not implemented")
 			// TODO: Remote this later.
-			// if err := runRestoreCmd(); err != nil {
-			// 	fmt.Fprintln(os.Stderr, err)
-			// 	os.Exit(1)
-			// }
+			if err := runRestoreCmd(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		},
 		Annotations: map[string]string{"group": "data-load"},
 	}
@@ -153,6 +159,92 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
+}
+
+func runRestoreCmd() error {
+	var (
+		start time.Time
+		zc    pb.ZeroClient
+		err   error
+	)
+	encKeyFile := Restore.Conf.GetString("encryption_key_file")
+	fmt.Println("Restoring backups from:", opt.location)
+	fmt.Println("Writing postings to:", opt.pdir)
+
+	if opt.zero == "" && opt.forceZero {
+		return errors.Errorf("No Dgraph Zero address passed. Use the --force_zero option if you " +
+			"meant to do this")
+	}
+
+	if opt.zero != "" {
+		fmt.Println("Updating Zero timestamp at:", opt.zero)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
+		x.Checkf(err, "Unable to generate helper TLS config")
+		callOpts := []grpc.DialOption{grpc.WithBlock()}
+		if tlsConfig != nil {
+			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+		} else {
+			callOpts = append(callOpts, grpc.WithInsecure())
+		}
+
+		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
+		if err != nil {
+			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
+		}
+		zc = pb.NewZeroClient(zero)
+	}
+
+	badger := z.NewSuperFlag(opt.badger).MergeAndCheckDefault(worker.BadgerDefaults)
+	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
+
+	start = time.Now()
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, encKeyFile, ctype, clevel)
+	if result.Err != nil {
+		return result.Err
+	}
+	if result.Version == 0 {
+		return errors.Errorf("Failed to obtain a restore version")
+	}
+	fmt.Printf("Restore version: %d\n", result.Version)
+	fmt.Printf("Restore max uid: %d\n", result.MaxLeaseUid)
+
+	if zc != nil {
+		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelTs()
+
+		if _, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version}); err != nil {
+			fmt.Printf("Failed to assign timestamp %d in Zero: %v", result.Version, err)
+			return err
+		}
+
+		leaseID := func(val uint64, typ pb.NumLeaseType) error {
+			// MaxLeaseUid can be zero if the backup was taken on an empty DB.
+			if val == 0 {
+				return nil
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if _, err = zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ}); err != nil {
+				fmt.Printf("Failed to assign %s %d in Zero: %v\n",
+					pb.NumLeaseType_name[int32(typ)], val, err)
+				return err
+			}
+			return nil
+		}
+
+		if err := leaseID(result.MaxLeaseUid, pb.Num_UID); err != nil {
+			return errors.Wrapf(err, "cannot update max uid lease after restore.")
+		}
+		if err := leaseID(result.MaxLeaseNsId, pb.Num_NS_ID); err != nil {
+			return errors.Wrapf(err, "cannot update max namespace lease after restore.")
+		}
+	}
+
+	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
+	return nil
 }
 
 func initBackupLs() {
@@ -256,7 +348,7 @@ func initExportBackup() {
 }
 
 // TODO: This function is broken. Needs to be re-written.
-func runExportBackup() error {
+func runExportBackup2() error {
 	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
@@ -335,5 +427,142 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
 	}
 
+	return nil
+}
+
+func runExportBackup() error {
+	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	if opt.format != "json" && opt.format != "rdf" {
+		return errors.Errorf("invalid format %s", opt.format)
+	}
+	// Create exportDir and temporary folder to store the restored backup.
+	exportDir, err := filepath.Abs(opt.destination)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
+
+	uri, err := url.Parse(opt.location)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+	handler, err := worker.NewUriHandler(uri, nil)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+	latestManifest, err := worker.GetLatestManifest(handler, uri)
+	if err != nil {
+		return errors.Wrapf(err, "runExportBackup")
+	}
+
+	exportSchema := func(writers *worker.Writers, val []byte, pk x.ParsedKey) error {
+		kv := &bpb.KV{}
+		var err error
+		if pk.IsSchema() {
+			kv, err = worker.SchemaExportKv(pk.Attr, val, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			kv, err = worker.TypeExportKv(pk.Attr, val)
+			if err != nil {
+				return err
+			}
+		}
+		return worker.WriteExport(writers, kv, "rdf")
+	}
+
+	processKvBuf := func(ch chan *z.Buffer, req *pb.ExportRequest, writers *worker.Writers) error {
+		for buf := range ch {
+			glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
+			kv := &bpb.KV{}
+			err := buf.SliceIterate(func(s []byte) error {
+				kv.Reset()
+				if err := kv.Unmarshal(s); err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+				pk, err := x.Parse(kv.Key)
+				if err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+
+				if pk.Attr == "_predicate_" {
+					return nil
+				}
+				if pk.IsSchema() || pk.IsType() {
+					return exportSchema(writers, kv.Value, pk)
+				}
+
+				pl := &pb.PostingList{}
+				if err := pl.Unmarshal(kv.Value); err != nil {
+					return errors.Wrap(err, "ProcessKvBuf")
+				}
+
+				l := posting.NewList(kv.Key, pl, kv.Version)
+				kvList, err := worker.ToExportKvList(pk, l, req)
+				if err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+				exportKv := kvList.Kv[0]
+				return worker.WriteExport(writers, exportKv, req.Format)
+			})
+			if err != nil {
+				return err
+			}
+			buf.Release()
+		}
+		return nil
+	}
+
+	// TODO: Make this procesing concurrent.
+	for gid, _ := range latestManifest.Groups {
+		glog.Infof("Exporting group: %d", gid)
+		req := &pb.RestoreRequest{
+			GroupId:           gid,
+			Location:          opt.location,
+			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+		}
+		if err := worker.MapBackup(req); err != nil {
+			return errors.Wrap(err, "Failed to map the backups")
+		}
+		in := &pb.ExportRequest{
+			GroupId:     uint32(gid),
+			ReadTs:      latestManifest.Since,
+			UnixTs:      time.Now().Unix(),
+			Format:      opt.format,
+			Destination: exportDir,
+		}
+		uts := time.Unix(in.UnixTs, 0)
+		destPath := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504"))
+		exportStorage, err := worker.NewExportStorage(in, destPath)
+		if err != nil {
+			return err
+		}
+
+		writers, err := worker.InitWriters(exportStorage, in)
+		if err != nil {
+			return err
+		}
+
+		r := worker.NewBackupReducer(nil)
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- processKvBuf(r.WriteCh(), in, writers)
+			glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
+		}()
+
+		if err := r.Reduce(); err != nil {
+			return errors.Wrap(err, "Failed to reduce the map")
+		}
+		if err := <-errCh; err != nil {
+			errors.Wrap(err, "Failed to process reduced buffers")
+		}
+		if _, err := exportStorage.FinishWriting(writers); err != nil {
+			return errors.Wrap(err, "Failed to finish write")
+		}
+	}
 	return nil
 }
