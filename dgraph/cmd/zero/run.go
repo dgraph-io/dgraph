@@ -307,8 +307,8 @@ func run() {
 	baseMux.HandleFunc("/moveTablet", st.moveTablet)
 	baseMux.HandleFunc("/assign", st.assign)
 	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
-	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
-	zpages.Handle(baseMux, "/z")
+	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/debug/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
