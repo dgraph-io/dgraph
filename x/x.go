@@ -1411,14 +1411,9 @@ type LimiterConf struct {
 	RefillAfter   time.Duration
 }
 
-type lockedMap struct {
-	sync.Mutex
-	mp map[uint64]uint64
-}
-
 // RateLimiter implements a basic rate limiter.
 type RateLimiter struct {
-	limiter     lockedMap
+	limiter     *sync.Map
 	maxTokens   uint64
 	refillAfter time.Duration
 	closer      *z.Closer
@@ -1428,9 +1423,7 @@ type RateLimiter struct {
 // refillAfter.
 func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
 	r := &RateLimiter{
-		limiter: lockedMap{
-			mp: make(map[uint64]uint64),
-		},
+		limiter:     &sync.Map{},
 		maxTokens:   maxTokens,
 		refillAfter: refillAfter,
 		closer:      closer,
@@ -1440,20 +1433,19 @@ func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Close
 	return r
 }
 
-// Allow checks if the request for count number of tokens can be allowed for a given namespace.
-// If request is allowed, it subtracts the count from the available tokens.
-func (r *RateLimiter) Allow(ns, count uint64) bool {
-	r.limiter.Lock()
-	defer r.limiter.Unlock()
-	glog.Infof("Request: ns:%d, count:%d, avail:%d", ns, count, r.limiter.mp[ns])
-
-	if _, ok := r.limiter.mp[ns]; !ok {
-		r.limiter.mp[ns] = r.maxTokens // make this configurable.
+// Allow checks if the request for req number of tokens can be allowed for a given namespace.
+// If request is allowed, it subtracts the req from the available tokens.
+func (r *RateLimiter) Allow(ns, req uint64) bool {
+	if _, ok := r.limiter.Load(ns); !ok {
+		r.limiter.Store(ns, r.maxTokens)
 	}
-	if r.limiter.mp[ns] < count {
+
+	val, _ := r.limiter.Load(ns)
+	cnt := val.(uint64)
+	if cnt < req {
 		return false
 	}
-	r.limiter.mp[ns] -= count
+	r.limiter.Store(ns, cnt-req)
 	return true
 }
 
@@ -1461,11 +1453,10 @@ func (r *RateLimiter) Allow(ns, count uint64) bool {
 func (r *RateLimiter) RefillPeriodically() {
 	defer r.closer.Done()
 	refill := func() {
-		r.limiter.Lock()
-		defer r.limiter.Unlock()
-		for ns := range r.limiter.mp {
-			r.limiter.mp[ns] = r.maxTokens
-		}
+		r.limiter.Range(func(ns, _ interface{}) bool {
+			r.limiter.Store(ns, r.maxTokens)
+			return true
+		})
 	}
 
 	ticker := time.NewTicker(r.refillAfter)
