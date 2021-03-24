@@ -35,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1414,14 +1415,14 @@ type LimiterConf struct {
 // RateLimiter implements a basic rate limiter.
 type RateLimiter struct {
 	limiter     *sync.Map
-	maxTokens   uint64
+	maxTokens   int64
 	refillAfter time.Duration
 	closer      *z.Closer
 }
 
 // NewRateLimiter creates a rate limiter that limits lease by maxTokens in an interval specified by
 // refillAfter.
-func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
+func NewRateLimiter(maxTokens int64, refillAfter time.Duration, closer *z.Closer) *RateLimiter {
 	r := &RateLimiter{
 		limiter:     &sync.Map{},
 		maxTokens:   maxTokens,
@@ -1435,17 +1436,14 @@ func NewRateLimiter(maxTokens uint64, refillAfter time.Duration, closer *z.Close
 
 // Allow checks if the request for req number of tokens can be allowed for a given namespace.
 // If request is allowed, it subtracts the req from the available tokens.
-func (r *RateLimiter) Allow(ns, req uint64) bool {
-	if _, ok := r.limiter.Load(ns); !ok {
-		r.limiter.Store(ns, r.maxTokens)
-	}
-
-	val, _ := r.limiter.Load(ns)
-	cnt := val.(uint64)
-	if cnt < req {
+func (r *RateLimiter) Allow(ns uint64, req int64) bool {
+	v := r.maxTokens
+	val, _ := r.limiter.LoadOrStore(ns, &v)
+	ptr := val.(*int64)
+	if cnt := atomic.AddInt64(ptr, -req); cnt < 0 {
+		atomic.AddInt64(ptr, req)
 		return false
 	}
-	r.limiter.Store(ns, cnt-req)
 	return true
 }
 
@@ -1453,8 +1451,8 @@ func (r *RateLimiter) Allow(ns, req uint64) bool {
 func (r *RateLimiter) RefillPeriodically() {
 	defer r.closer.Done()
 	refill := func() {
-		r.limiter.Range(func(ns, _ interface{}) bool {
-			r.limiter.Store(ns, r.maxTokens)
+		r.limiter.Range(func(_, val interface{}) bool {
+			atomic.StoreInt64(val.(*int64), r.maxTokens)
 			return true
 		})
 	}

@@ -38,10 +38,10 @@ import (
 
 // XidMapOptions specifies the options for creating a new xidmap.
 type XidMapOptions struct {
-	Zero     *grpc.ClientConn
-	DgClient *dgo.Dgraph
-	DB       *badger.DB
-	Dir      string
+	UidAssigner *grpc.ClientConn
+	DgClient    *dgo.Dgraph
+	DB          *badger.DB
+	Dir         string
 }
 
 // XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
@@ -142,7 +142,7 @@ func New(opts XidMapOptions) *XidMap {
 		})
 		x.Check(err)
 	}
-	xm.zc = pb.NewZeroClient(opts.Zero)
+	xm.zc = pb.NewZeroClient(opts.UidAssigner)
 
 	go func() {
 		const initBackoff = 10 * time.Millisecond

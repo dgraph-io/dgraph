@@ -235,7 +235,7 @@ func (ld *loader) mapStage() {
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 	ld.xids = xidmap.New(xidmap.XidMapOptions{
-		Zero: ld.zero,
+		UidAssigner: ld.zero,
 		DB:   db,
 		Dir:  filepath.Join(ld.opt.TmpDir, bufferDir),
 	})

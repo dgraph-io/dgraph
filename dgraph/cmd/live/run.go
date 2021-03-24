@@ -631,7 +631,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	xopts := xidmap.XidMapOptions{Zero: connzero, DB: db}
+	xopts := xidmap.XidMapOptions{UidAssigner: connzero, DB: db}
 	if Live.Conf.GetString("slash_grpc_endpoint") != "" {
 		// Slash uses alpha to assign UIDs in live loader. Dgraph client is needed by xidmap to do
 		// authorization.

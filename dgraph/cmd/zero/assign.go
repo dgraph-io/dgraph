@@ -197,7 +197,7 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 				num.Val, opts.limiterConfig.UidLeaseLimit)
 		}
 
-		if !s.rateLimiter.Allow(ns, num.Val) {
+		if !s.rateLimiter.Allow(ns, int64(num.Val)) {
 			// Return error after random delay.
 			delay := rand.Intn(int(opts.limiterConfig.RefillAfter))
 			time.Sleep(time.Duration(delay) * time.Second)

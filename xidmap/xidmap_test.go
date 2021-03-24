@@ -36,9 +36,9 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 
 func getTestXidmapOpts(conn *grpc.ClientConn, db *badger.DB) XidMapOptions {
 	return XidMapOptions{
-		Zero:     conn,
-		DgClient: nil,
-		DB:       db,
+		UidAssigner: conn,
+		DgClient:    nil,
+		DB:          db,
 	}
 }
 
