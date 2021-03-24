@@ -402,7 +402,7 @@ func New(s schema.Schema, resolverFactory ResolverFactory) *RequestResolver {
 // r.GqlReq should be set with a request before Resolve is called
 // and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
-func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *schema.Response {
+func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (resp *schema.Response) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
@@ -418,7 +418,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	startTime := time.Now()
-	resp := &schema.Response{
+	resp = &schema.Response{
 		Extensions: &schema.Extensions{
 			Tracing: &schema.Trace{
 				Version:   1,
@@ -426,6 +426,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			},
 		},
 	}
+	// Panic Handler for mutation. This ensures that the mutation which causes panic
+	// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
+	// used in recoveryHandler in admin/http.go
+	defer api.PanicHandler(
+		func(err error) {
+			resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
+		}, gqlReq.Query)
+
 	defer func() {
 		endTime := time.Now()
 		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
@@ -435,7 +443,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
-		return schema.ErrorResponse(err)
+		resp.Errors = schema.AsGQLErrors(err)
+		return
 	}
 
 	if glog.V(3) {
@@ -472,7 +481,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Field: q,
 							Err:   err,
 						}
-					})
+					}, gqlReq.Query)
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
@@ -861,7 +870,7 @@ func resolveCustomField(ctx context.Context, f schema.Field, vals []interface{},
 	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
-	})
+	}, "")
 
 	fconf, err := f.CustomHTTPConfig()
 	if err != nil {
@@ -999,7 +1008,7 @@ func resolveCustomField(ctx context.Context, f schema.Field, vals []interface{},
 			defer api.PanicHandler(
 				func(err error) {
 					errChan <- internalServerError(err, f)
-				})
+				}, "")
 
 			requestInput := input
 			if graphql {
@@ -1113,7 +1122,7 @@ func resolveNestedFields(ctx context.Context, f schema.Field, vals []interface{}
 	errCh chan error) {
 	defer api.PanicHandler(func(err error) {
 		errCh <- internalServerError(err, f)
-	})
+	}, "")
 
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
