@@ -480,15 +480,15 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 			},
 		},
 	}
-	defer func() {
-		// Panic Handler for mutation. This ensures that the mutation which causes panic
-		// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
-		// used in recoveryHandler in admin/http.go
-		api.PanicHandler(
-			func(err error) {
-				resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
-			}, gqlReq.Query)
+	// Panic Handler for mutation. This ensures that the mutation which causes panic
+	// gets logged in Alpha logs. This panic handler overrides the default Panic Handler
+	// used in recoveryHandler in admin/http.go
+	defer api.PanicHandler(
+		func(err error) {
+			resp.Errors = schema.AsGQLErrors(schema.AppendGQLErrs(resp.Errors, err))
+		}, gqlReq.Query)
 
+	defer func() {
 		endTime := time.Now()
 		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
 		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
