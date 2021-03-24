@@ -123,7 +123,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	buf.SortSlice(func(ls, rs []byte) bool {
 		lme := mapEntry(ls)
 		rme := mapEntry(rs)
-		return bytes.Compare(lme.Key(), rme.Key()) < 0
+		return y.CompareKeys(lme.Key(), rme.Key()) < 0
 	})
 
 	f, err := m.newMapFile()
@@ -554,7 +554,7 @@ func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
 		return err
 	}
 
-	lastManifest := manifests[len(manifests)-1]
+	lastManifest := manifests[0]
 	if len(currentGroups) != len(lastManifest.Groups) {
 		return errors.Errorf("groups in cluster and latest backup manifest differ")
 	}
@@ -603,7 +603,7 @@ func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) error {
 		}
 		key := mapEntry(mi.meBuf).Key()
 
-		if len(partitionKey) == 0 || bytes.Compare(key, partitionKey) < 0 {
+		if len(partitionKey) == 0 || y.CompareKeys(key, partitionKey) < 0 {
 			b := cbuf.SliceAllocate(len(mi.meBuf))
 			copy(b, mi.meBuf)
 			mi.meBuf = mi.meBuf[:0]
@@ -704,7 +704,7 @@ func (r *reducer) reduce() error {
 		keys = append(keys, []byte(k))
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return bytes.Compare(keys[i], keys[j]) < 0
+		return y.CompareKeys(keys[i], keys[j]) < 0
 	})
 	// Append nil for the last entries.
 	keys = append(keys, nil)
@@ -777,7 +777,7 @@ func (r *reducer) writeToDB() error {
 		cbuf.SortSlice(func(ls, rs []byte) bool {
 			lme := mapEntry(ls)
 			rme := mapEntry(rs)
-			return bytes.Compare(lme.Key(), rme.Key()) < 0
+			return y.CompareKeys(lme.Key(), rme.Key()) < 0
 		})
 
 		var lastKey []byte
