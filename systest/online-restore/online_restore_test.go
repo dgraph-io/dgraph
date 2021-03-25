@@ -563,7 +563,6 @@ func backup(t *testing.T, backupDir string) {
 	}
 	testutil.MakeGQLRequestWithTLS(t, backupParams, testutil.GetAlphaClientConfig(t)).
 		RequireNoGraphQLErrors(t)
-	testutil.WaitForBackup(t)
 }
 
 func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVerify,
