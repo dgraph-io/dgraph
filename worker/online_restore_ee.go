@@ -259,7 +259,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Write restored values to disk and update the UID lease.
-	if err := ProcessRestore(req); err != nil {
+	if err := MapBackup(req); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
 

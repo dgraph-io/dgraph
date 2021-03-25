@@ -423,7 +423,7 @@ func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupRead
 	return br, nil
 }
 
-func ProcessRestore(req *pb.RestoreRequest) error {
+func MapBackup(req *pb.RestoreRequest) error {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
 		return err
@@ -657,9 +657,10 @@ func reduceToDB(db *badger.DB) error {
 	// TODO: What should be the size of bufferCh?
 	r := &reducer{
 		bufferCh: make(chan *z.Buffer, 10),
-		db:       pstore,
+		db:       db,
+		writeCh:  make(chan *z.Buffer, 10),
 	}
-	return r.reduce()
+	return r.Reduce()
 }
 
 type reducer struct {
@@ -667,9 +668,22 @@ type reducer struct {
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
 	db            *badger.DB
+	writeCh       chan *z.Buffer
 }
 
-func (r *reducer) reduce() error {
+func NewBackupReducer(db *badger.DB) *reducer {
+	return &reducer{
+		bufferCh: make(chan *z.Buffer, 10),
+		db:       db,
+		writeCh:  make(chan *z.Buffer, 10),
+	}
+}
+
+func (r *reducer) WriteCh() chan *z.Buffer {
+	return r.writeCh
+}
+
+func (r *reducer) Reduce() error {
 	var files []string
 	f := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -752,13 +766,15 @@ func (r *reducer) blockingRead() error {
 }
 
 func (r *reducer) writeToDB() error {
-	writeCh := make(chan *z.Buffer, 3)
 
 	toStreamWriter := func() error {
+		if r.db == nil {
+			return nil
+		}
 		writer := r.db.NewStreamWriter()
 		x.Check(writer.Prepare())
 
-		for buf := range writeCh {
+		for buf := range r.writeCh {
 			if err := writer.Write(buf); err != nil {
 				return err
 			}
@@ -798,12 +814,12 @@ func (r *reducer) writeToDB() error {
 			return err
 		}
 
-		writeCh <- kvBuf
+		r.writeCh <- kvBuf
 		// Reuse cbuf for the next kvBuf.
 		cbuf.Reset()
 		kvBuf = cbuf
 	}
-	close(writeCh)
+	close(r.writeCh)
 	kvBuf.Release()
 	return <-errCh
 }

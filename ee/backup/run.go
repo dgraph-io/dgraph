@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/golang/glog"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dgraph-io/dgraph/ee"
@@ -256,7 +257,7 @@ func initExportBackup() {
 }
 
 // TODO: This function is broken. Needs to be re-written.
-func runExportBackup() error {
+func runExportBackup2() error {
 	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
@@ -335,5 +336,36 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot remove temp directory at %s", tmpDir)
 	}
 
+	return nil
+}
+
+func runExportBackup() error {
+	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	if opt.format != "json" && opt.format != "rdf" {
+		return errors.Errorf("invalid format %s", opt.format)
+	}
+
+	glog.Info("Backup location is: ", opt.location)
+
+	req := &pb.RestoreRequest{
+		Location:          opt.location,
+		EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+	}
+
+	if err := worker.MapBackup(req); err != nil {
+		return errors.Wrap(err, "Failed to map the backups")
+	}
+
+	r := worker.NewBackupReducer(nil)
+
+	go func() {
+		for buf := range r.WriteCh() {
+			glog.Info("Received buf: ", buf)
+		}
+	}()
+
+	if err := r.Reduce(); err != nil {
+		return errors.Wrap(err, "Failed to reduce the map")
+	}
 	return nil
 }
