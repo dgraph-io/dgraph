@@ -363,6 +363,13 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot get latest manifest")
 	}
 
+	processKvBuf := func(buf *z.Buffer) error {
+		err := buf.SliceIterate(func(s []byte) error {
+			// TODO: Do the processing here
+		})
+		return err
+	}
+
 	// TODO: Make this procesing concurrent.
 	for gid, _ := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
@@ -380,12 +387,11 @@ func runExportBackup() error {
 
 		errCh := make(chan error, 1)
 		go func() {
-			glog.Info("Waiting for buffers in write chan")
 			for buf := range r.WriteCh() {
 				glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
+				errCh <- processKvBuf(buf)
 				buf.Release()
 			}
-			glog.Info("Done processing")
 			errCh <- nil
 		}()
 

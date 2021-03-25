@@ -676,8 +676,8 @@ type reducer struct {
 
 func NewBackupReducer(db *badger.DB) *reducer {
 	return &reducer{
-		bufferCh: make(chan *z.Buffer, 10),
 		db:       db,
+		bufferCh: make(chan *z.Buffer, 10),
 		writeCh:  make(chan *z.Buffer, 10),
 	}
 }
@@ -792,6 +792,7 @@ func (r *reducer) writeToDB() error {
 	}()
 
 	kvBuf := getBuf()
+	// TODO: We need to sort it in a way such that the key with latest version is first.
 	for cbuf := range r.bufferCh {
 		cbuf.SortSlice(func(ls, rs []byte) bool {
 			lme := mapEntry(ls)
