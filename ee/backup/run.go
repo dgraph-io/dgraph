@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"golang.org/x/sync/errgroup"
 
@@ -347,25 +349,53 @@ func runExportBackup() error {
 
 	glog.Info("Backup location is: ", opt.location)
 
-	req := &pb.RestoreRequest{
-		Location:          opt.location,
-		EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+	uri, err := url.Parse(opt.location)
+	if err != nil {
+		return errors.Wrapf(err, "cannot parse backup location")
+	}
+	handler, err := worker.NewUriHandler(uri, nil)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	if err := worker.MapBackup(req); err != nil {
-		return errors.Wrap(err, "Failed to map the backups")
+	latestManifest, err := worker.GetLatestManifest(handler, uri)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get latest manifest")
 	}
 
-	r := worker.NewBackupReducer(nil)
-
-	go func() {
-		for buf := range r.WriteCh() {
-			glog.Info("Received buf: ", buf)
+	// TODO: Make this procesing concurrent.
+	for gid, _ := range latestManifest.Groups {
+		glog.Infof("Exporting group: %d", gid)
+		req := &pb.RestoreRequest{
+			GroupId:           gid,
+			Location:          opt.location,
+			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
 		}
-	}()
 
-	if err := r.Reduce(); err != nil {
-		return errors.Wrap(err, "Failed to reduce the map")
+		if err := worker.MapBackup(req); err != nil {
+			return errors.Wrap(err, "Failed to map the backups")
+		}
+
+		r := worker.NewBackupReducer(nil)
+
+		errCh := make(chan error, 1)
+		go func() {
+			glog.Info("Waiting for buffers in write chan")
+			for buf := range r.WriteCh() {
+				glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
+				buf.Release()
+			}
+			glog.Info("Done processing")
+			errCh <- nil
+		}()
+
+		if err := r.Reduce(); err != nil {
+			return errors.Wrap(err, "Failed to reduce the map")
+		}
+
+		if err := <-errCh; err != nil {
+			errors.Wrap(err, "Failed to process reduced buffers")
+		}
 	}
 	return nil
 }

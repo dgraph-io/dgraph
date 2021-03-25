@@ -111,6 +111,7 @@ func (mw *mapper) newMapFile() (*os.File, error) {
 		restoreMapDir,
 		fmt.Sprintf("%06d.map", fileNum),
 	)
+	glog.Infof("Creating new backup map file at: %q", filename)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
@@ -439,6 +440,8 @@ func MapBackup(req *pb.RestoreRequest) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot retrieve manifests")
 	}
+
+	glog.Infof("Got %d backups to restore ", len(manifests))
 
 	cfg, err := getEncConfig(req)
 	if err != nil {
@@ -814,6 +817,7 @@ func (r *reducer) writeToDB() error {
 			return err
 		}
 
+		glog.Info("Sent buffer to write channel")
 		r.writeCh <- kvBuf
 		// Reuse cbuf for the next kvBuf.
 		cbuf.Reset()
