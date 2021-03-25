@@ -19,9 +19,9 @@
       x as deleteUserSecret(func: uid(UserSecretRoot)) {
         uid
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
-      UserSecret1 as var(func: type(UserSecret)) @filter(anyofterms(UserSecret.aSecret, "auth is applied"))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: type(UserSecret)) @filter(anyofterms(UserSecret.aSecret, "auth is applied"))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Delete with inverse field and RBAC true"
@@ -45,23 +45,29 @@
           { "uid": "uid(x)" },
           {
             "User.tweets" : [{"uid":"uid(x)"}],
-            "uid" : "uid(User2)"
+            "uid" : "uid(User_2)"
           }
         ]
   dgquery: |-
     query {
       x as deleteTweets(func: uid(TweetsRoot)) {
         uid
-        User2 as Tweets.user
+        User_2 as Tweets.user
       }
-      TweetsRoot as var(func: uid(Tweets1))
-      Tweets1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
-      tweets(func: uid(Tweets3)) {
-        text : Tweets.text
+      TweetsRoot as var(func: uid(Tweets_1))
+      Tweets_1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(TweetsRoot))
+      TweetsRoot as var(func: uid(Tweets_1))
+      Tweets_1 as var(func: type(Tweets)) @filter(anyoftext(Tweets.text, "abc"))
+      DeleteTweetsPayload.tweets(func: uid(Tweets_3)) {
+        Tweets.text : Tweets.text
         dgraph.uid : uid
       }
-      Tweets3 as var(func: uid(Tweets4))
-      Tweets4 as var(func: uid(x))
+      Tweets_3 as var(func: uid(Tweets_4))
+      Tweets_4 as var(func: uid(x))
     }
 
 - name: "Delete with inverse field and RBAC false"
@@ -86,12 +92,16 @@
   dgquery: |-
     query {
       x as deleteTweets()
-      tweets(func: uid(Tweets1)) {
-        text : Tweets.text
+    }
+  dgquerysec: |-
+    query {
+      x as var()
+      DeleteTweetsPayload.tweets(func: uid(Tweets_1)) {
+        Tweets.text : Tweets.text
         dgraph.uid : uid
       }
-      Tweets1 as var(func: uid(Tweets2))
-      Tweets2 as var(func: uid(x))
+      Tweets_1 as var(func: uid(Tweets_2))
+      Tweets_2 as var(func: uid(x))
     }
 
 - name: "Delete with deep auth"
@@ -109,12 +119,12 @@
     - deletejson: |
         [
           { "uid": "uid(x)" },
-          { 
-            "uid":"uid(Column3)",
+          {
+            "uid":"uid(Column_3)",
             "Column.tickets": [ { "uid":"uid(x)" } ]
           },
           {
-            "uid":"uid(User4)",
+            "uid":"uid(User_4)",
             "User.tickets": [ { "uid":"uid(x)" } ]
           }
         ]
@@ -122,23 +132,19 @@
     query {
       x as deleteTicket(func: uid(TicketRoot)) {
         uid
-        Column3 as Ticket.onColumn
-        User4 as Ticket.assignedTo
+        Column_3 as Ticket.onColumn
+        User_4 as Ticket.assignedTo
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      TicketRoot as var(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2))
+      Ticket_1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -173,11 +179,11 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid":"uid(Column3)",
+            "uid":"uid(Column_3)",
             "Column.tickets": [ { "uid":"uid(x)" } ]
           },
           {
-            "uid":"uid(User4)",
+            "uid":"uid(User_4)",
             "User.tickets": [ { "uid":"uid(x)" } ]
           }
         ]
@@ -185,32 +191,43 @@
     query {
       x as deleteTicket(func: uid(TicketRoot)) {
         uid
-        Column3 as Ticket.onColumn
-        User4 as Ticket.assignedTo
+        Column_3 as Ticket.onColumn
+        User_4 as Ticket.assignedTo
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      TicketRoot as var(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2))
+      Ticket_1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      ticket(func: uid(Ticket5)) {
-        title : Ticket.title
-        onColumn : Ticket.onColumn @filter(uid(Column15)) {
-          inProject : Column.inProject @filter(uid(Project13)) {
-            roles : Project.roles @filter(uid(Role11)) {
-              assignedTo : Role.assignedTo @filter(uid(User10)) {
-                username : User.username
-                age : User.age
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(TicketRoot))
+      TicketRoot as var(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2))
+      Ticket_1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+      DeleteTicketPayload.ticket(func: uid(Ticket_5)) {
+        Ticket.title : Ticket.title
+        Ticket.onColumn : Ticket.onColumn @filter(uid(Column_6)) {
+          Column.inProject : Column.inProject @filter(uid(Project_8)) {
+            Project.roles : Project.roles @filter(uid(Role_10)) {
+              Role.assignedTo : Role.assignedTo @filter(uid(User_12)) {
+                User.username : User.username
+                User.age : User.age
                 dgraph.uid : uid
               }
               dgraph.uid : uid
@@ -221,53 +238,44 @@
         }
         dgraph.uid : uid
       }
-      Ticket5 as var(func: uid(Ticket16)) @filter(uid(TicketAuth17))
-      Ticket16 as var(func: uid(x))
-      TicketAuth17 as var(func: uid(Ticket16)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      Ticket_5 as var(func: uid(Ticket_16)) @filter(uid(Ticket_Auth17))
+      Ticket_16 as var(func: uid(x))
+      Ticket_Auth17 as var(func: uid(Ticket_16)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
-      var(func: uid(Ticket5)) {
-        Column6 as Ticket.onColumn
+      var(func: uid(Ticket_5)) {
+        Column_7 as Ticket.onColumn
       }
-      Column15 as var(func: uid(Column6)) @filter(uid(ColumnAuth14))
-      var(func: uid(Column6)) {
-        Project7 as Column.inProject
+      Column_6 as var(func: uid(Column_7)) @filter(uid(Column_Auth15))
+      var(func: uid(Column_6)) {
+        Project_9 as Column.inProject
       }
-      Project13 as var(func: uid(Project7)) @filter(uid(ProjectAuth12))
-      var(func: uid(Project7)) {
-        Role8 as Project.roles
+      Project_8 as var(func: uid(Project_9)) @filter(uid(Project_Auth14))
+      var(func: uid(Project_8)) {
+        Role_11 as Project.roles
       }
-      Role11 as var(func: uid(Role8))
-      var(func: uid(Role8)) {
-        User9 as Role.assignedTo
+      Role_10 as var(func: uid(Role_11))
+      var(func: uid(Role_10)) {
+        User_13 as Role.assignedTo
       }
-      User10 as var(func: uid(User9))
-      ProjectAuth12 as var(func: uid(Project7)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      User_12 as var(func: uid(User_13))
+      Project_Auth14 as var(func: uid(Project_9)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
-      ColumnAuth14 as var(func: uid(Column6)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
+      Column_Auth15 as var(func: uid(Column_7)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -294,14 +302,14 @@
            "Column.inProject": {
              "uid": "uid(x)"
            },
-           "uid": "uid(Column2)"
+           "uid": "uid(Column_2)"
          }
         ]
   dgquery: |-
     query {
       x as deleteProject(func: uid(0x1, 0x2)) @filter(type(Project)) {
         uid
-        Column2 as Project.columns
+        Column_2 as Project.columns
       }
     }
 
@@ -333,7 +341,11 @@
   dgquery: |-
     query {
       x as deleteLog()
-      log()
+    }
+  dgquerysec: |-
+    query {
+      var()
+      DeleteLogPayload.log()
     }
 
 - name: "multiple rule in delete mutation"
@@ -357,24 +369,24 @@
           { "uid" : "uid(x)" },
           {
             "Ticket.assignedTo" : [ {"uid":"uid(x)"} ],
-            "uid" : "uid(Ticket4)"
+            "uid" : "uid(Ticket_4)"
           },
           {
             "Tweets.user" : {"uid":"uid(x)"},
-            "uid" : "uid(Tweets5)"
+            "uid" : "uid(Tweets_5)"
           }
         ]
   dgquery: |-
     query {
       x as deleteUser(func: uid(UserRoot)) {
         uid
-        Ticket4 as User.tickets
-        Tweets5 as User.tweets
+        Ticket_4 as User.tickets
+        Tweets_5 as User.tweets
       }
-      UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
-      User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
-      UserAuth2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
+      UserRoot as var(func: uid(User_1)) @filter((uid(User_Auth2) AND uid(User_Auth3)))
+      User_1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
+      User_Auth2 as var(func: uid(User_1)) @filter(eq(User.username, "user1")) @cascade
+      User_Auth3 as var(func: uid(User_1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
 - name: "Filtering by ID"
@@ -402,9 +414,9 @@
       x as deleteRegion(func: uid(RegionRoot)) {
         uid
       }
-      RegionRoot as var(func: uid(Region1)) @filter(uid(RegionAuth2))
-      Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
-      RegionAuth2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
+      RegionRoot as var(func: uid(Region_1)) @filter(uid(Region_Auth2))
+      Region_1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
+      Region_Auth2 as var(func: uid(Region_1)) @filter(eq(Region.global, true)) @cascade
     }
 
 - name: "Delete with top level RBAC false."
@@ -463,15 +475,21 @@
       x as deleteLog(func: uid(LogRoot)) {
         uid
       }
-      LogRoot as var(func: uid(Log1))
-      Log1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
-      log(func: uid(Log2), orderasc: Log.logs) {
-        logs : Log.logs
-        random : Log.random
+      LogRoot as var(func: uid(Log_1))
+      Log_1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(LogRoot))
+      LogRoot as var(func: uid(Log_1))
+      Log_1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
+      DeleteLogPayload.log(func: uid(Log_2), orderasc: Log.logs) {
+        Log.logs : Log.logs
+        Log.random : Log.random
         dgraph.uid : uid
       }
-      Log2 as var(func: uid(Log3))
-      Log3 as var(func: uid(x))
+      Log_2 as var(func: uid(Log_3), orderasc: Log.logs)
+      Log_3 as var(func: uid(x))
     }
 
 - name: "Delete with top level OR RBAC true."
@@ -496,8 +514,8 @@
       x as deleteComplexLog(func: uid(ComplexLogRoot)) {
         uid
       }
-      ComplexLogRoot as var(func: uid(ComplexLog1))
-      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
+      ComplexLogRoot as var(func: uid(ComplexLog_1))
+      ComplexLog_1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
     }
 
 - name: "Delete with top level OR RBAC false."
@@ -521,23 +539,21 @@
       x as deleteComplexLog(func: uid(ComplexLogRoot)) {
         uid
       }
-      ComplexLogRoot as var(func: uid(ComplexLog1)) @filter(uid(ComplexLogAuth2))
-      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
-      ComplexLogAuth2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
+      ComplexLogRoot as var(func: uid(ComplexLog_1)) @filter(uid(ComplexLog_Auth2))
+      ComplexLog_1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
+      ComplexLog_Auth2 as var(func: uid(ComplexLog_1)) @filter(eq(ComplexLog.visible, true)) @cascade
     }
 
 - name: "Delete with top level AND RBAC true."
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -552,11 +568,10 @@
       x as deleteIssue(func: uid(IssueRoot)) {
         uid
       }
-      IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-      Issue1 as var(func: type(Issue))
-      IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
+      IssueRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
+      Issue_1 as var(func: uid(0x1, 0x2)) @filter(type(Issue))
+      Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
 
@@ -564,14 +579,12 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "USER"
@@ -590,14 +603,12 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "USER"
@@ -616,14 +627,12 @@
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
-    	numUids
+      numUids
       }
     }
   variables: |
-    { "filter":
-      {
-        "id": ["0x1", "0x2"]
-      }
+    {
+      "ids": ["0x1", "0x2"]
     }
   jwtvar:
     ROLE: "ADMIN"
@@ -635,7 +644,238 @@
          }]
   dgquery: |-
     query {
-      x as deleteRole(func: type(Role)) {
+      x as deleteRole(func: uid(0x1, 0x2)) @filter(type(Role)) {
         uid
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+      numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    USER: "user1"
+    ANS:  "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author_7)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost(func: uid(PostRoot)) {
+        uid
+        Author_7 as Post.author
+      }
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(Answer_Auth6)))
+      Post_1 as var(func: uid(0x1, 0x2)) @filter(type(Post))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_5 as var(func: type(Answer))
+      Answer_Auth6 as var(func: uid(Answer_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Deleting interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deletePost(filter: {id: $ids}) {
+      numUids
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    AND: "true"
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deletePost()
+    }
+
+- name: "Deleting interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteA(filter: {id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteA(func: uid(ARoot)) {
+        uid
+      }
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2)))
+      A_1 as var(func: uid(0x1, 0x2)) @filter(type(A))
+      B_2 as var(func: type(B))
+    }
+
+- name: "Delete Type Having Graph Traversal Auth Rules on Interface."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteQuestion(filter: {id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    USER: "user1"
+    ANS: "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author_4)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteQuestion(func: uid(QuestionRoot)) {
+        uid
+        Author_4 as Post.author
+      }
+      QuestionRoot as var(func: uid(Question_1)) @filter((uid(Question_Auth2) AND uid(Question_Auth3)))
+      Question_1 as var(func: uid(0x1, 0x2)) @filter(type(Question))
+      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Delete Type Having Graph Traversal Auth Rules on Interface and those are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteQuestion(filter: {id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ANS: "true"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteQuestion()
+    }
+
+- name: "Delete type having RBAC Auth Rules on interface and those are not satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteFbPost(filter: {id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteFbPost()
+    }
+
+- name: "Delete type having RBAC Auth Rules on interface and all are satisfied."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteFbPost(filter: {id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids": ["0x1", "0x2"]
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Author.posts": [
+             {"uid": "uid(x)"}
+           ],
+           "uid": "uid(Author_3)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteFbPost(func: uid(FbPostRoot)) {
+        uid
+        Author_3 as Post.author
+      }
+      FbPostRoot as var(func: uid(FbPost_1)) @filter(uid(FbPost_Auth2))
+      FbPost_1 as var(func: uid(0x1, 0x2)) @filter(type(FbPost))
+      FbPost_Auth2 as var(func: uid(FbPost_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "user1")) {
+          Author.name : Author.name
+        }
       }
     }

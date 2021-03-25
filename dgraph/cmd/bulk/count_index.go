@@ -23,13 +23,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/roaring/roaring64"
 )
 
 // type countEntry struct {
@@ -94,10 +94,10 @@ func (c *countIndexer) addCountEntry(ce countEntry) {
 	}
 
 	if !sameIndexKey {
-		if c.countBuf.Len() > 0 {
+		if c.countBuf.LenNoPadding() > 0 {
 			c.wg.Add(1)
 			go c.writeIndex(c.countBuf)
-			c.countBuf = getBuf()
+			c.countBuf = getBuf(c.opt.TmpDir)
 		}
 		c.cur.pred = pk.Attr
 		c.cur.rev = pk.IsReverse()
@@ -119,16 +119,13 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 	}
 
 	streamId := atomic.AddUint32(&c.streamId, 1)
-	list := &bpb.KVList{}
-	var listSz int
-
 	buf.SortSlice(func(ls, rs []byte) bool {
 		left := countEntry(ls)
 		right := countEntry(rs)
 		return left.less(right)
 	})
 
-	tmp, _ := buf.Slice(1)
+	tmp, _ := buf.Slice(buf.StartOffset())
 	lastCe := countEntry(tmp)
 	{
 		pk, err := x.Parse(lastCe.Key())
@@ -136,53 +133,53 @@ func (c *countIndexer) writeIndex(buf *z.Buffer) {
 		fmt.Printf("Writing count index for %q rev=%v\n", pk.Attr, pk.IsReverse())
 	}
 
-	var pl pb.PostingList
-	encoder := codec.Encoder{BlockSize: 256}
+	alloc := z.NewAllocator(8<<20, "CountIndexer.WriteIndex")
+	defer alloc.Release()
 
+	var pl pb.PostingList
+	bm := roaring64.New()
+
+	outBuf := z.NewBuffer(5<<20, "CountIndexer.Buffer.WriteIndex")
+	defer outBuf.Release()
 	encode := func() {
-		pl.Pack = encoder.Done()
-		if codec.ExactLen(pl.Pack) == 0 {
+		if bm.GetCardinality() == 0 {
 			return
 		}
-		data, byt := posting.MarshalPostingList(&pl)
-		codec.FreePack(pl.Pack)
 
-		kv := &bpb.KV{
-			Key:      append([]byte{}, lastCe.Key()...),
-			Value:    data,
-			UserMeta: []byte{byt},
-			Version:  c.state.writeTs,
-			StreamId: streamId,
-		}
-		list.Kv = append(list.Kv, kv)
-		listSz += kv.Size()
-		encoder = codec.Encoder{BlockSize: 256}
+		pl.Bitmap = codec.ToBytes(bm)
+
+		kv := posting.MarshalPostingList(&pl, nil)
+		kv.Key = append([]byte{}, lastCe.Key()...)
+		kv.Version = c.state.writeTs
+		kv.StreamId = streamId
+		badger.KVToBuffer(kv, outBuf)
+
+		alloc.Reset()
+		bm = roaring64.New()
 		pl.Reset()
 
-		// Flush out the buffer.
-		if listSz > 4<<20 {
-			x.Check(c.writer.Write(list))
-			listSz = 0
-			list = &bpb.KVList{}
+		// flush out the buffer.
+		if outBuf.LenNoPadding() > 4<<20 {
+			x.Check(c.writer.Write(outBuf))
+			outBuf.Reset()
 		}
 	}
 
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = buf.Slice(next)
+	buf.SliceIterate(func(slice []byte) error {
 		ce := countEntry(slice)
 		if !bytes.Equal(lastCe.Key(), ce.Key()) {
 			encode()
 		}
-		encoder.Add(ce.Uid())
+		bm.Add(ce.Uid())
 		lastCe = ce
-	}
+		return nil
+	})
 	encode()
-	x.Check(c.writer.Write(list))
+	x.Check(c.writer.Write(outBuf))
 }
 
 func (c *countIndexer) wait() {
-	if c.countBuf.Len() > 0 {
+	if c.countBuf.LenNoPadding() > 0 {
 		c.wg.Add(1)
 		go c.writeIndex(c.countBuf)
 	} else {

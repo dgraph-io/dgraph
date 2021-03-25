@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,23 +34,25 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"syscall"
 	"time"
 
 	"google.golang.org/grpc/peer"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
+	bo "github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v3/pb"
+	badgerpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
-	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/grpc"
@@ -64,7 +66,12 @@ import (
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
-	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrNoJwt is returned when JWT is not present in the context.
+	ErrNoJwt = errors.New("no accessJwt available")
+	// ErrorInvalidLogin is returned when username or password is incorrect in login
+	ErrorInvalidLogin = errors.New("invalid username or password")
+	// ErrConflict is returned when commit couldn't succeed due to conflicts.
+	ErrConflict = errors.New("Transaction conflict")
 )
 
 const (
@@ -81,8 +88,8 @@ const (
 	// ErrorNoData is an error returned when the requested data cannot be returned.
 	ErrorNoData = "ErrorNoData"
 	// ValidHostnameRegex is a regex that accepts our expected hostname format.
-	ValidHostnameRegex = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
-		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	ValidHostnameRegex = `^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}` +
+		`[a-zA-Z0-9_-]{0,62})*[._]?$`
 	// Star is equivalent to using * in a mutation.
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
@@ -114,37 +121,6 @@ const (
 	GrootId = "groot"
 	// GuardiansId is the ID of the admin group for ACLs.
 	GuardiansId = "guardians"
-	// AclPredicates is the JSON representation of the predicates reserved for use
-	// by the ACL system.
-	AclPredicates = `
-{"predicate":"dgraph.xid","type":"string", "index":true, "tokenizer":["exact"], "upsert":true},
-{"predicate":"dgraph.password","type":"password"},
-{"predicate":"dgraph.user.group","list":true, "reverse":true, "type":"uid"},
-{"predicate":"dgraph.acl.rule","type":"uid","list":true},
-{"predicate":"dgraph.rule.predicate","type":"string","index":true,"tokenizer":["exact"],"upsert":true},
-{"predicate":"dgraph.rule.permission","type":"int"}
-`
-	// CorsPredicate is the json representation of the predicate reserved by dgraph for the use
-	//of cors
-	CorsPredicate = `{"predicate":"dgraph.cors","type":"string","list":true,"type":"string","index":true,"tokenizer":["exact"],"upsert":true}`
-
-	InitialTypes = `
-"types": [{
-	"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],
-	"name": "dgraph.graphql"
-},{
-	"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],
-	"name": "dgraph.type.User"
-},{
-	"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],
-	"name": "dgraph.type.Group"
-},{
-	"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],
-	"name": "dgraph.type.Rule"
-}, {
-	"fields": [{"name": "dgraph.graphql.schema_history"},{"name": "dgraph.graphql.schema_created_at"}],
-	"name": "dgraph.graphql.history"
-}]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -152,18 +128,15 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
-	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
+	// DefaultCreds is the default credentials for login via dgo client.
+	DefaultCreds = "user=; password=; namespace=0;"
+
+	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, X-Dgraph-AuthToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
 	DgraphCostHeader = "Dgraph-TouchedUids"
 
-	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `
-{"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.schema_history", "type": "string"},
-{"predicate":"dgraph.graphql.schema_created_at", "type": "datetime"},
-{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
-`
+	DgraphVersion = 2103
 )
 
 var (
@@ -171,25 +144,16 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
-	// AcceptedOrigins is allowed list of origins to make request to the graphql endpoint.
-	AcceptedOrigins = atomic.Value{}
+	// GuardiansUid is a map from namespace to the Uid of guardians group node.
+	GuardiansUid = &sync.Map{}
+	// GrootUser Uid is a map from namespace to the Uid of groot user node.
+	GrootUid = &sync.Map{}
 )
 
 func init() {
-	AcceptedOrigins.Store(map[string]struct{}{})
-}
+	GuardiansUid.Store(GalaxyNamespace, 0)
+	GrootUid.Store(GalaxyNamespace, 0)
 
-// UpdateCorsOrigins updates the cors allowlist with the given origins.
-func UpdateCorsOrigins(origins []string) {
-	if len(origins) == 1 && origins[0] == "*" {
-		AcceptedOrigins.Store(map[string]struct{}{})
-		return
-	}
-	allowList := make(map[string]struct{}, len(origins))
-	for _, origin := range origins {
-		allowList[origin] = struct{}{}
-	}
-	AcceptedOrigins.Store(allowList)
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -201,7 +165,8 @@ func ShouldCrash(err error) bool {
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
-		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED")
+		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED") ||
+		strings.Contains(errStr, "ENTERPRISE_ONLY_LEARNER")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
@@ -238,6 +203,14 @@ type GqlErrorList []*GqlError
 
 type queryRes struct {
 	Errors GqlErrorList `json:"errors"`
+}
+
+// IsGqlErrorList tells whether the given err is a list of GraphQL errors.
+func IsGqlErrorList(err error) bool {
+	if _, ok := err.(GqlErrorList); ok {
+		return true
+	}
+	return false
 }
 
 func (gqlErr *GqlError) Error() string {
@@ -281,18 +254,65 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
-func ExtractJwt(ctx context.Context) ([]string, error) {
+// ExtractNamespaceHTTP parses the namespace value from the incoming HTTP request.
+func ExtractNamespaceHTTP(r *http.Request) uint64 {
+	ctx := AttachAccessJwt(context.Background(), r)
+	// Ignoring error because the default value is zero anyways.
+	namespace, _ := ExtractJWTNamespace(ctx)
+	return namespace
+}
+
+// ExtractNamespace parses the namespace value from the incoming gRPC context. For the non-ACL mode,
+// it is caller's responsibility to set the galaxy namespace.
+func ExtractNamespace(ctx context.Context) (uint64, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return 0, errors.New("No metadata in the context")
+	}
+	ns := md.Get("namespace")
+	if len(ns) == 0 {
+		return 0, errors.New("No namespace in the metadata of context")
+	}
+	namespace, err := strconv.ParseUint(ns[0], 0, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Error while parsing namespace from metadata")
+	}
+	return namespace, nil
+}
+
+func IsGalaxyOperation(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	ns := md.Get("galaxy-operation")
+	return len(ns) > 0 && (ns[0] == "true" || ns[0] == "True")
+}
+
+func GetForceNamespace(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	ns := md.Get("force-namespace")
+	if len(ns) == 0 {
+		return ""
+	}
+	return ns[0]
+}
+
+func ExtractJwt(ctx context.Context) (string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return nil, ErrNoJwt
+		return "", ErrNoJwt
 	}
 
-	return accessJwt, nil
+	return accessJwt[0], nil
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
@@ -320,6 +340,7 @@ func (gqlErr *GqlError) WithPath(path []interface{}) *GqlError {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
 	var qr queryRes
 	ext := make(map[string]interface{})
 	ext["code"] = code
@@ -409,6 +430,62 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+// AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
+// it attaches the galaxy namespace.
+func AttachJWTNamespace(ctx context.Context) context.Context {
+	if WorkerConfig.AclEnabled {
+		ns, err := ExtractJWTNamespace(ctx)
+		if err != nil {
+			glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+		} else {
+			// Attach the namespace only if we got one from JWT.
+			// This preserves any namespace directly present in the context which is needed for
+			// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+			// context is created by hand.
+			ctx = AttachNamespace(ctx, ns)
+		}
+	} else {
+		ctx = AttachNamespace(ctx, GalaxyNamespace)
+	}
+	return ctx
+}
+
+// AttachNamespace adds given namespace to the metadata of the context.
+func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	ns := strconv.FormatUint(namespace, 10)
+	md.Set("namespace", ns)
+	return metadata.NewIncomingContext(ctx, md)
+}
+
+// AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
+func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	md.Set("galaxy-operation", "true")
+	md.Set("force-namespace", strconv.FormatUint(ns, 10))
+	return metadata.NewOutgoingContext(ctx, md)
+}
+
+// AttachAuthToken adds any incoming PoorMan's auth header data into the grpc context metadata
+func AttachAuthToken(ctx context.Context, r *http.Request) context.Context {
+	if authToken := r.Header.Get("X-Dgraph-AuthToken"); authToken != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("auth-token", authToken)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
 }
 
 // AttachAccessJwt adds any incoming JWT header data into the grpc context metadata
@@ -865,9 +942,9 @@ type CloseFunc func()
 
 // CredOpt stores the options for logging in, including the password and user.
 type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
+	UserID    string
+	Password  string
+	Namespace uint64
 }
 
 type authorizationCredentials struct {
@@ -891,7 +968,7 @@ func WithAuthorizationCredentials(authToken string) grpc.DialOption {
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
 // --slash_grpc_endpoint specifies the grpc endpoint for slash. It takes precedence over --alpha and TLS
 // --alpha specifies a comma separated list of endpoints to connect to
-// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --tls "ca-cert=; client-cert=; client-key=;" etc specify the TLS configuration of the connection
 // --retries specifies how many times we should retry the connection to each endpoint upon failures
 // --user and --password specify the credentials we should use to login with the server
 func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
@@ -947,12 +1024,13 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	}
 
 	dg := dgo.NewDgraphClient(clients...)
-	user := conf.GetString("user")
+	creds := z.NewSuperFlag(conf.GetString("creds"))
+	user := creds.GetString("user")
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
-			Conf:        conf,
-			UserID:      user,
-			PasswordOpt: "password",
+			UserID:    user,
+			Password:  creds.GetString("password"),
+			Namespace: creds.GetUint64("namespace"),
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
@@ -998,7 +1076,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 
 // GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
-	password := opt.Conf.GetString(opt.PasswordOpt)
+	password := opt.Password
 	if len(password) == 0 {
 		var err error
 		password, err = AskUserPassword(opt.UserID, "Current", 1)
@@ -1008,7 +1086,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+	if err := dg.LoginIntoNamespace(ctx, opt.UserID, password, opt.Namespace); err != nil {
 		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
@@ -1026,117 +1104,41 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
-// MonitorCacheHealth periodically monitors the cache metrics and reports if
-// there is high contention in the cache.
-func MonitorCacheHealth(period time.Duration, prefix string, db *badger.DB, closer *z.Closer) {
-	defer closer.Done()
-
-	getMetrics := func(ct string) *ristretto.Metrics {
-		var metrics *ristretto.Metrics
-		switch ct {
-		case "pstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "pstore-index":
-			metrics = db.IndexCacheMetrics()
-		case "WALstore-block":
-			metrics = db.BlockCacheMetrics()
-		case "WALstore-index":
-			metrics = db.IndexCacheMetrics()
-		}
-		return metrics
-	}
-
-	checkCache := func(ct string) {
-		metrics := getMetrics(ct)
-		if metrics == nil {
-			return
-		}
-		switch ct {
-		case "pstore-block":
-			ostats.Record(context.Background(), PBlockHitRatio.M(metrics.Ratio()))
-		case "pstore-index":
-			ostats.Record(context.Background(), PIndexHitRatio.M(metrics.Ratio()))
-		case "WALstore-block":
-			ostats.Record(context.Background(), WBlockHitRatio.M(metrics.Ratio()))
-		case "WALstore-index":
-			ostats.Record(context.Background(), WIndexHitRatio.M(metrics.Ratio()))
-		default:
-			panic("invalid cache type")
-		}
-
-		// If the mean life expectancy is less than 10 seconds, the cache
-		// might be too small.
-		le := metrics.LifeExpectancySeconds()
-		lifeTooShort := le.Count > 0 && float64(le.Sum)/float64(le.Count) < 10
-		hitRatioTooLow := metrics.Ratio() > 0 && metrics.Ratio() < 0.4
-		if bool(glog.V(2)) && (lifeTooShort || hitRatioTooLow) {
-			glog.Warningf("======== Cache might be too small %s =====", ct)
-			glog.Warningf("Metric: %+v", metrics)
-			glog.Warningf("Life expectancy: %+v", le)
-		}
-	}
-
-	logMetrics := func(ct string) {
-		if metrics := getMetrics(ct); metrics != nil {
-			prefix := fmt.Sprintf("%s-%s", prefix, ct)
-			le := metrics.LifeExpectancySeconds()
-			glog.V(2).Infof("%s metrics %+v %+v", prefix, metrics, le)
-		}
-	}
-
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-	tickerLog := time.NewTicker(5 * time.Minute)
-	defer tickerLog.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			checkCache(prefix + "-block")
-			checkCache(prefix + "-index")
-		case <-tickerLog.C:
-			logMetrics(prefix + "-block")
-			logMetrics(prefix + "-index")
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
-}
-
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 10 minutes.
 // Additionally it also runs GC if vLogSize has grown more than 1 GB in last minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
-	// Get initial size on start.
-	_, lastVlogSize := store.Size()
-	const GB = int64(1 << 30)
 
 	// Runs every 1m, checks size of vlog and runs GC conditionally.
-	vlogTicker := time.NewTicker(1 * time.Minute)
-	defer vlogTicker.Stop()
-	// Runs vlog GC unconditionally every 10 minutes.
-	mandatoryVlogTicker := time.NewTicker(10 * time.Minute)
-	defer mandatoryVlogTicker.Stop()
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
+	abs := func(a, b int64) int64 {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+
+	var lastSz int64
 	runGC := func() {
 		for err := error(nil); err == nil; {
 			// If a GC is successful, immediately run it again.
 			err = store.RunValueLogGC(0.7)
 		}
-		_, lastVlogSize = store.Size()
+		_, sz := store.Size()
+		if abs(lastSz, sz) > 512<<20 {
+			glog.V(2).Infof("Value log size: %s\n", humanize.IBytes(uint64(sz)))
+			lastSz = sz
+		}
 	}
 
+	runGC()
 	for {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-vlogTicker.C:
-			_, currentVlogSize := store.Size()
-			if currentVlogSize < lastVlogSize+GB {
-				continue
-			}
-			runGC()
-		case <-mandatoryVlogTicker.C:
+		case <-ticker.C:
 			runGC()
 		}
 	}
@@ -1239,14 +1241,33 @@ func GetCachePercentages(cpString string, numExpected int) ([]int64, error) {
 	return cachePercent, nil
 }
 
-// ParseCompressionLevel returns compression level(int) given the compression level(string)
-func ParseCompressionLevel(level string) int {
-	x, err := strconv.Atoi(level)
-	Check(err)
-	if x < 0 {
-		glog.Fatalf("ERROR: compression level(%s) cannot be negative", level)
+// ParseCompression returns badger.compressionType and compression level given compression string
+// of format compression-type:compression-level
+func ParseCompression(cStr string) (bo.CompressionType, int) {
+	cStrSplit := strings.Split(cStr, ":")
+	cType := cStrSplit[0]
+	level := 3
+
+	var err error
+	if len(cStrSplit) == 2 {
+		level, err = strconv.Atoi(cStrSplit[1])
+		Check(err)
+		if level <= 0 {
+			glog.Fatalf("ERROR: compression level(%v) must be greater than zero", level)
+		}
+	} else if len(cStrSplit) > 2 {
+		glog.Fatalf("ERROR: Invalid badger.compression argument")
 	}
-	return x
+	switch cType {
+	case "zstd":
+		return bo.ZSTD, level
+	case "snappy":
+		return bo.Snappy, 0
+	case "none":
+		return bo.None, 0
+	}
+	glog.Fatalf("ERROR: compression type (%s) invalid", cType)
+	return 0, 0
 }
 
 // ToHex converts a uint64 to a hex byte array. If rdf is true it will
@@ -1274,4 +1295,96 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+// RootTemplate defines the help template for dgraph command.
+var RootTemplate string = `Dgraph is a horizontally scalable and distributed graph database,
+providing ACID transactions, consistent replication and linearizable reads.
+It's built from the ground up to perform for a rich set of queries. Being a native
+graph database, it tightly controls how the data is arranged on disk to optimize
+for query performance and throughput, reducing disk seeks and network calls in a
+cluster.` + BuildDetails() +
+	`Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
+
+Generic: {{range .Commands}} {{if (or (and .IsAvailableCommand (eq .Annotations.group "default")) (eq .Name "help"))}}
+ {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Available Commands:
+
+Dgraph Core: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "core"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Data Loading: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "data-load"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Security: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "security"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Debug: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "debug"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Dgraph Tools: {{range .Commands}} {{if (and .IsAvailableCommand (eq .Annotations.group "tool"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+` +
+	// uncomment this part when new availalble commands are added
+
+	/*Additional Commands:{{range .Commands}}{{if (and .IsAvailableCommand (not .Annotations.group))}}
+	  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}*/
+	`
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
+// NonRootTemplate defines the help template for dgraph sub-command.
+var NonRootTemplate string = `{{if .Long}} {{.Long}} {{else}} {{.Short}} {{end}}
+Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}} {{if .HasAvailableSubCommands}}
+
+Available Commands: {{range .Commands}}{{if (or .IsAvailableCommand)}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
+// KvWithMaxVersion returns a KV with the max version from the list of KVs.
+func KvWithMaxVersion(kvs *badgerpb.KVList, prefixes [][]byte) *badgerpb.KV {
+	// Iterate over kvs to get the KV with the latest version. It is not necessary that the last
+	// KV contain the latest value.
+	var maxKv *badgerpb.KV
+	for _, kv := range kvs.GetKv() {
+		if maxKv.GetVersion() <= kv.GetVersion() {
+			maxKv = kv
+		}
+	}
+	return maxKv
+}
+
+// PrefixesToMatches converts the prefixes for subscription to a list of match.
+func PrefixesToMatches(prefixes [][]byte, ignore string) []*pb.Match {
+	matches := make([]*pb.Match, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		matches = append(matches, &pb.Match{
+			Prefix:      prefix,
+			IgnoreBytes: ignore,
+		})
+	}
+	return matches
+}
+
+// LambdaUrl returns the correct lambda-url for the given namespace
+func LambdaUrl(ns uint64) string {
+	return strings.Replace(Config.GraphQL.GetString("lambda-url"), "$ns", strconv.FormatUint(ns,
+		10), 1)
 }

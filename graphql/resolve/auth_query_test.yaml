@@ -21,29 +21,29 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) {
-        id : uid
-        nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask5)) {
-          id : uid
-          name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
-            due : TaskOccurrence.due
-            comp : TaskOccurrence.comp
+        Contact.id : uid
+        Contact.nickName : Contact.nickName
+        Contact.adminTasks : Contact.adminTasks @filter(uid(AdminTask_1)) {
+          AdminTask.id : uid
+          AdminTask.name : AdminTask.name
+          AdminTask.occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence_3)) {
+            TaskOccurrence.due : TaskOccurrence.due
+            TaskOccurrence.comp : TaskOccurrence.comp
             dgraph.uid : uid
           }
         }
       }
-      ContactRoot as var(func: uid(Contact6))
-      Contact6 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact_6))
+      Contact_6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask_2 as Contact.adminTasks
       }
-      AdminTask5 as var(func: uid(AdminTask1))
-      var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+      AdminTask_1 as var(func: uid(AdminTask_2))
+      var(func: uid(AdminTask_1)) {
+        TaskOccurrence_4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence_3 as var(func: uid(TaskOccurrence_4)) @filter(uid(TaskOccurrence_Auth5))
+      TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Deep RBAC rule - Level 0 false"
@@ -94,11 +94,11 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) {
-        id : uid
-        nickName : Contact.nickName
+        Contact.id : uid
+        Contact.nickName : Contact.nickName
       }
-      ContactRoot as var(func: uid(Contact5))
-      Contact5 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact_6))
+      Contact_6 as var(func: type(Contact))
     }
 
 - name: "Deep RBAC rule with cascade - Level 1 false"
@@ -124,30 +124,30 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) @cascade {
-        id : uid
-        nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask6)) {
-          id : uid
-          name : AdminTask.name
-          occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence4)) {
-            due : TaskOccurrence.due
-            comp : TaskOccurrence.comp
+        Contact.id : uid
+        Contact.nickName : Contact.nickName
+        Contact.adminTasks : Contact.adminTasks @filter(uid(AdminTask_1)) {
+          AdminTask.id : uid
+          AdminTask.name : AdminTask.name
+          AdminTask.occurrences : AdminTask.occurrences @filter(uid(TaskOccurrence_3)) {
+            TaskOccurrence.due : TaskOccurrence.due
+            TaskOccurrence.comp : TaskOccurrence.comp
             dgraph.uid : uid
           }
         }
       }
-      ContactRoot as var(func: uid(Contact7))
-      Contact7 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact_7))
+      Contact_7 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask_2 as Contact.adminTasks
       }
-      AdminTask6 as var(func: uid(AdminTask1)) @filter(uid(AdminTask5))
-      var(func: uid(AdminTask1)) {
-        TaskOccurrence2 as AdminTask.occurrences
+      AdminTask_1 as var(func: uid(AdminTask_2)) @filter(uid(AdminTask_6))
+      var(func: uid(AdminTask_1)) {
+        TaskOccurrence_4 as AdminTask.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
-      AdminTask5 as var(func: uid())
+      TaskOccurrence_3 as var(func: uid(TaskOccurrence_4)) @filter(uid(TaskOccurrence_Auth5))
+      TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      AdminTask_6 as var(func: uid())
     }
 
 - name: "Deep RBAC rule - Level 2 false"
@@ -173,19 +173,19 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) {
-        id : uid
-        nickName : Contact.nickName
-        adminTasks : Contact.adminTasks @filter(uid(AdminTask3)) {
-          id : uid
-          name : AdminTask.name
+        Contact.id : uid
+        Contact.nickName : Contact.nickName
+        Contact.adminTasks : Contact.adminTasks @filter(uid(AdminTask_1)) {
+          AdminTask.id : uid
+          AdminTask.name : AdminTask.name
         }
       }
-      ContactRoot as var(func: uid(Contact4))
-      Contact4 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact_5))
+      Contact_5 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        AdminTask1 as Contact.adminTasks
+        AdminTask_2 as Contact.adminTasks
       }
-      AdminTask3 as var(func: uid(AdminTask1))
+      AdminTask_1 as var(func: uid(AdminTask_2))
     }
 
 - name: "Deep RBAC rule - Level 1 type without auth."
@@ -211,29 +211,29 @@
   dgquery: |-
     query {
       queryContact(func: uid(ContactRoot)) {
-        id : uid
-        nickName : Contact.nickName
-        tasks : Contact.tasks @filter(uid(Task5)) {
-          id : uid
-          name : Task.name
-          occurrences : Task.occurrences @filter(uid(TaskOccurrence4)) {
-            due : TaskOccurrence.due
-            comp : TaskOccurrence.comp
+        Contact.id : uid
+        Contact.nickName : Contact.nickName
+        Contact.tasks : Contact.tasks @filter(uid(Task_1)) {
+          Task.id : uid
+          Task.name : Task.name
+          Task.occurrences : Task.occurrences @filter(uid(TaskOccurrence_3)) {
+            TaskOccurrence.due : TaskOccurrence.due
+            TaskOccurrence.comp : TaskOccurrence.comp
             dgraph.uid : uid
           }
         }
       }
-      ContactRoot as var(func: uid(Contact6))
-      Contact6 as var(func: type(Contact))
+      ContactRoot as var(func: uid(Contact_6))
+      Contact_6 as var(func: type(Contact))
       var(func: uid(ContactRoot)) {
-        Task1 as Contact.tasks
+        Task_2 as Contact.tasks
       }
-      Task5 as var(func: uid(Task1))
-      var(func: uid(Task1)) {
-        TaskOccurrence2 as Task.occurrences
+      Task_1 as var(func: uid(Task_2))
+      var(func: uid(Task_1)) {
+        TaskOccurrence_4 as Task.occurrences
       }
-      TaskOccurrence4 as var(func: uid(TaskOccurrence2)) @filter(uid(TaskOccurrenceAuth3))
-      TaskOccurrenceAuth3 as var(func: uid(TaskOccurrence2)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
+      TaskOccurrence_3 as var(func: uid(TaskOccurrence_4)) @filter(uid(TaskOccurrence_Auth5))
+      TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
 - name: "Auth query with @dgraph pred."
@@ -249,12 +249,12 @@
   dgquery: |-
     query {
       queryStudent(func: uid(StudentRoot)) {
-        email : IOw80vnV
+        Student.email : IOw80vnV
         dgraph.uid : uid
       }
-      StudentRoot as var(func: uid(Student1)) @filter(uid(StudentAuth2))
-      Student1 as var(func: type(is7sowSm))
-      StudentAuth2 as var(func: uid(Student1)) @filter(eq(IOw80vnV, "user1")) @cascade
+      StudentRoot as var(func: uid(Student_1)) @filter(uid(Student_Auth2))
+      Student_1 as var(func: type(is7sowSm))
+      Student_Auth2 as var(func: uid(Student_1)) @filter(eq(IOw80vnV, "user1")) @cascade
     }
 
 - name: "Auth query with @dgraph pred (Test RBAC)."
@@ -288,34 +288,29 @@
   dgquery: |-
     query {
       getProject(func: uid(ProjectRoot)) @filter(type(Project)) {
-        projID : uid
-        columns : Project.columns @filter(uid(Column3)) {
-          name : Column.name
-          colID : uid
+        Project.projID : uid
+        Project.columns : Project.columns @filter(uid(Column_1)) {
+          Column.name : Column.name
+          Column.colID : uid
         }
       }
-      ProjectRoot as var(func: uid(Project4)) @filter(uid(ProjectAuth5))
-      Project4 as var(func: uid(0x123))
-      ProjectAuth5 as var(func: uid(Project4)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      ProjectRoot as var(func: uid(Project_4)) @filter(uid(Project_Auth5))
+      Project_4 as var(func: uid(0x123))
+      Project_Auth5 as var(func: uid(Project_4)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
       var(func: uid(ProjectRoot)) {
-        Column1 as Project.columns
+        Column_2 as Project.columns
       }
-      Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-      ColumnAuth2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
+      Column_1 as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+      Column_Auth3 as var(func: uid(Column_2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -332,12 +327,39 @@
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
-        id : uid
-        ownedBy : UserSecret.ownedBy
+        UserSecret.id : uid
+        UserSecret.ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
-      UserSecret1 as var(func: type(UserSecret))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: type(UserSecret))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Auth with Aggregate Root Query"
+  gqlquery: |
+    query {
+      aggregateUserSecret {
+        count
+        aSecretMax
+        aSecretMin
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      aggregateUserSecret() {
+        UserSecretAggregateResult.count : max(val(countVar))
+        UserSecretAggregateResult.aSecretMax : max(val(aSecretVar))
+        UserSecretAggregateResult.aSecretMin : min(val(aSecretVar))
+      }
+      var(func: uid(UserSecretRoot)) {
+        countVar as count(uid)
+        aSecretVar as UserSecret.aSecret
+      }
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: type(UserSecret))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with top level filter : get"
@@ -353,12 +375,12 @@
   dgquery: |-
     query {
       getUserSecret(func: uid(UserSecretRoot)) @filter(type(UserSecret)) {
-        id : uid
-        ownedBy : UserSecret.ownedBy
+        UserSecret.id : uid
+        UserSecret.ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
-      UserSecret1 as var(func: uid(0x123))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: uid(0x123))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with top level filter : query and filter"
@@ -374,12 +396,12 @@
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
-        id : uid
-        ownedBy : UserSecret.ownedBy
+        UserSecret.id : uid
+        UserSecret.ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
-      UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Deep RBAC rules true"
@@ -397,20 +419,19 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        issues : User.issues @filter(uid(Issue3)) {
-          id : uid
+        User.issues : User.issues @filter(uid(Issue_1)) {
+          Issue.id : uid
         }
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User4))
-      User4 as var(func: type(User))
+      UserRoot as var(func: uid(User_4))
+      User_4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Issue1 as User.issues
+        Issue_2 as User.issues
       }
-      Issue3 as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-      IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
+      Issue_1 as var(func: uid(Issue_2)) @filter(uid(Issue_Auth3))
+      Issue_Auth3 as var(func: uid(Issue_2)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
 
@@ -428,15 +449,14 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-      query {
-        queryUser(func: uid(UserRoot)) {
-          username : User.username
-          dgraph.uid : uid
-        }
-        UserRoot as var(func: uid(User2))
-        User2 as var(func: type(User))
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.username : User.username
+        dgraph.uid : uid
       }
-
+      UserRoot as var(func: uid(User_3))
+      User_3 as var(func: type(User))
+    }
 
 - name: "Auth with top level AND rbac true"
   gqlquery: |
@@ -451,14 +471,13 @@
   dgquery: |-
     query {
       queryIssue(func: uid(IssueRoot)) {
-        msg : Issue.msg
+        Issue.msg : Issue.msg
         dgraph.uid : uid
       }
-      IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
-      Issue1 as var(func: type(Issue))
-      IssueAuth2 as var(func: uid(Issue1)) @cascade {
-        owner : Issue.owner @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
+      IssueRoot as var(func: uid(Issue_1)) @filter(uid(Issue_Auth2))
+      Issue_1 as var(func: type(Issue))
+      Issue_Auth2 as var(func: uid(Issue_1)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
 
@@ -475,11 +494,11 @@
   dgquery: |-
     query {
       queryComplexLog(func: uid(ComplexLogRoot)) {
-        logs : ComplexLog.logs
+        ComplexLog.logs : ComplexLog.logs
         dgraph.uid : uid
       }
-      ComplexLogRoot as var(func: uid(ComplexLog1))
-      ComplexLog1 as var(func: type(ComplexLog))
+      ComplexLogRoot as var(func: uid(ComplexLog_1))
+      ComplexLog_1 as var(func: type(ComplexLog))
     }
 
 - name: "Auth with complex rbac rules, false"
@@ -510,11 +529,11 @@
   dgquery: |-
     query {
       queryLog(func: uid(LogRoot)) {
-        logs : Log.logs
+        Log.logs : Log.logs
         dgraph.uid : uid
       }
-      LogRoot as var(func: uid(Log1))
-      Log1 as var(func: type(Log))
+      LogRoot as var(func: uid(Log_1))
+      Log_1 as var(func: type(Log))
     }
 
 - name: "Auth with top level rbac false"
@@ -528,9 +547,9 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-     query {
-       queryLog()
-     }
+    query {
+      queryLog()
+    }
 
 - name: "Auth with top level AND rbac false"
   gqlquery: |
@@ -543,10 +562,25 @@
     ROLE: "USER"
     USER: "user1"
   dgquery: |-
-     query {
-       queryIssue()
-     }
+    query {
+      queryIssue()
+    }
 
+- name: "Aggregate Query on Auth with top level AND rbac false"
+  gqlquery: |
+    query {
+      aggregateIssue {
+        randomMin
+        count
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+      aggregateIssue()
+    }
 
 - name: "Auth with top level OR rbac true"
   gqlquery: |
@@ -559,14 +593,42 @@
     ROLE: "ADMIN"
     USER: "user1"
   dgquery: |-
-     query {
-       queryProject(func: uid(ProjectRoot)) {
-         name : Project.name
-         dgraph.uid : uid
-       }
-       ProjectRoot as var(func: uid(Project1))
-       Project1 as var(func: type(Project))
-     }
+    query {
+      queryProject(func: uid(ProjectRoot)) {
+        Project.name : Project.name
+        dgraph.uid : uid
+      }
+      ProjectRoot as var(func: uid(Project_1))
+      Project_1 as var(func: type(Project))
+    }
+
+- name: "Aggregate on Auth with top level OR rbac true"
+  gqlquery: |
+    query {
+      aggregateProject {
+        nameMin
+        count
+        randomMin
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      aggregateProject() {
+        ProjectAggregateResult.nameMin : min(val(nameVar))
+        ProjectAggregateResult.count : max(val(countVar))
+        ProjectAggregateResult.randomMin : min(val(randomVar))
+      }
+      var(func: uid(ProjectRoot)) {
+        nameVar as Project.name
+        countVar as count(uid)
+        randomVar as Project.random
+      }
+      ProjectRoot as var(func: uid(Project_1))
+      Project_1 as var(func: type(Project))
+    }
 
 - name: "Query with missing jwt variables"
   gqlquery: |
@@ -580,23 +642,21 @@
   dgquery: |-
     query {
       queryGroup(func: uid(GroupRoot)) {
-        id : uid
+        Group.id : uid
       }
-      GroupRoot as var(func: uid(Group1)) @filter((uid(GroupAuth2) OR uid(GroupAuth3)))
-      Group1 as var(func: type(Group))
-      GroupAuth2 as var(func: uid(Group1)) @cascade {
-        users : Group.users @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
+      GroupRoot as var(func: uid(Group_1)) @filter((uid(Group_Auth2) OR uid(Group_Auth3)))
+      Group_1 as var(func: type(Group))
+      Group_Auth2 as var(func: uid(Group_1)) @cascade {
+        Group.users : Group.users @filter(eq(User.username, "user1"))
       }
-      GroupAuth3 as var(func: uid(Group1)) @cascade {
-        createdBy : Group.createdBy @filter(eq(User.username, "user1"))
-        dgraph.uid : uid
+      Group_Auth3 as var(func: uid(Group_1)) @cascade {
+        Group.createdBy : Group.createdBy @filter(eq(User.username, "user1"))
       }
     }
 
 - name: "Auth with top level OR rbac false"
   gqlquery: |
-    query {                                           
+    query {
       queryProject {
         name
       }
@@ -607,17 +667,15 @@
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
-        name : Project.name
+        Project.name : Project.name
         dgraph.uid : uid
       }
-      ProjectRoot as var(func: uid(Project1)) @filter(uid(ProjectAuth2))
-      Project1 as var(func: type(Project))
-      ProjectAuth2 as var(func: uid(Project1)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      ProjectRoot as var(func: uid(Project_1)) @filter(uid(Project_Auth2))
+      Project_1 as var(func: type(Project))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
     }
 
@@ -633,13 +691,13 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret, first: 1) {
-        id : uid
-        ownedBy : UserSecret.ownedBy
+      queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
+        UserSecret.id : uid
+        UserSecret.ownedBy : UserSecret.ownedBy
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
-      UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretRoot as var(func: uid(UserSecret_1), orderasc: UserSecret.aSecret, first: 1) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with deep filter : query top-level"
@@ -655,23 +713,19 @@
   dgquery: |-
     query {
       queryTicket(func: uid(TicketRoot)) {
-        id : uid
-        title : Ticket.title
+        Ticket.id : uid
+        Ticket.title : Ticket.title
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: type(Ticket))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      TicketRoot as var(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2))
+      Ticket_1 as var(func: type(Ticket))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -682,7 +736,7 @@
         username
         tickets {
           id
-          title 
+          title
         }
       }
     }
@@ -691,31 +745,27 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        username : User.username
-        tickets : User.tickets @filter(uid(Ticket3)) {
-          id : uid
-          title : Ticket.title
+        User.username : User.username
+        User.tickets : User.tickets @filter(uid(Ticket_1)) {
+          Ticket.id : uid
+          Ticket.title : Ticket.title
         }
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User4))
-      User4 as var(func: type(User))
+      UserRoot as var(func: uid(User_4))
+      User_4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Ticket1 as User.tickets
+        Ticket_2 as User.tickets
       }
-      Ticket3 as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      Ticket_1 as var(func: uid(Ticket_2)) @filter(uid(Ticket_Auth3))
+      Ticket_Auth3 as var(func: uid(Ticket_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -726,7 +776,7 @@
         username
         tickets(filter: { title: { anyofterms: "graphql" } }) {
           id
-          title 
+          title
         }
       }
     }
@@ -735,31 +785,27 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        username : User.username
-        tickets : User.tickets @filter(uid(Ticket3)) {
-          id : uid
-          title : Ticket.title
+        User.username : User.username
+        User.tickets : User.tickets @filter(uid(Ticket_1)) {
+          Ticket.id : uid
+          Ticket.title : Ticket.title
         }
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User4))
-      User4 as var(func: type(User))
+      UserRoot as var(func: uid(User_4))
+      User_4 as var(func: type(User))
       var(func: uid(UserRoot)) {
-        Ticket1 as User.tickets
+        Ticket_2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
       }
-      Ticket3 as var(func: uid(Ticket1)) @filter((anyofterms(Ticket.title, "graphql") AND uid(TicketAuth2)))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
+      Ticket_1 as var(func: uid(Ticket_2)) @filter(uid(Ticket_Auth3))
+      Ticket_Auth3 as var(func: uid(Ticket_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             }
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
-        dgraph.uid : uid
       }
     }
 
@@ -774,23 +820,20 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
-        content : Movie.content
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
+        Movie.content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
-      Movie1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
-      MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth3 as var(func: uid(Movie1)) @cascade {
-        regionsAvailable : Movie.regionsAvailable {
-          users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      MovieRoot as var(func: uid(Movie_1), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth2)) AND (uid(Movie_Auth3) OR uid(Movie_Auth4))))
+      Movie_1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
+      Movie_Auth2 as var(func: uid(Movie_1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth3 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
-      MovieAuth4 as var(func: uid(Movie1)) @cascade {
-        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
+      Movie_Auth4 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
     }
 
@@ -809,33 +852,30 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
-        content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name, first: 10, offset: 10) {
-          name : Region.name
-          global : Region.global
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
+        Movie.content : Movie.content
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 10, offset: 10) {
+          Region.name : Region.name
+          Region.global : Region.global
           dgraph.uid : uid
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie3)) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
-      Movie3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
-      MovieAuth4 as var(func: uid(Movie3)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth5 as var(func: uid(Movie3)) @cascade {
-        regionsAvailable : Movie.regionsAvailable {
-          users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      MovieRoot as var(func: uid(Movie_3), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
+      Movie_3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
-      MovieAuth6 as var(func: uid(Movie3)) @cascade {
-        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
+      Movie_Auth6 as var(func: uid(Movie_3)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable
+        Region_2 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region2 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
+      Region_1 as var(func: uid(Region_2))
     }
 
 - name: "Auth deep query - 3 level"
@@ -862,18 +902,18 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) {
-        content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
-          name : Region.name
-          global : Region.global
-          users : Region.users @filter(uid(User6)) (orderasc: User.username, first: 10, offset: 10) {
-            username : User.username
-            age : User.age
-            isPublic : User.isPublic
-            secrets : User.secrets @filter(uid(UserSecret5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) {
-              aSecret : UserSecret.aSecret
-              ownedBy : UserSecret.ownedBy
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
+        Movie.content : Movie.content
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 10, offset: 10) @cascade {
+          Region.name : Region.name
+          Region.global : Region.global
+          Region.users : Region.users @filter(uid(User_3)) (orderasc: User.username, first: 10, offset: 10) {
+            User.username : User.username
+            User.age : User.age
+            User.isPublic : User.isPublic
+            User.secrets : User.secrets @filter(uid(UserSecret_5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) {
+              UserSecret.aSecret : UserSecret.aSecret
+              UserSecret.ownedBy : UserSecret.ownedBy
               dgraph.uid : uid
             }
             dgraph.uid : uid
@@ -882,33 +922,30 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie8)) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
-      Movie8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
-      MovieAuth9 as var(func: uid(Movie8)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth10 as var(func: uid(Movie8)) @cascade {
-        regionsAvailable : Movie.regionsAvailable {
-          users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      MovieRoot as var(func: uid(Movie_8), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
+      Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
-      MovieAuth11 as var(func: uid(Movie8)) @cascade {
-        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
+      Movie_Auth11 as var(func: uid(Movie_8)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
       var(func: uid(MovieRoot)) {
-        Region1 as Movie.regionsAvailable
+        Region_2 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
       }
-      Region7 as var(func: uid(Region1)) @filter(eq(Region.name, "Region123"))
-      var(func: uid(Region1)) {
-        User2 as Region.users
+      Region_1 as var(func: uid(Region_2))
+      var(func: uid(Region_1)) {
+        User_4 as Region.users @filter(eq(User.username, "User321"))
       }
-      User6 as var(func: uid(User2)) @filter(eq(User.username, "User321"))
-      var(func: uid(User2)) {
-        UserSecret3 as User.secrets
+      User_3 as var(func: uid(User_4))
+      var(func: uid(User_3)) {
+        UserSecret_6 as User.secrets @filter(allofterms(UserSecret.aSecret, "Secret132"))
       }
-      UserSecret5 as var(func: uid(UserSecret3)) @filter((allofterms(UserSecret.aSecret, "Secret132") AND uid(UserSecretAuth4)))
-      UserSecretAuth4 as var(func: uid(UserSecret3)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecret_5 as var(func: uid(UserSecret_6)) @filter(uid(UserSecret_Auth7))
+      UserSecret_Auth7 as var(func: uid(UserSecret_6)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with complex filter"
@@ -923,22 +960,52 @@
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot)) {
-        content : Movie.content
+        Movie.content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
-      Movie1 as var(func: type(Movie))
-      MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth3 as var(func: uid(Movie1)) @cascade {
-        regionsAvailable : Movie.regionsAvailable {
-          users : Region.users @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
+      MovieRoot as var(func: uid(Movie_1)) @filter((NOT (uid(Movie_Auth2)) AND (uid(Movie_Auth3) OR uid(Movie_Auth4))))
+      Movie_1 as var(func: type(Movie))
+      Movie_Auth2 as var(func: uid(Movie_1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth3 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
         }
-        dgraph.uid : uid
       }
-      MovieAuth4 as var(func: uid(Movie1)) @cascade {
-        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
+      Movie_Auth4 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+      }
+    }
+
+- name: "Aggregate Query with complex auth filter"
+  gqlquery: |
+    query {
+      aggregateMovie {
+        count
+        contentMin
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      aggregateMovie() {
+        MovieAggregateResult.count : max(val(countVar))
+        MovieAggregateResult.contentMin : min(val(contentVar))
+      }
+      var(func: uid(MovieRoot)) {
+        countVar as count(uid)
+        contentVar as Movie.content
+      }
+      MovieRoot as var(func: uid(Movie_1)) @filter((NOT (uid(Movie_Auth2)) AND (uid(Movie_Auth3) OR uid(Movie_Auth4))))
+      Movie_1 as var(func: type(Movie))
+      Movie_Auth2 as var(func: uid(Movie_1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth3 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
+        }
+      }
+      Movie_Auth4 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
     }
 
@@ -949,6 +1016,20 @@
         id
       }
     }
+  dgquery: |-
+    query {
+      queryUserSecret()
+    }
+
+- name: "Query with null variable - top level"
+  gqlquery: |
+    query {
+      queryUserSecret {
+        id
+      }
+    }
+  jwtVar:
+    USER: null
   dgquery: |-
     query {
       queryUserSecret()
@@ -982,11 +1063,34 @@
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
-        username : User.username
+        User.username : User.username
         dgraph.uid : uid
       }
-      UserRoot as var(func: uid(User2))
-      User2 as var(func: type(User))
+      UserRoot as var(func: uid(User_3))
+      User_3 as var(func: type(User))
+    }
+
+- name: "Query with null variable - deep query"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets {
+          id
+          title
+        }
+      }
+    }
+  jwtvar:
+    USER: null
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.username : User.username
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User_3))
+      User_3 as var(func: type(User))
     }
 
 - name: "Query with missing variable - partial jwt token"
@@ -1001,11 +1105,11 @@
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
-        name : Project.name
+        Project.name : Project.name
         dgraph.uid : uid
       }
-      ProjectRoot as var(func: uid(Project1))
-      Project1 as var(func: type(Project))
+      ProjectRoot as var(func: uid(Project_1))
+      Project_1 as var(func: type(Project))
     }
 
 - name: "Query with missing jwt token - type without auth directive"
@@ -1018,7 +1122,7 @@
   dgquery: |-
     query {
       queryRole(func: type(Role)) {
-        permission : Role.permission
+        Role.permission : Role.permission
         dgraph.uid : uid
       }
     }
@@ -1033,15 +1137,14 @@
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot)) {
-        content : Movie.content
+        Movie.content : Movie.content
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie1)) @filter((NOT (uid(MovieAuth2)) AND uid(MovieAuth3)))
-      Movie1 as var(func: type(Movie))
-      MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth3 as var(func: uid(Movie1)) @cascade {
-        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
-        dgraph.uid : uid
+      MovieRoot as var(func: uid(Movie_1)) @filter((NOT (uid(Movie_Auth2)) AND uid(Movie_Auth3)))
+      Movie_1 as var(func: type(Movie))
+      Movie_Auth2 as var(func: uid(Movie_1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth3 as var(func: uid(Movie_1)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
       }
     }
 
@@ -1055,7 +1158,878 @@
   dgquery: |-
     query {
       queryReview(func: type(Review)) {
-        comment : Review.comment
+        Review.comment : Review.comment
         dgraph.uid : uid
+      }
+    }
+
+- name: "Aggregate Fields at child with Auth deep filter and field filter"
+  gqlquery: |
+    query {
+      queryUser {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
+          count
+          titleMin
+          titleMax
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.ticketsAggregate : User.tickets @filter(uid(TicketAggregateResult_1)) {
+          User.ticketsAggregate_titleVar as Ticket.title
+          dgraph.uid : uid
+        }
+        TicketAggregateResult.count_User.ticketsAggregate : count(User.tickets) @filter(uid(TicketAggregateResult_1))
+        TicketAggregateResult.titleMin_User.ticketsAggregate : min(val(User.ticketsAggregate_titleVar))
+        TicketAggregateResult.titleMax_User.ticketsAggregate : max(val(User.ticketsAggregate_titleVar))
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User_4))
+      User_4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        TicketAggregateResult_2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
+      }
+      TicketAggregateResult_1 as var(func: uid(TicketAggregateResult_2)) @filter(uid(Ticket_Auth3))
+      Ticket_Auth3 as var(func: uid(TicketAggregateResult_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+
+- name: "Multiple Aggregate queries at child level and other queries with Auth deep filter"
+  gqlquery: |
+    query {
+      queryUser {
+        ticketsAggregate(filter: { title: { anyofterms: "graphql" } }) {
+          titleMin
+        }
+        issuesAggregate {
+          count
+          msgMax
+        }
+        tickets(filter: { title: { anyofterms: "graphql2" } }) {
+          title
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.ticketsAggregate : User.tickets @filter(uid(TicketAggregateResult_1)) {
+          User.ticketsAggregate_titleVar as Ticket.title
+          dgraph.uid : uid
+        }
+        TicketAggregateResult.titleMin_User.ticketsAggregate : min(val(User.ticketsAggregate_titleVar))
+        User.issuesAggregate : User.issues @filter(uid(IssueAggregateResult_4)) {
+          User.issuesAggregate_msgVar as Issue.msg
+          dgraph.uid : uid
+        }
+        IssueAggregateResult.count_User.issuesAggregate : count(User.issues) @filter(uid(IssueAggregateResult_4))
+        IssueAggregateResult.msgMax_User.issuesAggregate : max(val(User.issuesAggregate_msgVar))
+        User.tickets : User.tickets @filter(uid(Ticket_7)) {
+          Ticket.title : Ticket.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User_10))
+      User_10 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        TicketAggregateResult_2 as User.tickets @filter(anyofterms(Ticket.title, "graphql"))
+      }
+      TicketAggregateResult_1 as var(func: uid(TicketAggregateResult_2)) @filter(uid(Ticket_Auth3))
+      Ticket_Auth3 as var(func: uid(TicketAggregateResult_2)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+      var(func: uid(UserRoot)) {
+        IssueAggregateResult_5 as User.issues
+      }
+      IssueAggregateResult_4 as var(func: uid(IssueAggregateResult_5)) @filter(uid(Issue_Auth6))
+      Issue_Auth6 as var(func: uid(IssueAggregateResult_5)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
+      var(func: uid(UserRoot)) {
+        Ticket_8 as User.tickets @filter(anyofterms(Ticket.title, "graphql2"))
+      }
+      Ticket_7 as var(func: uid(Ticket_8)) @filter(uid(Ticket_Auth9))
+      Ticket_Auth9 as var(func: uid(Ticket_8)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+
+- name: "Aggregate at child with RBAC rules true"
+  gqlquery: |
+    query {
+      queryUser {
+        issuesAggregate {
+          count
+          msgMin
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.issuesAggregate : User.issues @filter(uid(IssueAggregateResult_1)) {
+          User.issuesAggregate_msgVar as Issue.msg
+          dgraph.uid : uid
+        }
+        IssueAggregateResult.count_User.issuesAggregate : count(User.issues) @filter(uid(IssueAggregateResult_1))
+        IssueAggregateResult.msgMin_User.issuesAggregate : min(val(User.issuesAggregate_msgVar))
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User_4))
+      User_4 as var(func: type(User))
+      var(func: uid(UserRoot)) {
+        IssueAggregateResult_2 as User.issues
+      }
+      IssueAggregateResult_1 as var(func: uid(IssueAggregateResult_2)) @filter(uid(Issue_Auth3))
+      Issue_Auth3 as var(func: uid(IssueAggregateResult_2)) @cascade {
+        Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
+      }
+    }
+
+- name: "Aggregate Fields with Deep RBAC rules false"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        issuesAggregate {
+          count
+          msgMin
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryUser(func: uid(UserRoot)) {
+        User.username : User.username
+        dgraph.uid : uid
+      }
+      UserRoot as var(func: uid(User_1))
+      User_1 as var(func: type(User))
+    }
+
+- name: "Type should apply Interface's query rules and along with its own auth rules"
+  gqlquery: |
+    query {
+      queryQuestion {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ANS: "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryQuestion(func: uid(QuestionRoot)) {
+        Question.id : uid
+        Question.text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question_1)) @filter((uid(Question_Auth2) AND uid(Question_Auth3)))
+      Question_1 as var(func: type(Question))
+      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth3 as var(func: uid(Question_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Type should apply only Interface's query auth rules"
+  gqlquery: |
+    query {
+      queryAnswer {
+        id
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryAnswer(func: uid(AnswerRoot)) {
+        Answer.id : uid
+        Answer.text : Post.text
+      }
+      AnswerRoot as var(func: uid(Answer_1)) @filter(uid(Answer_Auth2))
+      Answer_1 as var(func: type(Answer))
+      Answer_Auth2 as var(func: uid(Answer_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Type should apply query auth rules from all the interfaces that it implements."
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost(func: uid(FbPostRoot)) {
+        FbPost.id : uid
+        FbPost.postCount : FbPost.postCount
+      }
+      FbPostRoot as var(func: uid(FbPost_1)) @filter(uid(FbPost_Auth2))
+      FbPost_1 as var(func: type(FbPost))
+      FbPost_Auth2 as var(func: uid(FbPost_1)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Type which inherits auth rules from interfaces returns no results when auth rules fail"
+  gqlquery: |
+    query {
+      queryFbPost {
+        id
+        postCount
+      }
+    }
+  jwtvar:
+    ROLE: "REGULAR"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryFbPost()
+    }
+
+- name: "Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        Post.text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(FbPost_Auth6) OR uid(Answer_Auth8)))
+      Post_1 as var(func: type(Post))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      FbPost_5 as var(func: type(FbPost))
+      FbPost_Auth6 as var(func: uid(FbPost_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_7 as var(func: type(Answer))
+      Answer_Auth8 as var(func: uid(Answer_7)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Filters on query Interface should work correctly"
+  gqlquery: |
+    query {
+      queryPost(filter: {text: {eq: "A Post"}}, order: { desc: text}, first: 10, offset: 5 ) {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS:  "true"
+    USER: "Random"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot), orderdesc: Post.text) {
+        dgraph.type
+        Post.text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post_1), orderdesc: Post.text, first: 10, offset: 5) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(FbPost_Auth6) OR uid(Answer_Auth8)))
+      Post_1 as var(func: type(Post)) @filter(eq(Post.text, "A Post"))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      FbPost_5 as var(func: type(FbPost))
+      FbPost_Auth6 as var(func: uid(FbPost_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_7 as var(func: type(Answer))
+      Answer_Auth8 as var(func: uid(Answer_7)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Query interface should return empty if the auth rule of interface is not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryPost()
+    }
+
+- name: "Query interface should return partial types if the auth rule of interface is not satisfied"
+  gqlquery: |
+    query {
+      queryPost {
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryPost(func: uid(PostRoot)) {
+        dgraph.type
+        Post.text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(Answer_Auth6)))
+      Post_1 as var(func: type(Post))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_5 as var(func: type(Answer))
+      Answer_Auth6 as var(func: uid(Answer_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Get Query interface having Auth Rules apply Auth filters of types also"
+  gqlquery: |
+    query {
+      getPost(id: "0x1") {
+        text
+      }
+    }
+  jwtvar:
+    USER: "Random"
+    ANS: "true"
+  dgquery: |-
+    query {
+      getPost(func: uid(PostRoot)) @filter(type(Post)) {
+        dgraph.type
+        Post.text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(Answer_Auth6)))
+      Post_1 as var(func: uid(0x1))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+      }
+      Question_Auth4 as var(func: uid(Question_2)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_5 as var(func: type(Answer))
+      Answer_Auth6 as var(func: uid(Answer_5)) @cascade {
+        dgraph.type
+        Post.author : Post.author @filter(eq(Author.name, "Random")) {
+          Author.name : Author.name
+        }
+      }
+    }
+
+- name: "Get Query interface having Auth Rules should return empty if the Auth rules are not satisfied"
+  gqlquery: |
+    query {
+      getPost(id: "0x1") {
+        text
+      }
+    }
+  jwtvar:
+  dgquery: |-
+    query {
+      getPost()
+    }
+
+- name: "Query interface having no Auth Rules should apply auth rules on implementing types that are satisfied"
+  gqlquery: |
+    query {
+      queryA {
+        fieldA
+      }
+    }
+  jwtvar:
+    ANS: "true"
+  dgquery: |-
+    query {
+      queryA(func: uid(ARoot)) {
+        dgraph.type
+        A.fieldA : A.fieldA
+        dgraph.uid : uid
+      }
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2) OR uid(C_Auth4)))
+      A_1 as var(func: type(A))
+      B_2 as var(func: type(B))
+      C_3 as var(func: type(C))
+      C_Auth4 as var(func: uid(C_3)) @filter(eq(C.fieldC, true)) @cascade {
+        C.id : uid
+      }
+    }
+
+- name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified are excluded (for eg: type C )"
+  gqlquery: |
+    query {
+      queryA {
+        fieldA
+      }
+    }
+  jwtvar:
+  dgquery: |-
+    query {
+      queryA(func: uid(ARoot)) {
+        dgraph.type
+        A.fieldA : A.fieldA
+        dgraph.uid : uid
+      }
+      ARoot as var(func: uid(A_1)) @filter((uid(B_2)))
+      A_1 as var(func: type(A))
+      B_2 as var(func: type(B))
+    }
+
+-
+  name: "Password Query with no rule applied for password"
+  gqlquery: |
+    query {
+      checkUserPassword(username: "user", password: "Password") {
+        username
+      }
+    }
+  dgquery: |-
+    query {
+      checkUserPassword(func: eq(User.username, "user")) @filter((eq(val(pwd), 1) AND type(User))) {
+        User.username : User.username
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.username, "user")) @filter(type(User)) {
+        pwd as checkpwd(User.password, "Password")
+      }
+    }
+
+-
+  name: "Password Query with RBAC rule true"
+  gqlquery: |
+    query {
+      checkLogPassword(id: "0x123", pwd: "something") {
+        id
+        logs
+        random
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+  dgquery: |-
+    query {
+      checkLogPassword(func: uid(LogRoot)) @filter((eq(val(pwd), 1) AND type(Log))) {
+        Log.id : uid
+        Log.logs : Log.logs
+        Log.random : Log.random
+      }
+      LogRoot as var(func: uid(Log_1))
+      Log_1 as var(func: uid(0x123))
+      checkPwd(func: uid(LogRoot)) @filter(type(Log)) {
+        pwd as checkpwd(Log.pwd, "something")
+      }
+    }
+
+-
+  name: "Password Query with RBAC rule false"
+  gqlquery: |
+    query {
+      checkLogPassword(id: "0x123", pwd: "something") {
+        logs
+        random
+      }
+    }
+  jwtvar:
+    ROLE: "User"
+  dgquery: |-
+    query {
+      checkLogPassword()
+    }
+
+-
+  name: "Password Query with auth rules"
+  gqlquery: |
+    query {
+      checkProjectPassword(projID: "0x123", pwd: "something") {
+        name
+        projID
+        columns {
+          name
+          colID
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      checkProjectPassword(func: uid(ProjectRoot)) @filter((eq(val(pwd), 1) AND type(Project))) {
+        Project.name : Project.name
+        Project.projID : uid
+        Project.columns : Project.columns @filter(uid(Column_1)) {
+          Column.name : Column.name
+          Column.colID : uid
+        }
+      }
+      ProjectRoot as var(func: uid(Project_4)) @filter(uid(Project_Auth5))
+      Project_4 as var(func: uid(0x123))
+      Project_Auth5 as var(func: uid(Project_4)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+      var(func: uid(ProjectRoot)) {
+        Column_2 as Project.columns
+      }
+      Column_1 as var(func: uid(Column_2)) @filter(uid(Column_Auth3))
+      Column_Auth3 as var(func: uid(Column_2)) @cascade {
+        Column.inProject : Column.inProject {
+          Project.roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+            Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          }
+        }
+      }
+      checkPwd(func: uid(ProjectRoot)) @filter(type(Project)) {
+        pwd as checkpwd(Project.pwd, "something")
+      }
+    }
+
+- name: "Type with password query should apply Interface's password rules and along with its own auth rules"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword(func: uid(QuestionRoot)) @filter((eq(val(pwd), 1) AND type(Question))) {
+        Question.id : uid
+        Question.text : Post.text
+      }
+      QuestionRoot as var(func: uid(Question_1)) @filter(uid(Question_Auth2))
+      Question_1 as var(func: uid(0x123))
+      Question_Auth2 as var(func: uid(Question_1)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+        Question.text : Post.text
+      }
+      checkPwd(func: uid(QuestionRoot)) @filter(type(Question)) {
+        pwd as checkpwd(Question.pwd, "something")
+      }
+    }
+
+- name: "Type which inherits password auth rules from interfaces returns no results when auth rules fail"
+  gqlquery: |
+    query {
+      checkQuestionPassword(id: "0x123", pwd: "something") {
+        id
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "NotAdmin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkQuestionPassword()
+    }
+
+- name: "Password Auth rules of All the implementing types should Apply to the interface also"
+  gqlquery: |
+    query {
+      checkPostPassword(id: "0x123", pwd: "something") {
+        text
+      }
+    }
+  jwtvar:
+    ROLE: "Admin"
+    ANS: "true"
+    USER: "ADMIN"
+  dgquery: |-
+    query {
+      checkPostPassword(func: uid(PostRoot)) @filter((eq(val(pwd), 1) AND type(Post))) {
+        dgraph.type
+        Post.text : Post.text
+        dgraph.uid : uid
+      }
+      PostRoot as var(func: uid(Post_1)) @filter((uid(Question_Auth3) OR uid(FbPost_Auth5) OR uid(Answer_6)))
+      Post_1 as var(func: uid(0x123))
+      Question_2 as var(func: type(Question))
+      Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
+        Question.id : uid
+        Question.text : Post.text
+      }
+      FbPost_4 as var(func: type(FbPost))
+      FbPost_Auth5 as var(func: uid(FbPost_4)) @cascade {
+        FbPost.author : Post.author @filter(eq(Author.name, "ADMIN")) {
+          Author.name : Author.name
+        }
+      }
+      Answer_6 as var(func: type(Answer))
+      checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
+        pwd as checkpwd(Post.pwd, "something")
+      }
+    }
+
+- name: "Entities query with query auth rules"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Mission", id: "0x1"}{__typename: "Mission", id: "0x2"}, {__typename: "Mission", id: "0x3"}]) {
+        ... on Mission {
+          id
+          designation
+          startDate
+        }
+      }
+    }
+  jwtvar:
+    USER: "user"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot), orderasc: Mission.id) {
+        dgraph.type
+        Mission.id : Mission.id
+        Mission.designation : Mission.designation
+        Mission.startDate : Mission.startDate
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Mission_1), orderasc: Mission.id) @filter(uid(Mission_Auth2))
+      Mission_1 as var(func: eq(Mission.id, "0x1", "0x2", "0x3")) @filter(type(Mission))
+      Mission_Auth2 as var(func: uid(Mission_1)) @filter(eq(Mission.supervisorName, "user")) @cascade {
+        Mission.id : Mission.id
+      }
+    }
+- name: "Entities query with top level RBAC rule true and level 1 query auth rule"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+    USER: "user"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
+        dgraph.type
+        Astronaut.missions : Astronaut.missions @filter(uid(Mission_1)) {
+          Mission.designation : Mission.designation
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Astronaut_4), orderasc: Astronaut.id)
+      Astronaut_4 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
+      var(func: uid(_EntityRoot)) {
+        Mission_2 as Astronaut.missions
+      }
+      Mission_1 as var(func: uid(Mission_2)) @filter(uid(Mission_Auth3))
+      Mission_Auth3 as var(func: uid(Mission_2)) @filter(eq(Mission.supervisorName, "user")) @cascade {
+        Mission.id : Mission.id
+      }
+    }
+
+- name: "Entities query with RBAC rule false"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "user"
+  dgquery: |-
+    query {
+      _entities()
+    }
+
+- name: "Entities query with top RBAC rules true and missing JWT variable for level 1 query auth rule"
+  gqlquery: |
+    query {
+      _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
+        ... on Astronaut {
+          missions {
+            designation
+          }
+        }
+      }
+    }
+  jwtvar:
+    ROLE: "admin"
+  dgquery: |-
+    query {
+      _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
+        dgraph.type
+        dgraph.uid : uid
+      }
+      _EntityRoot as var(func: uid(Astronaut_3), orderasc: Astronaut.id)
+      Astronaut_3 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
+    }
+
+-
+  name: "Query interface should return all the nodes of a type if rbac rules of type are true"
+  gqlquery: |
+    query {
+      queryVehicle{
+        owner
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+    USER: "user"
+  dgquery: |-
+    query {
+      queryVehicle(func: uid(VehicleRoot)) {
+        dgraph.type
+        Vehicle.owner : Vehicle.owner
+        dgraph.uid : uid
+      }
+      VehicleRoot as var(func: uid(Vehicle_1)) @filter((uid(Car_2)))
+      Vehicle_1 as var(func: type(Vehicle))
+      Car_2 as var(func: type(Car))
+    }
+
+-
+  name: "Fragments in auth queries with user defined cascade"
+  gqlquery: |
+    query {
+      queryHome {
+        id
+        address
+      }
+    }
+  dgquery: |-
+    query {
+      queryHome(func: uid(HomeRoot)) {
+        Home.id : uid
+        Home.address : Home.address
+      }
+      HomeRoot as var(func: uid(Home_1)) @filter((uid(Home_Auth2) OR uid(Home_Auth3)))
+      Home_1 as var(func: type(Home))
+      Home_Auth2 as var(func: uid(Home_1)) @cascade(Home.members) {
+        Home.members : Home.members @filter((type(Dog))) @cascade {
+          dgraph.type
+          Dog.eats : Dog.eats {
+            dgraph.type
+            Parrot.id : uid
+            Plant.id : uid
+          }
+        }
+      }
+      Home_Auth3 as var(func: uid(Home_1)) @cascade {
+        Home.members : Home.members @filter((type(Plant))) {
+          dgraph.type
+          Plant.breed : Plant.breed
+        }
       }
     }

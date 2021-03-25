@@ -17,6 +17,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"google.golang.org/grpc"
+
+	"github.com/spf13/cast"
+
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/dgraph-io/dgraph/graphql/schema"
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -72,7 +83,7 @@ func touchedUidsHeader(t *testing.T) {
 			}
 		}`,
 	}
-	req, err := query.createGQLPost(GraphqlURL)
+	req, err := query.CreateGQLPost(GraphqlURL)
 	require.NoError(t, err)
 
 	client := http.Client{Timeout: 10 * time.Second}
@@ -82,6 +93,7 @@ func touchedUidsHeader(t *testing.T) {
 	// confirm that the header value is a non-negative integer
 	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
 	require.NoError(t, err)
+	require.Greater(t, touchedUidsInHeader, uint64(0))
 
 	// confirm that the value in header is same as the value in body
 	var gqlResp GraphQLResponse
@@ -89,6 +101,26 @@ func touchedUidsHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &gqlResp))
 	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
+}
+
+func cacheControlHeader(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query @cacheControl(maxAge: 5) {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := query.CreateGQLPost(GraphqlURL)
+	require.NoError(t, err)
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// confirm that the header value is a non-negative integer
+	require.Equal(t, "public,max-age=5", resp.Header.Get("Cache-Control"))
+	require.Equal(t, "Accept-Encoding", resp.Header.Get("Vary"))
 }
 
 // This test checks that all the different combinations of
@@ -131,6 +163,7 @@ func queryByTypeWithEncoding(t *testing.T, acceptGzip, gzipEncoding bool) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -166,6 +199,7 @@ func uidAlias(t *testing.T) {
 	expected.QueryCountry = []*countryUID{
 		&countryUID{UID: "Angola"},
 		&countryUID{UID: "Bangladesh"},
+		&countryUID{UID: "India"},
 		&countryUID{UID: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -194,6 +228,7 @@ func orderAtRoot(t *testing.T) {
 	expected.QueryCountry = []*country{
 		&country{Name: "Angola"},
 		&country{Name: "Bangladesh"},
+		&country{Name: "India"},
 		&country{Name: "Mozambique"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -220,8 +255,8 @@ func pageAtRoot(t *testing.T) {
 		QueryCountry []*country
 	}
 	expected.QueryCountry = []*country{
+		&country{Name: "India"},
 		&country{Name: "Bangladesh"},
-		&country{Name: "Angola"},
 	}
 	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.NoError(t, err)
@@ -344,6 +379,336 @@ func allPosts(t *testing.T) []*post {
 	require.Equal(t, 4, len(result.QueryPost))
 
 	return result.QueryPost
+}
+
+func entitiesQueryWithKeyFieldOfTypeString(t *testing.T) {
+	addSpaceShipParams := &GraphQLParams{
+		Query: `mutation addSpaceShip($id1: String!, $id2: String!, $id3: String!, $id4: String! ) {
+			addSpaceShip(input: [{id: $id1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: $id2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: $id3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: $id4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+				spaceShip {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id1": "SpaceShip1",
+			"id2": "SpaceShip2",
+			"id3": "SpaceShip3",
+			"id4": "SpaceShip4",
+		},
+	}
+
+	gqlResponse := addSpaceShipParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: String!, $id2: String!, $id3: String!, $id4: String!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
+				... on SpaceShip {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "SpaceShip",
+			"id1":      "SpaceShip1",
+			"id2":      "SpaceShip2",
+			"id3":      "SpaceShip3",
+			"id4":      "SpaceShip4",
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
+
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
+
+	spaceShipDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"SpaceShip1", "SpaceShip2", "SpaceShip3", "SpaceShip4"}}}
+	DeleteGqlType(t, "SpaceShip", spaceShipDeleteFilter, 4, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
+
+}
+
+func entitiesQueryWithKeyFieldOfTypeInt(t *testing.T) {
+	addPlanetParams := &GraphQLParams{
+		Query: `mutation {
+			addPlanet(input: [{id: 1, missions: [{id: "Mission1", designation: "Apollo1"}]},{id: 2, missions: [{id: "Mission2", designation: "Apollo2"}]},{id: 3, missions: [{id: "Mission3", designation: "Apollo3"}]}, {id: 4, missions: [{id: "Mission4", designation: "Apollo4"}]}]){
+				planet {
+					id
+					missions {
+						id
+						designation
+					}
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addPlanetParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	entitiesQueryParams := &GraphQLParams{
+		Query: `query _entities($typeName: String!, $id1: Int!, $id2: Int!, $id3: Int!, $id4: Int!){
+			_entities(representations: [{__typename: $typeName, id: $id4},{__typename: $typeName, id: $id2},{__typename: $typeName, id: $id1},{__typename: $typeName, id: $id3},{__typename: $typeName, id: $id1}]) {
+				... on Planet {
+					missions(order: {asc: id}){
+						id
+						designation
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"typeName": "Planet",
+			"id1":      1,
+			"id2":      2,
+			"id3":      3,
+			"id4":      4,
+		},
+	}
+
+	entitiesResp := entitiesQueryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, entitiesResp)
+
+	expectedJSON := `{"_entities":[{"missions":[{"designation":"Apollo4","id":"Mission4"}]},{"missions":[{"designation":"Apollo2","id":"Mission2"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]},{"missions":[{"designation":"Apollo3","id":"Mission3"}]},{"missions":[{"designation":"Apollo1","id":"Mission1"}]}]}`
+
+	JSONEqGraphQL(t, expectedJSON, string(entitiesResp.Data))
+
+	planetDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []int{1, 2, 3, 4}}}
+	DeleteGqlType(t, "Planet", planetDeleteFilter, 4, nil)
+
+	missionDeleteFilter := map[string]interface{}{"id": map[string]interface{}{"in": []string{"Mission1", "Mission2", "Mission3", "Mission4"}}}
+	DeleteGqlType(t, "Mission", missionDeleteFilter, 4, nil)
+
+}
+
+func inFilterOnString(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($name1: String!, $code1: String!, $name2: String!, $code2: String! ) {
+			addState(input: [{name: $name1, xcode: $code1},{name: $name2, xcode: $code2}]) {
+				state {
+					xcode
+					name
+				}
+			}
+		}`,
+
+		Variables: map[string]interface{}{
+			"name1": "A State",
+			"code1": "abc",
+			"name2": "B State",
+			"code2": "def",
+		},
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateStateParams := &GraphQLParams{
+		Query: `mutation{
+			updateState(input: { 
+				filter: {
+					xcode: { in: ["abc", "def"]}},
+				set: { 
+					capital: "Common Capital"} }){
+				state{
+					xcode
+					name
+					capital
+				}
+			}
+		  }`,
+	}
+	gqlResponse = updateStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	getStateParams := &GraphQLParams{
+		Query: `query{
+			queryState(filter: {xcode: {in: ["abc", "def"]}}, order: { asc: name }){
+				xcode
+				name
+				capital
+			}
+		}`,
+	}
+
+	gqlResponse = getStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryState []*state
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryState))
+	queriedResult := map[string]*state{}
+	queriedResult[result.QueryState[0].Name] = result.QueryState[0]
+	queriedResult[result.QueryState[1].Name] = result.QueryState[1]
+
+	state1 := &state{
+		Name:    "A State",
+		Code:    "abc",
+		Capital: "Common Capital",
+	}
+	state2 := &state{
+		Name:    "B State",
+		Code:    "def",
+		Capital: "Common Capital",
+	}
+
+	if diff := cmp.Diff(state1, queriedResult[state1.Name]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(state2, queriedResult[state2.Name]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	deleteFilter := map[string]interface{}{"xcode": map[string]interface{}{"in": []string{"abc", "def"}}}
+	DeleteGqlType(t, "State", deleteFilter, 2, nil)
+}
+
+func inFilterOnInt(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost(filter: {numLikes: {in: [1, 77, 100, 150, 200]}}) {
+				title
+				numLikes
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(result.QueryPost))
+}
+
+func inFilterOnFloat(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: {reputation: {in: [6.6, 8.9, 9.5]}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(result.QueryAuthor))
+}
+
+func inFilterOnDateTime(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: {dob: {in: ["2001-01-01","2002-02-01", "2005-01-01"]}}) {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+}
+
+func betweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			queryPost(filter: {numLikes: {between: {min:90, max:100}}}) {
+				title
+				numLikes
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryPost []*post
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryPost))
+
+	expected := &post{
+		Title:    "Introducing GraphQL in Dgraph",
+		NumLikes: 100,
+	}
+
+	if diff := cmp.Diff(expected, result.QueryPost[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func deepBetweenFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query{
+			queryAuthor(filter: {reputation: {between: {min:6.0, max: 7.2}}}){
+			  name
+			  reputation
+			  posts(filter: {topic: {between: {min: "GraphQL", max: "GraphQL+-"}}}){
+				title
+				topic
+			  }
+			}
+		  }`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryAuthor []*author
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.QueryAuthor))
+
+	expected := &author{
+		Name:       "Ann Author",
+		Reputation: 6.6,
+		Posts:      []*post{{Title: "Introducing GraphQL in Dgraph", Topic: "GraphQL"}},
+	}
+
+	if diff := cmp.Diff(expected, result.QueryAuthor[0]); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
 }
 
 func deepFilter(t *testing.T) {
@@ -752,6 +1117,18 @@ func hasFilters(t *testing.T) {
 	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
+func hasFilterOnListOfFields(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	newPost := addPostWithNullText(t, newAuthor.ID, newCountry.ID, postExecutor)
+	Filter := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{"text", "numViews"}}}
+	Expected := []*post{
+		{Title: "No text"},
+	}
+	postTest(t, Filter, Expected)
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
+}
+
 func int64Filters(t *testing.T) {
 	cases := map[string]struct {
 		Filter   interface{}
@@ -1028,6 +1405,18 @@ func includeAndSkipDirective(t *testing.T) {
 				title
 				tags
 			  }
+			  postsAggregate {
+				__typename @include(if: $includeFalse) @skip(if: $skipFalse)
+				count @include(if: $includeFalse) @skip(if: $skipTrue)
+				titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+				numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
+			  }
+			}
+			aggregatePost {
+			  __typename @include(if: $includeFalse) @skip(if: $skipFalse)
+			  count @include(if: $includeFalse) @skip(if: $skipTrue)
+			  titleMin @include(if: $includeTrue) @skip(if: $skipFalse)
+			  numLikesMax @include(if: $includeTrue) @skip(if: $skipTrue)
 			}
 		  }`,
 		Variables: map[string]interface{}{
@@ -1041,7 +1430,19 @@ func includeAndSkipDirective(t *testing.T) {
 	gqlResponse := getAuthorParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	expected := `{"queryAuthor":[{"name":"Ann Other Author"}]}`
+	expected := `{
+	  "queryAuthor": [
+		{
+		  "name": "Ann Other Author",
+		  "postsAggregate": {
+			"titleMin": "Learning GraphQL in Dgraph"
+		  }
+		}
+	  ],
+	  "aggregatePost": {
+		"titleMin": "GraphQL doco"
+	  }
+	}`
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
 
@@ -1180,6 +1581,7 @@ func queryApplicationGraphQl(t *testing.T) {
 	"queryCountry": [
           { "name": "Angola"},
           { "name": "Bangladesh"},
+		  { "name": "India"},
           { "name": "Mozambique"}
         ]
 }`
@@ -1208,6 +1610,10 @@ func queryTypename(t *testing.T) {
           },
           {
                 "name": "Bangladesh",
+                "__typename": "Country"
+          },
+		  {
+                "name": "India",
                 "__typename": "Country"
           },
           {
@@ -1269,7 +1675,7 @@ func typenameForInterface(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 					name
@@ -1397,7 +1803,7 @@ func onlytypenameForInterface(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 
@@ -1442,7 +1848,7 @@ func defaultEnumFilter(t *testing.T) {
 			Query: `query {
 				queryCharacter (filter: {
 					appearsIn: {
-						eq: [EMPIRE]
+						in: [EMPIRE]
 					}
 				}) {
 					name
@@ -1684,6 +2090,64 @@ func queriesHaveExtensions(t *testing.T) {
 	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 }
 
+func erroredQueriesHaveTouchedUids(t *testing.T) {
+	country1 := addCountry(t, postExecutor)
+	country2 := addCountry(t, postExecutor)
+
+	// delete the first country's name.
+	// The schema states type Country `{ ... name: String! ... }`
+	// so a query error will be raised if we ask for the country's name in a
+	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
+	require.NoError(t, err)
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	mu := &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf("<%s> <Country.name> * .", country1.ID)),
+	}
+	_, err = client.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	// query country's name with some other things, that should give us error for missing name.
+	query := &GraphQLParams{
+		Query: `query ($ids: [ID!]) {
+			queryCountry(filter: {id: $ids}) {
+				id
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"ids": []interface{}{country1.ID, country2.ID}},
+	}
+	gqlResponse := query.ExecuteAsPost(t, GraphqlURL)
+
+	// the data should have first country as null
+	expectedResponse := fmt.Sprintf(`{
+		"queryCountry": [
+			null,
+			{"id": "%s", "name": "Testland"}
+		]
+	}`, country2.ID)
+	testutil.CompareJSON(t, expectedResponse, string(gqlResponse.Data))
+
+	// we should also get error for the missing name field
+	require.Equal(t, x.GqlErrorList{{
+		Message: "Non-nullable field 'name' (type String!) was not present " +
+			"in result from Dgraph.  GraphQL error propagation triggered.",
+		Locations: []x.Location{{Line: 4, Column: 5}},
+		Path:      []interface{}{"queryCountry", float64(0), "name"},
+	}}, gqlResponse.Errors)
+
+	// response should have extensions
+	require.NotNil(t, gqlResponse.Extensions)
+	// it should have touched_uids filled in from Dgraph response's metrics
+	touchedUidskey := "touched_uids"
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+
+	// cleanup
+	deleteCountry(t, map[string]interface{}{"id": []interface{}{country1.ID, country2.ID}}, 2, nil)
+}
+
 func queryWithAlias(t *testing.T) {
 	queryPostParams := &GraphQLParams{
 		Query: `query {
@@ -1707,6 +2171,48 @@ func queryWithAlias(t *testing.T) {
 				"title": "Introducing GraphQL in Dgraph",
 				"postTitle": "Introducing GraphQL in Dgraph",
 				"postAuthor": { "theName": "Ann Author" }}]}`,
+		string(gqlResponse.Data))
+}
+
+func queryWithMultipleAliasOfSameField(t *testing.T) {
+	queryAuthorParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor (filter: {name: {eq: "Ann Other Author"}}){
+			  name
+			  p1: posts(filter: {numLikes: {ge: 80}}){
+				title
+				numLikes
+			  }
+			  p2: posts(filter: {numLikes: {le: 5}}){
+				title
+				numLikes
+			  }
+			}
+		  }`,
+	}
+
+	gqlResponse := queryAuthorParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+		"queryAuthor": [
+			{
+				"name": "Ann Other Author",
+				"p1": [
+					{
+						"title": "Learning GraphQL in Dgraph",
+						"numLikes": 87
+					}
+				],
+				"p2": [
+					{
+						"title": "Random post",
+						"numLikes": 1
+					}
+				]
+			}
+		]
+	}`,
 		string(gqlResponse.Data))
 }
 
@@ -2002,6 +2508,42 @@ func queryWithCascade(t *testing.T) {
 						}`,
 		},
 		{
+			name: "parameterized cascade at all levels using variables",
+			query: `query ($ids: [ID!],$fieldsRoot: [String], $fieldsDeep: [String]) {
+						queryAuthor(filter: {id: $ids}) @cascade(fields: $fieldsRoot) {
+							reputation
+							name
+							dob
+							posts @cascade(fields: $fieldsDeep) {
+								title
+								text
+							}
+						}
+					}`,
+			variables: map[string]interface{}{"ids": authorIds, "fieldsRoot": []string{"reputation", "name"}, "fieldsDeep": []string{"text"}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "reputation": 4.5,
+							  "name": "George",
+							  "dob": null,
+							  "posts": [
+								{
+								  "title": "A show about nothing",
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "dob": null,
+							  "name": "Jerry",
+							  "posts": [],
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+		},
+		{
 			name: "parameterized cascade on ID type ",
 			query: `query ($ids: [ID!]) {
 						queryAuthor(filter: {id: $ids}) @cascade(fields:["reputation","id"]) {
@@ -2046,7 +2588,7 @@ func queryWithCascade(t *testing.T) {
 		{
 			name: "parameterized cascade on interface ",
 			query: `query {
-						queryCharacter (filter: { appearsIn: { eq: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
+						queryCharacter (filter: { appearsIn: { in: [EMPIRE] } }) @cascade(fields:["appearsIn"]){	
 							name
 							appearsIn
 						} 
@@ -2079,8 +2621,1295 @@ func queryWithCascade(t *testing.T) {
 	// cleanup
 	deleteAuthors(t, authorIds, nil)
 	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
-	deleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
-	deleteState(t, getXidFilter("xcode", []string{states[0].Code, states[1].Code}), len(states),
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	deleteState(t, GetXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
 		nil)
 	cleanupStarwars(t, newStarship.ID, humanID, "")
+}
+
+func filterInQueriesWithArrayForAndOr(t *testing.T) {
+	// for testing filter with AND,OR connectives
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:          "Jerry",
+			Reputation:    4.6,
+			Qualification: "Phd in ECE",
+			Country:       &country{Name: "outer Galaxy2"},
+			Posts:         []*post{{Title: "Outside", Tags: []string{}}},
+		}, {
+			Name:          "Kramer",
+			Reputation:    4.2,
+			Qualification: "PostDoc in CSE",
+			Country:       &country{Name: "outer space2"},
+			Posts:         []*post{{Title: "Ha! Cosmo Kramer", Text: "Giddy up!", Tags: []string{}}},
+		},
+	}, postExecutor)
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	authorIds := []string{authors[0].ID, authors[1].ID, authors[2].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID,
+		authors[2].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID, authors[2].Country.ID}
+
+	states := []*state{
+		{Name: "California", Code: "CA", Capital: "Sacramento"},
+		{Name: "Texas", Code: "TX"},
+	}
+	addStateParams := GraphQLParams{
+		Query: `mutation ($input: [AddStateInput!]!) {
+					addState(input: $input) {
+						numUids
+					}
+				}`,
+		Variables: map[string]interface{}{"input": states},
+	}
+	resp := addStateParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+	testutil.CompareJSON(t, `{"addState":{"numUids":2}}`, string(resp.Data))
+
+	tcases := []struct {
+		name      string
+		query     string
+		variables string
+		respData  string
+	}{
+		{
+			name: "Filter with only AND key at top level",
+			query: `query{
+                      queryAuthor(filter:{and:{name:{eq:"George"}}}){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with only AND key at top level using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+			    	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+
+			variables: `{"filter":{"and":{"name":{"eq":"George"}}}}`,
+		},
+		{
+			name: "Filter with only OR key at top level",
+			query: `query {
+                      queryAuthor(filter:{or:{name:{eq:"George"}}}){
+                        name
+                        reputation
+                        posts {
+						  text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with only OR key at top level using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+						name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+			    	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or":{"name":{"eq":"George"}}}}`,
+		}, {
+			name: "Filter with Nested AND using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                         text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and":[{"name":{"eq":"George"}},{"and":{"reputation":{"eq":4.5}}}]}}`,
+		},
+		{
+			name: "Filter with Nested AND",
+			query: `query{
+                      queryAuthor(filter:{and:[{name:{eq:"George"}},{and:{reputation:{eq:4.5}}}]}){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                       }
+				     }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with Nested OR",
+			query: `query{
+                      queryAuthor(filter:{or:[{name:{eq:"George"}},{or:{reputation:{eq:4.2}}}]}){
+                        name
+                        reputation
+						posts {
+                          text
+                        }
+                      }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": 4.2,
+							  "posts": [
+								{
+								  "text": "Giddy up!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+			name: "Filter with Nested OR using variables",
+			query: `query($filter:AuthorFilter) {
+                      queryAuthor(filter:$filter){
+                        name
+						reputation
+                        posts {
+                          text
+                        }
+                      }
+			      	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							},
+							{
+							  "name": "Kramer",
+							  "reputation": 4.2,
+							  "posts": [
+								{
+								  "text": "Giddy up!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or":[{"name":{"eq":"George"}},{"or":{"reputation":{"eq":4.2}}}]}}`,
+		},
+		{
+			name: "(A OR B) AND (C OR D) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         posts {
+                           text
+                        }
+                       }
+				     }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and": [{"name":{"eq": "George"},"or":{"name":{"eq": "Alice"}}},
+						{"reputation":{"eq": 3}, "or":{"reputation":{"eq": 4.5}}}]}}`,
+		},
+		{
+			name: "(A AND B AND C) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         qualification
+                          posts {
+                            text
+                          }
+                       }
+			      	}`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "qualification": "Phd in CSE",
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"and": [{"name":{"eq": "George"}},{"reputation":{"eq": 4.5}},{"qualification": {"eq": "Phd in CSE"}}]}}`,
+		},
+		{
+			name: "(A OR B OR C) using variables",
+			query: `query($filter:AuthorFilter) {
+                       queryAuthor(filter:$filter){
+                         name
+                         reputation
+                         qualification
+                       }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "Kramer",
+							  "qualification": "PostDoc in CSE",
+							  "reputation": 4.2
+							},
+							{
+							  "name": "George",
+							  "qualification": "Phd in CSE",
+							  "reputation": 4.5
+							},
+							{
+							  "name": "Jerry",
+							  "qualification": "Phd in ECE",
+							  "reputation": 4.6
+							}
+						  ]
+						}`,
+			variables: `{"filter":{"or": [{"name": {"eq": "George"}}, {"reputation": {"eq": 4.6}}, {"qualification": {"eq": "PostDoc in CSE"}}]}}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+	deleteState(t, GetXidFilter("xcode", []interface{}{states[0].Code, states[1].Code}), len(states),
+		nil)
+	cleanupStarwars(t, newStarship.ID, humanID, "")
+}
+
+func queryGeoNearFilter(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addHotel($hotels: [AddHotelInput!]!) {
+		  addHotel(input: $hotels) {
+			hotel {
+			  name
+			  location {
+				latitude
+				longitude
+			  }
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"hotels": []interface{}{
+			map[string]interface{}{
+				"name": "Taj Hotel 1",
+				"location": map[string]interface{}{
+					"latitude":  11.11,
+					"longitude": 22.22,
+				},
+			},
+			map[string]interface{}{
+				"name": "Taj Hotel 2",
+				"location": map[string]interface{}{
+					"latitude":  33.33,
+					"longitude": 22.22,
+				},
+			},
+			map[string]interface{}{
+				"name": "Taj Hotel 3",
+				"location": map[string]interface{}{
+					"latitude":  11.11,
+					"longitude": 33.33,
+				},
+			},
+		},
+		},
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotel := &GraphQLParams{
+		Query: `
+			query {
+			  queryHotel(filter: { location: { near: { distance: 100, coordinate: { latitude: 11.11, longitude: 22.22} } } }) {
+				name
+				location {
+				  latitude
+				  longitude
+				}
+			  }
+			}`,
+	}
+	gqlResponse = queryHotel.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotelExpected := `
+	{
+		"queryHotel":[{
+			"name" : "Taj Hotel 1",
+			"location" : {
+				"latitude" : 11.11,
+				"longitude" : 22.22
+			}
+		}]
+	}`
+	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "Hotel", map[string]interface{}{}, 3, nil)
+}
+
+func persistedQuery(t *testing.T) {
+	queryCountryParams := &GraphQLParams{
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: "shaWithoutAnyPersistedQuery",
+		}},
+	}
+	gqlResponse := queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	require.Len(t, gqlResponse.Errors, 1)
+	require.Contains(t, gqlResponse.Errors[0].Message, "PersistedQueryNotFound")
+
+	queryCountryParams = &GraphQLParams{
+		Query: `query ($countryName: String){
+			queryCountry(filter: {name: {eq: $countryName}}) {
+				name
+			}
+		}`,
+		Variables: map[string]interface{}{"countryName": "Bangladesh"},
+		Extensions: &schema.RequestExtensions{PersistedQuery: schema.PersistedQuery{
+			Sha256Hash: "incorrectSha",
+		}},
+	}
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	require.Len(t, gqlResponse.Errors, 1)
+	require.Contains(t, gqlResponse.Errors[0].Message, "provided sha does not match query")
+
+	queryCountryParams.Extensions.PersistedQuery.Sha256Hash = "bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryCountryParams.Query = ""
+	gqlResponse = queryCountryParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	// test get method as well
+	queryCountryParams.Extensions = nil
+	gqlResponse = queryCountryParams.ExecuteAsGet(t, GraphqlURL+`?extensions={"persistedQuery":{"sha256Hash":"bbc0af44f82ce5c38e775f7f14c71e5eba1936b12b3e66c452ee262ef147f1ed"}}`)
+	RequireNoGQLErrors(t, gqlResponse)
+}
+
+func queryAggregateWithFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Introducing" }} ) {
+				count
+				numLikesMax
+				titleMin
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+						{
+							"count":1,
+							"numLikesMax": 100,
+							"titleMin": "Introducing GraphQL in Dgraph"
+						}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost (filter: {title : { anyofterms : "Nothing" }} ) {
+				count
+				numLikesMax
+				type: __typename
+				titleMin
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t,
+		`{
+			"aggregatePost": {
+				"count": 0,
+				"numLikesMax": null,
+				"type": "PostAggregateResult",
+				"titleMin": null
+			}
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData2(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregateState (filter: {xcode : { eq : "nsw" }} ) {
+				count
+				capitalMax
+				capitalMin
+				xcodeMin
+				xcodeMax
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregateState":
+						{
+							"capitalMax": null,
+							"capitalMin": null,
+							"xcodeMin": "nsw",
+							"xcodeMax": "nsw",
+							"count": 1
+						}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateOnEmptyData3(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+					nameMin
+					capitalMax
+					capitalMin
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"nameMin": "Gujarat",
+					"capitalMax": null,
+					"capitalMin": null
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateWithoutFilter(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				titleMax
+				titleMin
+				numLikesSum
+				numLikesAvg
+				numLikesMax
+				numLikesMin
+				count
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+						{
+							"count":4,
+							"titleMax": "Random post",
+							"titleMin": "GraphQL doco",
+							"numLikesAvg": 66.25,
+							"numLikesMax": 100,
+							"numLikesMin": 1,
+							"numLikesSum": 265
+						}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				cnt: count
+				tmin : titleMin
+				tmax: titleMax
+				navg : numLikesAvg 
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+							{
+								"cnt":4,
+								"tmax": "Random post",
+								"tmin": "GraphQL doco",
+								"navg": 66.25
+							}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateWithRepeatedFields(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			aggregatePost {
+				count
+				cnt2 : count
+				tmin : titleMin
+				tmin_again : titleMin
+				tmax: titleMax
+				tmax_again : titleMax
+				navg : numLikesAvg
+				navg2 : numLikesAvg
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+					"aggregatePost":
+							{
+								"count":4,
+								"cnt2":4,
+								"tmax": "Random post",
+								"tmax_again": "Random post",
+								"tmin": "GraphQL doco",
+								"tmin_again": "GraphQL doco",
+								"navg": 66.25,
+								"navg2": 66.25
+							}
+				}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevel(t *testing.T) {
+	queryNumberOfStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+					count
+					__typename
+					nameMin
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"__typename": "StateAggregateResult",
+					"nameMin": "Gujarat"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithFilter(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+                	count
+					nameMin
+                }
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 2,
+					"nameMin" : "Karnataka"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithEmptyData(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate(filter: {xcode: {in: ["nothing"]}}) {
+                	count
+					__typename
+					nameMin
+                }
+				n: name
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": {
+					"count": 0,
+					"__typename": "StateAggregateResult",
+					"nameMin": null
+				},
+				"n": "India"
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithMultipleAlias(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+					count
+					nameMax
+				}
+				ag2: statesAggregate(filter: {xcode: {in: ["ka", "mh", "gj", "xyz"]}}) {
+					count
+					nameMax
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag1": { 
+					"count" : 2,
+					"nameMax" : "Maharashtra"
+				},
+				"ag2": {
+					"count" : 3,
+					"nameMax" : "Maharashtra"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAtChildLevelWithRepeatedFields(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag1: statesAggregate(filter: {xcode: {in: ["ka", "mh"]}}) {
+					count
+					cnt2 : count
+					nameMax
+					nm : nameMax
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag1": {
+					"count" : 2,
+					"cnt2" : 2,
+					"nameMax" : "Maharashtra",
+					"nm": "Maharashtra"
+				}
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryAggregateAndOtherFieldsAtChildLevel(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query 
+		{
+			queryCountry(filter: { name: { eq: "India" } }) {
+				name
+				ag : statesAggregate {
+                	count
+					nameMin
+                },
+				states {
+					name
+				}
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryCountry": [{
+				"name": "India",
+				"ag": { 
+					"count" : 3,
+					"nameMin" : "Gujarat"
+				},
+				"states": [
+				{
+					"name": "Maharashtra"
+				}, 
+				{
+					"name": "Gujarat"
+				},
+				{
+					"name": "Karnataka"
+				}]
+			}]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func queryChildLevelWithMultipleAliasOnScalarField(t *testing.T) {
+	queryNumberOfIndianStates := &GraphQLParams{
+		Query: `query
+		{
+			queryPost(filter: {numLikes: {ge: 100}}) {
+				t1: title
+				t2: title
+			}
+		}`,
+	}
+	gqlResponse := queryNumberOfIndianStates.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`
+		{
+			"queryPost": [
+				{
+					"t1": "Introducing GraphQL in Dgraph",
+					"t2": "Introducing GraphQL in Dgraph"
+				}
+			]
+		}`,
+		string(gqlResponse.Data))
+}
+
+func checkUser(t *testing.T, userObj, expectedObj *user) {
+	checkUserParams := &GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+			checkUserPassword(name: $name, password: $pwd) { name }
+		}`,
+		Variables: map[string]interface{}{
+			"name": userObj.Name,
+			"pwd":  userObj.Password,
+		},
+	}
+
+	gqlResponse := checkUserParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPasword *user `json:"checkUserPassword,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(user{}, "Password")
+	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func checkUserPasswordWithAlias(t *testing.T, userObj, expectedObj *user) {
+	checkUserParams := &GraphQLParams{
+		Query: `query checkUserPassword($name: String!, $pwd: String!) {
+			verify : checkUserPassword(name: $name, password: $pwd) { name }
+		}`,
+		Variables: map[string]interface{}{
+			"name": userObj.Name,
+			"pwd":  userObj.Password,
+		},
+	}
+
+	gqlResponse := checkUserParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		CheckUserPasword *user `json:"verify,omitempty"`
+	}
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	opt := cmpopts.IgnoreFields(user{}, "Password")
+	if diff := cmp.Diff(expectedObj, result.CheckUserPasword, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func passwordTest(t *testing.T) {
+	newUser := &user{
+		Name:     "Test User",
+		Password: "password",
+	}
+
+	addUserParams := &GraphQLParams{
+		Query: `mutation addUser($user: [AddUserInput!]!) {
+			addUser(input: $user) {
+				user {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": []*user{newUser}},
+	}
+
+	updateUserParams := &GraphQLParams{
+		Query: `mutation addUser($user: UpdateUserInput!) {
+			updateUser(input: $user) {
+				user {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"user": map[string]interface{}{
+			"filter": map[string]interface{}{
+				"name": map[string]interface{}{
+					"eq": newUser.Name,
+				},
+			},
+			"set": map[string]interface{}{
+				"password": "password_new",
+			},
+		}},
+	}
+
+	t.Run("Test add and update user", func(t *testing.T) {
+		gqlResponse := postExecutor(t, GraphqlURL, addUserParams)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, `{"addUser":{"user":[{"name":"Test User"}]}}`,
+			string(gqlResponse.Data))
+
+		checkUser(t, newUser, newUser)
+		checkUserPasswordWithAlias(t, newUser, newUser)
+		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
+
+		gqlResponse = postExecutor(t, GraphqlURL, updateUserParams)
+		RequireNoGQLErrors(t, gqlResponse)
+		require.Equal(t, `{"updateUser":{"user":[{"name":"Test User"}]}}`,
+			string(gqlResponse.Data))
+		checkUser(t, newUser, nil)
+		updatedUser := &user{Name: newUser.Name, Password: "password_new"}
+		checkUser(t, updatedUser, updatedUser)
+	})
+
+	deleteUser(t, *newUser)
+}
+
+func queryFilterWithIDInputCoercion(t *testing.T) {
+	authors := addMultipleAuthorFromRef(t, []*author{
+		{
+			Name:          "George",
+			Reputation:    4.5,
+			Qualification: "Phd in CSE",
+			Posts:         []*post{{Title: "A show about nothing", Text: "Got ya!", Tags: []string{}}},
+		}, {
+			Name:       "Jerry",
+			Reputation: 4.6,
+			Country:    &country{Name: "outer Galaxy2"},
+			Posts:      []*post{{Title: "Outside", Tags: []string{}}},
+		},
+	}, postExecutor)
+	authorIds := []string{authors[0].ID, authors[1].ID}
+	postIds := []string{authors[0].Posts[0].PostID, authors[1].Posts[0].PostID}
+	countryIds := []string{authors[1].Country.ID}
+	authorIdsDecimal := []string{cast.ToString(cast.ToInt(authorIds[0])), cast.ToString(cast.ToInt(authorIds[1]))}
+	tcases := []struct {
+		name      string
+		query     string
+		variables map[string]interface{}
+		respData  string
+	}{
+		{
+
+			name: "Query using single ID in a filter",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": authors[0].ID}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using single ID given in variable of type integer coerced to string ",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          text
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": cast.ToInt(authors[0].ID)}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "text": "Got ya!"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID given in variable of type integer coerced to string",
+			query: `query($filter:AuthorFilter){
+                      queryAuthor(filter:$filter){
+                        name
+                        reputation
+                        posts {
+                          title
+                        }
+                      }
+				    }`,
+			variables: map[string]interface{}{"filter": map[string]interface{}{"id": []int{cast.ToInt(authors[0].ID), cast.ToInt(authors[1].ID)}}},
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using single ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:` + authorIdsDecimal[0] + `}){
+			           name
+					   reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+		{
+
+			name: "Query using multiple ID in a filter of type integer coerced to string",
+			query: `query{
+			         queryAuthor(filter:{id:[` + authorIdsDecimal[0] + `,` + authorIdsDecimal[1] + `]}){
+			           name
+                       reputation
+			           posts {
+			             title
+			           }
+			         }
+				    }`,
+			respData: `{
+						  "queryAuthor": [
+							{
+							  "name": "George",
+							  "reputation": 4.5,
+							  "posts": [
+								{
+								  "title": "A show about nothing"
+								}
+							  ]
+							},
+							{
+							  "name": "Jerry",
+							  "reputation": 4.6,
+							  "posts": [
+								{
+								  "title": "Outside"
+								}
+							  ]
+							}
+						  ]
+						}`,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: tcase.variables,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			RequireNoGQLErrors(t, resp)
+			testutil.CompareJSON(t, tcase.respData, string(resp.Data))
+		})
+	}
+
+	// cleanup
+	deleteAuthors(t, authorIds, nil)
+	deleteCountry(t, map[string]interface{}{"id": countryIds}, len(countryIds), nil)
+	DeleteGqlType(t, "Post", map[string]interface{}{"postID": postIds}, len(postIds), nil)
+}
+
+func idDirectiveWithInt64(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getBook(bookId: 1234567890) {
+			bookId
+			name
+			desc
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+			"getBook": {
+				"bookId": 1234567890,
+				"name": "Dgraph and Graphql",
+				"desc": "All love between dgraph and graphql"
+			  }
+		 }`
+	require.JSONEq(t, expected, string(response.Data))
+}
+
+func idDirectiveWithInt(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+		  getChapter(chapterId: 1) {
+			chapterId
+			name
+		  }
+		}`,
+	}
+
+	response := query.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, response)
+	var expected = `{
+	  	"getChapter": {
+			"chapterId": 1,
+			"name": "How Dgraph Works"
+		  }
+	}`
+	require.JSONEq(t, expected, string(response.Data))
 }

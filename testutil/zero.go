@@ -18,11 +18,10 @@ package testutil
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -42,6 +41,9 @@ type Member struct {
 // StateResponse represents the structure of the JSON object returned by calling
 // the /state endpoint in zero.
 type StateResponse struct {
+	Zeros map[string]struct {
+		Id string `json:"id"`
+	} `json:"zeros"`
 	Groups map[string]struct {
 		Members map[string]Member `json:"members"`
 		Tablets map[string]struct {
@@ -59,6 +61,35 @@ type StateResponse struct {
 // GetState queries the /state endpoint in zero and returns the response.
 func GetState() (*StateResponse, error) {
 	resp, err := http.Get("http://" + SockAddrZeroHttp + "/state")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if bytes.Contains(b, []byte("Error")) {
+		return nil, errors.Errorf("Failed to get state: %s", string(b))
+	}
+
+	var st StateResponse
+	if err := json.Unmarshal(b, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// GetStateHttps queries the /state endpoint in zero and returns the response.
+func GetStateHttps(tlsConfig *tls.Config) (*StateResponse, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
+	resp, err := client.Get("https://" + SockAddrZeroHttp + "/state")
 	if err != nil {
 		return nil, err
 	}
@@ -106,16 +137,9 @@ func GetClientToGroup(gid string) (*dgo.Dgraph, error) {
 	if len(parts) != 2 {
 		return nil, errors.Errorf("the member has an invalid address: %v", member.Addr)
 	}
-	// internalPort is used for communication between alpha nodes
-	internalPort, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil, errors.Errorf("unable to parse the port number from %s", parts[1])
-	}
 
-	// externalPort is for handling connections from clients
-	externalPort := internalPort + 2000
-
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", externalPort), grpc.WithInsecure())
+	addr := ContainerAddr(parts[0], 9080)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}

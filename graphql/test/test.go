@@ -21,11 +21,13 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // Various helpers used in GQL testing
@@ -40,7 +42,7 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
 	requireNoGQLErrors(t, gqlErr)
 
-	schema, err := schema.AsSchema(gql)
+	schema, err := schema.AsSchema(gql, x.GalaxyNamespace)
 	requireNoGQLErrors(t, err)
 	return schema
 }
@@ -56,10 +58,13 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 }
 
 func LoadSchemaFromString(t *testing.T, sch string) schema.Schema {
-	handler, err := schema.NewHandler(string(sch), false)
+	handler, err := schema.NewHandler(sch, false)
 	requireNoGQLErrors(t, err)
 
-	return LoadSchema(t, handler.GQLSchema())
+	schema := LoadSchema(t, handler.GQLSchema())
+	schema.SetMeta(handler.MetaInfo())
+
+	return schema
 }
 
 // GetMutation gets a single schema.Mutation from a schema.Operation.

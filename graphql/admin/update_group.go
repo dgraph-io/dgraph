@@ -17,14 +17,28 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 	return &updateGroupRewriter{}
 }
 
-// Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations
+// RewriteQueries on updateGroupRewriter initializes  urw.VarGen and
+// urw.XidMetadata. As there is no need to rewrite queries to check for existing
+// nodes. It does not rewrite any queries.
+func (urw *updateGroupRewriter) RewriteQueries(
+	ctx context.Context,
+	m schema.Mutation) ([]*gql.GraphQuery, error) {
+
+	urw.VarGen = resolve.NewVariableGenerator()
+	urw.XidMetadata = resolve.NewXidMetadata()
+
+	return []*gql.GraphQuery{}, nil
+}
+
+// Rewrite rewrites set and remove update patches into dql upsert mutations
 // only for Group type. It ensures that if a rule already exists in db, it is updated;
 // otherwise, it is created. It also ensures that only the last rule out of all
 // duplicate rules in input is preserved. A rule is duplicate if it has same predicate
 // name as another rule.
 func (urw *updateGroupRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
+	m schema.Mutation,
+	idExistence map[string]string) ([]*resolve.UpsertMutation, error) {
 
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	setArg := inp["set"]
@@ -34,12 +48,11 @@ func (urw *updateGroupRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil)
+	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m, nil, resolve.MutationQueryVar, m.Name(), "")
 	srcUID := resolve.MutationQueryVarUID
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := resolve.NewVariableGenerator()
 	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
@@ -50,7 +63,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := urw.VarGen.Next(ruleType, "", "", false)
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -96,7 +109,7 @@ func (urw *updateGroupRewriter) Rewrite(
 				continue
 			}
 
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := urw.VarGen.Next(ruleType, "", "", false)
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[
@@ -127,7 +140,7 @@ func (urw *updateGroupRewriter) Rewrite(
 	}
 
 	return []*resolve.UpsertMutation{{
-		Query:     &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}},
+		Query:     upsertQuery,
 		Mutations: append(mutSet, mutDel...),
 	}}, schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
@@ -137,15 +150,22 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	result map[string]interface{}) ([]*gql.GraphQuery, error) {
 
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
+func (urw *updateGroupRewriter) MutatedRootUIDs(
+	mutation schema.Mutation,
+	assigned map[string]string,
+	result map[string]interface{}) []string {
+	return ((*resolve.UpdateRewriter)(urw)).MutatedRootUIDs(mutation, assigned, result)
+}
+
 // addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
 // based on its predicate value.
-func addAclRuleQuery(upsertQuery *gql.GraphQuery, predicate, variable string) {
-	upsertQuery.Children = append(upsertQuery.Children, &gql.GraphQuery{
+func addAclRuleQuery(upsertQuery []*gql.GraphQuery, predicate, variable string) {
+	upsertQuery[0].Children = append(upsertQuery[0].Children, &gql.GraphQuery{
 		Attr:  "dgraph.acl.rule",
 		Alias: variable,
 		Var:   variable,

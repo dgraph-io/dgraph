@@ -21,9 +21,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/dgraph-io/gqlparser/v2/validator"
 )
 
 // A Request represents a GraphQL request.  It makes no guarantees that the
@@ -32,8 +32,18 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+	Extensions    RequestExtensions
+	Header        http.Header `json:"-"` // no need to marshal headers while generating poll hash
+}
 
-	Header http.Header
+// RequestExtensions represents extensions recieved in requests
+type RequestExtensions struct {
+	PersistedQuery PersistedQuery
+}
+
+// PersistedQuery represents the query struct received from clients like Apollo
+type PersistedQuery struct {
+	Sha256Hash string
 }
 
 // Operation finds the operation in req, if it is a valid request for GraphQL
@@ -50,7 +60,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, gqlErr
 	}
 
-	listErr := validator.Validate(s.schema, doc)
+	listErr := validator.Validate(s.schema, doc, req.Variables)
 	if len(listErr) != 0 {
 		return nil, listErr
 	}
@@ -153,17 +163,27 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	satisfies := []string{typeName, ""}
 	var additionalTypes map[string]bool
 	switch typeKind {
-	case ast.Interface:
-		// expand fragments on types which implement this interface
+	case ast.Interface, ast.Union:
+		// expand fragments on types which implement this interface (for interface case)
+		// expand fragments on member types of this union (for Union case)
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
+		// also, expand fragments on interfaces which are implemented by the member types of this union
+		// And also on additional interfaces which also implement the same type
+		var interfaceFragsToExpand []*ast.Definition
+		for typ := range additionalTypes {
+			interfaceFragsToExpand = append(interfaceFragsToExpand,
+				op.inSchema.schema.Implements[typ]...)
+		}
+		additionalInterfaces := getTypeNamesAsMap(interfaceFragsToExpand)
 		// if there is any fragment in the selection set of this field, need to store a mapping from
 		// fields in that fragment to the fragment's type condition, to be used later in completion.
-		for _, f := range field.SelectionSet {
-			addSelectionToInterfaceImplFragFields(typeName, f, additionalTypes, op)
+		for interfaceName := range additionalInterfaces {
+			additionalTypes[interfaceName] = true
+			for _, f := range field.SelectionSet {
+				addSelectionToInterfaceImplFragFields(interfaceName, f,
+					getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[interfaceName]), op)
+			}
 		}
-	case ast.Union:
-		// expand fragments on types of which it is a union
-		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.PossibleTypes[typeName])
 	case ast.Object:
 		// expand fragments on interfaces which are implemented by this object
 		additionalTypes = getTypeNamesAsMap(op.inSchema.schema.Implements[typeName])
@@ -266,11 +286,16 @@ func addFragFieldsToInterfaceImplFields(interfaceTypeName, typeCond string, selS
 		// otherwise, if the type condition is same as the type of the interface,
 		// then we still need to look if there are any more fragments inside this fragment
 		for _, fragField := range selSet {
-			if _, ok := fragField.(*ast.Field); !ok {
+			if f, ok := fragField.(*ast.Field); !ok {
 				// we got a fragment inside fragment
 				// the type condition for this fragment may be different that its parent fragment
 				addSelectionToInterfaceImplFragFields(interfaceTypeName, fragField,
 					interfaceImplMap, op)
+			} else {
+				// we got a field on an interface, so save the mapping of field
+				// to the interface type name. This will later be used during completion to find
+				// out if the field should be reported back in the response or not.
+				op.interfaceImplFragFields[f] = interfaceTypeName
 			}
 		}
 	}

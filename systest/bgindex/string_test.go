@@ -1,5 +1,3 @@
-// +build systest
-
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
@@ -32,7 +30,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -44,10 +45,13 @@ func TestStringIndex(t *testing.T) {
 	acctsBal := make(map[int]int, numAccts)
 	var lock sync.Mutex
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	var dg *dgo.Dgraph
+	err := x.RetryUntilSuccess(10, time.Second, func() error {
+		var err error
+		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+		return err
+	})
+	require.Nil(t, err)
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{

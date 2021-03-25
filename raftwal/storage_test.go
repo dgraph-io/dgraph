@@ -34,12 +34,14 @@ package raftwal
 
 import (
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -188,7 +190,6 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	ds := Init(dir)
-
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
 	data := []byte("data")
@@ -347,155 +348,243 @@ func TestEntryFile(t *testing.T) {
 	require.Equal(t, "abc", string(entries[0].Data))
 }
 
-func TestStorageBig(t *testing.T) {
+func TestTruncateStorage(t *testing.T) {
 	dir, err := ioutil.TempDir("", "raftwal")
 	require.NoError(t, err)
-	ds := Init(dir)
-	t.Logf("Creating dir: %s\n", dir)
-	// defer os.RemoveAll(dir)
-
-	ent := raftpb.Entry{
-		Term: 1,
-		Type: raftpb.EntryNormal,
-	}
-
-	addEntries := func(start, end uint64) {
-		t.Logf("adding entries: %d -> %d\n", start, end)
-		for idx := start; idx <= end; idx++ {
-			ent.Index = idx
-			require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
-			li, err := ds.LastIndex()
-			require.NoError(t, err)
-			require.Equal(t, idx, li)
-		}
-	}
-
-	N := uint64(100000)
-	addEntries(1, N)
-	num := ds.NumEntries()
-	require.Equal(t, int(N), num)
-
-	check := func(start, end uint64) {
-		ents, err := ds.Entries(start, end, math.MaxInt64)
-		require.NoError(t, err)
-		require.Equal(t, int(end-start), len(ents))
-		for i, e := range ents {
-			require.Equal(t, start+uint64(i), e.Index)
-		}
-	}
-	_, err = ds.Entries(0, 1, math.MaxInt64)
-	require.Equal(t, raft.ErrCompacted, err)
-
-	check(3, N)
-	check(10000, 20000)
-	check(20000, 33000)
-	check(33000, 45000)
-	check(45000, N)
-
-	// Around file boundaries.
-	check(1, N)
-	check(30000, N)
-	check(30001, N)
-	check(60000, N)
-	check(60001, N)
-	check(60000, 90000)
-	check(N, N+1)
-
-	_, err = ds.Entries(N+1, N+10, math.MaxInt64)
-	require.Error(t, raft.ErrUnavailable, err)
-
-	// Jump back a few files.
-	addEntries(N/3, N)
-	check(3, N)
-	check(10000, 20000)
-	check(20000, 33000)
-	check(33000, 45000)
-	check(45000, N)
-	check(N, N+1)
-
-	buf := make([]byte, 128)
-	rand.Read(buf)
-
-	cs := &raftpb.ConfState{}
-	require.NoError(t, ds.CreateSnapshot(N-100, cs, buf))
-	fi, err := ds.FirstIndex()
+	ds, err := InitEncrypted(dir, nil)
 	require.NoError(t, err)
-	require.Equal(t, N-100+1, fi)
+	defer os.RemoveAll(dir)
 
-	snap, err := ds.Snapshot()
-	require.NoError(t, err)
-	require.Equal(t, N-100, snap.Metadata.Index)
-	require.Equal(t, buf, snap.Data)
+	const numEntries = uint64(maxNumEntries*3) / 2
+	const numTruncated = numEntries / 2
 
-	require.Equal(t, 0, len(ds.wal.files))
-
-	files, err := getLogFiles(dir)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(files))
-
-	// Jumping back.
-	ent.Index = N - 50
-	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
-
-	start := N - 100 + 1
-	ents := ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
-	require.Equal(t, 50, len(ents))
-	for idx, ent := range ents {
-		require.Equal(t, int(start)+idx, int(ent.Index))
-	}
-
-	ent.Index = N
-	require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
-	ents = ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
-	require.Equal(t, 51, len(ents))
-	for idx, ent := range ents {
-		if idx == 50 {
-			require.Equal(t, N, ent.Index)
+	// Insert entries.
+	for i := uint64(0); i < numEntries; i++ {
+		var typ raftpb.EntryType
+		if i%3 == 0 {
+			typ = raftpb.EntryConfChange
 		} else {
-			require.Equal(t, int(start)+idx, int(ent.Index))
+			typ = raftpb.EntryNormal
 		}
-	}
-	require.NoError(t, ds.Sync())
 
-	ks := Init(dir)
-	ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
-	require.Equal(t, 51, len(ents))
-	for idx, ent := range ents {
-		if idx == 50 {
-			require.Equal(t, N, ent.Index)
+		idx := i + 1
+		entry := raftpb.Entry{
+			Term:  idx,
+			Index: idx,
+			Type:  typ,
+			Data:  []byte(fmt.Sprintf("entry %d", idx)),
+		}
+		ds.addEntries([]raftpb.Entry{entry})
+	}
+
+	// Verify all entries.
+	entries := ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntries))
+	for i := uint64(0); i < numEntries; i++ {
+		idx := i + 1
+		require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
+	}
+
+	// Truncate entries.
+	ds.TruncateEntriesUntil(numTruncated)
+
+	// Verify all entries.
+	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntries))
+	for i := uint64(0); i < numEntries; i++ {
+		idx := i + 1
+		if idx < numTruncated && i%3 != 0 {
+			require.Empty(t, entries[i].Data)
 		} else {
-			require.Equal(t, int(start)+idx, int(ent.Index))
+			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
 		}
 	}
 
+	// Insert more entries.
+	const numEntriesNew = numEntries + maxNumEntries
+	for i := numEntries; i < numEntriesNew; i++ {
+		idx := i + 1
+		entry := raftpb.Entry{
+			Term:  idx,
+			Index: idx,
+			Type:  raftpb.EntryNormal,
+			Data:  []byte(fmt.Sprintf("entry %d", idx)),
+		}
+		ds.addEntries([]raftpb.Entry{entry})
+	}
+
+	// Verify all entries.
+	entries = ds.wal.allEntries(0, math.MaxUint64, math.MaxUint64)
+	require.Len(t, entries, int(numEntriesNew))
+	for i := uint64(0); i < numEntriesNew; i++ {
+		idx := i + 1
+		if idx < numTruncated && i%3 != 0 {
+			require.Empty(t, entries[i].Data)
+		} else {
+			require.Equal(t, entries[i].Data, []byte(fmt.Sprintf("entry %d", idx)))
+		}
+	}
 }
 
 func TestStorageOnlySnap(t *testing.T) {
-	dir, err := ioutil.TempDir("", "raftwal")
-	require.NoError(t, err)
-	ds := Init(dir)
-	t.Logf("Creating dir: %s\n", dir)
+	test := func(t *testing.T, key []byte) {
+		x.WorkerConfig.EncryptionKey = key
+		dir, err := ioutil.TempDir("", "raftwal")
+		require.NoError(t, err)
+		ds, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
+		t.Logf("Creating dir: %s\n", dir)
 
-	buf := make([]byte, 128)
-	rand.Read(buf)
-	N := uint64(1000)
+		buf := make([]byte, 128)
+		rand.Read(buf)
+		N := uint64(1000)
 
-	snap := &raftpb.Snapshot{}
-	snap.Metadata.Index = N
-	snap.Metadata.ConfState = raftpb.ConfState{}
-	snap.Data = buf
+		snap := &raftpb.Snapshot{}
+		snap.Metadata.Index = N
+		snap.Metadata.ConfState = raftpb.ConfState{}
+		snap.Data = buf
 
-	require.NoError(t, ds.meta.StoreSnapshot(snap))
+		require.NoError(t, ds.meta.StoreSnapshot(snap))
 
-	out, err := ds.Snapshot()
-	require.NoError(t, err)
-	require.Equal(t, N, out.Metadata.Index)
+		out, err := ds.Snapshot()
+		require.NoError(t, err)
+		require.Equal(t, N, out.Metadata.Index)
 
-	fi, err := ds.FirstIndex()
-	require.NoError(t, err)
-	require.Equal(t, N+1, fi)
+		fi, err := ds.FirstIndex()
+		require.NoError(t, err)
+		require.Equal(t, N+1, fi)
 
-	li, err := ds.LastIndex()
-	require.NoError(t, err)
-	require.Equal(t, N, li)
+		li, err := ds.LastIndex()
+		require.NoError(t, err)
+		require.Equal(t, N, li)
+	}
+	t.Run("without encryption", func(t *testing.T) { test(t, nil) })
+	t.Run("with encryption", func(t *testing.T) { test(t, []byte("badger16byteskey")) })
+}
+
+func TestStorageBig(t *testing.T) {
+	test := func(t *testing.T, key []byte) {
+		dir, err := ioutil.TempDir("", "raftwal")
+		require.NoError(t, err)
+		ds, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
+		defer os.RemoveAll(dir)
+
+		ent := raftpb.Entry{
+			Term: 1,
+			Type: raftpb.EntryNormal,
+		}
+
+		addEntries := func(start, end uint64) {
+			t.Logf("adding entries: %d -> %d\n", start, end)
+			for idx := start; idx <= end; idx++ {
+				ent.Index = idx
+				require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+				li, err := ds.LastIndex()
+				require.NoError(t, err)
+				require.Equal(t, idx, li)
+			}
+		}
+
+		N := uint64(100000)
+		addEntries(1, N)
+		num := ds.NumEntries()
+		require.Equal(t, int(N), num)
+
+		check := func(start, end uint64) {
+			ents, err := ds.Entries(start, end, math.MaxInt64)
+			require.NoError(t, err)
+			require.Equal(t, int(end-start), len(ents))
+			for i, e := range ents {
+				require.Equal(t, start+uint64(i), e.Index)
+			}
+		}
+		_, err = ds.Entries(0, 1, math.MaxInt64)
+		require.Equal(t, raft.ErrCompacted, err)
+
+		check(3, N)
+		check(10000, 20000)
+		check(20000, 33000)
+		check(33000, 45000)
+		check(45000, N)
+
+		// Around file boundaries.
+		check(1, N)
+		check(30000, N)
+		check(30001, N)
+		check(60000, N)
+		check(60001, N)
+		check(60000, 90000)
+		check(N, N+1)
+
+		_, err = ds.Entries(N+1, N+10, math.MaxInt64)
+		require.Error(t, raft.ErrUnavailable, err)
+
+		// Jump back a few files.
+		addEntries(N/3, N)
+		check(3, N)
+		check(10000, 20000)
+		check(20000, 33000)
+		check(33000, 45000)
+		check(45000, N)
+		check(N, N+1)
+
+		buf := make([]byte, 128)
+		rand.Read(buf)
+
+		cs := &raftpb.ConfState{}
+		require.NoError(t, ds.CreateSnapshot(N-100, cs, buf))
+		fi, err := ds.FirstIndex()
+		require.NoError(t, err)
+		require.Equal(t, N-100+1, fi)
+
+		snap, err := ds.Snapshot()
+		require.NoError(t, err)
+		require.Equal(t, N-100, snap.Metadata.Index)
+		require.Equal(t, buf, snap.Data)
+
+		require.Equal(t, 0, len(ds.wal.files))
+
+		files, err := getLogFiles(dir)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(files))
+
+		// Jumping back.
+		ent.Index = N - 50
+		require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+
+		start := N - 100 + 1
+		ents := ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 50, len(ents))
+		for idx, ent := range ents {
+			require.Equal(t, int(start)+idx, int(ent.Index))
+		}
+
+		ent.Index = N
+		require.NoError(t, ds.wal.AddEntries([]raftpb.Entry{ent}))
+		ents = ds.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 51, len(ents))
+		for idx, ent := range ents {
+			if idx == 50 {
+				require.Equal(t, N, ent.Index)
+			} else {
+				require.Equal(t, int(start)+idx, int(ent.Index))
+			}
+		}
+		require.NoError(t, ds.Sync())
+
+		ks, err := InitEncrypted(dir, key)
+		require.NoError(t, err)
+		ents = ks.wal.allEntries(start, math.MaxInt64, math.MaxInt64)
+		require.Equal(t, 51, len(ents))
+		for idx, ent := range ents {
+			if idx == 50 {
+				require.Equal(t, N, ent.Index)
+			} else {
+				require.Equal(t, int(start)+idx, int(ent.Index))
+			}
+		}
+	}
+	t.Run("without encryption", func(t *testing.T) { test(t, nil) })
+	t.Run("with encryption", func(t *testing.T) { test(t, []byte("badger16byteskey")) })
 }

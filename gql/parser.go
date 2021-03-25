@@ -372,9 +372,6 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 	idVal, ok := gq.Args["id"]
 	if ok && len(gq.UID) == 0 {
-		if idVal == "" {
-			return errors.Errorf("Id can't be empty")
-		}
 		uids, err := parseID(idVal)
 		if err != nil {
 			return err
@@ -486,9 +483,6 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				idVal, ok := vmap[v.Value]
 				if !ok {
 					return errors.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
-				}
-				if idVal.Value == "" {
-					return errors.Errorf("Id can't be empty")
 				}
 				uids, err := parseID(idVal.Value)
 				if err != nil {
@@ -2350,8 +2344,11 @@ loop:
 // Parses ID list. Only used for GraphQL variables.
 // TODO - Maybe get rid of this by lexing individual IDs.
 func parseID(val string) ([]uint64, error) {
-	var uids []uint64
 	val = x.WhiteSpace.Replace(val)
+	if val == "" {
+		return nil, errors.Errorf("ID can't be empty")
+	}
+	var uids []uint64
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
@@ -2410,7 +2407,7 @@ loop:
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return count, item.Errorf("Expected a variable but got comma")
+				return count, item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
@@ -2443,7 +2440,7 @@ loop:
 			expectArg = true
 		case itemName:
 			if !expectArg {
-				return item.Errorf("Expected a variable but got comma")
+				return item.Errorf("Expected a variable but got %s", item.Val)
 			}
 			typeList = fmt.Sprintf("%s,%s", typeList, item.Val)
 			expectArg = false

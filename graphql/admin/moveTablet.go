@@ -49,11 +49,10 @@ func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", status.GetMsg())},
-		Field: m,
-		Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
-	}, true
+	return resolve.DataResult(m,
+		map[string]interface{}{m.Name(): response("Success", status.GetMsg())},
+		nil,
+	), true
 }
 
 func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {

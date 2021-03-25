@@ -41,10 +41,10 @@ func resolveEnterpriseLicense(ctx context.Context, m schema.Mutation) (*resolve.
 		return resolve.EmptyResult(m, err), false
 	}
 
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "License applied.")},
-		Field: m,
-	}, true
+	return resolve.DataResult(m,
+		map[string]interface{}{m.Name(): response("Success", "License applied.")},
+		nil,
+	), true
 }
 
 func getEnterpriseLicenseInput(m schema.Mutation) (*enterpriseLicenseInput,

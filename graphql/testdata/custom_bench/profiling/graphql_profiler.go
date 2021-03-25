@@ -421,7 +421,7 @@ func collectProfilingData() error {
 						}
 						saveProfile(memory, filepath.Join(queryResultsDir, fmt.Sprintf("%02d",
 							i)+"_"+string(memory)+"_post.prof"), nil)
-						err, totalDuration, dgraphDuration := saveTracing(resp, queryResultsDir, i)
+						totalDuration, dgraphDuration, err := saveTracing(resp, queryResultsDir, i)
 						if err != nil {
 							log.Println(err)
 						}
@@ -513,7 +513,7 @@ func checkGraphqlHealth(alphaUrl string) error {
 		}
 
 		// make sure we wait only for 60 secs
-		if time.Now().Sub(healthCheckStart).Seconds() > 60 {
+		if time.Since(healthCheckStart).Seconds() > 60 {
 			return fmt.Errorf("503 Service Unavailable: %s", alphaUrl)
 		}
 
@@ -574,28 +574,28 @@ func saveProfile(profType PprofProfile, profilePath string, profileOpts *Profili
 	log.Println("Saved profile ", profilePath)
 }
 
-func saveTracing(resp *Response, outputDir string, iteration int) (error, int64, int64) {
+func saveTracing(resp *Response, outputDir string, iteration int) (int64, int64, error) {
 	if resp == nil {
-		return nil, 0, 0
+		return 0, 0, nil
 	}
 
 	f, err := os.OpenFile(filepath.Join(outputDir, fmt.Sprintf("%02d", iteration)+"_tracing.txt"),
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		log.Println(err)
-		return err, 0, 0
+		return 0, 0, err
 	}
 	defer f.Close()
 
 	b, err := json.Marshal(resp)
 	if err != nil {
 		log.Println(err)
-		return err, 0, 0
+		return 0, 0, err
 	}
 
 	if _, err := f.Write(b); err != nil {
 		log.Println(err)
-		return err, 0, 0
+		return 0, 0, err
 	}
 
 	// return total and dgraph durations
@@ -605,7 +605,7 @@ func saveTracing(resp *Response, outputDir string, iteration int) (error, int64,
 			totalDgraphDuration += dgraphTrace.Duration
 		}
 	}
-	return nil, resp.Extensions.Tracing.Duration, totalDgraphDuration
+	return resp.Extensions.Tracing.Duration, totalDgraphDuration, nil
 }
 
 // save total, Dgraph and GraphQL layer durations for all query runs, and their computed avg.
@@ -796,7 +796,7 @@ func makeGqlRequest(query string) (*Response, int64, int64, error) {
 	httpClient := http.Client{}
 	reqStartTime := time.Now()
 	resp, err := httpClient.Do(req)
-	rtt = time.Now().Sub(reqStartTime).Nanoseconds()
+	rtt = time.Since(reqStartTime).Nanoseconds()
 	if err != nil {
 		return nil, rtt, 0, err
 	}

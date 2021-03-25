@@ -298,6 +298,54 @@ schemas:
       D.link: uid .
       D.correct: bool .
 
+  - name: "Schema with union"
+    input: |
+      interface W {
+        f1: ID!
+        f7: U
+      }
+      type X implements W {
+        f2: String
+      }
+      type Y implements W {
+        f3: Int
+      }
+      type Z {
+        f4: Float
+      }
+      union P @remote = X | Y
+      union U = X | Y | Z
+      type V {
+        id: ID!
+        f5: [U!]! @dgraph(pred: "data")
+        f6: U
+      }
+    output: |
+      type W {
+        W.f7
+      }
+      W.f7: uid .
+      type X {
+        W.f7
+        X.f2
+      }
+      X.f2: string .
+      type Y {
+        W.f7
+        Y.f3
+      }
+      Y.f3: int .
+      type Z {
+        Z.f4
+      }
+      Z.f4: float .
+      type V {
+        data
+        V.f6
+      }
+      data: [uid] .
+      V.f6: uid .
+
   -
     name: "Schema with @dgraph directive."
     input: |
@@ -440,6 +488,25 @@ schemas:
         A.id
       }
       A.id: string @index(hash, term) @upsert .
+      type B {
+        A.id
+        B.correct
+      }
+      B.correct: bool @index(bool) .
+
+  - name: "Field with @id directive and a exact arg in search directive generates correct schema."
+    input: |
+      interface A {
+        id: String! @id @search(by: [exact])
+      }
+      type B implements A {
+        correct: Boolean @search
+      }
+    output: |
+      type A {
+        A.id
+      }
+      A.id: string @index(exact) @upsert .
       type B {
         A.id
         B.correct
@@ -607,3 +674,182 @@ schemas:
           method: "POST"
         })
       }
+
+  -
+    name: "custom field shouldn't be part of dgraph schema"
+    input: |
+      type User {
+        id: ID!
+        name: String!
+        bio: String! @lambda
+        friends: [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "GET"
+        })
+      }
+    output: |
+      type User {
+        User.name
+      }
+      User.name: string .
+
+  - name: "Geo field in schema."
+    input: |
+      type Hotel {
+        id: ID!
+        name: String!
+        location: Point @search
+        landmark: Point
+        office: Point  @search(by: [point])
+        area1: Polygon @search
+        area2: Polygon
+        area3: Polygon @search(by: [polygon])
+        branches1: MultiPolygon @search
+        branches2: MultiPolygon
+        branches3: MultiPolygon @search(by: [multiPolygon])
+      }
+    output: |
+      type Hotel {
+        Hotel.name
+        Hotel.location
+        Hotel.landmark
+        Hotel.office
+        Hotel.area1
+        Hotel.area2
+        Hotel.area3
+        Hotel.branches1
+        Hotel.branches2
+        Hotel.branches3
+      }
+      Hotel.name: string .
+      Hotel.location: geo @index(geo) .
+      Hotel.landmark: geo .
+      Hotel.office: geo @index(geo) .
+      Hotel.area1: geo @index(geo) .
+      Hotel.area2: geo .
+      Hotel.area3: geo @index(geo) .
+      Hotel.branches1: geo @index(geo) .
+      Hotel.branches2: geo .
+      Hotel.branches3: geo @index(geo) .
+
+  - name: "Int field with @id Directive"
+    input: |
+      type T {
+        id : Int! @id
+        value: String
+      }
+    output: |
+      type T {
+        T.id
+        T.value
+      }
+      T.id: int @index(int) @upsert .
+      T.value: string .
+
+  - name: "Int64 field with @id Directive"
+    input: |
+      type T {
+        id : Int64! @id
+        value: String
+      }
+    output: |
+      type T {
+        T.id
+        T.value
+      }
+      T.id: int @index(int) @upsert .
+      T.value: string .
+
+  - name: "type extension having @external field of ID type which is @key"
+    input: |
+      extend type Product @key(fields: "id") {
+        id: ID! @external
+        name: String!
+        price: Int @external
+        reviews: [String]
+      }
+    output: |
+      type Product {
+        Product.id
+        Product.name
+        Product.reviews
+      }
+      Product.id: string @index(hash) @upsert .
+      Product.name: string .
+      Product.reviews: [string] .
+
+  - name: "type extension having @external field of non ID type which is @key"
+    input: |
+      extend type Product @key(fields: "name") {
+        id: ID! @external
+        name: String! @id @external
+        reviews: [String]
+      }
+    output: |
+      type Product {
+        Product.name
+        Product.reviews
+      }
+      Product.name: string @index(hash) @upsert .
+      Product.reviews: [string] .
+
+  - name: "A full valid federation schema"
+    input: |
+      type Review {
+        body: String
+        author: User @provides(fields: "username")
+        product: Product
+      }
+
+      extend type User @key(fields: "id") {
+        id: ID! @external
+        username: String! @external
+        reviews: [Review]
+      }
+
+      type Product @key(fields: "upc") @extends {
+        upc: String! @id @external
+        weight: Int @external
+        price: Int @external
+        inStock: Boolean
+        shippingEstimate: Int @requires(fields: "price weight") @lambda
+        reviews: [Review]
+      }
+    output: |
+      type Review {
+        Review.body
+        Review.author
+        Review.product
+      }
+      Review.body: string .
+      Review.author: uid .
+      Review.product: uid .
+      type Product {
+        Product.upc
+        Product.inStock
+        Product.reviews
+      }
+      Product.upc: string @index(hash) @upsert .
+      Product.inStock: bool .
+      Product.reviews: [uid] .
+      type User {
+        User.id
+        User.username
+        User.reviews
+      }
+      User.id: string @index(hash) @upsert .
+      User.username: string .
+      User.reviews: [uid] .
+
+  - name: "nothing is added in dgraph schema with lambdaOnMutate"
+    input: |
+      type T @lambdaOnMutate(add: true, update: true, delete: true) {
+        id : ID!
+        value: String
+      }
+    output: |
+      type T {
+        T.value
+      }
+      T.value: string .
+

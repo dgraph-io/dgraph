@@ -3,12 +3,12 @@ type User {
 	name: String!
 }
 
-input UserInput {
+input UpdateFavouriteUserInput {
 	name: String!
 }
 
 type Mutation {
-	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {
+	createMyFavouriteUsers(input: [UpdateFavouriteUserInput!]!): [User] @custom(http: {
 		url: "http://my-api.com",
 		method: "POST",
 		body: "{ data: $input }"

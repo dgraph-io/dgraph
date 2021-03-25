@@ -623,6 +623,20 @@ func TestTypeFilterAtExpandEmptyResults(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[]}}`, js)
 }
 
+func TestFilterAtSameLevelOnUIDWithExpand(t *testing.T) {
+	query := `{
+		q(func: eq(name, "Michonne")) {
+			expand(_all_)
+			friend @filter(eq(alive, true)){
+				expand(_all_)
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"name":"Michonne","gender":"female","alive":true,
+	"friend":[{"gender":"male","alive":true,"name":"Rick Grimes"}]}]}}`, js)
+}
+
 // Test Related to worker based pagination.
 
 func TestHasOrderDesc(t *testing.T) {

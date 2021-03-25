@@ -18,11 +18,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,7 +35,16 @@ import (
 
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	conf := viper.GetViper()
+	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
+		// ca-cert
+		"../../tlstest/mtls_internal/tls/live/ca.crt",
+		// server-name
+		"alpha1",
+		// internal-port
+		true))
+
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
@@ -43,28 +54,41 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
+
+	tlsDir, err := filepath.Abs("../../tlstest/mtls_internal/tls/live")
+	require.NoError(t, err)
+
+	tlsFlag := fmt.Sprintf(
+		`ca-cert=%s; internal-port=%v; client-cert=%s; client-key=%s; server-name=%s;`,
+		// ca-cert
+		tlsDir+"/ca.crt",
+		// internal-port
+		true,
+		// client-cert
+		tlsDir+"/client.liveclient.crt",
+		// client-key
+		tlsDir+"/client.liveclient.key",
+		// server-name
+		"alpha1")
+
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	require.NoError(t, liveCmd.Run())
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
+	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
+		"--tls", tlsFlag,
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
-		"-x", "x",
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	require.NoError(t, liveCmd.Run())
+		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
+	require.NoError(t, err)
 
 	op := api.Operation{Schema: "name: string @index(exact) ."}
 	x.Check(dg.Alter(ctx, &op))

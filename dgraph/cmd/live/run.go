@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,20 +33,23 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/badger/v2"
-	bopt "github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/filestore"
+	schemapkg "github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -73,7 +76,10 @@ type options struct {
 	bufferSize      int
 	ludicrousMode   bool
 	upsertPredicate string
+	tmpDir          string
 	key             x.SensitiveByteSlice
+	namespaceToLoad uint64
+	preserveNs      bool
 }
 
 type predicate struct {
@@ -100,10 +106,13 @@ type request struct {
 	conflicts []uint64
 }
 
-func (l *schema) init() {
+func (l *schema) init(ns uint64, galaxyOperation bool) {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
 		i.ValueType, _ = types.TypeForName(i.Type)
+		if !galaxyOperation {
+			i.Predicate = x.NamespaceAttr(ns, i.Predicate)
+		}
 		l.preds[i.Predicate] = i
 	}
 }
@@ -119,7 +128,7 @@ var (
 func init() {
 	Live.Cmd = &cobra.Command{
 		Use:   "live",
-		Short: "Run Dgraph live loader",
+		Short: "Run Dgraph Live Loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
 			if err := run(); err != nil {
@@ -127,10 +136,17 @@ func init() {
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "data-load"},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
+	Live.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Live.Cmd.Flags()
+	// --vault SuperFlag and encryption flags
+	enc.RegisterFlags(flag)
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
@@ -144,31 +160,38 @@ func init() {
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file. If used with --slash_grpc_endpoint, then this "+
-			"should be set to the API token issued by Slash GraphQL")
-	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. If --slash_grpc_endpoint is set, "+
-		"all other TLS options and connection options will be ignored")
+		"The auth token passed to the server for Alter operation of the schema file. "+
+			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
+			"by Slash GraphQL")
+	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. "+
+		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be"+
+		"ignored")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 	flag.String("http", "localhost:6060", "Address to serve http (pprof).")
 	flag.Bool("verbose", false, "Run the live loader in verbose mode")
-	flag.StringP("user", "u", "", "Username if login is required.")
-	flag.StringP("password", "p", "", "Password of the user.")
+
+	flag.String("creds", "",
+		`Various login credentials if login is required.
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
+
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
+	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
-
-	// Encryption and Vault options
-	enc.RegisterFlags(flag)
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
+	flag.String("tmp", "t", "Directory to store temporary buffers.")
+	flag.Int64("force-namespace", 0, "Namespace onto which to load the data."+
+		"Only guardian of galaxy should use this for loading data into multiple namespaces or some"+
+		"specific namespace. Setting it to negative value will preserve the namespace.")
 }
 
-func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
+func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph, galaxyOperation bool) (*schema, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -181,12 +204,35 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	sch.init()
+	// If we are not loading data across namespaces, the schema query result will not contain the
+	// namespace information. Set it inside the init function.
+	sch.init(opt.namespaceToLoad, galaxyOperation)
 	return &sch, nil
 }
 
+// validate that the schema contains the predicates whose namespace exist.
+func validateSchema(sch string, namespaces map[uint64]struct{}) error {
+	result, err := schemapkg.Parse(sch)
+	if err != nil {
+		return err
+	}
+	for _, pred := range result.Preds {
+		ns := x.ParseNamespace(pred.Predicate)
+		if _, ok := namespaces[ns]; !ok {
+			return errors.Errorf("Namespace %#x doesn't exist for pred %s.", ns, pred.Predicate)
+		}
+	}
+	for _, typ := range result.Types {
+		ns := x.ParseNamespace(typ.TypeName)
+		if _, ok := namespaces[ns]; !ok {
+			return errors.Errorf("Namespace %#x doesn't exist for type %s.", ns, typ.TypeName)
+		}
+	}
+	return nil
+}
+
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+func (l *loader) processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
 	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
@@ -195,7 +241,7 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	f, err := os.Open(file)
+	f, err := filestore.Open(file)
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
@@ -213,10 +259,16 @@ func processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlic
 
 	op := &api.Operation{}
 	op.Schema = string(b)
+	if opt.preserveNs {
+		// Verify schema if we are loding into multiple namespaces.
+		if err := validateSchema(op.Schema, l.namespaces); err != nil {
+			return err
+		}
+	}
 	return dgraphClient.Alter(ctx, op)
 }
 
-func (l *loader) uid(val string) string {
+func (l *loader) uid(val string, ns uint64) string {
 	// Attempt to parse as a UID (in the same format that dgraph outputs - a
 	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
 	// to be an existing node in the graph. There is limited protection against
@@ -228,8 +280,10 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
+	// TODO(Naman): Do we still need this here? As xidmap which uses btree does not keep hold of
+	// this string.
 	sb := strings.Builder{}
-	x.Check2(sb.WriteString(val))
+	x.Check2(sb.WriteString(x.NamespaceAttr(ns, val)))
 	uid, _ := l.alloc.AssignUid(sb.String())
 
 	return fmt.Sprintf("%#x", uint64(uid))
@@ -290,13 +344,15 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 
 	ids := make(map[string]string)
 
-	for _, i := range nqs {
+	for _, nq := range nqs {
 		// taking hash as the value might contain invalid symbols
-		ids[i.Subject] = generateBlankNode(i.Subject)
+		subject := x.NamespaceAttr(nq.Namespace, nq.Subject)
+		ids[subject] = generateBlankNode(subject)
 
-		if len(i.ObjectId) > 0 {
+		if len(nq.ObjectId) > 0 {
 			// taking hash as the value might contain invalid symbols
-			ids[i.ObjectId] = generateBlankNode(i.ObjectId)
+			object := x.NamespaceAttr(nq.Namespace, nq.ObjectId)
+			ids[object] = generateBlankNode(object)
 		}
 	}
 
@@ -310,6 +366,8 @@ func (l *loader) upsertUids(nqs []*api.NQuad) {
 			continue
 		}
 
+		// Strip away the namespace from the query and mutation.
+		xid := x.ParseAttr(xid)
 		query.WriteString(generateQuery(idx, opt.upsertPredicate, xid))
 		query.WriteRune('\n')
 		mutations = append(mutations, &api.NQuad{
@@ -400,10 +458,12 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, filename string, key x.SensitiveByteSlice) error {
+func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
+	key x.SensitiveByteSlice) error {
+
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename, key)
+	rd, cleanup := fs.ChunkReader(filename, key)
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
@@ -421,12 +481,14 @@ func (l *loader) processFile(ctx context.Context, filename string, key x.Sensiti
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
-	var wg sync.WaitGroup
-	wg.Add(1)
 	nqbuf := ck.NQuads()
+	errCh := make(chan error, 1)
 	// Spin a goroutine to push NQuads to mutation channel.
 	go func() {
-		defer wg.Done()
+		var err error
+		defer func() {
+			errCh <- err
+		}()
 		buffer := make([]*api.NQuad, 0, opt.bufferSize*opt.batchSize)
 
 		drain := func() {
@@ -435,8 +497,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			// Predicates with count index will conflict among themselves, so we keep them at
 			// end, making room for other predicates to load quickly.
 			sort.Slice(buffer, func(i, j int) bool {
-				iPred := sch.preds[buffer[i].Predicate]
-				jPred := sch.preds[buffer[j].Predicate]
+				iPred := sch.preds[x.NamespaceAttr(buffer[i].Namespace, buffer[i].Predicate)]
+				jPred := sch.preds[x.NamespaceAttr(buffer[j].Namespace, buffer[j].Predicate)]
 				t := func(a *predicate) int {
 					if a != nil && a.Count {
 						return 1
@@ -467,16 +529,33 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
+			for _, nq := range nqs {
+				if !opt.preserveNs {
+					// If do not preserve namespace, use the namespace passed through
+					// `--force-namespace` flag.
+					nq.Namespace = opt.namespaceToLoad
+				}
+				if _, ok := l.namespaces[nq.Namespace]; !ok {
+					err = errors.Errorf("Cannot load nquad:%+v as its namespace doesn't exist.", nq)
+					return
+				}
+			}
+
 			if opt.upsertPredicate == "" {
 				l.allocateUids(nqs)
 			} else {
+				// TODO(Naman): Handle this. Upserts UIDs send a single upsert block for multiple
+				// nquads. These nquads may belong to different namespaces. Hence, alpha can't
+				// figure out its processsing.
+				// Currently, this option works with data loading in the logged-in namespace.
+				// TODO(Naman): Add a test for a case when it works and when it doesn't.
 				l.upsertUids(nqs)
 			}
 
 			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
+				nq.Subject = l.uid(nq.Subject, nq.Namespace)
 				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
+					nq.ObjectId = l.uid(nq.ObjectId, nq.Namespace)
 				}
 			}
 
@@ -494,6 +573,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case err := <-errCh:
+			return err
 		default:
 		}
 
@@ -511,9 +592,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		}
 	}
 	nqbuf.Flush()
-	wg.Wait()
-
-	return nil
+	return <-errCh
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
@@ -523,10 +602,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
-			WithTableLoadingMode(bopt.MemoryMap).
 			WithCompression(bopt.ZSTD).
 			WithSyncWrites(false).
-			WithLoadBloomsOnOpen(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
 			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
@@ -542,22 +621,27 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		var tlsErr error
 		tlsConfig, tlsErr = x.SlashTLSConfig(conf.GetString("slash_grpc_endpoint"))
 		x.Checkf(tlsErr, "Unable to generate TLS Cert Pool")
+	} else {
+		var tlsErr error
+		tlsConfig, tlsErr = x.LoadClientTLSConfigForInternalPort(conf)
+		x.Check(tlsErr)
 	}
 
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db)
+	alloc := xidmap.New(connzero, db, "")
 	l := &loader{
-		opts:      opts,
-		dc:        dc,
-		start:     time.Now(),
-		reqs:      make(chan *request, opts.Pending*2),
-		conflicts: make(map[uint64]struct{}),
-		alloc:     alloc,
-		db:        db,
-		zeroconn:  connzero,
+		opts:       opts,
+		dc:         dc,
+		start:      time.Now(),
+		reqs:       make(chan *request, opts.Pending*2),
+		conflicts:  make(map[uint64]struct{}),
+		alloc:      alloc,
+		db:         db,
+		zeroconn:   connzero,
+		namespaces: make(map[uint64]struct{}),
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -569,6 +653,36 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	return l
 }
 
+// populateNamespace fetches the schema and extracts the information about the existing namespaces.
+func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleNsOp bool) error {
+	if singleNsOp {
+		// The below schema query returns the predicates without the namespace if context does not
+		// have the galaxy operation set. As we are not loading data across namespaces, so existence
+		// of namespace is verified when the user logs in.
+		l.namespaces[opt.namespaceToLoad] = struct{}{}
+		return nil
+	}
+
+	txn := dc.NewTxn()
+	defer txn.Discard(ctx)
+	res, err := txn.Query(ctx, "schema {}")
+	if err != nil {
+		return err
+	}
+
+	var sch schema
+	err = json.Unmarshal(res.GetJson(), &sch)
+	if err != nil {
+		return err
+	}
+
+	for _, pred := range sch.Predicates {
+		ns := x.ParseNamespace(pred.Predicate)
+		l.namespaces[ns] = struct{}{}
+	}
+	return nil
+}
+
 func run() error {
 	var zero string
 	if Live.Conf.GetString("slash_grpc_endpoint") != "" {
@@ -576,6 +690,8 @@ func run() error {
 	} else {
 		zero = Live.Conf.GetString("zero")
 	}
+
+	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
 	var err error
 	x.PrintVersion()
@@ -593,19 +709,57 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous_mode"),
+		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
+		tmpDir:          Live.Conf.GetString("tmp"),
 	}
-	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
-		return err
+
+	forceNs := Live.Conf.GetInt64("force-namespace")
+	switch creds.GetUint64("namespace") {
+	case x.GalaxyNamespace:
+		if forceNs < 0 {
+			opt.preserveNs = true
+			opt.namespaceToLoad = math.MaxUint64
+		} else {
+			opt.namespaceToLoad = uint64(forceNs)
+		}
+	default:
+		if Live.Conf.IsSet("force-namespace") {
+			return errors.Errorf("cannot force namespace %#x when provided creds are not of"+
+				" guardian of galaxy user", forceNs)
+		}
+		opt.namespaceToLoad = creds.GetUint64("namespace")
 	}
+
+	z.SetTmpDir(opt.tmpDir)
+
+	_, opt.key = ee.GetKeys(Live.Conf)
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
 		}
 	}()
 	ctx := context.Background()
+	// singleNsOp is set to false, when loading data into a namespace different from the one user
+	// provided credentials for.
+	singleNsOp := true
+	if len(creds.GetString("user")) > 0 && creds.GetUint64("namespace") == x.GalaxyNamespace &&
+		opt.namespaceToLoad != x.GalaxyNamespace {
+		singleNsOp = false
+	}
+	galaxyOperation := false
+	if !singleNsOp {
+		// Attach the galaxy to the context to specify that the query/mutations with this context
+		// will be galaxy-wide.
+		galaxyOperation = true
+		ctx = x.AttachGalaxyOperation(ctx, opt.namespaceToLoad)
+		// We don't support upsert predicate while loading data in multiple namespace.
+		if len(opt.upsertPredicate) > 0 {
+			return errors.Errorf("Upsert Predicate feature is not supported for loading" +
+				"into multiple namespaces.")
+		}
+	}
+
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,
 		Pending:       opt.concurrent,
@@ -615,14 +769,29 @@ func run() error {
 		bufferSize:    opt.bufferSize,
 	}
 
+	// Create directory for temporary buffers.
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
+
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
 	l := setup(bmOpts, dg, Live.Conf)
 	defer l.zeroconn.Close()
 
+	if err := l.populateNamespaces(ctx, dg, singleNsOp); err != nil {
+		fmt.Printf("Error while populating namespaces %s\n", err)
+		return err
+	}
+
+	if !opt.preserveNs {
+		if _, ok := l.namespaces[opt.namespaceToLoad]; !ok {
+			return errors.Errorf("Cannot load into namespace %#x. It does not exist.",
+				opt.namespaceToLoad)
+		}
+	}
+
 	if len(opt.schemaFile) > 0 {
-		err := processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
+		err := l.processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -634,8 +803,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	l.schema, err = getSchema(ctx, dg)
-	if err != nil {
+	if l.schema, err = getSchema(ctx, dg, galaxyOperation); err != nil {
 		fmt.Printf("Error while loading schema from alpha %s\n", err)
 		return err
 	}
@@ -644,19 +812,20 @@ func run() error {
 		return errors.New("RDF or JSON file(s) location must be specified")
 	}
 
-	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	fs := filestore.NewFileStore(opt.dataFiles)
+
+	filesList := fs.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return errors.Errorf("No data files found in %s", opt.dataFiles)
 	}
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
-	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
+			errCh <- errors.Wrapf(l.processFile(ctx, fs, file, opt.key), file)
 		}(file)
 	}
 
@@ -693,10 +862,10 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if err := l.alloc.Flush(); err != nil {
+		return err
+	}
 	if l.db != nil {
-		if err := l.alloc.Flush(); err != nil {
-			return err
-		}
 		if err := l.db.Close(); err != nil {
 			return err
 		}

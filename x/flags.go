@@ -16,7 +16,15 @@
 
 package x
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/spf13/pflag"
+)
+
+const (
+	TraceDefaults     = `ratio=0.01; jaeger=; datadog=;`
+	TelemetryDefaults = `reports=true; sentry=true;`
+)
 
 // FillCommonFlags stores flags common to Alpha and Zero.
 func FillCommonFlags(flag *pflag.FlagSet) {
@@ -24,26 +32,36 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 
 	// OpenCensus flags.
-	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
-	// about the status of supporting annotation logs through the datadog exporter
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
-		" exporter does not support annotation logs and would discard them.")
+	//
+	// datadog: See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
+	//          about the status of supporting annotation logs through the datadog exporter
+	flag.String("trace", TraceDefaults, z.NewSuperFlagHelp(TraceDefaults).
+		Head("Trace options").
+		Flag("ratio",
+			"The ratio of queries to trace.").
+		Flag("jaeger",
+			"URL of Jaeger to send OpenCensus traces.").
+		Flag("datadog",
+			"URL of Datadog to send OpenCensus traces. As of now, the trace exporter does not "+
+				"support annotation logs and discards them.").
+		String())
 
-	// Performance flags.
 	flag.String("survive", "process",
-		`Choose between "process" or "filesystem".
-		If set to "process", there would be no data loss in case of process crash, but the
-		behavior would be indeterministic in case of filesystem crash. If set to "filesystem",
-		blocking sync would be called after every write, hence guaranteeing no data loss in case
-		of hard reboot. Most users should be OK with choosing "process".
-		`)
+		`Choose between "process" or "filesystem".`+"\n    "+
+			`If set to "process", there would be no data loss in case of process crash, but `+
+			`the behavior would be indeterministic in case of filesystem crash.`+"\n    "+
+			`If set to "filesystem", blocking sync would be called after every write, hence `+
+			`guaranteeing no data loss in case of hard reboot.`+"\n    "+
+			`Most users should be OK with choosing "process".`)
 
 	// Cache flags.
-	flag.Int64("cache_mb", 0, "Total size of cache (in MB) to be used in Dgraph.")
+	flag.Int64("cache_mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")
 
-	// Telemetry.
-	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
-	flag.Bool("enable_sentry", true, "Turn on/off sending crash events to Sentry.")
+	flag.String("telemetry", TelemetryDefaults, z.NewSuperFlagHelp(TelemetryDefaults).
+		Head("Telemetry (diagnostic) options").
+		Flag("reports",
+			"Send anonymous telemetry data to Dgraph devs.").
+		Flag("sentry",
+			"Send crash events to Sentry.").
+		String())
 }

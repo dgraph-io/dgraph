@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -29,13 +28,12 @@ import (
 )
 
 type debugInfoCmdOpts struct {
-	alphaAddr string
-	zeroAddr  string
-	archive   bool
-	directory string
-	duration  uint32
-
-	pprofProfiles []string
+	alphaAddr   string
+	zeroAddr    string
+	archive     bool
+	directory   string
+	seconds     uint32
+	metricTypes []string
 }
 
 var (
@@ -43,18 +41,52 @@ var (
 	debugInfoCmd = debugInfoCmdOpts{}
 )
 
+var metricMap = map[string]string{
+	"jemalloc":     "/debug/jemalloc",
+	"state":        "/state",
+	"health":       "/health",
+	"vars":         "/debug/vars",
+	"metrics":      "/metrics",
+	"heap":         "/debug/pprof/heap",
+	"goroutine":    "/debug/pprof/goroutine?debug=2",
+	"threadcreate": "/debug/pprof/threadcreate",
+	"block":        "/debug/pprof/block",
+	"mutex":        "/debug/pprof/mutex",
+	"cpu":          "/debug/pprof/profile",
+	"trace":        "/debug/pprof/trace",
+}
+
+var metricList = []string{
+	"heap",
+	"cpu",
+	"state",
+	"health",
+	"jemalloc",
+	"trace",
+	"metrics",
+	"vars",
+	"trace",
+	"goroutine",
+	"block",
+	"mutex",
+	"threadcreate",
+}
+
 func init() {
 	DebugInfo.Cmd = &cobra.Command{
 		Use:   "debuginfo",
-		Short: "Generate debug info on the current node.",
+		Short: "Generate debug information on the current node",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := collectDebugInfo(); err != nil {
 				glog.Errorf("error while collecting dgraph debug info: %s", err)
 				os.Exit(1)
 			}
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
+
 	DebugInfo.EnvPrefix = "DGRAPH_AGENT_DEBUGINFO"
+	DebugInfo.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flags := DebugInfo.Cmd.Flags()
 	flags.StringVarP(&debugInfoCmd.alphaAddr, "alpha", "a", "localhost:8080",
@@ -64,10 +96,11 @@ func init() {
 		"Directory to write the debug info into.")
 	flags.BoolVarP(&debugInfoCmd.archive, "archive", "x", true,
 		"Whether to archive the generated report")
-	flags.Uint32VarP(&debugInfoCmd.duration, "seconds", "s", 15,
-		"Duration for time-based profile collection.")
-	flags.StringSliceVarP(&debugInfoCmd.pprofProfiles, "profiles", "p", pprofProfileTypes,
-		"List of pprof profiles to dump in the report.")
+	flags.Uint32VarP(&debugInfoCmd.seconds, "seconds", "s", 30,
+		"Duration for time-based metric collection.")
+	flags.StringSliceVarP(&debugInfoCmd.metricTypes, "metrics", "m", metricList,
+		"List of metrics & profile to dump in the report.")
+
 }
 
 func collectDebugInfo() (err error) {
@@ -84,7 +117,7 @@ func collectDebugInfo() (err error) {
 	}
 	glog.Infof("using directory %s for debug info dump.", debugInfoCmd.directory)
 
-	collectPProfProfiles()
+	collectDebug()
 
 	if debugInfoCmd.archive {
 		return archiveDebugInfo()
@@ -92,17 +125,19 @@ func collectDebugInfo() (err error) {
 	return nil
 }
 
-func collectPProfProfiles() {
-	duration := time.Duration(debugInfoCmd.duration) * time.Second
-
+func collectDebug() {
 	if debugInfoCmd.alphaAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "alpha_")
-		saveProfiles(debugInfoCmd.alphaAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+
+		saveMetrics(debugInfoCmd.alphaAddr, filePrefix, debugInfoCmd.seconds, debugInfoCmd.metricTypes)
+
 	}
 
 	if debugInfoCmd.zeroAddr != "" {
 		filePrefix := filepath.Join(debugInfoCmd.directory, "zero_")
-		saveProfiles(debugInfoCmd.zeroAddr, filePrefix, duration, debugInfoCmd.pprofProfiles)
+
+		saveMetrics(debugInfoCmd.zeroAddr, filePrefix, debugInfoCmd.seconds, debugInfoCmd.metricTypes)
+
 	}
 }
 

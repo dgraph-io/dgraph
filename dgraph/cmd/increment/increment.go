@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,25 +46,36 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run(Increment.Conf)
 		},
+		Annotations: map[string]string{"group": "tool"},
 	}
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
+	Increment.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Increment.Cmd.Flags()
+	// --tls SuperFlag
+	x.RegisterClientTLSFlags(flag)
+
+	flag.String("cloud", "", "addr: xxx; jwt: xxx")
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
-	flag.Int("num", 1, "How many times to run.")
+	flag.Int("num", 1, "How many times to run per goroutine.")
 	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.String("user", "", "Username if login is required.")
-	flag.String("password", "", "Password of the user.")
+	flag.Int("conc", 1, "How many goroutines to run.")
+
+	flag.String("creds", "",
+		`Various login credentials if login is required.
+	user defines the username to login.
+	password defines the password of the user.
+	namespace defines the namespace to log into.
+	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
+
 	flag.String("pred", "counter.val",
 		"Predicate to use for storing the counter.")
 	flag.Bool("ro", false,
 		"Read-only. Read the counter value without updating it.")
 	flag.Bool("be", false,
 		"Best-effort. Read counter value without retrieving timestamp from Zero.")
-	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	// TLS configuration
-	x.RegisterClientTLSFlags(flag)
+	flag.String("jaeger", "", "Send opencensus traces to Jaeger.")
 }
 
 // Counter stores information about the value being incremented by this tool.
@@ -167,25 +180,59 @@ func run(conf *viper.Viper) {
 
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
+	conc := int(conf.GetInt("conc"))
 	format := "0102 03:04:05.999"
 
-	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
-	defer closeFunc()
+	// Do a sanity check on the passed credentials.
+	_ = z.NewSuperFlag(Increment.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 
-	for num > 0 {
-		txnStart := time.Now() // Start time of transaction
-		cnt, err := process(dg, conf)
-		now := time.Now().UTC().Format(format)
-		if err != nil {
-			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
-			time.Sleep(time.Second)
-			continue
-		}
-		serverLat := cnt.qLatency + cnt.mLatency
-		clientLat := time.Since(txnStart).Round(time.Millisecond)
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n", now, cnt.Val,
-			cnt.startTs, cnt.qLatency, cnt.mLatency, serverLat, clientLat, clientLat-serverLat)
-		num--
-		time.Sleep(waitDur)
+	var dg *dgo.Dgraph
+	sf := z.NewSuperFlag(conf.GetString("cloud"))
+	if addr := sf.GetString("addr"); len(addr) > 0 {
+		conn, err := dgo.DialSlashEndpoint(addr, sf.GetString("jwt"))
+		x.Check(err)
+		dc := api.NewDgraphClient(conn)
+		dg = dgo.NewDgraphClient(dc)
+	} else {
+		dgTmp, closeFunc := x.GetDgraphClient(Increment.Conf, true)
+		defer closeFunc()
+		dg = dgTmp
 	}
+
+	// Run things serially first.
+	for i := 0; i < conc; i++ {
+		_, err := process(dg, conf)
+		x.Check(err)
+		num--
+	}
+
+	var wg sync.WaitGroup
+	f := func(i int) {
+		defer wg.Done()
+		count := 0
+		for count < num {
+			txnStart := time.Now() // Start time of transaction
+			cnt, err := process(dg, conf)
+			now := time.Now().UTC().Format(format)
+			if err != nil {
+				fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			serverLat := cnt.qLatency + cnt.mLatency
+			clientLat := time.Since(txnStart).Round(time.Millisecond)
+			fmt.Printf(
+				"[%d] %-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n",
+				i, now, cnt.Val, cnt.startTs, cnt.qLatency, cnt.mLatency,
+				serverLat, clientLat, clientLat-serverLat)
+			time.Sleep(waitDur)
+			count++
+		}
+	}
+
+	for i := 0; i < conc; i++ {
+		wg.Add(1)
+		go f(i)
+	}
+	wg.Wait()
 }

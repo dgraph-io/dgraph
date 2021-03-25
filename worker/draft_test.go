@@ -31,8 +31,10 @@ import (
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
@@ -40,8 +42,10 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	delta := &pb.OracleDelta{}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
 	proposal := pb.Proposal{Delta: delta}
-	data, err := proposal.Marshal()
+	data := make([]byte, 8+proposal.Size())
+	sz, err := proposal.MarshalToSizedBuffer(data)
 	x.Check(err)
+	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
 
@@ -63,7 +67,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
 	posting.Oracle().RegisterStartTs(2)
-	snap, err := n.calculateSnapshot(0, 1)
+	snap, err := n.calculateSnapshot(0, n.Applied.DoneUntil(), posting.Oracle().MinPendingStartTs())
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), snap.ReadTs)
 	require.Equal(t, uint64(1), snap.Index)
@@ -90,7 +94,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
 	posting.Oracle().ResetTxns()
-	snap, err = n.calculateSnapshot(0, 1)
+	snap, err = n.calculateSnapshot(0, n.Applied.DoneUntil(), posting.Oracle().MinPendingStartTs())
 	require.NoError(t, err)
 	require.Equal(t, uint64(9), snap.ReadTs)
 	require.Equal(t, uint64(8), snap.Index)
@@ -106,7 +110,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	entries = append(entries, getEntryForMutation(9, 11))
 	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(9)
-	snap, err = n.calculateSnapshot(0, 0)
+	snap, err = n.calculateSnapshot(0, n.Applied.DoneUntil(), posting.Oracle().MinPendingStartTs())
 	require.NoError(t, err)
 	require.Nil(t, snap)
 }

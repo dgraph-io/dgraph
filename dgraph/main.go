@@ -17,9 +17,7 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
-	"os"
 	"runtime"
 	"time"
 
@@ -35,7 +33,6 @@ func main() {
 	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
-	fmt.Printf("Page Size: %d\n", os.Getpagesize())
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {
@@ -44,11 +41,10 @@ func main() {
 		return b - a
 	}
 
+	ticker := time.NewTicker(10 * time.Second)
+
 	// Make sure the garbage collector is run periodically.
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
 		minDiff := uint64(2 << 30)
 
 		var ms runtime.MemStats
@@ -56,17 +52,18 @@ func main() {
 		var lastNumGC uint32
 
 		var js z.MemStats
-		var lastJs z.MemStats
+		var lastAlloc uint64
 
 		for range ticker.C {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
-			if diff := absDiff(js.Active, lastJs.Active); diff > 256<<20 {
-				glog.V(2).Infof("jemalloc: Active %s Allocated: %s Resident: %s Retained: %s\n",
+			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 256<<20 {
+				glog.V(2).Infof("NumAllocBytes: %s jemalloc: Active %s Allocated: %s"+
+					" Resident: %s Retained: %s\n",
+					humanize.IBytes(uint64(z.NumAllocBytes())),
 					humanize.IBytes(js.Active), humanize.IBytes(js.Allocated),
 					humanize.IBytes(js.Resident), humanize.IBytes(js.Retained))
-				lastJs = js
-				z.PrintAllocators()
+				lastAlloc = uint64(z.NumAllocBytes())
 			} else {
 				// Don't update the lastJs here.
 			}
@@ -88,14 +85,24 @@ func main() {
 
 			case ms.NumGC == lastNumGC:
 				runtime.GC()
-				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC,
+				glog.V(2).Infof("GC: %d. InUse: %s. Idle: %s. jemalloc: %s.\n", ms.NumGC,
 					humanize.IBytes(ms.HeapInuse),
-					humanize.IBytes(ms.HeapIdle-ms.HeapReleased))
+					humanize.IBytes(ms.HeapIdle-ms.HeapReleased),
+					humanize.IBytes(js.Active))
 				lastNumGC = ms.NumGC + 1
 				lastMs = ms
 			}
 		}
 	}()
 
+	// Run the program.
 	cmd.Execute()
+	ticker.Stop()
+
+	glog.V(2).Infof("Num Allocated Bytes at program end: %d", z.NumAllocBytes())
+	if z.NumAllocBytes() > 0 {
+		glog.Warningf("MEMORY LEAK detected of size: %s\n",
+			humanize.Bytes(uint64(z.NumAllocBytes())))
+		glog.Warningf("%s", z.Leaks())
+	}
 }

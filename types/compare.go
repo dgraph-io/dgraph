@@ -45,3 +45,10 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 	}
 	return false
 }
+
+// CompareBetween compares if the dst value lie between
+// two values val1 and val2(both inclusive).
+func CompareBetween(dst, val1, val2 Val) bool {
+	return CompareVals("ge", dst, val1) &&
+		CompareVals("le", dst, val2)
+}

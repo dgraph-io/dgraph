@@ -15,18 +15,22 @@ package worker
 import (
 	"compress/gzip"
 	"context"
-	"io"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,13 +42,13 @@ const (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	if req == nil {
-		return 0, errors.Errorf("restore request cannot be nil")
+		return errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return 0, errors.Wrapf(err, "cannot update membership state before restore")
+		return errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -53,19 +57,40 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		currentGroups = append(currentGroups, gid)
 	}
 
-	creds := Credentials{
+	creds := x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req, &creds, currentGroups); err != nil {
-		return 0, errors.Wrapf(err, "failed to verify backup")
+		return errors.Wrapf(err, "failed to verify backup")
+	}
+	if err := FillRestoreCredentials(req.Location, req); err != nil {
+		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 
-	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+	// This check if any restore operation running on the node.
+	// Operation initiated on other nodes doesn't have record in the record tracker.
+	// This keeps track if there is an already running restore operation return the error.
+	// IMP: This introduces few corner cases.
+	// Like two concurrent restore operation on different nodes.
+	// Considering Restore as admin operation, solving all those complexities has low gains
+	// than to sacrifice the simplicity.
+	isRestoreRunning := func() bool {
+		tasks := GetOngoingTasks()
+		for _, t := range tasks {
+			if t == opRestore.String() {
+				return true
+			}
+		}
+		return false
 	}
+	if isRestoreRunning() {
+		return errors.Errorf("another restore operation is already running. " +
+			"Please retry later.")
+	}
+
 	req.RestoreTs = State.GetTimestamp(false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
@@ -74,30 +99,22 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-
+		wg.Add(1)
 		go func() {
 			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
-	restoreId, err := rt.Add()
-	if err != nil {
-		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
-	go func(restoreId int) {
-		errs := make([]error, 0)
+	go func() {
 		for range currentGroups {
 			if err := <-errCh; err != nil {
-				errs = append(errs, err)
+				glog.Errorf("Error while restoring %v", err)
 			}
+			wg.Done()
 		}
-		if err := rt.Done(restoreId, errs); err != nil {
-			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
-				restoreId, err)
-		}
-	}(restoreId)
+	}()
 
-	return restoreId, nil
+	return nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -194,7 +211,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// backup could be in a different group. The tablets need to be moved.
 
 	// Reset tablets and set correct tablets to match the restored backup.
-	creds := &Credentials{
+	creds := &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -209,7 +226,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
 
-	manifests, err := handler.GetManifests(uri, req.BackupId, req.BackupNum)
+	manifests, err := getManifestsToRestore(handler, uri, req.BackupId, req.BackupNum)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get backup manifests")
 	}
@@ -219,6 +236,16 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	lastManifest := manifests[len(manifests)-1]
 	preds, ok := lastManifest.Groups[req.GroupId]
+
+	// Version is 0 if the backup was taken on an old version (v20.11).
+	if lastManifest.Version == 0 {
+		tmp := make([]string, 0, len(preds))
+		for _, pred := range preds {
+			tmp = append(tmp, x.GalaxyAttr(pred))
+		}
+		preds = tmp
+	}
+
 	if !ok {
 		return errors.Errorf("backup manifest does not contain information for group ID %d",
 			req.GroupId)
@@ -245,7 +272,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
-	if err := groups().Node.proposeSnapshot(1); err != nil {
+	if err := groups().Node.proposeSnapshot(); err != nil {
 		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
 	}
 
@@ -267,27 +294,35 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 	// Copy from the request.
 	config.Set("encryption_key_file", req.EncryptionKeyFile)
-	config.Set("vault_roleid_file", req.VaultRoleidFile)
-	config.Set("vault_secretid_file", req.VaultSecretidFile)
 
-	// Override only if non-nil
+	vaultBuilder := new(strings.Builder)
+	if req.VaultRoleidFile != "" {
+		fmt.Fprintf(vaultBuilder, "role-id-file=%s;", req.VaultRoleidFile)
+	}
+	if req.VaultSecretidFile != "" {
+		fmt.Fprintf(vaultBuilder, "secret-id-file=%s;", req.VaultSecretidFile)
+	}
 	if req.VaultAddr != "" {
-		config.Set("vault_addr", req.VaultAddr)
+		fmt.Fprintf(vaultBuilder, "addr=%s;", req.VaultAddr)
 	}
 	if req.VaultPath != "" {
-		config.Set("vault_path", req.VaultPath)
+		fmt.Fprintf(vaultBuilder, "path=%s;", req.VaultPath)
 	}
 	if req.VaultField != "" {
-		config.Set("vault_field", req.VaultField)
+		fmt.Fprintf(vaultBuilder, "field=%s;", req.VaultField)
 	}
 	if req.VaultFormat != "" {
-		config.Set("vault_format", req.VaultField)
+		fmt.Fprintf(vaultBuilder, "format=%s;", req.VaultFormat)
 	}
+	if vaultConfig := vaultBuilder.String(); vaultConfig != "" {
+		config.Set("vault", vaultConfig)
+	}
+
 	return config, nil
 }
 
-func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
-	return &Credentials{
+func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredentials {
+	return &x.MinioCredentials{
 		AccessKey:    req.AccessKey,
 		SecretKey:    req.SecretKey,
 		SessionToken: req.SessionToken,
@@ -298,61 +333,72 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *Credentials {
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId, req.BackupNum,
 		getCredentialsFromRestoreRequest(req),
-		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+		func(groupId uint32, in *loadBackupInput) (uint64, uint64, error) {
 			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
-				return 0, nil
+				return 0, 0, nil
 			}
 
 			cfg, err := getEncConfig(req)
 			if err != nil {
-				return 0, errors.Wrapf(err, "unable to get encryption config")
+				return 0, 0, errors.Wrapf(err, "unable to get encryption config")
 			}
-			key, err := enc.ReadKey(cfg)
+			_, encKey := ee.GetKeys(cfg)
+			in.r, err = enc.GetReader(encKey, in.r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "unable to read key")
+				return 0, 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
-			r, err = enc.GetReader(key, r)
+			gzReader, err := gzip.NewReader(in.r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot get encrypted reader")
-			}
-			gzReader, err := gzip.NewReader(r)
-			if err != nil {
-				return 0, errors.Wrapf(err, "couldn't create gzip reader")
+				return 0, 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
-			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
+			maxUid, maxNsId, err := loadFromBackup(pstore, &loadBackupInput{
+				r:              gzReader,
+				restoreTs:      req.RestoreTs,
+				preds:          in.preds,
+				dropOperations: in.dropOperations,
+				isOld:          in.isOld,
+			})
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot write backup")
+				return 0, 0, errors.Wrapf(err, "cannot write backup")
 			}
 
 			if maxUid == 0 {
 				// No need to update the lease, return here.
-				return 0, nil
+				return 0, 0, nil
 			}
 
 			// Use the value of maxUid to update the uid lease.
 			pl := groups().connToZeroLeader()
 			if pl == nil {
-				return 0, errors.Errorf(
+				return 0, 0, errors.Errorf(
 					"cannot update uid lease due to no connection to zero leader")
 			}
+
 			zc := pb.NewZeroClient(pl.Get())
-			if _, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid}); err != nil {
-				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
+			leaseID := func(val uint64, typ pb.NumLeaseType) error {
+				if val == 0 {
+					return nil
+				}
+				_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
+				return err
 			}
 
-			// We return the maxUid to enforce the signature of the method but it will
+			if err := leaseID(maxUid, pb.Num_UID); err != nil {
+				return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
+			}
+			if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
+				return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
+			}
+
+			// We return the maxUid/maxNsId to enforce the signature of the method but it will
 			// be ignored as the uid lease was updated above.
-			return maxUid, nil
+			return maxUid, maxNsId, nil
 		})
 	if res.Err != nil {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
-}
-
-func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
-	return rt.Status(restoreId), nil
 }

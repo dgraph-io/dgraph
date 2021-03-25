@@ -16,7 +16,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post2)",
+            "uid": "uid(Post_2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -24,7 +24,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
         uid
-        Post2 as Author.posts
+        Post_2 as Author.posts
       }
     }
 
@@ -59,7 +59,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post2)",
+            "uid": "uid(Post_2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -67,17 +67,21 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
         uid
-        Post2 as Author.posts
+        Post_2 as Author.posts
       }
-      author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
-        id : uid
-        name : Author.name
-        country : Author.country {
-          name : Country.name
-          states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
-            code : State.code
-            name : State.name
-            capital : State.capital
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: uid(0x1, 0x2)) @filter(type(Author))
+      DeleteAuthorPayload.author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
+        Author.id : uid
+        Author.name : Author.name
+        Author.country : Author.country {
+          Country.name : Country.name
+          Country.states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
+            State.code : State.code
+            State.name : State.name
+            State.capital : State.capital
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -106,7 +110,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post2)",
+            "uid": "uid(Post_2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -114,7 +118,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
         uid
-        Post2 as Author.posts
+        Post_2 as Author.posts
       }
     }
 
@@ -139,7 +143,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post2)",
+            "uid": "uid(Post_2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -147,7 +151,7 @@
     query {
       x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
         uid
-        Post2 as Author.posts
+        Post_2 as Author.posts
       }
     }
 
@@ -169,7 +173,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Country2)",
+            "uid": "uid(Country_2)",
             "Country.states": [{ "uid": "uid(x)" }]
           }
         ]
@@ -177,7 +181,7 @@
     query {
       x as deleteState(func: type(State)) @filter(eq(State.code, "abc")) {
         uid
-        Country2 as State.country
+        Country_2 as State.country
       }
     }
 
@@ -199,11 +203,11 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Author2)",
+            "uid": "uid(Author_2)",
             "Author.posts": [{ "uid": "uid(x)" }]
           },
           {
-            "uid": "uid(Category3)",
+            "uid": "uid(Category_3)",
             "Category.posts": [{ "uid": "uid(x)" }]
           }
         ]
@@ -211,8 +215,8 @@
     query {
       x as deletePost(func: uid(0x1, 0x2)) @filter(type(Post)) {
         uid
-        Author2 as Post.author
-        Category3 as Post.category
+        Author_2 as Post.author
+        Category_3 as Post.category
       }
     }
 
@@ -234,7 +238,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(MovieDirector2)",
+            "uid": "uid(MovieDirector_2)",
             "directed.movies": [{ "uid": "uid(x)" }]
           }
         ]
@@ -242,31 +246,9 @@
     query {
       x as deleteMovie(func: uid(0x1, 0x2)) @filter(type(Movie)) {
         uid
-        MovieDirector2 as ~directed.movies
+        MovieDirector_2 as ~directed.movies
       }
     }
-
--
-  name: "Delete mutation for an interface whose implementation has auth rules"
-  gqlmutation: |
-    mutation deleteX($filter: XFilter!) {
-      deleteX(filter: $filter) {
-        msg
-      }
-    }
-  gqlvariables: |
-    { "filter":
-      { "id": ["0x1", "0x2"] }
-    }
-  explanation: "The mutation should get rewritten to dummy query because its implementation has auth rules."
-  dgmutations:
-    - deletejson: |
-        [{ "uid": "uid(x)" }]
-  dgquery: |-
-    query {
-      x as deleteX()
-    }
-
 -
   name: "Deleting an interface with just a field with @id directive"
   gqlmutation: |
@@ -282,9 +264,13 @@
       x as deleteA(func: type(A)) @filter(eq(A.name, "xyz")) {
         uid
       }
-      a(func: uid(x)) {
+    }
+  dgquerysec: |-
+    query {
+      x as var(func: type(A)) @filter(eq(A.name, "xyz"))
+      DeleteAPayload.a(func: uid(x)) {
         dgraph.type
-        name : A.name
+        A.name : A.name
         dgraph.uid : uid
       }
     }
@@ -292,3 +278,50 @@
     - deletejson: |
         [{ "uid": "uid(x)"}]
 
+-
+  name: "delete with multiple id's"
+  gqlmutation: |
+    mutation deleteBook($filter: BookFilter!) {
+    	deleteBook(filter: $filter) {
+    		msg
+    	}
+    }
+  gqlvariables: |
+    {
+        "filter": {
+            "or": [
+                {
+                    "title": {
+                        "in": "Sapiens"
+                    }
+                },
+                {
+                    "ISBN": {
+                        "in": "2SB1Q"
+                    }
+                }
+            ]
+        }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+            {
+                "uid": "uid(x)"
+            },
+            {
+                "uid": "uid(author_2)",
+                "author.book": [
+                    {
+                        "uid": "uid(x)"
+                    }
+                ]
+            }
+        ]
+  dgquery: |-
+    query {
+      x as deleteBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2SB1Q"))) {
+        uid
+        author_2 as Book.author
+      }
+    }

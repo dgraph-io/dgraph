@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -29,18 +30,17 @@ import (
 )
 
 func setSchema(schema string) {
-	for retry := 0; retry < 3; retry++ {
-		err := client.Alter(context.Background(), &api.Operation{
+	var err error
+	for retry := 0; retry < 60; retry++ {
+		err = client.Alter(context.Background(), &api.Operation{
 			Schema: schema,
 		})
 		if err == nil {
 			return
 		}
-		// We'll panic if we are in last iteration.
-		if retry == 2 {
-			panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
-		}
+		time.Sleep(time.Second)
 	}
+	panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 }
 
 func dropPredicate(pred string) {
@@ -212,6 +212,9 @@ const testSchema = `
 type Person {
 	name
 	pet
+	friend
+	gender
+	alive
 }
 
 type Animal {
@@ -243,6 +246,9 @@ type SchoolInfo {
 type User {
 	name
 	password
+	gender
+	friend
+	alive
 }
 
 type Node {
@@ -318,6 +324,10 @@ noindex_salary                 : float .
 language                       : [string] .
 score                          : [int] @index(int) .
 average                        : [float] @index(float) .
+gender                         : string .
+indexpred                      : string @index(exact) .
+pred                           : string .
+pname                          : string .
 `
 
 func populateCluster() {
@@ -615,6 +625,10 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<23> <dgraph.type> "Person" .
+		<24> <dgraph.type> "Person" .
+		<25> <dgraph.type> "Person" .
+		<31> <dgraph.type> "Person" .
 		<32> <dgraph.type> "SchoolInfo" .
 		<33> <dgraph.type> "SchoolInfo" .
 		<34> <dgraph.type> "SchoolInfo" .
@@ -747,6 +761,73 @@ func populateCluster() {
 		<20001> <average> "49.33" .
 		<20001> <pet_name> "mahi" .
 		<20001> <pet_name> "ms" .
+
+		# data for testing consistency of sort
+		<61> <pred> "A" .
+		<62> <pred> "B" .
+		<63> <pred> "C" .
+		<64> <pred> "D" .
+		<65> <pred> "E" .
+
+		<61> <indexpred> "A" .
+		<62> <indexpred> "B" .
+		<63> <indexpred> "C" .
+		<64> <indexpred> "D" .
+		<65> <indexpred> "E" .
+
+		<61> <pname> "nameA" .
+		<62> <pname> "nameB" .
+		<63> <pname> "nameC" .
+		<64> <pname> "nameD" .
+		<65> <pname> "nameE" .
+		<66> <pname> "nameF" .
+		<67> <pname> "nameG" .
+		<68> <pname> "nameH" .
+		<69> <pname> "nameI" .
+		<70> <pname> "nameJ" .
+
+		<61> <pred1> "A" .
+		<62> <pred1> "A" .
+		<63> <pred1> "A" .
+		<64> <pred1> "B" .
+		<65> <pred1> "B" .
+		<66> <pred1> "B" .
+		<67> <pred1> "C" .
+		<68> <pred1> "C" .
+		<69> <pred1> "C" .
+		<70> <pred1> "C" .
+
+		<61> <pred2> "I" .
+		<62> <pred2> "J" .
+
+		<64> <pred2> "I" .
+		<65> <pred2> "J" .
+
+		<67> <pred2> "I" .
+		<68> <pred2> "J" .
+		<69> <pred2> "K" .
+
+
+		<61> <index-pred1> "A" .
+		<62> <index-pred1> "A" .
+		<63> <index-pred1> "A" .
+		<64> <index-pred1> "B" .
+		<65> <index-pred1> "B" .
+		<66> <index-pred1> "B" .
+		<67> <index-pred1> "C" .
+		<68> <index-pred1> "C" .
+		<69> <index-pred1> "C" .
+		<70> <index-pred1> "C" .
+
+		<61> <index-pred2> "I" .
+		<62> <index-pred2> "J" .
+
+		<64> <index-pred2> "I" .
+		<65> <index-pred2> "J" .
+
+		<67> <index-pred2> "I" .
+		<68> <index-pred2> "J" .
+		<69> <index-pred2> "K" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

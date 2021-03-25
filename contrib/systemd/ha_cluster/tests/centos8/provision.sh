@@ -98,9 +98,11 @@ setup_systemd_zero() {
   WAL=/var/lib/dgraph/zw
   IDX=$(( $(grep -o '[0-9]' <<< $HOSTNAME) + 1 ))
   if [[ $TYPE == "leader" ]]; then
-    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --wal $WAL --idx=$IDX --replicas $REPLICAS'"
+    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --wal $WAL
+    --raft="idx=$IDX" --replicas $REPLICAS'"
   else
-    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --peer $LDR --wal $WAL --idx=$IDX --replicas $REPLICAS'"
+    EXEC="/bin/bash -c '/usr/local/bin/dgraph zero --my=\$(hostname):5080 --peer $LDR --wal $WAL
+    --raft="idx=$IDX" --replicas $REPLICAS'"
   fi
 
   mkdir -p /var/{log/dgraph,lib/dgraph/zw}
@@ -119,7 +121,7 @@ setup_systemd_alpha() {
   for (( I=0; I <= $REPLICAS-1; I++)); do ZEROS+=("zero-$I:5080");done
   IFS=, eval 'ZERO_LIST="${ZEROS[*]}"' # join by ','
 
-  EXEC="/bin/bash -c '/usr/local/bin/dgraph alpha --my=\$(hostname):7080 --lru_mb 2048 --zero $ZERO_LIST --postings $POSTINGS --wal $WAL'"
+  EXEC="/bin/bash -c '/usr/local/bin/dgraph alpha --my=\$(hostname):7080 --zero $ZERO_LIST --postings $POSTINGS --wal $WAL'"
 
   mkdir -p /var/{log/dgraph,lib/dgraph/{w,p}}
   chown -R dgraph:dgraph /var/{lib,log}/dgraph

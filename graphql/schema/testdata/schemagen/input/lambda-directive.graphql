@@ -1,0 +1,14 @@
+type User {
+	id: ID!
+	firstName: String!
+	lastName: String!
+	fullName: String @lambda
+}
+
+type Query {
+	queryUserNames(id: [ID!]!): [String] @lambda
+}
+
+type Mutation {
+	createUser(firstName: String!, lastName: String!): User @lambda
+}

@@ -20,13 +20,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
@@ -45,7 +47,7 @@ var (
 
 	mc                *minio.Client
 	bucketName        = "dgraph-backup"
-	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
+	backupDestination = "minio://minio:9001/dgraph-backup?secure=false"
 	uidCounter        = 0
 	batchSize         = 100
 	totalTriples      = 20000
@@ -53,7 +55,8 @@ var (
 
 // Test to add a large database and verify backup and restore work as expected.
 func TestBackupMinioLarge(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	// backupDestination = "minio://" + testutil.DockerPrefix + "_minio_1:9001/dgraph-backup?secure=false"
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
@@ -93,13 +96,14 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 		Schema: `name1: string .
 				 name2: string .
 				 name3: string .`}))
-	_, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name1&group=1")
+	client := testutil.GetHttpsClient(t)
+	_, err := client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name1&group=1")
 	require.NoError(t, err)
 	time.Sleep(time.Second)
-	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name2&group=2")
+	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name2&group=2")
 	require.NoError(t, err)
 	time.Sleep(time.Second)
-	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name3&group=3")
+	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=name3&group=3")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -107,11 +111,11 @@ func setupTablets(t *testing.T, dg *dgo.Dgraph) {
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := testutil.GetState()
+		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		_, ok1 := state.Groups["1"].Tablets["name1"]
-		_, ok2 := state.Groups["2"].Tablets["name2"]
-		_, ok3 := state.Groups["3"].Tablets["name3"]
+		_, ok1 := state.Groups["1"].Tablets[x.GalaxyAttr("name1")]
+		_, ok2 := state.Groups["2"].Tablets[x.GalaxyAttr("name2")]
+		_, ok3 := state.Groups["3"].Tablets[x.GalaxyAttr("name3")]
 		if ok1 && ok2 && ok3 {
 			moveOk = true
 			break
@@ -142,7 +146,8 @@ func addTriples(t *testing.T, dg *dgo.Dgraph, numTriples int) {
 func runBackup(t *testing.T) {
 	// Using the old /admin/backup endpoint to ensure it works. Change back to using
 	// the GraphQL endpoint at /admin once this endpoint is deprecated.
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
+	client := testutil.GetHttpsClient(t)
+	resp, err := client.PostForm("https://"+testutil.SockAddrHttp+"/admin/backup", url.Values{
 		"destination": []string{backupDestination},
 	})
 	require.NoError(t, err)
@@ -162,14 +167,14 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil))
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, x.SensitiveByteSlice(nil), options.Snappy, 0)
 	require.NoError(t, result.Err)
 
-	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)
+	restored1, err := testutil.GetPredicateValues("./data/restore/p1", x.GalaxyAttr("name1"), commitTs)
 	require.NoError(t, err)
-	restored2, err := testutil.GetPredicateValues("./data/restore/p2", "name2", commitTs)
+	restored2, err := testutil.GetPredicateValues("./data/restore/p2", x.GalaxyAttr("name2"), commitTs)
 	require.NoError(t, err)
-	restored3, err := testutil.GetPredicateValues("./data/restore/p3", "name3", commitTs)
+	restored3, err := testutil.GetPredicateValues("./data/restore/p3", x.GalaxyAttr("name3"), commitTs)
 	require.NoError(t, err)
 
 	restored := make(map[string]string)
@@ -209,8 +214,10 @@ func copyToLocalFs(t *testing.T) {
 	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		if object.Key != "manifest.json" {
+			dstDir := backupDir + "/" + object.Key
+			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
+		}
 
 		// Get all the files in that folder and copy them to the local filesystem.
 		lsCh2 := make(chan struct{})

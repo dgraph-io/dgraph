@@ -23,8 +23,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
 
-	"github.com/dgraph-io/dgraph/graphql/web"
-
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -32,12 +30,12 @@ import (
 func init() {
 	http.Handle("/admin/backup", allowedMethodsHandler(allowedMethods{http.MethodPost: true},
 		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			backupHandler(w, r, adminServer)
+			backupHandler(w, r)
 		}))))
 }
 
 // backupHandler handles backup requests coming from the HTTP endpoint.
-func backupHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+func backupHandler(w http.ResponseWriter, r *http.Request) {
 	gqlReq := &schema.Request{
 		Query: `
 		mutation backup($input: BackupInput!) {

@@ -1,6 +1,14 @@
 # **Don't delete** Comments at top of schemas should work
 # See: https://github.com/dgraph-io/dgraph/issues/4227
 
+type Hotel {
+    id: ID!
+    name: String! @search(by: [exact])
+    location: Point @search
+    area: Polygon @search
+    branches: MultiPolygon @search
+}
+
 type Country {
         # **Don't delete** Comments in types should work
         id: ID! # **Don't delete** Comments in lines should work
@@ -12,8 +20,9 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-	capital: String
-	country: Country @dgraph(pred: "inCountry")
+        capital: String
+        region: Region
+	    country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -35,8 +44,11 @@ type Author @dgraph(type: "test.dgraph.author") {
 
         dob: DateTime @search
         reputation: Float @search
+        qualification: String @search(by: [hash, trigram])
         country: Country
         posts: [Post!] @hasInverse(field: author)
+		bio: String @lambda
+		rank: Int @lambda
 }
 
 type Post @dgraph(type: "myPost") {
@@ -90,14 +102,24 @@ interface Character @dgraph(type: "performance.character") {
         id: ID!
         name: String! @search(by: [exact])
         appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+		bio: String @lambda
 }
 
 type Human implements Character & Employee {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
+        ename: String!
         starships: [Starship]
         totalCredits: Float @dgraph(pred: "credits")
 }
 
 type Droid implements Character @dgraph(type: "roboDroid") {
+        id: ID!
+        name: String! @search(by: [exact])
+        appearsIn: [Episode!] @search
+        bio: String @lambda
         primaryFunction: String
 }
 
@@ -176,11 +198,181 @@ type Comment1 {
 type post1{
     id: ID
     title: String! @id @search(by: [regexp])
-    numLikes: Int64
+    numLikes: Int64 @search
+    commentsByMonth: [Int]
+    likesByMonth: [Int64]
+    author: author1 @hasInverse(field: posts)
 }
 
 type Person1 {
     id: ID!
     name: String!
     friends: [Person1] @hasInverse(field: friends)
+}
+
+# union testing - start
+enum AnimalCategory {
+	Fish
+	Amphibian
+	Reptile
+	Bird
+	Mammal
+	InVertebrate
+}
+
+interface Animal {
+	id: ID!
+	category: AnimalCategory @search
+}
+
+type Dog implements Animal {
+	breed: String @search
+}
+
+type Parrot implements Animal {
+	repeatsWords: [String]
+}
+
+type Cheetah implements Animal {
+	speed: Float
+}
+
+"""
+This type specifically doesn't implement any interface.
+We need this to test out all cases with union.
+"""
+type Plant {
+	id: ID!
+	breed: String # field with same name as a field in type Dog
+}
+
+union HomeMember = Dog | Parrot | Human | Plant
+
+type Zoo {
+	id: ID!
+	animals: [Animal]
+	city: String
+}
+
+type Home {
+	id: ID!
+	address: String
+	members: [HomeMember]
+	favouriteMember: HomeMember
+}
+# union testing - end
+
+type Query {
+	authorsByName(name: String!): [Author] @lambda
+}
+
+type Mutation {
+	newAuthor(name: String!): ID! @lambda
+}
+
+# generate directive testing
+type University @generate(
+    query: {
+        query: false
+    },
+    mutation: {
+        add: true,
+        update: true,
+        delete: false
+    }
+){
+    id: ID!
+    name: String!
+    numStudents: Int
+}
+
+# @id directive with multiple data types
+type Book {
+    bookId: Int64! @id
+    name: String!
+    desc: String
+	summary: String @lambda
+	chapters: [Chapter] @hasInverse(field: book)
+}
+
+type Chapter {
+    chapterId: Int! @id
+    name: String!
+	book: Book
+}
+
+type Mission @key(fields: "id") {
+    id: String! @id
+    crew: [Astronaut] @provides(fields: "name") @hasInverse(field: missions)
+    spaceShip: [SpaceShip]
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    name: String @external
+    age: Int @external
+    isActive: Boolean
+    bio: String @requires(fields: "name age") @lambda
+    missions: [Mission]
+}
+
+type SpaceShip @key(fields: "id") @extends {
+    id: String! @id @external
+    missions: [Mission]
+}
+
+type Planet @key(fields: "id") @extends {
+        id: Int! @id @external
+        missions: [Mission]
+}
+
+type Region {
+    id: String! @id
+    name: String!
+    district: District
+}
+
+type District @lambdaOnMutate(add: true, update: true, delete: true) {
+    dgId: ID!
+    id: String! @id
+    name: String!
+}
+
+type Owner {
+    username: String! @id
+    password: String!
+    projects: [Project!] @hasInverse(field: owner)
+}
+
+type Project {
+    id: String! @id
+    owner: Owner!
+    name: String! @search(by: [hash])
+    datasets: [Dataset!] @hasInverse(field: project)
+}
+
+type Dataset {
+    id: String! @id
+    owner: Owner!
+    project: Project!
+    name: String! @search(by: [hash])
+}
+
+type author1{
+    name:String! @id @search(by: [regexp])
+    posts:[post1] @hasInverse(field: author)
+}
+# multiple fields with @id directive
+type Worker {
+    name: String!
+    reg_No: Int! @id
+    emp_Id: String! @id
+}
+
+type Employer {
+    company: String! @id
+    worker: [Worker]
 }

@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -79,7 +80,7 @@ func processToFastJSON(q string) string {
 		log.Fatal(err)
 	}
 
-	buf, err := query.ToJson(&l, qr.Subgraphs)
+	buf, err := query.ToJson(context.Background(), &l, qr.Subgraphs, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func processToFastJSON(q string) string {
 }
 
 func runGraphqlQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, "application/graphql+-", "", 0)
+	output, _, err := queryWithTs(q, "application/dql", "", 0)
 	return string(output), err
 }
 
@@ -244,12 +245,9 @@ func TestDeletePredicate(t *testing.T) {
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
 
-	testutil.CompareJSON(t, `{"data":{"schema":[`+
-		`{"predicate":"age","type":"default"},`+
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
-		x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}],`+x.InitialTypes+`}}`, output)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{UserPreds: `{"predicate":"age","type":"default"},` +
+		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}),
+		output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -1076,11 +1074,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, `{"data":{"schema":[`+
-		x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
-		`{"predicate":"occupations","type":"string"},`+
-		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
-			"list":true}],`+x.InitialTypes+`}}`, res)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.
+		SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1323,11 +1318,7 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
-	testutil.CompareJSON(t,
-		`{"data":{"schema":[`+
-			x.AclPredicates+","+x.GraphqlPredicates+","+x.CorsPredicate+","+
-			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
-				"list":true}],`+x.InitialTypes+`}}`, output)
+	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{}), output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1389,7 +1380,7 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 
 	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	dc.Login(context.Background(), x.GrootId, "password")
+	dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.GalaxyNamespace)
 	q := `schema {}`
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)
@@ -1663,25 +1654,55 @@ func TestGeoValidWkbData(t *testing.T) {
 	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
 
-var addr = "http://localhost:8180"
+var addr string
 
-// the grootAccessJWT stores the access JWT extracted from the response
-// of http login
-var grootAccessJwt string
-var grootRefreshJwt string
+type Token struct {
+	token *testutil.HttpToken
+	sync.RWMutex
+}
+
+//// the grootAccessJWT stores the access JWT extracted from the response
+//// of http login
+var token *Token
+
+func (t *Token) getAccessJWTToken() string {
+	t.RLock()
+	defer t.RUnlock()
+	return t.token.AccessJwt
+}
+
+func (t *Token) refreshToken() error {
+	t.Lock()
+	defer t.Unlock()
+	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint:   addr + "/admin",
+		RefreshJwt: t.token.RefreshToken,
+	})
+	if err != nil {
+		return err
+	}
+	t.token.AccessJwt = newToken.AccessJwt
+	t.token.RefreshToken = newToken.RefreshToken
+	return nil
+}
 
 func TestMain(m *testing.M) {
+	addr = "http://" + testutil.SockAddrHttp
 	// Increment lease, so that mutations work.
 	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	zc := pb.NewZeroClient(conn)
-	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
+	if _, err := zc.AssignIds(context.Background(),
+		&pb.Num{Val: 1e6, Type: pb.Num_UID}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/admin")
-
+	httpToken := testutil.GrootHttpLogin(addr + "/admin")
+	token = &Token{
+		token:   httpToken,
+		RWMutex: sync.RWMutex{},
+	}
 	r := m.Run()
 	os.Exit(r)
 }

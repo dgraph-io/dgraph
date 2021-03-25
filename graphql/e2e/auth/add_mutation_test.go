@@ -38,8 +38,8 @@ func (p *Project) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{p.ProjID}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (c *Column) delete(t *testing.T, user, role string) {
@@ -54,8 +54,8 @@ func (c *Column) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"colids": []string{c.ColID}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (i *Issue) delete(t *testing.T, user, role string) {
@@ -70,8 +70,8 @@ func (i *Issue) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{i.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (l *Log) delete(t *testing.T, user, role string) {
@@ -86,8 +86,8 @@ func (l *Log) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{l.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
 }
 
 func (m *Movie) delete(t *testing.T, user, role string) {
@@ -102,8 +102,257 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 		`,
 		Variables: map[string]interface{}{"ids": []string{m.Id}},
 	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func (a *Author) delete(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+			mutation deleteAuthor($ids: [ID!]) {
+				deleteAuthor(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{a.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func (q *Question) delete(t *testing.T, user string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWTForInterfaceAuth(t, user, "", q.Answered, metaInfo),
+		Query: `
+			mutation deleteQuestion($ids: [ID!]) {
+				deleteQuestion(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{q.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func (f *FbPost) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: common.GetJWT(t, user, role, metaInfo),
+		Query: `
+			mutation deleteFbPost($ids: [ID!]) {
+				deleteFbPost(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{f.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+}
+
+func TestAuth_AddOnTypeWithRBACRuleOnInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1@dgraph.io",
+		role: "ADMIN",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Pwd:  "password",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		expectedError: false,
+		result:        `{"addFbPost":{"fbPost":[{"id":"0x15f","text":"New FbPost","author":{"id":"0x15e","name":"user1@dgraph.io"},"sender":{"id":"0x15d","name":"user1@dgraph.io"},"receiver":{"id":"0x160","name":"user2@dgraph.io"}}]}}`,
+	}, {
+		user: "user1@dgraph.io",
+		role: "USER",
+		variables: map[string]interface{}{"fbpost": &FbPost{
+			Text: "New FbPost",
+			Pwd:  "password",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Sender: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Receiver: &Author{
+				Name: "user2@dgraph.io",
+			},
+			PostCount: 5,
+		}},
+		expectedError: true,
+	},
+	}
+
+	query := `
+		mutation addFbPost($fbpost: AddFbPostInput!) {
+			addFbPost(input: [$fbpost]) {
+				fbPost {
+					id
+					text
+					author {
+						id
+						name
+					}
+					sender {
+						id
+						name
+					}
+					receiver {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+
+	var expected, result struct {
+		AddFbPost struct {
+			FbPost []*FbPost
+		}
+	}
+
+	for _, tcase := range testCases {
+		params := &common.GraphQLParams{
+			Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
+		if tcase.expectedError {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
+
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+
+		err = json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		opt := cmpopts.IgnoreFields(FbPost{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddFbPost.FbPost {
+			i.Author.delete(t)
+			i.Sender.delete(t)
+			i.Receiver.delete(t)
+			i.delete(t, tcase.user, tcase.role)
+		}
+	}
+}
+
+func TestAuth_AddOnTypeWithGraphTraversalRuleOnInterface(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1@dgraph.io",
+		ans:  true,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Pwd:  "password",
+			Author: &Author{
+				Name: "user1@dgraph.io",
+			},
+			Answered: true,
+		}},
+		result: `{"addQuestion": {"question": [{"id": "0x123", "text": "A Question", "author": {"id": "0x124", "name": "user1@dgraph.io"}}]}}`,
+	}, {
+		user: "user1",
+		ans:  false,
+		variables: map[string]interface{}{"question": &Question{
+			Text: "A Question",
+			Pwd:  "password",
+			Author: &Author{
+				Name: "user1",
+			},
+			Answered: true,
+		}},
+		expectedError: true,
+	},
+		{
+			user: "user2",
+			ans:  true,
+			variables: map[string]interface{}{"question": &Question{
+				Text: "A Question",
+				Pwd:  "password",
+				Author: &Author{
+					Name: "user1",
+				},
+				Answered: true,
+			}},
+			expectedError: true,
+		},
+	}
+
+	query := `
+		mutation addQuestion($question: AddQuestionInput!) {
+			addQuestion(input: [$question]) {
+				question {
+					id
+					text
+					author {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+	var expected, result struct {
+		AddQuestion struct {
+			Question []*Question
+		}
+	}
+
+	for _, tcase := range testCases {
+		params := &common.GraphQLParams{
+			Headers:   common.GetJWTForInterfaceAuth(t, tcase.user, tcase.role, tcase.ans, metaInfo),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := params.ExecuteAsPost(t, common.GraphqlURL)
+		if tcase.expectedError {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
+			continue
+		}
+
+		common.RequireNoGQLErrors(t, gqlResponse)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+
+		err = json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+		opt := cmpopts.IgnoreFields(Question{}, "Id")
+		opt1 := cmpopts.IgnoreFields(Author{}, "Id")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddQuestion.Question {
+			i.Author.delete(t)
+			i.delete(t, tcase.user)
+		}
+	}
 }
 
 func TestAddDeepFilter(t *testing.T) {
@@ -117,6 +366,7 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_1",
 			InProject: &Project{
 				Name: "project_add_1",
+				Pwd:  "password1",
 			},
 		}},
 	}, {
@@ -128,10 +378,12 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_2",
 			InProject: &Project{
 				Name: "project_add_2",
+				Pwd:  "password2",
 				Roles: []*Role{{
 					Permission: "ADMIN",
 					AssignedTo: []*common.User{{
 						Username: "user2",
+						Password: "password",
 					}},
 				}},
 			},
@@ -144,15 +396,18 @@ func TestAddDeepFilter(t *testing.T) {
 			Name: "column_add_3",
 			InProject: &Project{
 				Name: "project_add_4",
+				Pwd:  "password4",
 				Roles: []*Role{{
 					Permission: "ADMIN",
 					AssignedTo: []*common.User{{
 						Username: "user6",
+						Password: "password",
 					}},
 				}, {
 					Permission: "VIEW",
 					AssignedTo: []*common.User{{
 						Username: "user6",
+						Password: "password",
 					}},
 				}},
 			},
@@ -186,14 +441,14 @@ func TestAddDeepFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -224,6 +479,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: `{"addProject": {"project":[{"name":"project_add_1"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_1",
+			Pwd:  "password1",
 		}},
 	}, {
 		// Test case fails as the role isn't assigned to the correct user
@@ -232,10 +488,12 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_2",
+			Pwd:  "password2",
 			Roles: []*Role{{
 				Permission: "ADMIN",
 				AssignedTo: []*common.User{{
 					Username: "user2",
+					Password: "password",
 				}},
 			}},
 		}},
@@ -245,15 +503,18 @@ func TestAddOrRBACFilter(t *testing.T) {
 		result: `{"addProject": {"project":[{"name":"project_add_3"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_3",
+			Pwd:  "password3",
 			Roles: []*Role{{
 				Permission: "ADMIN",
 				AssignedTo: []*common.User{{
 					Username: "user7",
+					Password: "password",
 				}},
 			}, {
 				Permission: "VIEW",
 				AssignedTo: []*common.User{{
 					Username: "user7",
+					Password: "password",
 				}},
 			}},
 		}},
@@ -283,14 +544,14 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -362,14 +623,14 @@ func TestAddAndRBACFilterMultiple(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -437,14 +698,14 @@ func TestAddAndRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -541,14 +802,14 @@ func TestAddComplexFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -573,6 +834,7 @@ func TestAddRBACFilter(t *testing.T) {
 		result: `{"addLog": {"log":[{"logs":"log_add_1"}]}}`,
 		variables: map[string]interface{}{"issue": &Log{
 			Logs: "log_add_1",
+			Pwd:  "password1",
 		}},
 	}, {
 		user:   "user1",
@@ -580,6 +842,7 @@ func TestAddRBACFilter(t *testing.T) {
 		result: ``,
 		variables: map[string]interface{}{"issue": &Log{
 			Logs: "log_add_2",
+			Pwd:  "password2",
 		}},
 	}}
 
@@ -607,14 +870,14 @@ func TestAddRBACFilter(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -671,14 +934,14 @@ func TestAddGQLOnly(t *testing.T) {
 			Variables: tcase.variables,
 		}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
 			require.Contains(t, gqlResponse.Errors[0].Message, "authorization failed")
 			continue
 		}
 
-		require.Nil(t, gqlResponse.Errors)
+		common.RequireNoGQLErrors(t, gqlResponse)
 
 		err := json.Unmarshal([]byte(tcase.result), &expected)
 		require.NoError(t, err)
@@ -694,4 +957,198 @@ func TestAddGQLOnly(t *testing.T) {
 			i.Delete(t, tcase.user, tcase.role, metaInfo)
 		}
 	}
+}
+
+func TestUpsertMutationsWithRBAC(t *testing.T) {
+
+	testCases := []TestCase{{
+		// First Add Tweets should succeed.
+		user: "foo",
+		role: "admin",
+		variables: map[string]interface{}{
+			"upsert": true,
+			"tweet": common.Tweets{
+				Id:        "tweet1",
+				Text:      "abc",
+				Timestamp: "2020-10-10"},
+		},
+		result: `{"addTweets":{"tweets": [{"id":"tweet1", "text": "abc"}]}}`,
+	}, {
+		// Add Tweet with same id and upsert as false should fail.
+		user: "foo",
+		role: "admin",
+		variables: map[string]interface{}{
+			"upsert": false,
+			"tweet": common.Tweets{
+				Id:        "tweet1",
+				Text:      "abcdef",
+				Timestamp: "2020-10-10"},
+		},
+		expectedError: true,
+	}, {
+		// Add Tweet with same id but user, notfoo should fail authorization.
+		// As the failing is silent, no error is returned.
+		user: "notfoo",
+		role: "admin",
+		variables: map[string]interface{}{
+			"upsert": true,
+			"tweet": common.Tweets{
+				Id:        "tweet1",
+				Text:      "abcdef",
+				Timestamp: "2020-10-10"},
+		},
+		result: `{"addTweets": {"tweets": []} }`,
+	}, {
+		// Upsert should succeed.
+		user: "foo",
+		role: "admin",
+		variables: map[string]interface{}{
+			"upsert": true,
+			"tweet": common.Tweets{
+				Id:        "tweet1",
+				Text:      "abcdef",
+				Timestamp: "2020-10-10"},
+		},
+		result: `{"addTweets":{"tweets":  [{"id": "tweet1", "text":"abcdef"}]}}`,
+	}}
+
+	mutation := `
+	mutation addTweets($tweet: AddTweetsInput!, $upsert: Boolean){
+      addTweets(input: [$tweet], upsert: $upsert) {
+        tweets {
+			id
+			text
+		}
+      }
+    }
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+"_"+tcase.user, func(t *testing.T) {
+			mutationParams := &common.GraphQLParams{
+				Query:     mutation,
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Variables: tcase.variables,
+			}
+			gqlResponse := mutationParams.ExecuteAsPost(t, common.GraphqlURL)
+			if tcase.expectedError {
+				require.Error(t, gqlResponse.Errors)
+				require.Equal(t, len(gqlResponse.Errors), 1)
+				require.Contains(t, gqlResponse.Errors[0].Error(),
+					"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
+			} else {
+				common.RequireNoGQLErrors(t, gqlResponse)
+				require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+			}
+		})
+	}
+
+	tweet := common.Tweets{
+		Id: "tweet1",
+	}
+	tweet.DeleteByID(t, "foo", metaInfo)
+	// Clear the tweet.
+}
+
+func TestUpsertWithDeepAuth(t *testing.T) {
+	testCases := []TestCase{{
+		// Should succeed
+		name: "Initial Mutation",
+		user: "user",
+		variables: map[string]interface{}{"state": &State{
+			Code:    "UK",
+			Name:    "Uttaranchal",
+			OwnedBy: "user",
+		}},
+		result: `{
+					"addState":
+						{"state":
+							[{
+								"code": "UK",
+								"name":"Uttaranchal",
+								"ownedBy": "user",
+								"country": null
+							}]
+						}
+				}`,
+	}, {
+		// Should Fail with no error
+		name: "Upsert with wrong user",
+		user: "wrong user",
+		variables: map[string]interface{}{"state": &State{
+			Code: "UK",
+			Name: "Uttarakhand",
+			Country: &Country{
+				Id:      "IN",
+				Name:    "India",
+				OwnedBy: "user",
+			},
+		}},
+		result: `{"addState": { "state": [] } }`,
+	}, {
+		// Should succeed and add Country, also update country of state
+		name: " Upsert with correct user",
+		user: "user",
+		variables: map[string]interface{}{"state": &State{
+			Code: "UK",
+			Name: "Uttarakhand",
+			Country: &Country{
+				Id:      "IN",
+				Name:    "India",
+				OwnedBy: "user",
+			},
+		}},
+		result: `{
+					"addState":
+						{"state":
+							[{
+								"code": "UK",
+								"name": "Uttarakhand",
+								"ownedBy": "user",
+								"country":
+									{
+										"name": "India",
+										"id": "IN",
+										"ownedBy": "user"
+									}
+							}]
+						}
+				}`,
+	}}
+
+	query := `
+		mutation addState($state: AddStateInput!) {
+			addState(input: [$state], upsert: true) {
+				state {
+					code
+					name
+					ownedBy
+					country {
+						id
+						name
+						ownedBy
+					}
+				}
+			}
+		}
+	`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:     query,
+				Variables: tcase.variables,
+			}
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+
+	// Clean Up
+	filter := map[string]interface{}{"id": map[string]interface{}{"eq": "IN"}}
+	common.DeleteGqlType(t, "Country", filter, 1, nil)
+	filter = map[string]interface{}{"code": map[string]interface{}{"eq": "UK"}}
+	common.DeleteGqlType(t, "State", filter, 1, nil)
 }

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -70,16 +70,25 @@ func newExecutor(applied *y.WaterMark, conc int) *executor {
 func generateTokenKeys(nq *pb.DirectedEdge, tokenizers []tok.Tokenizer) ([]uint64, error) {
 	keys := make([]uint64, 0, len(tokenizers))
 	errs := make([]string, 0)
-	for _, token := range tokenizers {
-		storageVal := types.Val{
-			Tid:   types.TypeID(nq.GetValueType()),
-			Value: nq.GetValue(),
-		}
+	if len(tokenizers) == 0 {
+		return keys, nil
+	}
 
-		schemaVal, err := types.Convert(storageVal, types.TypeID(nq.GetValueType()))
-		if err != nil {
-			errs = append(errs, err.Error())
-		}
+	storageVal := types.Val{
+		Tid:   types.TypeID(nq.GetValueType()),
+		Value: nq.GetValue(),
+	}
+	stt, ok := schema.State().Get(context.Background(), nq.Attr)
+	if !ok { // predicate definition is not available
+		return keys, nil
+	}
+	schemaVal, err := types.Convert(storageVal, types.TypeID(stt.GetValueType()))
+	// In case value cannot be type casted into correct format, no need
+	// to generate tokens as they will be either invalid or fail.
+	if err != nil {
+		return keys, err
+	}
+	for _, token := range tokenizers {
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token,
 			nq.Lang))
 		if err != nil {
@@ -109,11 +118,11 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 		}
 
 		keys[posting.GetConflictKey(pk, key, edge)] = struct{}{}
-		stt, _ := schema.State().Get(ctx, edge.Attr)
+		hasCount := schema.State().HasCount(ctx, edge.Attr)
 		tokenizers := schema.State().Tokenizer(ctx, edge.Attr)
 		isReverse := schema.State().IsReversed(ctx, edge.Attr)
 
-		if stt.Count || isReverse {
+		if hasCount || isReverse {
 			keys[0] = struct{}{}
 		}
 
@@ -130,9 +139,9 @@ func generateConflictKeys(ctx context.Context, p *subMutation) map[uint64]struct
 }
 
 type mutation struct {
+	inDeg              int64
 	sm                 *subMutation
 	conflictKeys       map[uint64]struct{}
-	inDeg              int
 	dependentMutations map[uint64]*mutation
 	graph              *graph
 }
@@ -185,8 +194,7 @@ func (e *executor) worker(mut *mutation) {
 
 	// Decrease inDeg of dependents. If this mutation unblocks them, queue them.
 	for _, dependent := range mut.dependentMutations {
-		dependent.inDeg -= 1
-		if dependent.inDeg == 0 {
+		if atomic.AddInt64(&dependent.inDeg, -1) == 0 {
 			x.Check(e.throttle.Do())
 			go e.worker(dependent)
 		}
@@ -224,9 +232,9 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			conflictKeys:       conflicts,
 			dependentMutations: make(map[uint64]*mutation),
 			graph:              g,
-			inDeg:              0,
 		}
 
+		isDependent := false
 		g.Lock()
 		for c := range conflicts {
 			l, ok := g.conflicts[c]
@@ -238,7 +246,8 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 			for _, dependent := range l {
 				_, ok := dependent.dependentMutations[m.sm.startTs]
 				if !ok {
-					m.inDeg += 1
+					isDependent = true
+					atomic.AddInt64(&m.inDeg, 1)
 					dependent.dependentMutations[m.sm.startTs] = m
 				}
 			}
@@ -248,7 +257,10 @@ func (e *executor) processMutationCh(ctx context.Context, ch chan *subMutation) 
 		}
 		g.Unlock()
 
-		if m.inDeg == 0 {
+		// If this mutation doesn't depend on any other mutation then process it right now.
+		// Otherwise, don't process it. It will be called for processing when the last mutation on
+		// which it depends is completed.
+		if !isDependent {
 			x.Check(e.throttle.Do())
 			go e.worker(m)
 		}

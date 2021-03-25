@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -26,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	otrace "go.opencensus.io/trace"
-
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/audit"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -38,6 +38,13 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
+)
+
+const (
+	raftDefaults = "idx=1; learner=false;"
 )
 
 type node struct {
@@ -73,8 +80,8 @@ func (n *node) AmLeader() bool {
 	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
-func (n *node) uniqueKey() string {
-	return fmt.Sprintf("z%x-%d", n.Id, n.Rand.Uint64())
+func (n *node) uniqueKey() uint64 {
+	return uint64(n.Id)<<32 | uint64(n.Rand.Uint32())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -118,15 +125,22 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		// unique key is randomly generated key and could have collision.
+		// This is to ensure that even if collision occurs, we retry.
+		for !n.Proposals.Store(key, pctx) {
+			glog.Warningf("Found existing proposal with key: [%v]", key)
+			key = n.uniqueKey()
+		}
 		defer n.Proposals.Delete(key)
-		proposal.Key = key
-		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
+		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
-		data, err := proposal.Marshal()
+		data := make([]byte, 8+proposal.Size())
+		binary.BigEndian.PutUint64(data[:8], key)
+		sz, err := proposal.MarshalToSizedBuffer(data[8:])
 		if err != nil {
 			return err
 		}
+		data = data[:8+sz]
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
@@ -207,18 +221,26 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
-	if !has && len(group.Members) >= n.server.NumReplicas {
+	var numReplicas int
+	for _, gm := range group.Members {
+		if !gm.Learner {
+			numReplicas++
+		}
+	}
+	switch {
+	case has || member.GetLearner():
+		// pass
+	case numReplicas >= n.server.NumReplicas:
 		// We shouldn't allow more members than the number of replicas.
 		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
 
 	// Create a connection to this server.
-	go conn.GetPools().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr, n.server.tlsClientConfig)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
-	if member.GroupId == n.server.nextGroup &&
-		len(group.Members) >= n.server.NumReplicas {
+	if member.GroupId == n.server.nextGroup && numReplicas >= n.server.NumReplicas {
 		n.server.nextGroup++
 	}
 	if member.Leader {
@@ -237,29 +259,35 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	return nil
 }
 
+func (n *node) regenerateChecksum() {
+	n.server.AssertLock()
+	state := n.server.state
+	// Regenerate group checksums. These checksums are solely based on which tablets are being
+	// served by the group. If the tablets that a group is serving changes, and the Alpha does
+	// not know about these changes, then the read request must fail.
+	for _, g := range state.GetGroups() {
+		preds := make([]string, 0, len(g.GetTablets()))
+		for pred := range g.GetTablets() {
+			preds = append(preds, pred)
+		}
+		sort.Strings(preds)
+		g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
+	}
+
+	if n.AmLeader() {
+		// It is important to push something to Oracle updates channel, so the subscribers would
+		// get the latest checksum that we calculated above. Otherwise, if all the queries are
+		// best effort queries which don't create any transaction, then the OracleDelta never
+		// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+		n.server.orc.updates <- &pb.OracleDelta{}
+	}
+}
+
 func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	n.server.AssertLock()
 	state := n.server.state
-	defer func() {
-		// Regenerate group checksums. These checksums are solely based on which tablets are being
-		// served by the group. If the tablets that a group is serving changes, and the Alpha does
-		// not know about these changes, then the read request must fail.
-		for _, g := range state.GetGroups() {
-			preds := make([]string, 0, len(g.GetTablets()))
-			for pred := range g.GetTablets() {
-				preds = append(preds, pred)
-			}
-			sort.Strings(preds)
-			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
-		}
-		if n.AmLeader() {
-			// It is important to push something to Oracle updates channel, so the subscribers would
-			// get the latest checksum that we calculated above. Otherwise, if all the queries are
-			// best effort queries which don't create any transaction, then the OracleDelta never
-			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
-			n.server.orc.updates <- &pb.OracleDelta{}
-		}
-	}()
+
+	defer n.regenerateChecksum()
 
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
@@ -296,19 +324,58 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	return nil
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (string, error) {
+func (n *node) deleteNamespace(delNs uint64) error {
+	n.server.AssertLock()
+	state := n.server.state
+	glog.Infof("Deleting namespace %d", delNs)
+	defer n.regenerateChecksum()
+
+	for _, group := range state.Groups {
+		for pred := range group.Tablets {
+			ns := x.ParseNamespace(pred)
+			if ns == delNs {
+				delete(group.Tablets, pred)
+			}
+		}
+	}
+	return nil
+}
+
+func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
+	existing, err := n.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if existing.Metadata.Index >= snap.Index {
+		glog.V(2).Infof("Skipping snapshot at %d, because found one at %d\n",
+			snap.Index, existing.Metadata.Index)
+		return nil
+	}
+	n.server.orc.purgeBelow(snap.CheckpointTs)
+
+	data, err := snap.Marshal()
+	x.Check(err)
+
+	for {
+		// We should never let CreateSnapshot have an error.
+		err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+		if err == nil {
+			break
+		}
+		glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
+	}
+	return nil
+}
+
+func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
+	x.AssertTrue(len(e.Data) > 0)
+
 	var p pb.ZeroProposal
-	// Raft commits empty entry on becoming a leader.
-	if len(e.Data) == 0 {
-		return p.Key, nil
+	key := binary.BigEndian.Uint64(e.Data[:8])
+	if err := p.Unmarshal(e.Data[8:]); err != nil {
+		return key, err
 	}
-	if err := p.Unmarshal(e.Data); err != nil {
-		return p.Key, err
-	}
-	if p.Key == "" {
-		return p.Key, errInvalidProposal
-	}
-	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
+	span := otrace.FromContext(n.Proposals.Ctx(key))
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -317,13 +384,13 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	state.Counter = e.Index
 	if len(p.Cid) > 0 {
 		if len(state.Cid) > 0 {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.Cid = p.Cid
 	}
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
 		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
@@ -334,26 +401,19 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 				group.SnapshotTs = x.Max(group.SnapshotTs, ts)
 			}
 		}
-		purgeTs := uint64(math.MaxUint64)
-		for _, group := range state.Groups {
-			purgeTs = x.Min(purgeTs, group.SnapshotTs)
-		}
-		if purgeTs < math.MaxUint64 {
-			n.server.orc.purgeBelow(purgeTs)
-		}
 	}
 	if p.Member != nil {
 		if err := n.handleMemberProposal(p.Member); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(p.Tablet); err != nil {
 			span.Annotatef(nil, "While applying tablet proposal: %v", err)
 			glog.Errorf("While applying tablet proposal: %v", err)
-			return p.Key, err
+			return key, err
 		}
 	}
 	if p.License != nil {
@@ -364,30 +424,49 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			numNodes += len(group.GetMembers())
 		}
 		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
-			return p.Key, errInvalidProposal
+			return key, errInvalidProposal
 		}
 		state.License = p.License
 		// Check expiry and set enabled accordingly.
 		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
 		state.License.Enabled = time.Now().UTC().Before(expiry)
+		if state.License.Enabled && opts.audit != nil {
+			if err := audit.InitAuditor(opts.audit, 0, n.Id); err != nil {
+				glog.Errorf("error while initializing audit logs %+v", err)
+			}
+		}
+	}
+	if p.Snapshot != nil {
+		if err := n.applySnapshot(p.Snapshot); err != nil {
+			glog.Errorf("While applying snapshot: %v\n", err)
+		}
+	}
+	if p.DeleteNs != nil {
+		if err := n.deleteNamespace(p.DeleteNs.Namespace); err != nil {
+			glog.Errorf("While deleting namespace %+v", err)
+			return key, err
+		}
 	}
 
 	switch {
-	case p.MaxLeaseId > state.MaxLeaseId:
-		state.MaxLeaseId = p.MaxLeaseId
+	case p.MaxUID > state.MaxUID:
+		state.MaxUID = p.MaxUID
 	case p.MaxTxnTs > state.MaxTxnTs:
 		state.MaxTxnTs = p.MaxTxnTs
-	case p.MaxLeaseId != 0 || p.MaxTxnTs != 0:
+	case p.MaxNsID > state.MaxNsID:
+		state.MaxNsID = p.MaxNsID
+	case p.MaxUID != 0 || p.MaxTxnTs != 0 || p.MaxNsID != 0:
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
-		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
-			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
+		glog.Infof("Could not apply proposal, ignoring: p.MaxUID=%v, p.MaxTxnTs=%v"+
+			"p.MaxNsID=%v, maxUID=%d maxTxnTs=%d maxNsID=%d\n",
+			p.MaxUID, p.MaxTxnTs, p.MaxNsID, state.MaxUID, state.MaxTxnTs, state.MaxNsID)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
-	return p.Key, nil
+	return key, nil
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -408,7 +487,12 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{
+			Id:      rc.Id,
+			Addr:    rc.Addr,
+			GroupId: 0,
+			Learner: rc.IsLearner,
+		}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
@@ -446,6 +530,11 @@ func (n *node) proposeNewCID() {
 	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
 	for n.server.membershipState().Cid == "" {
 		id := uuid.New().String()
+
+		if zeroCid := Zero.Conf.GetString("cid"); len(zeroCid) > 0 {
+			id = zeroCid
+		}
+
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 		if err == nil {
 			glog.Infof("CID set for cluster: %v", id)
@@ -492,12 +581,11 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 		batch = entries[len(entries)-1].Index + 1
 
 		for _, entry := range entries {
-			if entry.Type != raftpb.EntryNormal {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
 			var proposal pb.ZeroProposal
-			err = proposal.Unmarshal(entry.Data)
-			if err != nil {
+			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
 				return false, err
 			}
 			if len(proposal.Cid) > 0 {
@@ -521,11 +609,11 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var state pb.MembershipState
-			x.Check(state.Unmarshal(sp.Data))
-			n.server.SetMembershipState(&state)
+			var zs pb.ZeroSnapshot
+			x.Check(zs.Unmarshal(sp.Data))
+			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, state.Zeros[id].Addr)
+				n.Connect(id, zs.State.Zeros[id].Addr)
 			}
 		}
 
@@ -539,7 +627,7 @@ func (n *node) initAndStartNode() error {
 		}
 
 	case len(opts.peer) > 0:
-		p := conn.GetPools().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer, opts.tlsClientConfig)
 		if p == nil {
 			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}
@@ -647,13 +735,15 @@ func (n *node) checkQuorum(closer *z.Closer) {
 
 func (n *node) snapshotPeriodically(closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			n.trySnapshot(1000)
+			if err := n.calculateAndProposeSnapshot(); err != nil {
+				glog.Errorf("While calculateAndProposeSnapshot: %v", err)
+			}
 
 		case <-closer.HasBeenClosed():
 			return
@@ -661,26 +751,116 @@ func (n *node) snapshotPeriodically(closer *z.Closer) {
 	}
 }
 
-func (n *node) trySnapshot(skip uint64) {
-	existing, err := n.Store.Snapshot()
-	x.Checkf(err, "Unable to get existing snapshot")
-	si := existing.Metadata.Index
-	idx := n.server.SyncedUntil()
-	if idx <= si+skip {
-		return
+// calculateAndProposeSnapshot works by tracking Alpha group leaders' checkpoint timestamps. It then
+// finds the minimum checkpoint ts across these groups, say Tmin.  And then, iterates over Zero Raft
+// logs to determine what all entries we could discard which are below Tmin. It uses that
+// information to calculate a snapshot, which it proposes to other Zeros. When the proposal arrives
+// via Raft, all Zeros apply it to themselves via applySnapshot in raft.Ready.
+func (n *node) calculateAndProposeSnapshot() error {
+	// Only run this on the leader.
+	if !n.AmLeader() {
+		return nil
 	}
 
-	data, err := n.server.MarshalMembershipState()
-	x.Check(err)
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
+	defer span.End()
 
-	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
-	x.Checkf(err, "While creating snapshot")
-	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
+	// We calculate the minimum timestamp from all the group's maxAssigned.
+	discardBelow := uint64(math.MaxUint64)
+	{
+		s := n.server
+		s.RLock()
+		if len(s.state.Groups) != len(s.checkpointPerGroup) {
+			log := fmt.Sprintf("Skipping creating a snapshot."+
+				" Num groups: %d, Num checkpoints: %d\n",
+				len(s.state.Groups), len(s.checkpointPerGroup))
+			s.RUnlock()
+			span.Annotatef(nil, log)
+			glog.Infof(log)
+			return nil
+		}
+		for gid, ts := range s.checkpointPerGroup {
+			span.Annotatef(nil, "Group: %d Checkpoint Ts: %d", gid, ts)
+			discardBelow = x.Min(discardBelow, ts)
+		}
+		s.RUnlock()
+	}
+
+	first, err := n.Store.FirstIndex()
+	if err != nil {
+		span.Annotatef(nil, "FirstIndex error: %v", err)
+		return err
+	}
+	last, err := n.Store.LastIndex()
+	if err != nil {
+		span.Annotatef(nil, "LastIndex error: %v", err)
+		return err
+	}
+
+	span.Annotatef(nil, "First index: %d. Last index: %d. Discard Below Ts: %d",
+		first, last, discardBelow)
+
+	var snapshotIndex uint64
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 256<<20)
+		if err != nil {
+			span.Annotatef(nil, "Error: %v", err)
+			return err
+		}
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
+		}
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
+				continue
+			}
+			var p pb.ZeroProposal
+			if err := p.Unmarshal(entry.Data[8:]); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return err
+			}
+			if txn := p.Txn; txn != nil {
+				if txn.CommitTs > 0 && txn.CommitTs < discardBelow {
+					snapshotIndex = entry.Index
+				}
+			}
+		}
+		batchFirst = entries[len(entries)-1].Index + 1
+	}
+	if snapshotIndex == 0 {
+		return nil
+	}
+	span.Annotatef(nil, "Taking snapshot at index: %d", snapshotIndex)
+	state := n.server.membershipState()
+
+	zs := &pb.ZeroSnapshot{
+		Index:        snapshotIndex,
+		CheckpointTs: discardBelow,
+		State:        state,
+	}
+	glog.V(2).Infof("Proposing snapshot at index: %d, checkpoint ts: %d\n",
+		zs.Index, zs.CheckpointTs)
+	zp := &pb.ZeroProposal{Snapshot: zs}
+	if err = n.proposeAndWait(n.ctx, zp); err != nil {
+		glog.Errorf("Error while proposing snapshot: %v\n", err)
+		span.Annotatef(nil, "Error while proposing snapshot: %v", err)
+		return err
+	}
+	span.Annotatef(nil, "Snapshot proposed: Done")
+	return nil
 }
 
 const tickDur = 100 * time.Millisecond
 
 func (n *node) Run() {
+	// lastLead is for detecting leadership changes
+	//
+	// etcd has a similar mechanism for tracking leader changes, with their
+	// raftReadyHandler.getLead() function that returns the previous leader
+	lastLead := uint64(math.MaxUint64)
+
 	var leader bool
 	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
@@ -733,6 +913,22 @@ func (n *node) Run() {
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
+				// group id hardcoded as 0
+				ctx, _ := tag.New(n.ctx, tag.Upsert(x.KeyGroup, "0"))
+				if rd.SoftState.Lead != lastLead {
+					lastLead = rd.SoftState.Lead
+					ostats.Record(ctx, x.RaftLeaderChanges.M(1))
+				}
+				if rd.SoftState.Lead != raft.None {
+					ostats.Record(ctx, x.RaftHasLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftHasLeader.M(0))
+				}
+				if leader {
+					ostats.Record(ctx, x.RaftIsLeader.M(1))
+				} else {
+					ostats.Record(ctx, x.RaftIsLeader.M(0))
+				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
@@ -746,17 +942,20 @@ func (n *node) Run() {
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
 			span.Annotatef(nil, "Saved to storage")
-			if x.WorkerConfig.HardSync && rd.MustSync {
+			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
+					time.Sleep(10 * time.Millisecond)
+					continue
 				}
 				timer.Record("sync")
+				break
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state pb.MembershipState
-				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.SetMembershipState(&state)
+				var zs pb.ZeroSnapshot
+				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				n.server.SetMembershipState(zs.State)
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -766,12 +965,25 @@ func (n *node) Run() {
 					n.applyConfChange(entry)
 					glog.Infof("Done applying conf change at %#x", n.Id)
 
+				case len(entry.Data) == 0:
+					// Raft commits empty entry on becoming a leader.
+					// Do nothing.
+
 				case entry.Type == raftpb.EntryNormal:
+					start := time.Now()
 					key, err := n.applyProposal(entry)
 					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
+					if took := time.Since(start); took > time.Second {
+						var p pb.ZeroProposal
+						// Raft commits empty entry on becoming a leader.
+						if err := p.Unmarshal(entry.Data[8:]); err == nil {
+							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
+								took.Round(time.Second), p)
+						}
+					}
 
 				default:
 					glog.Infof("Unhandled entry: %+v\n", entry)
@@ -797,8 +1009,8 @@ func (n *node) Run() {
 			if timer.Total() > 5*tickDur {
 				glog.Warningf(
 					"Raft.Ready took too long to process: %s."+
-						" Num entries: %d. MustSync: %v",
-					timer.String(), len(rd.Entries), rd.MustSync)
+						" Num entries: %d. Num committed entries: %d. MustSync: %v",
+					timer.String(), len(rd.Entries), len(rd.CommittedEntries), rd.MustSync)
 			}
 
 			// Apply license when I am the leader.

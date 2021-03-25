@@ -22,10 +22,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
 	"gopkg.in/yaml.v2"
 )
 
@@ -85,65 +87,128 @@ type Starship {
 
 	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
-	sch, err := FromString(schHandler.GQLSchema())
+	sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	s, ok := sch.(*schema)
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "Author.name",
-		"dob":        "Author.dob",
-		"reputation": "Author.reputation",
-		"posts":      "Author.posts",
+		"name":           "Author.name",
+		"dob":            "Author.dob",
+		"reputation":     "Author.reputation",
+		"posts":          "Author.posts",
+		"postsAggregate": "Author.postsAggregate",
+	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
 	}
 	post := map[string]string{
 		"postType": "Post.postType",
 		"author":   "Post.author",
 	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
+	}
 	character := map[string]string{
 		"name":      "Character.name",
 		"appearsIn": "Character.appearsIn",
 	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
+	}
+	employee := map[string]string{
+		"ename": "Employee.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
+	}
 	human := map[string]string{
-		"ename":        "Employee.ename",
-		"name":         "Character.name",
-		"appearsIn":    "Character.appearsIn",
-		"starships":    "Human.starships",
-		"totalCredits": "Human.totalCredits",
+		"ename":              "Employee.ename",
+		"name":               "Character.name",
+		"appearsIn":          "Character.appearsIn",
+		"starships":          "Human.starships",
+		"totalCredits":       "Human.totalCredits",
+		"starshipsAggregate": "Human.starshipsAggregate",
+	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
 	}
 	droid := map[string]string{
 		"name":            "Character.name",
 		"appearsIn":       "Character.appearsIn",
 		"primaryFunction": "Droid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
 	starship := map[string]string{
 		"name":   "Starship.name",
 		"length": "Starship.length",
 	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
+	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "Employee.ename",
-		},
-		"Character":              character,
-		"UpdateCharacterPayload": character,
-		"DeleteCharacterPayload": character,
-		"Human":                  human,
-		"UpdateHumanPayload":     human,
-		"DeleteHumanPayload":     human,
-		"Droid":                  droid,
-		"UpdateDroidPayload":     droid,
-		"DeleteDroidPayload":     droid,
-		"Starship":               starship,
-		"UpdateStarshipPayload":  starship,
-		"DeleteStarshipPayload":  starship,
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
+		"Character":                character,
+		"UpdateCharacterPayload":   character,
+		"DeleteCharacterPayload":   character,
+		"Human":                    human,
+		"UpdateHumanPayload":       human,
+		"DeleteHumanPayload":       human,
+		"Droid":                    droid,
+		"UpdateDroidPayload":       droid,
+		"DeleteDroidPayload":       droid,
+		"UpdateEmployeePayload":    employee,
+		"DeleteEmployeePayload":    employee,
+		"Starship":                 starship,
+		"UpdateStarshipPayload":    starship,
+		"DeleteStarshipPayload":    starship,
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
@@ -207,65 +272,128 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 
 	schHandler, errs := NewHandler(schemaStr, false)
 	require.NoError(t, errs)
-	sch, err := FromString(schHandler.GQLSchema())
+	sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	s, ok := sch.(*schema)
 	require.True(t, ok, "expected to be able to convert sch to internal schema type")
 
 	author := map[string]string{
-		"name":       "dgraph.author.name",
-		"dob":        "dgraph.author.dob",
-		"reputation": "dgraph.author.reputation",
-		"posts":      "dgraph.author.posts",
+		"name":           "dgraph.author.name",
+		"dob":            "dgraph.author.dob",
+		"reputation":     "dgraph.author.reputation",
+		"posts":          "dgraph.author.posts",
+		"postsAggregate": "dgraph.author.postsAggregate",
+	}
+	authorAggregateResult := map[string]string{
+		"count":         "AuthorAggregateResult.count",
+		"dobMax":        "AuthorAggregateResult.dobMax",
+		"dobMin":        "AuthorAggregateResult.dobMin",
+		"nameMax":       "AuthorAggregateResult.nameMax",
+		"nameMin":       "AuthorAggregateResult.nameMin",
+		"reputationAvg": "AuthorAggregateResult.reputationAvg",
+		"reputationMax": "AuthorAggregateResult.reputationMax",
+		"reputationMin": "AuthorAggregateResult.reputationMin",
+		"reputationSum": "AuthorAggregateResult.reputationSum",
 	}
 	post := map[string]string{
 		"postType": "dgraph.post_type",
 		"author":   "dgraph.post_author",
 	}
+	postAggregateResult := map[string]string{
+		"count": "PostAggregateResult.count",
+	}
 	character := map[string]string{
 		"name":      "performance.character.name",
 		"appearsIn": "appears_in",
 	}
+	characterAggregateResult := map[string]string{
+		"count":   "CharacterAggregateResult.count",
+		"nameMax": "CharacterAggregateResult.nameMax",
+		"nameMin": "CharacterAggregateResult.nameMin",
+	}
 	human := map[string]string{
-		"ename":        "dgraph.employee.en.ename",
-		"name":         "performance.character.name",
-		"appearsIn":    "appears_in",
-		"starships":    "Human.starships",
-		"totalCredits": "credits",
+		"ename":              "dgraph.employee.en.ename",
+		"name":               "performance.character.name",
+		"appearsIn":          "appears_in",
+		"starships":          "Human.starships",
+		"totalCredits":       "credits",
+		"starshipsAggregate": "Human.starshipsAggregate",
+	}
+	humanAggregateResult := map[string]string{
+		"count":           "HumanAggregateResult.count",
+		"enameMax":        "HumanAggregateResult.enameMax",
+		"enameMin":        "HumanAggregateResult.enameMin",
+		"nameMax":         "HumanAggregateResult.nameMax",
+		"nameMin":         "HumanAggregateResult.nameMin",
+		"totalCreditsAvg": "HumanAggregateResult.totalCreditsAvg",
+		"totalCreditsMax": "HumanAggregateResult.totalCreditsMax",
+		"totalCreditsMin": "HumanAggregateResult.totalCreditsMin",
+		"totalCreditsSum": "HumanAggregateResult.totalCreditsSum",
 	}
 	droid := map[string]string{
 		"name":            "performance.character.name",
 		"appearsIn":       "appears_in",
 		"primaryFunction": "roboDroid.primaryFunction",
 	}
+	droidAggregateResult := map[string]string{
+		"count":              "DroidAggregateResult.count",
+		"nameMax":            "DroidAggregateResult.nameMax",
+		"nameMin":            "DroidAggregateResult.nameMin",
+		"primaryFunctionMax": "DroidAggregateResult.primaryFunctionMax",
+		"primaryFunctionMin": "DroidAggregateResult.primaryFunctionMin",
+	}
+	employee := map[string]string{
+		"ename": "dgraph.employee.en.ename",
+	}
+	employeeAggregateResult := map[string]string{
+		"count":    "EmployeeAggregateResult.count",
+		"enameMax": "EmployeeAggregateResult.enameMax",
+		"enameMin": "EmployeeAggregateResult.enameMin",
+	}
 	starship := map[string]string{
 		"name":   "star.ship.name",
 		"length": "star.ship.length",
 	}
+	starshipAggregateResult := map[string]string{
+		"count":     "StarshipAggregateResult.count",
+		"lengthAvg": "StarshipAggregateResult.lengthAvg",
+		"lengthMax": "StarshipAggregateResult.lengthMax",
+		"lengthMin": "StarshipAggregateResult.lengthMin",
+		"lengthSum": "StarshipAggregateResult.lengthSum",
+		"nameMax":   "StarshipAggregateResult.nameMax",
+		"nameMin":   "StarshipAggregateResult.nameMin",
+	}
 
 	expected := map[string]map[string]string{
-		"Author":              author,
-		"UpdateAuthorPayload": author,
-		"DeleteAuthorPayload": author,
-		"Post":                post,
-		"UpdatePostPayload":   post,
-		"DeletePostPayload":   post,
-		"Employee": map[string]string{
-			"ename": "dgraph.employee.en.ename",
-		},
-		"Character":              character,
-		"UpdateCharacterPayload": character,
-		"DeleteCharacterPayload": character,
-		"Human":                  human,
-		"UpdateHumanPayload":     human,
-		"DeleteHumanPayload":     human,
-		"Droid":                  droid,
-		"UpdateDroidPayload":     droid,
-		"DeleteDroidPayload":     droid,
-		"Starship":               starship,
-		"UpdateStarshipPayload":  starship,
-		"DeleteStarshipPayload":  starship,
+		"Author":                   author,
+		"UpdateAuthorPayload":      author,
+		"DeleteAuthorPayload":      author,
+		"Post":                     post,
+		"UpdatePostPayload":        post,
+		"DeletePostPayload":        post,
+		"Employee":                 employee,
+		"DeleteEmployeePayload":    employee,
+		"UpdateEmployeePayload":    employee,
+		"Character":                character,
+		"UpdateCharacterPayload":   character,
+		"DeleteCharacterPayload":   character,
+		"Human":                    human,
+		"UpdateHumanPayload":       human,
+		"DeleteHumanPayload":       human,
+		"Droid":                    droid,
+		"UpdateDroidPayload":       droid,
+		"DeleteDroidPayload":       droid,
+		"Starship":                 starship,
+		"UpdateStarshipPayload":    starship,
+		"DeleteStarshipPayload":    starship,
+		"AuthorAggregateResult":    authorAggregateResult,
+		"CharacterAggregateResult": characterAggregateResult,
+		"DroidAggregateResult":     droidAggregateResult,
+		"EmployeeAggregateResult":  employeeAggregateResult,
+		"HumanAggregateResult":     humanAggregateResult,
+		"PostAggregateResult":      postAggregateResult,
+		"StarshipAggregateResult":  starshipAggregateResult,
 	}
 
 	if diff := cmp.Diff(expected, s.dgraphPredicate); diff != "" {
@@ -280,7 +408,7 @@ func TestCheckNonNulls(t *testing.T) {
 		req: String!
 		notReq: String
 		alsoReq: String!
-	}`)
+	}`, x.GalaxyNamespace)
 	require.NoError(t, err)
 
 	tcases := map[string]struct {
@@ -456,14 +584,7 @@ func TestSubstituteVarsInBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			var templatePtr *interface{}
-			if test.template == nil {
-				templatePtr = nil
-			} else {
-				templatePtr = &test.template
-			}
-			SubstituteVarsInBody(templatePtr, test.variables)
-			require.Equal(t, test.expected, test.template)
+			require.Equal(t, test.expected, SubstituteVarsInBody(test.template, test.variables))
 		})
 	}
 }
@@ -577,7 +698,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		},
 		{
 			"parses body template with an array of object and hardcoded scalars correctly",
-			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5, 
+			`{ author: $id, admin: false, post: { id: $postID, rating: 4.5,
 				comments: [{ text: $text, type: "hidden" }] }, age: 23, meta: null}`,
 			map[string]interface{}{"author": "$id", "admin": false,
 				"post": map[string]interface{}{"id": "$postID", "rating": 4.5,
@@ -619,7 +740,7 @@ func TestParseBodyTemplate(t *testing.T) {
 				if b == nil {
 					require.Nil(t, test.expected)
 				} else {
-					require.Equal(t, test.expected, *b)
+					require.Equal(t, test.expected, b)
 				}
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
@@ -653,7 +774,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute query params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies?id=$ids&name=$names&check=$check",
 			"http://myapi.com/favMovies?check=1&check=3.14&check=test&id=1&id=2&name=M1&name=M2",
@@ -698,7 +819,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		},
 		{
 			"Substitute path params for variables with array value",
-			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+			map[string]interface{}{"ids": []interface{}{1, 2}, "names": []interface{}{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
 			"http://myapi.com/favMovies/$ids/$names/$check",
 			"http://myapi.com/favMovies/1%2C2/M1%2CM2/1%2C3.14%2Ctest",
@@ -797,7 +918,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			schHandler, errs := NewHandler(tcase.GQLSchema, false)
 			require.NoError(t, errs)
-			sch, err := FromString(schHandler.GQLSchema())
+			sch, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 
 			var vars map[string]interface{}
@@ -837,11 +958,11 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 
 			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema, false)
 			require.NoError(t, errs)
-			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
+			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
 
 			// Validate the generated query against the remote schema.
-			tmpl, ok := (*c.Template).(map[string]interface{})
+			tmpl, ok := (c.Template).(map[string]interface{})
 			require.True(t, ok)
 
 			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
@@ -874,7 +995,7 @@ func TestAllowedHeadersList(t *testing.T) {
 		expected  string
 	}{
 		{
-			"auth header present in allowed headers list",
+			"auth header present in extraCorsHeaders headers list",
 			`
 	 type X @auth(
         query: {rule: """
@@ -897,9 +1018,10 @@ func TestAllowedHeadersList(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			schHandler, errs := NewHandler(test.schemaStr, false)
 			require.NoError(t, errs)
-			_, err := FromString(schHandler.GQLSchema())
+			_, err := FromString(schHandler.GQLSchema(), x.GalaxyNamespace)
 			require.NoError(t, err)
-			require.True(t, strings.Contains(hc.allowed, test.expected))
+			require.Equal(t, strings.Join([]string{x.AccessControlAllowedHeaders, test.expected},
+				","), schHandler.MetaInfo().AllowedCorsHeaders())
 		})
 	}
 }
@@ -986,11 +1108,12 @@ func TestCustomLogicHeaders(t *testing.T) {
 
 func TestParseSecrets(t *testing.T) {
 	tcases := []struct {
-		name               string
-		schemaStr          string
-		expectedSecrets    map[string]string
-		expectedAuthHeader string
-		err                error
+		name                   string
+		schemaStr              string
+		expectedSecrets        map[string]string
+		expectedAuthHeader     string
+		expectedAllowedOrigins []string
+		err                    error
 	}{
 		{"should be able to parse secrets",
 			`
@@ -1001,10 +1124,11 @@ func TestParseSecrets(t *testing.T) {
 
 			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
-			`,
+		`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
+			nil,
 			nil,
 		},
 		{"should be able to parse secret where schema also has other comments.",
@@ -1018,24 +1142,26 @@ func TestParseSecrets(t *testing.T) {
 
 		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 		# random comment
-		`,
+	`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"",
+			nil,
 			nil,
 		},
 		{
 			"should throw an error if the secret is not in the correct format",
 			`
-			type User {
-				id: ID!
-				name: String!
-			}
+		type User {
+			id: ID!
+			name: String!
+		}
 
-			# Dgraph.Secret RANDOM_TOKEN
-			`,
+		# Dgraph.Secret RANDOM_TOKEN
+		`,
 			nil,
 			"",
+			nil,
 			errors.New("incorrect format for specifying Dgraph secret found for " +
 				"comment: `# Dgraph.Secret RANDOM_TOKEN`, it should " +
 				"be `# Dgraph.Secret key value`"),
@@ -1056,6 +1182,7 @@ func TestParseSecrets(t *testing.T) {
 				"STRIPE_API_KEY": "stripe-api-key-value"},
 			"X-Test-Dgraph",
 			nil,
+			nil,
 		},
 		{
 			"Dgraph.Authorization old format error",
@@ -1071,6 +1198,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
+			nil,
 			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
 		},
 		{
@@ -1086,6 +1214,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
+			nil,
 			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
 				`, found second mention: # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}`),
 		},
@@ -1101,7 +1230,23 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
-			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl` `Algo` `Header` `Namespace`"),
+			nil,
+			errors.New("required field missing in Dgraph.Authorization: `Verification key`/`JWKUrl`/`JWKUrls` `Algo` `Header` `Namespace`"),
+		},
+		{
+			"Should be able to parse  Dgraph.Authorization irrespective of spacing between # and Dgraph.Authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			#Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+			nil,
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
@@ -1115,6 +1260,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			map[string]string{},
 			"X-Test-Auth",
+			nil,
 			nil,
 		},
 		{
@@ -1130,19 +1276,78 @@ func TestParseSecrets(t *testing.T) {
 			map[string]string{},
 			"X-Test-Auth",
 			nil,
+			nil,
+		},
+		{
+			"should parse Dgraph.Allow-Origin correctly",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			# Dgraph.Allow-Origin   "https://dgraph.io"
+			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+			`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token"},
+			"X-Test-Auth",
+			[]string{"https://dgraph.io"},
+			nil,
+		},
+		{
+			"should parse multiple Dgraph.Allow-Origin correctly",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Allow-Origin   "https://dgraph.io"
+			# Dgraph.Allow-Origin "https://developer.mozilla.org"
+			`,
+			map[string]string{},
+			"",
+			[]string{"https://dgraph.io", "https://developer.mozilla.org"},
+			nil,
+		},
+		{
+			"should throw error if Dgraph.Allow-Origin has incorrect format",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Allow-Origin 1"https://dgraph.io"
+			`,
+			map[string]string{},
+			"",
+			nil,
+			errors.New("incorrect format for specifying Dgraph.Allow-Origin found for " +
+				"comment: `# Dgraph.Allow-Origin 1\"https://dgraph.io\"`, it should " +
+				"be `# Dgraph.Allow-Origin \"http://example.com\"`"),
 		},
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			s, authMeta, err := parseSecrets(test.schemaStr)
+			meta, err := parseMetaInfo(test.schemaStr)
 			if test.err != nil || err != nil {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
-			require.Equal(t, test.expectedSecrets, s)
+			require.NotNil(t, meta)
+			require.Len(t, meta.secrets, len(test.expectedSecrets))
+			for k, v := range test.expectedSecrets {
+				require.Equal(t, v, string(meta.secrets[k]))
+			}
+			require.Len(t, meta.allowedCorsOrigins, len(test.expectedAllowedOrigins))
+			for _, k := range test.expectedAllowedOrigins {
+				require.True(t, meta.allowedCorsOrigins[k])
+			}
 			if test.expectedAuthHeader != "" {
-				require.NotNil(t, authMeta)
-				require.Equal(t, test.expectedAuthHeader, authMeta.Header)
+				require.NotNil(t, meta.authMeta)
+				require.Equal(t, test.expectedAuthHeader, meta.authMeta.Header)
 			}
 		})
 	}

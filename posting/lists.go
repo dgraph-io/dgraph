@@ -19,22 +19,15 @@ package posting
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -43,90 +36,6 @@ import (
 const (
 	mb = 1 << 20
 )
-
-func getMemUsage() int {
-	if runtime.GOOS != "linux" {
-		pid := os.Getpid()
-		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
-		c1, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			// In case of error running the command, resort to go way
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := ms.Alloc
-			return int(megs)
-		}
-
-		rss := strings.Split(string(c1), " ")[0]
-		kbs, err := strconv.Atoi(rss)
-		if err != nil {
-			return 0
-		}
-
-		megs := kbs << 10
-		return megs
-	}
-
-	contents, err := ioutil.ReadFile("/proc/self/stat")
-	if err != nil {
-		glog.Errorf("Can't read the proc file. Err: %v\n", err)
-		return 0
-	}
-
-	cont := strings.Split(string(contents), " ")
-	// 24th entry of the file is the RSS which denotes the number of pages
-	// used by the process.
-	if len(cont) < 24 {
-		glog.Errorln("Error in RSS from stat")
-		return 0
-	}
-
-	rss, err := strconv.Atoi(cont[23])
-	if err != nil {
-		glog.Errorln(err)
-		return 0
-	}
-
-	return rss * os.Getpagesize()
-}
-
-func updateMemoryMetrics(lc *z.Closer) {
-	defer lc.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	update := func() {
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-
-		inUse := ms.HeapInuse + ms.StackInuse
-		// From runtime/mstats.go:
-		// HeapIdle minus HeapReleased estimates the amount of memory
-		// that could be returned to the OS, but is being retained by
-		// the runtime so it can grow the heap without requesting more
-		// memory from the OS. If this difference is significantly
-		// larger than the heap size, it indicates there was a recent
-		// transient spike in live heap size.
-		idle := ms.HeapIdle - ms.HeapReleased
-
-		ostats.Record(context.Background(),
-			x.MemoryInUse.M(int64(inUse)),
-			x.MemoryIdle.M(int64(idle)),
-			x.MemoryProc.M(int64(getMemUsage())))
-	}
-	// Call update immediately so that Dgraph reports memory stats without
-	// having to wait for the first tick.
-	update()
-
-	for {
-		select {
-		case <-lc.HasBeenClosed():
-			return
-		case <-ticker.C:
-			update()
-		}
-	}
-}
 
 var (
 	pstore *badger.DB
@@ -138,7 +47,7 @@ var (
 func Init(ps *badger.DB, cacheSize int64) {
 	pstore = ps
 	closer = z.NewCloser(1)
-	go updateMemoryMetrics(closer)
+	go x.MonitorMemoryMetrics(closer)
 	// Initialize cache.
 	if cacheSize == 0 {
 		return
@@ -168,6 +77,10 @@ func Init(ps *badger.DB, cacheSize int64) {
 			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
 	}()
+}
+
+func UpdateMaxCost(maxCost int64) {
+	lCache.UpdateMaxCost(maxCost)
 }
 
 // Cleanup waits until the closer has finished processing.
@@ -241,9 +154,19 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
-	if lc.plists == nil {
-		return getNew(key, pstore, lc.startTs)
+	getNewPlistNil := func() (*List, error) {
+		lc.RLock()
+		defer lc.RUnlock()
+		if lc.plists == nil {
+			return getNew(key, pstore, lc.startTs)
+		}
+		return nil, nil
 	}
+
+	if l, err := getNewPlistNil(); l != nil || err != nil {
+		return l, err
+	}
+
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil

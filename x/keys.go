@@ -18,7 +18,9 @@ package x
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -49,7 +51,77 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
+	// GalaxyNamespace is the default namespace name.
+	GalaxyNamespace = uint64(0)
+	// IgnoreBytes is the byte range which will be ignored while prefix match in subscription.
+	IgnoreBytes = "1-8"
+	// NamespaceOffset is the offset in badger key from which the next 8 bytes contain namespace.
+	NamespaceOffset = 1
 )
+
+func NamespaceToBytes(ns uint64) []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, ns)
+	return buf
+}
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(ns uint64, attr string) string {
+	return string(NamespaceToBytes(ns)) + attr
+}
+
+func NamespaceAttrList(ns uint64, preds []string) []string {
+	var resp []string
+	for _, pred := range preds {
+		resp = append(resp, NamespaceAttr(ns, pred))
+	}
+	return resp
+}
+
+func GalaxyAttr(attr string) string {
+	return NamespaceAttr(GalaxyNamespace, attr)
+}
+
+// ParseNamespaceAttr returns the namespace and attr from the given value.
+func ParseNamespaceAttr(attr string) (uint64, string) {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8])), attr[8:]
+}
+
+func ParseNamespaceBytes(attr string) ([]byte, string) {
+	AssertTrue(len(attr) >= 8)
+	return []byte(attr[:8]), attr[8:]
+}
+
+// ParseAttr returns the attr from the given value.
+func ParseAttr(attr string) string {
+	AssertTrue(len(attr) >= 8)
+	return attr[8:]
+}
+
+// ParseNamespace returns the namespace from the given value.
+func ParseNamespace(attr string) uint64 {
+	AssertTrue(len(attr) >= 8)
+	return binary.BigEndian.Uint64([]byte(attr[:8]))
+}
+
+func ParseAttrList(attrs []string) []string {
+	var resp []string
+	for _, attr := range attrs {
+		resp = append(resp, ParseAttr(attr))
+	}
+	return resp
+}
+
+func IsReverseAttr(attr string) bool {
+	AssertTrue(len(attr) >= 8)
+	return attr[8] == '~'
+}
+
+func FormatNsAttr(attr string) string {
+	ns, attr := ParseNamespaceAttr(attr)
+	return strconv.FormatUint(ns, 10) + "-" + attr
+}
 
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
@@ -69,7 +141,10 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 
 	buf := make([]byte, totalLen)
 	buf[0] = typeByte
-	rest := buf[1:]
+	// Separate namespace and attribute from attr and write namespace in the first 8 bytes of key.
+	namespace, attr := ParseNamespaceBytes(attr)
+	AssertTrue(copy(buf[1:], namespace) == 8)
+	rest := buf[9:]
 
 	writeAttr(rest, attr)
 	return buf
@@ -162,6 +237,7 @@ func IndexKey(attr, term string) []byte {
 	rest[0] = ByteIndex
 
 	rest = rest[1:]
+	AssertTrue(len(rest) == len(term))
 	AssertTrue(len(term) == copy(rest, term))
 	return buf
 }
@@ -264,13 +340,16 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 func (p ParsedKey) SkipPredicate() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = 0xFF
 	return buf
 }
 
+// TODO(Naman): Remove these functions as they are unused.
 // SkipSchema returns the first key after all the schema keys.
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
@@ -289,8 +368,10 @@ func (p ParsedKey) SkipType() []byte {
 func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteData
 	return buf
@@ -300,8 +381,10 @@ func (p ParsedKey) DataPrefix() []byte {
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = DefaultPrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteIndex
 	return buf
@@ -311,8 +394,10 @@ func (p ParsedKey) IndexPrefix() []byte {
 func (p ParsedKey) ReversePrefix() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = DefaultPrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	k[0] = ByteReverse
 	return buf
@@ -322,8 +407,10 @@ func (p ParsedKey) ReversePrefix() []byte {
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
+	ns, attr := ParseNamespaceBytes(p.Attr)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	rest := buf[9:]
+	k := writeAttr(rest, attr)
 	AssertTrue(len(k) == 1)
 	if reverse {
 		k[0] = ByteCountRev
@@ -335,8 +422,10 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 
 // ToBackupKey returns the key in the format used for writing backups.
 func (p ParsedKey) ToBackupKey() *pb.BackupKey {
+	ns, attr := ParseNamespaceAttr(p.Attr)
 	key := pb.BackupKey{}
-	key.Attr = p.Attr
+	key.Namespace = ns
+	key.Attr = attr
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
 	key.Term = p.Term
@@ -358,6 +447,7 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	case p.IsType():
 		key.Type = pb.BackupKey_TYPE
 	}
+
 	return &key
 }
 
@@ -367,22 +457,24 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 		return nil
 	}
 
+	attr := NamespaceAttr(backupKey.Namespace, backupKey.Attr)
+
 	var key []byte
 	switch backupKey.Type {
 	case pb.BackupKey_DATA:
-		key = DataKey(backupKey.Attr, backupKey.Uid)
+		key = DataKey(attr, backupKey.Uid)
 	case pb.BackupKey_INDEX:
-		key = IndexKey(backupKey.Attr, backupKey.Term)
+		key = IndexKey(attr, backupKey.Term)
 	case pb.BackupKey_REVERSE:
-		key = ReverseKey(backupKey.Attr, backupKey.Uid)
+		key = ReverseKey(attr, backupKey.Uid)
 	case pb.BackupKey_COUNT:
-		key = CountKey(backupKey.Attr, backupKey.Count, false)
+		key = CountKey(attr, backupKey.Count, false)
 	case pb.BackupKey_COUNT_REV:
-		key = CountKey(backupKey.Attr, backupKey.Count, true)
+		key = CountKey(attr, backupKey.Count, true)
 	case pb.BackupKey_SCHEMA:
-		key = SchemaKey(backupKey.Attr)
+		key = SchemaKey(attr)
 	case pb.BackupKey_TYPE:
-		key = TypeKey(backupKey.Attr)
+		key = TypeKey(attr)
 	}
 
 	if backupKey.StartUid > 0 {
@@ -411,8 +503,18 @@ func TypePrefix() []byte {
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
 	buf[0] = DefaultPrefix
-	k := writeAttr(buf[1:], predicate)
+	ns, predicate := ParseNamespaceBytes(predicate)
+	AssertTrue(copy(buf[1:], ns) == 8)
+	k := writeAttr(buf[9:], predicate)
 	AssertTrue(len(k) == 0)
+	return buf
+}
+
+// DataPrefix returns the prefix for all data keys belonging to this namespace.
+func DataPrefix(ns uint64) []byte {
+	buf := make([]byte, 1+8)
+	buf[0] = DefaultPrefix
+	binary.BigEndian.PutUint64(buf[1:], ns)
 	return buf
 }
 
@@ -438,27 +540,28 @@ func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
-	if len(key) == 0 {
-		return p, errors.New("0 length key")
+	if len(key) < 9 {
+		return p, errors.New("Key length less than 9")
 	}
-
 	p.bytePrefix = key[0]
+	namespace := key[1:9]
+	key = key[9:]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
-	p.HasStartUid = key[0] == ByteSplit
+	p.HasStartUid = p.bytePrefix == ByteSplit
 
 	if len(key) < 3 {
 		return p, errors.Errorf("Invalid format for key %v", key)
 	}
-	sz := int(binary.BigEndian.Uint16(key[1:3]))
-	k := key[3:]
+	sz := int(binary.BigEndian.Uint16(key[:2]))
+	k := key[2:]
 
 	if len(k) < sz {
 		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
 	}
-	p.Attr = string(k[:sz])
+	p.Attr = string(namespace) + string(k[:sz])
 	k = k[sz:]
 
 	switch p.bytePrefix {
@@ -526,6 +629,18 @@ func Parse(key []byte) (ParsedKey, error) {
 	return p, nil
 }
 
+func IsDropOpKey(key []byte) (bool, error) {
+	pk, err := Parse(key)
+	if err != nil {
+		return false, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+	}
+
+	if pk.IsData() && ParseAttr(pk.Attr) == "dgraph.drop.op" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
@@ -540,30 +655,35 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.acl.rule":        {},
 }
 
+// TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
+// predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
+// by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
 var graphqlReservedPredicate = map[string]struct{}{
-	"dgraph.graphql.xid":               {},
-	"dgraph.graphql.schema":            {},
-	"dgraph.cors":                      {},
-	"dgraph.graphql.schema_history":    {},
-	"dgraph.graphql.schema_created_at": {},
+	"dgraph.graphql.xid":     {},
+	"dgraph.graphql.schema":  {},
+	"dgraph.drop.op":         {},
+	"dgraph.graphql.p_query": {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
 // predicate is a predicate that has a special meaning in Dgraph and its query
-// language and should not be allowed as a user-defined  predicate.
+// language and should not be allowed either as a user-defined predicate or as a
+// predicate in initial internal schema.
 var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }
 
 var preDefinedTypeMap = map[string]struct{}{
-	"dgraph.graphql":         {},
-	"dgraph.type.User":       {},
-	"dgraph.type.Group":      {},
-	"dgraph.type.Rule":       {},
-	"dgraph.graphql.history": {},
+	"dgraph.graphql":                 {},
+	"dgraph.type.User":               {},
+	"dgraph.type.Group":              {},
+	"dgraph.type.Rule":               {},
+	"dgraph.graphql.persisted_query": {},
 }
 
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
+// These are a subset of PreDefined predicates, so follow all their properties. In addition,
+// the value for these predicates is also not allowed to be mutated directly by the users.
 func IsGraphqlReservedPredicate(pred string) bool {
 	_, ok := graphqlReservedPredicate[pred]
 	return ok
@@ -586,10 +706,12 @@ func IsGraphqlReservedPredicate(pred string) bool {
 // 	2. dgraph.blah (reserved = true,  pre_defined = false)
 // 	3. person.name (reserved = false, pre_defined = false)
 func IsReservedPredicate(pred string) bool {
-	return isReservedName(pred)
+	return isReservedName(ParseAttr(pred))
 }
 
-// IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally.
+// IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally
+// in the initial schema. These are not allowed to be dropped, as well as any schema update which
+// is different than the initial internal schema is also not allowed for these.
 // For example, `dgraph.type` or ACL predicates or GraphQL predicates are defined in the initial
 // internal schema.
 //
@@ -599,6 +721,7 @@ func IsReservedPredicate(pred string) bool {
 //
 // Pre-defined predicates are subset of reserved predicates.
 func IsPreDefinedPredicate(pred string) bool {
+	pred = ParseAttr(pred)
 	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
@@ -612,10 +735,10 @@ func IsAclPredicate(pred string) bool {
 
 // StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func StarAllPredicates() []string {
+func StarAllPredicates(namespace uint64) []string {
 	preds := make([]string, 0, len(starAllPredicateMap))
 	for pred := range starAllPredicateMap {
-		preds = append(preds, pred)
+		preds = append(preds, NamespaceAttr(namespace, pred))
 	}
 	return preds
 }
@@ -631,7 +754,7 @@ func AllACLPredicates() []string {
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
 // Currently, `uid` is the only such candidate.
 func IsInternalPredicate(pred string) bool {
-	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	_, ok := internalPredicateMap[strings.ToLower(ParseAttr(pred))]
 	return ok
 }
 
@@ -647,7 +770,7 @@ func IsInternalPredicate(pred string) bool {
 // When critical, use IsPreDefinedType(typ string) to find out whether the typ was
 // actually defined internally or not.
 func IsReservedType(typ string) bool {
-	return isReservedName(typ)
+	return isReservedName(ParseAttr(typ))
 }
 
 // IsPreDefinedType returns true only if the typ has been defined by dgraph internally.
@@ -659,7 +782,7 @@ func IsReservedType(typ string) bool {
 //
 // Pre-defined types are subset of reserved types.
 func IsPreDefinedType(typ string) bool {
-	_, ok := preDefinedTypeMap[typ]
+	_, ok := preDefinedTypeMap[ParseAttr(typ)]
 	return ok
 }
 

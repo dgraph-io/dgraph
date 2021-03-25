@@ -28,18 +28,18 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/testutil"
+	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/stretchr/testify/require"
-	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
 )
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 
 type QueryRewritingCase struct {
-	Name      string
-	GQLQuery  string
-	Variables map[string]interface{}
-	DGQuery   string
+	Name         string
+	GQLQuery     string
+	GQLVariables string
+	DGQuery      string
 }
 
 func TestQueryRewriting(t *testing.T) {
@@ -56,11 +56,15 @@ func TestQueryRewriting(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err := json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,
-					Variables: tcase.Variables,
+					Variables: vars,
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
@@ -156,11 +160,10 @@ func TestCustomHTTPQuery(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPQueryResolver(client, StdQueryCompletion())
+			resolver := NewHTTPQueryResolver(client)
 			resolved := resolver.Resolve(context.Background(), gqlQuery)
-			b, err := json.Marshal(resolved.Data)
-			require.NoError(t, err)
-			testutil.CompareJSON(t, tcase.ResolvedResponse, string(b))
+
+			testutil.CompareJSON(t, tcase.ResolvedResponse, string(resolved.Data))
 		})
 	}
 }

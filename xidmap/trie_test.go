@@ -17,6 +17,7 @@
 package xidmap
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -29,6 +30,7 @@ func TestTrie(t *testing.T) {
 		"Size of Trie node should be 24. Got: %d\n", nodeSz)
 
 	trie := NewTrie()
+	defer trie.Release()
 
 	trie.Put("trie", 1)
 	trie.Put("tree", 2)
@@ -44,6 +46,32 @@ func TestTrie(t *testing.T) {
 	require.Equal(t, uint64(5), trie.Get("t"))
 	t.Logf("Size of node: %d\n", nodeSz)
 	t.Logf("Size used by allocator: %d\n", trie.Size())
+}
+
+func TestTrieIterate(t *testing.T) {
+	keys := make([]string, 0)
+	uids := make([]uint64, 0)
+	trie := NewTrie()
+
+	i := uint64(1)
+	for ; i <= 1000; i++ {
+		trie.Put(fmt.Sprintf("%05d", i), i)
+	}
+
+	err := trie.Iterate(func(key string, uid uint64) error {
+		keys = append(keys, key)
+		uids = append(uids, uid)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1000, len(keys))
+	require.Equal(t, 1000, len(uids))
+
+	for i := range keys {
+		val := uint64(i + 1)
+		require.Equal(t, fmt.Sprintf("%05d", val), keys[i])
+		require.Equal(t, val, uids[i])
+	}
 }
 
 // $ go test -bench=BenchmarkWordsTrie --run=XXX -benchmem -memprofile mem.out

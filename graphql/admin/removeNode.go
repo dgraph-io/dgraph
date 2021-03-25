@@ -48,11 +48,11 @@ func resolveRemoveNode(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): response("Success",
+	return resolve.DataResult(m,
+		map[string]interface{}{m.Name(): response("Success",
 			fmt.Sprintf("Removed node with group: %v, idx: %v", input.GroupId, input.NodeId))},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {

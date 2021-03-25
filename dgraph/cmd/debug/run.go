@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,28 @@
 package debug
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"math"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
+	"github.com/dgraph-io/ristretto/z"
+
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -48,8 +57,10 @@ var (
 type flagOptions struct {
 	vals          bool
 	keyLookup     string
+	rollupKey     string
 	keyHistory    bool
 	predicate     string
+	prefix        string
 	readOnly      bool
 	pdir          string
 	itemMeta      bool
@@ -63,7 +74,6 @@ type flagOptions struct {
 	wdir           string
 	wtruncateUntil uint64
 	wsetSnapshot   string
-	oldWalFormat   bool
 }
 
 func init() {
@@ -73,7 +83,9 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
+		Annotations: map[string]string{"group": "debug"},
 	}
+	Debug.Cmd.SetHelpTemplate(x.NonRootTemplate)
 
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
@@ -84,14 +96,14 @@ func init() {
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
+	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
+	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
-	flag.BoolVar(&opt.oldWalFormat, "old-wal", false,
-		"Denotes that the directory pointed by --wal is a wal directory in old format.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
@@ -127,7 +139,7 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
-		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
+		if !pk.IsData() || !strings.HasPrefix(x.ParseAttr(pk.Attr), prefix) {
 			continue
 		}
 		if pk.IsSchema() {
@@ -269,7 +281,8 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		var acc *account
-		if strings.HasPrefix(pk.Attr, "key_") || strings.HasPrefix(pk.Attr, "amount_") {
+		attr := x.ParseAttr(pk.Attr)
+		if strings.HasPrefix(attr, "key_") || strings.HasPrefix(attr, "amount_") {
 			var has bool
 			acc, has = keys[pk.Uid]
 			if !has {
@@ -291,9 +304,9 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 		if num > 0 && acc != nil {
 			switch {
-			case strings.HasPrefix(pk.Attr, "key_"):
+			case strings.HasPrefix(attr, "key_"):
 				acc.Key = num
-			case strings.HasPrefix(pk.Attr, "amount_"):
+			case strings.HasPrefix(attr, "amount_"):
 				acc.Amt = num
 			}
 		}
@@ -401,11 +414,17 @@ func history(lookup []byte, itr *badger.Iterator) {
 				appendPosting(&buf, p)
 			}
 
+			r := codec.FromBytes(plist.Bitmap)
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
-				codec.ExactLen(plist.Pack), plist.Pack.Size())
-			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
-				for _, uid := range uids {
+				r.GetCardinality(), len(plist.Bitmap))
+			itr := r.ManyIterator()
+			uids := make([]uint64, 256)
+			for {
+				num := itr.NextMany(uids)
+				if num == 0 {
+					break
+				}
+				for _, uid := range uids[:num] {
 					fmt.Fprintf(&buf, " Uid = %d\n", uid)
 				}
 			}
@@ -432,6 +451,43 @@ func appendPosting(w io.Writer, o *pb.Posting) {
 		}
 	}
 	fmt.Fprintln(w, "")
+}
+func rollupKey(db *badger.DB) {
+	txn := db.NewTransactionAt(opt.readTs, false)
+	defer txn.Discard()
+
+	key, err := hex.DecodeString(opt.rollupKey)
+	x.Check(err)
+
+	iopts := badger.DefaultIteratorOptions
+	iopts.AllVersions = true
+	iopts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iopts)
+	defer itr.Close()
+
+	itr.Rewind()
+	if !itr.Valid() {
+		log.Fatalf("Unable to seek to key: %s", hex.Dump(key))
+	}
+
+	item := itr.Item()
+	// Don't need to do anything if the bitdelta is not set.
+	if item.UserMeta()&posting.BitDeltaPosting == 0 {
+		fmt.Printf("First item has UserMeta:[b%04b]. Nothing to do\n", item.UserMeta())
+		return
+	}
+	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+	x.Check(err)
+
+	alloc := z.NewAllocator(32<<20, "Debug.RollupKey")
+	defer alloc.Release()
+
+	kvs, err := pl.Rollup(alloc)
+	x.Check(err)
+
+	wb := db.NewManagedWriteBatch()
+	x.Check(wb.WriteList(&bpb.KVList{Kv: kvs}))
+	x.Check(wb.Flush())
 }
 
 func lookup(db *badger.DB) {
@@ -484,28 +540,27 @@ func lookup(db *badger.DB) {
 	fmt.Println(buf.String())
 }
 
+// Current format is like:
+// {i} attr: name term: [8] woods  ts: 535 item: [28, b0100] sz: 81 dcnt: 3 key: 00000...6f6f6473
+// Fix the TestBulkLoadMultiShard accordingly, if the format changes.
 func printKeys(db *badger.DB) {
-	txn := db.NewTransactionAt(opt.readTs, false)
-	defer txn.Discard()
-
-	iopts := badger.DefaultIteratorOptions
-	iopts.PrefetchValues = false
-	itr := txn.NewIterator(iopts)
-	defer itr.Close()
-
 	var prefix []byte
 	if len(opt.predicate) > 0 {
 		prefix = x.PredicatePrefix(opt.predicate)
+	} else if len(opt.prefix) > 0 {
+		p, err := hex.DecodeString(opt.prefix)
+		x.Check(err)
+		prefix = p
 	}
-
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
-	var loop int
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+	stream := db.NewStreamAt(opt.readTs)
+	stream.Prefix = prefix
+	var total uint64
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
-		pk, err := x.Parse(item.Key())
+		pk, err := x.Parse(key)
 		x.Check(err)
 		var buf bytes.Buffer
-
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
 		if pk.IsData() {
@@ -523,17 +578,9 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			x.Check2(buf.WriteString("{r}"))
 		}
-
-		switch {
-		case item.DiscardEarlierVersions():
-			x.Check2(buf.WriteString(" {v.las}"))
-		case item.IsDeletedOrExpired():
-			x.Check2(buf.WriteString(" {v.not}"))
-		default:
-			x.Check2(buf.WriteString(" {v.ok}"))
-		}
-
-		x.Check2(buf.WriteString(" attr: " + pk.Attr))
+		ns, attr := x.ParseNamespaceAttr(pk.Attr)
+		x.Check2(buf.WriteString(fmt.Sprintf(" ns: %#x ", ns)))
+		x.Check2(buf.WriteString(" attr: " + attr))
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
@@ -543,15 +590,87 @@ func printKeys(db *badger.DB) {
 		if pk.StartUid > 0 {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
-		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
+
 		if opt.itemMeta {
-			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 			fmt.Fprintf(&buf, " ts: %d", item.Version())
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
 		}
-		fmt.Println(buf.String())
-		loop++
+
+		var sz, deltaCount int64
+	LOOP:
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+			if item.IsDeletedOrExpired() {
+				x.Check2(buf.WriteString(" {v.del}"))
+				break
+			}
+			switch item.UserMeta() {
+			// This is rather a default case as one of the 4 bit must be set.
+			case posting.BitCompletePosting, posting.BitEmptyPosting, posting.BitSchemaPosting:
+				sz += item.EstimatedSize()
+				break LOOP
+			case posting.BitDeltaPosting:
+				sz += item.EstimatedSize()
+				deltaCount++
+			default:
+				fmt.Printf("No user meta found for key: %s\n", hex.EncodeToString(key))
+			}
+			if item.DiscardEarlierVersions() {
+				x.Check2(buf.WriteString(" {v.las}"))
+				break
+			}
+		}
+		var invalidSz, invalidCount uint64
+		// skip all the versions of key
+		for ; itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !bytes.Equal(item.Key(), key) {
+				break
+			}
+			invalidSz += uint64(item.EstimatedSize())
+			invalidCount++
+		}
+
+		fmt.Fprintf(&buf, " sz: %d dcnt: %d", sz, deltaCount)
+		if invalidCount > 0 {
+			fmt.Fprintf(&buf, " isz: %d icount: %d", invalidSz, invalidCount)
+		}
+		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(key))
+		// If total size is more than 1 GB or we have more than 1 million keys, flag this key.
+		if uint64(sz)+invalidSz > (1<<30) || uint64(deltaCount)+invalidCount > 10e6 {
+			fmt.Fprintf(&buf, " [HEAVY]")
+		}
+		buf.WriteRune('\n')
+		list := &bpb.KVList{}
+		list.Kv = append(list.Kv, &bpb.KV{
+			Value: buf.Bytes(),
+		})
+		// Don't call fmt.Println here. It is much slower.
+		return list, nil
 	}
-	fmt.Printf("Found %d keys\n", loop)
+
+	w := bufio.NewWriterSize(os.Stdout, 16<<20)
+	stream.Send = func(buf *z.Buffer) error {
+		var count int
+		err := buf.SliceIterate(func(s []byte) error {
+			var kv bpb.KV
+			if err := kv.Unmarshal(s); err != nil {
+				return err
+			}
+			x.Check2(w.Write(kv.Value))
+			count++
+			return nil
+		})
+		atomic.AddUint64(&total, uint64(count))
+		return err
+	}
+	x.Check(stream.Orchestrate(context.Background()))
+	w.Flush()
+	fmt.Println()
+	fmt.Printf("Found %d keys\n", atomic.LoadUint64(&total))
 }
 
 // Creates bounds for an histogram. The bounds are powers of two of the form
@@ -746,8 +865,10 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 		fmt.Fprintf(buf, " Member: %+v .", zpr.Member)
 	case zpr.Tablet != nil:
 		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
-	case zpr.MaxLeaseId > 0:
-		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxLeaseId)
+	case zpr.MaxUID > 0:
+		fmt.Fprintf(buf, " MaxUID: %d .", zpr.MaxUID)
+	case zpr.MaxNsID > 0:
+		fmt.Fprintf(buf, " MaxNsID: %d .", zpr.MaxNsID)
 	case zpr.MaxRaftId > 0:
 		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
 	case zpr.MaxTxnTs > 0:
@@ -761,6 +882,16 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 }
 
 func run() {
+	go func() {
+		for i := 8080; i < 9080; i++ {
+			fmt.Printf("Listening for /debug HTTP requests at port: %d\n", i)
+			if err := http.ListenAndServe(fmt.Sprintf("localhost:%d", i), nil); err != nil {
+				fmt.Println("Port busy. Trying another one...")
+				continue
+			}
+		}
+	}()
+
 	var err error
 	dir := opt.pdir
 	isWal := false
@@ -768,39 +899,26 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
-		fmt.Printf("unable to read key %v", err)
+	_, opt.key = ee.GetKeys(Debug.Conf)
+
+	if isWal {
+		store, err := raftwal.InitEncrypted(dir, opt.key)
+		x.Check(err)
+		if err := handleWal(store); err != nil {
+			fmt.Printf("\nGot error while handling WAL: %v\n", err)
+		}
 		return
 	}
 
 	bopts := badger.DefaultOptions(dir).
-		WithTableLoadingMode(options.MemoryMap).
 		WithReadOnly(opt.readOnly).
-		WithEncryptionKey(opt.key)
+		WithEncryptionKey(opt.key).
+		WithBlockCacheSize(1 << 30).
+		WithIndexCacheSize(1 << 30).
+		WithNamespaceOffset(x.NamespaceOffset) // We don't want to see the banned data.
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
-
-	// If this is a new format WAL, print and return.
-	if isWal && !opt.oldWalFormat {
-		store := raftwal.Init(dir)
-		fmt.Printf("RaftID: %+v\n", store.Uint(raftwal.RaftId))
-
-		// TODO: Fix the pending logic.
-		pending := make(map[uint64]bool)
-
-		start, last := printBasic(store)
-		for start < last-1 {
-			entries, err := store.Entries(start, last+1, 64<<20)
-			x.Check(err)
-			for _, e := range entries {
-				printEntry(e, pending)
-				start = x.Max(start, e.Index)
-			}
-		}
-		fmt.Println("Done")
-		return
-	}
 
 	db, err := badger.OpenManaged(bopts)
 	x.Check(err)
@@ -808,21 +926,13 @@ func run() {
 	posting.Init(db, 0)
 	defer db.Close()
 
-	if isWal {
-		if err := handleWal(db); err != nil {
-			fmt.Printf("\nGot error while handling WAL: %v\n", err)
-		}
-		fmt.Println("Done")
-		// WAL can't execute the getMinMax function, so we need to deal with it
-		// here, instead of in the select case below.
-		return
-	}
-
 	// Commenting the following out because on large Badger DBs, this can take a LONG time.
 	// min, max := getMinMax(db, opt.readTs)
 	// fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
+	case len(opt.rollupKey) > 0:
+		rollupKey(db)
 	case len(opt.keyLookup) > 0:
 		lookup(db)
 	case len(opt.jepsen) > 0:

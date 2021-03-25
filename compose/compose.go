@@ -19,8 +19,10 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 
 	sv "github.com/Masterminds/semver/v3"
@@ -62,6 +64,7 @@ type service struct {
 	WorkingDir    string    `yaml:"working_dir,omitempty"`
 	DependsOn     []string  `yaml:"depends_on,omitempty"`
 	Labels        stringMap `yaml:",omitempty"`
+	EnvFile       []string  `yaml:"env_file,omitempty"`
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []volume  `yaml:",omitempty"`
@@ -81,7 +84,7 @@ type options struct {
 	NumZeros       int
 	NumAlphas      int
 	NumReplicas    int
-	LruSizeMB      int
+	NumLearners    int
 	Acl            bool
 	AclSecret      string
 	DataDir        string
@@ -101,12 +104,19 @@ type options struct {
 	Ratel          bool
 	RatelPort      int
 	MemLimit       string
-	TlsDir         string
 	ExposePorts    bool
 	Encryption     bool
 	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
+	AlphaVolumes   []string
+	ZeroVolumes    []string
+	AlphaEnvFile   []string
+	ZeroEnvFile    []string
+	Minio          bool
+	MinioDataDir   string
+	MinioPort      uint16
+	MinioEnvFile   []string
 
 	// Extra flags
 	AlphaFlags string
@@ -139,6 +149,9 @@ func toPort(i int) string {
 }
 
 func getOffset(idx int) int {
+	if !opts.ExposePorts {
+		return 0
+	}
 	if idx == 1 {
 		return 0
 	}
@@ -162,12 +175,14 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
-	svc.Volumes = append(svc.Volumes, volume{
-		Type:     "bind",
-		Source:   "$GOPATH/bin",
-		Target:   "/gobin",
-		ReadOnly: true,
-	})
+	if opts.LocalBin {
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   "$GOPATH/bin",
+			Target:   "/gobin",
+			ReadOnly: true,
+		})
+	}
 
 	switch {
 	case opts.DataVol:
@@ -201,16 +216,12 @@ func initService(basename string, idx, grpcPort int) service {
 	}
 	svc.Command += " " + basename
 	if opts.Jaeger {
-		svc.Command += " --jaeger.collector=http://jaeger:14268"
+		svc.Command += ` --trace "jaeger=http://jaeger:14268;"`
 	}
-	if opts.LudicrousMode {
-		svc.Command += " --ludicrous_mode=true"
-	}
-
 	return svc
 }
 
-func getZero(idx int) service {
+func getZero(idx int, raft string) service {
 	basename := "zero"
 	basePort := zeroBasePort + opts.PortOffset
 	grpcPort := basePort + getOffset(idx)
@@ -221,7 +232,11 @@ func getZero(idx int) service {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
+	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
@@ -243,16 +258,22 @@ func getZero(idx int) service {
 	if opts.ZeroFlags != "" {
 		svc.Command += " " + opts.ZeroFlags
 	}
+
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
+	}
+	svc.EnvFile = opts.ZeroEnvFile
+
 	return svc
 }
 
-func getAlpha(idx int) service {
+func getAlpha(idx int, raft string) service {
 	basename := "alpha"
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 	svc := initService(basename, idx, grpcPort)
-	// Don't make Alphas depend on each other.
-	svc.DependsOn = nil
 
 	if opts.TmpFS {
 		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
@@ -261,7 +282,9 @@ func getAlpha(idx int) service {
 	isMultiZeros := true
 	var isInvalidVersion, err = semverCompare("< 1.2.3 || 20.03.0", opts.Tag)
 	if err != nil || isInvalidVersion {
-		isMultiZeros = false
+		if opts.Tag != "latest" {
+			isMultiZeros = false
+		}
 	}
 
 	maxZeros := 1
@@ -272,28 +295,38 @@ func getAlpha(idx int) service {
 	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+i)
+		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
 		zeros = append(zeros, zeroHostAddr)
 	}
 
 	zerosOpt := strings.Join(zeros, ",")
 
-	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
+	offset := getOffset(idx)
+	if (opts.PortOffset + offset) != 0 {
+		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
+	}
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
-	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
+	if opts.LudicrousMode {
+		svc.Command += ` --ludicrous "enabled=true;"`
+	}
+
+	if opts.SnapshotAfter != "" {
+		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
+	}
+	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
 
 	// Don't assign idx, let it auto-assign.
-	// svc.Command += fmt.Sprintf(" --idx=%d", idx)
+	// svc.Command += fmt.Sprintf(" --raft='idx=%d'", idx)
 	if opts.Vmodule != "" {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
-		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"`
 	}
 	if opts.Acl {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
+		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./acl-secret",
@@ -301,11 +334,8 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
-	if opts.SnapshotAfter != "" {
-		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
-	}
 	if opts.AclSecret != "" {
-		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s"
+		svc.Command += ` --acl "secret-file=/secret/hmac;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   opts.AclSecret,
@@ -327,20 +357,35 @@ func getAlpha(idx int) service {
 			ReadOnly: true,
 		})
 	}
-	if opts.TlsDir != "" {
-		svc.Command += " --tls_dir=/secret/tls"
-		svc.Volumes = append(svc.Volumes, volume{
-			Type:     "bind",
-			Source:   opts.TlsDir,
-			Target:   "/secret/tls",
-			ReadOnly: true,
-		})
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			svc.Volumes = append(svc.Volumes, getVolume(vol))
+		}
 	}
+	svc.EnvFile = opts.AlphaEnvFile
 	if opts.AlphaFlags != "" {
 		svc.Command += " " + opts.AlphaFlags
 	}
 
 	return svc
+}
+
+func getVolume(vol string) volume {
+	s := strings.Split(vol, ":")
+	srcDir := s[0]
+	dstDir := s[1]
+	readOnly := len(s) > 2 && s[2] == "ro"
+	volType := "volume"
+	if isBindMount(srcDir) {
+		volType = "bind"
+	}
+	return volume{
+		Type:     volType,
+		Source:   srcDir,
+		Target:   dstDir,
+		ReadOnly: readOnly,
+	}
+
 }
 
 func getJaeger() service {
@@ -358,6 +403,27 @@ func getJaeger() service {
 		Command: "--badger.ephemeral=false" +
 			" --badger.directory-key /working/jaeger" +
 			" --badger.directory-value /working/jaeger",
+	}
+	return svc
+}
+
+func getMinio(minioDataDir string) service {
+	svc := service{
+		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
+		ContainerName: containerName("minio1"),
+		Ports: []string{
+			toPort(int(opts.MinioPort)),
+		},
+		EnvFile: opts.MinioEnvFile,
+		Command: "minio server /data/minio --address :" +
+			strconv.FormatUint(uint64(opts.MinioPort), 10),
+	}
+	if minioDataDir != "" {
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:   "bind",
+			Source: minioDataDir,
+			Target: "/data/minio",
+		})
 	}
 	return svc
 }
@@ -451,6 +517,10 @@ func semverCompare(constraint, version string) (bool, error) {
 	return c.Check(v), nil
 }
 
+func isBindMount(vol string) bool {
+	return strings.HasPrefix(vol, ".") || strings.HasPrefix(vol, "/")
+}
+
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
 	os.Exit(1)
@@ -468,13 +538,13 @@ func main() {
 	}
 
 	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 3,
-		"number of zeros in dgraph cluster")
+		"number of zeros in Dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
-		"number of alphas in dgraph cluster")
+		"number of alphas in Dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
-		"number of alpha replicas in dgraph cluster")
-	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
-		"approximate size of LRU cache")
+		"number of alpha replicas in Dgraph cluster")
+	cmd.PersistentFlags().IntVarP(&opts.NumLearners, "num_learners", "n", 0,
+		"number of learner replicas in Dgraph cluster")
 	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
@@ -510,15 +580,13 @@ func main() {
 		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
-	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
-		"TLS Dir.")
 	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
 		"expose host:container ports for each service")
 	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous_mode", false,
+	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
 		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
@@ -526,8 +594,24 @@ func main() {
 		"extra flags for alphas.")
 	cmd.PersistentFlags().StringVar(&opts.ZeroFlags, "extra_zero_flags", "",
 		"extra flags for zeros.")
-	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", false,
+	cmd.PersistentFlags().BoolVar(&opts.ContainerNames, "names", true,
 		"set container names in docker compose.")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaVolumes, "alpha_volume", nil,
+		"alpha volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroVolumes, "zero_volume", nil,
+		"zero volume mounts, following srcdir:dstdir[:ro]")
+	cmd.PersistentFlags().StringArrayVar(&opts.AlphaEnvFile, "alpha_env_file", nil,
+		"env_file for alpha")
+	cmd.PersistentFlags().StringArrayVar(&opts.ZeroEnvFile, "zero_env_file", nil,
+		"env_file for zero")
+	cmd.PersistentFlags().BoolVar(&opts.Minio, "minio", false,
+		"include minio service")
+	cmd.PersistentFlags().StringVar(&opts.MinioDataDir, "minio_data_dir", "",
+		"default minio data directory")
+	cmd.PersistentFlags().Uint16Var(&opts.MinioPort, "minio_port", 9001,
+		"minio service port")
+	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
+		"minio service env_file")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -547,9 +631,6 @@ func main() {
 	if opts.NumReplicas%2 == 0 {
 		fatal(errors.Errorf("number of replicas must be odd"))
 	}
-	if opts.LruSizeMB < 1024 {
-		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
-	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
 	}
@@ -563,19 +644,60 @@ func main() {
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
-		svc := getZero(i)
+		svc := getZero(i, fmt.Sprintf("idx=%d", i))
 		services[svc.name] = svc
 	}
 
 	for i := 1; i <= opts.NumAlphas; i++ {
-		svc := getAlpha(i)
+		gid := int(math.Ceil(float64(i) / float64(opts.NumReplicas)))
+		rs := fmt.Sprintf("idx=%d; group=%d", i, gid)
+		svc := getAlpha(i, rs)
+		// Don't make Alphas depend on each other.
+		svc.DependsOn = nil
 		services[svc.name] = svc
+	}
+
+	numGroups := opts.NumAlphas / opts.NumReplicas
+	lidx := opts.NumZeros
+	for i := 1; i <= opts.NumLearners; i++ {
+		lidx++
+		rs := fmt.Sprintf("idx=%d; learner=true", lidx)
+		svc := getZero(lidx, rs)
+		services[svc.name] = svc
+	}
+	lidx = opts.NumAlphas
+	for gid := 1; gid <= numGroups; gid++ {
+		for i := 1; i <= opts.NumLearners; i++ {
+			lidx++
+			rs := fmt.Sprintf("idx=%d; group=%d; learner=true", lidx, gid)
+			svc := getAlpha(lidx, rs)
+			services[svc.name] = svc
+		}
 	}
 
 	cfg := composeConfig{
 		Version:  "3.5",
 		Services: services,
 		Volumes:  make(map[string]stringMap),
+	}
+
+	if len(opts.AlphaVolumes) > 0 {
+		for _, vol := range opts.AlphaVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
+	}
+	if len(opts.ZeroVolumes) > 0 {
+		for _, vol := range opts.ZeroVolumes {
+			s := strings.Split(vol, ":")
+			srcDir := s[0]
+			if !isBindMount(srcDir) {
+				cfg.Volumes[srcDir] = stringMap{}
+			}
+		}
 	}
 
 	if opts.DataVol {
@@ -592,6 +714,10 @@ func main() {
 
 	if opts.Metrics {
 		addMetrics(&cfg)
+	}
+
+	if opts.Minio {
+		services["minio1"] = getMinio(opts.MinioDataDir)
 	}
 
 	if opts.Acl {
@@ -620,7 +746,8 @@ func main() {
 	if opts.OutFile == "-" {
 		x.Check2(fmt.Printf("%s", doc))
 	} else {
-		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", opts.OutFile))
+		fmt.Printf("Options: %+v\n", opts)
+		fmt.Printf("Writing file: %s\n", opts.OutFile)
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))

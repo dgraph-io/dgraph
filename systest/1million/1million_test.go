@@ -1,5 +1,3 @@
-// +build systest
-
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
@@ -20,9 +18,14 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -59,7 +62,7 @@ var tc = []struct {
 	{
 		query: `{
 			coactors(func:allofterms(name@en, "Jane Campion")) @cascade {
-				JC_films as director.film {      # JC_films = all Jane Campion's films
+				JC_films as director.film {      # JC_films = all Jane Campion films
 					starting_movie: name@en
 					starring {
 						JC_actors as performance.actor {      # JC_actors = all actors in all JC films
@@ -9262,13 +9265,13 @@ var tc = []struct {
 }
 
 func Test1Million(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
 	for _, tt := range tc {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		resp, err := dg.NewTxn().Query(ctx, tt.query)
 		cancel()
 
@@ -9279,4 +9282,57 @@ func Test1Million(t *testing.T) {
 
 		testutil.CompareJSON(t, tt.resp, string(resp.Json))
 	}
+}
+
+func TestMain(m *testing.M) {
+	noschemaFile := filepath.Join(testutil.TestDataDirectory, "1million-noindex.schema")
+	rdfFile := filepath.Join(testutil.TestDataDirectory, "1million.rdf.gz")
+	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
+		os.Exit(1)
+	}
+
+	if err := testutil.BulkLoad(testutil.BulkOpts{
+		Zero:       testutil.SockAddrZero,
+		Shards:     1,
+		RdfFile:    rdfFile,
+		SchemaFile: noschemaFile,
+	}); err != nil {
+		cleanupAndExit(1)
+	}
+
+	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
+		fmt.Printf("Error while bringin up alphas. Error: %v\n", err)
+		cleanupAndExit(1)
+	}
+	schemaFile := filepath.Join(testutil.TestDataDirectory, "1million.schema")
+	client, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
+	if err != nil {
+		fmt.Printf("Error while creating client. Error: %v\n", err)
+		cleanupAndExit(1)
+	}
+
+	file, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		fmt.Printf("Error while reading schema file. Error: %v\n", err)
+		cleanupAndExit(1)
+	}
+
+	if err = client.Alter(context.Background(), &api.Operation{
+		Schema: string(file),
+	}); err != nil {
+		fmt.Printf("Error while indexing. Error: %v\n", err)
+		cleanupAndExit(1)
+	}
+
+	exitCode := m.Run()
+	cleanupAndExit(exitCode)
+}
+
+func cleanupAndExit(exitCode int) {
+	if testutil.StopAlphasAndDetectRace("./alpha.yml") {
+		// if there is race fail the test
+		exitCode = 1
+	}
+	_ = os.RemoveAll("out")
+	os.Exit(exitCode)
 }

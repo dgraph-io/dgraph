@@ -1,0 +1,22 @@
+type Mission @key(fields: "id") {
+    id: ID!
+    crew: [Astronaut] @provides(fields: "name age")
+    designation: String!
+    startDate: String
+    endDate: String
+}
+
+type Astronaut @key(fields: "id") @extends {
+    id: ID! @external
+    name: String @external
+    age: Int @external
+    missions: [Mission]
+}
+
+ extend type Product @key(fields: "upc") {
+    upc: String! @id @external
+    price: Int @external
+    weight: Int @external
+    inStock: Boolean
+    shippingEstimate: Float @requires(fields: "price weight")
+  }

@@ -1,0 +1,28 @@
+repositories:
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: stable
+    url: https://charts.helm.sh/stable
+
+releases:
+  - name: my-prometheus
+    namespace: {{ env "NAMESPACE" | default "monitoring" }}
+    chart: prometheus-community/kube-prometheus-stack
+    values:
+      - ./dgraph-prometheus-operator.yaml
+      - grafana:
+          adminPassword: {{ requiredEnv "GRAFANA_ADMIN_PASSWORD" }}
+      {{/* Dgraph Kubernetes Monitoring Support */}}
+      {{/* Set DGRAPH_ALERTS_ENABLED=1 to enable alerts for dgraph */}}
+      {{- if env "DGRAPH_ALERTS_ENABLED" }}
+      - ./dgraph-app-alert-rules.yaml.gotmpl
+      {{/* Dgraph Kubernetes CronJob Monitoring Support */}}
+      {{/* Set DGRAPH_BACKUPS_ALERTS_ENABLED=1 and DGRAPH_ALERTS_ENABLED=1 to enable this feature */}}
+      {{- if env "DGRAPH_BACKUPS_ALERTS_ENABLED" }}
+      - ./dgraph-backup-alert-rules.yaml
+      {{- end }}
+      {{- if env "PAGERDUTY_INTEGRATION_KEY" }}
+      - ./alertmanager-pagerduty.yaml.gotmpl
+      {{- end }}
+      {{- end }}
+    disableValidation: true

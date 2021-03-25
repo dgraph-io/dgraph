@@ -24,7 +24,10 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
+
+	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -32,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -47,10 +49,10 @@ const (
 )
 
 type ErrorCase struct {
-	Name       string
-	GQLRequest string
-	variables  map[string]interface{}
-	Errors     x.GqlErrorList
+	Name         string
+	GQLRequest   string
+	GQLVariables string
+	Errors       x.GqlErrorList
 }
 
 func graphQLCompletionOn(t *testing.T) {
@@ -60,7 +62,7 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(Alpha1gRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -91,10 +93,11 @@ func graphQLCompletionOn(t *testing.T) {
 			}
 			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 			require.NoError(t, err)
-			require.Equal(t, 4, len(result.QueryCountry))
+			require.Equal(t, 5, len(result.QueryCountry))
 			expected.QueryCountry = []*country{
 				&country{Name: "Angola"},
 				&country{Name: "Bangladesh"},
+				&country{Name: "India"},
 				&country{Name: "Mozambique"},
 				nil,
 			}
@@ -106,11 +109,11 @@ func graphQLCompletionOn(t *testing.T) {
 				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
 			})
 
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 4; i++ {
 				require.NotNil(t, result.QueryCountry[i])
 				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
 			}
-			require.Nil(t, result.QueryCountry[3])
+			require.Nil(t, result.QueryCountry[4])
 		})
 	}
 
@@ -132,8 +135,8 @@ func deepMutationErrors(t *testing.T) {
 	}{
 		"missing ID and XID": {
 			set: &country{States: []*state{{Name: "NOT A VALID STATE"}}},
-			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation " +
-				"payload because type State requires a value for field xcode, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite" +
+				" mutation payload because field xcode cannot be empty",
 		},
 		"ID not valid": {
 			set: &country{States: []*state{{ID: "HI"}}},
@@ -142,13 +145,14 @@ func deepMutationErrors(t *testing.T) {
 		},
 		"ID not found": {
 			set: &country{States: []*state{{ID: "0x1"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because ID \"0x1\" isn't a State",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because ID \"0x1\" isn't a State",
 		},
 		"XID not found": {
 			set: &country{States: []*state{{Code: "NOT A VALID CODE"}}},
-			exp: "couldn't rewrite query for mutation updateCountry because xid " +
-				"\"NOT A VALID CODE\" doesn't exist and input object not well formed because type " +
-				"State requires a value for field name, but no value present",
+			exp: "couldn't rewrite mutation updateCountry because failed to rewrite mutation" +
+				" payload because type State requires a value for field name, but no value" +
+				" present",
 		},
 	}
 
@@ -188,18 +192,63 @@ func requestValidationErrors(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				d := json.NewDecoder(strings.NewReader(tcase.GQLVariables))
+				d.UseNumber()
+				err := d.Decode(&vars)
+				require.NoError(t, err)
+			}
 			test := &GraphQLParams{
 				Query:     tcase.GQLRequest,
-				Variables: tcase.variables,
+				Variables: vars,
 			}
 			gqlResponse := test.ExecuteAsPost(t, GraphqlURL)
-
 			require.Nil(t, gqlResponse.Data)
 			if diff := cmp.Diff(tcase.Errors, gqlResponse.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+// notGeneratedAPIErrors check that the mutations and queries explicitly asked to be not
+// generated using the generate directive are indeed not generated
+func notGeneratedAPIErrors(t *testing.T) {
+	// Add and update university
+	universityID := addUniversity(t)
+	updateUniversity(t, universityID)
+
+	// Try querying, should throw error as query API is not generated
+	query := `
+		query {
+			queryUniversity {
+				name
+			}
+		}`
+	params := &GraphQLParams{Query: query}
+	gqlResponse := params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"queryUniversity\" on type \"Query\"."))
+
+	// Try deleting university, should throw error as delete API does not exist
+	mutation := `
+		mutation {
+			deleteUniversity(filter: {}) {
+				name
+			}
+		}`
+	params = &GraphQLParams{Query: mutation}
+	gqlResponse = params.ExecuteAsPost(t, GraphqlURL)
+	require.NotNil(t, gqlResponse.Errors)
+	require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
+	require.Equal(t, 1, len(gqlResponse.Errors))
+	require.True(t, strings.Contains(gqlResponse.Errors[0].Message,
+		"Cannot query field \"deleteUniversity\" on type \"Mutation\"."))
 }
 
 // panicCatcher tests that the GraphQL server behaves properly when an internal
@@ -241,7 +290,8 @@ func panicCatcher(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers, true)
+	server := admin2.NewServer()
+	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -263,13 +313,15 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request,
+	field schema.Field) (*dgoapi.Response, error) {
 	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }
 
-func (dg *panicClient) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return nil
+func (dg *panicClient) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return &dgoapi.TxnContext{}, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
@@ -300,7 +352,8 @@ func clientInfoLogin(t *testing.T) {
 		WithConventionResolvers(gqlSchema, fns)
 	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(&schemaEpoch, resolvers, true)
+	server := admin2.NewServer()
+	server.Set(x.GalaxyNamespace, &schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

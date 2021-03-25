@@ -1,7 +1,7 @@
 package query
 
 import (
-	"bytes"
+	"context"
 	"math"
 	"testing"
 
@@ -9,14 +9,17 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/stretchr/testify/require"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
+	r := roaring64.New()
+	r.Add(1)
 	return &SubGraph{
 		Params:    params{Alias: "query"},
 		SrcUIDs:   &pb.List{Uids: []uint64{1}},
-		DestUIDs:  &pb.List{Uids: []uint64{1}},
+		DestMap:   r,
 		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
 		Children: []*SubGraph{
 			&SubGraph{
@@ -35,7 +38,7 @@ func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
 }
 
 func assertJSON(t *testing.T, expected string, sg *SubGraph) {
-	buf, err := ToJson(&Latency{}, []*SubGraph{sg})
+	buf, err := ToJson(context.Background(), &Latency{}, []*SubGraph{sg}, nil)
 	require.Nil(t, err)
 	require.Equal(t, expected, string(buf))
 }
@@ -77,8 +80,8 @@ func TestEncode(t *testing.T) {
 		enc.AddListChild(root, friendNode1)
 		enc.AddListChild(root, friendNode2)
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		enc.buf.Reset()
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"friend":[
@@ -90,7 +93,7 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 
 	t.Run("with value list predicate", func(t *testing.T) {
@@ -100,8 +103,8 @@ func TestEncode(t *testing.T) {
 		enc.AddValue(root, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "bob"})
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		enc.buf.Reset()
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"name":[
@@ -109,7 +112,7 @@ func TestEncode(t *testing.T) {
 				"bob"
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 
 	t.Run("with uid predicate", func(t *testing.T) {
@@ -121,8 +124,8 @@ func TestEncode(t *testing.T) {
 
 		enc.AddListChild(root, person)
 
-		buf := new(bytes.Buffer)
-		require.NoError(t, enc.encode(root, buf))
+		enc.buf.Reset()
+		require.NoError(t, enc.encode(root))
 		testutil.CompareJSON(t, `
 		{
 			"person":[
@@ -132,6 +135,6 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, buf.String())
+		`, enc.buf.String())
 	})
 }

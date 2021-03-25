@@ -72,16 +72,16 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		endId = int64(resp.GetEndId())
 	}
 
-	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
+	return resolve.DataResult(m,
+		map[string]interface{}{m.Name(): map[string]interface{}{
 			"response": map[string]interface{}{
 				"startId":  startId,
 				"endId":    endId,
 				"readOnly": readOnly,
 			},
 		}},
-		Field: m,
-	}, true
+		nil,
+	), true
 }
 
 func getAssignInput(m schema.Mutation) (*assignInput, error) {

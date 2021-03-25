@@ -75,3 +75,20 @@ func AuthorizeGuardians(ctx context.Context) error {
 	// always allow access
 	return nil
 }
+
+func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	// always allow access
+	return nil
+}
+
+func validateToken(jwtStr string) ([]string, error) {
+	return nil, nil
+}
+
+func upsertGuardian(ctx context.Context) error {
+	return nil
+}
+
+func upsertGroot(ctx context.Context) error {
+	return nil
+}

@@ -20,8 +20,8 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/pb"
 	"github.com/golang/glog"
 )
 
@@ -113,11 +113,7 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 // Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
-	defer func() {
-		if err := w.db.Sync(); err != nil {
-			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
-		}
-	}()
+	// No need to call Sync here.
 	return w.Wait()
 }
 

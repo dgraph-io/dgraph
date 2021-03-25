@@ -17,16 +17,19 @@
 package alpha
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetricTxnAborts(t *testing.T) {
+func TestMetricTxnCommits(t *testing.T) {
+	metricName := "dgraph_txn_commits_total"
 	mt := `
     {
 	  set {
@@ -35,51 +38,138 @@ func TestMetricTxnAborts(t *testing.T) {
 	}
 	`
 
-	// Create initial 'dgraph_txn_aborts_total' metric
+	// first normal commit
+	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+
+	metrics := fetchMetrics(t, metricName)
+
+	// second normal commit
+	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+
+	require.NoError(t, retryableFetchMetrics(t, map[string]int{
+		metricName: metrics[metricName] + 1,
+	}))
+}
+
+func TestMetricTxnDiscards(t *testing.T) {
+	metricName := "dgraph_txn_discards_total"
+	mt := `
+    {
+	  set {
+		<0x71>  <name> "Bob" .
+	  }
+	}
+	`
+
+	// first normal commit
+	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false))
+
+	metrics := fetchMetrics(t, metricName)
+
+	// second commit discarded
+	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	require.NoError(t, err)
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, true))
+
+	require.NoError(t, retryableFetchMetrics(t, map[string]int{
+		metricName: metrics[metricName] + 1,
+	}))
+}
+
+func TestMetricTxnAborts(t *testing.T) {
+	metricName := "dgraph_txn_aborts_total"
+	mt := `
+    {
+	  set {
+		<0x71>  <name> "Bob" .
+	  }
+	}
+	`
+
 	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
 
-	// Fetch Metrics
-	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
-	require.NoError(t, err)
-	_, body, err := runRequest(req)
-	require.NoError(t, err)
-	metricsMap, err := extractMetrics(string(body))
-	requiredMetric := "dgraph_txn_aborts_total"
-	txnAbort, ok := metricsMap[requiredMetric]
-	require.True(t, ok, "the required metric '%s' is not found", requiredMetric)
-	txnAbort1, _ := strconv.Atoi(txnAbort.(string))
+	metrics := fetchMetrics(t, metricName)
 
-	// Create second 'dgraph_txn_aborts_total' metric
 	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
 	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs))
+	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false))
+	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false))
 
-	// Fetch Updated Metrics
-	req, err = http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
-	require.NoError(t, err)
-	_, body, err = runRequest(req)
-	require.NoError(t, err)
-	metricsMap, err = extractMetrics(string(body))
-	requiredMetric = "dgraph_txn_aborts_total"
-	txnAbort, ok = metricsMap["dgraph_txn_aborts_total"]
-	txnAbort2, _ := strconv.Atoi(txnAbort.(string))
+	require.NoError(t, retryableFetchMetrics(t, map[string]int{
+		metricName: metrics[metricName] + 1,
+	}))
+}
 
-	require.Equal(t, txnAbort1+1, txnAbort2, "txnAbort was not incremented")
+func retryableFetchMetrics(t *testing.T, expected map[string]int) error {
+	metricList := make([]string, 0)
+	for metric := range expected {
+		metricList = append(metricList, metric)
+	}
+
+	for i := 0; i < 10; i++ {
+		metrics := fetchMetrics(t, metricList...)
+		found := 0
+		for expMetric, expCount := range expected {
+			count, ok := metrics[expMetric]
+			if !ok {
+				return fmt.Errorf("expected metric '%s' was not found", expMetric)
+			}
+			if count != expCount {
+				return fmt.Errorf("expected metric '%s' count was %d instead of %d",
+					expMetric, count, expCount)
+			}
+			found++
+		}
+		if found == len(metricList) {
+			return nil
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	return fmt.Errorf("metrics were not found")
+}
+
+func fetchMetrics(t *testing.T, metrics ...string) map[string]int {
+	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
+	require.NoError(t, err)
+
+	_, body, _, err := runRequest(req)
+	require.NoError(t, err)
+
+	metricsMap, err := extractMetrics(string(body))
+	require.NoError(t, err)
+
+	countMap := make(map[string]int)
+	for _, metric := range metrics {
+		if count, ok := metricsMap[metric]; ok {
+			n, err := strconv.Atoi(count.(string))
+			require.NoError(t, err)
+			countMap[metric] = n
+		} else {
+			t.Fatalf("the required metric '%s' was not found", metric)
+		}
+	}
+	return countMap
 }
 
 func TestMetrics(t *testing.T) {
 	req, err := http.NewRequest("GET", addr+"/debug/prometheus_metrics", nil)
 	require.NoError(t, err)
 
-	_, body, err := runRequest(req)
+	_, body, _, err := runRequest(req)
 	require.NoError(t, err)
 	metricsMap, err := extractMetrics(string(body))
 	require.NoError(t, err, "Unable to get the metrics map: %v", err)
@@ -90,16 +180,26 @@ func TestMetrics(t *testing.T) {
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
-		"badger_v2_disk_reads_total", "badger_v2_disk_writes_total", "badger_v2_gets_total",
-		"badger_v2_memtable_gets_total", "badger_v2_puts_total", "badger_v2_read_bytes",
-		"badger_v2_written_bytes",
+		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
+		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
+		"badger_written_bytes",
+		// The following metrics get exposed after 1 minute from Badger, so
+		// they're not available in time for this test
+		// "badger_lsm_size_bytes", "badger_vlog_size_bytes",
+
+		// Transaction Metrics
+		"dgraph_txn_aborts_total", "dgraph_txn_commits_total", "dgraph_txn_discards_total",
 
 		// Dgraph Memory Metrics
 		"dgraph_memory_idle_bytes", "dgraph_memory_inuse_bytes", "dgraph_memory_proc_bytes",
+		"dgraph_memory_alloc_bytes",
 		// Dgraph Activity Metrics
 		"dgraph_active_mutations_total", "dgraph_pending_proposals_total",
 		"dgraph_pending_queries_total",
 		"dgraph_num_queries_total", "dgraph_alpha_health_status",
+
+		// Raft metrics
+		"dgraph_raft_has_leader", "dgraph_raft_is_leader", "dgraph_raft_leader_changes_total",
 	}
 	for _, requiredM := range requiredMetrics {
 		_, ok := metricsMap[requiredM]

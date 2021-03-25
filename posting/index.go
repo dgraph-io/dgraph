@@ -32,14 +32,15 @@ import (
 	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 var emptyCountParams countParams
@@ -227,18 +228,23 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
 				hex.Dump(dataKey))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+
+		bm, err := dataList.Bitmap(ListOptions{ReadTs: txn.StartTs})
+		if err != nil {
+			return errors.Wrapf(err, "while retriving Bitmap for key %s", hex.Dump(dataKey))
+		}
+
+		for _, uid := range bm.ToArray() {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
-				ValueId: p.Uid,
+				ValueId: uid,
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
-		})
-		if err != nil {
-			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
-				hex.Dump(dataKey))
+			if err := txn.addReverseAndCountMutation(ctx, delEdge); err != nil {
+				return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+					hex.Dump(dataKey))
+			}
 		}
 	}
 
@@ -276,9 +282,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
-	var plen int
-	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
-		plen++
+	plen := l.Length(txn.StartTs, 0)
+	err := l.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 		switch {
 		case isReversed:
 			// Delete reverse edge for each posting.
@@ -516,13 +521,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	return nil
 }
 
-// deleteTokensFor deletes the index for the given attribute and token.
-func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
+// prefixesToDeleteTokensFor returns the prefixes to be deleted for index for the given attribute and token.
+func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]byte, error) {
+	prefixes := [][]byte{}
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
-		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+		return nil, errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	if hasLang {
 		// We just need the tokenizer identifier for ExactTokenizer having language.
@@ -530,54 +536,15 @@ func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
+	prefixes = append(prefixes, prefix)
+	// All the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
 	prefix = pk.IndexPrefix()
 	prefix[0] = x.ByteSplit
 	prefix = append(prefix, tokenizer.Identifier())
-	return pstore.DropPrefix(prefix)
-}
+	prefixes = append(prefixes, prefix)
 
-func deleteReverseEdges(attr string) error {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.ReversePrefix()
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
-	// Such keys have a different prefix (the last byte is set to 1).
-	prefix = pk.ReversePrefix()
-	prefix[0] = x.ByteSplit
-
-	return pstore.DropPrefix(prefix)
-}
-
-func deleteCountIndex(attr string) error {
-	pk := x.ParsedKey{Attr: attr}
-	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
-		return err
-	}
-	if err := pstore.DropPrefix(pk.CountPrefix(true)); err != nil {
-		return err
-	}
-
-	// Also delete all the parts of any list that has been split into multiple parts.
-	// Such keys have a different prefix (the last byte is set to 1).
-	prefix := pk.CountPrefix(false)
-	prefix[0] = x.ByteSplit
-	if err := pstore.DropPrefix(prefix); err != nil {
-		return err
-	}
-
-	// Delete parts for count-reverse index.
-	prefix = pk.CountPrefix(true)
-	prefix[0] = x.ByteSplit
-	return pstore.DropPrefix(prefix)
+	return prefixes, nil
 }
 
 // rebuilder handles the process of rebuilding an index.
@@ -599,8 +566,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
-	tmpIndexDir, err := ioutil.TempDir("", "dgraph_index_")
+	tmpIndexDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "dgraph_index_")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
@@ -612,8 +578,16 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithLogRotatesToFlush(10).
-		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey).
+		WithLoggingLevel(badger.WARNING).
+		WithMetricsEnabled(false)
+
+	// Set cache if we have encryption.
+	if len(x.WorkerConfig.EncryptionKey) > 0 {
+		dbOpts.EncryptionKey = x.WorkerConfig.EncryptionKey
+		dbOpts.BlockCacheSize = 100 << 20
+		dbOpts.IndexCacheSize = 100 << 20
+	}
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
@@ -622,7 +596,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	glog.V(1).Infof(
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
-		r.attr, r.startTs, hex.Dump(r.prefix))
+		x.FormatNsAttr(r.attr), r.startTs, hex.Dump(r.prefix))
 
 	// Counter is used here to ensure that all keys are committed at different timestamp.
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
@@ -630,7 +604,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
-	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):",
+		x.FormatNsAttr(r.attr))
 	stream.Prefix = r.prefix
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -676,8 +651,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return &bpb.KVList{Kv: kvs}, nil
 	}
-	stream.Send = func(kvList *bpb.KVList) error {
-		if err := tmpWriter.Write(kvList); err != nil {
+	stream.Send = func(buf *z.Buffer) error {
+		if err := tmpWriter.Write(buf); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
@@ -692,19 +667,21 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
-		r.attr, time.Since(start))
+		x.FormatNsAttr(r.attr), time.Since(start))
 
 	// Now we write all the created posting lists to disk.
-	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
+	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger",
+		x.FormatNsAttr(r.attr))
 	start = time.Now()
 	defer func() {
 		glog.V(1).Infof("Rebuilding index for predicate %s: writing index took: %v\n",
-			r.attr, time.Since(start))
+			x.FormatNsAttr(r.attr), time.Since(start))
 	}()
 
 	writer := pstore.NewManagedWriteBatch()
 	tmpStream := tmpDB.NewStreamAt(counter)
-	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
+	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):",
+		x.FormatNsAttr(r.attr))
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := ReadPostingList(key, itr)
 		if err != nil {
@@ -713,36 +690,42 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup()
+		kvs, err := l.Rollup(nil)
 		if err != nil {
 			return nil, err
 		}
 
 		return &bpb.KVList{Kv: kvs}, nil
 	}
-	tmpStream.Send = func(kvList *bpb.KVList) error {
-		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.
-		// SetEntryAt requries lock for every entry, whereas Write reduces lock contention.
-		for _, kv := range kvList.Kv {
+	tmpStream.Send = func(buf *z.Buffer) error {
+		return buf.SliceIterate(func(slice []byte) error {
+			kv := &bpb.KV{}
+			if err := kv.Unmarshal(slice); err != nil {
+				return err
+			}
 			if len(kv.Value) == 0 {
-				continue
+				return nil
 			}
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
+			e := &badger.Entry{
+				Key:      kv.Key,
+				Value:    kv.Value,
+				UserMeta: BitCompletePosting,
+			}
 			if err := writer.SetEntryAt(e.WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
-		}
-
-		return nil
+			return nil
+		})
 	}
 
 	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
+	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n",
+		x.FormatNsAttr(r.attr))
 	return writer.Flush()
 }
 
@@ -796,13 +779,14 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 
 // DropIndexes drops the indexes that need to be rebuilt.
 func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
-	if err := dropTokIndexes(ctx, rb); err != nil {
+	prefixes, err := prefixesForTokIndexes(ctx, rb)
+	if err != nil {
 		return err
 	}
-	if err := dropReverseEdges(ctx, rb); err != nil {
-		return err
-	}
-	return dropCountIndex(ctx, rb)
+	prefixes = append(prefixes, prefixesToDropReverseEdges(ctx, rb)...)
+	prefixes = append(prefixes, prefixesToDropCountIndex(ctx, rb)...)
+	glog.Infof("Deleting indexes for %s", rb.Attr)
+	return pstore.DropPrefix(prefixes...)
 }
 
 // BuildData updates data.
@@ -903,42 +887,52 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	}
 }
 
-func dropTokIndexes(ctx context.Context, rb *IndexRebuild) error {
+func prefixesForTokIndexes(ctx context.Context, rb *IndexRebuild) ([][]byte, error) {
 	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes := [][]byte{}
+
 	if rebuildInfo.op == indexNoop {
-		return nil
+		return prefixes, nil
 	}
 
-	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
+	glog.Infof("Computing prefix index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
-			return err
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesNonLang...)
 		if tokenizer != "exact" {
 			continue
 		}
-		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
-			return err
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
 	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
-			return err
+		prefixesNonLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, false)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesNonLang...)
 		if tokenizer != "exact" {
 			continue
 		}
-		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
-			return err
+		prefixesWithLang, err := prefixesToDeleteTokensFor(rb.Attr, tokenizer, true)
+		if err != nil {
+			return nil, err
 		}
+		prefixes = append(prefixes, prefixesWithLang...)
 	}
 
-	return nil
+	return prefixes, nil
 }
 
 // rebuildTokIndex rebuilds index for a given attribute.
@@ -1017,19 +1011,30 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	return indexRebuild
 }
 
-func dropCountIndex(ctx context.Context, rb *IndexRebuild) error {
+func prefixesToDropCountIndex(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsCountIndexRebuild()
+
 	if op == indexNoop {
 		return nil
 	}
 
-	glog.Infof("Deleting count index for %s", rb.Attr)
-	if err := deleteCountIndex(rb.Attr); err != nil {
-		return err
-	}
+	pk := x.ParsedKey{Attr: rb.Attr}
+	prefixes := append([][]byte{}, pk.CountPrefix(false))
+	prefixes = append(prefixes, pk.CountPrefix(true))
 
-	return nil
+	// All the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	countPrefix := pk.CountPrefix(false)
+	countPrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countPrefix)
+
+	// Parts for count-reverse index.
+	countReversePrefix := pk.CountPrefix(true)
+	countReversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, countReversePrefix)
+
+	return prefixes
 }
 
 // rebuildCountIndex rebuilds the count index for a given attribute.
@@ -1106,14 +1111,23 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	return indexDelete
 }
 
-func dropReverseEdges(ctx context.Context, rb *IndexRebuild) error {
+func prefixesToDropReverseEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
+	// Exit early if indices do not need to be rebuilt.
 	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
 	}
 
-	glog.Infof("Deleting reverse index for %s", rb.Attr)
-	return deleteReverseEdges(rb.Attr)
+	pk := x.ParsedKey{Attr: rb.Attr}
+	prefixes := append([][]byte{}, pk.ReversePrefix())
+
+	// All the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	reversePrefix := pk.ReversePrefix()
+	reversePrefix[0] = x.ByteSplit
+	prefixes = append(prefixes, reversePrefix)
+
+	return prefixes
 }
 
 // rebuildReverseEdges rebuilds the reverse edges for a given attribute.
@@ -1128,13 +1142,12 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
-		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
+		return pl.IterateAll(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
-			edge.Label = pp.Label
 
 			for {
 				// we only need to build reverse index here.
@@ -1165,7 +1178,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", rb.CurrentSchema.Predicate)
+			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
 	}
 
 	return false, nil
@@ -1182,7 +1195,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.IterateAll(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
@@ -1215,7 +1228,6 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
-			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
 		return pl.addMutation(ctx, txn, newEdge)
@@ -1242,4 +1254,10 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 
 	return schema.State().Delete(attr)
+}
+
+// DeleteNamespace bans the namespace and deletes its predicates/types from the schema.
+func DeleteNamespace(ns uint64) error {
+	schema.State().DeletePredsForNs(ns)
+	return pstore.BanNamespace(ns)
 }

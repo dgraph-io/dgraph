@@ -1096,7 +1096,7 @@
                                 {
                                     "Ref": "AWS::Region"
                                 },
-                                ".compute.internal:5080 -w /var/run/dgraph/w --idx=1\n",
+                                ".compute.internal:5080 -w /var/run/dgraph/w --raft='idx=1'\n",
                                 "StandardOutput=journal\n",
                                 "StandardError=journal\n",
                                 "User=dgraph\n",
@@ -1438,7 +1438,7 @@
                                     {
                                         "Ref": "AWS::Region"
                                     },
-                                    ".compute.internal:7080 --lru_mb 2048 --zero ",
+                                    ".compute.internal:7080 --zero ",
                                     {
                                         "Fn::GetAtt": [
                                             "DgraphHealthyZero",

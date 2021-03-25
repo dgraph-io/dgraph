@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/99designs/gqlgen/graphql"
-	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/dgraph-io/gqlgen/graphql"
+	"github.com/dgraph-io/gqlgen/graphql/introspection"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation
@@ -90,7 +90,7 @@ func (ec *executionContext) writeStringValue(val string) {
 
 func (ec *executionContext) writeOptionalStringValue(val *string) {
 	if val == nil {
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 	} else {
 		ec.writeStringValue(*val)
 	}
@@ -211,7 +211,7 @@ func (ec *executionContext) handleEnumValue(sel ast.SelectionSet, obj *introspec
 		if i != 0 {
 			x.Check2(ec.b.WriteRune(','))
 		}
-		ec.writeKey(field.Name)
+		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
 			ec.writeStringValue("__EnumValue")
@@ -293,7 +293,7 @@ func (ec *executionContext) handleSchema(sel ast.SelectionSet, obj *introspectio
 		if i != 0 {
 			x.Check2(ec.b.WriteRune(','))
 		}
-		ec.writeKey(field.Name)
+		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
 			ec.writeStringValue("__Schema")
@@ -390,7 +390,7 @@ func (ec *executionContext) marshalIntrospectionTypeSlice(sel ast.SelectionSet,
 func (ec *executionContext) marshalIntrospectionType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
 		// TODO - This should be an error as this field is mandatory.
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 		return
 	}
 	ec.handleType(sel, v)
@@ -399,7 +399,7 @@ func (ec *executionContext) marshalIntrospectionType(sel ast.SelectionSet, v *in
 func (ec *executionContext) marshalOptionalEnumValueSlice(sel ast.SelectionSet,
 	v []introspection.EnumValue) {
 	if v == nil {
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 		return
 	}
 	x.Check2(ec.b.WriteRune('['))
@@ -415,7 +415,7 @@ func (ec *executionContext) marshalOptionalEnumValueSlice(sel ast.SelectionSet,
 func (ec *executionContext) marshalIntrospectionFieldSlice(sel ast.SelectionSet,
 	v []introspection.Field) {
 	if v == nil {
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 		return
 	}
 	x.Check2(ec.b.WriteRune('['))
@@ -447,7 +447,7 @@ func (ec *executionContext) marshalOptionalInputValueSlice(sel ast.SelectionSet,
 func (ec *executionContext) marshalOptionalItypeSlice(sel ast.SelectionSet,
 	v []introspection.Type) {
 	if v == nil {
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 		return
 	}
 
@@ -463,7 +463,7 @@ func (ec *executionContext) marshalOptionalItypeSlice(sel ast.SelectionSet,
 
 func (ec *executionContext) marshalType(sel ast.SelectionSet, v *introspection.Type) {
 	if v == nil {
-		x.Check2(ec.b.WriteString("null"))
+		x.Check2(ec.b.Write(JsonNull))
 		return
 	}
 	ec.handleType(sel, v)

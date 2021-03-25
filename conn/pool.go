@@ -18,6 +18,7 @@ package conn
 
 import (
 	"context"
+	"crypto/tls"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -138,13 +140,13 @@ func (p *Pools) getPool(addr string) (*Pool, bool) {
 }
 
 // Connect creates a Pool instance for the node with the given address or returns the existing one.
-func (p *Pools) Connect(addr string) *Pool {
+func (p *Pools) Connect(addr string, tlsClientConf *tls.Config) *Pool {
 	existingPool, has := p.getPool(addr)
 	if has {
 		return existingPool
 	}
 
-	pool, err := newPool(addr)
+	pool, err := newPool(addr, tlsClientConf)
 	if err != nil {
 		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil
@@ -160,21 +162,32 @@ func (p *Pools) Connect(addr string) *Pool {
 	glog.Infof("CONNECTING to %s\n", addr)
 	p.all[addr] = pool
 	return pool
+
 }
 
 // newPool creates a new "pool" with one gRPC connection, refcount 0.
-func newPool(addr string) (*Pool, error) {
-	conn, err := grpc.Dial(addr,
+func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
+	conOpts := []grpc.DialOption{
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize),
 			grpc.UseCompressor((snappyCompressor{}).Name())),
 		grpc.WithBackoffMaxDelay(time.Second),
-		grpc.WithInsecure())
+	}
+
+	if tlsClientConf != nil {
+		conOpts = append(conOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsClientConf)))
+	} else {
+		conOpts = append(conOpts, grpc.WithInsecure())
+	}
+
+	conn, err := grpc.Dial(addr, conOpts...)
 	if err != nil {
+		glog.Errorf("unable to connect with %s : %s", addr, err)
 		return nil, err
 	}
+
 	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now(), closer: z.NewCloser(1)}
 	go pl.MonitorHealth()
 	return pl, nil

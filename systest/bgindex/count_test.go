@@ -1,5 +1,3 @@
-// +build systest
-
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
@@ -27,12 +25,16 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -44,11 +46,13 @@ func TestCountIndex(t *testing.T) {
 	edgeCount := make([]int, total+100000)
 	uidLocks := make([]sync.Mutex, total+100000)
 
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-
+	var dg *dgo.Dgraph
+	err := x.RetryUntilSuccess(10, time.Second, func() error {
+		var err error
+		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+		return err
+	})
+	require.Nil(t, err)
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: "value: [string] .",
@@ -117,10 +121,11 @@ func TestCountIndex(t *testing.T) {
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <value> "%v" .`, uid, ec-1)),
-			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
-				t.Fatalf("error in deletion :: %v\n", err)
-			} else if errors.Is(err, dgo.ErrAborted) {
+			}); err != nil && (errors.Is(err, dgo.ErrAborted) ||
+				strings.Contains(err.Error(), "Properties of guardians group and groot user cannot be deleted")) {
 				return
+			} else if err != nil {
+				t.Fatalf("error in deletion :: %v\n", err)
 			}
 			ec--
 		case 2:

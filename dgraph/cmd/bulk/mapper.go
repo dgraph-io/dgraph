@@ -17,9 +17,7 @@
 package bulk
 
 import (
-	"bufio"
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -42,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/snappy"
 )
 
 type mapper struct {
@@ -58,7 +57,8 @@ type shardState struct {
 
 func newMapperBuffer(opt *options) *z.Buffer {
 	sz := float64(opt.MapBufSize) * 1.1
-	buf, err := z.NewBufferWith(int(sz), 2*int(opt.MapBufSize), z.UseMmap)
+	buf, err := z.NewBufferWithDir(int(sz), 2*int(opt.MapBufSize), z.UseMmap,
+		filepath.Join(opt.TmpDir, bufferDir), "Mapper.Buffer")
 	x.Check(err)
 	return buf
 }
@@ -83,7 +83,7 @@ type MapEntry []byte
 // }
 
 func mapEntrySize(key []byte, p *pb.Posting) int {
-	return 8 + 4 + 4 + len(key) + p.Size()
+	return 8 + 4 + 4 + len(key) + p.Size() // UID + keySz + postingSz + len(key) + size(p)
 }
 
 func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
@@ -166,12 +166,9 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		x.Check(f.Close())
 	}()
 
-	gzWriter := gzip.NewWriter(f)
-	w := bufio.NewWriterSize(gzWriter, 4<<20)
+	w := snappy.NewBufferedWriter(f)
 	defer func() {
-		x.Check(w.Flush())
-		x.Check(gzWriter.Flush())
-		x.Check(gzWriter.Close())
+		x.Check(w.Close())
 	}()
 
 	// Create partition keys for the map file.
@@ -180,22 +177,22 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	}
 
 	var bufSize int64
-	slice, next := []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+	cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
 		if bufSize < m.opt.PartitionBufSize {
-			continue
+			return nil
 		}
 		sz := len(header.PartitionKeys)
 		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
 			// We already have this key.
-			continue
+			return nil
 		}
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
-	}
+		return nil
+	})
+
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
 	x.Check(err)
@@ -206,16 +203,16 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	slice, next = []byte{}, 1
-	for next != 0 {
-		slice, next = cbuf.Slice(next)
+
+	err = cbuf.SliceIterate(func(slice []byte) error {
 		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
 		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
 
 		_, err = w.Write(slice)
-		x.Check(err)
-	}
+		return err
+	})
+	x.Check(err)
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
@@ -248,7 +245,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 		for i := range m.shards {
 			sh := &m.shards[i]
-			if uint64(sh.cbuf.Len()) >= m.opt.MapBufSize {
+			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
 				go m.writeMapEntriesToFile(sh.cbuf, i)
 				// Clear the entries and encodedSize for the next batch.
@@ -260,7 +257,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if sh.cbuf.Len() > 0 {
+		if sh.cbuf.LenNoPadding() > 0 {
 			sh.mu.Lock() // One write at a time.
 			m.writeMapEntriesToFile(sh.cbuf, i)
 		} else {
@@ -289,14 +286,18 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
-	sid := m.uid(nq.GetSubject())
+	if m.opt.Namespace != math.MaxUint64 {
+		// Use the specified namespace passed through '--force-namespace' flag.
+		nq.Namespace = m.opt.Namespace
+	}
+	sid := m.uid(nq.GetSubject(), nq.Namespace)
 	if sid == 0 {
 		panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetSubject()))
 	}
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
-		oid = m.uid(nq.GetObjectId())
+		oid = m.uid(nq.GetObjectId(), nq.Namespace)
 		if oid == 0 {
 			panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetObjectId()))
 		}
@@ -307,19 +308,23 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		x.Check(err)
 	}
 
+	m.schema.checkAndSetInitialSchema(nq.Namespace)
+
+	// Appropriate schema must exist for the nquad's namespace by this time.
+	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 	fwd, rev := m.createPostings(nq, de)
-	shard := m.state.shards.shardFor(nq.Predicate)
-	key := x.DataKey(nq.Predicate, sid)
+	shard := m.state.shards.shardFor(attr)
+	key := x.DataKey(attr, sid)
 	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(nq.Predicate, oid)
+		key = x.ReverseKey(attr, oid)
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
 }
 
-func (m *mapper) uid(xid string) uint64 {
+func (m *mapper) uid(xid string, ns uint64) uint64 {
 	if !m.opt.NewUids {
 		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
 			m.xids.BumpTo(uid)
@@ -327,10 +332,10 @@ func (m *mapper) uid(xid string) uint64 {
 		}
 	}
 
-	return m.lookupUid(xid)
+	return m.lookupUid(xid, ns)
 }
 
-func (m *mapper) lookupUid(xid string) uint64 {
+func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 	// We create a copy of xid string here because it is stored in
 	// the map in AssignUid and going to be around throughout the process.
 	// We don't want to keep the whole line that we read from file alive.
@@ -344,7 +349,9 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	// sb := strings.Builder{}
 	// x.Check2(sb.WriteString(xid))
 	// uid, isNew := m.xids.AssignUid(sb.String())
-	uid, isNew := m.xids.AssignUid(xid)
+
+	// There might be a case where Nquad from different namespace have the same xid.
+	uid, isNew := m.xids.AssignUid(x.NamespaceAttr(ns, xid))
 	if !m.opt.StoreXids || !isNew {
 		return uid
 	}
@@ -358,6 +365,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 		ObjectValue: &api.Value{
 			Val: &api.Value_StrVal{StrVal: xid},
 		},
+		Namespace: ns,
 	}}
 	m.processNQuad(nq)
 	return uid
@@ -366,10 +374,10 @@ func (m *mapper) lookupUid(xid string) uint64 {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
-	m.schema.validateType(de, nq.ObjectValue == nil)
+	m.schema.validateType(de, nq.Namespace, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
-	sch := m.schema.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
 	if nq.GetObjectValue() != nil {
 		lang := de.GetLang()
 		switch {
@@ -391,7 +399,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.schema.validateType(de, true)
+	m.schema.validateType(de, nq.Namespace, true)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
@@ -404,7 +412,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		return // Cannot index UIDs
 	}
 
-	sch := m.schema.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
 	for _, tokerName := range sch.GetTokenizer() {
 		// Find tokeniser.
 		toker, ok := tok.GetTokenizer(tokerName)
@@ -428,15 +436,16 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
+		attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 		// Store index posting.
 		for _, t := range toks {
 			m.addMapEntry(
-				x.IndexKey(nq.Predicate, t),
+				x.IndexKey(attr, t),
 				&pb.Posting{
 					Uid:         de.GetEntity(),
 					PostingType: pb.Posting_REF,
 				},
-				m.state.shards.shardFor(nq.Predicate),
+				m.state.shards.shardFor(attr),
 			)
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	bpb "github.com/dgraph-io/badger/v2/pb"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
@@ -74,21 +75,21 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
-		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		glog.Errorf("Authentication from address %s failed: %v", addr, err)
+		return nil, x.ErrorInvalidLogin
 	}
 	glog.Infof("%s logged in successfully", user.UserID)
 
 	resp := &api.Response{}
-	accessJwt, err := getAccessJwt(user.UserID, user.Groups)
+	accessJwt, err := getAccessJwt(user.UserID, user.Groups, user.Namespace)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
 		return nil, errors.Errorf(errMsg)
 	}
-	refreshJwt, err := getRefreshJwt(user.UserID)
+
+	refreshJwt, err := getRefreshJwt(user.UserID, user.Namespace)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
@@ -129,20 +130,25 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 				request.RefreshToken)
 		}
 
-		userId := userData[0]
+		userId := userData.userId
+		ctx = x.AttachNamespace(ctx, userData.namespace)
 		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
 			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
 		}
 
 		if user == nil {
-			return nil, errors.Errorf("unable to authenticate through refresh token: "+
-				"user not found for id %v", userId)
+			return nil, errors.Errorf("unable to authenticate: invalid credentials")
 		}
 
+		user.Namespace = userData.namespace
 		glog.Infof("Authenticated user %s through refresh token", userId)
 		return user, nil
 	}
+
+	// In case of login, we can't extract namespace from JWT because we have not yet given JWT
+	// to the user, so the login request should contain the namespace, which is then set to ctx.
+	ctx = x.AttachNamespace(ctx, request.Namespace)
 
 	// authorize the user using password
 	var err error
@@ -153,36 +159,29 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	}
 
 	if user == nil {
-		return nil, errors.Errorf("unable to authenticate through password: "+
-			"user not found for id %v", request.Userid)
+		return nil, errors.Errorf("unable to authenticate: invalid credentials")
 	}
 	if !user.PasswordMatch {
-		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, x.ErrorInvalidLogin
 	}
+	user.Namespace = request.Namespace
 	return user, nil
+}
+
+type userData struct {
+	namespace uint64
+	userId    string
+	groupIds  []string
 }
 
 // validateToken verifies the signature and expiration of the jwt, and if validation passes,
 // returns a slice of strings, where the first element is the extracted userId
 // and the rest are groupIds encoded in the jwt.
-func validateToken(jwtStr string) ([]string, error) {
-	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(worker.Config.HmacSecret), nil
-	})
-
+func validateToken(jwtStr string) (*userData, error) {
+	claims, err := x.ParseJWT(jwtStr)
 	if err != nil {
-		return nil, errors.Errorf("unable to parse jwt token:%v", err)
+		return nil, err
 	}
-
-	// TODO(arijit): Upgrade the jwt library to v4.0
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, errors.Errorf("claims in jwt token is not map claims")
-	}
-
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
@@ -193,6 +192,11 @@ func validateToken(jwtStr string) ([]string, error) {
 	userId, ok := claims["userid"].(string)
 	if !ok {
 		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
+	}
+
+	namespace, ok := claims["namespace"].(float64)
+	if !ok {
+		return nil, errors.Errorf("namespace in claims is not valid:%v", namespace)
 	}
 
 	groups, ok := claims["groups"].([]interface{})
@@ -209,7 +213,7 @@ func validateToken(jwtStr string) ([]string, error) {
 			groupIds = append(groupIds, groupId)
 		}
 	}
-	return append([]string{userId}, groupIds...), nil
+	return &userData{namespace: uint64(namespace), userId: userId, groupIds: groupIds}, nil
 }
 
 // validateLoginRequest validates that the login request has either the refresh token or the
@@ -233,12 +237,13 @@ func validateLoginRequest(request *api.LoginRequest) error {
 	return nil
 }
 
-// getAccessJwt constructs an access jwt with the given user id, groupIds,
+// getAccessJwt constructs an access jwt with the given user id, groupIds, namespace
 // and expiration TTL specified by worker.Config.AccessJwtTtl
-func getAccessJwt(userId string, groups []acl.Group) (string, error) {
+func getAccessJwt(userId string, groups []acl.Group, namespace uint64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userid": userId,
-		"groups": acl.GetGroupIDs(groups),
+		"userid":    userId,
+		"groups":    acl.GetGroupIDs(groups),
+		"namespace": namespace,
 		// set the jwt exp according to the ttl
 		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
@@ -250,12 +255,13 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 	return jwtString, nil
 }
 
-// getRefreshJwt constructs a refresh jwt with the given user id, and expiration ttl specified by
-// worker.Config.RefreshJwtTtl
-func getRefreshJwt(userId string) (string, error) {
+// getRefreshJwt constructs a refresh jwt with the given user id, namespace and expiration ttl
+// specified by worker.Config.RefreshJwtTtl
+func getRefreshJwt(userId string, namespace uint64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userid": userId,
-		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
+		"userid":    userId,
+		"namespace": namespace,
+		"exp":       time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
 	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
@@ -287,12 +293,14 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		"$userid":   userid,
 		"$password": password,
 	}
-	queryRequest := api.Request{
-		Query: queryUser,
-		Vars:  queryVars,
+	req := &Request{
+		req: &api.Request{
+			Query: queryUser,
+			Vars:  queryVars,
+		},
+		doAuth: NoAuthorize,
 	}
-
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, NoAuthorize)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -318,20 +326,24 @@ func RefreshAcls(closer *z.Closer) {
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCachePtr
 	var maxRefreshTs uint64
-	retrieveAcls := func(refreshTs uint64) error {
+	retrieveAcls := func(ns uint64, refreshTs uint64) error {
 		if refreshTs <= maxRefreshTs {
 			return nil
 		}
 		maxRefreshTs = refreshTs
 
 		glog.V(3).Infof("Refreshing ACLs")
-		queryRequest := api.Request{
-			Query:    queryAcls,
-			ReadOnly: true,
-			StartTs:  refreshTs,
+		req := &Request{
+			req: &api.Request{
+				Query:    queryAcls,
+				ReadOnly: true,
+				StartTs:  refreshTs,
+			},
+			doAuth: NoAuthorize,
 		}
 
-		queryResp, err := (&Server{}).doQuery(closer.Ctx(), &queryRequest, NoAuthorize)
+		ctx := x.AttachNamespace(closer.Ctx(), ns)
+		queryResp, err := (&Server{}).doQuery(ctx, req)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -340,17 +352,25 @@ func RefreshAcls(closer *z.Closer) {
 			return err
 		}
 
-		aclCachePtr.update(groups)
+		aclCachePtr.update(ns, groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
 
 	closer.AddRunning(1)
-	go worker.SubscribeForUpdates(aclPrefixes, func(kvs *bpb.KVList) {
+	go worker.SubscribeForUpdates(aclPrefixes, x.IgnoreBytes, func(kvs *bpb.KVList) {
 		if kvs == nil || len(kvs.Kv) == 0 {
 			return
 		}
-		if err := retrieveAcls(kvs.Kv[0].Version); err != nil {
+		kv := x.KvWithMaxVersion(kvs, aclPrefixes)
+		pk, err := x.Parse(kv.GetKey())
+		if err != nil {
+			glog.Fatalf("Got a key from subscription which is not parsable: %s", err)
+		}
+		glog.V(3).Infof("Got ACL update via subscription for attr: %s", pk.Attr)
+
+		ns, _ := x.ParseNamespaceAttr(pk.Attr)
+		if err := retrieveAcls(ns, kv.GetVersion()); err != nil {
 			glog.Errorf("Error while retrieving acls: %v", err)
 		}
 	}, 1, closer)
@@ -374,15 +394,15 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix("dgraph.acl.permission"),
-	x.PredicatePrefix("dgraph.acl.predicate"),
-	x.PredicatePrefix("dgraph.acl.rule"),
-	x.PredicatePrefix("dgraph.user.group"),
-	x.PredicatePrefix("dgraph.type.Group"),
-	x.PredicatePrefix("dgraph.xid"),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.permission")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.predicate")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
+	x.PredicatePrefix(x.GalaxyAttr("dgraph.xid")),
 }
 
-// ResetAcl clears the aclCachePtr and upserts the Groot account.
+// clears the aclCachePtr and upserts the Groot account.
 func ResetAcl(closer *z.Closer) {
 	defer func() {
 		glog.Infof("ResetAcl closed")
@@ -393,72 +413,11 @@ func ResetAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
-
-	// guardians is the group of users who have complete access over all predicates.
-	upsertGuardians := func(ctx context.Context) error {
-		query := fmt.Sprintf(`
-			{
-				guid as var(func: eq(dgraph.xid, "%s"))
-			}
-		`, x.GuardiansId)
-		groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
-		req := &api.Request{
-			CommitNow: true,
-			Query:     query,
-			Mutations: []*api.Mutation{
-				{
-					Set:  groupNQuads,
-					Cond: "@if(eq(len(guid), 0))",
-				},
-			},
-		}
-
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
-			return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
-		}
-
-		glog.Infof("Successfully upserted the guardian group")
-		return nil
-	}
-
-	// groot is the default user of guardians group.
-	upsertGroot := func(ctx context.Context) error {
-		query := fmt.Sprintf(`
-			{
-				grootid as var(func: eq(dgraph.xid, "%s"))
-				guid as var(func: eq(dgraph.xid, "%s"))
-			}
-		`, x.GrootId, x.GuardiansId)
-		userNQuads := acl.CreateUserNQuads(x.GrootId, "password")
-		userNQuads = append(userNQuads, &api.NQuad{
-			Subject:   "_:newuser",
-			Predicate: "dgraph.user.group",
-			ObjectId:  "uid(guid)",
-		})
-		req := &api.Request{
-			CommitNow: true,
-			Query:     query,
-			Mutations: []*api.Mutation{
-				{
-					Set: userNQuads,
-					// Assuming that if groot exists, it is in guardian group
-					Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
-				},
-			},
-		}
-
-		if _, err := (&Server{}).doQuery(ctx, req, NoAuthorize); err != nil {
-			return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
-		}
-
-		glog.Infof("Successfully upserted groot account")
-		return nil
-	}
-
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		if err := upsertGuardians(ctx); err != nil {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -469,7 +428,8 @@ func ResetAcl(closer *z.Closer) {
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
 		defer cancel()
-		if err := upsertGroot(ctx); err != nil {
+		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -478,21 +438,178 @@ func ResetAcl(closer *z.Closer) {
 	}
 }
 
+// upsertGuardian must be called after setting the namespace in the context.
+func upsertGuardian(ctx context.Context) error {
+	query := fmt.Sprintf(`
+			{
+				guid as guardians(func: eq(dgraph.xid, "%s")){
+					uid
+				}
+			}
+		`, x.GuardiansId)
+	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
+	req := &Request{
+		req: &api.Request{
+			CommitNow: true,
+			Query:     query,
+			Mutations: []*api.Mutation{
+				{
+					Set:  groupNQuads,
+					Cond: "@if(eq(len(guid), 0))",
+				},
+			},
+		},
+		doAuth: NoAuthorize,
+	}
+
+	resp, err := (&Server{}).doQuery(ctx, req)
+
+	// Structs to parse guardians group uid from query response
+	type groupNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type groupQryResp struct {
+		GuardiansGroup []groupNode `json:"guardians"`
+	}
+
+	if err != nil {
+		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+	}
+	var groupResp groupQryResp
+	var guardiansUidStr string
+	if err := json.Unmarshal(resp.GetJson(), &groupResp); err != nil {
+		return errors.Wrap(err, "Couldn't unmarshal response from guardians group query")
+	}
+
+	if len(groupResp.GuardiansGroup) == 0 {
+		// no guardians group found
+		// Extract guardians group uid from mutation
+		newGroupUidMap := resp.GetUids()
+		guardiansUidStr = newGroupUidMap["newgroup"]
+	} else if len(groupResp.GuardiansGroup) == 1 {
+		// we found a guardians group
+		guardiansUidStr = groupResp.GuardiansGroup[0].Uid
+	} else {
+		return errors.Wrap(err, "Multiple guardians group found")
+	}
+
+	uid, err := strconv.ParseUint(guardiansUidStr, 0, 64)
+	if err != nil {
+		return errors.Wrapf(err, "Error while parsing Uid: %s of guardians Group", guardiansUidStr)
+	}
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While upserting group with id %s", x.GuardiansId)
+	}
+	x.GuardiansUid.Store(ns, uid)
+	glog.V(2).Infof("Successfully upserted the guardian of namespace: %d\n", ns)
+	return nil
+}
+
+// upsertGroot must be called after setting the namespace in the context.
+func upsertGroot(ctx context.Context, passwd string) error {
+	// groot is the default user of guardians group.
+	query := fmt.Sprintf(`
+			{
+				grootid as grootUser(func: eq(dgraph.xid, "%s")){
+					uid
+				}
+				guid as var(func: eq(dgraph.xid, "%s"))
+			}
+		`, x.GrootId, x.GuardiansId)
+	userNQuads := acl.CreateUserNQuads(x.GrootId, passwd)
+	userNQuads = append(userNQuads, &api.NQuad{
+		Subject:   "_:newuser",
+		Predicate: "dgraph.user.group",
+		ObjectId:  "uid(guid)",
+	})
+	req := &Request{
+		req: &api.Request{
+			CommitNow: true,
+			Query:     query,
+			Mutations: []*api.Mutation{
+				{
+					Set: userNQuads,
+					// Assuming that if groot exists, it is in guardian group
+					Cond: "@if(eq(len(grootid), 0) and gt(len(guid), 0))",
+				},
+			},
+		},
+		doAuth: NoAuthorize,
+	}
+
+	resp, err := (&Server{}).doQuery(ctx, req)
+	if err != nil {
+		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
+	}
+
+	// Structs to parse groot user uid from query response
+	type userNode struct {
+		Uid string `json:"uid"`
+	}
+
+	type userQryResp struct {
+		GrootUser []userNode `json:"grootUser"`
+	}
+
+	var grootUserUid string
+	var userResp userQryResp
+	if err := json.Unmarshal(resp.GetJson(), &userResp); err != nil {
+		return errors.Wrap(err, "Couldn't unmarshal response from groot user query")
+	}
+	if len(userResp.GrootUser) == 0 {
+		// no groot user found from query
+		// Extract uid of created groot user from mutation
+		newUserUidMap := resp.GetUids()
+		grootUserUid = newUserUidMap["newuser"]
+	} else if len(userResp.GrootUser) == 1 {
+		// we found a groot user
+		grootUserUid = userResp.GrootUser[0].Uid
+	} else {
+		return errors.Wrap(err, "Multiple groot users found")
+	}
+
+	uid, err := strconv.ParseUint(grootUserUid, 0, 64)
+	if err != nil {
+		return errors.Wrapf(err, "Error while parsing Uid: %s of groot user", grootUserUid)
+	}
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "While upserting user with id %s", x.GrootId)
+	}
+	x.GrootUid.Store(ns, uid)
+	glog.V(2).Infof("Successfully upserted groot account for namespace %d\n", ns)
+	return nil
+}
+
 // extract the userId, groupIds from the accessJwt in the context
-func extractUserAndGroups(ctx context.Context) ([]string, error) {
+func extractUserAndGroups(ctx context.Context) (*userData, error) {
 	accessJwt, err := x.ExtractJwt(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return validateToken(accessJwt[0])
+	return validateToken(accessJwt)
 }
 
-func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) (map[string]struct{}, []string) {
+type authPredResult struct {
+	allowed []string
+	blocked map[string]struct{}
+}
 
+func authorizePreds(ctx context.Context, userData *userData, preds []string,
+	aclOp *acl.Operation) (*authPredResult, error) {
+
+	ns, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While authorizing preds")
+	}
+	userId := userData.userId
+	groupIds := userData.groupIds
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
-		if err := aclCachePtr.authorizePredicate(groupIds, pred, aclOp); err != nil {
+		nsPred := x.NamespaceAttr(ns, pred)
+		if err := aclCachePtr.authorizePredicate(groupIds, nsPred, aclOp); err != nil {
 			logAccess(&accessEntry{
 				userId:    userId,
 				groups:    groupIds,
@@ -514,7 +631,7 @@ func authorizePreds(userId string, groupIds, preds []string,
 		}
 	}
 	aclCachePtr.RUnlock()
-	return blockedPreds, allowedPreds
+	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}, nil
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -540,10 +657,9 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		for _, u := range update.Preds {
-			preds = append(preds, u.Predicate)
+			preds = append(preds, x.ParseAttr(u.Predicate))
 		}
 	}
-
 	var userId string
 	var groupIds []string
 
@@ -556,8 +672,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian group are allowed to alter anything.
@@ -570,10 +686,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Modify)
-		if len(blockedPreds) > 0 {
+		result, err := authorizePreds(ctx, userData, preds, acl.Modify)
+		if err != nil {
+			return nil
+		}
+		if len(result.blocked) > 0 {
 			var msg strings.Builder
-			for key := range blockedPreds {
+			for key := range result.blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
@@ -644,6 +763,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 
 // authorizeMutation authorizes the mutation using the aclCachePtr. It will return permission
 // denied error if any one of the predicates in mutation(set or delete) is unauthorized.
+// At this stage, namespace is not attached in the predicates.
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -666,8 +786,8 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardians group are allowed to mutate anything
@@ -680,18 +800,20 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			}
 			return nil
 		}
-
-		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
-		if len(blockedPreds) > 0 {
+		result, err := authorizePreds(ctx, userData, preds, acl.Write)
+		if err != nil {
+			return err
+		}
+		if len(result.blocked) > 0 {
 			var msg strings.Builder
-			for key := range blockedPreds {
+			for key := range result.blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-		gmu.AllowedPreds = allowedPreds
+		gmu.AllowedPreds = result.allowed
 		return nil
 	}
 
@@ -791,6 +913,7 @@ func logAccess(log *accessEntry) {
 
 //authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
 // unauthorized predicates from query.
+// At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -816,19 +939,22 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			return nil, nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId = userData[0]
-		groupIds = userData[1:]
+		userId = userData.userId
+		groupIds = userData.groupIds
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil, nil
 		}
 
-		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Read)
-		return blockedPreds, allowedPreds, nil
+		result, err := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, result.allowed, err
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
+	if err != nil {
+		return err
+	}
 
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -838,10 +964,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			operation: acl.Read,
 			allowed:   err == nil,
 		}).String())
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if len(blockedPreds) != 0 {
@@ -906,16 +1028,13 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
-		userId := userData[0]
-		groupIds := userData[1:]
-
+		groupIds := userData.groupIds
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Read)
-
-		return blockedPreds, nil
+		result, err := authorizePreds(ctx, userData, preds, acl.Read)
+		return result.blocked, err
 	}
 
 	// find the predicates which are blocked for the schema query
@@ -948,6 +1067,29 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	return nil
 }
 
+// AuthGuardianOfTheGalaxy authorizes the operations for the users who belong to the guardians
+// group in the galaxy namespace. This authorization is used for admin usages like creation and
+// deletion of a namespace, resetting passwords across namespaces etc.
+func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return errors.Wrap(err, "Authorize guradian of the galaxy, extracting jwt token, error:")
+	}
+	if ns != 0 {
+		return errors.New("Only guardian of galaxy is allowed to do this operation")
+	}
+	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
+	// any of the group to which the user belongs is "guardians" or not.
+	if err := AuthorizeGuardians(ctx); err != nil {
+		return errors.Wrap(err, "AuthGuardianOfTheGalaxy, failed to authorize guardians")
+	}
+	glog.V(3).Info("Successfully authorised guardian of the galaxy")
+	return nil
+}
+
 // AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
 func AuthorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
@@ -962,8 +1104,8 @@ func AuthorizeGuardians(ctx context.Context) error {
 	case err != nil:
 		return status.Error(codes.Unauthenticated, err.Error())
 	default:
-		userId := userData[0]
-		groupIds := userData[1:]
+		userId := userData.userId
+		groupIds := userData.groupIds
 
 		if !x.IsGuardian(groupIds) {
 			// Deny access for members of non-guardian groups

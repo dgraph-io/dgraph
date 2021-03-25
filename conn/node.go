@@ -19,6 +19,7 @@ package conn
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -33,7 +34,7 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -66,16 +67,17 @@ type Node struct {
 	_raft      raft.Node
 
 	// Fields which are never changed after init.
-	StartTime   time.Time
-	Cfg         *raft.Config
-	MyAddr      string
-	Id          uint64
-	peers       map[uint64]string
-	confChanges map[uint64]chan error
-	messages    chan sendmsg
-	RaftContext *pb.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	StartTime       time.Time
+	Cfg             *raft.Config
+	MyAddr          string
+	Id              uint64
+	peers           map[uint64]string
+	confChanges     map[uint64]chan error
+	messages        chan sendmsg
+	RaftContext     *pb.RaftContext
+	Store           *raftwal.DiskStorage
+	Rand            *rand.Rand
+	tlsClientConfig *tls.Config
 
 	Proposals proposals
 
@@ -84,7 +86,7 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -135,13 +137,14 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     y.WaterMark{Name: "Applied watermark"},
-		RaftContext: rc,
-		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
-		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq, 100),
+		Applied:         y.WaterMark{Name: "Applied watermark"},
+		RaftContext:     rc,
+		Rand:            rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges:     make(map[uint64]chan error),
+		messages:        make(chan sendmsg, 100),
+		peers:           make(map[uint64]string),
+		requestCh:       make(chan linReadReq, 100),
+		tlsClientConfig: tlsConfig,
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -521,7 +524,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	GetPools().Connect(addr)
+	GetPools().Connect(addr, n.tlsClientConfig)
 	n.SetPeer(pid, addr)
 }
 
@@ -562,14 +565,9 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 	}
 }
 
-func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
-	addr, ok := n.Peer(pid)
-	x.AssertTruef(ok, "Unable to find conn pool for peer: %#x", pid)
-	rc := &pb.RaftContext{
-		Addr:  addr,
-		Group: n.RaftContext.Group,
-		Id:    pid,
-	}
+func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
+	pid := rc.Id
+	rc.SnapshotTs = 0
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
 
@@ -578,9 +576,13 @@ func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
 		NodeID:  pid,
 		Context: rcBytes,
 	}
+	if rc.IsLearner {
+		cc.Type = raftpb.ConfChangeAddLearnerNode
+	}
+
 	err = errInternalRetry
 	for err == errInternalRetry {
-		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, rc.Addr)
 		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
 	}
@@ -705,7 +707,7 @@ func (n *Node) RunReadIndexLoop(closer *z.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(3).Infof("Request readctx: %#x", activeRctx)
+			glog.V(4).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
@@ -749,7 +751,7 @@ func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payloa
 	}
 	n.Connect(rc.Id, rc.Addr)
 
-	err := n.addToCluster(context.Background(), rc.Id)
+	err := n.addToCluster(context.Background(), rc)
 	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }

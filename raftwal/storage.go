@@ -70,41 +70,46 @@ const versionKey = 1
 // HardSync is set, msync is called after every write, which flushes those
 // writes to disk.
 type DiskStorage struct {
-	dir      string
-	commitTs uint64
-	id       uint64
-	gid      uint32
-	elog     trace.EventLog
+	dir  string
+	elog trace.EventLog
 
 	meta *metaFile
 	wal  *wal
 	lock sync.Mutex
 }
 
-type indexRange struct {
-	from, until uint64 // index range for deletion, until index is not deleted.
+// Init initializes an instance of DiskStorage without encryption.
+func Init(dir string) *DiskStorage {
+	ds, err := InitEncrypted(dir, nil)
+	x.Check(err)
+	return ds
 }
 
-// Init initializes returns a properly initialized instance of DiskStorage.
+// InitEncrypted initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func Init(dir string) *DiskStorage {
+func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}
 
 	var err error
-	w.meta, err = newMetaFile(dir)
-	x.Check(err)
+	if w.meta, err = newMetaFile(dir); err != nil {
+		return nil, err
+	}
 	// fmt.Printf("meta: %s\n", hex.Dump(w.meta.data[1024:2048]))
 	// fmt.Printf("found snapshot of size: %d\n", sliceSize(w.meta.data, snapshotOffset))
 
-	w.wal, err = openWal(dir)
-	x.Check(err)
+	encryptionKey = encKey
+	if w.wal, err = openWal(dir); err != nil {
+		return nil, err
+	}
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.meta.snapshot()
-	x.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	first, _ := w.FirstIndex()
 	if !raft.IsEmptySnap(snap) {
@@ -119,7 +124,7 @@ func Init(dir string) *DiskStorage {
 
 	glog.Infof("Init Raft Storage with snap: %d, first: %d, last: %d\n",
 		snap.Metadata.Index, first, last)
-	return w
+	return w, nil
 }
 
 func (w *DiskStorage) SetUint(info MetaInfo, id uint64) { w.meta.SetUint(info, id) }
@@ -140,6 +145,8 @@ func (w *DiskStorage) HardState() (raftpb.HardState, error) {
 	}
 	return w.meta.HardState()
 }
+
+// Checkpoint returns the Raft index corresponding to the checkpoint.
 func (w *DiskStorage) Checkpoint() (uint64, error) {
 	if w.meta == nil {
 		return 0, errors.Errorf("uninitialized meta file")
@@ -354,8 +361,21 @@ func (w *DiskStorage) addEntries(entries []raftpb.Entry) error {
 	return nil
 }
 
+// truncateEntriesUntil deletes the data field of every raft entry
+// of type EntryNormal and index ∈ [0, lastIdx).
+func (w *DiskStorage) TruncateEntriesUntil(lastIdx uint64) {
+	w.wal.truncateEntriesUntil(lastIdx)
+}
+
+func (w *DiskStorage) NumLogFiles() int {
+	return len(w.wal.files)
+}
+
 // Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
 func (w *DiskStorage) Sync() error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
 	if err := w.meta.Sync(); err != nil {
 		return errors.Wrapf(err, "while syncing meta")
 	}

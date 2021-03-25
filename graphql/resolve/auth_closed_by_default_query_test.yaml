@@ -1,0 +1,23 @@
+- name: "Query with missing jwt token - type with auth directive"
+  gqlquery: |
+    query {
+      queryTodo {
+        id
+        owner
+        text
+      }
+    }
+  error:
+    { "message": "a valid JWT is required but was not provided"}
+
+- name: "Query with missing jwt token - type without auth directive"
+  gqlquery: |
+    query {
+      queryTodo {
+        id
+        owner
+        text
+      }
+    }
+  error:
+    { "message": "a valid JWT is required but was not provided" }

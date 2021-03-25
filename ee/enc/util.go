@@ -19,9 +19,6 @@
 package enc
 
 import (
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"io"
 )
 
@@ -36,14 +33,4 @@ func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 // GetReader returns the reader as is for OSS Builds.
 func GetReader(_ []byte, r io.Reader) (io.Reader, error) {
 	return r, nil
-}
-
-// RegisterVaultFlags registers the required encryption flags. None for OSS.
-func RegisterFlags(_ *pflag.FlagSet) {
-	return
-}
-
-// ReadKey reads the key. Nil for OSS.
-func ReadKey(_ *viper.Viper) (x.SensitiveByteSlice, error) {
-	return nil, nil
 }

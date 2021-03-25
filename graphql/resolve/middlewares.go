@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // QueryMiddleware represents a middleware for queries
@@ -108,6 +109,15 @@ func (mws MutationMiddlewares) Then(resolver MutationResolver) MutationResolver 
 	return resolver
 }
 
+// resolveGuardianOfTheGalaxyAuth returns a Resolved with error if the context doesn't contain any
+// Guardian of Galaxy auth, otherwise it returns nil
+func resolveGuardianOfTheGalaxyAuth(ctx context.Context, f schema.Field) *Resolved {
+	if err := edgraph.AuthGuardianOfTheGalaxy(ctx); err != nil {
+		return EmptyResult(f, err)
+	}
+	return nil
+}
+
 // resolveGuardianAuth returns a Resolved with error if the context doesn't contain any Guardian auth,
 // otherwise it returns nil
 func resolveGuardianAuth(ctx context.Context, f schema.Field) *Resolved {
@@ -124,8 +134,19 @@ func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
 	return nil
 }
 
-// GuardianAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian auth
-// present in context, otherwise it lets the resolverFunc resolve the query.
+// GuardianOfTheGalaxyAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian
+// of Galaxy auth present in context, otherwise it lets the resolverFunc resolve the query.
+func GuardianOfTheGalaxyAuthMW4Query(resolver QueryResolver) QueryResolver {
+	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+		if resolved := resolveGuardianOfTheGalaxyAuth(ctx, query); resolved != nil {
+			return resolved
+		}
+		return resolver.Resolve(ctx, query)
+	})
+}
+
+// GuardianAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian auth present
+// in context, otherwise it lets the resolverFunc resolve the query.
 func GuardianAuthMW4Query(resolver QueryResolver) QueryResolver {
 	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 		if resolved := resolveGuardianAuth(ctx, query); resolved != nil {
@@ -148,6 +169,17 @@ func LoggingMWQuery(resolver QueryResolver) QueryResolver {
 	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 		glog.Infof("GraphQL admin query. Name =  %v", query.Name())
 		return resolver.Resolve(ctx, query)
+	})
+}
+
+// GuardianOfTheGalaxyAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian
+// of Galaxy auth present in context, otherwise it lets the resolverFunc resolve the mutation.
+func GuardianOfTheGalaxyAuthMW4Mutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+		if resolved := resolveGuardianOfTheGalaxyAuth(ctx, mutation); resolved != nil {
+			return resolved, false
+		}
+		return resolver.Resolve(ctx, mutation)
 	})
 }
 
@@ -176,6 +208,16 @@ func LoggingMWMutation(resolver MutationResolver) MutationResolver {
 	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
 		bool) {
 		glog.Infof("GraphQL admin mutation. Name =  %v", mutation.Name())
+		return resolver.Resolve(ctx, mutation)
+	})
+}
+
+func AclOnlyMW4Mutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
+		bool) {
+		if !x.WorkerConfig.AclEnabled {
+			return EmptyResult(mutation, errors.New("Enable ACL to use this mutation")), false
+		}
 		return resolver.Resolve(ctx, mutation)
 	})
 }

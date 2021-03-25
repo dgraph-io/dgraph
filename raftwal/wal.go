@@ -17,8 +17,10 @@
 package raftwal
 
 import (
+	"bytes"
 	"sort"
 
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -34,8 +36,8 @@ var errNotFound = errors.New("Unable to find raft entry")
 // DiskStorage, which has a lock protecting the calls to this object.
 type wal struct {
 	// files is the list of all log files ordered in ascending order by the first
-	// index in the file. The current file being written should always be accessible
-	// by looking at the last element of this slice.
+	// index in the file. current is the file currently being written to, and is
+	// added to files only after it is full.
 	files   []*logFile
 	current *logFile
 	// nextEntryIdx is the index of the next entry to write to. When this value exceeds
@@ -102,6 +104,41 @@ func (l *wal) allEntries(lo, hi, maxSize uint64) []raftpb.Entry {
 	return entries
 }
 
+// truncateEntriesUntil deletes the data field of every raft entry
+// of type EntryNormal and index ∈ [0, lastIdx).
+func (l *wal) truncateEntriesUntil(lastIdx uint64) {
+	files := append(l.files, l.current)
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		for idx := 0; idx < maxNumEntries; idx++ {
+			entry := file.getEntry(idx)
+			if entry.Index() >= lastIdx {
+				return
+			}
+
+			// Truncate the data of normal Raft entries.
+			// Here, we set the length field of the entry data to zero.
+			// As long as we never directly iterate through the data section,
+			// this operation is safe.
+			// Suppose we truncate indexes [0, 100) and then call AddEntries
+			// with indexes [95, 105]. AddEntries will do the following:
+			// 1. It will zero out all data at index 95 and above
+			// 2. It will find the data offset at index 94 (say 'x')
+			// 3. We start writing new data at x+sliceSize(data, x),
+			//    which will be x+4 if the entry is of type EntryNormal.
+			// Since all entries of index 95 and above have been invalidated,
+			// we can be sure that we don't overwrite any useful data.
+			if entry.Type() == uint64(raftpb.EntryNormal) {
+				offset := int(entry.DataOffset())
+				z.ZeroOut(file.Data, offset, offset+4)
+			}
+		}
+	}
+}
+
 // AddEntries adds the entries to the log. If there are entries in the log with the same index
 // they will be overwritten and the entries after that zeroed out from the log.
 func (l *wal) AddEntries(entries []raftpb.Entry) error {
@@ -160,15 +197,29 @@ func (l *wal) AddEntries(entries []raftpb.Entry) error {
 	}
 
 	for _, re := range entries {
-		if l.nextEntryIdx >= maxNumEntries {
-			if err := l.rotate(re.Index); err != nil {
+		// Write upto maxNumEntries or 1GB, whatever happens first.
+		if l.nextEntryIdx >= maxNumEntries || offset+4+len(re.Data) > 1<<30 {
+			if err := l.rotate(re.Index, offset); err != nil {
 				return err
 			}
 			l.nextEntryIdx, offset = 0, logFileOffset
 		}
+		// If encryption is enabled then encrypt the data.
+		if l.current.dataKey != nil {
+			var ebuf bytes.Buffer
+			curr := l.current
+			if err := y.XORBlockStream(
+				&ebuf, re.Data, curr.dataKey.Data, curr.generateIV(uint64(offset))); err != nil {
+				return err
+			}
+			re.Data = ebuf.Bytes()
+		}
 
-		// Write re.Data to a new slice at the end of the file.
-		destBuf, next := l.current.AllocateSlice(len(re.Data), offset)
+		// Allocate slice for the data and copy bytes.
+		destBuf, next, err := l.current.AllocateSlice(len(re.Data), offset)
+		if err != nil {
+			return err
+		}
 		x.AssertTrue(copy(destBuf, re.Data) == len(re.Data))
 
 		// Write the entry at the given slot.
@@ -340,7 +391,7 @@ func (l *wal) reset() error {
 }
 
 // Moves the current logFile into l.files and creates a new logFile.
-func (l *wal) rotate(firstIndex uint64) error {
+func (l *wal) rotate(firstIndex uint64, offset int) error {
 	// Select the name for the new file based on the names of the existing files.
 	nextFid := l.current.fid
 	x.AssertTrue(nextFid > 0)
@@ -349,8 +400,12 @@ func (l *wal) rotate(firstIndex uint64) error {
 			nextFid = ef.fid
 		}
 	}
-	nextFid += 1
-	go l.current.Sync() // Trigger a sync in the background.
+	nextFid++
+
+	err := l.current.Truncate(int64(offset))
+	if err != nil {
+		return errors.Wrapf(err, "while truncating entry file")
+	}
 
 	ef, err := openLogFile(l.dir, nextFid)
 	if err != nil {
