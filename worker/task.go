@@ -1514,6 +1514,9 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		uids.Or(bm)
 	}
 	numUids := int(uids.GetCardinality())
+	if numUids == 0 {
+		return nil
+	}
 
 	numGo, width := x.DivideAndRule(numUids)
 	if span != nil && numGo > 1 {
