@@ -218,6 +218,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
+	glog.Info("prefix is: ", prefix)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
@@ -560,20 +561,16 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	return exportInternal(ctx, in, pstore, false)
 }
 
-func ToExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {
+func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {
 	e := &exporter{
-		readTs: in.ReadTs,
+		readTs:    in.ReadTs,
+		uid:       pk.Uid,
+		namespace: x.ParseNamespace(pk.Attr),
+		attr:      x.ParseAttr(pk.Attr),
+		pl:        pl,
 	}
-	e.uid = pk.Uid
-	e.namespace, e.attr = x.ParseNamespaceAttr(pk.Attr)
 
 	switch {
-	case e.attr == "dgraph.graphql.xid":
-		// Ignore this predicate.
-	case e.attr == "dgraph.drop.op":
-		// Ignore this predicate.
-	case e.attr == "dgraph.graphql.p_query":
-		// Ignore this predicate.
 	case pk.IsData() && e.attr == "dgraph.graphql.schema":
 		// Export the graphql schema.
 		vals, err := pl.AllValues(in.ReadTs)
@@ -602,25 +599,13 @@ func ToExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 		if val, err = json.Marshal(exported); err != nil {
 			return nil, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
 		}
-
 		kv := &bpb.KV{
 			Value:   val,
 			Version: 2, // GraphQL schema value
 		}
 		return listWrap(kv), nil
 
-	// below predicates no longer exist internally starting v21.03 but leaving them here
-	// so that users with a binary with version >= 21.03 can export data from a version < 21.03
-	// without this internal data showing up.
-	case e.attr == "dgraph.cors":
-	case e.attr == "dgraph.graphql.schema_created_at":
-	case e.attr == "dgraph.graphql.schema_history":
-	case e.attr == "dgraph.graphql.p_sha256hash":
-		// Ignore these predicates.
-
 	case pk.IsData():
-		e.pl = pl
-
 		// The GraphQL layer will create a node of type "dgraph.graphql". That entry
 		// should not be exported.
 		if e.attr == "dgraph.type" {
@@ -648,18 +633,57 @@ func ToExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 			glog.Fatalf("Invalid export format found: %s", in.Format)
 		}
 
+	// below predicates no longer exist internally starting v21.03 but leaving them here
+	// so that users with a binary with version >= 21.03 can export data from a version < 21.03
+	// without this internal data showing up.
+	case e.attr == "dgraph.cors":
+	case e.attr == "dgraph.graphql.schema_created_at":
+	case e.attr == "dgraph.graphql.schema_history":
+	case e.attr == "dgraph.graphql.p_sha256hash":
+
+	// These predicates are not required in the export data.
+	case e.attr == "dgraph.graphql.xid":
+	case e.attr == "dgraph.drop.op":
+	case e.attr == "dgraph.graphql.p_query":
 	default:
 		glog.Fatalf("Invalid key found: %+v\n", pk)
 	}
 	return nil, nil
 }
 
-func WriteExport(writer *ExportWriter, kv *bpb.KV, sep []byte) error {
+func WriteExport(writers *Writers, kv *bpb.KV, format string) error {
 	// Skip nodes that have no data. Otherwise, the exported data could have
 	// formatting and/or syntax errors.
 	if len(kv.Value) == 0 {
 		return nil
 	}
+
+	var dataSeparator []byte
+	switch format {
+	case "json":
+		dataSeparator = []byte(",\n")
+	case "rdf":
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
+	default:
+		glog.Fatalf("Invalid export format found: %s", format)
+	}
+
+	var writer *ExportWriter
+	var sep []byte
+	switch kv.Version {
+	case 1: // data
+		writer = writers.DataWriter
+		sep = dataSeparator
+	case 2: // graphQL schema
+		writer = writers.GqlSchemaWriter
+		sep = []byte(",\n") // use json separator.
+	case 3: // graphQL schema
+		writer = writers.SchemaWriter
+	default:
+		glog.Fatalf("Invalid data type found: %x", kv.Key)
+	}
+
 	if writer.hasDataBefore {
 		if _, err := writer.gw.Write(sep); err != nil {
 			return err
@@ -769,18 +793,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot read posting list")
 		}
-		return ToExportFormat(pk, pl, in)
-	}
-
-	var dataSeparator []byte
-	switch in.Format {
-	case "json":
-		dataSeparator = []byte(",\n")
-	case "rdf":
-		// The separator for RDF should be empty since the toRDF function already
-		// adds newline to each RDF entry.
-	default:
-		glog.Fatalf("Invalid export format found: %s", in.Format)
+		return ToExportKvList(pk, pl, in)
 	}
 
 	stream.Send = func(buf *z.Buffer) error {
@@ -790,19 +803,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if err := kv.Unmarshal(s); err != nil {
 				return err
 			}
-			var writer *ExportWriter
-			var sep []byte
-			switch kv.Version {
-			case 1: // data
-				writer = writers.DataWriter
-				sep = dataSeparator
-			case 2: // graphQL schema
-				writer = writers.GqlSchemaWriter
-				sep = []byte(",\n") // use json separator.
-			default:
-				glog.Fatalf("Invalid data type found: %x", kv.Key)
-			}
-			return WriteExport(writer, kv, sep)
+			return WriteExport(writers, kv, in.Format)
 		})
 	}
 
@@ -832,39 +833,26 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				return err
 			}
 
-			var kv *bpb.KV
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				return errors.Wrap(err, "writePrefix failed to get value")
+			}
+			kv := &bpb.KV{}
 			switch prefix {
 			case x.ByteSchema:
-				if !skipZero {
-					servesTablet, err := groups().ServesTablet(pk.Attr)
-					if err != nil || !servesTablet {
-						continue
-					}
-				}
-
-				var update pb.SchemaUpdate
-				err = item.Value(func(val []byte) error {
-					return update.Unmarshal(val)
-				})
+				kv, err = SchemaExportKv(pk.Attr, val, skipZero)
 				if err != nil {
 					// Let's not propagate this error. We just log this and continue onwards.
-					glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
+					glog.Errorf("Unable to export schema: %+v. Err=%v\n", pk, err)
 					continue
 				}
-				kv = toSchema(pk.Attr, &update)
-
 			case x.ByteType:
-				var update pb.TypeUpdate
-				err := item.Value(func(val []byte) error {
-					return update.Unmarshal(val)
-				})
+				kv, err = TypeExportKv(pk.Attr, val)
 				if err != nil {
 					// Let's not propagate this error. We just log this and continue onwards.
-					glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
-					return nil
+					glog.Errorf("Unable to export schema: %+v. Err=%v\n", pk, err)
+					continue
 				}
-				kv = toType(pk.Attr, update)
-
 			default:
 				glog.Fatalf("Unhandled byte prefix: %v", prefix)
 			}
@@ -905,6 +893,29 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 	return exportStorage.FinishWriting(writers)
+}
+
+func SchemaExportKv(attr string, val []byte, skipZero bool) (*bpb.KV, error) {
+	if !skipZero {
+		servesTablet, err := groups().ServesTablet(attr)
+		if err != nil || !servesTablet {
+			return nil, errors.Wrapf(err, "Tablet not found for attribute: %s", attr)
+		}
+	}
+
+	var update pb.SchemaUpdate
+	if err := update.Unmarshal(val); err != nil {
+		return nil, err
+	}
+	return toSchema(attr, &update), nil
+}
+
+func TypeExportKv(attr string, val []byte) (*bpb.KV, error) {
+	var update pb.TypeUpdate
+	if err := update.Unmarshal(val); err != nil {
+		return nil, err
+	}
+	return toType(attr, update), nil
 }
 
 // Export request is used to trigger exports for the request list of groups.

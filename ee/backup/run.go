@@ -357,66 +357,76 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot create dir %s", exportDir)
 	}
 
-	glog.Info("Backup location is: ", opt.location)
-
 	uri, err := url.Parse(opt.location)
 	if err != nil {
-		return errors.Wrapf(err, "cannot parse backup location")
+		return errors.Wrapf(err, "runExportBackup")
 	}
 	handler, err := worker.NewUriHandler(uri, nil)
 	if err != nil {
-		return errors.Wrapf(err, "cannot create backup handler")
+		return errors.Wrapf(err, "runExportBackup")
 	}
-
 	latestManifest, err := worker.GetLatestManifest(handler, uri)
 	if err != nil {
-		return errors.Wrapf(err, "cannot get latest manifest")
+		return errors.Wrapf(err, "runExportBackup")
 	}
 
-	processKvBuf := func(buf *z.Buffer, in *pb.ExportRequest, writers *worker.Writers) error {
+	exportSchema := func(writers *worker.Writers, val []byte, pk x.ParsedKey) error {
 		kv := &bpb.KV{}
-		err := buf.SliceIterate(func(s []byte) error {
-			kv.Reset()
-			// TODO: Do the processing here
-			if err := kv.Unmarshal(s); err != nil {
-				return errors.Wrap(err, "processKvBuf")
-			}
-			pk, err := x.Parse(kv.Key)
+		var err error
+		if pk.IsSchema() {
+			kv, err = worker.SchemaExportKv(pk.Attr, val, true)
 			if err != nil {
-				return errors.Wrap(err, "processKvBuf")
+				return err
 			}
-
-			if pk.HasStartUid || pk.Attr == "_predicate_" || !pk.IsData() {
-				return nil
-			}
-
-			pl := &pb.PostingList{}
-			if err := pl.Unmarshal(kv.Value); err != nil {
-				return errors.Wrap(err, "ProcessKvBuf")
-			}
-			l := posting.NewList(kv.Key, pl, kv.Version)
-
-			kvList, err := worker.ToExportFormat(pk, l, in)
+		} else {
+			kv, err = worker.TypeExportKv(pk.Attr, val)
 			if err != nil {
-				return errors.Wrap(err, "processKvBuf")
+				return err
 			}
-			exportKv := kvList.Kv[0]
+		}
+		return worker.WriteExport(writers, kv, "rdf")
+	}
 
-			var writer *worker.ExportWriter
-			var sep []byte
-			switch exportKv.Version {
-			case 1: // data
-				writer = writers.DataWriter
-				sep = []byte("")
-			case 2: // graphQL schema
-				writer = writers.GqlSchemaWriter
-				sep = []byte(",\n") // use json separator.
-			default:
-				glog.Fatalf("Invalid data type found: %x", kv.Key)
+	processKvBuf := func(ch chan *z.Buffer, req *pb.ExportRequest, writers *worker.Writers) error {
+		for buf := range ch {
+			glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
+			kv := &bpb.KV{}
+			err := buf.SliceIterate(func(s []byte) error {
+				kv.Reset()
+				if err := kv.Unmarshal(s); err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+				pk, err := x.Parse(kv.Key)
+				if err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+
+				if pk.Attr == "_predicate_" {
+					return nil
+				}
+				if pk.IsSchema() || pk.IsType() {
+					return exportSchema(writers, kv.Value, pk)
+				}
+
+				pl := &pb.PostingList{}
+				if err := pl.Unmarshal(kv.Value); err != nil {
+					return errors.Wrap(err, "ProcessKvBuf")
+				}
+
+				l := posting.NewList(kv.Key, pl, kv.Version)
+				kvList, err := worker.ToExportKvList(pk, l, req)
+				if err != nil {
+					return errors.Wrap(err, "processKvBuf")
+				}
+				exportKv := kvList.Kv[0]
+				return worker.WriteExport(writers, exportKv, req.Format)
+			})
+			if err != nil {
+				return err
 			}
-			return worker.WriteExport(writer, kv, sep)
-		})
-		return err
+			buf.Release()
+		}
+		return nil
 	}
 
 	// TODO: Make this procesing concurrent.
@@ -453,11 +463,7 @@ func runExportBackup() error {
 
 		errCh := make(chan error, 1)
 		go func() {
-			for buf := range r.WriteCh() {
-				glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
-				errCh <- processKvBuf(buf, in, writers)
-				buf.Release()
-			}
+			errCh <- processKvBuf(r.WriteCh(), in, writers)
 			glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 		}()
 
