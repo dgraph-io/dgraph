@@ -32,12 +32,16 @@ type mathTree struct {
 
 var (
 	ErrorIntOverflow     = errors.New("Integer overflow")
-	ErrorFloatOverflow   = errors.New("Float overflow")
 	ErrorDivisionByZero  = errors.New("Division by zero")
-	ErrorModuloByZero    = errors.New("Modulo by zero")
 	ErrorFractionalPower = errors.New("Fractional power of negative number")
 	ErrorNegativeLog     = errors.New("Log of negative number")
 	ErrorNegativeRoot    = errors.New("Root of negative number")
+)
+
+const (
+	NotANumber       = "NaN"
+	PositiveInfinity = "+Inf"
+	NegativeInfinity = "-Int"
 )
 
 // processBinary handles the binary operands like

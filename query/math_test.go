@@ -253,24 +253,6 @@ func TestProcessBinary(t *testing.T) {
 			name: "Addition integer underflow",
 		},
 		{in: &mathTree{
-			Fn: "+",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: float64(math.MaxFloat64)}},
-				{Const: types.Val{Tid: types.FloatID, Value: float64(math.MaxFloat64)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Addition float overflow",
-		},
-		{in: &mathTree{
-			Fn: "+",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: float64(-math.MaxFloat64)}},
-				{Const: types.Val{Tid: types.FloatID, Value: float64(-math.MaxFloat64)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Addition float underflow",
-		},
-		{in: &mathTree{
 			Fn: "-",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775800)}},
@@ -289,24 +271,6 @@ func TestProcessBinary(t *testing.T) {
 			name: "Subtraction integer underflow",
 		},
 		{in: &mathTree{
-			Fn: "-",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
-				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Subtraction float overflow",
-		},
-		{in: &mathTree{
-			Fn: "-",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
-				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Subtraction float underflow",
-		},
-		{in: &mathTree{
 			Fn: "*",
 			Child: []*mathTree{
 				{Const: types.Val{Tid: types.IntID, Value: int64(9223372036854775)}},
@@ -323,24 +287,6 @@ func TestProcessBinary(t *testing.T) {
 			}},
 			err:  ErrorIntOverflow,
 			name: "Multiplication integer underflow",
-		},
-		{in: &mathTree{
-			Fn: "*",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: math.MaxFloat64}},
-				{Const: types.Val{Tid: types.FloatID, Value: float64(10.2)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Multiplication float overflow",
-		},
-		{in: &mathTree{
-			Fn: "*",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: -math.MaxFloat64}},
-				{Const: types.Val{Tid: types.FloatID, Value: float64(10.23)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Multiplication float underflow",
 		},
 		{in: &mathTree{
 			Fn: "/",
@@ -366,7 +312,7 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.IntID, Value: int64(23)}},
 				{Const: types.Val{Tid: types.IntID, Value: int64(0)}},
 			}},
-			err:  ErrorModuloByZero,
+			err:  ErrorDivisionByZero,
 			name: "Modulo int zero",
 		},
 		{in: &mathTree{
@@ -375,7 +321,7 @@ func TestProcessBinary(t *testing.T) {
 				{Const: types.Val{Tid: types.FloatID, Value: float64(23)}},
 				{Const: types.Val{Tid: types.FloatID, Value: float64(0)}},
 			}},
-			err:  ErrorModuloByZero,
+			err:  ErrorDivisionByZero,
 			name: "Modulo float zero",
 		},
 		{in: &mathTree{
@@ -386,24 +332,6 @@ func TestProcessBinary(t *testing.T) {
 			}},
 			err:  ErrorFractionalPower,
 			name: "Fractional negative power",
-		},
-		{in: &mathTree{
-			Fn: "pow",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.IntID, Value: int64(200)}},
-				{Const: types.Val{Tid: types.IntID, Value: int64(1231424123)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Power overflow",
-		},
-		{in: &mathTree{
-			Fn: "pow",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: float64(200)}},
-				{Const: types.Val{Tid: types.FloatID, Value: float64(1231424123)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Power overflow float",
 		},
 		{in: &mathTree{
 			Fn: "logbase",
@@ -525,38 +453,6 @@ func TestProcessUnary(t *testing.T) {
 			}},
 			err:  ErrorNegativeLog,
 			name: "Negative float ln",
-		},
-		{in: &mathTree{
-			Fn: "exp",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.IntID, Value: int64(800)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Exp int overflow",
-		},
-		{in: &mathTree{
-			Fn: "exp",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.IntID, Value: int64(-800)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Exp int underflow",
-		},
-		{in: &mathTree{
-			Fn: "exp",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: float64(800)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Exp float overflow",
-		},
-		{in: &mathTree{
-			Fn: "exp",
-			Child: []*mathTree{
-				{Const: types.Val{Tid: types.FloatID, Value: float64(-800)}},
-			}},
-			err:  ErrorFloatOverflow,
-			name: "Exp float underflow",
 		},
 		{in: &mathTree{
 			Fn: "u-",
