@@ -64,7 +64,7 @@ test:
 
 image:
 	@GOOS=linux $(MAKE) dgraph
-	@mkdir linux
+	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
