@@ -19,6 +19,7 @@ package edgraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1115,6 +1116,16 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+		// A fresh StartTs is assigned if it is 0.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if req.GetHash() != getHash(ns, req.GetStartTs()) {
+			return nil, errors.Errorf("Miscmatch between claimed namespace|startTs and hash")
+		}
+	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "abort_older_than".
@@ -1263,7 +1274,20 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
+	if x.WorkerConfig.AclEnabled {
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
+	}
 	return resp, gqlErrs
+}
+
+func getHash(ns, startTs uint64) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	return string(h.Sum(nil))
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
@@ -1471,28 +1495,14 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
-func validateNamespace(ctx context.Context, preds []string) error {
+func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Do a basic validation that all the predicates passed in transaction context matches the
-	// claimed namespace and user is not accidently commiting a transaction that it did not create.
-	for _, pred := range preds {
-		// Format for Preds in TxnContext is gid-<namespace><pred> (see fillPreds in posting pkg)
-		splits := strings.Split(pred, "-")
-		if len(splits) < 2 {
-			return errors.Errorf("Unable to find group id in %s", pred)
-		}
-		pred = strings.Join(splits[1:], "-")
-		if len(pred) < 8 {
-			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
-		}
-		if parsedNs := x.ParseNamespace(pred); parsedNs != ns {
-			return errors.Errorf("Please login into correct namespace. "+
-				"Currently logged in namespace %#x", ns)
-		}
+	if getHash(ns, tc.StartTs) != tc.Hash {
+		return errors.Errorf("Mismatch between the claimed namespace|startTs and hash.")
 	}
 
 	return nil
@@ -1508,7 +1518,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 
 	if x.WorkerConfig.AclEnabled {
-		if err := validateNamespace(ctx, tc.Preds); err != nil {
+		if err := validateNamespace(ctx, tc); err != nil {
 			return &api.TxnContext{}, err
 		}
 	}
