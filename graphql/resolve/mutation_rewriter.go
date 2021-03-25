@@ -96,7 +96,6 @@ type mutationFragment struct {
 	deletes    []interface{}
 	check      resultChecker
 	newNodes   map[string]schema.Type
-	err        error
 }
 
 // xidMetadata is used to handle cases where we get multiple objects which have same xid value in a
@@ -425,13 +424,24 @@ func (arw *AddRewriter) Rewrite(
 	xidMetadata := arw.XidMetadata
 	// ret stores a slice of Upsert Mutations. These are used in executing upsert queries in graphql/resolve/mutation.go
 	var ret []*UpsertMutation
-	// upsertQuery stores a list of queries of the form
-	// State1 as addState(func: uid(0x11)) @filter(type(State)) {
-	// 		uid
+	// queries contains queries which are performed along with mutations. These include
+	// queries aiding upserts or additional deletes.
+	// Example:
+	// var(func: uid(0x123)) {
+	//   Author_4 as Post.author
 	// }
-	// These are formed while doing Upserts with Add Mutations. These also contain
-	// any related auth queries. These are prepended to other queries formed during rewriteObject.
-	var upsertQuery []*gql.GraphQuery
+	// The above query is used to find old Author of the Post. The edge between the Post and
+	// Author is then deleted using the accompanied mutation.
+	var queries []*gql.GraphQuery
+	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
+	// This is collated from newNodes of each fragment.
+	// Example
+	// newNodes["Project3"] = schema.Type(Project)
+	newNodes := make(map[string]schema.Type)
+	// mutationsAll stores mutations computed from fragment. These are returned as Mutation parameter
+	// of UpsertMutation
+	var mutationsAll []*dgoapi.Mutation
+	// retErrors stores errors found out during rewriting mutations. These are returned by this function.
 	var retErrors error
 
 	// Parse upsert parameter from addMutation input.
@@ -479,7 +489,9 @@ func (arw *AddRewriter) Rewrite(
 			// State1 as addState(func: uid(0x11)) @filter(type(State)) {
 			// 		uid
 			// }
-			upsertQuery = append(upsertQuery, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, upsertVar, idExistence[upsertVar])...)
+			// These are formed while doing Upserts with Add Mutations. These also contain
+			// any related auth queries.
+			queries = append(queries, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, upsertVar, idExistence[upsertVar])...)
 			// Add upsert condition to ensure that the upsert takes place only when the node
 			// exists and has proper auth permission.
 			// Example condition:  cond: "@if(gt(len(State1), 0))"
@@ -490,51 +502,29 @@ func (arw *AddRewriter) Rewrite(
 		}
 	}
 
-	mutationsAll := []*dgoapi.Mutation{}
-	queries := &gql.GraphQuery{}
-	queries.Children = upsertQuery
-
-	buildMutations := func(mutationsAll []*dgoapi.Mutation, queries *gql.GraphQuery,
-		frags []*mutationFragment) []*dgoapi.Mutation {
-		for _, frag := range frags {
-			mutation, _ := mutationFromFragment(
-				frag,
-				func(frag *mutationFragment) ([]byte, error) {
-					return json.Marshal(frag.fragment)
-				},
-				func(frag *mutationFragment) ([]byte, error) {
-					if len(frag.deletes) > 0 {
-						return json.Marshal(frag.deletes)
-					}
-					return nil, nil
-				})
-
-			if mutation != nil {
-				mutationsAll = append(mutationsAll, mutation)
-			}
-			queries.Children = append(queries.Children, frag.queries...)
-		}
-		return mutationsAll
-	}
-
-	mutationsAll = buildMutations(mutationsAll, queries, arw.frags)
-
-	if len(queries.Children) == 0 {
-		queries = nil
-	}
-
-	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
-	// This is collated from newNodes of each fragment.
-	// Example
-	// newNodes["Project3"] = schema.Type(Project)
-	newNodes := make(map[string]schema.Type)
 	for _, frag := range arw.frags {
+		mutation, _ := mutationFromFragment(
+			frag,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+
+		if mutation != nil {
+			mutationsAll = append(mutationsAll, mutation)
+		}
+		queries = append(queries, frag.queries...)
 		copyTypeMap(frag.newNodes, newNodes)
 	}
 
 	if len(mutationsAll) > 0 {
 		ret = append(ret, &UpsertMutation{
-			Query:     []*gql.GraphQuery{queries},
+			Query:     queries,
 			Mutations: mutationsAll,
 			NewNodes:  newNodes,
 		})
@@ -580,6 +570,24 @@ func (urw *UpdateRewriter) Rewrite(
 
 	// ret stores a slice of Upsert Mutations. These are used in executing upsert queries in graphql/resolve/mutation.go
 	var ret []*UpsertMutation
+	// queries contains queries which are performed along with mutations. These include
+	// queries aiding upserts or additional deletes.
+	// Example:
+	// var(func: uid(0x123)) {
+	//   Author_4 as Post.author
+	// }
+	// The above query is used to find old Author of the Post. The edge between the Post and
+	// Author is then deleted using the accompanied mutation.
+	var queries []*gql.GraphQuery
+	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
+	// This is collated from newNodes of each fragment.
+	// Example
+	// newNodes["Project3"] = schema.Type(Project)
+	newNodes := make(map[string]schema.Type)
+	// mutations stores mutations computed from fragment. These are returned as Mutation parameter
+	// of UpsertMutation
+	var mutations []*dgoapi.Mutation
+	// retErrors stores errors found out during rewriting mutations. These are returned by this function.
 	var retErrors error
 
 	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
@@ -595,7 +603,7 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
+	queries = append(queries, RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")...)
 	srcUID := MutationQueryVarUID
 	objDel, okDelArg := delArg.(map[string]interface{})
 	objSet, okSetArg := setArg.(map[string]interface{})
@@ -639,73 +647,64 @@ func (urw *UpdateRewriter) Rewrite(
 			}
 		}
 	}
-	buildMutation := func(setFrag, delFrag *mutationFragment) *UpsertMutation {
-		var mutSet, mutDel *dgoapi.Mutation
-		var mutations []*dgoapi.Mutation
-		queries := upsertQuery
 
-		if setFrag != nil {
-			setFrag.conditions = append(setFrag.conditions, updateMutationCondition)
-			var errSet error
-			mutSet, errSet = mutationFromFragment(
-				setFrag,
+	if urw.setFrag != nil {
+		urw.setFrag.conditions = append(urw.setFrag.conditions, updateMutationCondition)
+		mutSet, errSet := mutationFromFragment(
+			urw.setFrag,
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				if len(frag.deletes) > 0 {
+					return json.Marshal(frag.deletes)
+				}
+				return nil, nil
+			})
+
+		if mutSet != nil {
+			mutations = append(mutations, mutSet)
+		}
+		retErrors = schema.AppendGQLErrs(retErrors, errSet)
+
+		queries = append(queries, urw.setFrag.queries...)
+	}
+
+	if urw.delFrag != nil {
+		if len(objDel) != 0 {
+			addUpdateCondition(urw.delFrag)
+			mutDel, errDel := mutationFromFragment(
+				urw.delFrag,
 				func(frag *mutationFragment) ([]byte, error) {
-					return json.Marshal(frag.fragment)
+					return nil, nil
 				},
 				func(frag *mutationFragment) ([]byte, error) {
-					if len(frag.deletes) > 0 {
-						return json.Marshal(frag.deletes)
-					}
-					return nil, nil
+					return json.Marshal(frag.fragment)
 				})
 
-			if mutSet != nil {
-				mutations = append(mutations, mutSet)
+			if mutDel != nil {
+				mutations = append(mutations, mutDel)
 			}
-			retErrors = schema.AppendGQLErrs(retErrors, errSet)
+			retErrors = schema.AppendGQLErrs(retErrors, errDel)
 
-			queries = append(queries, setFrag.queries...)
-		}
-
-		if delFrag != nil {
-			if len(objDel) != 0 {
-				addUpdateCondition(delFrag)
-				var errDel error
-				mutDel, errDel = mutationFromFragment(
-					delFrag,
-					func(frag *mutationFragment) ([]byte, error) {
-						return nil, nil
-					},
-					func(frag *mutationFragment) ([]byte, error) {
-						return json.Marshal(frag.fragment)
-					})
-
-				if mutDel != nil {
-					mutations = append(mutations, mutDel)
-				}
-				retErrors = schema.AppendGQLErrs(retErrors, errDel)
-
-				queries = append(queries, delFrag.queries...)
-			}
-		}
-
-		newNodes := make(map[string]schema.Type)
-		if urw.setFrag != nil {
-			copyTypeMap(urw.setFrag.newNodes, newNodes)
-		}
-		if urw.delFrag != nil {
-			copyTypeMap(urw.delFrag.newNodes, newNodes)
-		}
-
-		return &UpsertMutation{
-			Query:     queries,
-			Mutations: mutations,
-			NewNodes:  newNodes,
+			queries = append(queries, urw.delFrag.queries...)
 		}
 	}
 
-	mutations := buildMutation(urw.setFrag, urw.delFrag)
-	ret = append(ret, mutations)
+	if urw.setFrag != nil {
+		copyTypeMap(urw.setFrag.newNodes, newNodes)
+	}
+	if urw.delFrag != nil {
+		copyTypeMap(urw.delFrag.newNodes, newNodes)
+	}
+
+	if len(mutations) > 0 {
+		ret = append(ret, &UpsertMutation{
+			Query:     queries,
+			Mutations: mutations,
+			NewNodes:  newNodes,
+		})
+	}
 
 	return ret, retErrors
 }
