@@ -2748,12 +2748,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "removeNode",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving removeNode failed because rpc error: code = Unknown desc = No" +
-					" group with groupId 2147483640 found",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"removeNode": null}`,
+			guardianErr:        "No group with groupId 2147483640 found",
+			guardianData:       `{"removeNode": null}`,
 		},
 		{
 			name: "moveTablet has guardian auth",
@@ -2768,12 +2764,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "moveTablet",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving moveTablet failed because rpc error: code = Unknown desc" +
-					" = Group: [2147483640] is not a known group.",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"moveTablet": null}`,
+			guardianErr:        "Group: [2147483640] is not a known group.",
+			guardianData:       `{"moveTablet": null}`,
 		},
 		{
 			name: "assign has guardian auth",
@@ -2789,12 +2781,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "assign",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving assign failed because rpc error: code = Unknown desc" +
-					" = Nothing to be leased",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
-			guardianData: `{"assign": null}`,
+			guardianErr:        "Nothing to be leased",
+			guardianData:       `{"assign": null}`,
 		},
 		{
 			name: "enterpriseLicense has guardian auth",
@@ -2808,12 +2796,8 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					}`,
 			queryName:          "enterpriseLicense",
 			testGuardianAccess: true,
-			guardianErrs: x.GqlErrorList{{
-				Message: "resolving enterpriseLicense failed because rpc error: code = Unknown" +
-					" desc = while extracting enterprise details from the license: while decoding" +
-					" license file: EOF",
-				Locations: []x.Location{{Line: 3, Column: 8}},
-			}},
+			guardianErr: "while extracting enterprise details from the license: while decoding" +
+				" license file: EOF",
 			guardianData: `{"enterpriseLicense": null}`,
 		},
 		{
