@@ -1854,55 +1854,55 @@ func TestNormalizeDirectiveWithRecurseDirective(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-           "data": {
-               "me": [
-                   {
-                       "n": [
-                           "Michonne",
-                           "Michonne",
-                           "Rick Grimes"
-                       ],
-                       "d": [
-                           "1910-01-01T00:00:00Z",
-                           "1910-01-01T00:00:00Z",
-                           "1910-01-02T00:00:00Z"
-                       ]
-                   },
-                   {
-                       "n": [
-                           "Michonne",
-                           "Glenn Rhee"
-                       ],
-                       "d": [
-                           "1910-01-01T00:00:00Z",
-                           "1909-05-05T00:00:00Z"
-                       ]
-                   },
-                   {
-                       "n": [
-                           "Michonne",
-                           "Daryl Dixon"
-                       ],
-                       "d": [
-                           "1910-01-01T00:00:00Z",
-                           "1909-01-10T00:00:00Z"
-                       ]
-                   },
-                   {
-                       "n": [
-                           "Michonne",
-                           "Glenn Rhee",
-                           "Andrea"
-                       ],
-                       "d": [
-                           "1910-01-01T00:00:00Z",
-                           "1909-05-05T00:00:00Z",
-                           "1901-01-15T00:00:00Z"
-                       ]
-                   }
-               ]
-           }
-        }`, js)
+          "data": {
+              "me": [
+                  {
+                      "n": [
+                          "Michonne",
+                          "Rick Grimes",
+                          "Michonne"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1910-01-02T00:00:00Z",
+                          "1910-01-01T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Glenn Rhee"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1909-05-05T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Daryl Dixon"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1909-01-10T00:00:00Z"
+                      ]
+                  },
+                  {
+                      "n": [
+                          "Michonne",
+                          "Andrea",
+                          "Glenn Rhee"
+                      ],
+                      "d": [
+                          "1910-01-01T00:00:00Z",
+                          "1901-01-15T00:00:00Z",
+                          "1909-05-05T00:00:00Z"
+                      ]
+                  }
+              ]
+          }
+      }`, js)
 }
 
 func TestNormalizeDirectiveSubQueryLevel1(t *testing.T) {

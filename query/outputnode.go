@@ -814,50 +814,54 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			} else {
 				// This code merge child and parent lists such that nodes with
 				// same attribute id's comes together in merged list
-				tempPa := paCopy
+				startCaPtr := caCopy
 				// unmatchedNodesStartPtr and unmatchedNodesEndPtr stores start
-				// and end pointer of whose attribute id's  doesn't match with
-				// attribute id's of some nodes in parent list
+				// and end pointer of parent list nodes whose attribute id's doesn't match with
+				// attribute id's of any node in child list
 				var unmatchedNodesStartPtr fastJsonNode
 				var unmatchedNodesEndPtr fastJsonNode
-				for caCopy != nil {
+				for paCopy != nil {
 					var exist bool
-					caCopyNext := caCopy.next
-					for paCopy != nil {
-						// Merge child nodes in parent list whose attribute id's matched
-						// with attribute id's of some nodes in parent list
+					var caCopyPrev fastJsonNode
+					paCopyNext := paCopy.next
+					for caCopy != nil {
+						// Merge parent node in child list, if attribute id of it match
+						// with attribute id of any node in child list
 						if enc.getAttr(paCopy) == enc.getAttr(caCopy) {
-							temp := paCopy.next
-							caCopy.next = temp
-							paCopy.next = caCopy
+							if caCopyPrev == nil {
+								paCopy.next = startCaPtr
+								startCaPtr = paCopy
+							} else {
+								caCopyPrev.next = paCopy
+								paCopy.next = caCopy
+							}
 							exist = true
 							break
-						} else {
-							paCopy = paCopy.next
 						}
+						caCopyPrev = caCopy
+						caCopy = caCopy.next
 					}
 					if !exist {
 						if unmatchedNodesStartPtr == nil {
-							unmatchedNodesStartPtr = caCopy
-							unmatchedNodesEndPtr = caCopy
+							unmatchedNodesStartPtr = paCopy
+							unmatchedNodesEndPtr = paCopy
 
 						} else {
-							unmatchedNodesEndPtr.next = caCopy
-							unmatchedNodesEndPtr = caCopy
+							unmatchedNodesEndPtr.next = paCopy
+							unmatchedNodesEndPtr = paCopy
 						}
 					}
-					caCopy = caCopyNext
-					paCopy = tempPa
+					caCopy = startCaPtr
+					paCopy = paCopyNext
 				}
-				// Merge all unmatched nodes at the end of parent List
-				temp := tempPa
-				for temp.next != nil {
-					temp = temp.next
+				// Merge all unmatched nodes at the beginning of child List
+				if unmatchedNodesStartPtr != nil {
+					unmatchedNodesEndPtr.next = startCaPtr
+					startCaPtr = unmatchedNodesStartPtr
 				}
-				temp.next = unmatchedNodesStartPtr
-				paCopy = tempPa
+				caCopy = startCaPtr
 			}
-			mergedList = append(mergedList, paCopy)
+			mergedList = append(mergedList, caCopy)
 		}
 	}
 	return mergedList, nil
