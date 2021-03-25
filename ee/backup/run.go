@@ -26,12 +26,14 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
@@ -346,6 +348,14 @@ func runExportBackup() error {
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}
+	// Create exportDir and temporary folder to store the restored backup.
+	exportDir, err := filepath.Abs(opt.destination)
+	if err != nil {
+		return errors.Wrapf(err, "cannot convert path %s to absolute path", exportDir)
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return errors.Wrapf(err, "cannot create dir %s", exportDir)
+	}
 
 	glog.Info("Backup location is: ", opt.location)
 
@@ -363,9 +373,48 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "cannot get latest manifest")
 	}
 
-	processKvBuf := func(buf *z.Buffer) error {
+	processKvBuf := func(buf *z.Buffer, in *pb.ExportRequest, writers *worker.Writers) error {
+		kv := &bpb.KV{}
 		err := buf.SliceIterate(func(s []byte) error {
+			kv.Reset()
 			// TODO: Do the processing here
+			if err := kv.Unmarshal(s); err != nil {
+				return errors.Wrap(err, "processKvBuf")
+			}
+			pk, err := x.Parse(kv.Key)
+			if err != nil {
+				return errors.Wrap(err, "processKvBuf")
+			}
+
+			if pk.HasStartUid || pk.Attr == "_predicate_" || !pk.IsData() {
+				return nil
+			}
+
+			pl := &pb.PostingList{}
+			if err := pl.Unmarshal(kv.Value); err != nil {
+				return errors.Wrap(err, "ProcessKvBuf")
+			}
+			l := posting.NewList(kv.Key, pl, kv.Version)
+
+			kvList, err := worker.ToExportFormat(pk, l, in)
+			if err != nil {
+				return errors.Wrap(err, "processKvBuf")
+			}
+			exportKv := kvList.Kv[0]
+
+			var writer *worker.ExportWriter
+			var sep []byte
+			switch exportKv.Version {
+			case 1: // data
+				writer = writers.DataWriter
+				sep = []byte("")
+			case 2: // graphQL schema
+				writer = writers.GqlSchemaWriter
+				sep = []byte(",\n") // use json separator.
+			default:
+				glog.Fatalf("Invalid data type found: %x", kv.Key)
+			}
+			return worker.WriteExport(writer, kv, sep)
 		})
 		return err
 	}
@@ -378,9 +427,26 @@ func runExportBackup() error {
 			Location:          opt.location,
 			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
 		}
-
 		if err := worker.MapBackup(req); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
+		}
+		in := &pb.ExportRequest{
+			GroupId:     uint32(gid),
+			ReadTs:      latestManifest.Since,
+			UnixTs:      time.Now().Unix(),
+			Format:      opt.format,
+			Destination: exportDir,
+		}
+		uts := time.Unix(in.UnixTs, 0)
+		destPath := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504"))
+		exportStorage, err := worker.NewExportStorage(in, destPath)
+		if err != nil {
+			return err
+		}
+
+		writers, err := worker.InitWriters(exportStorage, in)
+		if err != nil {
+			return err
 		}
 
 		r := worker.NewBackupReducer(nil)
@@ -389,18 +455,20 @@ func runExportBackup() error {
 		go func() {
 			for buf := range r.WriteCh() {
 				glog.Info("Received buf of size: ", humanize.IBytes(uint64(buf.LenNoPadding())))
-				errCh <- processKvBuf(buf)
+				errCh <- processKvBuf(buf, in, writers)
 				buf.Release()
 			}
-			errCh <- nil
+			glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 		}()
 
 		if err := r.Reduce(); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
-
 		if err := <-errCh; err != nil {
 			errors.Wrap(err, "Failed to process reduced buffers")
+		}
+		if _, err := exportStorage.FinishWriting(writers); err != nil {
+			return errors.Wrap(err, "Failed to finish write")
 		}
 	}
 	return nil

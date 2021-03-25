@@ -401,9 +401,9 @@ func (writer *ExportWriter) Close() error {
 // ExportedFiles has the relative path of files that were written during export
 type ExportedFiles []string
 
-type exportStorage interface {
-	openFile(relativePath string) (*ExportWriter, error)
-	finishWriting(fs ...*ExportWriter) (ExportedFiles, error)
+type ExportStorage interface {
+	OpenFile(relativePath string) (*ExportWriter, error)
+	FinishWriting(w *Writers) (ExportedFiles, error)
 }
 
 type localExportStorage struct {
@@ -432,7 +432,7 @@ func newLocalExportStorage(destination, backupName string) (*localExportStorage,
 	return &localExportStorage{destination, backupName}, nil
 }
 
-func (l *localExportStorage) openFile(fileName string) (*ExportWriter, error) {
+func (l *localExportStorage) OpenFile(fileName string) (*ExportWriter, error) {
 	fw := &ExportWriter{relativePath: filepath.Join(l.relativePath, fileName)}
 
 	filePath, err := filepath.Abs(filepath.Join(l.destination, fw.relativePath))
@@ -449,17 +449,21 @@ func (l *localExportStorage) openFile(fileName string) (*ExportWriter, error) {
 	return fw, nil
 }
 
-func (l *localExportStorage) finishWriting(fs ...*ExportWriter) (ExportedFiles, error) {
-	var files ExportedFiles
-
-	for _, file := range fs {
-		err := file.Close()
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, file.relativePath)
+func (l *localExportStorage) FinishWriting(w *Writers) (ExportedFiles, error) {
+	if err := w.DataWriter.Close(); err != nil {
+		return nil, err
 	}
-
+	if err := w.SchemaWriter.Close(); err != nil {
+		return nil, err
+	}
+	if err := w.GqlSchemaWriter.Close(); err != nil {
+		return nil, err
+	}
+	files := ExportedFiles{
+		w.DataWriter.relativePath,
+		w.SchemaWriter.relativePath,
+		w.GqlSchemaWriter.relativePath,
+	}
 	return files, nil
 }
 
@@ -496,12 +500,12 @@ func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExp
 	return &remoteExportStorage{mc, bucket, prefix, localStorage}, nil
 }
 
-func (r *remoteExportStorage) openFile(fileName string) (*ExportWriter, error) {
-	return r.les.openFile(fileName)
+func (r *remoteExportStorage) OpenFile(fileName string) (*ExportWriter, error) {
+	return r.les.OpenFile(fileName)
 }
 
-func (r *remoteExportStorage) finishWriting(fs ...*ExportWriter) (ExportedFiles, error) {
-	files, err := r.les.finishWriting(fs...)
+func (r *remoteExportStorage) FinishWriting(w *Writers) (ExportedFiles, error) {
+	files, err := r.les.FinishWriting(w)
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +531,7 @@ func (r *remoteExportStorage) finishWriting(fs ...*ExportWriter) (ExportedFiles,
 	return files, nil
 }
 
-func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, error) {
+func NewExportStorage(in *pb.ExportRequest, backupName string) (ExportStorage, error) {
 	switch {
 	case strings.HasPrefix(in.Destination, "/"):
 		return newLocalExportStorage(in.Destination, backupName)
@@ -556,7 +560,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	return exportInternal(ctx, in, pstore, false)
 }
 
-func toExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {
+func ToExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {
 	e := &exporter{
 		readTs: in.ReadTs,
 	}
@@ -650,29 +654,49 @@ func toExportFormat(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 	return nil, nil
 }
 
-type WriteInput struct {
-	writer    *ExportWriter
-	kv        *bpb.KV
-	separator []byte
-}
-
-func WriteExport(in *WriteInput) error {
+func WriteExport(writer *ExportWriter, kv *bpb.KV, sep []byte) error {
 	// Skip nodes that have no data. Otherwise, the exported data could have
 	// formatting and/or syntax errors.
-	if len(in.kv.Value) == 0 {
+	if len(kv.Value) == 0 {
 		return nil
 	}
-	if in.writer.hasDataBefore {
-		if _, err := in.writer.gw.Write(in.separator); err != nil {
+	if writer.hasDataBefore {
+		if _, err := writer.gw.Write(sep); err != nil {
 			return err
 		}
 	}
 	// change the hasDataBefore flag so that the next data entry will have a separator
 	// prepended
-	in.writer.hasDataBefore = true
+	writer.hasDataBefore = true
 
-	_, err = in.writer.gw.Write(in.kv.Value)
+	_, err := writer.gw.Write(kv.Value)
 	return err
+}
+
+type Writers struct {
+	DataWriter      *ExportWriter
+	SchemaWriter    *ExportWriter
+	GqlSchemaWriter *ExportWriter
+}
+
+func InitWriters(s ExportStorage, in *pb.ExportRequest) (*Writers, error) {
+	xfmt := exportFormats[in.Format]
+	w := &Writers{}
+	fileName := func(ext string) string {
+		return fmt.Sprintf("g%02d%s", in.GroupId, ext)
+	}
+
+	var err error
+	if w.DataWriter, err = s.OpenFile(fileName(xfmt.ext + ".gz")); err != nil {
+		return w, err
+	}
+	if w.SchemaWriter, err = s.OpenFile(fileName(".schema.gz")); err != nil {
+		return w, err
+	}
+	if w.GqlSchemaWriter, err = s.OpenFile(fileName(".gql_schema.gz")); err != nil {
+		return w, err
+	}
+	return w, nil
 }
 
 // exportInternal contains the core logic to export a Dgraph database. If skipZero is set to
@@ -682,31 +706,17 @@ func WriteExport(in *WriteInput) error {
 // and types.
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
+
 	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := newExportStorage(in,
+	exportStorage, err := NewExportStorage(in,
 		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 	if err != nil {
 		return nil, err
 	}
-
-	xfmt := exportFormats[in.Format]
-
-	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
+	writers, err := InitWriters(exportStorage, in)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "exportInternal failed")
 	}
-
-	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
-	if err != nil {
-		return nil, err
-	}
-
-	gqlSchemaWriter, err := exportStorage.openFile(
-		fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
-	if err != nil {
-		return nil, err
-	}
-
 	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
@@ -759,7 +769,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot read posting list")
 		}
-		return toExportFormat(pk, pl, in)
+		return ToExportFormat(pk, pl, in)
 	}
 
 	var dataSeparator []byte
@@ -784,20 +794,15 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			var sep []byte
 			switch kv.Version {
 			case 1: // data
-				writer = dataWriter
+				writer = writers.DataWriter
 				sep = dataSeparator
 			case 2: // graphQL schema
-				writer = gqlSchemaWriter
+				writer = writers.GqlSchemaWriter
 				sep = []byte(",\n") // use json separator.
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
-			in := &WriteInput{
-				writer:    writer,
-				kv:        kv,
-				separator: sep,
-			}
-			return WriteExport(in)
+			return WriteExport(writer, kv, sep)
 		})
 	}
 
@@ -865,27 +870,28 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 
 			// Write to the appropriate writer.
-			if _, err := schemaWriter.gw.Write(kv.Value); err != nil {
+			if _, err := writers.SchemaWriter.gw.Write(kv.Value); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
+	xfmt := exportFormats[in.Format]
 
 	// All prepwork done. Time to roll.
-	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].pre)); err != nil {
+	if _, err = writers.GqlSchemaWriter.gw.Write([]byte(exportFormats["json"].pre)); err != nil {
 		return nil, err
 	}
-	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
+	if _, err = writers.DataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
 		return nil, err
 	}
 	if err := stream.Orchestrate(ctx); err != nil {
 		return nil, err
 	}
-	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
+	if _, err = writers.DataWriter.gw.Write([]byte(xfmt.post)); err != nil {
 		return nil, err
 	}
-	if _, err = gqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
+	if _, err = writers.GqlSchemaWriter.gw.Write([]byte(exportFormats["json"].post)); err != nil {
 		return nil, err
 	}
 
@@ -898,7 +904,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	}
 
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
+	return exportStorage.FinishWriting(writers)
 }
 
 // Export request is used to trigger exports for the request list of groups.
