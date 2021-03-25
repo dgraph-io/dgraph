@@ -15,9 +15,12 @@ func forwardAssignUidsToZero(ctx context.Context, in *pb.Num) (*pb.AssignedIds, 
 		return &pb.AssignedIds{}, errors.Errorf("Cannot lease %s via zero proxy", in.Type.String())
 	}
 
-	ctx, err := x.AttachJWTNamespaceOutgoing(ctx)
-	if err != nil {
-		return &pb.AssignedIds{}, err
+	if x.WorkerConfig.AclEnabled {
+		var err error
+		ctx, err = x.AttachJWTNamespaceOutgoing(ctx)
+		if err != nil {
+			return &pb.AssignedIds{}, err
+		}
 	}
 
 	pl := groups().Leader(0)
