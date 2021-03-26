@@ -41,7 +41,6 @@ type Options struct {
 	LimitMutationsNquad  int
 	LimitQueryEdge       uint64
 	BlockClusterWideDrop bool
-	LimitNormalizeNode   int
 	QueryTimeout         time.Duration
 
 	// GraphQL options:

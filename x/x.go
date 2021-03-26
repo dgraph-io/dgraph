@@ -1458,6 +1458,7 @@ func (r *RateLimiter) RefillPeriodically() {
 	}
 
 	ticker := time.NewTicker(r.refillAfter)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-r.closer.HasBeenClosed():

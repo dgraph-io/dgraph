@@ -47,6 +47,12 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 )
 
+var limitNormalizeNode int
+
+func init() {
+	limitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
+}
+
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
 func ToJson(ctx context.Context, l *Latency, sgl []*SubGraph, field gqlSchema.Field) ([]byte,
 	error) {
@@ -804,7 +810,7 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			caCopy, caNodeCount := enc.copyFastJsonList(ca)
 
 			cnt += paNodeCount + caNodeCount
-			if cnt > x.Config.LimitNormalizeNode {
+			if cnt > limitNormalizeNode {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}

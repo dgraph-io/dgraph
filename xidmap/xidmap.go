@@ -199,7 +199,7 @@ func (m *XidMap) relogin() error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return m.dg.RetryLogin(ctx)
+	return m.dg.Relogin(ctx)
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
