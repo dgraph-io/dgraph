@@ -56,6 +56,6 @@ func getEnterpriseLicenseInput(m schema.Mutation) (*enterpriseLicenseInput,
 	}
 
 	var input enterpriseLicenseInput
-	err = json.Unmarshal(inputBytes, &input)
+	err = schema.Unmarshal(inputBytes, &input)
 	return &input, inputArgError(err)
 }
