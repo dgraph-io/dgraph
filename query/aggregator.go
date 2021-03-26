@@ -230,7 +230,7 @@ func applyPow(a, b, c *types.Val) error {
 	case FLOAT:
 		// Fractional power of -ve numbers should not be returned.
 		if a.Value.(float64) < 0 &&
-			math.Ceil(b.Value.(float64))-b.Value.(float64) > 0 {
+			math.Abs(math.Ceil(b.Value.(float64))-b.Value.(float64)) > 0 {
 			return ErrorFractionalPower
 		}
 		c.Value = math.Pow(a.Value.(float64), b.Value.(float64))
