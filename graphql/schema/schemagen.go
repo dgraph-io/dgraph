@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"sort"
 	"strings"
 
@@ -395,11 +394,10 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema, parseErr := genDgSchema(sch, typesToComplete, providesFieldsMap)
+	dgSchema, gqlErr := genDgSchema(sch, typesToComplete, providesFieldsMap)
 	if err != nil {
-		return nil, gqlerror.List{parseErr}
+		return nil, gqlerror.List{gqlErr}
 	}
-	glog.Infof("%s", dgSchema)
 	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
@@ -520,12 +518,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	var typeStrings []string
 
 	type dgPred struct {
-		typ     string
-		indexes map[string]bool
-		upsert  string
-		reverse string
-		lang    bool
-		gqlPred *ast.FieldDefinition
+		typ         string
+		indexes     map[string]bool
+		upsert      string
+		reverse     string
+		lang        bool
+		gqlField    *ast.FieldDefinition
+		gqlTypeName string
 	}
 
 	type field struct {
@@ -542,16 +541,17 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
-	langTagsDgPreds := make(map[string]dgPred)
+	langTagDgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlPred *ast.FieldDefinition) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlField *ast.FieldDefinition, gqlTypeName string) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
-				typ:     typStr,
-				indexes: make(map[string]bool),
-				upsert:  upsertStr,
-				gqlPred: gqlPred,
+				typ:         typStr,
+				indexes:     make(map[string]bool),
+				upsert:      upsertStr,
+				gqlField:    gqlField,
+				gqlTypeName: gqlTypeName,
 			}
 		}
 		for _, index := range indexes {
@@ -614,7 +614,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f, typName)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -674,15 +674,18 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					}
 
 					if strings.Contains(fname, "@") {
-						langTagsDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f)
-						if langTagsDgPreds[fname].typ != "String" {
-							return "", gqlerror.ErrorPosf(f.Position, "Expected String type for language tag field: %s,"+
-								" but got %s inside Type %s", f.Name, f.Type.String(), f.Type.String())
+						if typStr != "String" {
+							return "", gqlerror.ErrorPosf(f.Position, "Expected `String` type for language tag field: `%s`,"+
+								" but got `%s` inside Type %s", f.Name, f.Type.String(), typName)
 						}
+						if f.Directives.ForName(idDirective) != nil {
+							return "", gqlerror.ErrorPosf(f.Position, "@id directive on language tag fields not supported,field: %s,type: %s", f.Name, typName)
+						}
+						langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f, typName)
 						continue
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f, typName)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -697,7 +700,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f, typName)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -719,32 +722,48 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		}
 	}
 
-	for fname, languageTagsPred := range langTagsDgPreds {
+	for fname, langTagPred := range langTagDgPreds {
 		dgPredAndTags := strings.Split(fname, "@")
 		unTaggedDgPredName := dgPredAndTags[0]
-
 		tags := dgPredAndTags[1]
-		gqlPredTaggedLang := languageTagsPred.gqlPred
+		gqlLangTaggedField := langTagPred.gqlField
+
 		if tags == "*" {
-			return "", gqlerror.ErrorPosf(gqlPredTaggedLang.Position, "`*`language tag not supported in graphql,field:%s", gqlPredTaggedLang.Name)
+			return "", gqlerror.ErrorPosf(gqlLangTaggedField.Position, "`*` language tag not supported in GraphQL, field:%s,type:%s", gqlLangTaggedField.Name, langTagPred.gqlTypeName)
 		}
-		if unTaggedPred, ok := dgPreds[unTaggedDgPredName]; ok {
-			gqlPredUntaggedLang := unTaggedPred.gqlPred
-			if unTaggedPred.typ != "String" {
-				return "", gqlerror.ErrorPosf(gqlPredUntaggedLang.Position, "Expected type: String, but got: %s for untagged language field %s ",
-					gqlPredUntaggedLang.Type.String(), gqlPredUntaggedLang.Name)
+		if unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]; ok {
+			gqlUntaggedLangField := unTaggedDgPred.gqlField
+			if unTaggedDgPred.typ != "String" {
+				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Expected type: String, but got: %s for untagged language field %s inside type: %s ",
+					gqlUntaggedLangField.Type.String(), gqlUntaggedLangField.Name, unTaggedDgPred.gqlTypeName)
 			}
-			unTaggedPred.lang = true
-			for index := range languageTagsPred.indexes {
-				if unTaggedPred.indexes["exact"] && index == "hash" {
-					continue
-				}
-				if unTaggedPred.indexes["hash"] && index == "exact" {
-					delete(unTaggedPred.indexes, "hash")
-				}
-				unTaggedPred.indexes[index] = true
+			unTaggedDgPred.lang = true
+
+			if unTaggedDgPred.indexes["exact"] && langTagPred.indexes["hash"] {
+				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: %s have exact index"+
+					"and language tagged field %s have hash index inside type: %s",
+					gqlUntaggedLangField.Name, gqlLangTaggedField.Name, unTaggedDgPred.gqlTypeName)
 			}
-			dgPreds[unTaggedDgPredName] = unTaggedPred
+
+			if unTaggedDgPred.indexes["hash"] && langTagPred.indexes["exact"] {
+				search := gqlUntaggedLangField.Directives.ForName(searchDirective)
+				if search != nil {
+					indexes := search.Arguments.ForName(searchArgs)
+					if indexes != nil {
+						if x.HasString(getAllSearchIndexes(indexes.Value), "hash") {
+							return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: %s have hash index"+
+								"and language tagged field %s have exact index inside type: %s",
+								gqlUntaggedLangField.Name, gqlLangTaggedField.Name, unTaggedDgPred.gqlTypeName)
+						}
+					}
+				}
+				delete(unTaggedDgPred.indexes, "hash")
+			}
+
+			for index := range langTagPred.indexes {
+				unTaggedDgPred.indexes[index] = true
+			}
+			dgPreds[unTaggedDgPredName] = unTaggedDgPred
 		}
 	}
 

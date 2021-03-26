@@ -1,0 +1,9 @@
+type Person {
+    name: String! @id
+    # We can have exact index on language tagged field while having implicit hash index on language tagged field
+    nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [term,exact])
+    nameEn: String @dgraph(pred:"Person.name@en") @search(by: [regexp])
+    nameHiEn: String @dgraph(pred:"Person.name@hi:en") # This field Won't be added to update/add mutation patch and ref type
+    nameHi_En_untag: String @dgraph(pred:"Person.name@hi:en:.") # This field won't be added to update/add mutation patch and ref type
+    Address: String  @search(by: [fulltext])
+}
