@@ -93,26 +93,29 @@ func (s *Server) MoveTablet(ctx context.Context, req *pb.MoveTabletRequest) (*pb
 			fmt.Errorf("Group: [%d] is not a known group.", req.DstGroup)
 	}
 
-	tab := s.ServingTablet(req.Tablet)
+	tablet := x.NamespaceAttr(req.Namespace, req.Tablet)
+	tab := s.ServingTablet(tablet)
 	if tab == nil {
 		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
-			fmt.Errorf("No tablet found for: %s", req.Tablet)
+			fmt.Errorf("namespace: %d. No tablet found for: %s", req.Namespace, req.Tablet)
 	}
 
 	srcGroup := tab.GroupId
 	if srcGroup == req.DstGroup {
 		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
-			fmt.Errorf("Tablet: [%s] is already being served by group: [%d]", req.Tablet, srcGroup)
+			fmt.Errorf("namespace: %d. Tablet: [%s] is already being served by group: [%d]",
+				req.Namespace, req.Tablet, srcGroup)
 	}
 
-	if err := s.movePredicate(req.Tablet, srcGroup, req.DstGroup); err != nil {
-		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
-			req.Tablet, srcGroup, req.DstGroup, err)
+	if err := s.movePredicate(tablet, srcGroup, req.DstGroup); err != nil {
+		glog.Errorf("namespace: %d. While moving predicate %s from %d -> %d. Error: %v",
+			req.Namespace, req.Tablet, srcGroup, req.DstGroup, err)
 		return &pb.Status{Code: 1, Msg: x.Error}, err
 	}
 
-	return &pb.Status{Code: 0, Msg: fmt.Sprintf("Predicate: [%s] moved from group [%d] to [%d]",
-		req.Tablet, srcGroup, req.DstGroup)}, nil
+	return &pb.Status{Code: 0, Msg: fmt.Sprintf("namespace: %d. "+
+		"Predicate: [%s] moved from group [%d] to [%d]", req.Namespace, req.Tablet, srcGroup,
+		req.DstGroup)}, nil
 }
 
 // movePredicate is the main entry point for move predicate logic. This Zero must remain the leader

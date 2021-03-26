@@ -155,8 +155,6 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tablet := r.URL.Query().Get("tablet")
-
 	namespace := r.URL.Query().Get("namespace")
 	namespace = strings.TrimSpace(namespace)
 	ns := x.GalaxyNamespace
@@ -169,7 +167,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tablet = x.NamespaceAttr(ns, tablet)
+	tablet := r.URL.Query().Get("tablet")
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
@@ -187,7 +185,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	var resp *pb.Status
 	var err error
-	if resp, err = st.zero.MoveTablet(context.Background(), &pb.MoveTabletRequest{Tablet: tablet,
+	if resp, err = st.zero.MoveTablet(context.Background(), &pb.MoveTabletRequest{Namespace: ns,
+		Tablet:   tablet,
 		DstGroup: dstGroup}); err != nil {
 		if resp.GetMsg() == x.ErrorInvalidRequest {
 			w.WriteHeader(http.StatusBadRequest)

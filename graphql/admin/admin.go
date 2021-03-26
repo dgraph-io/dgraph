@@ -311,7 +311,7 @@ const (
 		"""
 		ID of the destination group where the predicate is to be moved.
 		"""
-		groupId: Int64!
+		groupId: UInt64!
 	}
 
 	type MoveTabletPayload {

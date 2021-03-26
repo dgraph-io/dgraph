@@ -19,6 +19,8 @@ package admin
 import (
 	"context"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -28,9 +30,7 @@ import (
 )
 
 type moveTabletInput struct {
-	Tablet string
-	// TODO: once we have type for uint32 available in admin schema,
-	// update the type of this field from Int64 with the new type name in admin schema.
+	Tablet  string
 	GroupId uint32
 }
 
@@ -40,9 +40,14 @@ func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
+	ns, _ := x.ExtractNamespace(ctx)
+
 	// gRPC call returns a nil status if the error is non-nil
-	status, err := worker.MoveTabletOverNetwork(ctx, &pb.MoveTabletRequest{Tablet: input.Tablet,
-		DstGroup: input.GroupId})
+	status, err := worker.MoveTabletOverNetwork(ctx, &pb.MoveTabletRequest{
+		Namespace: ns,
+		Tablet:    input.Tablet,
+		DstGroup:  input.GroupId,
+	})
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

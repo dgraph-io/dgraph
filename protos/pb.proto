@@ -592,8 +592,9 @@ message RemoveNodeRequest {
 }
 
 message MoveTabletRequest {
-	string tablet = 1;
-	uint32 dstGroup = 2;
+	uint64 namespace = 1;
+	string tablet = 2;
+	uint32 dstGroup = 3;
 }
 
 message ApplyLicenseRequest {
