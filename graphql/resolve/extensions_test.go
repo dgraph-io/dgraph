@@ -163,8 +163,8 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	require.True(t, resp.Extensions.Tracing.Execution.Resolvers[0].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution.Resolvers[0].Duration > 0)
 
-	require.Len(t, resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph, 2)
-	labels := []string{"mutation", "query"}
+	require.Len(t, resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph, 3)
+	labels := []string{"preMutationQuery", "mutation", "query"}
 	for i, dgraphTrace := range resp.Extensions.Tracing.Execution.Resolvers[0].Dgraph {
 		require.Equal(t, dgraphTrace.Label, labels[i])
 		require.True(t, dgraphTrace.StartOffset > 0)
@@ -221,8 +221,8 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 		require.True(t, resolver.StartOffset > 0)
 		require.True(t, resolver.Duration > 0)
 
-		require.Len(t, resolver.Dgraph, 2)
-		labels := []string{"mutation", "query"}
+		require.Len(t, resolver.Dgraph, 3)
+		labels := []string{"preMutationQuery", "mutation", "query"}
 		for j, dgraphTrace := range resolver.Dgraph {
 			require.Equal(t, dgraphTrace.Label, labels[j])
 			require.True(t, dgraphTrace.StartOffset > 0)
