@@ -18,8 +18,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 
 	"github.com/pkg/errors"
 
@@ -67,27 +65,11 @@ func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
 		return nil, inputArgError(errors.Errorf("can't convert input.tablet to string"))
 	}
 
-	gId, err := getInt64FieldAsUint32(inputArg["groupId"])
+	gId, err := parseAsUint32(inputArg["groupId"])
 	if err != nil {
 		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.groupId to uint32"))
 	}
 	inputRef.GroupId = gId
 
 	return inputRef, nil
-}
-
-func getInt64FieldAsUint32(val interface{}) (uint32, error) {
-	gId := uint64(0)
-	var err error
-
-	switch v := val.(type) {
-	case string:
-		gId, err = strconv.ParseUint(v, 10, 32)
-	case json.Number:
-		gId, err = strconv.ParseUint(v.String(), 10, 32)
-	default:
-		err = errors.Errorf("got unexpected value type")
-	}
-
-	return uint32(gId), err
 }

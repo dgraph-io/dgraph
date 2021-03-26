@@ -289,12 +289,12 @@ const (
 		"""
 		ID of the node to be removed.
 		"""
-		nodeId: Int64!
+		nodeId: UInt64!
 
 		"""
 		ID of the group from which the node is to be removed.
 		"""
-		groupId: Int64!
+		groupId: UInt64!
 	}
 
 	type RemoveNodePayload {

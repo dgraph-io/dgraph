@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	UID          = "UID"
-	TIMESTAMP    = "TIMESTAMP"
-	NAMESPACE_ID = "NAMESPACE_ID"
+	uid         = "UID"
+	timestamp   = "TIMESTAMP"
+	namespaceId = "NAMESPACE_ID"
 )
 
 type assignInput struct {
@@ -49,14 +49,14 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	var resp *pb.AssignedIds
 	num := &pb.Num{Val: input.Num}
 	switch input.What {
-	case UID:
+	case uid:
 		resp, err = worker.AssignUidsOverNetwork(ctx, num)
-	case TIMESTAMP:
+	case timestamp:
 		if num.Val == 0 {
 			num.ReadOnly = true
 		}
 		resp, err = worker.Timestamps(ctx, num)
-	case NAMESPACE_ID:
+	case namespaceId:
 		resp, err = worker.AssignNsIdsOverNetwork(ctx, num)
 	}
 	if err != nil {
@@ -66,7 +66,7 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	var startId, endId, readOnly interface{}
 	// if it was readonly TIMESTAMP request, then let other output fields be `null`,
 	// otherwise, let readOnly field remain `null`.
-	if input.What == TIMESTAMP && num.Val == 0 {
+	if input.What == timestamp && num.Val == 0 {
 		readOnly = json.Number(strconv.FormatUint(resp.GetReadOnly(), 10))
 	} else {
 		startId = json.Number(strconv.FormatUint(resp.GetStartId(), 10))

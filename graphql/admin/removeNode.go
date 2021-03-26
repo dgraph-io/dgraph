@@ -31,8 +31,6 @@ import (
 )
 
 type removeNodeInput struct {
-	// TODO: once we have types for uint64 and uint32 available in admin schema,
-	// update the type of these fields from Int64 with the new type name in admin schema.
 	NodeId  uint64
 	GroupId uint32
 }
@@ -68,7 +66,7 @@ func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
 	}
 	inputRef.NodeId = nodeId
 
-	gId, err := getInt64FieldAsUint32(inputArg["groupId"])
+	gId, err := parseAsUint32(inputArg["groupId"])
 	if err != nil {
 		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.groupId to uint32"))
 	}
@@ -78,17 +76,26 @@ func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
 }
 
 func parseAsUint64(val interface{}) (uint64, error) {
-	gId := uint64(0)
+	return parseAsUint(val, 64)
+}
+
+func parseAsUint32(val interface{}) (uint32, error) {
+	ret, err := parseAsUint(val, 32)
+	return uint32(ret), err
+}
+
+func parseAsUint(val interface{}, bitSize int) (uint64, error) {
+	ret := uint64(0)
 	var err error
 
 	switch v := val.(type) {
 	case string:
-		gId, err = strconv.ParseUint(v, 10, 64)
+		ret, err = strconv.ParseUint(v, 10, bitSize)
 	case json.Number:
-		gId, err = strconv.ParseUint(v.String(), 10, 64)
+		ret, err = strconv.ParseUint(v.String(), 10, bitSize)
 	default:
 		err = errors.Errorf("got unexpected value type")
 	}
 
-	return gId, err
+	return ret, err
 }
