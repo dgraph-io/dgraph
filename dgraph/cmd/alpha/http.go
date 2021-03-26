@@ -162,6 +162,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	hash := r.URL.Query().Get("hash")
 	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -218,6 +219,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Vars:    params.Variables,
 		Query:   params.Query,
 		StartTs: startTs,
+		Hash:    hash,
 	}
 
 	if req.StartTs == 0 {
@@ -294,6 +296,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	hash := r.URL.Query().Get("hash")
 	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -405,6 +408,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseEnd := time.Now()
 
 	req.StartTs = startTs
+	req.Hash = hash
 	req.CommitNow = commitNow
 
 	ctx := x.AttachAccessJwt(context.Background(), r)

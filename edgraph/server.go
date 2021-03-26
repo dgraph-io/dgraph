@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1123,7 +1124,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 			return nil, err
 		}
 		if req.GetHash() != getHash(ns, req.GetStartTs()) {
-			return nil, errors.Errorf("Miscmatch between claimed namespace|startTs and hash")
+			return nil, x.ErrHashMismatch
 		}
 	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
@@ -1287,7 +1288,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 func getHash(ns, startTs uint64) string {
 	h := sha256.New()
 	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
-	return string(h.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
@@ -1501,10 +1502,9 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 		return err
 	}
 
-	if getHash(ns, tc.StartTs) != tc.Hash {
-		return errors.Errorf("Mismatch between the claimed namespace|startTs and hash.")
+	if tc.StartTs != 0 && getHash(ns, tc.StartTs) != tc.Hash {
+		return x.ErrHashMismatch
 	}
-
 	return nil
 }
 
