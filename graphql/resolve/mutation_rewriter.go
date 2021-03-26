@@ -433,7 +433,8 @@ func (arw *AddRewriter) Rewrite(
 	// The above query is used to find old Author of the Post. The edge between the Post and
 	// Author is then deleted using the accompanied mutation.
 	var queries []*gql.GraphQuery
-	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
+	// newNodes is map from variable name to node type.
+	// This is used for applying auth on newly added nodes.
 	// This is collated from newNodes of each fragment.
 	// Example
 	// newNodes["Project3"] = schema.Type(Project)
@@ -441,7 +442,8 @@ func (arw *AddRewriter) Rewrite(
 	// mutationsAll stores mutations computed from fragment. These are returned as Mutation parameter
 	// of UpsertMutation
 	var mutationsAll []*dgoapi.Mutation
-	// retErrors stores errors found out during rewriting mutations. These are returned by this function.
+	// retErrors stores errors found out during rewriting mutations.
+	// These are returned by this function.
 	var retErrors error
 
 	// Parse upsert parameter from addMutation input.
@@ -491,7 +493,8 @@ func (arw *AddRewriter) Rewrite(
 			// }
 			// These are formed while doing Upserts with Add Mutations. These also contain
 			// any related auth queries.
-			queries = append(queries, RewriteUpsertQueryFromMutation(m, authRw, upsertVar, upsertVar, idExistence[upsertVar])...)
+			queries = append(queries, RewriteUpsertQueryFromMutation(
+				m, authRw, upsertVar, upsertVar, idExistence[upsertVar])...)
 			// Add upsert condition to ensure that the upsert takes place only when the node
 			// exists and has proper auth permission.
 			// Example condition:  cond: "@if(gt(len(State1), 0))"
@@ -579,7 +582,8 @@ func (urw *UpdateRewriter) Rewrite(
 	// The above query is used to find old Author of the Post. The edge between the Post and
 	// Author is then deleted using the accompanied mutation.
 	var queries []*gql.GraphQuery
-	// newNodes is map from variable name to node type. This is used for applying auth on newly added nodes.
+	// newNodes is map from variable name to node type.
+	// This is used for applying auth on newly added nodes.
 	// This is collated from newNodes of each fragment.
 	// Example
 	// newNodes["Project3"] = schema.Type(Project)
@@ -587,7 +591,8 @@ func (urw *UpdateRewriter) Rewrite(
 	// mutations stores mutations computed from fragment. These are returned as Mutation parameter
 	// of UpsertMutation
 	var mutations []*dgoapi.Mutation
-	// retErrors stores errors found out during rewriting mutations. These are returned by this function.
+	// retErrors stores errors found out during rewriting mutations.
+	// These are returned by this function.
 	var retErrors error
 
 	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
@@ -603,7 +608,8 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
-	queries = append(queries, RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")...)
+	queries = append(queries, RewriteUpsertQueryFromMutation(
+		m, authRw, MutationQueryVar, m.Name(), "")...)
 	srcUID := MutationQueryVarUID
 	objDel, okDelArg := delArg.(map[string]interface{})
 	objSet, okSetArg := setArg.(map[string]interface{})
