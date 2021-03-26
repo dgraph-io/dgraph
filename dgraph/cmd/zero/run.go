@@ -90,9 +90,6 @@ instances to achieve high-availability.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 
-	// Cache flags.
-	flag.Int64("cache_mb", 1024, "Total size of cache (in MB) to be used in Dgraph.")
-
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Int("replicas", 1, "How many Dgraph Alpha replicas to run per data shard group."+
