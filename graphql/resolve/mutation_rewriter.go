@@ -677,24 +677,22 @@ func (urw *UpdateRewriter) Rewrite(
 	}
 
 	if urw.delFrag != nil {
-		if len(objDel) != 0 {
-			addUpdateCondition(urw.delFrag)
-			mutDel, errDel := mutationFromFragment(
-				urw.delFrag,
-				func(frag *mutationFragment) ([]byte, error) {
-					return nil, nil
-				},
-				func(frag *mutationFragment) ([]byte, error) {
-					return json.Marshal(frag.fragment)
-				})
+		urw.delFrag.conditions = append(urw.delFrag.conditions, updateMutationCondition)
+		mutDel, errDel := mutationFromFragment(
+			urw.delFrag,
+			func(frag *mutationFragment) ([]byte, error) {
+				return nil, nil
+			},
+			func(frag *mutationFragment) ([]byte, error) {
+				return json.Marshal(frag.fragment)
+			})
 
-			if mutDel != nil {
-				mutations = append(mutations, mutDel)
-			}
-			retErrors = schema.AppendGQLErrs(retErrors, errDel)
-
-			queries = append(queries, urw.delFrag.queries...)
+		if mutDel != nil {
+			mutations = append(mutations, mutDel)
 		}
+		retErrors = schema.AppendGQLErrs(retErrors, errDel)
+
+		queries = append(queries, urw.delFrag.queries...)
 	}
 
 	if urw.setFrag != nil {
@@ -864,10 +862,6 @@ func convertIDsWithErr(uidSlice []string) ([]uint64, error) {
 		ret = append(ret, uid)
 	}
 	return ret, errs
-}
-
-func addUpdateCondition(frag *mutationFragment) {
-	frag.conditions = append(frag.conditions, updateMutationCondition)
 }
 
 // checkResult checks if any mutationFragment in frags was successful in result.
