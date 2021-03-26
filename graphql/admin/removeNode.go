@@ -62,7 +62,7 @@ func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
 	}
 
 	inputRef := &removeNodeInput{}
-	nodeId, err := getInt64FieldAsUint64(inputArg["nodeId"])
+	nodeId, err := parseAsUint64(inputArg["nodeId"])
 	if err != nil {
 		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.nodeId to uint64"))
 	}
@@ -77,7 +77,7 @@ func getRemoveNodeInput(m schema.Mutation) (*removeNodeInput, error) {
 	return inputRef, nil
 }
 
-func getInt64FieldAsUint64(val interface{}) (uint64, error) {
+func parseAsUint64(val interface{}) (uint64, error) {
 	gId := uint64(0)
 	var err error
 

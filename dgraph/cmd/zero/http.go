@@ -65,7 +65,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	num := &pb.Num{Val: uint64(val)}
+	num := &pb.Num{Val: val}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -87,7 +87,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
-			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
+			fmt.Sprintf("Invalid what: [%s]. Must be one of: [uids, timestamps, nsids]", what))
 		return
 	}
 	if err != nil {

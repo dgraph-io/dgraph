@@ -98,9 +98,9 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
-	flag.Bool("enable_admin_http", true,
-		"Turn on/off the admin endpoints exposed over HTTP port for Zero.")
 	flag.String("cid", "", "Cluster ID")
+	flag.Bool("disable_admin_http", false,
+		"Turn on/off the admin endpoints exposed over HTTP port for Zero.")
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").
@@ -304,8 +304,8 @@ func run() {
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
 	baseMux.HandleFunc("/health", st.pingResponse)
-	// the following endpoints are disabled only if the flag is explicitly set to false
-	if Zero.Conf.GetBool("enable_admin_http") {
+	// the following endpoints are disabled only if the flag is explicitly set to true
+	if !Zero.Conf.GetBool("disable_admin_http") {
 		baseMux.HandleFunc("/state", st.getState)
 		baseMux.HandleFunc("/removeNode", st.removeNode)
 		baseMux.HandleFunc("/moveTablet", st.moveTablet)

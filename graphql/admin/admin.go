@@ -53,7 +53,7 @@ const (
 	scalar Int64
 
     """
-	The UInt64 scalar type represents a unsigned 64‐bit numeric non‐fractional value.
+	The UInt64 scalar type represents an unsigned 64‐bit numeric non‐fractional value.
 	UInt64 can represent values in range [0,(2^64 - 1)].
 	""" 
     scalar UInt64
@@ -321,37 +321,38 @@ const (
 	enum AssignKind {
 		UID
 		TIMESTAMP
+		NAMESPACE_ID
 	}
 
 	input AssignInput {
 
 		"""
-		Choose what to assign: UID or TIMESTAMP.
+		Choose what to assign: UID, TIMESTAMP or NAMESPACE_ID.
 		"""
 		what: AssignKind!
 
 		"""
 		How many to assign.
 		"""
-		num: Int64!
+		num: UInt64!
 	}
 
 	type AssignedIds {
 
 		"""
-		The first UID or TIMESTAMP assigned.
+		The first UID, TIMESTAMP or NAMESPACE_ID assigned.
 		"""
-		startId: Int64
+		startId: UInt64
 
 		"""
-		The last UID or TIMESTAMP assigned.
+		The last UID, TIMESTAMP or NAMESPACE_ID assigned.
 		"""
-		endId: Int64
+		endId: UInt64
 
 		"""
 		TIMESTAMP for read-only transactions.
 		"""
-		readOnly: Int64
+		readOnly: UInt64
 	}
 
 	type AssignPayload {
@@ -421,7 +422,7 @@ const (
 		moveTablet(input: MoveTabletInput!): MoveTabletPayload
 
 		"""
-		Lease UIDs or Timestamps in advance.
+		Lease UIDs, Timestamps or Namespace IDs in advance.
 		"""
 		assign(input: AssignInput!): AssignPayload
 
@@ -1033,7 +1034,7 @@ func LazyLoadSchema(namespace uint64) {
 }
 
 func inputArgError(err error) error {
-	return schema.GQLWrapf(err, "couldn't get input argument")
+	return schema.GQLWrapf(err, "couldn't parse input argument")
 }
 
 func response(code, msg string) map[string]interface{} {

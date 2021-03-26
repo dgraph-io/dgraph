@@ -18,6 +18,8 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 
 	"github.com/pkg/errors"
 
@@ -28,15 +30,14 @@ import (
 )
 
 const (
-	UID       = "UID"
-	TIMESTAMP = "TIMESTAMP"
+	UID          = "UID"
+	TIMESTAMP    = "TIMESTAMP"
+	NAMESPACE_ID = "NAMESPACE_ID"
 )
 
 type assignInput struct {
 	What string
-	// TODO: once we have type for uint64 available in admin schema,
-	// update the type of this field from Int64 with the new type name in admin schema.
-	Num uint64
+	Num  uint64
 }
 
 func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -55,6 +56,8 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 			num.ReadOnly = true
 		}
 		resp, err = worker.Timestamps(ctx, num)
+	case NAMESPACE_ID:
+		resp, err = worker.AssignNsIdsOverNetwork(ctx, num)
 	}
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
@@ -64,12 +67,10 @@ func resolveAssign(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	// if it was readonly TIMESTAMP request, then let other output fields be `null`,
 	// otherwise, let readOnly field remain `null`.
 	if input.What == TIMESTAMP && num.Val == 0 {
-		// TODO: these conversions should be removed after we have a type which can contain
-		// uint64 values in admin schema.
-		readOnly = int64(resp.GetReadOnly())
+		readOnly = json.Number(strconv.FormatUint(resp.GetReadOnly(), 10))
 	} else {
-		startId = int64(resp.GetStartId())
-		endId = int64(resp.GetEndId())
+		startId = json.Number(strconv.FormatUint(resp.GetStartId(), 10))
+		endId = json.Number(strconv.FormatUint(resp.GetEndId(), 10))
 	}
 
 	return resolve.DataResult(m,
@@ -96,7 +97,7 @@ func getAssignInput(m schema.Mutation) (*assignInput, error) {
 		return nil, inputArgError(errors.Errorf("can't convert input.what to string"))
 	}
 
-	num, err := getInt64FieldAsUint64(inputArg["num"])
+	num, err := parseAsUint64(inputArg["num"])
 	if err != nil {
 		return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.num to uint64"))
 	}
