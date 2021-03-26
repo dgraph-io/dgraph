@@ -31,7 +31,7 @@ Alternative Steps using `bound_cidr_list` (see [Using Hashicorp Vault CIDR List 
 5.  [Create an `admin` role with the attached policy](#Step-5-create-an-admin-role-with-the-attached-policy)
 6.  [Retrieve the admin token](#Step-6-retrieve-the-admin-token)
 7.  [Create a `dgraph` policy to access the secrets](#Step-7-create-a-dgraph-policy-to-access-the-secrets)
-8.  [Create a `dgraph` role using `bound_cidr_list`](#Step-8-create-a-dgraph-role-using-bound-cidr-list)
+8.  [Create a `dgraph` role using `bound_cidr_list`](#Step-8-create-a-dgraph-role-using-bound_cidr_list)
 9.  [Save secrets using admin persona](#Step-9-save-secrets-using-admin-persona)
 10. [Retrieve the dgraph token using only the `role-id`](#Step-10-retrieve-the-dgraph-token-using-only-the-role-id)
 11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
