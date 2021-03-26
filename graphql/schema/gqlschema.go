@@ -1183,7 +1183,7 @@ func addUnionMemberTypeEnum(schema *ast.Schema, defn *ast.Definition) {
 // it should be present in the addTypeInput as it should not be generated automatically by dgraph
 // but determined by the value of field in the GraphQL service where the type is defined.
 func addInputType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) {
-	field := getFieldsWithoutIDType(schema, defn, providesTypeMap)
+	field := getFieldsWithoutIDType(schema, defn, providesTypeMap, true)
 	if hasExtends(defn) {
 		idField := getIDField(defn, providesTypeMap)
 		field = append(idField, field...)
@@ -1206,7 +1206,7 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 		}
 		flds = append(getIDField(defn, providesTypeMap), getXIDField(defn, providesTypeMap)...)
 	} else {
-		flds = append(getIDField(defn, providesTypeMap), getFieldsWithoutIDType(schema, defn, providesTypeMap)...)
+		flds = append(getIDField(defn, providesTypeMap), getFieldsWithoutIDType(schema, defn, providesTypeMap, true)...)
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -1554,7 +1554,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 	}
 
 	// Has filter makes sense only if there is atleast one non ID field in the defn
-	if len(getFieldsWithoutIDType(schema, defn, providesTypeMap)) > 0 {
+	if len(getFieldsWithoutIDType(schema, defn, providesTypeMap, false)) > 0 {
 		filter.Fields = append(filter.Fields,
 			&ast.FieldDefinition{Name: "has", Type: &ast.Type{Elem: &ast.Type{NamedType: defn.Name + "HasFilter"}}},
 		)
@@ -2182,7 +2182,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 
 		// Ignore Fields with @external directives also as they shouldn't be present
 		// in the Patch Type also. If the field is an argument to `@provides` directive
-		// then it should be presnt.
+		// then it should be present.
 		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
@@ -2191,7 +2191,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
+		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
+		// We don't add above field in update patch because it corresponds to multiple languages
+		if !isMutableLanguageField(fld) {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2220,7 +2225,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 	return append(fldList, pd)
 }
 
-func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, addInput bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2238,7 +2243,10 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTy
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-
+		// see also comment in getNonIDFields
+		if !isMutableLanguageField(fld) && addInput {
+			continue
+		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -2259,6 +2267,23 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTy
 		return fldList
 	}
 	return append(fldList, pd)
+}
+
+func isMutableLanguageField(fld *ast.FieldDefinition) bool {
+	dgDirective := fld.Directives.ForName(dgraphDirective)
+	if dgDirective != nil {
+		pred := dgDirective.Arguments.ForName("pred")
+		if pred != nil {
+			if strings.Contains(pred.Value.Raw, "@") {
+				langs := strings.Split(pred.Value.Raw, "@")[1]
+				if strings.Contains(langs, ":") || langs == "." {
+					return false
+				}
+			}
+		}
+	}
+	return true
+
 }
 
 func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {

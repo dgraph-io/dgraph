@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"sort"
 	"strings"
 
@@ -394,7 +395,11 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema := genDgSchema(sch, typesToComplete, providesFieldsMap)
+	dgSchema, parseErr := genDgSchema(sch, typesToComplete, providesFieldsMap)
+	if err != nil {
+		return nil, gqlerror.List{parseErr}
+	}
+	glog.Infof("%s", dgSchema)
 	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
@@ -511,7 +516,7 @@ func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string,
-	providesFieldsMap map[string]map[string]bool) string {
+	providesFieldsMap map[string]map[string]bool) (string, *gqlerror.Error) {
 	var typeStrings []string
 
 	type dgPred struct {
@@ -519,6 +524,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		indexes map[string]bool
 		upsert  string
 		reverse string
+		lang    bool
+		gqlPred *ast.FieldDefinition
 	}
 
 	type field struct {
@@ -535,14 +542,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
+	langTagsDgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlPred *ast.FieldDefinition) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
 				typ:     typStr,
 				indexes: make(map[string]bool),
 				upsert:  upsertStr,
+				gqlPred: gqlPred,
 			}
 		}
 		for _, index := range indexes {
@@ -605,7 +614,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -664,8 +673,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 
+					if strings.Contains(fname, "@") {
+						langTagsDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f)
+						if langTagsDgPreds[fname].typ != "String" {
+							return "", gqlerror.ErrorPosf(f.Position, "Expected String type for language tag field: %s,"+
+								" but got %s inside Type %s", f.Name, f.Type.String(), f.Type.String())
+						}
+						continue
+					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -680,7 +697,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, f)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -702,6 +719,35 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		}
 	}
 
+	for fname, languageTagsPred := range langTagsDgPreds {
+		dgPredAndTags := strings.Split(fname, "@")
+		unTaggedDgPredName := dgPredAndTags[0]
+
+		tags := dgPredAndTags[1]
+		gqlPredTaggedLang := languageTagsPred.gqlPred
+		if tags == "*" {
+			return "", gqlerror.ErrorPosf(gqlPredTaggedLang.Position, "`*`language tag not supported in graphql,field:%s", gqlPredTaggedLang.Name)
+		}
+		if unTaggedPred, ok := dgPreds[unTaggedDgPredName]; ok {
+			gqlPredUntaggedLang := unTaggedPred.gqlPred
+			if unTaggedPred.typ != "String" {
+				return "", gqlerror.ErrorPosf(gqlPredUntaggedLang.Position, "Expected type: String, but got: %s for untagged language field %s ",
+					gqlPredUntaggedLang.Type.String(), gqlPredUntaggedLang.Name)
+			}
+			unTaggedPred.lang = true
+			for index := range languageTagsPred.indexes {
+				if unTaggedPred.indexes["exact"] && index == "hash" {
+					continue
+				}
+				if unTaggedPred.indexes["hash"] && index == "exact" {
+					delete(unTaggedPred.indexes, "hash")
+				}
+				unTaggedPred.indexes[index] = true
+			}
+			dgPreds[unTaggedDgPredName] = unTaggedPred
+		}
+	}
+
 	predWritten := make(map[string]bool, len(dgPreds))
 	for _, typ := range dgTypes {
 		var typeDef, preds strings.Builder
@@ -714,6 +760,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
 			if !fld.inherited && !predWritten[fld.name] {
 				indexStr := ""
+				langStr := ""
 				if len(f.indexes) > 0 {
 					indexes := make([]string, 0)
 					for index := range f.indexes {
@@ -722,7 +769,11 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					sort.Strings(indexes)
 					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 				}
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
+				if f.lang {
+					langStr = "@lang"
+				}
+
+				fmt.Fprintf(&preds, "%s: %s%s%s %s%s.\n", fld.name, f.typ, indexStr, langStr, f.upsert,
 					f.reverse)
 				predWritten[fld.name] = true
 			}
@@ -734,5 +785,5 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		)
 	}
 
-	return strings.Join(typeStrings, "")
+	return strings.Join(typeStrings, ""), nil
 }
