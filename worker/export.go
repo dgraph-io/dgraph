@@ -571,6 +571,11 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 
 	emptyList := &bpb.KVList{}
 	switch {
+	// These predicates are not required in the export data.
+	case e.attr == "dgraph.graphql.xid":
+	case e.attr == "dgraph.drop.op":
+	case e.attr == "dgraph.graphql.p_query":
+
 	case pk.IsData() && e.attr == "dgraph.graphql.schema":
 		// Export the graphql schema.
 		vals, err := pl.AllValues(in.ReadTs)
@@ -605,6 +610,14 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 		}
 		return listWrap(kv), nil
 
+	// below predicates no longer exist internally starting v21.03 but leaving them here
+	// so that users with a binary with version >= 21.03 can export data from a version < 21.03
+	// without this internal data showing up.
+	case e.attr == "dgraph.cors":
+	case e.attr == "dgraph.graphql.schema_created_at":
+	case e.attr == "dgraph.graphql.schema_history":
+	case e.attr == "dgraph.graphql.p_sha256hash":
+
 	case pk.IsData():
 		// The GraphQL layer will create a node of type "dgraph.graphql". That entry
 		// should not be exported.
@@ -633,18 +646,6 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 			glog.Fatalf("Invalid export format found: %s", in.Format)
 		}
 
-	// below predicates no longer exist internally starting v21.03 but leaving them here
-	// so that users with a binary with version >= 21.03 can export data from a version < 21.03
-	// without this internal data showing up.
-	case e.attr == "dgraph.cors":
-	case e.attr == "dgraph.graphql.schema_created_at":
-	case e.attr == "dgraph.graphql.schema_history":
-	case e.attr == "dgraph.graphql.p_sha256hash":
-
-	// These predicates are not required in the export data.
-	case e.attr == "dgraph.graphql.xid":
-	case e.attr == "dgraph.drop.op":
-	case e.attr == "dgraph.graphql.p_query":
 	default:
 		glog.Fatalf("Invalid key found: %+v %v\n", pk, hex.Dump([]byte(pk.Attr)))
 	}
@@ -837,7 +838,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if err != nil {
 				return errors.Wrap(err, "writePrefix failed to get value")
 			}
-			kv := &bpb.KV{}
+			var kv *bpb.KV
 			switch prefix {
 			case x.ByteSchema:
 				kv, err = SchemaExportKv(pk.Attr, val, skipZero)
@@ -850,7 +851,7 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 				kv, err = TypeExportKv(pk.Attr, val)
 				if err != nil {
 					// Let's not propagate this error. We just log this and continue onwards.
-					glog.Errorf("Unable to export schema: %+v. Err=%v\n", pk, err)
+					glog.Errorf("Unable to export type: %+v. Err=%v\n", pk, err)
 					continue
 				}
 			default:
@@ -899,7 +900,7 @@ func SchemaExportKv(attr string, val []byte, skipZero bool) (*bpb.KV, error) {
 	if !skipZero {
 		servesTablet, err := groups().ServesTablet(attr)
 		if err != nil || !servesTablet {
-			return nil, errors.Wrapf(err, "Tablet not found for attribute: %s", attr)
+			return nil, errors.Errorf("Tablet not found for attribute: %v", err)
 		}
 	}
 
