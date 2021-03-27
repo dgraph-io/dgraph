@@ -304,6 +304,11 @@ const (
 	input MoveTabletInput {
 
 		"""
+		Namespace in which the predicate exists.
+		"""
+		namespace: UInt64
+
+		"""
 		Name of the predicate to move.
 		"""
 		tablet: String!
@@ -451,9 +456,9 @@ var (
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
-	// guardianOfTheGalaxyMutaionWithAclMWs are the middlewares which should be applied to mutations
+	// guardianOfTheGalaxyMutationWithAclMWs are the middlewares which should be applied to mutations
 	// served by the admin server for guardian of galaxy with ACL enabled.
-	guardianOfTheGalaxyMutaionWithAclMWs = resolve.MutationMiddlewares{
+	guardianOfTheGalaxyMutationWithAclMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.AclOnlyMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
@@ -495,13 +500,14 @@ var (
 		"login":             {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
 		"restore":           guardianOfTheGalaxyMutationMWs,
 		"shutdown":          guardianOfTheGalaxyMutationMWs,
-		"removeNode":        commonAdminMutationMWs,
-		"moveTablet":        commonAdminMutationMWs,
-		"assign":            commonAdminMutationMWs,
-		"enterpriseLicense": commonAdminMutationMWs,
-		"updateGQLSchema":   commonAdminMutationMWs, "addNamespace": guardianOfTheGalaxyMutaionWithAclMWs,
-		"deleteNamespace": guardianOfTheGalaxyMutaionWithAclMWs,
-		"resetPassword":   guardianOfTheGalaxyMutaionWithAclMWs,
+		"removeNode":        guardianOfTheGalaxyMutationMWs,
+		"moveTablet":        guardianOfTheGalaxyMutationMWs,
+		"assign":            guardianOfTheGalaxyMutationMWs,
+		"enterpriseLicense": guardianOfTheGalaxyMutationMWs,
+		"updateGQLSchema":   commonAdminMutationMWs,
+		"addNamespace":      guardianOfTheGalaxyMutationWithAclMWs,
+		"deleteNamespace":   guardianOfTheGalaxyMutationWithAclMWs,
+		"resetPassword":     guardianOfTheGalaxyMutationWithAclMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},

@@ -30,8 +30,9 @@ import (
 )
 
 type moveTabletInput struct {
-	Tablet  string
-	GroupId uint32
+	Namespace uint64
+	Tablet    string
+	GroupId   uint32
 }
 
 func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -40,11 +41,9 @@ func resolveMoveTablet(ctx context.Context, m schema.Mutation) (*resolve.Resolve
 		return resolve.EmptyResult(m, err), false
 	}
 
-	ns, _ := x.ExtractNamespace(ctx)
-
 	// gRPC call returns a nil status if the error is non-nil
 	status, err := worker.MoveTabletOverNetwork(ctx, &pb.MoveTabletRequest{
-		Namespace: ns,
+		Namespace: input.Namespace,
 		Tablet:    input.Tablet,
 		DstGroup:  input.GroupId,
 	})
@@ -65,6 +64,17 @@ func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
 	}
 
 	inputRef := &moveTabletInput{}
+	// namespace is an optional parameter
+	if _, ok = inputArg["namespace"]; !ok {
+		inputRef.Namespace = x.GalaxyNamespace
+	} else {
+		ns, err := parseAsUint64(inputArg["namespace"])
+		if err != nil {
+			return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.namespace to uint64"))
+		}
+		inputRef.Namespace = ns
+	}
+
 	inputRef.Tablet, ok = inputArg["tablet"].(string)
 	if !ok {
 		return nil, inputArgError(errors.Errorf("can't convert input.tablet to string"))

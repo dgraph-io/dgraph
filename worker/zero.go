@@ -24,6 +24,7 @@ import (
 )
 
 // RemoveNodeOverNetwork sends a request to remove the given node from given group to a zero server.
+// This operation doesn't necessarily require a zero leader.
 func RemoveNodeOverNetwork(ctx context.Context, request *pb.RemoveNodeRequest) (*pb.Status, error) {
 	pl := groups().AnyServer(0)
 	if pl == nil {
@@ -49,6 +50,7 @@ func MoveTabletOverNetwork(ctx context.Context, request *pb.MoveTabletRequest) (
 }
 
 // ApplyLicenseOverNetwork sends a request to apply the given enterprise license to a zero server.
+// This operation doesn't necessarily require a zero leader.
 func ApplyLicenseOverNetwork(ctx context.Context, request *pb.ApplyLicenseRequest) (*pb.Status,
 	error) {
 	pl := groups().AnyServer(0)
