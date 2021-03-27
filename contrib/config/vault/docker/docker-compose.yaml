@@ -2,7 +2,7 @@ version: "3.5"
 services:
   zero1:
     image: dgraph/dgraph:${DGRAPH_VERSION}
-    command: dgraph zero --my=zero1:5080 --replicas 1 --idx 1
+    command: dgraph zero --my=zero1:5080 --replicas 1 --raft idx=1
     ports:
       - 6080:6080
     container_name: zero1

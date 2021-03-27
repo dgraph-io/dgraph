@@ -995,6 +995,33 @@ func TestLargePlistSplit(t *testing.T) {
 	}
 	_, err = ol.Rollup(nil)
 	require.NoError(t, err)
+
+	ol, err = getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	b = make([]byte, 10<<20)
+	rand.Read(b)
+	for i := 0; i < 63; i++ {
+		edge := &pb.DirectedEdge{
+			Entity:  uint64(1 << uint32(i)),
+			ValueId: uint64(i),
+			Facets:  []*api.Facet{{Key: strconv.Itoa(i)}},
+			Value:   b,
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+	}
+
+	kvs, err := ol.Rollup(nil)
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.Nil(t, ol.plist.Bitmap)
+	require.Equal(t, 0, len(ol.plist.Postings))
+	t.Logf("Num splits: %d\n", len(ol.plist.Splits))
+	require.True(t, len(ol.plist.Splits) > 0)
+	verifySplits(t, ol.plist.Splits)
 }
 
 func TestDeleteStarMultiPartList(t *testing.T) {
