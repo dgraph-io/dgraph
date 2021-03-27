@@ -449,7 +449,8 @@ func newBuffer(dir string) *z.Buffer {
 	return cbuf
 }
 
-func (r *reducer) readBuffers(partitionKeys [][]byte, mapItrs []*mapIterator, bufCh chan *z.Buffer) {
+func (r *reducer) readBuffers(partitionKeys [][]byte, mapItrs []*mapIterator,
+	bufCh chan *z.Buffer) {
 	// Start collecting buffers.
 	hd := z.NewHistogramData(z.HistogramBounds(16, 40))
 	cbuf := newBuffer(r.opt.TmpDir)
