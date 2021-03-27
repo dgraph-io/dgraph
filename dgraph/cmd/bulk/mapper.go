@@ -196,7 +196,7 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 // writHeader builds and writes the MapHeader to the writer.
 // MapHeader contains the list of partition keys. They are used to create
 // partitions in the file and they are used in readuce phase for reading.
-func writeHeader(w io.Writer, cbuf *z.Buffer, partitionSize int64) error {
+func writeHeader(w io.Writer, cbuf *z.Buffer, partitionSize int64) {
 	// Create partition keys for the map file.
 	header := &pb.MapHeader{
 		PartitionKeys: [][]byte{},
@@ -226,8 +226,6 @@ func writeHeader(w io.Writer, cbuf *z.Buffer, partitionSize int64) error {
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))
 	x.Check2(w.Write(lenBuf))
 	x.Check2(w.Write(headerBuf))
-
-	return nil
 }
 
 // run starts the mapping. There are 4 steps involved.
@@ -309,7 +307,6 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh := &m.shards[shard]
 
 	sz := mapEntrySize(key, p)
-	fmt.Printf("addMapEntry start = %+v, end = %d\n", sh.cbuf.LenWithPadding(), sh.cbuf.LenWithPadding()+sz)
 	dst := sh.cbuf.SliceAllocate(sz)
 	marshalMapEntry(dst, uid, key, p)
 }
