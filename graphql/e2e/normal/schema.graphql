@@ -307,12 +307,6 @@ type Chapter {
         book: Book
 }
 
-type Section {
-        sectionId: Float! @id
-        name: String!
-        chapterId: Int! @search
-}
-
 # multiple fields with @id directive
 type Worker {
         name: String!

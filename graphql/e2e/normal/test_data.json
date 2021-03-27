@@ -143,19 +143,5 @@
         "dgraph.type": "Chapter",
         "Chapter.chapterId": 1,
         "Chapter.name": "How Dgraph Works"
-    },
-    {
-        "uid": "_:section1",
-        "dgraph.type": "Section",
-        "Section.chapterId": 1,
-        "Section.sectionId": 1.1,
-        "Section.name": "How to define dgraph schema"
-    },
-    {
-        "uid": "_:section2",
-        "dgraph.type": "Section",
-        "Section.chapterId": 1,
-        "Section.sectionId": 1.2,
-        "Section.name": "Dgraph Data Types"
     }
 ]

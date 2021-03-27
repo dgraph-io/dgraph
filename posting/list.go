@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/roaring/roaring64"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -963,12 +962,13 @@ func (l *List) ToBackupPostingList(bl *pb.BackupPostingList, alloc *z.Allocator)
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
-	// defer out.free()
 
 	ol := out.plist
 	bm := roaring64.New()
-	if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
-		return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+	if ol.Bitmap != nil {
+		if err := bm.UnmarshalBinary(ol.Bitmap); err != nil {
+			return nil, errors.Wrapf(err, "failed when unmarshal binary bitmap")
+		}
 	}
 
 	// Encode uids to []byte instead of []uint64 if we have more than 1000
@@ -1133,7 +1133,7 @@ func (ro *rollupOutput) split(startUid uint64) error {
 	newpl.Postings = pl.Postings[idx:]
 
 	// Update pl as well. Keeps the lower UIDs.
-	codec.RemoveRange(r, uid, math.MaxInt64)
+	codec.RemoveRange(r, uid, math.MaxUint64)
 	pl.Bitmap = codec.ToBytes(r)
 	pl.Postings = pl.Postings[:idx]
 
@@ -1633,7 +1633,8 @@ func (out *rollupOutput) updateSplits() {
 	out.plist.Splits = splits
 }
 
-// removeEmptySplits updates the split list by removing empty posting lists' startUids.
+// finalize updates the split list by removing empty posting lists' startUids. In case there is
+// only part, then that part is set to main plist.
 func (out *rollupOutput) finalize() {
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
@@ -1662,20 +1663,6 @@ func (out *rollupOutput) finalize() {
 		out.parts = nil
 	}
 	out.updateSplits()
-	if len(out.plist.Splits) > 0 {
-		glog.Infof("Got splits: %d\n", len(out.plist.Splits))
-	}
-	// if len(out.plist.Splits) > 1 {
-	// 	start := out.plist.Splits[1]
-	// 	pl := out.parts[start]
-	// 	first := pl.Postings[0]
-	// 	last := pl.Postings[len(pl.Postings)-1]
-	// 	r := roaring64.New()
-	// 	codec.FromPostingList(r, pl)
-	// 	fmt.Printf("Start: %d. Len: %d. Postings: (%d -> %d). Bitmap: %d -> %d, %d\n",
-	// 		start, len(pl.Postings), first.Uid, last.Uid,
-	// 		r.Minimum(), r.Maximum(), r.GetCardinality())
-	// }
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are

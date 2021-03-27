@@ -42,7 +42,7 @@ var (
 )
 
 var metricMap = map[string]string{
-	"jemalloc":     "/jemalloc",
+	"jemalloc":     "/debug/jemalloc",
 	"state":        "/state",
 	"health":       "/health",
 	"vars":         "/debug/vars",

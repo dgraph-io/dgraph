@@ -204,6 +204,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
 				" allows dropping attributes and types.").
+		Flag("query-timeout",
+			"Maximum time after which a query execution will fail. If set to"+
+				" 0, the timeout is infinite.").
 		Flag("max-pending-queries",
 			"Number of maximum pending queries before we reject them as too many requests.").
 		String())
@@ -500,7 +503,8 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/alter", alterHandler)
 	baseMux.HandleFunc("/health", healthCheck)
 	baseMux.HandleFunc("/state", stateHandler)
-	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/debug/z")
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -556,9 +560,6 @@ func setupServer(closer *z.Closer) {
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
 
-	// Add OpenCensus z-pages.
-	zpages.Handle(baseMux, "/z")
-
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
 
@@ -588,6 +589,16 @@ func setupServer(closer *z.Closer) {
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 
 	atomic.AddUint32(&initDone, 1)
+	// Audit needs groupId and nodeId to initialize audit files
+	// Therefore we wait for the cluster initialization to be done.
+	for {
+		if x.HealthCheck() == nil {
+			// Audit is enterprise feature.
+			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 	x.ServerCloser.Wait()
 }
 
@@ -723,6 +734,7 @@ func run() {
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
+	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
@@ -747,9 +759,6 @@ func run() {
 	glog.Infof("worker.Config: %+v", worker.Config)
 
 	worker.InitServerState()
-
-	// Audit is enterprise feature.
-	x.Check(audit.InitAuditorIfNecessary(opts.Audit, worker.EnterpriseEnabled))
 
 	if Alpha.Conf.GetBool("expose_trace") {
 		// TODO: Remove this once we get rid of event logs.

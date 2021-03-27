@@ -628,6 +628,11 @@ func GroupId() uint32 {
 	return groups().groupId()
 }
 
+// NodeId returns the raft id of the node.
+func NodeId() uint64 {
+	return groups().Node.Id
+}
+
 func (g *groupi) triggerMembershipSync() {
 	// It's ok if we miss the trigger, periodic membership sync runs every minute.
 	select {

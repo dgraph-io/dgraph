@@ -1396,8 +1396,6 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 			switch v := f.ArgValue(xidArgName).(type) {
 			case int64:
 				xidArgVal = strconv.FormatInt(v, 10)
-			case float64:
-				xidArgVal = strconv.FormatFloat(v, 'f', -1, 64)
 			case string:
 				xidArgVal = v
 			default:

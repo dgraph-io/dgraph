@@ -1070,13 +1070,30 @@ func cleanupInput(sch *ast.Schema, def *ast.Definition, seen map[string]bool) {
 	}
 	def.Fields = def.Fields[:i]
 
+	// Delete input type which contains no fields.
+	if len(def.Fields) == 0 {
+		delete(sch.Types, def.Name)
+	}
+
 	// In case of UpdateTypeInput, if TypePatch gets cleaned up then it becomes
 	// input UpdateTypeInput {
 	//		filter: TypeFilter!
 	// }
 	// In this case, UpdateTypeInput should also be deleted.
-	if len(def.Fields) == 0 || (strings.HasPrefix(def.Name, "Update") && len(def.Fields) == 1) {
-		delete(sch.Types, def.Name)
+	if strings.HasPrefix(def.Name, "Update") &&
+		strings.HasSuffix(def.Name, "Input") &&
+		len(def.Fields) == 1 {
+		// Obtain T from UpdateTInput
+		typeDef := sch.Types[def.Name[6:len(def.Name)-5]]
+		if typeDef != nil &&
+			typeDef.Directives.ForName(remoteDirective) == nil &&
+			(typeDef.Kind == ast.Object || typeDef.Kind == ast.Interface) {
+			// this ensures that it was Dgraph who generated the `UpdateTInput`
+			// and allows users to still be able to define a type `UpdateT1Input` with a field named
+			//`filter` in that input type and not get cleaned up.
+			// It checks if the type T exists in schema and is an Object or Interface.
+			delete(sch.Types, def.Name)
+		}
 	}
 }
 
@@ -1917,7 +1934,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	xidCount := xidsCount(defn.Fields)
-	if !hasIDField && (defn.Kind == "INTERFACE" || !hasXIDField) {
+	if !hasIDField && !hasXIDField {
 		return
 	}
 	qry := &ast.FieldDefinition{
@@ -1939,7 +1956,16 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 			},
 		})
 	}
-	if hasXIDField && defn.Kind != "INTERFACE" {
+	if hasXIDField {
+		if defn.Kind == "INTERFACE" {
+			qry.Directives = append(
+				qry.Directives, &ast.Directive{Name: deprecatedDirective,
+					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",
+						Value: &ast.Value{Raw: "@id argument for get query on interface is being deprecated, " +
+							"it will be removed in v21.11.0, " +
+							"please update your query to not use that argument",
+							Kind: ast.StringValue}}}})
+		}
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{

@@ -458,6 +458,7 @@ input UpdateLibraryInput {
 #######################
 
 type Query {
+	getLibraryItem(refID: String!): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated, it will be removed in v21.11.0, please update your query to not use that argument")
 	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
 	getBook(refID: String!): Book

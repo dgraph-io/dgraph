@@ -1270,19 +1270,6 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	}
 
 	for _, arg := range dir.Arguments {
-		switch arg.Name {
-		case "add":
-		case "update":
-		case "delete":
-			// do nothing
-		default:
-			errs = append(errs, gqlerror.ErrorPosf(
-				arg.Position,
-				"Type %s; @lambdaOnMutate directive doesn't support argument named: `%s`.",
-				typ.Name, arg.Name))
-			continue // to next arg
-		}
-
 		// validate add/update/delete args
 		if arg.Value.Kind != ast.BooleanValue {
 			errs = append(errs, gqlerror.ErrorPosf(
@@ -2048,13 +2035,12 @@ func idValidation(sch *ast.Schema,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
-		field.Type.String() == "Int64!" ||
-		field.Type.String() == "Float!" {
+		field.Type.String() == "Int64!" {
 		return nil
 	}
 	return []*gqlerror.Error{gqlerror.ErrorPosf(
 		dir.Position,
-		"Type %s; Field %s: with @id directive must be of type String!, Int!, Int64! or Float!, not %s",
+		"Type %s; Field %s: with @id directive must be of type String!, Int! or Int64!, not %s",
 		typ.Name, field.Name, field.Type.String())}
 }
 

@@ -3913,26 +3913,3 @@ func idDirectiveWithInt(t *testing.T) {
 	}`
 	require.JSONEq(t, expected, string(response.Data))
 }
-
-func idDirectiveWithFloat(t *testing.T) {
-	query := &GraphQLParams{
-		Query: `query {
-		  getSection(sectionId: 1.1) {
-			chapterId
-			sectionId
-			name
-		  }
-		}`,
-	}
-
-	response := query.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, response)
-	var expected = `{
-	 	"getSection": {
-			"chapterId": 1,
-			"sectionId": 1.1,
-			"name": "How to define dgraph schema"
-		  }
-	}`
-	require.JSONEq(t, expected, string(response.Data))
-}

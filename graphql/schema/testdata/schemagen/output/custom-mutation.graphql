@@ -7,7 +7,7 @@ type User {
 	name: String!
 }
 
-input UserInput {
+input UpdateFavouriteUserInput {
 	name: String!
 }
 
@@ -363,7 +363,7 @@ type Query {
 #######################
 
 type Mutation {
-	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
+	createMyFavouriteUsers(input: [UpdateFavouriteUserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
 	addUser(input: [AddUserInput!]!): AddUserPayload
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload

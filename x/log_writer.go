@@ -242,7 +242,7 @@ func (l *LogWriter) open() error {
 			return err
 		}
 		l.file = f
-		l.writer = bufio.NewWriterSize(f, bufferSize)
+		l.writer = bufio.NewWriterSize(l.file, bufferSize)
 
 		if l.EncryptionKey != nil {
 			rand.Read(l.baseIv[:])
@@ -273,11 +273,12 @@ func (l *LogWriter) open() error {
 		return openNew()
 	}
 
+	l.file = f
 	if l.EncryptionKey != nil {
 		// If not able to read the baseIv, then this file might be corrupted.
 		// open the new file in that case
-		if _, err = f.ReadAt(l.baseIv[:], 0); err != nil {
-			_ = f.Close()
+		if _, err = l.file.ReadAt(l.baseIv[:], 0); err != nil {
+			_ = l.file.Close()
 			return openNew()
 		}
 		text := make([]byte, 11)
@@ -293,8 +294,7 @@ func (l *LogWriter) open() error {
 		}
 	}
 
-	l.file = f
-	l.writer = bufio.NewWriterSize(f, bufferSize)
+	l.writer = bufio.NewWriterSize(l.file, bufferSize)
 	l.size = size()
 	return nil
 }

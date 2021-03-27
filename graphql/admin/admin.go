@@ -39,13 +39,29 @@ import (
 const (
 	errMsgServerNotReady = "Unavailable: Server not ready."
 
-	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph.  " +
+	errNoGraphQLSchema = "Not resolving %s. There's no GraphQL schema in Dgraph. " +
 		"Use the /admin API to add a GraphQL schema"
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
 		"this indicates a resolver or validation bug. Please let us know by filing an issue."
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
+	"""
+	The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+	Int64 can represent values in range [-(2^63),(2^63 - 1)].
+	"""
+	scalar Int64
+
+    """
+	The UInt64 scalar type represents a unsigned 64‐bit numeric non‐fractional value.
+	UInt64 can represent values in range [0,(2^64 - 1)].
+	""" 
+    scalar UInt64
+	
+	"""
+	The DateTime scalar type represents date and time as a string in RFC3339 format.
+	For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
+	"""
 	scalar DateTime
 
 	"""
@@ -100,12 +116,12 @@ const (
 		"""
 		Time in nanoseconds since the node started.
 		"""
-		uptime: Int
+		uptime: Int64
 
 		"""
 		Time in Unix epoch time that the node was last contacted by another Zero or Alpha node.
 		"""
-		lastEcho: Int
+		lastEcho: Int64
 
 		"""
 		List of ongoing operations in the background.
@@ -124,51 +140,51 @@ const (
 	}
 
 	type MembershipState {
-		counter: Int
+		counter: UInt64
 		groups: [ClusterGroup]
 		zeros: [Member]
-		maxUID: Int
-		maxNsID: Int
-		maxTxnTs: Int
-		maxRaftId: Int
+		maxUID: UInt64
+		maxNsID: UInt64
+		maxTxnTs: UInt64
+		maxRaftId: UInt64
 		removed: [Member]
 		cid: String
 		license: License
 	}
 
 	type ClusterGroup {
-		id: Int
+		id: UInt64
 		members: [Member]
 		tablets: [Tablet]
-		snapshotTs: Int
-		checksum: Int
+		snapshotTs: UInt64
+		checksum: UInt64
 	}
 
 	type Member {
-		id: Int
-		groupId: Int
+		id: UInt64
+		groupId: UInt64
 		addr: String
 		leader: Boolean
 		amDead: Boolean
-		lastUpdate: Int
+		lastUpdate: UInt64
 		clusterInfoOnly: Boolean
 		forceGroupId: Boolean
 	}
 
 	type Tablet {
-		groupId: Int
+		groupId: UInt64
 		predicate: String
 		force: Boolean
 		space: Int
 		remove: Boolean
 		readOnly: Boolean
-		moveTs: Int
+		moveTs: UInt64
 	}
 
 	type License {
 		user: String
-		maxNodes: Int
-		expiryTs: Int
+		maxNodes: UInt64
+		expiryTs: Int64
 		enabled: Boolean
 	}
 
@@ -798,15 +814,19 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	return resolve.NewResolverFactory(qErr, mErr)
 }
 
-func (as *adminServer) incrementSchemaUpdateCounter(ns uint64) {
-	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
-	// will match against global epoch to terminate the current subscriptions.
+func (as *adminServer) getGlobalEpoch(ns uint64) *uint64 {
 	e := as.globalEpoch[ns]
 	if e == nil {
 		e = new(uint64)
 		as.globalEpoch[ns] = e
 	}
-	atomic.AddUint64(e, 1)
+	return e
+}
+
+func (as *adminServer) incrementSchemaUpdateCounter(ns uint64) {
+	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
+	// will match against global epoch to terminate the current subscriptions.
+	atomic.AddUint64(as.getGlobalEpoch(ns), 1)
 }
 
 func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
@@ -814,7 +834,10 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	mainHealthStore.updatingSchema()
 
 	var resolverFactory resolve.ResolverFactory
-	// If schema is nil (which becomes after drop_all) then do not attach Resolver for
+	// gqlSchema can be nil in following cases:
+	// * after DROP_ALL
+	// * if the schema hasn't yet been set even once for a non-Galaxy namespace
+	// If schema is nil then do not attach Resolver for
 	// introspection operations, and set GQL schema to empty.
 	if gqlSchema == nil {
 		resolverFactory = resolverFactoryWithErrorMsg(errNoGraphQLSchema)
@@ -847,7 +870,7 @@ func (as *adminServer) resetSchema(ns uint64, gqlSchema schema.Schema) {
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	as.gqlServer.Set(ns, as.globalEpoch[ns], resolvers)
+	as.gqlServer.Set(ns, as.getGlobalEpoch(ns), resolvers)
 
 	// reset status to up, as now we are serving the new schema
 	mainHealthStore.up()
@@ -869,15 +892,18 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 		return
 	}
 
+	var generatedSchema schema.Schema
 	if sch.Schema == "" {
+		// if there was no schema stored in Dgraph, we still need to attach resolvers to the main
+		// graphql server which should just return errors for any incoming request.
+		// generatedSchema will be nil in this case
 		glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
-		return
-	}
-
-	generatedSchema, err := generateGQLSchema(sch, namespace)
-	if err != nil {
-		glog.Infof("Error processing GraphQL schema: %s.", err)
-		return
+	} else {
+		generatedSchema, err = generateGQLSchema(sch, namespace)
+		if err != nil {
+			glog.Infof("Error processing GraphQL schema: %s.", err)
+			return
+		}
 	}
 
 	as.mux.Lock()
@@ -886,7 +912,7 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 	as.schema[namespace] = sch
 	as.resetSchema(namespace, generatedSchema)
 
-	glog.Infof("Successfully lazy-loaded GraphQL schema. Serving GraphQL API.")
+	glog.Infof("Successfully lazy-loaded GraphQL schema.")
 }
 
 func LazyLoadSchema(namespace uint64) {
