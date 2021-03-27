@@ -3383,3 +3383,29 @@
         }
       }
     }
+
+-
+  name: "query with language tag fields"
+  gqlquery: |
+    query {
+    	queryPerson {
+    		name
+            nameZh
+            nameHi
+            nameHiZh
+            nameHi_Zh_Untag
+            name_Untag_AnyLang
+    	}
+    }
+  dgquery: |-
+    query {
+      queryPerson(func: type(Person)) {
+        Person.name : Person.name
+        Person.nameZh : Person.name@zh
+        Person.nameHi : Person.name@hi
+        Person.nameHiZh : Person.name@hi:zh
+        Person.nameHi_Zh_Untag : Person.name@hi:zh:.
+        Person.name_Untag_AnyLang : Person.name@.
+        dgraph.uid : uid
+      }
+    }

@@ -4521,3 +4521,24 @@
           "dgraph.type":["Friend1"],
           "uid":"_:Friend1_1"
        }
+
+-
+  name: "Add mutation with language tag fields"
+  gqlmutation: |
+    mutation {
+         addPerson(input: { name: "Alice", nameHi: "ऐलिस",nameZh: "爱丽丝"}) {
+           person {
+             name
+             nameZh
+             nameHi
+           }
+         }
+    }
+  dgmutations:
+    - setjson: |
+        { "Person.name":"Alice",
+          "Person.name@hi":"ऐलिस",
+          "Person.name@zh":"爱丽丝",
+          "dgraph.type": ["Person"],
+          "uid": "_:Person_1"
+        }
