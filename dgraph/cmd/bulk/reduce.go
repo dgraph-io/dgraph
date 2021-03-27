@@ -95,7 +95,7 @@ func (r *reducer) run() error {
 				splitWriter: splitWriter,
 				tmpDb:       tmpDb,
 				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    getBuf(r.opt.TmpDir),
+				countBuf:    newBuffer(r.opt.TmpDir),
 			}
 
 			partitionKeys := make([][]byte, 0, len(partitions))
@@ -441,7 +441,7 @@ func bufferStats(cbuf *z.Buffer) {
 		numEntries, len(keys), keyHist.String())
 }
 
-func getBuf(dir string) *z.Buffer {
+func newBuffer(dir string) *z.Buffer {
 	cbuf, err := z.NewBufferWithDir(64<<20, 64<<30, z.UseCalloc,
 		filepath.Join(dir, bufferDir), "Reducer.GetBuf")
 	x.Check(err)
@@ -449,6 +449,51 @@ func getBuf(dir string) *z.Buffer {
 	return cbuf
 }
 
+func (r *reducer) readBuffers(partitionKeys [][]byte, mapItrs []*mapIterator, bufCh chan *z.Buffer) {
+	// Start collecting buffers.
+	hd := z.NewHistogramData(z.HistogramBounds(16, 40))
+	cbuf := newBuffer(r.opt.TmpDir)
+	// Append nil for the last entries.
+	partitionKeys = append(partitionKeys, nil)
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for i := 0; i < len(partitionKeys); i++ {
+		for _, itr := range mapItrs {
+			pkey := partitionKeys[i]
+			itr.Next(cbuf, pkey)
+		}
+		if cbuf.LenNoPadding() < 256<<20 {
+			// Pick up more data.
+			continue
+		}
+
+		hd.Update(int64(cbuf.LenNoPadding()))
+		select {
+		case <-ticker.C:
+			fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
+		default:
+		}
+
+		bufCh <- cbuf
+		cbuf = newBuffer(r.opt.TmpDir)
+	}
+	if !cbuf.IsEmpty() {
+		hd.Update(int64(cbuf.LenNoPadding()))
+		bufCh <- cbuf
+	} else {
+		cbuf.Release()
+	}
+	fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
+	close(bufCh)
+}
+
+// reduce reduces the map files into postings lists and writes them to badger.
+// There are 3 steps involved
+// Step 1: Read buffers from the map files based on the partition keys
+// Step 2; Encode the buffers into postings lists
+// Step 3: write these posting lists to badger.
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := r.opt.NumGoroutines
 	fmt.Printf("Num Encoders: %d\n", cpu)
@@ -464,70 +509,27 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser := z.NewCloser(1)
 	go r.startWriting(ci, writerCh, writerCloser)
 
-	sendReq := func(zbuf *z.Buffer) {
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		req := &encodeRequest{
-			cbuf:     zbuf,
-			wg:       wg,
-			listCh:   make(chan *z.Buffer, 3),
-			splitCh:  ci.splitCh,
-			countBuf: getBuf(r.opt.TmpDir),
-		}
-		encoderCh <- req
-		writerCh <- req
-	}
+	bufCh := make(chan *z.Buffer, 3)
+	go r.readBuffers(partitionKeys, mapItrs, bufCh)
 
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	buffers := make(chan *z.Buffer, 3)
-
-	go func() {
-		// Start collecting buffers.
-		hd := z.NewHistogramData(z.HistogramBounds(16, 40))
-		cbuf := getBuf(r.opt.TmpDir)
-		// Append nil for the last entries.
-		partitionKeys = append(partitionKeys, nil)
-
-		for i := 0; i < len(partitionKeys); i++ {
-			for _, itr := range mapItrs {
-				pkey := partitionKeys[i]
-				itr.Next(cbuf, pkey)
-			}
-			if cbuf.LenNoPadding() < 256<<20 {
-				// Pick up more data.
-				continue
-			}
-
-			hd.Update(int64(cbuf.LenNoPadding()))
-			select {
-			case <-ticker.C:
-				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
-			default:
-			}
-
-			buffers <- cbuf
-			cbuf = getBuf(r.opt.TmpDir)
-		}
-		if !cbuf.IsEmpty() {
-			hd.Update(int64(cbuf.LenNoPadding()))
-			buffers <- cbuf
-		} else {
-			cbuf.Release()
-		}
-		fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
-		close(buffers)
-	}()
-
-	for cbuf := range buffers {
+	for cbuf := range bufCh {
 		if cbuf.LenNoPadding() > limit/2 {
 			bufferStats(cbuf)
 		}
 		r.throttle()
 
 		atomic.AddInt64(&r.prog.numEncoding, int64(cbuf.LenNoPadding()))
-		sendReq(cbuf)
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		req := &encodeRequest{
+			cbuf:     cbuf,
+			wg:       wg,
+			listCh:   make(chan *z.Buffer, 3),
+			splitCh:  ci.splitCh,
+			countBuf: newBuffer(r.opt.TmpDir),
+		}
+		encoderCh <- req
+		writerCh <- req
 	}
 
 	// Close the encodes.
