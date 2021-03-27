@@ -127,22 +127,23 @@ func newClient(address, roleIdPath, secretIdPath string) (*api.Client, error) {
 	}
 
 	// Read Vault credentials from disk.
-	roleIdBytes, err := ioutil.ReadFile(roleIdPath)
+	loginData := make(map[string]interface{}, 2)
+	roleId, err := ioutil.ReadFile(roleIdPath)
 	if err != nil {
 		return nil, fmt.Errorf("vault: error reading from role ID file: %s", err)
 	}
-	roleId := string(roleIdBytes)
-	secretIdBytes, err := ioutil.ReadFile(secretIdPath)
-	if err != nil {
-		return nil, fmt.Errorf("vault: error reading from secret ID file: %s", err)
+	loginData["role_id"] = string(roleId)
+	// If we configure a bound_cidr_list in Vault, we don't need to use a secret_id.
+	if secretIdPath != "" {
+		secretId, err := ioutil.ReadFile(secretIdPath)
+		if err != nil {
+			return nil, fmt.Errorf("vault: error reading from secret ID file: %s", err)
+		}
+		loginData["secret_id"] = string(secretId)
 	}
-	secretId := string(secretIdBytes)
 
 	// Login into Vault with AppRole authentication.
-	secret, err := client.Logical().Write("auth/approle/login", map[string]interface{}{
-		"role_id":   roleId,
-		"secret_id": secretId,
-	})
+	secret, err := client.Logical().Write("auth/approle/login", loginData)
 	if err != nil {
 		return nil, fmt.Errorf("vault: login error: %s", err)
 	}
@@ -191,9 +192,6 @@ func parseFlags(flag *z.SuperFlag) (*config, error) {
 		return nil, err
 	}
 	secretIdFile := flag.GetPath(flagSecretIdFile)
-	if err := validateRequired(flagSecretIdFile, secretIdFile); err != nil {
-		return nil, err
-	}
 	path := flag.GetString(flagPath)
 	if err := validateRequired(flagPath, path); err != nil {
 		return nil, err
