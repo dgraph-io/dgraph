@@ -279,8 +279,20 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
+	enc := &encoder{
+		// prog:            r.prog,
+		// writeAt:         r.writeTs,
+		// schema:          r.schema,
+		trackCountIndex: make(map[string]bool),
+		kvBuf:           z.NewBuffer(260<<20, "Reducer.Buffer.ToList"),
+		pl:              &pb.PostingList{},
+		r:               r,
+	}
+	defer enc.kvBuf.Release()
+
 	for req := range entryCh {
-		r.toList(req)
+		// r.toList(req)
+		enc.toList(req)
 		req.wg.Done()
 	}
 }
@@ -542,7 +554,199 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(req *encodeRequest) {
+type encoder struct {
+	r               *reducer
+	freePostings    []*pb.Posting
+	trackCountIndex map[string]bool
+	pl              *pb.PostingList
+	kvBuf           *z.Buffer
+}
+
+func (e *encoder) getPosting() *pb.Posting {
+	if sz := len(e.freePostings); sz > 0 {
+		last := e.freePostings[sz-1]
+		e.freePostings = e.freePostings[:sz-1]
+		return last
+	}
+	return &pb.Posting{}
+}
+func (e *encoder) resetPl() {
+	for _, p := range e.pl.Postings {
+		p.Reset()
+		e.freePostings = append(e.freePostings, p)
+	}
+	e.pl.Reset()
+}
+
+func (e *encoder) toList(req *encodeRequest) {
+	cbuf := req.cbuf
+	prog := e.r.prog
+	defer func() {
+		atomic.AddInt64(&prog.numEncoding, -int64(cbuf.LenNoPadding()))
+		cbuf.Release()
+	}()
+
+	cbuf.SortSlice(func(ls, rs []byte) bool {
+		lhs := MapEntry(ls)
+		rhs := MapEntry(rs)
+		return less(lhs, rhs)
+	})
+
+	var currentKey []byte
+	e.kvBuf.Reset()
+	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
+	appendToList := func() {
+		if num == 0 {
+			return
+		}
+		atomic.AddInt64(&prog.reduceEdgeCount, int64(num))
+
+		pk, err := x.Parse(currentKey)
+		x.Check(err)
+		x.AssertTrue(len(pk.Attr) > 0)
+
+		// We might not need to track count index every time.
+		e.countIfNeeded(num, pk, req.countBuf)
+
+		numUids := e.mergePostings(cbuf, start, end)
+
+		atomic.AddInt64(&prog.reduceKeyCount, 1)
+
+		// For a UID-only posting list, the badger value is a delta packed UID
+		// list. The UserMeta indicates to treat the value as a delta packed
+		// list when the value is read by dgraph.  For a value posting list,
+		// the full pb.Posting type is used (which pb.y contains the
+		// delta packed UID list).
+		if numUids == 0 {
+			// No need to FrePack here because we are reusing alloc.
+			return
+		}
+
+		// If the schema is of type uid and not a list but we have more than one uid in this
+		// list, we cannot enforce the constraint without losing data. Inform the user and
+		// force the schema to be a list so that all the data can be found when Dgraph is started.
+		// The user should fix their data once Dgraph is up.
+		if pk.IsData() {
+			schema := e.r.schema.getSchema(pk.Attr)
+			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && numUids > 1 {
+				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
+					"one UID has been found. Forcing the schema to be a list to avoid any "+
+					"data loss. Please fix the data to your specifications once Dgraph is up.\n",
+					pk.Attr)
+				e.r.schema.setSchemaAsList(pk.Attr)
+			}
+		}
+
+		e.splitIfNeeded(currentKey, pk, req.splitCh)
+		e.resetPl()
+	}
+
+	for end >= 0 {
+		slice, next := cbuf.Slice(end)
+		entry := MapEntry(slice)
+		entryKey := entry.Key()
+
+		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
+			appendToList()
+			start, num = end, 0 // Start would start from current one.
+
+			if e.kvBuf.LenNoPadding() > 256<<20 {
+				req.listCh <- e.kvBuf
+				e.kvBuf = z.NewBuffer(260<<20, "Reducer.Buffer.KVBuffer")
+			}
+		}
+		end = next
+		currentKey = append(currentKey[:0], entryKey...)
+		num++
+	}
+
+	appendToList()
+	if e.kvBuf.LenNoPadding() > 0 {
+		req.listCh <- e.kvBuf
+	}
+	close(req.listCh)
+
+	// Sort countBuf before returning to better use the goroutines.
+	req.countBuf.SortSlice(func(ls, rs []byte) bool {
+		left := countEntry(ls)
+		right := countEntry(rs)
+		return left.less(right)
+	})
+}
+
+func (e *encoder) countIfNeeded(num int, pk x.ParsedKey, countBuf *z.Buffer) {
+	if pk.IsData() || pk.IsReverse() {
+		doCount, ok := e.trackCountIndex[pk.Attr]
+		if !ok {
+			doCount = e.r.schema.getSchema(pk.Attr).GetCount()
+			e.trackCountIndex[pk.Attr] = doCount
+		}
+		if doCount {
+			// Calculate count entries.
+			ck := x.CountKey(pk.Attr, uint32(num), pk.IsReverse())
+			dst := countBuf.SliceAllocate(countEntrySize(ck))
+			marshalCountEntry(dst, ck, pk.Uid)
+		}
+	}
+}
+
+func (e *encoder) mergePostings(cbuf *z.Buffer, start, end int) uint64 {
+	bm := roaring64.New()
+	var lastUid uint64
+	slice, next := []byte{}, start
+	for next >= 0 && (next < end || end == -1) {
+		slice, next = cbuf.Slice(next)
+		me := MapEntry(slice)
+
+		uid := me.Uid()
+		if uid == lastUid {
+			continue
+		}
+		lastUid = uid
+
+		bm.Add(uid)
+		if pbuf := me.Plist(); len(pbuf) > 0 {
+			p := e.getPosting()
+			x.Check(p.Unmarshal(pbuf))
+			e.pl.Postings = append(e.pl.Postings, p)
+		}
+	}
+
+	// We should not do defer FreePack here, because we might be giving ownership of it away if
+	// we run Rollup.
+	e.pl.Bitmap = codec.ToBytes(bm)
+	return bm.GetCardinality()
+}
+
+func (e *encoder) splitIfNeeded(currentKey []byte, pk x.ParsedKey, splitCh chan *bpb.KVList) {
+	shouldSplit, err := posting.ShouldSplit(e.pl)
+	x.Check(err)
+	writeTs := e.r.writeTs
+	if shouldSplit {
+		// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
+		l := posting.NewList(y.Copy(currentKey), e.pl, writeTs)
+		kvs, err := l.Rollup(nil)
+		x.Check(err)
+
+		for _, kv := range kvs {
+			kv.StreamId = e.r.streamIdFor(pk.Attr)
+		}
+		badger.KVToBuffer(kvs[0], e.kvBuf)
+		if splits := kvs[1:]; len(splits) > 0 {
+			splitCh <- &bpb.KVList{Kv: splits}
+		}
+		return
+	}
+	kv := posting.MarshalPostingList(e.pl, nil)
+	// No need to FreePack here, because we are reusing alloc.
+
+	kv.Key = y.Copy(currentKey)
+	kv.Version = writeTs
+	kv.StreamId = e.r.streamIdFor(pk.Attr)
+	badger.KVToBuffer(kv, e.kvBuf)
+}
+
+func (r *reducer) toListOld(req *encodeRequest) {
 	cbuf := req.cbuf
 	defer func() {
 		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
@@ -563,7 +767,6 @@ func (r *reducer) toList(req *encodeRequest) {
 	trackCountIndex := make(map[string]bool)
 
 	var freePostings []*pb.Posting
-
 	getPosting := func() *pb.Posting {
 		if sz := len(freePostings); sz > 0 {
 			last := freePostings[sz-1]
