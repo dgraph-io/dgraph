@@ -3913,3 +3913,59 @@ func idDirectiveWithInt(t *testing.T) {
 	}`
 	require.JSONEq(t, expected, string(response.Data))
 }
+
+func queryMultipleLangFields(t *testing.T) {
+	addHotelParams := &GraphQLParams{
+		Query: `
+		mutation addPerson($person: [AddPersonInput!]!) {
+		  addPerson(input: $person) {
+			person {
+			  name
+              nameHi
+              nameZh
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"person": []interface{}{
+			map[string]interface{}{
+				"name":   "Alice",
+				"nameHi": "ऐलिस",
+				"nameZh": "爱丽丝",
+			},
+		},
+		},
+	}
+	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotel := &GraphQLParams{
+		Query: `
+			   query {
+    				queryPerson {
+    					name
+            			nameZh
+						nameHi
+						nameHiZh
+            			nameHi_Zh_Untag
+            			name_Untag_AnyLang
+    				}
+   				 }`,
+	}
+	gqlResponse = queryHotel.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryHotelExpected := `
+	{
+		"queryPerson":[{
+			"name": "Alice",
+        	"nameZh": "爱丽丝",
+        	"nameHi": "ऐलिस",
+        	"nameHiZh": "ऐलिस",
+        	"nameHi_Zh_Untag": "ऐलिस",
+        	"name_Untag_AnyLang": "Alice"
+		}]
+	}`
+	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
+	// Cleanup
+	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
+}
