@@ -174,12 +174,16 @@ type mapIterator struct {
 	meBuf  []byte
 }
 
+// Next reads the entries from the mapIterator and writes them to the cbuf. The
+// iterator will read all keys less than the partition key.
 func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) {
 	readMapEntry := func() error {
+		// If we have entry stored from the last run, use it.
 		if len(mi.meBuf) > 0 {
 			return nil
 		}
 		r := mi.reader
+		// Read the size of the slice. We have to peek because the size is written in VarInt
 		sizeBuf, err := r.Peek(binary.MaxVarintLen64)
 		if err != nil {
 			return err
@@ -188,11 +192,13 @@ func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) {
 		if n <= 0 {
 			log.Fatalf("Could not read uvarint: %d", n)
 		}
+		// Move past the "sizeBuf".
 		x.Check2(r.Discard(n))
 		if cap(mi.meBuf) < int(sz) {
 			mi.meBuf = make([]byte, int(sz))
 		}
 		mi.meBuf = mi.meBuf[:int(sz)]
+		// Read the entry.
 		x.Check2(io.ReadFull(r, mi.meBuf))
 		return nil
 	}
@@ -203,16 +209,16 @@ func (mi *mapIterator) Next(cbuf *z.Buffer, partitionKey []byte) {
 			x.Check(err)
 		}
 		key := MapEntry(mi.meBuf).Key()
-
-		if len(partitionKey) == 0 || bytes.Compare(key, partitionKey) < 0 {
-			b := cbuf.SliceAllocate(len(mi.meBuf))
-			copy(b, mi.meBuf)
-			mi.meBuf = mi.meBuf[:0]
-			// map entry is already part of cBuf.
-			continue
+		// This key is beyond the partition key. Stop here.
+		if bytes.Compare(key, partitionKey) > 0 {
+			return
 		}
-		// Current key is not part of this batch so track that we have already read the key.
-		return
+
+		// Add entry to cbuf.
+		b := cbuf.SliceAllocate(len(mi.meBuf))
+		copy(b, mi.meBuf)
+		// Entry copied to the cbuf. We can reset it now.
+		mi.meBuf = mi.meBuf[:0]
 	}
 }
 

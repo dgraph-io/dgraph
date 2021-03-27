@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"os"
@@ -74,6 +75,9 @@ func newMapper(st *state) *mapper {
 	}
 }
 
+// +---------+----------+---------------------+---------+
+// | UID [8] | key [4]  | size of posting [4] | posting |
+// +---------+----------+---------------------+---------+
 type MapEntry []byte
 
 // type mapEntry struct {
@@ -100,8 +104,7 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
 
 	if psz > 0 {
 		pbuf := dst[16+n:]
-		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
-		x.Check(err)
+		x.Check2(p.MarshalToSizedBuffer(pbuf[:psz]))
 	}
 
 	x.AssertTrue(len(dst) == 16+n+psz)
@@ -146,6 +149,12 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
+// writeMapEntriesToFile writes map entries from the cbuf.
+// The structure of map file is shown below.
+// +-------------+--------------+------------------------+-------+---------------+------+
+// | len(header) | pb.MapHeader | size of entry (VarInt) | entry | size of entry | .... |
+// +-------------+--------------+------------------------+-------+---------------+------+
+//
 func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	defer func() {
 		m.shards[shardIdx].mu.Unlock() // Locked by caller.
@@ -171,16 +180,33 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		x.Check(w.Close())
 	}()
 
+	writeHeader(w, cbuf, m.opt.PartitionBufSize)
+
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	x.Check(cbuf.SliceIterate(func(slice []byte) error {
+		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
+
+		x.Check2(w.Write(sizeBuf[:n]))
+		x.Check2(w.Write(slice))
+
+		return nil
+	}))
+}
+
+// writHeader builds and writes the MapHeader to the writer.
+// MapHeader contains the list of partition keys. They are used to create
+// partitions in the file and they are used in readuce phase for reading.
+func writeHeader(w io.Writer, cbuf *z.Buffer, partitionSize int64) error {
 	// Create partition keys for the map file.
 	header := &pb.MapHeader{
 		PartitionKeys: [][]byte{},
 	}
 
 	var bufSize int64
-	cbuf.SliceIterate(func(slice []byte) error {
+	x.Check(cbuf.SliceIterate(func(slice []byte) error {
 		me := MapEntry(slice)
 		bufSize += int64(4 + len(me))
-		if bufSize < m.opt.PartitionBufSize {
+		if bufSize < partitionSize {
 			return nil
 		}
 		sz := len(header.PartitionKeys)
@@ -191,7 +217,7 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		header.PartitionKeys = append(header.PartitionKeys, me.Key())
 		bufSize = 0
 		return nil
-	})
+	}))
 
 	// Write the header to the map file.
 	headerBuf, err := header.Marshal()
@@ -200,36 +226,22 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))
 	x.Check2(w.Write(lenBuf))
 	x.Check2(w.Write(headerBuf))
-	x.Check(err)
 
-	sizeBuf := make([]byte, binary.MaxVarintLen64)
-
-	err = cbuf.SliceIterate(func(slice []byte) error {
-		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
-		_, err := w.Write(sizeBuf[:n])
-		x.Check(err)
-
-		_, err = w.Write(slice)
-		return err
-	})
-	x.Check(err)
+	return nil
 }
 
+// run starts the mapping. There are 4 steps involved.
+// Step 1: read data from the file and send to the readerChunkCh [done in mapStage function]
+// Step 2: read data fromt he readChunkCh and parse the data. [rdf to nquad conversion]
+// Step 3: process the nquad. [nquad to posting conversion]
+// step 4: write the processed data to the map file. [generate map file for the reduce phase]
 func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunk := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunk.NQuads()
-	go func() {
-		for chunkBuf := range m.readerChunkCh {
-			if err := chunk.Parse(chunkBuf); err != nil {
-				atomic.AddInt64(&m.prog.errCount, 1)
-				if !m.opt.IgnoreErrors {
-					x.Check(err)
-				}
-			}
-		}
-		nquads.Flush()
-	}()
+	// Step 2
+	go m.parseChunks(chunk)
 
+	// Step 3
 	for nqs := range nquads.Ch() {
 		for _, nq := range nqs {
 			if err := facets.SortAndValidate(nq.Facets); err != nil {
@@ -243,6 +255,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			atomic.AddInt64(&m.prog.nquadCount, 1)
 		}
 
+		// Step 4
 		for i := range m.shards {
 			sh := &m.shards[i]
 			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
@@ -255,6 +268,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		}
 	}
 
+	// Step 4
 	for i := range m.shards {
 		sh := &m.shards[i]
 		if sh.cbuf.LenNoPadding() > 0 {
@@ -267,9 +281,23 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	}
 }
 
+// parseChunks reads chunks from the readerChunkCh, parses them and then pushes
+// (internally) to the nquadsBuffer.
+func (m *mapper) parseChunks(chunk chunker.Chunker) {
+	nquads := chunk.NQuads()
+	for chunkBuf := range m.readerChunkCh {
+		if err := chunk.Parse(chunkBuf); err != nil {
+			atomic.AddInt64(&m.prog.errCount, 1)
+			if !m.opt.IgnoreErrors {
+				x.Check(err)
+			}
+		}
+	}
+	nquads.Flush()
+}
+
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
-
 	uid := p.Uid
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
 		// Keep p
@@ -281,6 +309,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh := &m.shards[shard]
 
 	sz := mapEntrySize(key, p)
+	fmt.Printf("addMapEntry start = %+v, end = %d\n", sh.cbuf.LenWithPadding(), sh.cbuf.LenWithPadding()+sz)
 	dst := sh.cbuf.SliceAllocate(sz)
 	marshalMapEntry(dst, uid, key, p)
 }
