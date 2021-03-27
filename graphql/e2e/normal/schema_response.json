@@ -414,6 +414,7 @@
       "upsert": true
     },
     {
+      "lang": true,
       "predicate": "Person.name",
       "type": "string"
     },
