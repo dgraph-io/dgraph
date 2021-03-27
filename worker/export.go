@@ -145,7 +145,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+`,"namespace":"0x%x"`, e.uid, e.namespace)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -218,8 +218,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
-	glog.Info("prefix is: ", prefix)
-	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
 			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
@@ -570,26 +569,27 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 		pl:        pl,
 	}
 
+	emptyList := &bpb.KVList{}
 	switch {
 	case pk.IsData() && e.attr == "dgraph.graphql.schema":
 		// Export the graphql schema.
 		vals, err := pl.AllValues(in.ReadTs)
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
+			return emptyList, errors.Wrapf(err, "cannot read value of GraphQL schema")
 		}
 		// if the GraphQL schema node was deleted with S * * delete mutation,
 		// then the data key will be overwritten with nil value.
 		// So, just skip exporting it as there will be no value for this data key.
 		if len(vals) == 0 {
-			return nil, nil
+			return emptyList, nil
 		}
 		// Give an error only if we find more than one value for the schema.
 		if len(vals) > 1 {
-			return nil, errors.Errorf("found multiple values for the GraphQL schema")
+			return emptyList, errors.Errorf("found multiple values for the GraphQL schema")
 		}
 		val, ok := vals[0].Value.([]byte)
 		if !ok {
-			return nil, errors.Errorf("cannot convert value of GraphQL schema to byte array")
+			return emptyList, errors.Errorf("cannot convert value of GraphQL schema to byte array")
 		}
 
 		exported := x.ExportedGQLSchema{
@@ -597,7 +597,7 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 			Schema:    string(val),
 		}
 		if val, err = json.Marshal(exported); err != nil {
-			return nil, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
+			return emptyList, errors.Wrapf(err, "Error marshalling GraphQL schema to json")
 		}
 		kv := &bpb.KV{
 			Value:   val,
@@ -611,15 +611,15 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 		if e.attr == "dgraph.type" {
 			vals, err := e.pl.AllValues(in.ReadTs)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
+				return emptyList, errors.Wrapf(err, "cannot read value of dgraph.type entry")
 			}
 			if len(vals) == 1 {
 				val, ok := vals[0].Value.([]byte)
 				if !ok {
-					return nil, errors.Errorf("cannot read value of dgraph.type entry")
+					return emptyList, errors.Errorf("cannot read value of dgraph.type entry")
 				}
 				if string(val) == "dgraph.graphql" {
-					return nil, nil
+					return emptyList, nil
 				}
 			}
 		}
@@ -646,9 +646,9 @@ func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bp
 	case e.attr == "dgraph.drop.op":
 	case e.attr == "dgraph.graphql.p_query":
 	default:
-		glog.Fatalf("Invalid key found: %+v\n", pk)
+		glog.Fatalf("Invalid key found: %+v %v\n", pk, hex.Dump([]byte(pk.Attr)))
 	}
-	return nil, nil
+	return emptyList, nil
 }
 
 func WriteExport(writers *Writers, kv *bpb.KV, format string) error {

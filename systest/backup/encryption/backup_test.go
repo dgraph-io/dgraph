@@ -354,7 +354,8 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.NoError(t, os.RemoveAll(restoreDir))
 	keyFile := "../../../ee/enc/test-fixtures/enc-key"
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, keyFile, options.Snappy, 0)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, keyFile,
+		options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

@@ -21,7 +21,6 @@ import (
 func init() {
 	// subcommands already has the default subcommands, we append to EE ones to that.
 	subcommands = append(subcommands,
-		&backup.Restore,
 		&backup.LsBackup,
 		&backup.ExportBackup,
 		&acl.CmdAcl,

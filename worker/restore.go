@@ -48,76 +48,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(dir, location, backupId string, keyFile string,
-	ctype options.CompressionType, clevel int) LoadResult {
-	// Create the pdir if it doesn't exist.
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return LoadResult{Err: err}
-	}
-
-	uri, err := url.Parse(location)
-	if err != nil {
-		return LoadResult{Err: err}
-	}
-
-	h, err := NewUriHandler(uri, nil)
-	if err != nil {
-		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
-	}
-	manifest, err := GetLatestManifest(h, uri)
-	if err != nil {
-		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
-	}
-	var key x.Sensitive
-	if len(keyFile) > 0 {
-		key, err = ioutil.ReadFile(keyFile)
-		if err != nil {
-			return LoadResult{Err: errors.Wrapf(err, "RunRestore failed to read enc-key")}
-		}
-	}
-
-	for gid := range manifest.Groups {
-		req := &pb.RestoreRequest{
-			Location:          location,
-			GroupId:           gid,
-			BackupId:          backupId,
-			EncryptionKeyFile: keyFile,
-		}
-		if err := MapBackup(req); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
-		}
-		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
-		db, err := badger.OpenManaged(badger.DefaultOptions(pdir).
-			WithCompression(ctype).
-			WithZSTDCompressionLevel(clevel).
-			WithSyncWrites(false).
-			WithBlockCacheSize(100 * (1 << 20)).
-			WithIndexCacheSize(100 * (1 << 20)).
-			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key).
-			WithNamespaceOffset(x.NamespaceOffset))
-		if err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
-
-		}
-		defer db.Close()
-		if err := reduceToDB(db); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
-		}
-		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
-		}
-	}
-	// TODO: Fix this return value.
-	return LoadResult{Version: manifest.Since}
-}
-
 type loadBackupInput struct {
 	r              io.Reader
 	restoreTs      uint64
 	preds          predicateSet
-	dropPrefixes   [][]byte
 	dropOperations []*pb.DropOperation
 	isOld          bool
 }
@@ -160,6 +94,7 @@ func (me mapEntry) Data() []byte {
 }
 
 func (mw *mapper) Set(kv *bpb.KV) error {
+
 	key := y.KeyWithTs(kv.Key, kv.Version)
 	sz := kv.Size()
 	buf := mw.buf.SliceAllocate(2 + len(key) + sz)
@@ -341,16 +276,6 @@ func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
 			}
-			shouldSkip := false
-			for _, p := range in.dropPrefixes {
-				glog.Info("Checking: ", parsedKey.Attr, string(p))
-				if strings.HasPrefix(parsedKey.Attr, string(p)) {
-					shouldSkip = true
-				}
-			}
-			if shouldSkip {
-				continue
-			}
 
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.
@@ -527,7 +452,6 @@ func MapBackup(req *pb.RestoreRequest) error {
 
 	dropAll := false
 	dropAttr := make(map[string]struct{})
-	var predPrefixes [][]byte
 
 	// manifests are ordered as: latest..full
 	for i, manifest := range manifests {
@@ -564,9 +488,9 @@ func MapBackup(req *pb.RestoreRequest) error {
 			in := &loadBackupInput{
 				r:              br,
 				preds:          predSet,
-				dropPrefixes:   predPrefixes,
 				dropOperations: manifest.DropOperations,
 				isOld:          manifest.Version == 0,
+				restoreTs:      req.RestoreTs,
 			}
 
 			// Only map the schema keys corresponding to the latest backup.
@@ -590,15 +514,15 @@ func MapBackup(req *pb.RestoreRequest) error {
 			case pb.DropOperation_ATTR:
 				dropAttr[op.DropValue] = struct{}{}
 			case pb.DropOperation_NS:
+				// If there is a drop namespace, we just ban the namespace in the pstore.
+				// TODO: We probably need to propose ban request.
 				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
 				if err != nil {
-					return errors.Wrap(err, "Map phase failed to parse namespace")
+					return errors.Wrapf(err, "Map phase failed to parse namespace")
 				}
-				// TODO: Banning the namespace should be sufficient. No need to filter prefixes.
 				if err := pstore.BanNamespace(ns); err != nil {
-					return errors.Wrap(err, "Failed to ban namespace while restore")
+					return errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
 				}
-				predPrefixes = append(predPrefixes, x.NamespaceToBytes(ns))
 			}
 		}
 	}
@@ -896,7 +820,6 @@ func (r *reducer) writeToDB() error {
 			return err
 		}
 
-		glog.Info("Sent buffer to write channel")
 		r.writeCh <- kvBuf
 		// Reuse cbuf for the next kvBuf.
 		cbuf.Reset()
@@ -905,4 +828,69 @@ func (r *reducer) writeToDB() error {
 	close(r.writeCh)
 	kvBuf.Release()
 	return <-errCh
+}
+
+// RunRestore creates required DBs and streams the backups to them. It is used only for testing.
+func RunRestore(dir, location, backupId string, keyFile string,
+	ctype options.CompressionType, clevel int) LoadResult {
+	// Create the pdir if it doesn't exist.
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return LoadResult{Err: err}
+	}
+
+	uri, err := url.Parse(location)
+	if err != nil {
+		return LoadResult{Err: err}
+	}
+
+	h, err := NewUriHandler(uri, nil)
+	if err != nil {
+		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
+	}
+	manifest, err := GetLatestManifest(h, uri)
+	if err != nil {
+		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
+	}
+	var key x.Sensitive
+	if len(keyFile) > 0 {
+		key, err = ioutil.ReadFile(keyFile)
+		if err != nil {
+			return LoadResult{Err: errors.Wrapf(err, "RunRestore failed to read enc-key")}
+		}
+	}
+
+	for gid := range manifest.Groups {
+		req := &pb.RestoreRequest{
+			Location:          location,
+			GroupId:           gid,
+			BackupId:          backupId,
+			EncryptionKeyFile: keyFile,
+		}
+		if err := MapBackup(req); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
+		}
+		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
+		db, err := badger.OpenManaged(badger.DefaultOptions(pdir).
+			WithCompression(ctype).
+			WithZSTDCompressionLevel(clevel).
+			WithSyncWrites(false).
+			WithBlockCacheSize(100 * (1 << 20)).
+			WithIndexCacheSize(100 * (1 << 20)).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithEncryptionKey(key).
+			WithNamespaceOffset(x.NamespaceOffset))
+		if err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
+
+		}
+		defer db.Close()
+		if err := reduceToDB(db); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
+		}
+		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
+		}
+	}
+	// TODO: Fix this return value.
+	return LoadResult{Version: manifest.Since}
 }

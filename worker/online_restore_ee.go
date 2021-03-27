@@ -331,19 +331,3 @@ func getCredentialsFromRestoreRequest(req *pb.RestoreRequest) *x.MinioCredential
 		Anonymous:    req.Anonymous,
 	}
 }
-
-// zc := pb.NewZeroClient(pl.Get())
-// leaseID := func(val uint64, typ pb.NumLeaseType) error {
-// 	if val == 0 {
-// 		return nil
-// 	}
-// 	_, err := zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ})
-// 	return err
-// }
-
-// if err := leaseID(maxUid, pb.Num_UID); err != nil {
-// 	return 0, 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
-// }
-// if err := leaseID(maxNsId, pb.Num_NS_ID); err != nil {
-// 	return 0, 0, errors.Wrapf(err, "cannot update max namespace lease after restore.")
-// }
