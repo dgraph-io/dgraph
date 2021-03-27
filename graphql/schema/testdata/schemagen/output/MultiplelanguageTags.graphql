@@ -7,7 +7,8 @@ type Person {
 	nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term,exact])
 	nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
 	nameHiEn: String @dgraph(pred: "Person.name@hi:en")
-	nameHi_En_untag: String @dgraph(pred: "Person.name@hi:en:.")
+	nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+	name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
 	Address: String @search(by: [fulltext])
 }
 
@@ -298,8 +299,10 @@ type PersonAggregateResult {
 	nameEnMax: String
 	nameHiEnMin: String
 	nameHiEnMax: String
-	nameHi_En_untagMin: String
-	nameHi_En_untagMax: String
+	nameHi_En_UntagMin: String
+	nameHi_En_UntagMax: String
+	name_Untag_AnyLangMin: String
+	name_Untag_AnyLangMax: String
 	AddressMin: String
 	AddressMax: String
 }
@@ -318,7 +321,8 @@ enum PersonHasFilter {
 	nameHi
 	nameEn
 	nameHiEn
-	nameHi_En_untag
+	nameHi_En_Untag
+	name_Untag_AnyLang
 	Address
 }
 
@@ -327,7 +331,8 @@ enum PersonOrderable {
 	nameHi
 	nameEn
 	nameHiEn
-	nameHi_En_untag
+	nameHi_En_Untag
+	name_Untag_AnyLang
 	Address
 }
 

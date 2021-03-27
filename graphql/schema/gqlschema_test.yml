@@ -2880,6 +2880,68 @@ invalid_schemas:
       { "message": "Type TwitterUser; @lambdaOnMutate directive not allowed along with @remote directive.", "locations": [{"line": 1, "column": 27}]}
     ]
 
+  - name: "language tag field should be of String type"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: Int @dgraph(pred:"Person.name@hi")
+      }
+    errlist: [
+      { "message": "Expected `String` type for language tag field: `nameHi` but got :`Int` inside Type `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "@id directive not supported on language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String! @dgraph(pred:"Person.name@hi") @id
+      }
+    errlist: [
+      { "message": "@id directive on language tag fields not supported, field: `nameHi`,type: `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "unsupported `*` language tag in graphql"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String @dgraph(pred:"Person.name@*")
+      }
+    errlist: [
+      { "message": "`*` language tag not supported in GraphQL, field: `nameHi`,type: `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "untagged language field should be of type String"
+    input: |
+      type Person  {
+        name: Int!
+        nameHi: String @dgraph(pred:"Person.name@en:hi")
+      }
+    errlist: [
+      { "message": "Expected type: String, but got: `Int` for untagged language field `name` inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
+  - name: "Incompatible exact and hash indexes are not allowed at same time on untagged and tagged languages field "
+    input: |
+      type Person  {
+        name: String! @search(by: [exact])
+        nameHi: String @dgraph(pred:"Person.name@en:hi") @search(by: [hash])
+      }
+    errlist: [
+      { "message": "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: `name` have exact index
+      and language tagged field `nameHi` have hash index inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
+  - name: "Incompatible exact and hash indexes are not allowed at same time on tagged and untagged languages field, when hash index is given explicitly on untagged language field "
+    input: |
+      type Person  {
+        name: String! @search(by: [hash])
+        nameHi: String @dgraph(pred:"Person.name@en:hi") @search(by: [exact])
+      }
+    errlist: [
+      { "message": "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: `name` have hash index
+      and language tagged field `nameHi` have exact index inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
