@@ -95,6 +95,11 @@
       "type": "uid"
     },
     {
+      "lang": true,
+      "predicate": "Person.name",
+      "type": "string"
+    },
+    {
       "predicate": "Book.chapters",
       "type": "uid",
       "list": true
@@ -913,6 +918,14 @@
         }
       ],
       "name": "Home"
+    },
+    {
+      "fields": [
+        {
+          "name": "Person.name"
+        }
+      ],
+      "name": "Person"
     },
     {
       "fields": [
