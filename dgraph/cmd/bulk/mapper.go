@@ -154,7 +154,6 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 // +-------------+--------------+------------------------+-------+---------------+------+
 // | len(header) | pb.MapHeader | size of entry (VarInt) | entry | size of entry | .... |
 // +-------------+--------------+------------------------+-------+---------------+------+
-//
 func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	defer func() {
 		m.shards[shardIdx].mu.Unlock() // Locked by caller.
@@ -236,10 +235,10 @@ func writeHeader(w io.Writer, cbuf *z.Buffer, partitionSize int64) {
 func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunk := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunk.NQuads()
-	// Step 2
+	// Step 2: read data fromt he readChunkCh and parse the data. [rdf to nquad conversion]
 	go m.parseChunks(chunk)
 
-	// Step 3
+	// Step 3: process the nquad. [nquad to posting conversion]
 	for nqs := range nquads.Ch() {
 		for _, nq := range nqs {
 			if err := facets.SortAndValidate(nq.Facets); err != nil {
@@ -253,7 +252,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			atomic.AddInt64(&m.prog.nquadCount, 1)
 		}
 
-		// Step 4
+		// step 4: write the processed data to the map file. [generate map file
+		// for the reduce phase]
 		for i := range m.shards {
 			sh := &m.shards[i]
 			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
@@ -266,7 +266,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		}
 	}
 
-	// Step 4
+	// step 4: write the processed data to the map file. [generate map file for the reduce phase]
 	for i := range m.shards {
 		sh := &m.shards[i]
 		if sh.cbuf.LenNoPadding() > 0 {
