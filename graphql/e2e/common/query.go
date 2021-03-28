@@ -3940,7 +3940,7 @@ func queryMultipleLangFields(t *testing.T) {
 
 	queryHotel := &GraphQLParams{
 		Query: `
-			   query {
+			query {
 	            queryPerson {
 	            	name
 	            	nameZh

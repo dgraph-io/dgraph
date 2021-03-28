@@ -2297,6 +2297,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 	return append(fldList, pd)
 }
 
+// This function check if given gql field have multiple language tags
 func isMutableLanguageField(fld *ast.FieldDefinition) bool {
 	dgDirective := fld.Directives.ForName(dgraphDirective)
 	if dgDirective != nil {
@@ -2311,7 +2312,6 @@ func isMutableLanguageField(fld *ast.FieldDefinition) bool {
 		}
 	}
 	return true
-
 }
 
 func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
