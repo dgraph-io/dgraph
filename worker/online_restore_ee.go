@@ -263,7 +263,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot write backup")
 	}
 
-	if err := reduceToDB(pstore); err != nil {
+	if err := reduceToDB(pstore, req.RestoreTs); err != nil {
 		return errors.Wrap(err, "failed to reduce restore map")
 	}
 

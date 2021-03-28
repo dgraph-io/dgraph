@@ -279,7 +279,7 @@ func runExportBackup() error {
 			return err
 		}
 
-		r := worker.NewBackupReducer(nil)
+		r := worker.NewBackupReducer(nil, 0)
 		errCh := make(chan error, 1)
 		go func() {
 			errCh <- processKvBuf(r.WriteCh(), in, writers)

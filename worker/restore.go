@@ -272,15 +272,8 @@ func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
 			if !keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
 				continue
 			}
-			// TODO: Why do we exclude type keys here?
 			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
-			}
-
-			// Override the version if requested. Should not be done for type and schema predicates,
-			// which always have their version set to 1.
-			if in.restoreTs > 0 && !parsedKey.IsSchema() && !parsedKey.IsType() {
-				kv.Version = in.restoreTs
 			}
 
 			switch kv.GetUserMeta()[0] {
@@ -669,18 +662,20 @@ type reducer struct {
 	bufferCh      chan *z.Buffer
 	db            *badger.DB
 	writeCh       chan *z.Buffer
+	restoreTs     uint64
 }
 
-func reduceToDB(db *badger.DB) error {
-	r := NewBackupReducer(db)
+func reduceToDB(db *badger.DB, restoreTs uint64) error {
+	r := NewBackupReducer(db, restoreTs)
 	return r.Reduce()
 }
 
-func NewBackupReducer(db *badger.DB) *reducer {
+func NewBackupReducer(db *badger.DB, restoreTs uint64) *reducer {
 	return &reducer{
-		db:       db,
-		bufferCh: make(chan *z.Buffer, 10),
-		writeCh:  make(chan *z.Buffer, 10),
+		db:        db,
+		restoreTs: restoreTs,
+		bufferCh:  make(chan *z.Buffer, 10),
+		writeCh:   make(chan *z.Buffer, 10),
 	}
 }
 
@@ -808,12 +803,33 @@ func (r *reducer) writeToDB() error {
 			me := mapEntry(s)
 			key := me.Key()
 
+			pk, err := x.Parse(key)
+			if err != nil {
+				return errors.Wrap(err, "writeToDB failed to parse key")
+			}
+
 			// Don't need to pick multiple versions of the same key.
 			if y.SameKey(key, lastKey) {
 				return nil
 			}
+
+			kv := &bpb.KV{}
+			b := me.Data()
+			// Override the version if requested. Should not be done for type and schema predicates,
+			// which always have their version set to 1.
+			if r.restoreTs > 0 && !pk.IsSchema() && !pk.IsType() {
+				if err := kv.Unmarshal(me.Data()); err != nil {
+					return errors.Wrap(err, "writeToDB failed to unmarshal KV")
+				}
+				kv.Version = r.restoreTs
+				b = make([]byte, kv.Size())
+				if _, err := kv.MarshalToSizedBuffer(b); err != nil {
+					return errors.Wrap(err, "writeToDB failed to marshal KV")
+				}
+			}
+
 			lastKey = append(lastKey[:0], key...)
-			kvBuf.WriteSlice(me.Data())
+			kvBuf.WriteSlice(b)
 			return nil
 		})
 		if err != nil {
@@ -884,7 +900,7 @@ func RunRestore(dir, location, backupId string, keyFile string,
 
 		}
 		defer db.Close()
-		if err := reduceToDB(db); err != nil {
+		if err := reduceToDB(db, 0); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
 		}
 		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
