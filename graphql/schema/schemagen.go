@@ -731,7 +731,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 
 		if tags == "*" {
 			return "", gqlerror.ErrorPosf(gqlLangTaggedField.Position, "`*` language tag not"+
-				" supported in GraphQL, field: `%s`,type: `%s`", gqlLangTaggedField.Name, langTagPred.gqlTypeName)
+				" supported in GraphQL, field: `%s`,type: `%s`", gqlLangTaggedField.Name,
+				langTagPred.gqlTypeName)
 		}
 		if unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]; ok {
 			gqlUntaggedLangField := unTaggedDgPred.gqlField
