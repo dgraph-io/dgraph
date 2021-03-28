@@ -22,7 +22,7 @@ services:
     container_name: alpha1
 
   vault:
-    image: vault:1.6.3
+    image: vault:${VAULT_VERSION}
     container_name: vault
     ports:
       - 8200:8200

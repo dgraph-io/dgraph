@@ -7,17 +7,35 @@ This guide will demonstrate using best practices with two personas:
 * `admin` persona with privileged permissions to configure an auth method
 * `app` persona (`dgraph`) - a consumer of secrets stored in Vault
 
-Overview:
+Steps using `bind_secret_id`:
 
-1. [Launch unsealed Vault server](#Launch-unsealed-Vault-server)
-2. [Enable AppRole Auth and KV Secrets](#Enable-AppRole-Auth-and-KV-Secrets)
-3. [Create the admin role with an attached policy](#Create-the-admin-role-with-an-attached-policy)
-4. [Retrieve the admin token](#Retrieve-the-admin-token)
-5. [Create the `dgraph` role with an attached policy](#Create-the-dgraph-role-with-an-attached-policy)
-6. [Save secrets using admin persona](#Save-secrets-using-admin-persona)
-7. [Retrieve the `dgraph` token and save credentials](#Retrieve-the-dgraph-token-and-save-credentials)
-8. [Verify secrets access using app persona](#Verify-secrets-access-using-app-persona)
-9. [Launch Dgraph](#Launch-Dgraph)
+1.  [Configure Dgraph and Vault Versions](#Step-1-configure-dgraph-and-vault-versions)
+2.  [Launch unsealed Vault server](#Step-2-launch-unsealed-Vault-server)
+3.  [Enable AppRole Auth and KV Secrets](#Step-3-enable-AppRole-Auth-and-KV-Secrets)
+4.  [Create an `admin` policy](#Step-4-create-an-admin-policy)
+5.  [Create an `admin` role with the attached policy](#Step-5-create-an-admin-role-with-the-attached-policy)
+6.  [Retrieve the admin token](#Step-6-retrieve-the-admin-token)
+7.  [Create a `dgraph` policy to access the secrets](#Step-7-create-a-dgraph-policy-to-access-the-secrets)
+8.  [Create a `dgraph` role with the attached policy](#Step-8-create-a-dgraph-role-with-the-attached-policy)
+9.  [Save secrets using admin persona](#Step-9-save-secrets-using-admin-persona)
+10. [Retrieve the `dgraph` token and save credentials](#Step-10-retrieve-the-dgraph-token-and-save-credentials)
+11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
+12. [Launch Dgraph](#Step-12-launch-Dgraph)
+
+Alternative Steps using `bound_cidr_list` (see [Using Hashicorp Vault CIDR List for Authentication](#Using-hashicorp-vault-cidr-list-for-authentication)):
+
+1.  [Configure Dgraph and Vault Versions](#Step-1-configure-dgraph-and-vault-versions)
+2.  [Launch unsealed Vault server](#Step-2-launch-unsealed-Vault-server)
+3.  [Enable AppRole Auth and KV Secrets](#Step-3-enable-AppRole-Auth-and-KV-Secrets)
+4.  [Create an `admin` policy](#Step-4-create-an-admin-policy)
+5.  [Create an `admin` role with the attached policy](#Step-5-create-an-admin-role-with-the-attached-policy)
+6.  [Retrieve the admin token](#Step-6-retrieve-the-admin-token)
+7.  [Create a `dgraph` policy to access the secrets](#Step-7-create-a-dgraph-policy-to-access-the-secrets)
+8.  [Create a `dgraph` role using `bound_cidr_list`](#Step-8-create-a-dgraph-role-using-bound_cidr_list)
+9.  [Save secrets using admin persona](#Step-9-save-secrets-using-admin-persona)
+10. [Retrieve the dgraph token using only the `role-id`](#Step-10-retrieve-the-dgraph-token-using-only-the-role-id)
+11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
+12. [Launch Dgraph](#Step-12-launch-Dgraph)
 
 ## Prerequisites
 
@@ -28,7 +46,18 @@ Overview:
 
 ## Steps
 
-### Launch unsealed Vault server
+This configures an app role that requires log in with `role-id` and `secret-id` to login.  This is the default role setting where `bind_seccret_id` is enabled.
+
+### Step 1: Configure Dgraph and Vault Versions
+
+```bash
+export DGRAPH_VERSION="v21.03"  # default is 'latest'
+export VAULT_VERSION="1.7.0"    # default is 'latest'
+```
+
+**NOTE**: This guide has been tested with Hashicorp Vault version `1.6.3` and `1.7.0`.
+
+### Step 2: Launch unsealed Vault server
 
 ```bash
 ## launch vault server
@@ -43,7 +72,7 @@ docker exec -ti vault vault operator unseal
 docker exec -ti vault vault operator unseal
 ```
 
-### Enable AppRole Auth and KV Secrets
+### Step 3: Enable AppRole Auth and KV Secrets
 
 Using the root token copied from `vault operator init`, we can enable these features:
 
@@ -67,7 +96,7 @@ curl --silent \
   $VAULT_ADDRESS/v1/sys/mounts/secret
 ```
 
-### Create the admin role with an attached policy
+### Step 4: Create an `admin` policy
 
 ```bash
 ## convert policies to json format
@@ -83,6 +112,16 @@ curl --silent \
   --request PUT --data @./vault/policy_admin.json \
   http://$VAULT_ADDRESS/v1/sys/policies/acl/admin
 
+curl --silent \
+  --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
+  --request GET \
+  http://$VAULT_ADDRESS/v1/sys/policies/acl/admin | jq
+```
+
+### Step 5: Create an `admin` role with the attached policy
+
+```bash
+
 ## create the admin role with an attached policy
 curl --silent \
   --header "X-Vault-Token: $VAULT_ROOT_TOKEN" \
@@ -97,7 +136,7 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/auth/approle/role/admin | jq
 ```
 
-### Retrieve the admin token
+### Step 6: Retrieve the admin token
 
 From here, we'll want to get a admin token that we can use for the rest of the process:
 
@@ -120,7 +159,7 @@ export VAULT_ADMIN_TOKEN=$(curl --silent \
 )
 ```
 
-### Create the dgraph role with an attached policy
+### Step 7: Create a `dgraph` policy to access the secrets
 
 ```bash
 ## convert policies to json format
@@ -136,6 +175,17 @@ curl --silent \
   --request PUT --data @./vault/policy_dgraph.json \
   http://$VAULT_ADDRESS/v1/sys/policies/acl/dgraph
 
+## verify the policy
+curl --silent \
+  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
+  --request GET \
+  http://$VAULT_ADDRESS/v1/sys/policies/acl/dgraph | jq
+```
+
+
+### Step 8: Create a `dgraph` role with the attached policy
+
+```bash
 ## create the dgraph role with an attached policy
 curl --silent \
  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
@@ -149,7 +199,7 @@ curl --silent \
  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph | jq
 ```
 
-### Save secrets using admin persona
+### Step 9: Save secrets using admin persona
 
 This will save secrets for both [Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and [Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).
 
@@ -161,7 +211,20 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
-### Retrieve the dgraph token and save credentials
+**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha.secrests.json` to look like the following:
+```json
+{
+  "options": {
+    "cas": 1
+  },
+  "data": {
+    "enc_key": "12345678901234567890123456789012",
+    "hmac_secret_file": "12345678901234567890123456789012"
+  }
+}
+```
+
+### Step 10: Retrieve the dgraph token and save credentials
 
 ```bash
 VAULT_DGRAPH_ROLE_ID=$(curl --silent \
@@ -189,7 +252,7 @@ echo $VAULT_DGRAPH_ROLE_ID > ./vault/role_id
 echo $VAULT_DGRAPH_SECRET_ID > ./vault/secret_id
 ```
 
-### Verify secrets access using app persona
+### Step 11: Verify secrets access using app persona
 
 ```bash
 curl --silent \
@@ -198,7 +261,7 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
-### Launch Dgraph
+### Step 12: Launch Dgraph
 
 ```bash
 export DGRAPH_VERSION="<desired-dgraph-version>" # default 'latest'
@@ -209,4 +272,53 @@ You can verify encryption features are enabled with:
 
 ```bash
 curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
+```
+
+## Using Hashicorp Vault CIDR List for Authentication
+
+As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP addresses ranges for the `bound_cidr_list` key.
+
+Only two steps will need to be changed, but otherwise the other steps are the same:
+
+### Step 8: Create a `dgraph` role using `bound_cidr_list`
+
+```bash
+## create the dgraph role with an attached policy
+curl --silent \
+ --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
+ --request POST \
+ --data '{
+"token_policies": "dgraph",
+"token_ttl": "1h",
+"token_max_ttl": "4h",
+"bind_secret_id": false,
+"bound_cidr_list": ["10.0.0.0/8","172.0.0.0/8","192.168.0.0/16", "127.0.0.1/32"]
+}' \
+ http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph
+
+## verify the role
+curl --silent \
+  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" --request GET \
+ http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph | jq
+```
+
+### Step 10: Retrieve the dgraph token using only the `role-id`
+
+```bash
+VAULT_DGRAPH_ROLE_ID=$(curl --silent \
+  --header "X-Vault-Token: $VAULT_ADMIN_TOKEN" \
+  http://$VAULT_ADDRESS/v1/auth/approle/role/dgraph/role-id | jq -r '.data.role_id'
+)
+
+export VAULT_DGRAPH_TOKEN=$(curl --silent \
+  --request POST \
+  --data "{ \"role_id\": \"$VAULT_DGRAPH_ROLE_ID\" }" \
+  http://$VAULT_ADDRESS/v1/auth/approle/login | jq -r '.auth.client_token'
+)
+```
+
+Also, we want to save only the `role-id` for the Dgraph Alpha server.
+
+```bash
+echo $VAULT_DGRAPH_ROLE_ID > ./vault/role_id
 ```
