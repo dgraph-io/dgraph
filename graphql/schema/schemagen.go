@@ -543,7 +543,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	dgPreds := make(map[string]dgPred)
 	langTagDgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlField *ast.FieldDefinition,
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string,
+		gqlField *ast.FieldDefinition,
 		gqlTypeName string) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
@@ -729,14 +730,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		gqlLangTaggedField := langTagPred.gqlField
 
 		if tags == "*" {
-			return "", gqlerror.ErrorPosf(gqlLangTaggedField.Position, "`*` language tag not supported in GraphQL,"+
-				" field: `%s`,type: `%s`", gqlLangTaggedField.Name, langTagPred.gqlTypeName)
+			return "", gqlerror.ErrorPosf(gqlLangTaggedField.Position, "`*` language tag not"+
+				" supported in GraphQL, field: `%s`,type: `%s`", gqlLangTaggedField.Name, langTagPred.gqlTypeName)
 		}
 		if unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]; ok {
 			gqlUntaggedLangField := unTaggedDgPred.gqlField
 			if gqlUntaggedLangField.Type.Name() != "String" {
-				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Expected type: String, but got: `%s`"+
-					" for untagged language field `%s` inside type: `%s`",
+				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Expected type:"+
+					" String, but got: `%s` for untagged language field `%s` inside type: `%s`",
 					gqlUntaggedLangField.Type.Name(), gqlUntaggedLangField.Name, unTaggedDgPred.gqlTypeName)
 			}
 			unTaggedDgPred.lang = true

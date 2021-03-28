@@ -2252,8 +2252,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 	return append(fldList, pd)
 }
 
-func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool,
-	addInput bool) ast.FieldList {
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
+	providesTypeMap map[string]bool, addInput bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
