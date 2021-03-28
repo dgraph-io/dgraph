@@ -1223,7 +1223,8 @@ func addReferenceType(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 		}
 		flds = append(getIDField(defn, providesTypeMap), getXIDField(defn, providesTypeMap)...)
 	} else {
-		flds = append(getIDField(defn, providesTypeMap), getFieldsWithoutIDType(schema, defn, providesTypeMap, true)...)
+		flds = append(getIDField(defn, providesTypeMap),
+			getFieldsWithoutIDType(schema, defn, providesTypeMap, true)...)
 	}
 
 	if len(flds) == 1 && (hasID(defn) || hasXID(defn)) {
@@ -2251,7 +2252,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 	return append(fldList, pd)
 }
 
-func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool, addInput bool) ast.FieldList {
+func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool,
+	addInput bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
