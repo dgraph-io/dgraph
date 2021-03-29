@@ -14,7 +14,6 @@ package worker
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/hex"
@@ -27,40 +26,31 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type loadBackupInput struct {
-	r              io.Reader
 	restoreTs      uint64
 	preds          predicateSet
 	dropOperations []*pb.DropOperation
 	isOld          bool
-}
-
-type mapper struct {
-	once   sync.Once
-	buf    *z.Buffer
-	nextId uint32
-	thr    *y.Throttle
+	keepSchema     bool
 }
 
 const (
@@ -77,285 +67,6 @@ func newBuffer() *z.Buffer {
 		path, "Restore.Buffer")
 	x.Check(err)
 	return buf
-}
-
-// mapEntry stores uint16 (2 bytes), which store the length of the key, followed by the key itself.
-// The rest of the mapEntry stores the marshalled KV.
-// We store the key alongside the protobuf, to make it easier to parse for comparison.
-type mapEntry []byte
-
-func (me mapEntry) Key() []byte {
-	sz := binary.BigEndian.Uint16(me[0:2])
-	return me[2 : 2+sz]
-}
-func (me mapEntry) Data() []byte {
-	sz := binary.BigEndian.Uint16(me[0:2])
-	return me[2+sz:]
-}
-
-func (mw *mapper) Set(kv *bpb.KV) error {
-
-	key := y.KeyWithTs(kv.Key, kv.Version)
-	sz := kv.Size()
-	buf := mw.buf.SliceAllocate(2 + len(key) + sz)
-
-	binary.BigEndian.PutUint16(buf[0:2], uint16(len(key)))
-	x.AssertTrue(copy(buf[2:], key) == len(key))
-	if _, err := kv.MarshalToSizedBuffer(buf[2+len(key):]); err != nil {
-		return err
-	}
-	if mw.buf.LenNoPadding() <= mapFileSz {
-		return nil
-	}
-	return mw.sendForWriting()
-}
-
-func (mw *mapper) newMapFile() (*os.File, error) {
-	fileNum := atomic.AddUint32(&mw.nextId, 1)
-	filename := filepath.Join(
-		x.WorkerConfig.TmpDir,
-		restoreMapDir,
-		fmt.Sprintf("%06d.map", fileNum),
-	)
-	glog.Infof("Creating new backup map file at: %q", filename)
-	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
-	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-}
-
-func (m *mapper) writeToDisk(buf *z.Buffer) error {
-	defer buf.Release()
-	if buf.IsEmpty() {
-		return nil
-	}
-	buf.SortSlice(func(ls, rs []byte) bool {
-		lme := mapEntry(ls)
-		rme := mapEntry(rs)
-		return y.CompareKeys(lme.Key(), rme.Key()) < 0
-	})
-
-	f, err := m.newMapFile()
-	if err != nil {
-		return errors.Wrap(err, "openOutputFile")
-	}
-	defer f.Close()
-
-	// Create partition keys for the map file.
-	header := &pb.MapHeader{PartitionKeys: [][]byte{}}
-	var bufSize int
-	buf.SliceIterate(func(slice []byte) error {
-		bufSize += 4 + len(slice)
-		if bufSize < partitionBufSz {
-			return nil
-		}
-		sz := len(header.PartitionKeys)
-		me := mapEntry(slice)
-		if sz > 0 && bytes.Equal(me.Key(), header.PartitionKeys[sz-1]) {
-			// We already have this key.
-			return nil
-		}
-		header.PartitionKeys = append(header.PartitionKeys, me.Key())
-		bufSize = 0
-		return nil
-	})
-
-	// Write the header to the map file.
-	headerBuf, err := header.Marshal()
-	x.Check(err)
-	var lenBuf [4]byte
-	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(headerBuf)))
-
-	w := snappy.NewBufferedWriter(f)
-	x.Check2(w.Write(lenBuf[:]))
-	x.Check2(w.Write(headerBuf))
-	x.Check(err)
-
-	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	err = buf.SliceIterate(func(slice []byte) error {
-		n := binary.PutUvarint(sizeBuf, uint64(len(slice)))
-		_, err := w.Write(sizeBuf[:n])
-		x.Check(err)
-
-		_, err = w.Write(slice)
-		return err
-	})
-	if err != nil {
-		return errors.Wrap(err, "sliceIterate")
-	}
-	if err := w.Close(); err != nil {
-		return errors.Wrap(err, "writer.Close")
-	}
-	if err := f.Sync(); err != nil {
-		return errors.Wrap(err, "file.Sync")
-	}
-	return f.Close()
-}
-
-func (mw *mapper) sendForWriting() error {
-	if err := mw.thr.Do(); err != nil {
-		return err
-	}
-	go func(buf *z.Buffer) {
-		err := mw.writeToDisk(buf)
-		mw.thr.Done(err)
-	}(mw.buf)
-	mw.buf = newBuffer()
-	return nil
-}
-
-func (mw *mapper) Close() error {
-	cl := func() error {
-		if err := mw.sendForWriting(); err != nil {
-			return err
-		}
-		if err := mw.thr.Finish(); err != nil {
-			return err
-		}
-		return mw.buf.Release()
-	}
-
-	var rerr error
-	mw.once.Do(func() {
-		rerr = cl()
-	})
-	return rerr
-}
-
-// mapToDisk reads the backup, converts the keys and values to the required format,
-// and loads them to the given badger DB. The set of predicates is used to avoid restoring
-// values from predicates no longer assigned to this group.
-// If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
-// Otherwise, the original value is used.
-// TODO(DGRAPH-1234): Check whether restoreTs can be removed.
-func (m *mapper) Map(in *loadBackupInput, keepSchema bool) error {
-	br := bufio.NewReaderSize(in.r, 16<<10)
-	unmarshalBuf := make([]byte, 1<<10)
-	for {
-		var sz uint64
-		err := binary.Read(br, binary.LittleEndian, &sz)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		if cap(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, sz)
-		}
-
-		if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
-			return err
-		}
-
-		list := &bpb.KVList{}
-		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
-			return err
-		}
-
-		for _, kv := range list.Kv {
-			if len(kv.GetUserMeta()) != 1 {
-				return errors.Errorf(
-					"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
-			}
-
-			restoreKey, _, err := fromBackupKey(kv.Key)
-			if err != nil {
-				return errors.Wrap(err, "fromBackupKey")
-			}
-
-			// Filter keys using the preds set. Do not do this filtering for type keys
-			// as they are meant to be in every group and their Attr value does not
-			// match a predicate name.
-			parsedKey, err := x.Parse(restoreKey)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
-			}
-			if !keepSchema && (parsedKey.IsSchema() || parsedKey.IsType()) {
-				continue
-			}
-			if _, ok := in.preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
-				continue
-			}
-
-			switch kv.GetUserMeta()[0] {
-			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
-				backupPl := &pb.BackupPostingList{}
-				if err := backupPl.Unmarshal(kv.Value); err != nil {
-					return errors.Wrapf(err, "while reading backup posting list")
-				}
-				pl := posting.FromBackupPostingList(backupPl)
-
-				shouldSplit, err := posting.ShouldSplit(pl)
-				if err != nil {
-					return errors.Wrap(err, "Failed to get shouldSplit")
-				}
-
-				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
-					// This covers two cases.
-					// 1. The list is not big enough to be split.
-					// 2. This key is storing part of a multi-part list. Write each individual
-					// part without rolling the key first. This part is here for backwards
-					// compatibility. New backups are not affected because there was a change
-					// to roll up lists into a single one.
-					newKv := posting.MarshalPostingList(pl, nil)
-					newKv.Key = restoreKey
-					// Use the version of the KV before we marshalled the
-					// posting list. The MarshalPostingList function returns KV
-					// with a zero version.
-					newKv.Version = kv.Version
-					if err := m.Set(newKv); err != nil {
-						return err
-					}
-				} else {
-					// This is a complete list. It should be rolled up to avoid writing
-					// a list that is too big to be read back from disk.
-					// Rollup will take ownership of the Pack and will free the memory.
-					l := posting.NewList(restoreKey, pl, kv.Version)
-					kvs, err := l.Rollup(nil)
-					if err != nil {
-						// TODO: wrap errors in this file for easier debugging.
-						return err
-					}
-					for _, kv := range kvs {
-						if err := m.Set(kv); err != nil {
-							return err
-						}
-					}
-				}
-
-			case posting.BitSchemaPosting:
-				appendNamespace := func() error {
-					// If the backup was taken on old version, we need to append the namespace to
-					// the fields of TypeUpdate.
-					var update pb.TypeUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
-						return err
-					}
-					for _, sch := range update.Fields {
-						sch.Predicate = x.GalaxyAttr(sch.Predicate)
-					}
-					kv.Value, err = update.Marshal()
-					return err
-				}
-				if in.isOld && parsedKey.IsType() {
-					if err := appendNamespace(); err != nil {
-						glog.Errorf("Unable to (un)marshal type: %+v. Err=%v\n", parsedKey, err)
-						continue
-					}
-				}
-				// Schema and type keys are not stored in an intermediate format so their
-				// value can be written as is.
-				kv.Key = restoreKey
-				if err := m.Set(kv); err != nil {
-					return err
-				}
-
-			default:
-				return errors.Errorf(
-					"Unexpected meta %d for key %s", kv.UserMeta[0], hex.Dump(kv.Key))
-			}
-		}
-	}
-	return nil
 }
 
 func fromBackupKey(key []byte) ([]byte, uint64, error) {
@@ -402,116 +113,6 @@ func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupRead
 
 	br.r = bufio.NewReaderSize(gzReader, 16<<10)
 	return br, nil
-}
-
-func MapBackup(req *pb.RestoreRequest) error {
-	uri, err := url.Parse(req.Location)
-	if err != nil {
-		return err
-	}
-
-	creds := getCredentialsFromRestoreRequest(req)
-	h, err := NewUriHandler(uri, creds)
-	if err != nil {
-		return err
-	}
-
-	manifests, err := getManifestsToRestore(h, uri, req)
-	if err != nil {
-		return errors.Wrapf(err, "cannot retrieve manifests")
-	}
-
-	fmt.Printf("Got %d backups to restore ", len(manifests))
-
-	cfg, err := getEncConfig(req)
-	if err != nil {
-		return errors.Wrapf(err, "unable to get encryption config")
-	}
-	_, encKey := ee.GetKeys(cfg)
-
-	mapper := &mapper{
-		buf: newBuffer(),
-		thr: y.NewThrottle(3),
-	}
-	defer mapper.Close()
-
-	dropAll := false
-	dropAttr := make(map[string]struct{})
-
-	// manifests are ordered as: latest..full
-	for i, manifest := range manifests {
-		// A dropAll or DropData operation is encountered. No need to restore previous backups.
-		if dropAll {
-			break
-		}
-		if manifest.Since == 0 || len(manifest.Groups) == 0 {
-			continue
-		}
-		path := manifest.Path
-		for gid := range manifest.Groups {
-			if gid != req.GroupId {
-				// LoadBackup will try to call the backup function for every group.
-				// Exit here if the group is not the one indicated by the request.
-				continue
-			}
-			file := filepath.Join(path, backupName(manifest.Since, gid))
-
-			// Only restore the predicates that were assigned to this group at the time
-			// of the last backup.
-			predSet := manifests[0].getPredsInGroup(gid)
-			br, err := newBackupReader(h, file, encKey)
-			if err != nil {
-				return errors.Wrap(err, "newBackupReader")
-			}
-
-			// Only map the predicates which haven't been dropped yet.
-			for p, _ := range predSet {
-				if _, ok := dropAttr[p]; ok {
-					delete(predSet, p)
-				}
-			}
-			in := &loadBackupInput{
-				r:              br,
-				preds:          predSet,
-				dropOperations: manifest.DropOperations,
-				isOld:          manifest.Version == 0,
-				restoreTs:      req.RestoreTs,
-			}
-
-			// Only map the schema keys corresponding to the latest backup.
-			keepSchema := i == 0
-
-			// This would stream the backups from the source, and map them in
-			// Dgraph compatible format on disk.
-			if err := mapper.Map(in, keepSchema); err != nil {
-				return errors.Wrap(err, "mapper.Map")
-			}
-			if err := br.Close(); err != nil {
-				return errors.Wrap(err, "br.Close")
-			}
-		}
-		for _, op := range manifest.DropOperations {
-			switch op.DropOp {
-			case pb.DropOperation_ALL:
-				dropAll = true
-			case pb.DropOperation_DATA:
-				dropAll = true
-			case pb.DropOperation_ATTR:
-				dropAttr[op.DropValue] = struct{}{}
-			case pb.DropOperation_NS:
-				// If there is a drop namespace, we just ban the namespace in the pstore.
-				// TODO: We probably need to propose ban request.
-				ns, err := strconv.ParseUint(op.DropValue, 0, 64)
-				if err != nil {
-					return errors.Wrapf(err, "Map phase failed to parse namespace")
-				}
-				if err := pstore.BanNamespace(ns); err != nil {
-					return errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
-				}
-			}
-		}
-	}
-	return nil
 }
 
 // VerifyBackup will access the backup location and verify that the specified backup can
@@ -653,12 +254,19 @@ type reducer struct {
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
 	db            *badger.DB
-	writeCh       chan *z.Buffer
-	restoreTs     uint64
+	// writeCh        chan *z.Buffer
+	restoreTs      uint64
+	bytesProcessed uint64
+	bytesRead      uint64
 }
 
 func reduceToDB(db *badger.DB, restoreTs uint64) error {
 	r := NewBackupReducer(db, restoreTs)
+	closer := z.NewCloser(1)
+
+	go r.Progress(closer)
+	defer closer.SignalAndWait()
+
 	return r.Reduce()
 }
 
@@ -667,12 +275,42 @@ func NewBackupReducer(db *badger.DB, restoreTs uint64) *reducer {
 		db:        db,
 		restoreTs: restoreTs,
 		bufferCh:  make(chan *z.Buffer, 10),
-		writeCh:   make(chan *z.Buffer, 10),
+		// writeCh:   make(chan *z.Buffer, 10),
+	}
+}
+
+func (r *reducer) Progress(closer *z.Closer) {
+	defer closer.Done()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	start := time.Now()
+	update := func() {
+		since := time.Since(start)
+		read := atomic.LoadUint64(&r.bytesRead)
+		proc := atomic.LoadUint64(&r.bytesProcessed)
+		pr := uint64(float64(proc) / since.Seconds())
+		glog.Infof(
+			"Restore REDUCE %s read: %s. processed: %s rate: %s/sec. jemalloc: %s.\n",
+			x.FixedDuration(since), humanize.IBytes(read), humanize.IBytes(proc),
+			humanize.IBytes(pr), humanize.IBytes(uint64(z.NumAllocBytes())))
+	}
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			update()
+			glog.Infof("Restore REDUCE Done in %s.\n", x.FixedDuration(time.Since(start)))
+			return
+		case <-ticker.C:
+			update()
+		}
 	}
 }
 
 func (r *reducer) WriteCh() chan *z.Buffer {
-	return r.writeCh
+	return nil
+	// return r.writeCh
 }
 
 func (r *reducer) Reduce() error {
@@ -736,6 +374,17 @@ func (r *reducer) Reduce() error {
 
 func (r *reducer) blockingRead() error {
 	cbuf := getBuf()
+
+	sortAndPush := func(buf *z.Buffer) {
+		// Let's sort here. So, there's less work for processor.
+		buf.SortSlice(func(ls, rs []byte) bool {
+			lme := mapEntry(ls)
+			rme := mapEntry(rs)
+			return y.CompareKeys(lme.Key(), rme.Key()) < 0
+		})
+		atomic.AddUint64(&r.bytesRead, uint64(buf.LenNoPadding()))
+		r.bufferCh <- buf
+	}
 	for _, pkey := range r.partitionKeys {
 		for _, itr := range r.mapItrs {
 			if err := itr.Next(cbuf, pkey); err != nil {
@@ -747,12 +396,12 @@ func (r *reducer) blockingRead() error {
 			// Pick up more data.
 			continue
 		}
-		r.bufferCh <- cbuf
+		sortAndPush(cbuf)
 		cbuf = getBuf()
 	}
 
 	if !cbuf.IsEmpty() {
-		r.bufferCh <- cbuf
+		sortAndPush(cbuf)
 	} else {
 		cbuf.Release()
 	}
@@ -761,36 +410,19 @@ func (r *reducer) blockingRead() error {
 }
 
 func (r *reducer) writeToDB() error {
-	toStreamWriter := func() error {
-		if r.db == nil {
-			return nil
-		}
-		writer := r.db.NewStreamWriter()
-		x.Check(writer.Prepare())
-
-		for buf := range r.writeCh {
-			if err := writer.Write(buf); err != nil {
-				return err
-			}
-			buf.Release()
-		}
-		return writer.Flush()
+	if r.db == nil {
+		return nil
 	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- toStreamWriter()
-	}()
+	writer := r.db.NewStreamWriter()
+	x.Check(writer.Prepare())
 
 	kvBuf := getBuf()
+	defer func() {
+		kvBuf.Release()
+	}()
+
 	var lastKey []byte
 	for cbuf := range r.bufferCh {
-		cbuf.SortSlice(func(ls, rs []byte) bool {
-			lme := mapEntry(ls)
-			rme := mapEntry(rs)
-			return y.CompareKeys(lme.Key(), rme.Key()) < 0
-		})
-
 		err := cbuf.SliceIterate(func(s []byte) error {
 			me := mapEntry(s)
 			key := me.Key()
@@ -804,38 +436,42 @@ func (r *reducer) writeToDB() error {
 			if y.SameKey(key, lastKey) {
 				return nil
 			}
+			lastKey = append(lastKey[:0], key...)
 
 			kv := &bpb.KV{}
-			b := me.Data()
 			// Override the version if requested. Should not be done for type and schema predicates,
 			// which always have their version set to 1.
 			if r.restoreTs > 0 && !pk.IsSchema() && !pk.IsType() {
 				if err := kv.Unmarshal(me.Data()); err != nil {
 					return errors.Wrap(err, "writeToDB failed to unmarshal KV")
 				}
+				// TODO: We're doing this extra step of unmarshal, then marshal
+				// back to set the version. See if there's a way to avoid this.
 				kv.Version = r.restoreTs
-				b = make([]byte, kv.Size())
-				if _, err := kv.MarshalToSizedBuffer(b); err != nil {
+				buf := kvBuf.SliceAllocate(kv.Size())
+				if _, err := kv.MarshalToSizedBuffer(buf); err != nil {
 					return errors.Wrap(err, "writeToDB failed to marshal KV")
 				}
+			} else {
+				kvBuf.WriteSlice(me.Data())
 			}
-
-			lastKey = append(lastKey[:0], key...)
-			kvBuf.WriteSlice(b)
 			return nil
 		})
 		if err != nil {
 			return err
 		}
 
-		r.writeCh <- kvBuf
-		// Reuse cbuf for the next kvBuf.
-		cbuf.Reset()
-		kvBuf = cbuf
-	}
-	close(r.writeCh)
-	kvBuf.Release()
-	return <-errCh
+		atomic.AddUint64(&r.bytesProcessed, uint64(cbuf.LenNoPadding()))
+		if err := writer.Write(kvBuf); err != nil {
+			return err
+		}
+		kvBuf.Reset()
+		cbuf.Release()
+	} // end loop for bufferCh
+
+	// close(r.writeCh)
+	// return <-errCh
+	return nil
 }
 
 // RunRestore creates required DBs and streams the backups to them. It is used only for testing.
