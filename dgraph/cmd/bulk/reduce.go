@@ -485,8 +485,8 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		partitionKeys = append(partitionKeys, nil)
 
 		for i := 0; i < len(partitionKeys); i++ {
+			pkey := partitionKeys[i]
 			for _, itr := range mapItrs {
-				pkey := partitionKeys[i]
 				itr.Next(cbuf, pkey)
 			}
 			if cbuf.LenNoPadding() < 256<<20 {

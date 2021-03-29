@@ -58,7 +58,7 @@ type Options struct {
 	WalCache int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret x.SensitiveByteSlice
+	HmacSecret x.Sensitive
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.

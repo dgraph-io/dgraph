@@ -104,7 +104,7 @@ type WorkerOptions struct {
 	// AclEnabled indicates whether the enterprise ACL feature is turned on.
 	AclEnabled bool
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret SensitiveByteSlice
+	HmacSecret Sensitive
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
@@ -126,7 +126,7 @@ type WorkerOptions struct {
 	// token string - if set, all Admin requests to Dgraph will have this token.
 	Security *z.SuperFlag
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
-	EncryptionKey SensitiveByteSlice
+	EncryptionKey Sensitive
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
 	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests

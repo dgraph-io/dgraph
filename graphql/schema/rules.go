@@ -818,7 +818,7 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) gqlerror
 
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	field *ast.FieldDefinition, dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	invTypeName := field.Type.Name()
@@ -1002,7 +1002,7 @@ func searchValidation(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	arg := dir.Arguments.ForName(searchArgs)
@@ -1081,7 +1081,7 @@ func searchValidation(
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	dir *ast.Directive, secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	if isID(field) {
@@ -1220,7 +1220,7 @@ func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	return passwordDirectiveValidation(sch, typ)
 }
@@ -1229,7 +1229,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
 	if x.LambdaUrl(x.GalaxyNamespace) == "" {
@@ -1389,7 +1389,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	// 1. Validating custom directive itself
@@ -2032,7 +2032,7 @@ func idValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	if field.Type.String() == "String!" ||
 		field.Type.String() == "Int!" ||
 		field.Type.String() == "Int64!" {
@@ -2109,7 +2109,7 @@ func apolloRequiresValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2146,7 +2146,7 @@ func apolloProvidesValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	fldTypeDefn := sch.Types[field.Type.Name()]
 	keyDirective := fldTypeDefn.Directives.ForName(apolloKeyDirective)
@@ -2179,7 +2179,7 @@ func apolloExternalValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	extendsDirective := typ.Directives.ForName(apolloExtendsDirective)
 	if extendsDirective == nil {
@@ -2212,7 +2212,7 @@ func remoteResponseValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 
 	remoteDirectiveDefn := typ.Directives.ForName(remoteDirective)
 	if remoteDirectiveDefn == nil {

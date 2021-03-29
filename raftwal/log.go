@@ -62,7 +62,7 @@ const (
 
 var (
 	emptyEntry    = entry(make([]byte, entrySize))
-	encryptionKey x.SensitiveByteSlice
+	encryptionKey x.Sensitive
 )
 
 type entry []byte
