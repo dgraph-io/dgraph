@@ -289,7 +289,7 @@ func runExportBackup() error {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
 		if err := <-errCh; err != nil {
-			errors.Wrap(err, "Failed to process reduced buffers")
+			return errors.Wrap(err, "Failed to process reduced buffers")
 		}
 		if _, err := exportStorage.FinishWriting(writers); err != nil {
 			return errors.Wrap(err, "Failed to finish write")
