@@ -288,7 +288,7 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 		pl:              &pb.PostingList{},
 		r:               r,
 	}
-	defer enc.kvBuf.Release()
+	defer func() { x.Check(enc.kvBuf.Release()) }()
 
 	for req := range entryCh {
 		// r.toList(req)
@@ -496,7 +496,7 @@ func (r *reducer) readBuffers(partitionKeys [][]byte, mapItrs []*mapIterator,
 		hd.Update(int64(cbuf.LenNoPadding()))
 		bufCh <- cbuf
 	} else {
-		cbuf.Release()
+		x.Check(cbuf.Release())
 	}
 	fmt.Printf("Final Histogram of buffer sizes: %s\n", hd.String())
 	close(bufCh)
@@ -583,7 +583,7 @@ func (e *encoder) toList(req *encodeRequest) {
 	prog := e.r.prog
 	defer func() {
 		atomic.AddInt64(&prog.numEncoding, -int64(cbuf.LenNoPadding()))
-		cbuf.Release()
+		x.Check(cbuf.Release())
 	}()
 
 	cbuf.SortSlice(func(ls, rs []byte) bool {
@@ -663,6 +663,7 @@ func (e *encoder) toList(req *encodeRequest) {
 	appendToList()
 	if e.kvBuf.LenNoPadding() > 0 {
 		req.listCh <- e.kvBuf
+		e.kvBuf = z.NewBuffer(260<<20, "Reducer.Buffer.KVBuffer")
 	}
 	close(req.listCh)
 
