@@ -65,64 +65,69 @@ func (r *reducer) run() error {
 		if err := thr.Do(); err != nil {
 			return err
 		}
-		go func(shardId int, db *badger.DB, tmpDb *badger.DB) {
-			defer thr.Done(nil)
-
-			mapFiles := filenamesInTree(dirs[shardId])
-			var mapItrs []*mapIterator
-
-			// Dedup the partition keys.
-			partitions := make(map[string]struct{})
-			for _, mapFile := range mapFiles {
-				header, itr := newMapIterator(mapFile)
-				for _, k := range header.PartitionKeys {
-					if len(k) == 0 {
-						continue
-					}
-					partitions[string(k)] = struct{}{}
-				}
-				mapItrs = append(mapItrs, itr)
-			}
-
-			writer := db.NewStreamWriter()
-			x.Check(writer.Prepare())
-			// Split lists are written to a separate DB first to avoid ordering issues.
-			splitWriter := tmpDb.NewManagedWriteBatch()
-
-			ci := &countIndexer{
-				reducer:     r,
-				writer:      writer,
-				splitWriter: splitWriter,
-				tmpDb:       tmpDb,
-				splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
-				countBuf:    newBuffer(r.opt.TmpDir),
-			}
-
-			partitionKeys := make([][]byte, 0, len(partitions))
-			for k := range partitions {
-				partitionKeys = append(partitionKeys, []byte(k))
-			}
-			sort.Slice(partitionKeys, func(i, j int) bool {
-				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
-			})
-
-			r.reduce(partitionKeys, mapItrs, ci)
-			ci.wait()
-
-			fmt.Println("Writing split lists back to the main DB now")
-			// Write split lists back to the main DB.
-			r.writeSplitLists(db, tmpDb, writer)
-
-			x.Check(writer.Flush())
-
-			for _, itr := range mapItrs {
-				if err := itr.Close(); err != nil {
-					fmt.Printf("Error while closing iterator: %v", err)
-				}
-			}
-		}(i, r.createBadger(i), r.createTmpBadger())
+		go r.reduceShard(i, dirs[i], thr)
 	}
 	return thr.Finish()
+}
+
+func (r *reducer) reduceShard(shardId int, dir string, thr *y.Throttle) {
+	defer thr.Done(nil)
+
+	db := r.createBadger(shardId)
+	tmpDb := r.createTmpBadger()
+
+	mapFiles := filenamesInTree(dir)
+	var mapItrs []*mapIterator
+
+	// Dedup the partition keys.
+	partitions := make(map[string]struct{})
+	for _, mapFile := range mapFiles {
+		header, itr := newMapIterator(mapFile)
+		for _, k := range header.PartitionKeys {
+			if len(k) == 0 {
+				continue
+			}
+			partitions[string(k)] = struct{}{}
+		}
+		mapItrs = append(mapItrs, itr)
+	}
+
+	writer := db.NewStreamWriter()
+	x.Check(writer.Prepare())
+	// Split lists are written to a separate DB first to avoid ordering issues.
+	splitWriter := tmpDb.NewManagedWriteBatch()
+
+	ci := &countIndexer{
+		reducer:     r,
+		writer:      writer,
+		splitWriter: splitWriter,
+		tmpDb:       tmpDb,
+		splitCh:     make(chan *bpb.KVList, 2*runtime.NumCPU()),
+		countBuf:    newBuffer(r.opt.TmpDir),
+	}
+
+	partitionKeys := make([][]byte, 0, len(partitions))
+	for k := range partitions {
+		partitionKeys = append(partitionKeys, []byte(k))
+	}
+	sort.Slice(partitionKeys, func(i, j int) bool {
+		return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
+	})
+
+	r.reduce(partitionKeys, mapItrs, ci)
+	ci.wait()
+
+	fmt.Println("Writing split lists back to the main DB now")
+	// Write split lists back to the main DB.
+	r.writeSplitLists(db, tmpDb, writer)
+
+	x.Check(writer.Flush())
+
+	for _, itr := range mapItrs {
+		if err := itr.Close(); err != nil {
+			fmt.Printf("Error while closing iterator: %v", err)
+		}
+	}
 }
 
 func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB {
@@ -280,9 +285,6 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
 	enc := &encoder{
-		// prog:            r.prog,
-		// writeAt:         r.writeTs,
-		// schema:          r.schema,
 		trackCountIndex: make(map[string]bool),
 		kvBuf:           z.NewBuffer(260<<20, "Reducer.Buffer.ToList"),
 		pl:              &pb.PostingList{},
@@ -361,12 +363,13 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			x.Check(ci.writer.Write(kvBuf))
 
 			kv := &bpb.KV{}
-			err := kvBuf.SliceIterate(func(s []byte) error {
+			x.Check(kvBuf.SliceIterate(func(s []byte) error {
 				kv.Reset()
 				x.Check(kv.Unmarshal(s))
 				if lastStreamId == kv.StreamId {
 					return nil
 				}
+				// TODO(ibrahim): ?? We're closing the stream if we see a different stream ID?
 				if lastStreamId > 0 {
 					fmt.Printf("Finishing stream id: %d\n", lastStreamId)
 					doneKV := &bpb.KV{
@@ -383,8 +386,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 				lastStreamId = kv.StreamId
 				return nil
 
-			})
-			x.Check(err)
+			}))
 			kvBuf.Release()
 		}
 	}
@@ -504,8 +506,8 @@ func (r *reducer) readBuffers(partitionKeys [][]byte, mapItrs []*mapIterator,
 
 // reduce reduces the map files into postings lists and writes them to badger.
 // There are 3 steps involved
-// Step 1: Read buffers from the map files based on the partition keys
-// Step 2; Encode the buffers into postings lists
+// Step 1: Read buffers from the map files based on the partition keys.
+// Step 2; Encode the buffers into postings lists.
 // Step 3: write these posting lists to badger.
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := r.opt.NumGoroutines
@@ -595,7 +597,7 @@ func (e *encoder) toList(req *encodeRequest) {
 	var currentKey []byte
 	e.kvBuf.Reset()
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
-	appendToList := func() {
+	processList := func() {
 		if num == 0 {
 			return
 		}
@@ -608,7 +610,8 @@ func (e *encoder) toList(req *encodeRequest) {
 		// We might not need to track count index every time.
 		e.countIfNeeded(num, pk, req.countBuf)
 
-		numUids := e.mergePostings(cbuf, start, end)
+		// buildPlist will read data between start and end in the cbuf and fill the e.pl.postings.
+		numUids := e.buildPlist(cbuf, start, end)
 
 		atomic.AddInt64(&prog.reduceKeyCount, 1)
 
@@ -637,7 +640,8 @@ func (e *encoder) toList(req *encodeRequest) {
 			}
 		}
 
-		e.splitIfNeeded(currentKey, pk, req.splitCh)
+		// write plist to the e.KVBuf.
+		e.writeToKVBuf(currentKey, pk, req.splitCh)
 		e.resetPl()
 	}
 
@@ -647,7 +651,7 @@ func (e *encoder) toList(req *encodeRequest) {
 		entryKey := entry.Key()
 
 		if !bytes.Equal(entryKey, currentKey) && currentKey != nil {
-			appendToList()
+			processList()
 			start, num = end, 0 // Start would start from current one.
 
 			if e.kvBuf.LenNoPadding() > 256<<20 {
@@ -660,9 +664,12 @@ func (e *encoder) toList(req *encodeRequest) {
 		num++
 	}
 
-	appendToList()
+	processList()
 	if e.kvBuf.LenNoPadding() > 0 {
 		req.listCh <- e.kvBuf
+		// Create a new one so that we can free it up in the defer in the
+		// encode function. We cannot the remove the defer because we might
+		// have to free up e.KvBuf in case of errors as well.
 		e.kvBuf = z.NewBuffer(260<<20, "Reducer.Buffer.KVBuffer")
 	}
 	close(req.listCh)
@@ -691,7 +698,7 @@ func (e *encoder) countIfNeeded(num int, pk x.ParsedKey, countBuf *z.Buffer) {
 	}
 }
 
-func (e *encoder) mergePostings(cbuf *z.Buffer, start, end int) uint64 {
+func (e *encoder) buildPlist(cbuf *z.Buffer, start, end int) uint64 {
 	bm := roaring64.New()
 	var lastUid uint64
 	slice, next := []byte{}, start
@@ -719,7 +726,9 @@ func (e *encoder) mergePostings(cbuf *z.Buffer, start, end int) uint64 {
 	return bm.GetCardinality()
 }
 
-func (e *encoder) splitIfNeeded(currentKey []byte, pk x.ParsedKey, splitCh chan *bpb.KVList) {
+// writeToKVBuf will write the e.pl to e.kvBuf if we don't need to split it. If
+// split is needed, we push the kvs to the split channel.
+func (e *encoder) writeToKVBuf(currentKey []byte, pk x.ParsedKey, splitCh chan *bpb.KVList) {
 	shouldSplit, err := posting.ShouldSplit(e.pl)
 	x.Check(err)
 	writeTs := e.r.writeTs
