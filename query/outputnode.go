@@ -812,56 +812,13 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			if paCopy == nil {
 				paCopy = caCopy
 			} else {
-				// This code merge child and parent lists such that nodes with
-				// same attribute id's comes together in merged list
-				startCaPtr := caCopy
-				// unmatchedNodesStartPtr and unmatchedNodesEndPtr stores start
-				// and end pointer of parent list nodes whose attribute id's doesn't match with
-				// attribute id's of any node in child list
-				var unmatchedNodesStartPtr fastJsonNode
-				var unmatchedNodesEndPtr fastJsonNode
-				for paCopy != nil {
-					var exist bool
-					var caCopyPrev fastJsonNode
-					paCopyNext := paCopy.next
-					for caCopy != nil {
-						// Merge parent node in child list, if attribute id of it match
-						// with attribute id of any node in child list
-						if enc.getAttr(paCopy) == enc.getAttr(caCopy) {
-							if caCopyPrev == nil {
-								paCopy.next = startCaPtr
-								startCaPtr = paCopy
-							} else {
-								caCopyPrev.next = paCopy
-								paCopy.next = caCopy
-							}
-							exist = true
-							break
-						}
-						caCopyPrev = caCopy
-						caCopy = caCopy.next
-					}
-					if !exist {
-						if unmatchedNodesStartPtr == nil {
-							unmatchedNodesStartPtr = paCopy
-							unmatchedNodesEndPtr = paCopy
-
-						} else {
-							unmatchedNodesEndPtr.next = paCopy
-							unmatchedNodesEndPtr = paCopy
-						}
-					}
-					caCopy = startCaPtr
-					paCopy = paCopyNext
+				temp := paCopy
+				for temp.next != nil {
+					temp = temp.next
 				}
-				// Merge all unmatched nodes at the beginning of child List
-				if unmatchedNodesStartPtr != nil {
-					unmatchedNodesEndPtr.next = startCaPtr
-					startCaPtr = unmatchedNodesStartPtr
-				}
-				caCopy = startCaPtr
+				temp.next = caCopy
 			}
-			mergedList = append(mergedList, caCopy)
+			mergedList = append(mergedList, paCopy)
 		}
 	}
 	return mergedList, nil
@@ -936,6 +893,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 
 	for _, slice := range parentSlice {
 		// From every slice we need to remove node with attribute "uid".
+		MergeSort(&slice, enc)
 		var prev, cur fastJsonNode
 		cur = slice
 		for cur != nil {
@@ -957,6 +915,73 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 	}
 
 	return parentSlice, nil
+}
+
+func MergeSort(headRef *fastJsonNode, enc *encoder) {
+	head := *headRef
+	var a fastJsonNode
+	var b fastJsonNode
+
+	/* Base case -- length 0 or 1 */
+	if headRef == nil || (*headRef).next == nil {
+		return
+	}
+
+	/* Split head into 'a' and 'b' sublists */
+	FrontBackSplit(head, &a, &b)
+
+	/* Recursively sort the sublists */
+	MergeSort(&a, enc)
+	MergeSort(&b, enc)
+
+	/* answer = merge the two sorted lists together */
+	*headRef = SortedMerge(a, b, enc)
+}
+
+func SortedMerge(a fastJsonNode, b fastJsonNode, enc *encoder) fastJsonNode {
+	var result fastJsonNode
+
+	/* Base cases */
+	if a == nil {
+		return b
+	} else if b == nil {
+		return a
+	}
+
+	/* Pick either a or b, and recur */
+	if Less(enc, a, b) {
+		result = a
+		result.next = SortedMerge(a.next, b, enc)
+	} else {
+		result = b
+		result.next = SortedMerge(a, b.next, enc)
+	}
+	return result
+}
+
+func Less(enc *encoder, i fastJsonNode, j fastJsonNode) bool {
+	attri := enc.getAttr(i)
+	attrj := enc.getAttr(j)
+	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
+	return cmp < 0
+}
+
+func FrontBackSplit(source fastJsonNode,
+	frontRef *fastJsonNode, backRef *fastJsonNode) {
+	slow := source
+	fast := source.next
+
+	for fast != nil {
+		fast = fast.next
+		if fast != nil {
+			slow = slow.next
+			fast = fast.next
+		}
+	}
+
+	*frontRef = source
+	*backRef = slow.next
+	slow.next = nil
 }
 
 func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
