@@ -366,14 +366,6 @@ func fromBackupKey(key []byte) ([]byte, uint64, error) {
 	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
 }
 
-func compareKeys(key1, key2 []byte) int {
-	if cmp := bytes.Compare(key1[:len(key1)-8], key2[:len(key2)-8]); cmp != 0 {
-		return cmp
-	}
-	// We are keeping the largest version first in the sort result.
-	return bytes.Compare(key2[len(key2)-8:], key1[len(key1)-8:])
-}
-
 type backupReader struct {
 	toClose []io.Closer
 	r       io.Reader
