@@ -1,5 +1,7 @@
+// +build oss
+
 /*
- * Copyright 2015-2020 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020-2021 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +16,15 @@
  * limitations under the License.
  */
 
-package x
+package vault
 
-type ExportedGQLSchema struct {
-	Namespace uint64
-	Schema    string
-}
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
+)
 
-// Sensitive implements the Stringer interface to redact its contents.
-// Use this type for sensitive info such as keys, passwords, or secrets so it doesn't leak
-// as output such as logs.
-type Sensitive []byte
-
-func (Sensitive) String() string {
-	return "****"
+func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
+	glog.Exit("flags: vault is an enterprise-only feature")
+	return
 }

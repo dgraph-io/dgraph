@@ -167,7 +167,7 @@ func doBackup(ctx context.Context, req *pb.BackupRequest, forceFull bool) error 
 	if err != nil {
 		return err
 	}
-	latestManifest, err := getLatestManifest(handler, uri)
+	latestManifest, err := GetLatestManifest(handler, uri)
 	if err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 		return err
 	}
 
-	manifest, err := getManifest(handler, uri)
+	manifest, err := GetManifest(handler, uri)
 	if err != nil {
 		return err
 	}

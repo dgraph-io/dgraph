@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -48,7 +47,7 @@ func RunFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	result := worker.RunRestore("./data/restore", backupLocation, lastDir,
-		x.SensitiveByteSlice(nil), options.Snappy, 0)
+		"", options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

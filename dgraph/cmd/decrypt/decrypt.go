@@ -31,8 +31,8 @@ import (
 )
 
 type options struct {
-	// keyfile comes from the encryption or Vault flags
-	keyfile x.SensitiveByteSlice
+	// keyfile comes from the encryption_key_file or Vault flags
+	keyfile x.Sensitive
 	file    string
 	output  string
 }

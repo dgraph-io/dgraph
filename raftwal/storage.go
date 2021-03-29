@@ -87,7 +87,7 @@ func Init(dir string) *DiskStorage {
 
 // InitEncrypted initializes returns a properly initialized instance of DiskStorage.
 // To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
-func InitEncrypted(dir string, encKey x.SensitiveByteSlice) (*DiskStorage, error) {
+func InitEncrypted(dir string, encKey x.Sensitive) (*DiskStorage, error) {
 	w := &DiskStorage{
 		dir: dir,
 	}

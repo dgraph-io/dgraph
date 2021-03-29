@@ -425,7 +425,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List
+	secrets map[string]x.Sensitive) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -553,7 +553,7 @@ func ValidatorNoOp(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	return nil
 }
 
@@ -852,7 +852,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // has fleshed out the schema structure; we just need to check if it also satisfies
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string,
-	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	secrets map[string]x.Sensitive) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range definitions {

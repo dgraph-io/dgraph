@@ -24,7 +24,7 @@ import (
 // GetKeys returns the ACL and encryption keys as configured by the user
 // through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function exits with an error.
-func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
+func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
 	aclKey, encKey := vaultGetKeys(config)
 	var err error
