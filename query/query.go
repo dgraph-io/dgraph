@@ -983,7 +983,7 @@ func calculateFirstN(sg *SubGraph) int32 {
 	shouldExclude := false
 	if sg.SrcFunc != nil {
 		switch sg.SrcFunc.Name {
-		case "regexp", "alloftext", "anyoftext", "anyofterms", "allofterms", "match":
+		case "regexp", "alloftext", "allofterms", "match":
 			shouldExclude = true
 		default:
 			shouldExclude = false
