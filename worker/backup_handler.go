@@ -388,6 +388,8 @@ func (h *s3Handler) CreateFile(path string) (io.WriteCloser, error) {
 }
 
 func (h *s3Handler) Rename(srcPath, dstPath string) error {
+	srcPath = h.getObjectPath(srcPath)
+	dstPath = h.getObjectPath(dstPath)
 	src := minio.NewSourceInfo(h.bucketName, srcPath, nil)
 	dst, err := minio.NewDestinationInfo(h.bucketName, dstPath, nil, nil)
 	if err != nil {
@@ -396,7 +398,7 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 	// We try copying 100 times, if it still fails, then the user should manually rename.
 	err = x.RetryUntilSuccess(100, time.Second, func() error {
 		if err := h.mc.CopyObject(dst, src); err != nil {
-			return errors.Wrapf(err, "While renaming object in s3, copy failed ")
+			return errors.Wrapf(err, "While renaming object in s3, copy failed")
 		}
 		return nil
 	})
