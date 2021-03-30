@@ -150,6 +150,68 @@ func newEncoder() *encoder {
 	return e
 }
 
+// Sort the given fastJson list
+func (enc *encoder) MergeSort(headRef *fastJsonNode) {
+	head := *headRef
+	var a fastJsonNode
+	var b fastJsonNode
+
+	if headRef == nil || (*headRef).next == nil {
+		return
+	}
+
+	FrontBackSplit(head, &a, &b)
+
+	enc.MergeSort(&a)
+	enc.MergeSort(&b)
+
+	*headRef = enc.SortedMerge(a, b)
+}
+
+func (enc *encoder) SortedMerge(a fastJsonNode, b fastJsonNode) fastJsonNode {
+	var result fastJsonNode
+
+	if a == nil {
+		return b
+	} else if b == nil {
+		return a
+	}
+
+	if enc.Less(a, b) {
+		result = a
+		result.next = enc.SortedMerge(a.next, b)
+	} else {
+		result = b
+		result.next = enc.SortedMerge(a, b.next)
+	}
+	return result
+}
+
+func (enc *encoder) Less(i fastJsonNode, j fastJsonNode) bool {
+	attri := enc.getAttr(i)
+	attrj := enc.getAttr(j)
+	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
+	return cmp <= 0
+}
+
+func FrontBackSplit(source fastJsonNode,
+	frontRef *fastJsonNode, backRef *fastJsonNode) {
+	slow := source
+	fast := source.next
+
+	for fast != nil {
+		fast = fast.next
+		if fast != nil {
+			slow = slow.next
+			fast = fast.next
+		}
+	}
+
+	*frontRef = source
+	*backRef = slow.next
+	slow.next = nil
+}
+
 func (enc *encoder) idForAttr(attr string) uint16 {
 	if attr == "uid" && enc.uidAttr > 0 {
 		return enc.uidAttr
@@ -891,9 +953,10 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		}
 	}
 
-	for _, slice := range parentSlice {
+	for i, slice := range parentSlice {
+		// sort the slice
+		enc.MergeSort(&slice)
 		// From every slice we need to remove node with attribute "uid".
-		MergeSort(&slice, enc)
 		var prev, cur fastJsonNode
 		cur = slice
 		for cur != nil {
@@ -912,76 +975,10 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		if prev == nil {
 			slice = nil
 		}
+		parentSlice[i] = slice
 	}
 
 	return parentSlice, nil
-}
-
-func MergeSort(headRef *fastJsonNode, enc *encoder) {
-	head := *headRef
-	var a fastJsonNode
-	var b fastJsonNode
-
-	/* Base case -- length 0 or 1 */
-	if headRef == nil || (*headRef).next == nil {
-		return
-	}
-
-	/* Split head into 'a' and 'b' sublists */
-	FrontBackSplit(head, &a, &b)
-
-	/* Recursively sort the sublists */
-	MergeSort(&a, enc)
-	MergeSort(&b, enc)
-
-	/* answer = merge the two sorted lists together */
-	*headRef = SortedMerge(a, b, enc)
-}
-
-func SortedMerge(a fastJsonNode, b fastJsonNode, enc *encoder) fastJsonNode {
-	var result fastJsonNode
-
-	/* Base cases */
-	if a == nil {
-		return b
-	} else if b == nil {
-		return a
-	}
-
-	/* Pick either a or b, and recur */
-	if Less(enc, a, b) {
-		result = a
-		result.next = SortedMerge(a.next, b, enc)
-	} else {
-		result = b
-		result.next = SortedMerge(a, b.next, enc)
-	}
-	return result
-}
-
-func Less(enc *encoder, i fastJsonNode, j fastJsonNode) bool {
-	attri := enc.getAttr(i)
-	attrj := enc.getAttr(j)
-	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
-	return cmp < 0
-}
-
-func FrontBackSplit(source fastJsonNode,
-	frontRef *fastJsonNode, backRef *fastJsonNode) {
-	slow := source
-	fast := source.next
-
-	for fast != nil {
-		fast = fast.next
-		if fast != nil {
-			slow = slow.next
-			fast = fast.next
-		}
-	}
-
-	*frontRef = source
-	*backRef = slow.next
-	slow.next = nil
 }
 
 func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
