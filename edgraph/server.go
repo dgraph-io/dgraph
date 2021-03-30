@@ -1117,16 +1117,6 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
-	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
-		// A fresh StartTs is assigned if it is 0.
-		ns, err := x.ExtractNamespace(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if req.GetHash() != getHash(ns, req.GetStartTs()) {
-			return nil, x.ErrHashMismatch
-		}
-	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "abort_older_than".
@@ -1273,22 +1263,17 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
-	grpc.SendHeader(ctx, md)
 	if x.WorkerConfig.AclEnabled {
+		// attach the hash, user should send this hash when further operating on this startTs.
 		ns, err := x.ExtractNamespace(ctx)
 		if err != nil {
 			return nil, err
 		}
 		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
-}
-
-func getHash(ns, startTs uint64) string {
-	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) {
@@ -1496,14 +1481,23 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+func getHash(ns, startTs uint64) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
 	}
-
-	if tc.StartTs != 0 && getHash(ns, tc.StartTs) != tc.Hash {
-		return x.ErrHashMismatch
+	if tc.Hash != getHash(ns, tc.StartTs) {
+		return errors.Errorf("hash mismatch the claimed startTs|namespace")
 	}
 	return nil
 }
@@ -1517,18 +1511,16 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, err
 	}
 
-	if x.WorkerConfig.AclEnabled {
-		if err := validateNamespace(ctx, tc); err != nil {
-			return &api.TxnContext{}, err
-		}
-	}
-
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
+
+	if err := validateNamespace(ctx, tc); err != nil {
+		return &api.TxnContext{}, err
+	}
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)

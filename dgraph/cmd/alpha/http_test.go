@@ -162,39 +162,6 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	return string(output), resp, err
 }
 
-func queryWithTsHash(queryText, contentType, debug string, ts uint64, hash string) (string,
-	uint64, string, error) {
-	params := make([]string, 0, 2)
-	if debug != "" {
-		params = append(params, "debug="+debug)
-	}
-	if ts != 0 {
-		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
-		params = append(params, fmt.Sprintf("hash=%s", hash))
-	}
-	url := addr + "/query?" + strings.Join(params, "&")
-
-	_, body, _, err := runWithRetriesForResp("POST", contentType, url, queryText)
-	if err != nil {
-		return "", 0, "", err
-	}
-
-	var r res
-	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, "", err
-	}
-	startTs := r.Extensions.Txn.StartTs
-	hash = r.Extensions.Txn.Hash
-
-	// Remove the extensions.
-	r2 := res{
-		Data: r.Data,
-	}
-	output, err := json.Marshal(r2)
-
-	return string(output), startTs, hash, err
-}
-
 func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
 	out, startTs, _, err := queryWithTsForResp(queryText, contentType, debug, ts)
 	return out, startTs, err
@@ -241,58 +208,10 @@ type mutationResponse struct {
 	cost    string
 }
 
-// TODO: Refactor this.
-func mutationWithTsHash(m, t string, isJson bool, commitNow bool, ts uint64, hash string) (
-	mutationResponse, error) {
-
-	fmt.Println("ts:", ts, "hash:", hash)
-	params := make([]string, 2)
-	if ts != 0 {
-		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
-		params = append(params, "hash="+hash)
-	}
-
-	var mr mutationResponse
-	if commitNow {
-		params = append(params, "commitNow=true")
-	}
-
-	url := addr + "/mutate?" + strings.Join(params, "&")
-	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
-	if err != nil {
-		return mr, err
-	}
-	mr.cost = resp.Header.Get(x.DgraphCostHeader)
-
-	var r res
-	if err := json.Unmarshal(body, &r); err != nil {
-		return mr, err
-	}
-
-	mr.keys = r.Extensions.Txn.Keys
-	mr.preds = r.Extensions.Txn.Preds
-	mr.startTs = r.Extensions.Txn.StartTs
-	mr.hash = r.Extensions.Txn.Hash
-	sort.Strings(mr.preds)
-
-	var d map[string]interface{}
-	if err := json.Unmarshal(r.Data, &d); err != nil {
-		return mr, err
-	}
-	delete(d, "code")
-	delete(d, "message")
-	delete(d, "uids")
-	mr.data, err = json.Marshal(d)
-	if err != nil {
-		return mr, err
-	}
-	return mr, nil
-}
-
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mutationResponse, error) {
 
-	params := make([]string, 2)
+	params := make([]string, 0, 2)
 	if ts != 0 {
 		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
 	}
@@ -301,7 +220,6 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	if commitNow {
 		params = append(params, "commitNow=true")
 	}
-
 	url := addr + "/mutate?" + strings.Join(params, "&")
 	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
 	if err != nil {
@@ -405,14 +323,14 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 	return qr, respBody, resp, err
 }
 
-func commitWithTs(keys, preds []string, ts uint64, abort bool, hash string) error {
+func commitWithTs(mr mutationResponse, abort bool) error {
 	url := addr + "/commit"
-	if ts != 0 {
-		url += "?startTs=" + strconv.FormatUint(ts, 10)
-		url += "&hash=" + hash
+	if mr.startTs != 0 {
+		url += "?startTs=" + strconv.FormatUint(mr.startTs, 10)
+		url += "&hash=" + mr.hash
 	}
 	if abort {
-		if ts != 0 {
+		if mr.startTs != 0 {
 			url += "&abort=true"
 		} else {
 			url += "?abort=true"
@@ -420,8 +338,8 @@ func commitWithTs(keys, preds []string, ts uint64, abort bool, hash string) erro
 	}
 
 	m := make(map[string]interface{})
-	m["keys"] = keys
-	m["preds"] = preds
+	m["keys"] = mr.keys
+	m["preds"] = mr.preds
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -466,7 +384,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, hash, err := queryWithTsHash(q1, "application/dql", "", 0, "")
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -479,7 +397,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTsHash(m1, "application/rdf", false, false, ts, hash)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
@@ -498,12 +416,12 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, _, err = queryWithTsHash(q1, "application/dql", "", ts, mr.hash)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -521,7 +439,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, hash, err := queryWithTsHash(q1, "application/dql", "", 0, "")
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -534,7 +452,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTsHash(m1, "application/rdf", false, false, ts, hash)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
@@ -544,12 +462,12 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, _, err = queryWithTsHash(q1, "application/dql", "", ts, mr.hash)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -600,7 +518,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, hash, err := queryWithTsHash(q1, "application/dql", "", 0, "")
+	_, ts, err := queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -613,7 +531,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	mr, err := mutationWithTsHash(m1, "application/rdf", false, false, ts, hash)
+	mr, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
@@ -623,14 +541,14 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, _, err = queryWithTsHash(q1, "application/dql", "", ts, mr.hash)
+	data, _, err = queryWithTs(q1, "application/dql", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// One more time, with json body this time.
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
-	data, _, _, err = queryWithTsHash(string(d1), "application/json", "", ts, mr.hash)
+	data, _, err = queryWithTs(string(d1), "application/json", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
