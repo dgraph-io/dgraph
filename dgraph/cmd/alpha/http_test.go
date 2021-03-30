@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -162,9 +163,27 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	return string(output), resp, err
 }
 
+func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
+	out, startTs, _, err := queryWithTsForResp(queryText, contentType, debug, ts)
+	return out, startTs, err
+}
+
 func queryWithTsHash(queryText, contentType, debug string, ts uint64, hash string) (string,
 	uint64, string, error) {
-	params := make([]string, 0, 2)
+	output, tctx, _, err := queryWithTsHashForResp(queryText, contentType, debug, ts, hash)
+	return output, tctx.StartTs, tctx.Hash, err
+}
+
+// queryWithTsForResp query the dgraph and returns it's http response and result.
+func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string,
+	uint64, *http.Response, error) {
+	output, tctx, resp, err := queryWithTsHashForResp(queryText, contentType, debug, ts, "")
+	return output, tctx.StartTs, resp, err
+}
+
+func queryWithTsHashForResp(queryText, contentType, debug string, ts uint64, hash string) (string,
+	*api.TxnContext, *http.Response, error) {
+	params := make([]string, 0, 3)
 	if debug != "" {
 		params = append(params, "debug="+debug)
 	}
@@ -174,54 +193,15 @@ func queryWithTsHash(queryText, contentType, debug string, ts uint64, hash strin
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
-	_, body, _, err := runWithRetriesForResp("POST", contentType, url, queryText)
-	if err != nil {
-		return "", 0, "", err
-	}
-
-	var r res
-	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, "", err
-	}
-	startTs := r.Extensions.Txn.StartTs
-	hash = r.Extensions.Txn.Hash
-
-	// Remove the extensions.
-	r2 := res{
-		Data: r.Data,
-	}
-	output, err := json.Marshal(r2)
-
-	return string(output), startTs, hash, err
-}
-
-func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
-	out, startTs, _, err := queryWithTsForResp(queryText, contentType, debug, ts)
-	return out, startTs, err
-}
-
-// queryWithTsForResp query the dgraph and returns it's http response and result.
-func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string,
-	uint64, *http.Response, error) {
-	params := make([]string, 0, 2)
-	if debug != "" {
-		params = append(params, "debug="+debug)
-	}
-	if ts != 0 {
-		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
-	}
-	url := addr + "/query?" + strings.Join(params, "&")
-
 	_, body, resp, err := runWithRetriesForResp("POST", contentType, url, queryText)
 	if err != nil {
-		return "", 0, resp, err
+		return "", &api.TxnContext{}, resp, err
 	}
 
 	var r res
 	if err := json.Unmarshal(body, &r); err != nil {
-		return "", 0, resp, err
+		return "", &api.TxnContext{}, resp, err
 	}
-	startTs := r.Extensions.Txn.StartTs
 
 	// Remove the extensions.
 	r2 := res{
@@ -229,7 +209,7 @@ func queryWithTsForResp(queryText, contentType, debug string, ts uint64) (string
 	}
 	output, err := json.Marshal(r2)
 
-	return string(output), startTs, resp, err
+	return string(output), r.Extensions.Txn, resp, err
 }
 
 type mutationResponse struct {
@@ -241,23 +221,21 @@ type mutationResponse struct {
 	cost    string
 }
 
-// TODO: Refactor this.
-func mutationWithTsHash(m, t string, isJson bool, commitNow bool, ts uint64, hash string) (
-	mutationResponse, error) {
-
-	fmt.Println("ts:", ts, "hash:", hash)
-	params := make([]string, 2)
+func buildMutationUrl(startTs uint64, hash string, commitNow bool) string {
+	params := make([]string, 0, 3)
 	if ts != 0 {
 		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
 		params = append(params, "hash="+hash)
 	}
 
-	var mr mutationResponse
 	if commitNow {
 		params = append(params, "commitNow=true")
 	}
+	return addr + "/mutate?" + strings.Join(params, "&")
+}
 
-	url := addr + "/mutate?" + strings.Join(params, "&")
+func sendMutationReq(m, t, url string) (mutationResponse, error) {
+	var mr mutationResponse
 	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
 	if err != nil {
 		return mr, err
@@ -289,49 +267,18 @@ func mutationWithTsHash(m, t string, isJson bool, commitNow bool, ts uint64, has
 	return mr, nil
 }
 
+func mutationWithTsHash(m, t string, isJson bool, commitNow bool, ts uint64, hash string) (
+	mutationResponse, error) {
+
+	url := buildMutationUrl(ts, hash, commitNow)
+	return sendMutationReq(m, t, url)
+}
+
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mutationResponse, error) {
 
-	params := make([]string, 2)
-	if ts != 0 {
-		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
-	}
-
-	var mr mutationResponse
-	if commitNow {
-		params = append(params, "commitNow=true")
-	}
-
-	url := addr + "/mutate?" + strings.Join(params, "&")
-	_, body, resp, err := runWithRetriesForResp("POST", t, url, m)
-	if err != nil {
-		return mr, err
-	}
-	mr.cost = resp.Header.Get(x.DgraphCostHeader)
-
-	var r res
-	if err := json.Unmarshal(body, &r); err != nil {
-		return mr, err
-	}
-
-	mr.keys = r.Extensions.Txn.Keys
-	mr.preds = r.Extensions.Txn.Preds
-	mr.startTs = r.Extensions.Txn.StartTs
-	mr.hash = r.Extensions.Txn.Hash
-	sort.Strings(mr.preds)
-
-	var d map[string]interface{}
-	if err := json.Unmarshal(r.Data, &d); err != nil {
-		return mr, err
-	}
-	delete(d, "code")
-	delete(d, "message")
-	delete(d, "uids")
-	mr.data, err = json.Marshal(d)
-	if err != nil {
-		return mr, err
-	}
-	return mr, nil
+	url := buildMutationUrl(ts, "", commitNow)
+	return sendMutationReq(m, t, url)
 }
 
 func createRequest(method, contentType, url string, body string) (*http.Request, error) {
@@ -405,11 +352,11 @@ func runWithRetriesForResp(method, contentType, url string, body string) (
 	return qr, respBody, resp, err
 }
 
-func commitWithTs(keys, preds []string, ts uint64, abort bool, hash string) error {
+func commitWithTs(mr mutationResponse, abort bool) error {
 	url := addr + "/commit"
 	if ts != 0 {
-		url += "?startTs=" + strconv.FormatUint(ts, 10)
-		url += "&hash=" + hash
+		url += "?startTs=" + strconv.FormatUint(mr.startTs, 10)
+		url += "&hash=" + mr.hash
 	}
 	if abort {
 		if ts != 0 {
@@ -420,8 +367,8 @@ func commitWithTs(keys, preds []string, ts uint64, abort bool, hash string) erro
 	}
 
 	m := make(map[string]interface{})
-	m["keys"] = keys
-	m["preds"] = preds
+	m["keys"] = mr.keys
+	m["preds"] = mr.preds
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -466,7 +413,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, hash, err := queryWithTsHash(q1, "application/dql", "", 0, "")
+	_, ts, hash, err := queryWithTsHashForResp(q1, "application/dql", "", 0, "")
 	require.NoError(t, err)
 
 	m1 := `
@@ -503,7 +450,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -549,7 +496,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 	data, _, err = queryWithTs(q1, "application/dql", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
