@@ -161,7 +161,6 @@ func (enc *encoder) MergeSort(headRef *fastJsonNode) {
 	frontBackSplit(head, &a, &b)
 	enc.MergeSort(&a)
 	enc.MergeSort(&b)
-
 	*headRef = enc.mergeSortedLists(a, b)
 }
 
