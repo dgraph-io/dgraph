@@ -3445,7 +3445,6 @@ func TestMatchingWithPagination(t *testing.T) {
 					tweet-a
 				}
 			 }`,
-
 			`{"data":{"me":[{"tweet-a":"aaaab"}]}}`,
 		},
 		{
@@ -3455,7 +3454,6 @@ func TestMatchingWithPagination(t *testing.T) {
 					tweet-b
 				}
 			 }`,
-
 			`{"data":{"me":[{"tweet-b":"indiana jones"}]}}`,
 		},
 		{
@@ -3465,7 +3463,6 @@ func TestMatchingWithPagination(t *testing.T) {
 					tweet-c
 				}
 			 }`,
-
 			`{"data":{"me":[{"tweet-c":"I am a citizen of Paradis Island"}]}}`,
 		},
 	}
