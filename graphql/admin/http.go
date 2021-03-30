@@ -221,7 +221,8 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachJWTNamespace(ctx)
+	// Ignore the error here, it will be handled accordingly in downstream functions.
+	ctx, _ = x.AttachJWTNamespace(ctx)
 
 	var res *schema.Response
 	gqlReq, err := getRequest(r)

@@ -141,17 +141,16 @@ func PeriodicallyPostTelemetry() {
 // GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
-	ctx := context.WithValue(context.Background(), Authorize, false)
-	ctx = x.AttachNamespace(ctx, namespace)
-	resp, err := (&Server{}).Query(ctx,
-		&api.Request{
-			Query: `
+	ctx := x.AttachNamespace(context.Background(), namespace)
+	req := &api.Request{
+		Query: `
 			query {
 			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
 				uid
 				dgraph.graphql.schema
 			  }
-			}`})
+			}`}
+	resp, err := (&Server{}).doQuery(ctx, &Request{req: req, doAuth: NoAuthorize})
 	if err != nil {
 		return "", "", err
 	}
@@ -353,7 +352,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.AttachJWTNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
 	// Always print out Alter operations because they are important and rare.
@@ -1114,7 +1116,10 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.AttachJWTNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "abort_older_than".
