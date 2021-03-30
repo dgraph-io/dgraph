@@ -265,6 +265,7 @@ func runExportBackup() error {
 			GroupId:           gid,
 			Location:          opt.location,
 			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+			RestoreTs:         1,
 		}
 		if err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
