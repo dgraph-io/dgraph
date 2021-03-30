@@ -41,14 +41,14 @@ func TestMetricTxnCommits(t *testing.T) {
 	// first normal commit
 	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second normal commit
 	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -68,14 +68,14 @@ func TestMetricTxnDiscards(t *testing.T) {
 	// first normal commit
 	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, false, mr.hash))
+	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second commit discarded
 	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.startTs, true, mr.hash))
+	require.NoError(t, commitWithTs(mr, true))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,
@@ -96,8 +96,8 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.NoError(t, err)
 	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false, mr1.hash))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false, mr2.hash))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	metrics := fetchMetrics(t, metricName)
 
@@ -105,8 +105,8 @@ func TestMetricTxnAborts(t *testing.T) {
 	require.NoError(t, err)
 	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
 	require.NoError(t, err)
-	require.NoError(t, commitWithTs(mr1.keys, mr1.preds, mr1.startTs, false, mr1.hash))
-	require.Error(t, commitWithTs(mr2.keys, mr2.preds, mr2.startTs, false, mr2.hash))
+	require.NoError(t, commitWithTs(mr1, false))
+	require.Error(t, commitWithTs(mr2, false))
 
 	require.NoError(t, retryableFetchMetrics(t, map[string]int{
 		metricName: metrics[metricName] + 1,

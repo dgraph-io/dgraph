@@ -468,8 +468,6 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hash := r.URL.Query().Get("hash")
-	// TODO: Do validation for hash, like basic length check.
-
 	abort, err := parseBool(r, "abort")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -524,8 +522,8 @@ func handleAbort(ctx context.Context, startTs uint64, hash string) (map[string]i
 	}
 }
 
-func handleCommit(ctx context.Context, startTs uint64, hash string, reqText []byte) (map[string]interface{},
-	error) {
+func handleCommit(ctx context.Context,
+	startTs uint64, hash string, reqText []byte) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 		Hash:    hash,

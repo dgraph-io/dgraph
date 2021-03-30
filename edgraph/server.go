@@ -1273,15 +1273,16 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
-	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
-	grpc.SendHeader(ctx, md)
 	if x.WorkerConfig.AclEnabled {
+		// attach the hash, user should send this hash when further operating on this startTs.
 		ns, err := x.ExtractNamespace(ctx)
 		if err != nil {
 			return nil, err
 		}
 		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
+	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
+	grpc.SendHeader(ctx, md)
 	return resp, gqlErrs
 }
 
@@ -1497,12 +1498,15 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 }
 
 func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
 	ns, err := x.ExtractJWTNamespace(ctx)
 	if err != nil {
 		return err
 	}
-
-	if tc.StartTs != 0 && getHash(ns, tc.StartTs) != tc.Hash {
+	if tc.Hash != getHash(ns, tc.StartTs) {
 		return x.ErrHashMismatch
 	}
 	return nil
@@ -1517,18 +1521,16 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, err
 	}
 
-	if x.WorkerConfig.AclEnabled {
-		if err := validateNamespace(ctx, tc); err != nil {
-			return &api.TxnContext{}, err
-		}
-	}
-
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
+
+	if err := validateNamespace(ctx, tc); err != nil {
+		return &api.TxnContext{}, err
+	}
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
