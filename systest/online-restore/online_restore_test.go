@@ -354,7 +354,9 @@ func TestListBackups(t *testing.T) {
 }
 
 func TestRestoreWithDropOperations(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.Dial(
+		testutil.SockAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	for {
@@ -559,7 +561,9 @@ func backup(t *testing.T, backupDir string) {
 		}`,
 		Variables: map[string]interface{}{"backupDir": backupDir},
 	}
-	testutil.MakeGQLRequestWithTLS(t, backupParams, testutil.GetAlphaClientConfig(t)).RequireNoGraphQLErrors(t)
+	testutil.MakeGQLRequestWithTLS(t, backupParams, testutil.GetAlphaClientConfig(t)).
+		RequireNoGraphQLErrors(t)
+	testutil.WaitForBackup(t)
 }
 
 func backupRestoreAndVerify(t *testing.T, dg *dgo.Dgraph, backupDir, queryToVerify,

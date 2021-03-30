@@ -59,9 +59,10 @@ type Server struct {
 	state       *pb.MembershipState
 	nextRaftId  uint64
 
-	nextLease  map[pb.NumLeaseType]uint64
-	readOnlyTs uint64
-	leaseLock  sync.Mutex // protects nextUID, nextTxnTs, nextNsID and corresponding proposals.
+	nextLease   map[pb.NumLeaseType]uint64
+	readOnlyTs  uint64
+	leaseLock   sync.Mutex // protects nextUID, nextTxnTs, nextNsID and corresponding proposals.
+	rateLimiter *x.RateLimiter
 
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
@@ -100,6 +101,8 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
+	s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
+		opts.limiterConfig.RefillAfter, s.closer)
 
 	go s.rebalanceTablets()
 }

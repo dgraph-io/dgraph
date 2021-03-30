@@ -857,7 +857,7 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 	}
 	return nil
 }
@@ -909,9 +909,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
+			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 			}
 		}
 	}
@@ -1115,6 +1115,16 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "abort_older_than".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
@@ -1461,6 +1471,33 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+func validateNamespace(ctx context.Context, preds []string) error {
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Do a basic validation that all the predicates passed in transaction context matches the
+	// claimed namespace and user is not accidently commiting a transaction that it did not create.
+	for _, pred := range preds {
+		// Format for Preds in TxnContext is gid-<namespace><pred> (see fillPreds in posting pkg)
+		splits := strings.Split(pred, "-")
+		if len(splits) < 2 {
+			return errors.Errorf("Unable to find group id in %s", pred)
+		}
+		pred = strings.Join(splits[1:], "-")
+		if len(pred) < 8 {
+			return errors.Errorf("found invalid pred %s of length < 8 in transaction context", pred)
+		}
+		if parsedNs := x.ParseNamespace(pred); parsedNs != ns {
+			return errors.Errorf("Please login into correct namespace. "+
+				"Currently logged in namespace %#x", ns)
+		}
+	}
+
+	return nil
+}
+
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
@@ -1468,6 +1505,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	if err := x.HealthCheck(); err != nil {
 		return &api.TxnContext{}, err
+	}
+
+	if x.WorkerConfig.AclEnabled {
+		if err := validateNamespace(ctx, tc.Preds); err != nil {
+			return &api.TxnContext{}, err
+		}
 	}
 
 	tctx := &api.TxnContext{}
@@ -1482,11 +1525,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if err == dgo.ErrAborted {
 		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
 		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		tctx.Aborted = true
 		if tc.Aborted {
 			return tctx, nil
 		}
 
-		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs
