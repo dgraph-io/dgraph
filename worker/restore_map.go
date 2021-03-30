@@ -55,8 +55,9 @@ type mapper struct {
 	bytesRead      uint64
 	closer         *z.Closer
 
-	buf     *z.Buffer
-	bufLock *sync.Mutex
+	buf       *z.Buffer
+	bufLock   *sync.Mutex
+	restoreTs uint64
 
 	reqCh chan listReq
 }
@@ -196,8 +197,8 @@ func (m *mapper) processKVList(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
 	defer buf.Release()
 
-	toBuffer := func(kv *bpb.KV) error {
-		key := y.KeyWithTs(kv.Key, kv.Version)
+	toBuffer := func(kv *bpb.KV, version uint64) error {
+		key := y.KeyWithTs(kv.Key, version)
 		sz := kv.Size()
 		buf := buf.SliceAllocate(2 + len(key) + sz)
 
@@ -254,11 +255,13 @@ func (m *mapper) processKVList(ctx context.Context) error {
 				// to roll up lists into a single one.
 				newKv := posting.MarshalPostingList(pl, nil)
 				newKv.Key = restoreKey
-				// Use the version of the KV before we marshalled the
-				// posting list. The MarshalPostingList function returns KV
-				// with a zero version.
-				newKv.Version = kv.Version
-				if err := toBuffer(newKv); err != nil {
+
+				// We are using kv.Version (from the key-value) to generate the key. But, using
+				// restoreTs to set the version of the KV. This way, when we sort the keys, we
+				// choose the latest key based on kv.Version. But, then set its version to
+				// restoreTs.
+				newKv.Version = m.restoreTs
+				if err := toBuffer(newKv, kv.Version); err != nil {
 					return err
 				}
 			} else {
@@ -272,7 +275,7 @@ func (m *mapper) processKVList(ctx context.Context) error {
 					return err
 				}
 				for _, kv := range kvs {
-					if err := toBuffer(kv); err != nil {
+					if err := toBuffer(kv, kv.Version); err != nil {
 						return err
 					}
 				}
@@ -301,7 +304,7 @@ func (m *mapper) processKVList(ctx context.Context) error {
 			// Schema and type keys are not stored in an intermediate format so their
 			// value can be written as is.
 			kv.Key = restoreKey
-			if err := toBuffer(kv); err != nil {
+			if err := toBuffer(kv, kv.Version); err != nil {
 				return err
 			}
 
@@ -379,7 +382,7 @@ func (m *mapper) Progress() {
 		proc := atomic.LoadUint64(&m.bytesProcessed)
 		since := time.Since(start)
 		rate := uint64(float64(proc) / since.Seconds())
-		glog.Infof("Restore MAP %s read: %s. processed: %s rate: %s/sec. jemalloc: %s.\n",
+		glog.Infof("Restore MAP %s read: %s. output: %s. rate: %s/sec. jemalloc: %s.\n",
 			x.FixedDuration(since), humanize.IBytes(read), humanize.IBytes(proc),
 			humanize.IBytes(rate), humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
@@ -417,9 +420,9 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 		if _, err = io.ReadFull(br, buf); err != nil {
 			return err
 		}
-		atomic.AddUint64(&m.bytesRead, sz)
 
 		if zbuf.LenNoPadding() > 256<<20 {
+			atomic.AddUint64(&m.bytesRead, uint64(zbuf.LenNoPadding()))
 			m.reqCh <- listReq{zbuf, in}
 			zbuf = z.NewBuffer(260<<20, "Restore.Map")
 		}
@@ -428,12 +431,15 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 	return nil
 }
 
-// 1. MapBackup creates a mapper object
+// 1. RunMapper creates a mapper object
 // 2. mapper.Map() ->
-func MapBackup(req *pb.RestoreRequest) error {
+func RunMapper(req *pb.RestoreRequest) error {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
 		return err
+	}
+	if req.RestoreTs == 0 {
+		return errors.New("RestoreRequest must have a valid restoreTs")
 	}
 
 	creds := getCredentialsFromRestoreRequest(req)
@@ -455,15 +461,17 @@ func MapBackup(req *pb.RestoreRequest) error {
 	_, encKey := ee.GetKeys(cfg)
 
 	mapper := &mapper{
-		buf:     newBuffer(),
-		thr:     y.NewThrottle(3),
-		bufLock: &sync.Mutex{},
-		closer:  z.NewCloser(1),
-		reqCh:   make(chan listReq, 16),
+		buf:       newBuffer(),
+		thr:       y.NewThrottle(3),
+		bufLock:   &sync.Mutex{},
+		closer:    z.NewCloser(1),
+		reqCh:     make(chan listReq, 3),
+		restoreTs: req.RestoreTs,
 	}
 
+	numGo := 8
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
-	for i := 0; i < 8; i++ {
+	for i := 0; i < numGo; i++ {
 		g.Go(func() error {
 			return mapper.processKVList(ctx)
 		})
@@ -504,7 +512,7 @@ func MapBackup(req *pb.RestoreRequest) error {
 			}
 
 			// Only map the predicates which haven't been dropped yet.
-			for p, _ := range predSet {
+			for p := range predSet {
 				if _, ok := dropAttr[p]; ok {
 					delete(predSet, p)
 				}

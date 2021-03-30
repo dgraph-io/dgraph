@@ -259,12 +259,19 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Write restored values to disk and update the UID lease.
-	if err := MapBackup(req); err != nil {
+	if err := RunMapper(req); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
 
-	if err := reduceToDB(pstore, req.RestoreTs); err != nil {
+	sw := pstore.NewStreamWriter()
+	if err := sw.Prepare(); err != nil {
+		return errors.Wrapf(err, "while preparing DB")
+	}
+	if err := RunReducer(sw); err != nil {
 		return errors.Wrap(err, "failed to reduce restore map")
+	}
+	if err := sw.Flush(); err != nil {
+		return errors.Wrap(err, "while stream writer flush")
 	}
 
 	// Load schema back.

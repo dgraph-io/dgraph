@@ -161,6 +161,70 @@ func initExportBackup() {
 	enc.RegisterFlags(flag)
 }
 
+type bufWriter struct {
+	writers *worker.Writers
+	req     *pb.ExportRequest
+}
+
+func exportSchema(writers *worker.Writers, val []byte, pk x.ParsedKey) error {
+	kv := &bpb.KV{}
+	var err error
+	if pk.IsSchema() {
+		kv, err = worker.SchemaExportKv(pk.Attr, val, true)
+		if err != nil {
+			return err
+		}
+	} else {
+		kv, err = worker.TypeExportKv(pk.Attr, val)
+		if err != nil {
+			return err
+		}
+	}
+	return worker.WriteExport(writers, kv, "rdf")
+}
+
+func (bw *bufWriter) Write(buf *z.Buffer) error {
+	kv := &bpb.KV{}
+	err := buf.SliceIterate(func(s []byte) error {
+		kv.Reset()
+		if err := kv.Unmarshal(s); err != nil {
+			return errors.Wrap(err, "processKvBuf failed to unmarshal kv")
+		}
+		pk, err := x.Parse(kv.Key)
+		if err != nil {
+			return errors.Wrap(err, "processKvBuf failed to parse key")
+		}
+		if pk.Attr == "_predicate_" {
+			return nil
+		}
+		if pk.IsSchema() || pk.IsType() {
+			return exportSchema(bw.writers, kv.Value, pk)
+		}
+		if pk.IsData() {
+			pl := &pb.PostingList{}
+			if err := pl.Unmarshal(kv.Value); err != nil {
+				return errors.Wrap(err, "ProcessKvBuf failed to Unmarshal pl")
+			}
+			l := posting.NewList(kv.Key, pl, kv.Version)
+			kvList, err := worker.ToExportKvList(pk, l, bw.req)
+			if err != nil {
+				return errors.Wrap(err, "processKvBuf failed to Export")
+			}
+			if len(kvList.Kv) == 0 {
+				return nil
+			}
+			exportKv := kvList.Kv[0]
+			return worker.WriteExport(bw.writers, exportKv, bw.req.Format)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	buf.Release()
+	return nil
+}
+
 func runExportBackup() error {
 	_, opt.key = ee.GetKeys(ExportBackup.Conf)
 	if opt.format != "json" && opt.format != "rdf" {
@@ -188,67 +252,6 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "runExportBackup")
 	}
 
-	exportSchema := func(writers *worker.Writers, val []byte, pk x.ParsedKey) error {
-		kv := &bpb.KV{}
-		var err error
-		if pk.IsSchema() {
-			kv, err = worker.SchemaExportKv(pk.Attr, val, true)
-			if err != nil {
-				return err
-			}
-		} else {
-			kv, err = worker.TypeExportKv(pk.Attr, val)
-			if err != nil {
-				return err
-			}
-		}
-		return worker.WriteExport(writers, kv, "rdf")
-	}
-
-	processKvBuf := func(ch chan *z.Buffer, req *pb.ExportRequest, writers *worker.Writers) error {
-		for buf := range ch {
-			kv := &bpb.KV{}
-			err := buf.SliceIterate(func(s []byte) error {
-				kv.Reset()
-				if err := kv.Unmarshal(s); err != nil {
-					return errors.Wrap(err, "processKvBuf failed to unmarshal kv")
-				}
-				pk, err := x.Parse(kv.Key)
-				if err != nil {
-					return errors.Wrap(err, "processKvBuf failed to parse key")
-				}
-				if pk.Attr == "_predicate_" {
-					return nil
-				}
-				if pk.IsSchema() || pk.IsType() {
-					return exportSchema(writers, kv.Value, pk)
-				}
-				if pk.IsData() {
-					pl := &pb.PostingList{}
-					if err := pl.Unmarshal(kv.Value); err != nil {
-						return errors.Wrap(err, "ProcessKvBuf failed to Unmarshal pl")
-					}
-					l := posting.NewList(kv.Key, pl, kv.Version)
-					kvList, err := worker.ToExportKvList(pk, l, req)
-					if err != nil {
-						return errors.Wrap(err, "processKvBuf failed to Export")
-					}
-					if len(kvList.Kv) == 0 {
-						return nil
-					}
-					exportKv := kvList.Kv[0]
-					return worker.WriteExport(writers, exportKv, req.Format)
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-			buf.Release()
-		}
-		return nil
-	}
-
 	// TODO: Can probably make this procesing concurrent.
 	for gid, _ := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
@@ -257,7 +260,7 @@ func runExportBackup() error {
 			Location:          opt.location,
 			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
 		}
-		if err := worker.MapBackup(req); err != nil {
+		if err := worker.RunMapper(req); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
 		in := &pb.ExportRequest{
@@ -279,17 +282,9 @@ func runExportBackup() error {
 			return err
 		}
 
-		r := worker.NewBackupReducer(nil, 0)
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- processKvBuf(r.WriteCh(), in, writers)
-		}()
-
-		if err := r.Reduce(); err != nil {
+		w := &bufWriter{req: in, writers: writers}
+		if err := worker.RunReducer(w); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
-		}
-		if err := <-errCh; err != nil {
-			return errors.Wrap(err, "Failed to process reduced buffers")
 		}
 		if _, err := exportStorage.FinishWriting(writers); err != nil {
 			return errors.Wrap(err, "Failed to finish write")

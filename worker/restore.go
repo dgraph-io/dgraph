@@ -32,7 +32,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
-	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
@@ -253,30 +252,26 @@ type reducer struct {
 	mapItrs       []*mapIterator
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
-	db            *badger.DB
-	// writeCh        chan *z.Buffer
-	restoreTs      uint64
+	w             Writer
+
 	bytesProcessed uint64
 	bytesRead      uint64
 }
 
-func reduceToDB(db *badger.DB, restoreTs uint64) error {
-	r := NewBackupReducer(db, restoreTs)
-	closer := z.NewCloser(1)
-
-	go r.Progress(closer)
-	defer closer.SignalAndWait()
-
-	return r.Reduce()
+type Writer interface {
+	Write(buf *z.Buffer) error
 }
 
-func NewBackupReducer(db *badger.DB, restoreTs uint64) *reducer {
-	return &reducer{
-		db:        db,
-		restoreTs: restoreTs,
-		bufferCh:  make(chan *z.Buffer, 10),
-		// writeCh:   make(chan *z.Buffer, 10),
+func RunReducer(w Writer) error {
+	r := &reducer{
+		w:        w,
+		bufferCh: make(chan *z.Buffer, 10),
 	}
+	closer := z.NewCloser(1)
+	defer closer.SignalAndWait()
+	go r.Progress(closer)
+
+	return r.Reduce()
 }
 
 func (r *reducer) Progress(closer *z.Closer) {
@@ -292,7 +287,7 @@ func (r *reducer) Progress(closer *z.Closer) {
 		proc := atomic.LoadUint64(&r.bytesProcessed)
 		pr := uint64(float64(proc) / since.Seconds())
 		glog.Infof(
-			"Restore REDUCE %s read: %s. processed: %s rate: %s/sec. jemalloc: %s.\n",
+			"Restore REDUCE %s read: %s. processed: %s. rate: %s/sec. jemalloc: %s.\n",
 			x.FixedDuration(since), humanize.IBytes(read), humanize.IBytes(proc),
 			humanize.IBytes(pr), humanize.IBytes(uint64(z.NumAllocBytes())))
 	}
@@ -306,11 +301,6 @@ func (r *reducer) Progress(closer *z.Closer) {
 			update()
 		}
 	}
-}
-
-func (r *reducer) WriteCh() chan *z.Buffer {
-	return nil
-	// return r.writeCh
 }
 
 func (r *reducer) Reduce() error {
@@ -361,7 +351,7 @@ func (r *reducer) Reduce() error {
 		errCh <- r.blockingRead()
 	}()
 	go func() {
-		errCh <- r.writeToDB()
+		errCh <- r.process()
 	}()
 
 	for i := 0; i < 2; i++ {
@@ -409,12 +399,11 @@ func (r *reducer) blockingRead() error {
 	return nil
 }
 
-func (r *reducer) writeToDB() error {
-	if r.db == nil {
+func (r *reducer) process() error {
+	if r.w == nil {
 		return nil
 	}
-	writer := r.db.NewStreamWriter()
-	x.Check(writer.Prepare())
+	writer := r.w
 
 	kvBuf := getBuf()
 	defer func() {
@@ -427,34 +416,13 @@ func (r *reducer) writeToDB() error {
 			me := mapEntry(s)
 			key := me.Key()
 
-			pk, err := x.Parse(key)
-			if err != nil {
-				return errors.Wrap(err, "writeToDB failed to parse key")
-			}
-
 			// Don't need to pick multiple versions of the same key.
 			if y.SameKey(key, lastKey) {
 				return nil
 			}
 			lastKey = append(lastKey[:0], key...)
 
-			kv := &bpb.KV{}
-			// Override the version if requested. Should not be done for type and schema predicates,
-			// which always have their version set to 1.
-			if r.restoreTs > 0 && !pk.IsSchema() && !pk.IsType() {
-				if err := kv.Unmarshal(me.Data()); err != nil {
-					return errors.Wrap(err, "writeToDB failed to unmarshal KV")
-				}
-				// TODO: We're doing this extra step of unmarshal, then marshal
-				// back to set the version. See if there's a way to avoid this.
-				kv.Version = r.restoreTs
-				buf := kvBuf.SliceAllocate(kv.Size())
-				if _, err := kv.MarshalToSizedBuffer(buf); err != nil {
-					return errors.Wrap(err, "writeToDB failed to marshal KV")
-				}
-			} else {
-				kvBuf.WriteSlice(me.Data())
-			}
+			kvBuf.WriteSlice(me.Data())
 			return nil
 		})
 		if err != nil {
@@ -468,9 +436,6 @@ func (r *reducer) writeToDB() error {
 		kvBuf.Reset()
 		cbuf.Release()
 	} // end loop for bufferCh
-
-	// close(r.writeCh)
-	// return <-errCh
 	return nil
 }
 
@@ -510,7 +475,7 @@ func RunRestore(dir, location, backupId string, keyFile string,
 			BackupId:          backupId,
 			EncryptionKeyFile: keyFile,
 		}
-		if err := MapBackup(req); err != nil {
+		if err := RunMapper(req); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
 		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
@@ -528,8 +493,15 @@ func RunRestore(dir, location, backupId string, keyFile string,
 
 		}
 		defer db.Close()
-		if err := reduceToDB(db, 0); err != nil {
+		sw := pstore.NewStreamWriter()
+		if err := sw.Prepare(); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "while preparing DB")}
+		}
+		if err := RunReducer(sw); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
+		}
+		if err := sw.Flush(); err != nil {
+			return LoadResult{Err: errors.Wrap(err, "while stream writer flush")}
 		}
 		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
