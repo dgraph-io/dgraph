@@ -328,6 +328,9 @@ gender                         : string .
 indexpred                      : string @index(exact) .
 pred                           : string .
 pname                          : string .
+tweet-a                        : string @index(trigram) .
+tweet-b                        : string @index(term) .
+tweet-c                        : string @index(fulltext) .
 `
 
 func populateCluster() {
@@ -828,6 +831,21 @@ func populateCluster() {
 		<67> <index-pred2> "I" .
 		<68> <index-pred2> "J" .
 		<69> <index-pred2> "K" .
+
+		<61> <tweet-a> "aaa" .
+		<62> <tweet-a> "aaaa" .
+		<63> <tweet-a> "aaaab" .
+		<64> <tweet-a> "aaaabb" .
+
+		<61> <tweet-b> "indiana" .
+		<62> <tweet-b> "indiana" .
+		<63> <tweet-b> "indiana jones" .
+		<64> <tweet-b> "indiana pop" .
+
+		<61> <tweet-c> "I am a citizen" .
+		<62> <tweet-c> "I am a citizen" .
+		<63> <tweet-c> "I am a citizen" .
+		<64> <tweet-c> "I am a citizen of Paradis Island" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
