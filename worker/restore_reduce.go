@@ -17,11 +17,8 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -30,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dustin/go-humanize"
@@ -437,76 +432,4 @@ func (r *reducer) process() error {
 		cbuf.Release()
 	} // end loop for bufferCh
 	return nil
-}
-
-// RunRestore creates required DBs and streams the backups to them. It is used only for testing.
-func RunRestore(dir, location, backupId string, keyFile string,
-	ctype options.CompressionType, clevel int) LoadResult {
-	// Create the pdir if it doesn't exist.
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return LoadResult{Err: err}
-	}
-
-	uri, err := url.Parse(location)
-	if err != nil {
-		return LoadResult{Err: err}
-	}
-
-	h, err := NewUriHandler(uri, nil)
-	if err != nil {
-		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
-	}
-	manifest, err := GetLatestManifest(h, uri)
-	if err != nil {
-		return LoadResult{Err: errors.Wrapf(err, "cannot retrieve manifests")}
-	}
-	var key x.Sensitive
-	if len(keyFile) > 0 {
-		key, err = ioutil.ReadFile(keyFile)
-		if err != nil {
-			return LoadResult{Err: errors.Wrapf(err, "RunRestore failed to read enc-key")}
-		}
-	}
-
-	for gid := range manifest.Groups {
-		req := &pb.RestoreRequest{
-			Location:          location,
-			GroupId:           gid,
-			BackupId:          backupId,
-			EncryptionKeyFile: keyFile,
-		}
-		if err := RunMapper(req); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
-		}
-		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
-		db, err := badger.OpenManaged(badger.DefaultOptions(pdir).
-			WithCompression(ctype).
-			WithZSTDCompressionLevel(clevel).
-			WithSyncWrites(false).
-			WithBlockCacheSize(100 * (1 << 20)).
-			WithIndexCacheSize(100 * (1 << 20)).
-			WithNumVersionsToKeep(math.MaxInt32).
-			WithEncryptionKey(key).
-			WithNamespaceOffset(x.NamespaceOffset))
-		if err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
-
-		}
-		defer db.Close()
-		sw := pstore.NewStreamWriter()
-		if err := sw.Prepare(); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "while preparing DB")}
-		}
-		if err := RunReducer(sw); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
-		}
-		if err := sw.Flush(); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "while stream writer flush")}
-		}
-		if err := x.WriteGroupIdFile(pdir, uint32(gid)); err != nil {
-			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
-		}
-	}
-	// TODO: Fix this return value.
-	return LoadResult{Version: manifest.Since}
 }
