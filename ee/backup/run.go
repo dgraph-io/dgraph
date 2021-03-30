@@ -15,6 +15,7 @@ package backup
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -252,6 +253,11 @@ func runExportBackup() error {
 		return errors.Wrapf(err, "runExportBackup")
 	}
 
+	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-export")
+	x.Check(err)
+	defer os.RemoveAll(mapDir)
+	glog.Infof("Created temporary map directory: %s\n", mapDir)
+
 	// TODO: Can probably make this procesing concurrent.
 	for gid, _ := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
@@ -260,7 +266,7 @@ func runExportBackup() error {
 			Location:          opt.location,
 			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
 		}
-		if err := worker.RunMapper(req); err != nil {
+		if err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
 		in := &pb.ExportRequest{
@@ -283,7 +289,7 @@ func runExportBackup() error {
 		}
 
 		w := &bufWriter{req: in, writers: writers}
-		if err := worker.RunReducer(w); err != nil {
+		if err := worker.RunReducer(w, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
 		if _, err := exportStorage.FinishWriting(writers); err != nil {

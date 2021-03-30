@@ -15,6 +15,7 @@ package worker
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -31,6 +32,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgraph/ee"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,24 +44,55 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type backupReader struct {
+	toClose []io.Closer
+	r       io.Reader
+}
+
+func (br *backupReader) Read(p []byte) (n int, err error) {
+	return br.r.Read(p)
+}
+func (br *backupReader) Close() (rerr error) {
+	for i := len(br.toClose) - 1; i >= 0; i-- {
+		if err := br.toClose[i].Close(); err != nil {
+			rerr = err
+		}
+	}
+	return rerr
+}
+func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupReader, error) {
+	br := &backupReader{}
+	reader, err := h.Stream(file)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to open %q", file)
+	}
+	br.toClose = append(br.toClose, reader)
+
+	encReader, err := enc.GetReader(encKey, reader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot get encrypted reader")
+	}
+	gzReader, err := gzip.NewReader(encReader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "couldn't create gzip reader")
+	}
+	br.toClose = append(br.toClose, gzReader)
+
+	br.r = bufio.NewReaderSize(gzReader, 16<<10)
+	return br, nil
+}
+
+type loadBackupInput struct {
+	restoreTs      uint64
+	preds          predicateSet
+	dropOperations []*pb.DropOperation
+	isOld          bool
+	keepSchema     bool
+}
+
 type listReq struct {
 	lbuf *z.Buffer
 	in   *loadBackupInput
-}
-
-type mapper struct {
-	once           sync.Once
-	nextId         uint32
-	thr            *y.Throttle
-	bytesProcessed uint64
-	bytesRead      uint64
-	closer         *z.Closer
-
-	buf       *z.Buffer
-	bufLock   *sync.Mutex
-	restoreTs uint64
-
-	reqCh chan listReq
 }
 
 // mapEntry stores uint16 (2 bytes), which store the length of the key, followed by the key itself.
@@ -76,14 +109,29 @@ func (me mapEntry) Data() []byte {
 	return me[2+sz:]
 }
 
+type mapper struct {
+	once   sync.Once
+	nextId uint32
+	thr    *y.Throttle
+
+	bytesProcessed uint64
+	bytesRead      uint64
+	closer         *z.Closer
+
+	buf       *z.Buffer
+	bufLock   *sync.Mutex
+	restoreTs uint64
+
+	mapDir string
+	reqCh  chan listReq
+	szHist *z.HistogramData
+}
+
 func (mw *mapper) newMapFile() (*os.File, error) {
 	fileNum := atomic.AddUint32(&mw.nextId, 1)
-	filename := filepath.Join(
-		x.WorkerConfig.TmpDir,
-		restoreMapDir,
-		fmt.Sprintf("%06d.map", fileNum),
-	)
+	filename := filepath.Join(mw.mapDir, fmt.Sprintf("%06d.map", fileNum))
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0750))
+
 	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
@@ -159,6 +207,12 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	return f.Close()
 }
 
+func newBuffer() *z.Buffer {
+	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap, "", "Restore.Buffer")
+	x.Check(err)
+	return buf
+}
+
 func (mw *mapper) sendForWriting() error {
 	if mw.buf.IsEmpty() {
 		return nil
@@ -193,7 +247,15 @@ func (mw *mapper) Flush() error {
 	return rerr
 }
 
-func (m *mapper) processKVList(ctx context.Context) error {
+func fromBackupKey(key []byte) ([]byte, uint64, error) {
+	backupKey := &pb.BackupKey{}
+	if err := backupKey.Unmarshal(key); err != nil {
+		return nil, 0, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
+	}
+	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
+}
+
+func (m *mapper) processReqCh(ctx context.Context) error {
 	buf := z.NewBuffer(20<<20, "processKVList")
 	defer buf.Release()
 
@@ -398,6 +460,9 @@ func (m *mapper) Progress() {
 	}
 }
 
+const bufSz = 64 << 20
+const bufSoftLimit = bufSz - 2<<20
+
 // mapToDisk reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
@@ -406,7 +471,8 @@ func (m *mapper) Progress() {
 // TODO(DGRAPH-1234): Check whether restoreTs can be removed.
 func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 	br := bufio.NewReaderSize(r, 16<<10)
-	zbuf := z.NewBuffer(260<<20, "Restore.Map")
+	zbuf := z.NewBuffer(bufSz, "Restore.Map")
+
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
@@ -416,15 +482,17 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 			return err
 		}
 
+		m.szHist.Update(int64(sz))
 		buf := zbuf.SliceAllocate(int(sz))
 		if _, err = io.ReadFull(br, buf); err != nil {
 			return err
 		}
 
-		if zbuf.LenNoPadding() > 256<<20 {
+		if zbuf.LenNoPadding() > bufSoftLimit {
 			atomic.AddUint64(&m.bytesRead, uint64(zbuf.LenNoPadding()))
+			glog.Infof("Sending req of size: %s\n", humanize.IBytes(uint64(zbuf.LenNoPadding())))
 			m.reqCh <- listReq{zbuf, in}
-			zbuf = z.NewBuffer(260<<20, "Restore.Map")
+			zbuf = z.NewBuffer(bufSz, "Restore.Map")
 		}
 	}
 	m.reqCh <- listReq{zbuf, in}
@@ -433,7 +501,7 @@ func (m *mapper) Map(r io.Reader, in *loadBackupInput) error {
 
 // 1. RunMapper creates a mapper object
 // 2. mapper.Map() ->
-func RunMapper(req *pb.RestoreRequest) error {
+func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 	uri, err := url.Parse(req.Location)
 	if err != nil {
 		return err
@@ -467,13 +535,15 @@ func RunMapper(req *pb.RestoreRequest) error {
 		closer:    z.NewCloser(1),
 		reqCh:     make(chan listReq, 3),
 		restoreTs: req.RestoreTs,
+		mapDir:    mapDir,
+		szHist:    z.NewHistogramData(z.HistogramBounds(10, 32)),
 	}
 
 	numGo := 8
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
 	for i := 0; i < numGo; i++ {
 		g.Go(func() error {
-			return mapper.processKVList(ctx)
+			return mapper.processReqCh(ctx)
 		})
 	}
 	go mapper.Progress()
@@ -556,6 +626,8 @@ func RunMapper(req *pb.RestoreRequest) error {
 			}
 		}
 	} // done with all the manifests.
+
+	glog.Infof("Histogram of map input sizes:\n%s\n", mapper.szHist)
 	close(mapper.reqCh)
 	if err := g.Wait(); err != nil {
 		return errors.Wrapf(err, "from processKVList")

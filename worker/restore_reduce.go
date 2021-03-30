@@ -14,12 +14,9 @@ package worker
 
 import (
 	"bufio"
-	"compress/gzip"
 	"encoding/binary"
-	"encoding/hex"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,129 +29,15 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
-	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type loadBackupInput struct {
-	restoreTs      uint64
-	preds          predicateSet
-	dropOperations []*pb.DropOperation
-	isOld          bool
-	keepSchema     bool
-}
-
 const (
 	mapFileSz      int = 2 << 30
 	partitionBufSz int = 4 << 20
-	restoreTmpDir      = "restore-tmp"
-	restoreMapDir      = "restore-map"
 )
-
-func newBuffer() *z.Buffer {
-	path := filepath.Join(x.WorkerConfig.TmpDir, restoreTmpDir)
-	x.Check(os.MkdirAll(path, 0750))
-	buf, err := z.NewBufferWithDir(mapFileSz, 2*mapFileSz, z.UseMmap,
-		path, "Restore.Buffer")
-	x.Check(err)
-	return buf
-}
-
-func fromBackupKey(key []byte) ([]byte, uint64, error) {
-	backupKey := &pb.BackupKey{}
-	if err := backupKey.Unmarshal(key); err != nil {
-		return nil, 0, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
-	}
-	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
-}
-
-type backupReader struct {
-	toClose []io.Closer
-	r       io.Reader
-}
-
-func (br *backupReader) Read(p []byte) (n int, err error) {
-	return br.r.Read(p)
-}
-func (br *backupReader) Close() (rerr error) {
-	for i := len(br.toClose) - 1; i >= 0; i-- {
-		if err := br.toClose[i].Close(); err != nil {
-			rerr = err
-		}
-	}
-	return rerr
-}
-func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupReader, error) {
-	br := &backupReader{}
-	reader, err := h.Stream(file)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to open %q", file)
-	}
-	br.toClose = append(br.toClose, reader)
-
-	encReader, err := enc.GetReader(encKey, reader)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get encrypted reader")
-	}
-	gzReader, err := gzip.NewReader(encReader)
-	if err != nil {
-		return nil, errors.Wrapf(err, "couldn't create gzip reader")
-	}
-	br.toClose = append(br.toClose, gzReader)
-
-	br.r = bufio.NewReaderSize(gzReader, 16<<10)
-	return br, nil
-}
-
-// VerifyBackup will access the backup location and verify that the specified backup can
-// be restored to the cluster.
-func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGroups []uint32) error {
-	uri, err := url.Parse(req.GetLocation())
-	if err != nil {
-		return err
-	}
-
-	h, err := NewUriHandler(uri, creds)
-	if err != nil {
-		return errors.Wrap(err, "VerifyBackup")
-	}
-
-	return verifyRequest(h, uri, req, currentGroups)
-}
-
-// verifyRequest verifies that the manifest satisfies the requirements to process the given
-// restore request.
-func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
-	currentGroups []uint32) error {
-
-	manifests, err := getManifestsToRestore(h, uri, req)
-	if err != nil {
-		return errors.Wrapf(err, "while retrieving manifests")
-	}
-	if len(manifests) == 0 {
-		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
-	}
-
-	// TODO(Ahsan): Do we need to verify the manifests again here?
-	if err := verifyManifests(manifests); err != nil {
-		return err
-	}
-
-	lastManifest := manifests[0]
-	if len(currentGroups) != len(lastManifest.Groups) {
-		return errors.Errorf("groups in cluster and latest backup manifest differ")
-	}
-
-	for _, group := range currentGroups {
-		if _, ok := lastManifest.Groups[group]; !ok {
-			return errors.Errorf("groups in cluster and latest backup manifest differ")
-		}
-	}
-	return nil
-}
 
 type mapIterator struct {
 	fd     *os.File
@@ -244,6 +127,7 @@ func getBuf() *z.Buffer {
 }
 
 type reducer struct {
+	mapDir        string
 	mapItrs       []*mapIterator
 	partitionKeys [][]byte
 	bufferCh      chan *z.Buffer
@@ -257,10 +141,11 @@ type Writer interface {
 	Write(buf *z.Buffer) error
 }
 
-func RunReducer(w Writer) error {
+func RunReducer(w Writer, mapDir string) error {
 	r := &reducer{
 		w:        w,
 		bufferCh: make(chan *z.Buffer, 10),
+		mapDir:   mapDir,
 	}
 	closer := z.NewCloser(1)
 	defer closer.SignalAndWait()
@@ -300,22 +185,24 @@ func (r *reducer) Progress(closer *z.Closer) {
 
 func (r *reducer) Reduce() error {
 	var files []string
+
+	var total int64
 	f := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasSuffix(info.Name(), ".map") {
 			files = append(files, path)
+			total += info.Size()
 		}
 		return nil
 	}
 
-	mapDir := filepath.Join(x.WorkerConfig.TmpDir, restoreMapDir)
-	defer os.RemoveAll(mapDir)
-	if err := filepath.Walk(mapDir, f); err != nil {
+	if err := filepath.Walk(r.mapDir, f); err != nil {
 		return err
 	}
-	glog.Infof("Got files: %+v\n", files)
+	glog.Infof("Got %d map files of compressed size: %s.\n",
+		len(files), humanize.IBytes(uint64(total)))
 
 	// Pick up map iterators and partition keys.
 	partitions := make(map[string]struct{})

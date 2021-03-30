@@ -45,6 +45,53 @@ const (
 	errRestoreProposal = "cannot propose restore request"
 )
 
+// verifyRequest verifies that the manifest satisfies the requirements to process the given
+// restore request.
+func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
+	currentGroups []uint32) error {
+
+	manifests, err := getManifestsToRestore(h, uri, req)
+	if err != nil {
+		return errors.Wrapf(err, "while retrieving manifests")
+	}
+	if len(manifests) == 0 {
+		return errors.Errorf("No backups with the specified backup ID %s", req.GetBackupId())
+	}
+
+	// TODO(Ahsan): Do we need to verify the manifests again here?
+	if err := verifyManifests(manifests); err != nil {
+		return err
+	}
+
+	lastManifest := manifests[0]
+	if len(currentGroups) != len(lastManifest.Groups) {
+		return errors.Errorf("groups in cluster and latest backup manifest differ")
+	}
+
+	for _, group := range currentGroups {
+		if _, ok := lastManifest.Groups[group]; !ok {
+			return errors.Errorf("groups in cluster and latest backup manifest differ")
+		}
+	}
+	return nil
+}
+
+// VerifyBackup will access the backup location and verify that the specified backup can
+// be restored to the cluster.
+func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGroups []uint32) error {
+	uri, err := url.Parse(req.GetLocation())
+	if err != nil {
+		return err
+	}
+
+	h, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return errors.Wrap(err, "VerifyBackup")
+	}
+
+	return verifyRequest(h, uri, req, currentGroups)
+}
+
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
 	if req == nil {
@@ -264,8 +311,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		}
 	}
 
+	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+	x.Check(err)
+	defer os.RemoveAll(mapDir)
+	glog.Infof("Created temporary map directory: %s\n", mapDir)
+
 	// Write restored values to disk and update the UID lease.
-	if err := RunMapper(req); err != nil {
+	if err := RunMapper(req, mapDir); err != nil {
 		return errors.Wrapf(err, "cannot write backup")
 	}
 
@@ -273,7 +325,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if err := sw.Prepare(); err != nil {
 		return errors.Wrapf(err, "while preparing DB")
 	}
-	if err := RunReducer(sw); err != nil {
+	if err := RunReducer(sw, mapDir); err != nil {
 		return errors.Wrap(err, "failed to reduce restore map")
 	}
 	if err := sw.Flush(); err != nil {
@@ -374,6 +426,10 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		}
 	}
 
+	mapDir, err := ioutil.TempDir(x.WorkerConfig.TmpDir, "restore-map")
+	x.Check(err)
+	defer os.RemoveAll(mapDir)
+
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -381,7 +437,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			BackupId:          backupId,
 			EncryptionKeyFile: keyFile,
 		}
-		if err := RunMapper(req); err != nil {
+		if err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
 		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
@@ -403,7 +459,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		if err := sw.Prepare(); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "while preparing DB")}
 		}
-		if err := RunReducer(sw); err != nil {
+		if err := RunReducer(sw, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to reduce")}
 		}
 		if err := sw.Flush(); err != nil {
