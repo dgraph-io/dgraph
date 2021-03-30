@@ -955,7 +955,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 
 	for i, slice := range parentSlice {
 		// sort the slice
-		enc.MergeSort(&slice)
+		enc.MergeSort(&parentSlice[i])
 		// From every slice we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
 		cur = slice
@@ -975,7 +975,6 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		if prev == nil {
 			slice = nil
 		}
-		parentSlice[i] = slice
 	}
 
 	return parentSlice, nil
