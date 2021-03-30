@@ -13,7 +13,6 @@
 package worker
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -37,6 +36,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 )
 
@@ -68,10 +68,11 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 		return nil, errors.Wrapf(err, "cannot start backup operation")
 	}
 	defer closer.Done()
+
 	bp := NewBackupProcessor(pstore, req)
 	defer bp.Close()
 
-	return bp.WriteBackup(ctx)
+	return bp.WriteBackup(closer.Ctx())
 }
 
 // BackupGroup backs up the group specified in the backup request.
@@ -197,7 +198,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		}
 	}
 
-	glog.Infof("Created backup request: read_ts:%d since_ts:%d unix_ts:\"%s\" destination:\"%s\" . Groups=%v\n", req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
+	glog.Infof(
+		"Created backup request: read_ts:%d since_ts:%d unix_ts:%q destination:%q. Groups=%v\n",
+		req.ReadTs, req.SinceTs, req.UnixTs, req.Destination, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -223,8 +226,14 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	m := Manifest{Since: req.ReadTs, Groups: predMap, Version: x.DgraphVersion,
-		DropOperations: dropOperations, Path: dir}
+	m := Manifest{
+		Since:          req.ReadTs,
+		Groups:         predMap,
+		Version:        x.DgraphVersion,
+		DropOperations: dropOperations,
+		Path:           dir,
+		Compression:    "snappy",
+	}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)
@@ -237,6 +246,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
 
 	bp := NewBackupProcessor(nil, req)
+	defer bp.Close()
 	err = bp.CompleteBackup(ctx, &m)
 
 	if err != nil {
@@ -282,6 +292,7 @@ type threadLocal struct {
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
 	itr   *badger.Iterator
+	buf   *z.Buffer
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -294,8 +305,13 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
 	}
 	for i := range bp.threads {
+		buf, err := z.NewBufferWith(32<<20, 32<<30, z.UseCalloc, "Worker.BackupProcessor")
+		x.Check(err)
+		buf.AutoMmapAfter(1 << 30)
+
 		bp.threads[i] = &threadLocal{
 			Request: bp.Request,
+			buf:     buf,
 		}
 		if bp.txn != nil {
 			iopt := badger.DefaultIteratorOptions
@@ -304,6 +320,18 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		}
 	}
 	return bp
+}
+
+func (pr *BackupProcessor) Close() {
+	for _, th := range pr.threads {
+		if pr.txn != nil {
+			th.itr.Close()
+		}
+		th.buf.Release()
+	}
+	if pr.txn != nil {
+		pr.txn.Discard()
+	}
 }
 
 // LoadResult holds the output of a Load operation.
@@ -317,16 +345,6 @@ type LoadResult struct {
 	MaxLeaseNsId uint64
 	// The error, if any, of the load operation.
 	Err error
-}
-
-func (pr *BackupProcessor) Close() {
-	if pr.txn == nil {
-		return
-	}
-	for _, th := range pr.threads {
-		th.itr.Close()
-	}
-	pr.txn.Discard()
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
@@ -351,11 +369,21 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
-	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, w)
+	eWriter, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, w)
 	if err != nil {
 		return nil, err
 	}
-	gzWriter := gzip.NewWriter(newhandler)
+
+	// Snappy is much faster than gzip compression, even with the BestSpeed
+	// gzip option. In fact, in my experiments, gzip compression caused the
+	// output speed to be ~30 MBps. Snappy can write at ~90 MBps, and overall
+	// the speed is similar to writing uncompressed data on disk.
+	//
+	// These are the times I saw:
+	// Without compression: 7m2s 33GB output.
+	// With snappy: 7m11s 9.5GB output.
+	// With snappy + S3: 7m54s 9.5GB output.
+	cWriter := snappy.NewBufferedWriter(eWriter)
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
@@ -427,11 +455,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 				maxVersion = kv.Version
 			}
 		}
-		return writeKVList(list, gzWriter)
+		return writeKVList(list, cWriter)
 	}
 
 	// This is where the execution happens.
-	if err := stream.Orchestrate(context.Background()); err != nil {
+	if err := stream.Orchestrate(ctx); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &response, err
 	}
@@ -488,7 +516,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 			kv.ExpiresAt = item.ExpiresAt()
 			list.Kv = append(list.Kv, kv)
 		}
-		return writeKVList(list, gzWriter)
+		return writeKVList(list, cWriter)
 	}
 
 	for _, prefix := range []byte{x.ByteSchema, x.ByteType} {
@@ -504,7 +532,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	}
 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
-	if err = gzWriter.Close(); err != nil {
+	if err = cWriter.Close(); err != nil {
 		glog.Errorf("While closing gzipped writer: %v", err)
 		return &response, err
 	}
@@ -573,7 +601,7 @@ func (tl *threadLocal) toBackupList(key []byte, itr *badger.Iterator) (
 		}
 
 		// Don't allocate kv on tl.alloc, because we don't need it by the end of this func.
-		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc)
+		kv, err := l.ToBackupPostingList(&tl.bpl, tl.alloc, tl.buf)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "while rolling up list")
 		}

@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/gogo/protobuf/proto"
 	"github.com/google/uuid"
@@ -1436,7 +1437,9 @@ func TestSingleListRollup(t *testing.T) {
 	}
 
 	var bl pb.BackupPostingList
-	kv, err := ol.ToBackupPostingList(&bl, nil)
+	buf := z.NewBuffer(10<<10, "TestSingleListRollup")
+	defer buf.Release()
+	kv, err := ol.ToBackupPostingList(&bl, nil, buf)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(kv.UserMeta))
 	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
