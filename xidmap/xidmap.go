@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -34,10 +36,19 @@ import (
 	"github.com/golang/glog"
 )
 
+// XidMapOptions specifies the options for creating a new xidmap.
+type XidMapOptions struct {
+	UidAssigner *grpc.ClientConn
+	DgClient    *dgo.Dgraph
+	DB          *badger.DB
+	Dir         string
+}
+
 // XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
+	dg         *dgo.Dgraph
 	shards     []*shard
 	newRanges  chan *pb.AssignedIds
 	zc         pb.ZeroClient
@@ -82,12 +93,13 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations. XidMap creates the temporary buffers inside dir directory. The caller must
 // ensure that the dir exists.
-func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
+func New(opts XidMapOptions) *XidMap {
 	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 		kvChan:    make(chan []kv, 64),
+		dg:        opts.DgClient,
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -95,16 +107,16 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		}
 	}
 
-	if db != nil {
+	if opts.DB != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
-		xm.writer = db.NewWriteBatch()
+		xm.writer = opts.DB.NewWriteBatch()
 
 		for i := 0; i < 16; i++ {
 			xm.wg.Add(1)
 			go xm.dbWriter()
 		}
 
-		err := db.View(func(txn *badger.Txn) error {
+		err := opts.DB.View(func(txn *badger.Txn) error {
 			var count int
 			opt := badger.DefaultIteratorOptions
 			opt.PrefetchValues = false
@@ -130,7 +142,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		})
 		x.Check(err)
 	}
-	xm.zc = pb.NewZeroClient(zero)
+	xm.zc = pb.NewZeroClient(opts.UidAssigner)
 
 	go func() {
 		const initBackoff = 10 * time.Millisecond
@@ -138,6 +150,7 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx = xm.attachNamespace(ctx)
 			assigned, err := xm.zc.AssignIds(ctx, &pb.Num{Val: 1e5, Type: pb.Num_UID})
 			glog.V(2).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
@@ -152,10 +165,41 @@ func New(zero *grpc.ClientConn, db *badger.DB, dir string) *XidMap {
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
+
+			if x.IsJwtExpired(err) {
+				if err := xm.relogin(); err != nil {
+					glog.Errorf("While trying to relogin: %v", err)
+				}
+			}
 			time.Sleep(backoff)
 		}
 	}()
 	return xm
+}
+
+func (m *XidMap) attachNamespace(ctx context.Context) context.Context {
+	if m.dg == nil {
+		return ctx
+	}
+
+	// Need to attach JWT because slash uses alpha as zero proxy.
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+	md.Set("accessJwt", m.dg.GetJwt().AccessJwt)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return ctx
+}
+
+func (m *XidMap) relogin() error {
+	if m.dg == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return m.dg.Relogin(ctx)
 }
 
 func (m *XidMap) shardFor(xid string) *shard {
@@ -255,6 +299,7 @@ func (m *XidMap) BumpTo(uid uint64) {
 		glog.V(1).Infof("Bumping up to %v", uid)
 		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx = m.attachNamespace(ctx)
 		assigned, err := m.zc.AssignIds(ctx, &pb.Num{Val: num, Type: pb.Num_UID})
 		cancel()
 		if err == nil {
@@ -263,6 +308,11 @@ func (m *XidMap) BumpTo(uid uint64) {
 			return
 		}
 		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
+		if x.IsJwtExpired(err) {
+			if err := m.relogin(); err != nil {
+				glog.Errorf("While trying to relogin: %v", err)
+			}
+		}
 	}
 }
 

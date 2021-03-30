@@ -734,6 +734,7 @@ func run() {
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
+	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(

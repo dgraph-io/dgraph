@@ -861,7 +861,7 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 			caCopy, caNodeCount := enc.copyFastJsonList(ca)
 
 			cnt += paNodeCount + caNodeCount
-			if cnt > int(x.Config.Limit.GetInt64("normalize-node")) {
+			if cnt > x.Config.LimitNormalizeNode {
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
