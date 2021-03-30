@@ -437,12 +437,14 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				key:   key,
 				plist: l.plist,
 			}
+			l.RLock()
 			if l.mutationMap != nil {
 				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
 				for ts, pl := range l.mutationMap {
 					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 				}
 			}
+			l.RUnlock()
 			return lCopy, nil
 		}
 	}
