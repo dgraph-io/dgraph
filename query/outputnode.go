@@ -156,19 +156,19 @@ func (enc *encoder) MergeSort(headRef *fastJsonNode) {
 	var a fastJsonNode
 	var b fastJsonNode
 
-	if headRef == nil || (*headRef).next == nil {
+	if headRef == nil || head.next == nil {
 		return
 	}
 
-	FrontBackSplit(head, &a, &b)
+	frontBackSplit(head, &a, &b)
 
 	enc.MergeSort(&a)
 	enc.MergeSort(&b)
 
-	*headRef = enc.SortedMerge(a, b)
+	*headRef = enc.sortedMerge(a, b)
 }
 
-func (enc *encoder) SortedMerge(a fastJsonNode, b fastJsonNode) fastJsonNode {
+func (enc *encoder) sortedMerge(a fastJsonNode, b fastJsonNode) fastJsonNode {
 	var result fastJsonNode
 
 	if a == nil {
@@ -177,24 +177,23 @@ func (enc *encoder) SortedMerge(a fastJsonNode, b fastJsonNode) fastJsonNode {
 		return a
 	}
 
-	if enc.Less(a, b) {
+	if enc.less(a, b) {
 		result = a
-		result.next = enc.SortedMerge(a.next, b)
+		result.next = enc.sortedMerge(a.next, b)
 	} else {
 		result = b
-		result.next = enc.SortedMerge(a, b.next)
+		result.next = enc.sortedMerge(a, b.next)
 	}
 	return result
 }
 
-func (enc *encoder) Less(i fastJsonNode, j fastJsonNode) bool {
+func (enc *encoder) less(i fastJsonNode, j fastJsonNode) bool {
 	attri := enc.getAttr(i)
 	attrj := enc.getAttr(j)
-	cmp := strings.Compare(enc.attrForID(attri), enc.attrForID(attrj))
-	return cmp <= 0
+	return strings.Compare(enc.attrForID(attri), enc.attrForID(attrj)) <= 0
 }
 
-func FrontBackSplit(source fastJsonNode,
+func frontBackSplit(source fastJsonNode,
 	frontRef *fastJsonNode, backRef *fastJsonNode) {
 	slow := source
 	fast := source.next
@@ -953,16 +952,18 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 		}
 	}
 
-	for i, slice := range parentSlice {
-		// sort the slice
+	for i, node := range parentSlice {
+		// sort the fastJson list
+		// This will ensure that nodes with same attribute name comes together
+		// in response
 		enc.MergeSort(&parentSlice[i])
-		// From every slice we need to remove node with attribute "uid".
+		// From every list we need to remove node with attribute "uid".
 		var prev, cur fastJsonNode
-		cur = slice
+		cur = node
 		for cur != nil {
 			if enc.getAttr(cur) == enc.uidAttr {
 				if prev == nil {
-					slice = cur
+					node = cur
 					cur = cur.next
 					continue
 				} else {
@@ -973,7 +974,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([]fastJsonNode, error) {
 			cur = cur.next
 		}
 		if prev == nil {
-			slice = nil
+			node = nil
 		}
 	}
 
