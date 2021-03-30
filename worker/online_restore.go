@@ -436,6 +436,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			GroupId:           gid,
 			BackupId:          backupId,
 			EncryptionKeyFile: keyFile,
+			RestoreTs:         1,
 		}
 		if err := RunMapper(req, mapDir); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
@@ -452,10 +453,10 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 			WithNamespaceOffset(x.NamespaceOffset))
 		if err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to open DB")}
-
 		}
 		defer db.Close()
-		sw := pstore.NewStreamWriter()
+
+		sw := db.NewStreamWriter()
 		if err := sw.Prepare(); err != nil {
 			return LoadResult{Err: errors.Wrap(err, "while preparing DB")}
 		}
