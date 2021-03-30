@@ -247,6 +247,8 @@ func applyLog(a, b, c *types.Val) error {
 	case INT:
 		if a.Value.(int64) < 0 || b.Value.(int64) < 0 {
 			return ErrorNegativeLog
+		} else if b.Value.(int64) == 1 {
+			return ErrorDivisionByZero
 		}
 		c.Value = math.Log(float64(a.Value.(int64))) / math.Log(float64(b.Value.(int64)))
 		c.Tid = types.FloatID
@@ -254,6 +256,8 @@ func applyLog(a, b, c *types.Val) error {
 	case FLOAT:
 		if a.Value.(float64) < 0 || b.Value.(float64) < 0 {
 			return ErrorNegativeLog
+		} else if b.Value.(float64) == 1 {
+			return ErrorDivisionByZero
 		}
 		c.Value = math.Log(a.Value.(float64)) / math.Log(b.Value.(float64))
 

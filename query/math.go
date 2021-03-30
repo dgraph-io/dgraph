@@ -38,12 +38,6 @@ var (
 	ErrorNegativeRoot    = errors.New("Root of negative number")
 )
 
-const (
-	NotANumber       = "NaN"
-	PositiveInfinity = "+Inf"
-	NegativeInfinity = "-Int"
-)
-
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
 func processBinary(mNode *mathTree) error {
