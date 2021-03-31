@@ -77,7 +77,7 @@ type options struct {
 	ludicrousMode   bool
 	upsertPredicate string
 	tmpDir          string
-	key             x.SensitiveByteSlice
+	key             x.Sensitive
 	namespaceToLoad uint64
 	preserveNs      bool
 }
@@ -232,7 +232,7 @@ func validateSchema(sch string, namespaces map[uint64]struct{}) error {
 }
 
 // processSchemaFile process schema for a given gz file.
-func (l *loader) processSchemaFile(ctx context.Context, file string, key x.SensitiveByteSlice,
+func (l *loader) processSchemaFile(ctx context.Context, file string, key x.Sensitive,
 	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
@@ -459,7 +459,7 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, fs filestore.FileStore, filename string,
-	key x.SensitiveByteSlice) error {
+	key x.Sensitive) error {
 
 	fmt.Printf("Processing data file %q\n", filename)
 

@@ -68,7 +68,7 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
-	key           x.SensitiveByteSlice
+	key           x.Sensitive
 
 	// Options related to the WAL.
 	wdir           string

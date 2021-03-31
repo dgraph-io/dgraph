@@ -1,7 +1,7 @@
 // +build oss
 
 /*
- * Copyright 2020-2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,28 @@
  * limitations under the License.
  */
 
-package vault
+package worker
 
 import (
+	"context"
+	"sync"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"github.com/spf13/viper"
 )
 
-func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
-	glog.Exit("flags: vault is an enterprise-only feature")
-	return
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
+	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
+	return x.ErrNotSupported
+}
+
+// Restore implements the Worker interface.
+func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
+	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
+	return &pb.Status{}, x.ErrNotSupported
+}
+
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	return nil
 }

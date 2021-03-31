@@ -25,7 +25,7 @@ import (
 )
 
 func TestSensitiveByteSlice(t *testing.T) {
-	var v SensitiveByteSlice = SensitiveByteSlice("mysecretkey")
+	var v Sensitive = Sensitive("mysecretkey")
 
 	s := fmt.Sprintf("%s,%v,%s,%+v", v, v, &v, &v)
 	require.EqualValues(t, "****,****,****,****", s)
