@@ -100,7 +100,7 @@ instances to achieve high-availability.
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 	flag.String("cid", "", "Cluster ID")
 	flag.Bool("disable_admin_http", false,
-		"Turn on/off the admin endpoints exposed over HTTP port for Zero.")
+		"Turn on/off the administrative endpoints exposed over Zero's HTTP port.")
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").

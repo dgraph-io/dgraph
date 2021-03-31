@@ -36,8 +36,10 @@ func resolveEnterpriseLicense(ctx context.Context, m schema.Mutation) (*resolve.
 		return resolve.EmptyResult(m, err), false
 	}
 
-	if _, err = worker.ApplyLicenseOverNetwork(ctx, &pb.ApplyLicenseRequest{License: []byte(input.
-		License)}); err != nil {
+	if _, err = worker.ApplyLicenseOverNetwork(
+		ctx,
+		&pb.ApplyLicenseRequest{License: []byte(input.License)},
+	); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
@@ -47,8 +49,7 @@ func resolveEnterpriseLicense(ctx context.Context, m schema.Mutation) (*resolve.
 	), true
 }
 
-func getEnterpriseLicenseInput(m schema.Mutation) (*enterpriseLicenseInput,
-	error) {
+func getEnterpriseLicenseInput(m schema.Mutation) (*enterpriseLicenseInput, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
 	inputBytes, err := json.Marshal(inputArg)
 	if err != nil {

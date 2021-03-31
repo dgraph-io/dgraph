@@ -25,7 +25,7 @@ import (
 
 // RemoveNodeOverNetwork sends a request to remove the given node from given group to a zero server.
 // This operation doesn't necessarily require a zero leader.
-func RemoveNodeOverNetwork(ctx context.Context, request *pb.RemoveNodeRequest) (*pb.Status, error) {
+func RemoveNodeOverNetwork(ctx context.Context, req *pb.RemoveNodeRequest) (*pb.Status, error) {
 	pl := groups().AnyServer(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -33,12 +33,12 @@ func RemoveNodeOverNetwork(ctx context.Context, request *pb.RemoveNodeRequest) (
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.RemoveNode(ctx, request)
+	return c.RemoveNode(ctx, req)
 }
 
 // MoveTabletOverNetwork sends a request to move the given tablet to destination group to the
 // current zero leader.
-func MoveTabletOverNetwork(ctx context.Context, request *pb.MoveTabletRequest) (*pb.Status, error) {
+func MoveTabletOverNetwork(ctx context.Context, req *pb.MoveTabletRequest) (*pb.Status, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -46,13 +46,12 @@ func MoveTabletOverNetwork(ctx context.Context, request *pb.MoveTabletRequest) (
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.MoveTablet(ctx, request)
+	return c.MoveTablet(ctx, req)
 }
 
 // ApplyLicenseOverNetwork sends a request to apply the given enterprise license to a zero server.
 // This operation doesn't necessarily require a zero leader.
-func ApplyLicenseOverNetwork(ctx context.Context, request *pb.ApplyLicenseRequest) (*pb.Status,
-	error) {
+func ApplyLicenseOverNetwork(ctx context.Context, req *pb.ApplyLicenseRequest) (*pb.Status, error) {
 	pl := groups().AnyServer(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -60,5 +59,5 @@ func ApplyLicenseOverNetwork(ctx context.Context, request *pb.ApplyLicenseReques
 
 	con := pl.Get()
 	c := pb.NewZeroClient(con)
-	return c.ApplyLicense(ctx, request)
+	return c.ApplyLicense(ctx, req)
 }

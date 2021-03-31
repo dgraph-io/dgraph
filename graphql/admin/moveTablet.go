@@ -70,7 +70,8 @@ func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
 	} else {
 		ns, err := parseAsUint64(inputArg["namespace"])
 		if err != nil {
-			return nil, inputArgError(schema.GQLWrapf(err, "can't convert input.namespace to uint64"))
+			return nil, inputArgError(schema.GQLWrapf(err,
+				"can't convert input.namespace to uint64"))
 		}
 		inputRef.Namespace = ns
 	}

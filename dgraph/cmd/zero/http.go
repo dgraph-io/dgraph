@@ -124,8 +124,10 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := st.zero.RemoveNode(context.Background(), &pb.RemoveNodeRequest{NodeId: nodeId,
-		GroupId: uint32(groupId)}); err != nil {
+	if _, err := st.zero.RemoveNode(
+		context.Background(),
+		&pb.RemoveNodeRequest{NodeId: nodeId, GroupId: uint32(groupId)},
+	); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -185,9 +187,10 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	var resp *pb.Status
 	var err error
-	if resp, err = st.zero.MoveTablet(context.Background(), &pb.MoveTabletRequest{Namespace: ns,
-		Tablet:   tablet,
-		DstGroup: dstGroup}); err != nil {
+	if resp, err = st.zero.MoveTablet(
+		context.Background(),
+		&pb.MoveTabletRequest{Namespace: ns, Tablet: tablet, DstGroup: dstGroup},
+	); err != nil {
 		if resp.GetMsg() == x.ErrorInvalidRequest {
 			w.WriteHeader(http.StatusBadRequest)
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())

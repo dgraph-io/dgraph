@@ -285,7 +285,6 @@ const (
 	}
 
 	input RemoveNodeInput {
-
 		"""
 		ID of the node to be removed.
 		"""
@@ -302,7 +301,6 @@ const (
 	}
 
 	input MoveTabletInput {
-
 		"""
 		Namespace in which the predicate exists.
 		"""
@@ -330,7 +328,6 @@ const (
 	}
 
 	input AssignInput {
-
 		"""
 		Choose what to assign: UID, TIMESTAMP or NAMESPACE_ID.
 		"""
@@ -343,7 +340,6 @@ const (
 	}
 
 	type AssignedIds {
-
 		"""
 		The first UID, TIMESTAMP or NAMESPACE_ID assigned.
 		"""
@@ -362,18 +358,6 @@ const (
 
 	type AssignPayload {
 		response: AssignedIds
-	}
-
-	input EnterpriseLicenseInput {
-
-		"""
-		The contents of license file as a String.
-		"""
-		license: String!
-	}
-
-	type EnterpriseLicensePayload {
-		response: Response
 	}
 
 	` + adminTypes + `
@@ -431,91 +415,98 @@ const (
 		"""
 		assign(input: AssignInput!): AssignPayload
 
-		"""
-		Apply enterprise license.
-		"""
-		enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
-
 		` + adminMutations + `
 	}
  `
 )
 
 var (
-	// guardianOfTheGalaxyQueryMWs are the middlewares which should be applied to queries served by
+	// gogQryMWs are the middlewares which should be applied to queries served by
 	// admin server for guardian of galaxy unless some exceptional behaviour is required
-	guardianOfTheGalaxyQueryMWs = resolve.QueryMiddlewares{
+	gogQryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query,
 		resolve.GuardianOfTheGalaxyAuthMW4Query,
 		resolve.LoggingMWQuery,
 	}
-	// guardianOfTheGalaxyMutationMWs are the middlewares which should be applied to mutations
+	// gogMutMWs are the middlewares which should be applied to mutations
 	// served by admin server for guardian of galaxy unless some exceptional behaviour is required
-	guardianOfTheGalaxyMutationMWs = resolve.MutationMiddlewares{
+	gogMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
-	// guardianOfTheGalaxyMutationWithAclMWs are the middlewares which should be applied to mutations
+	// gogAclMutMWs are the middlewares which should be applied to mutations
 	// served by the admin server for guardian of galaxy with ACL enabled.
-	guardianOfTheGalaxyMutationWithAclMWs = resolve.MutationMiddlewares{
+	gogAclMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.AclOnlyMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
-	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
+	// stdAdminQryMWs are the middlewares which should be applied to queries served by admin
 	// server unless some exceptional behaviour is required
-	commonAdminQueryMWs = resolve.QueryMiddlewares{
+	stdAdminQryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Query,
 		resolve.LoggingMWQuery,
 	}
-	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
+	// stdAdminMutMWs are the middlewares which should be applied to mutations served by
 	// admin server unless some exceptional behaviour is required
-	commonAdminMutationMWs = resolve.MutationMiddlewares{
+	stdAdminMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
+	// minimalAdminQryMWs is the minimal set of middlewares that should be applied to any query
+	// served by the admin server
+	minimalAdminQryMWs = resolve.QueryMiddlewares{
+		resolve.IpWhitelistingMW4Query,
+		resolve.LoggingMWQuery,
+	}
+	// minimalAdminMutMWs is the minimal set of middlewares that should be applied to any mutation
+	// served by the admin server
+	minimalAdminMutMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation,
+		resolve.LoggingMWMutation,
+	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":       commonAdminQueryMWs,
-		"listBackups":  guardianOfTheGalaxyQueryMWs,
-		"getGQLSchema": commonAdminQueryMWs,
+		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
+		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
+		"config":       stdAdminQryMWs,
+		"listBackups":  gogQryMWs,
+		"getGQLSchema": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryUser":      {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"queryGroup":     {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getCurrentUser": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getGroup":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":      minimalAdminQryMWs,
+		"queryGroup":     minimalAdminQryMWs,
+		"getUser":        minimalAdminQryMWs,
+		"getCurrentUser": minimalAdminQryMWs,
+		"getGroup":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":            guardianOfTheGalaxyMutationMWs,
-		"config":            guardianOfTheGalaxyMutationMWs,
-		"draining":          guardianOfTheGalaxyMutationMWs,
-		"export":            commonAdminMutationMWs, // dgraph handles the export for other namespaces by guardian of galaxy
-		"login":             {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"restore":           guardianOfTheGalaxyMutationMWs,
-		"shutdown":          guardianOfTheGalaxyMutationMWs,
-		"removeNode":        guardianOfTheGalaxyMutationMWs,
-		"moveTablet":        guardianOfTheGalaxyMutationMWs,
-		"assign":            guardianOfTheGalaxyMutationMWs,
-		"enterpriseLicense": guardianOfTheGalaxyMutationMWs,
-		"updateGQLSchema":   commonAdminMutationMWs,
-		"addNamespace":      guardianOfTheGalaxyMutationWithAclMWs,
-		"deleteNamespace":   guardianOfTheGalaxyMutationWithAclMWs,
-		"resetPassword":     guardianOfTheGalaxyMutationWithAclMWs,
+		"backup":            gogMutMWs,
+		"config":            gogMutMWs,
+		"draining":          gogMutMWs,
+		"export":            stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
+		"login":             minimalAdminMutMWs,
+		"restore":           gogMutMWs,
+		"shutdown":          gogMutMWs,
+		"removeNode":        gogMutMWs,
+		"moveTablet":        gogMutMWs,
+		"assign":            gogMutMWs,
+		"enterpriseLicense": gogMutMWs,
+		"updateGQLSchema":   stdAdminMutMWs,
+		"addNamespace":      gogAclMutMWs,
+		"deleteNamespace":   gogAclMutMWs,
+		"resetPassword":     gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"addGroup":    {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateUser":  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateGroup": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteUser":  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteGroup": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addUser":     minimalAdminMutMWs,
+		"addGroup":    minimalAdminMutMWs,
+		"updateUser":  minimalAdminMutMWs,
+		"updateGroup": minimalAdminMutMWs,
+		"deleteUser":  minimalAdminMutMWs,
+		"deleteGroup": minimalAdminMutMWs,
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
