@@ -37,8 +37,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#7658]: https://github.com/dgraph-io/dgraph/issues/7658
 [#7502]: https://github.com/dgraph-io/dgraph/issues/7502
 [#7509]: https://github.com/dgraph-io/dgraph/issues/7509
-[#7439]: https://github.com/dgraph-io/dgraph/issues/7539
+[#7439]: https://github.com/dgraph-io/dgraph/issues/7439
 [#7562]: https://github.com/dgraph-io/dgraph/issues/7562
+[#7415]: https://github.com/dgraph-io/dgraph/issues/7415
 [#7474]: https://github.com/dgraph-io/dgraph/issues/7474
 [#7360]: https://github.com/dgraph-io/dgraph/issues/7360
 [#7547]: https://github.com/dgraph-io/dgraph/issues/7547
