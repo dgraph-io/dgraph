@@ -164,6 +164,8 @@ func UpdateCacheMb(memoryMB int64) error {
 	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update index cache size")
 	}
+
+	Config.CacheMb = memoryMB
 	return nil
 }
 

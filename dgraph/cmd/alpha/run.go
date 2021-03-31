@@ -645,6 +645,7 @@ func run() {
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
+		CacheMb:                    totalCache,
 		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
