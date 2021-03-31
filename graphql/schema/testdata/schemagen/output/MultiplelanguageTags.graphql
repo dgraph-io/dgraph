@@ -9,7 +9,9 @@ type Person {
 	nameHiEn: String @dgraph(pred: "Person.name@hi:en")
 	nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
 	name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
-	Address: String @search(by: [fulltext])
+	address: String @search(by: [fulltext])
+	addressHi: String @dgraph(pred: "Person.address@hi")
+	professionEn: String @dgraph(pred: "Person.profession@en")
 }
 
 #######################
@@ -297,14 +299,14 @@ type PersonAggregateResult {
 	nameHiMax: String
 	nameEnMin: String
 	nameEnMax: String
-	nameHiEnMin: String
-	nameHiEnMax: String
-	nameHi_En_UntagMin: String
-	nameHi_En_UntagMax: String
 	name_Untag_AnyLangMin: String
 	name_Untag_AnyLangMax: String
-	AddressMin: String
-	AddressMax: String
+	addressMin: String
+	addressMax: String
+	addressHiMin: String
+	addressHiMax: String
+	professionEnMin: String
+	professionEnMax: String
 }
 
 type UpdatePersonPayload {
@@ -320,20 +322,20 @@ enum PersonHasFilter {
 	name
 	nameHi
 	nameEn
-	nameHiEn
-	nameHi_En_Untag
 	name_Untag_AnyLang
-	Address
+	address
+	addressHi
+	professionEn
 }
 
 enum PersonOrderable {
 	name
 	nameHi
 	nameEn
-	nameHiEn
-	nameHi_En_Untag
 	name_Untag_AnyLang
-	Address
+	address
+	addressHi
+	professionEn
 }
 
 #######################
@@ -344,14 +346,16 @@ input AddPersonInput {
 	name: String!
 	nameHi: String
 	nameEn: String
-	Address: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
 input PersonFilter {
 	name: StringHashFilter
 	nameHi: StringExactFilter_StringTermFilter
 	nameEn: StringRegExpFilter
-	Address: StringFullTextFilter
+	address: StringFullTextFilter
 	has: [PersonHasFilter]
 	and: [PersonFilter]
 	or: [PersonFilter]
@@ -367,14 +371,18 @@ input PersonOrder {
 input PersonPatch {
 	nameHi: String
 	nameEn: String
-	Address: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
 input PersonRef {
 	name: String
 	nameHi: String
 	nameEn: String
-	Address: String
+	address: String
+	addressHi: String
+	professionEn: String
 }
 
 input StringExactFilter_StringTermFilter {

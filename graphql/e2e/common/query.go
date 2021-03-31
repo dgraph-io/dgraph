@@ -3915,59 +3915,145 @@ func idDirectiveWithInt(t *testing.T) {
 }
 
 func queryMultipleLangFields(t *testing.T) {
-	addHotelParams := &GraphQLParams{
+	addPersonParams := &GraphQLParams{
 		Query: `
 		mutation addPerson($person: [AddPersonInput!]!) {
 	       addPerson(input: $person) {
-	       	person {
-	       		name
-	       		nameHi
-	       		nameZh
-	       	}
+             numUids
 	       }
         }`,
-		Variables: map[string]interface{}{"person": []interface{}{
-			map[string]interface{}{
-				"name":   "Alice",
-				"nameHi": "ऐलिस",
-				"nameZh": "爱丽丝",
-			},
-		},
-		},
 	}
-	gqlResponse := addHotelParams.ExecuteAsPost(t, GraphqlURL)
+
+	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+		map[string]interface{}{
+			"name": "Bob",
+		}}}
+
+	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	queryHotel := &GraphQLParams{
+	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+		map[string]interface{}{
+			"name":   "Alice",
+			"nameZh": "爱丽丝",
+		}}}
+
+	gqlResponse = addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+		map[string]interface{}{
+			"name":         "Juliet",
+			"nameHi":       "जूलियट",
+			"nameZh":       "朱丽叶",
+			"professionEn": "singer",
+		},
+	},
+	}
+	gqlResponse = addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPerson := &GraphQLParams{
 		Query: `
 			query {
-	            queryPerson {
+	            queryPerson(filter:{name:{eq:"Bob"}}) {
 	            	name
 	            	nameZh
 	            	nameHi
 	            	nameHiZh
+                    nameZhHi
 	            	nameHi_Zh_Untag
 	            	name_Untag_AnyLang
 	            }
         }`,
 	}
-	gqlResponse = queryHotel.ExecuteAsPost(t, GraphqlURL)
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	queryHotelExpected := `
+	queryPersonExpected := `
+	  {
+        "queryPerson": [
+            {
+                "name": "Bob",
+                "nameZh": null,
+                "nameHi": null,
+                "nameHiZh": null,
+                "nameZhHi": null,
+                "nameHi_Zh_Untag": "Bob",
+                "name_Untag_AnyLang": "Bob"
+            }
+        ]
+      }`
+
+	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
+
+	queryPerson = &GraphQLParams{
+		Query: `
+			query {
+	            queryPerson(filter:{name:{eq:"Alice"}}) {
+	            	name
+	            	nameZh
+	            	nameHi
+	            	nameHiZh
+                    nameZhHi
+	            	nameHi_Zh_Untag
+	            	name_Untag_AnyLang
+	            }
+        }`,
+	}
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPersonExpected = `
 	  {
         "queryPerson": [
             {
                 "name": "Alice",
                 "nameZh": "爱丽丝",
-                "nameHi": "ऐलिस",
-                "nameHiZh": "ऐलिस",
-                "nameHi_Zh_Untag": "ऐलिस",
+                "nameHi": null,
+                "nameHiZh": "爱丽丝",
+                "nameZhHi": "爱丽丝",
+                "nameHi_Zh_Untag": "爱丽丝",
                 "name_Untag_AnyLang": "Alice"
             }
         ]
       }`
-	testutil.CompareJSON(t, queryHotelExpected, string(gqlResponse.Data))
+
+	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
+
+	queryPerson = &GraphQLParams{
+		Query: `
+			query {
+	            queryPerson(filter:{name:{eq:"Juliet"}}) {
+	            	name
+	            	nameZh
+	            	nameHi
+	            	nameHiZh
+                    nameZhHi
+	            	nameHi_Zh_Untag
+	            	name_Untag_AnyLang
+                    professionEn
+	            }
+        }`,
+	}
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	queryPersonExpected = `
+	  {
+        "queryPerson": [
+            {
+                "name": "Juliet",
+                "nameZh": "朱丽叶",
+                "nameHi": "जूलियट",
+                "nameHiZh": "जूलियट",
+                "nameZhHi": "朱丽叶",
+                "nameHi_Zh_Untag": "जूलियट",
+                "name_Untag_AnyLang": "Juliet",
+                "professionEn": "singer"
+            }
+        ]
+      }`
+	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
-	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
+	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
 }

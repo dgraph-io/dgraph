@@ -2896,7 +2896,8 @@ invalid_schemas:
         nameHi: Int @dgraph(pred:"Person.name@hi")
       }
     errlist: [
-      { "message": "Expected `String` type for language tag field: `nameHi` but got :`Int` inside Type `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`",
+        "locations": [ { "line": 3, "column": 3 } ] },
     ]
 
   - name: "@id directive not supported on language tag field"
@@ -2906,7 +2907,8 @@ invalid_schemas:
         nameHi: String! @dgraph(pred:"Person.name@hi") @id
       }
     errlist: [
-      { "message": "@id directive not supported on language tag fields, field: `nameHi`,type: `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields",
+        "locations": [ { "line": 3, "column": 51 } ] },
     ]
 
   - name: "unsupported `*` language tag in graphql"
@@ -2916,7 +2918,8 @@ invalid_schemas:
         nameHi: String @dgraph(pred:"Person.name@*")
       }
     errlist: [
-      { "message": "`*` language tag not supported in GraphQL, field: `nameHi`,type: `Person`", "locations": [ { "line": 3, "column": 3 } ] },
+      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL",
+        "locations": [ { "line": 3, "column": 19 } ] },
     ]
 
   - name: "untagged language field should be of type String"
@@ -2926,29 +2929,8 @@ invalid_schemas:
         nameHi: String @dgraph(pred:"Person.name@en:hi")
       }
     errlist: [
-      { "message": "Expected type: String, but got: `Int` for untagged language field `name` inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
-    ]
-
-  - name: "Incompatible exact and hash indexes are not allowed at same time on untagged and tagged languages field "
-    input: |
-      type Person  {
-        name: String! @search(by: [exact])
-        nameHi: String @dgraph(pred:"Person.name@en:hi") @search(by: [hash])
-      }
-    errlist: [
-      { "message": "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: `name` have exact index
-      and language tagged field `nameHi` have hash index inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
-    ]
-
-  - name: "Incompatible exact and hash indexes are not allowed at same time on tagged and untagged languages field, when hash index is given explicitly on untagged language field "
-    input: |
-      type Person  {
-        name: String! @search(by: [hash])
-        nameHi: String @dgraph(pred:"Person.name@en:hi") @search(by: [exact])
-      }
-    errlist: [
-      { "message": "Incompatible indexes hash and exact are not allowed on language tagged and untagged fields, language untagged field: `name` have hash index
-      and language tagged field `nameHi` have exact index inside type: `Person`", "locations": [ { "line": 2, "column": 3 } ] },
+      { "message": "Type Person; Field name: Expected type `String` for untagged language field but got `Int`",
+        "locations": [ { "line": 2, "column": 3 } ] },
     ]
 
 valid_schemas:
@@ -3427,5 +3409,19 @@ valid_schemas:
       type Question implements Post @lambdaOnMutate(add: true, update: true) {
         id: ID!
         questionText: String
+      }
+
+  - name: "valid schema with multiple language tag fields"
+    input: |
+      type Person {
+          name: String! @id
+          nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [term,exact])
+          nameEn: String @dgraph(pred:"Person.name@en") @search(by: [regexp])
+          nameHiEn: String @dgraph(pred:"Person.name@hi:en")
+          nameHi_En_Untag: String @dgraph(pred:"Person.name@hi:en:.")
+          name_Untag_AnyLang: String @dgraph(pred:"Person.name@.")
+          address: String  @search(by: [fulltext])
+          addressHi: String @dgraph(pred:"Person.address@hi")
+          professionEn: String @dgraph(pred:"Person.profession@en")
       }
 

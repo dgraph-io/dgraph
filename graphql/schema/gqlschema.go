@@ -1408,7 +1408,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) || hasCustomOrLambda(fld) {
+		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangTag(fld, "addHashFilter") {
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
@@ -1632,8 +1632,9 @@ func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
 	// the field is an argument in `@provides` directive.
+	//glog.Infof("%s--%v", fld.Name, isMultiLangTag(fld,false))
 	if !hasExternal(fld) {
-		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld)
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) && !isMultiLangTag(fld, "addOderables")
 	}
 	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
@@ -2221,7 +2222,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
 		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
 		// We don't add above field in update patch because it corresponds to multiple languages
-		if !isMutableLanguageField(fld) {
+		if isMultiLangTag(fld, "updateMutation") {
 			continue
 		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
@@ -2253,7 +2254,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 }
 
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
-	providesTypeMap map[string]bool, addInput bool) ast.FieldList {
+	providesTypeMap map[string]bool, isAddingInput bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2271,8 +2272,8 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 		if hasCustomOrLambda(fld) {
 			continue
 		}
-		// see also comment in getNonIDFields
-		if !isMutableLanguageField(fld) && addInput {
+		// see the comment in getNonIDFields as well.
+		if isMultiLangTag(fld, "addMutation") && isAddingInput {
 			continue
 		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
@@ -2297,21 +2298,23 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 	return append(fldList, pd)
 }
 
-// This function check if given gql field have multiple language tags
-func isMutableLanguageField(fld *ast.FieldDefinition) bool {
+// This function check if given gql field has multiple language tags
+func isMultiLangTag(fld *ast.FieldDefinition, opType string) bool {
 	dgDirective := fld.Directives.ForName(dgraphDirective)
 	if dgDirective != nil {
 		pred := dgDirective.Arguments.ForName("pred")
 		if pred != nil {
 			if strings.Contains(pred.Value.Raw, "@") {
 				langs := strings.Split(pred.Value.Raw, "@")[1]
-				if strings.Contains(langs, ":") || langs == "." {
-					return false
+				if opType == "addMutation" || opType == "updateMutation" {
+					return strings.Contains(langs, ":") || langs == "."
+				} else {
+					return strings.Contains(langs, ":")
 				}
 			}
 		}
 	}
-	return true
+	return false
 }
 
 func getIDField(defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {

@@ -8,5 +8,8 @@ type Person {
     nameHiEn: String @dgraph(pred:"Person.name@hi:en")
     nameHi_En_Untag: String @dgraph(pred:"Person.name@hi:en:.")
     name_Untag_AnyLang: String @dgraph(pred:"Person.name@.")
-    Address: String  @search(by: [fulltext])
+    address: String  @search(by: [fulltext])
+    addressHi: String @dgraph(pred:"Person.address@hi")
+    # We can have language tag field without corresponding language untagged field
+    professionEn: String @dgraph(pred:"Person.profession@en")
 }

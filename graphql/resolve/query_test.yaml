@@ -3388,18 +3388,20 @@
   name: "query with language tag fields"
   gqlquery: |
     query {
-    	queryPerson {
-    		name
-            nameZh
-            nameHi
-            nameHiZh
-            nameHi_Zh_Untag
-            name_Untag_AnyLang
-    	}
+      queryPerson(filter:{or:[{name:{eq:"Alice"}},{nameHi:{eq:"ऐलिस"}},{nameZh:{eq:"爱丽丝"}},{nameHiZh:{eq:"ऐलिस"}},
+       {nameHi_Zh_Untag:{eq:"ऐलिस"}},{name_Untag_AnyLang:{eq:"Alice"}}]})
+      {
+        name
+        nameZh
+        nameHi
+        nameHiZh
+        nameHi_Zh_Untag
+        name_Untag_AnyLang
+      }
     }
   dgquery: |-
     query {
-      queryPerson(func: type(Person)) {
+      queryPerson(func: type(Person)) @filter((eq(Person.name, "Alice") OR eq(Person.name@hi, "ऐलिस") OR eq(Person.name@zh, "爱丽丝") OR eq(Person.name@hi:zh, "ऐलिस") OR eq(Person.name@hi:zh:., "ऐलिस") OR eq(Person.name@., "Alice"))) {
         Person.name : Person.name
         Person.nameZh : Person.name@zh
         Person.nameHi : Person.name@hi

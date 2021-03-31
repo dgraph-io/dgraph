@@ -395,6 +395,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
 	dgSchema, gqlErr := genDgSchema(sch, typesToComplete, providesFieldsMap)
+	//glog.Info("%v",dgSchema)
 	if gqlErr != nil {
 		return nil, gqlerror.List{gqlErr}
 	}
@@ -544,8 +545,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	langTagDgPreds := make(map[string]dgPred)
 
 	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string,
-		gqlField *ast.FieldDefinition,
-		gqlTypeName string) dgPred {
+		gqlField *ast.FieldDefinition, gqlTypename string) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
@@ -553,7 +553,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 				indexes:     make(map[string]bool),
 				upsert:      upsertStr,
 				gqlField:    gqlField,
-				gqlTypeName: gqlTypeName,
+				gqlTypeName: gqlTypename,
 			}
 		}
 		for _, index := range indexes {
@@ -674,14 +674,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					}
 
 					if strings.Contains(fname, "@") {
-						if f.Type.Name() != "String" {
-							return "", gqlerror.ErrorPosf(f.Position, "Expected `String` type for language tag "+
-								"field: `%s` but got :`%s` inside Type `%s`", f.Name, f.Type.Name(), typName)
-						}
-						if f.Directives.ForName(idDirective) != nil {
-							return "", gqlerror.ErrorPosf(f.Position, "@id directive not supported on"+
-								" language tag fields, field: `%s`,type: `%s`", f.Name, typName)
-						}
 						langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, f, typName)
 						continue
 					}
@@ -726,58 +718,30 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	for fname, langTagDgPred := range langTagDgPreds {
 		dgPredAndTags := strings.Split(fname, "@")
 		unTaggedDgPredName := dgPredAndTags[0]
-		tags := dgPredAndTags[1]
-		gqlLangTaggedField := langTagDgPred.gqlField
+		unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]
 
-		if tags == "*" {
-			return "", gqlerror.ErrorPosf(gqlLangTaggedField.Position, "`*` language tag not"+
-				" supported in GraphQL, field: `%s`,type: `%s`", gqlLangTaggedField.Name,
-				langTagDgPred.gqlTypeName)
-		}
-		if unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]; ok {
+		if ok {
 			gqlUntaggedLangField := unTaggedDgPred.gqlField
 			if gqlUntaggedLangField.Type.Name() != "String" {
-				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Expected type:"+
-					" String, but got: `%s` for untagged language field `%s` inside type: `%s`",
-					gqlUntaggedLangField.Type.Name(), gqlUntaggedLangField.Name, unTaggedDgPred.gqlTypeName)
+				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Type %s; Field %s: Expected type `String`"+
+					" for untagged language field but got `%s`",
+					unTaggedDgPred.gqlTypeName, gqlUntaggedLangField.Name, gqlUntaggedLangField.Type.Name())
 			}
-			unTaggedDgPred.lang = true
-
-			if unTaggedDgPred.indexes["exact"] && langTagDgPred.indexes["hash"] {
-				return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Incompatible indexes"+
-					" hash and exact are not allowed on language tagged and untagged fields,"+
-					" language untagged field: `%s` have exact index and language tagged field"+
-					" `%s` have hash index inside type: `%s`",
-					gqlUntaggedLangField.Name, gqlLangTaggedField.Name, unTaggedDgPred.gqlTypeName)
-			}
-
-			if unTaggedDgPred.indexes["hash"] && langTagDgPred.indexes["exact"] {
-				// if hash index is explicitly given on an untagged field and
-				// language tagged field have exact index then we return error for that case
-				search := gqlUntaggedLangField.Directives.ForName(searchDirective)
-				if search != nil {
-					indexes := search.Arguments.ForName(searchArgs)
-					if indexes != nil {
-						if x.HasString(getAllSearchIndexes(indexes.Value), "hash") {
-							return "", gqlerror.ErrorPosf(gqlUntaggedLangField.Position, "Incompatible indexes hash"+
-								" and exact are not allowed on language tagged and untagged fields,"+
-								" language untagged field: `%s` have hash index "+
-								"and language tagged field `%s` have exact index inside type: `%s`",
-								gqlUntaggedLangField.Name, gqlLangTaggedField.Name, unTaggedDgPred.gqlTypeName)
-						}
-					}
+		} else {
+			unTaggedDgPred = getUpdatedPred(unTaggedDgPredName, "string", "", nil, nil, "")
+			for i, typ := range dgTypes {
+				if typ.name == strings.Split(unTaggedDgPredName, ".")[0] {
+					typ.fields = append(typ.fields, field{unTaggedDgPredName, false})
+					dgTypes[i] = typ
+					break
 				}
-				// if hash index is not explicitly given(i.e. @id directive applied) on an untagged field and
-				// language tagged field have exact index then we delete hash index from untagged
-				// language field because we add exact index on it
-				delete(unTaggedDgPred.indexes, "hash")
 			}
-
-			for index := range langTagDgPred.indexes {
-				unTaggedDgPred.indexes[index] = true
-			}
-			dgPreds[unTaggedDgPredName] = unTaggedDgPred
 		}
+		unTaggedDgPred.lang = true
+		for index := range langTagDgPred.indexes {
+			unTaggedDgPred.indexes[index] = true
+		}
+		dgPreds[unTaggedDgPredName] = unTaggedDgPred
 	}
 
 	predWritten := make(map[string]bool, len(dgPreds))
