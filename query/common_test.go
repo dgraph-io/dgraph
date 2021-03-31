@@ -331,6 +331,7 @@ pname                          : string .
 tweet-a                        : string @index(trigram) .
 tweet-b                        : string @index(term) .
 tweet-c                        : string @index(fulltext) .
+tweet-d                        : string @index(trigram) .
 `
 
 func populateCluster() {
@@ -846,6 +847,10 @@ func populateCluster() {
 		<62> <tweet-c> "I am a citizen" .
 		<63> <tweet-c> "I am a citizen" .
 		<64> <tweet-c> "I am a citizen of Paradis Island" .
+
+		<61> <tweet-d> "aaabxxx" .
+		<62> <tweet-d> "aaacdxx" .
+		<63> <tweet-d> "aaabcd" .
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))

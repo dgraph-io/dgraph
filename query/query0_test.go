@@ -3465,6 +3465,15 @@ func TestMatchingWithPagination(t *testing.T) {
 			 }`,
 			`{"data":{"me":[{"tweet-c":"I am a citizen of Paradis Island"}]}}`,
 		},
+		{
+			`Test match function with pagination`,
+			`{
+				me(func: match(tweet-d, "aaaaaa", 3), first:1) {
+					tweet-d
+				}
+			 }`,
+			`{"data":{"me":[{"tweet-d":"aaabcd"}]}}`,
+		},
 	}
 
 	for _, tc := range tests {
