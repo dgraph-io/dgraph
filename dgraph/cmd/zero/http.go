@@ -65,7 +65,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	num := &pb.Num{Val: uint64(val)}
+	num := &pb.Num{Val: val}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -87,7 +87,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		ids, err = st.zero.AssignIds(ctx, num)
 	default:
 		x.SetStatus(w, x.Error,
-			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
+			fmt.Sprintf("Invalid what: [%s]. Must be one of: [uids, timestamps, nsids]", what))
 		return
 	}
 	if err != nil {
@@ -124,7 +124,10 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := st.zero.removeNode(context.Background(), nodeId, uint32(groupId)); err != nil {
+	if _, err := st.zero.RemoveNode(
+		context.Background(),
+		&pb.RemoveNodeRequest{NodeId: nodeId, GroupId: uint32(groupId)},
+	); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -154,8 +157,6 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tablet := r.URL.Query().Get("tablet")
-
 	namespace := r.URL.Query().Get("namespace")
 	namespace = strings.TrimSpace(namespace)
 	ns := x.GalaxyNamespace
@@ -168,7 +169,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tablet = x.NamespaceAttr(ns, tablet)
+	tablet := r.URL.Query().Get("tablet")
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
@@ -178,50 +179,28 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf(
-			"Query parameter 'group' should contain a valid integer."))
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Query parameter 'group' should contain a valid integer.")
 		return
 	}
 	dstGroup := uint32(groupId)
-	knownGroups := st.zero.KnownGroups()
-	var isKnown bool
-	for _, grp := range knownGroups {
-		if grp == dstGroup {
-			isKnown = true
-			break
+
+	var resp *pb.Status
+	var err error
+	if resp, err = st.zero.MoveTablet(
+		context.Background(),
+		&pb.MoveTabletRequest{Namespace: ns, Tablet: tablet, DstGroup: dstGroup},
+	); err != nil {
+		if resp.GetMsg() == x.ErrorInvalidRequest {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.SetStatus(w, x.Error, err.Error())
 		}
-	}
-	if !isKnown {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Group: [%d] is not a known group.",
-			dstGroup))
 		return
 	}
-
-	tab := st.zero.ServingTablet(tablet)
-	if tab == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
-		return
-	}
-
-	srcGroup := tab.GroupId
-	if srcGroup == dstGroup {
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			fmt.Sprintf("Tablet: [%s] is already being served by group: [%d]", tablet, srcGroup))
-		return
-	}
-
-	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
-		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
-			tablet, srcGroup, dstGroup, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-	_, err := fmt.Fprintf(w, "Predicate: [%s] moved from group [%d] to [%d]",
-		tablet, srcGroup, dstGroup)
+	_, err = fmt.Fprint(w, resp.GetMsg())
 	if err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
