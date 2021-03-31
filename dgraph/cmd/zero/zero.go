@@ -17,9 +17,9 @@
 package zero
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
-	"io"
 	"math"
 	"strings"
 	"sync"
@@ -402,26 +402,32 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	return res, nil
 }
 
-// removeNode removes the given node from the given group.
+// RemoveNode removes the given node from the given group.
 // It's the user's responsibility to ensure that node doesn't come back again
 // before calling the api.
-func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
-	if groupId == 0 {
-		return s.Node.ProposePeerRemoval(ctx, nodeId)
+func (s *Server) RemoveNode(ctx context.Context, req *pb.RemoveNodeRequest) (*pb.Status, error) {
+	if req.GroupId == 0 {
+		return nil, s.Node.ProposePeerRemoval(ctx, req.NodeId)
 	}
 	zp := &pb.ZeroProposal{}
-	zp.Member = &pb.Member{Id: nodeId, GroupId: groupId, AmDead: true}
-	if _, ok := s.state.Groups[groupId]; !ok {
-		return errors.Errorf("No group with groupId %d found", groupId)
+	zp.Member = &pb.Member{Id: req.NodeId, GroupId: req.GroupId, AmDead: true}
+	if _, ok := s.state.Groups[req.GroupId]; !ok {
+		return nil, errors.Errorf("No group with groupId %d found", req.GroupId)
 	}
-	if _, ok := s.state.Groups[groupId].Members[nodeId]; !ok {
-		return errors.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
+	if _, ok := s.state.Groups[req.GroupId].Members[req.NodeId]; !ok {
+		return nil, errors.Errorf("No node with nodeId %d found in group %d", req.NodeId,
+			req.GroupId)
 	}
-	if len(s.state.Groups[groupId].Members) == 1 && len(s.state.Groups[groupId].Tablets) > 0 {
-		return errors.Errorf("Move all tablets from group %d before removing the last node", groupId)
+	if len(s.state.Groups[req.GroupId].Members) == 1 && len(s.state.Groups[req.GroupId].
+		Tablets) > 0 {
+		return nil, errors.Errorf("Move all tablets from group %d before removing the last node",
+			req.GroupId)
+	}
+	if err := s.Node.proposeAndWait(ctx, zp); err != nil {
+		return nil, err
 	}
 
-	return s.Node.proposeAndWait(ctx, zp)
+	return &pb.Status{}, nil
 }
 
 // Connect is used by Alpha nodes to connect the very first time with group zero.
@@ -802,10 +808,12 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 	return ms, nil
 }
 
-func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
+func (s *Server) ApplyLicense(ctx context.Context, req *pb.ApplyLicenseRequest) (*pb.Status,
+	error) {
 	var l license
+	signedData := bytes.NewReader(req.License)
 	if err := verifySignature(signedData, strings.NewReader(publicKey), &l); err != nil {
-		return errors.Wrapf(err, "while extracting enterprise details from the license")
+		return nil, errors.Wrapf(err, "while extracting enterprise details from the license")
 	}
 
 	numNodes := len(s.state.GetZeros())
@@ -813,8 +821,8 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 		numNodes += len(group.GetMembers())
 	}
 	if uint64(numNodes) > l.MaxNodes {
-		return errors.Errorf("Your license only allows [%v] (Alpha + Zero) nodes. You have: [%v].",
-			l.MaxNodes, numNodes)
+		return nil, errors.Errorf("Your license only allows [%v] (Alpha + Zero) nodes. "+
+			"You have: [%v].", l.MaxNodes, numNodes)
 	}
 
 	proposal := &pb.ZeroProposal{
@@ -827,8 +835,8 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 
 	err := s.Node.proposeAndWait(ctx, proposal)
 	if err != nil {
-		return errors.Wrapf(err, "while proposing enterprise license state to cluster")
+		return nil, errors.Wrapf(err, "while proposing enterprise license state to cluster")
 	}
 	glog.Infof("Enterprise license proposed to the cluster %+v", proposal)
-	return nil
+	return &pb.Status{}, nil
 }

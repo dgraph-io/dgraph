@@ -13,7 +13,6 @@
 package zero
 
 import (
-	"bytes"
 	"context"
 	"io/ioutil"
 	"math"
@@ -139,7 +138,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := st.zero.applyLicense(ctx, bytes.NewReader(b)); err != nil {
+	if _, err := st.zero.ApplyLicense(ctx, &pb.ApplyLicenseRequest{License: b}); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -157,7 +156,7 @@ func (s *Server) applyLicenseFile(path string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err = s.applyLicense(ctx, bytes.NewReader(content)); err != nil {
+	if _, err = s.ApplyLicense(ctx, &pb.ApplyLicenseRequest{License: content}); err != nil {
 		glog.Infof("Unable to apply license at %v due to error %v", path, err)
 	}
 }

@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -151,11 +152,7 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		moveUrl := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
-			url.QueryEscape(pred))
-		resp, err := http.Get(moveUrl)
-		require.NoError(t, err)
-		require.NoError(t, getError(resp.Body))
+		testutil.AssertMoveTablet(t, pred, 2)
 		time.Sleep(time.Second)
 	}
 
@@ -168,10 +165,9 @@ func TestNodes(t *testing.T) {
 
 	groupNodes, err := testutil.GetNodesInGroup("3")
 	require.NoError(t, err)
-	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=3&id=" +
-		groupNodes[0])
+	nodeId, err := strconv.ParseUint(groupNodes[0], 10, 64)
 	require.NoError(t, err)
-	require.NoError(t, getError(resp.Body))
+	testutil.AssertRemoveNode(t, nodeId, 3)
 
 	state2, err = testutil.GetState()
 	require.NoError(t, err)
@@ -205,7 +201,7 @@ func TestNodes(t *testing.T) {
 
 	groupNodes, err = testutil.GetNodesInGroup("2")
 	require.NoError(t, err)
-	resp, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=" +
+	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=" +
 		groupNodes[0])
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))

@@ -91,7 +91,6 @@ type responseStruct struct {
 }
 
 func TestEnterpriseLicense(t *testing.T) {
-	stateURL := "http://" + testutil.SockAddrZeroHttp + "/state"
 	enterpriseLicenseURL := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
 
 	var tests = []struct {
@@ -123,6 +122,8 @@ func TestEnterpriseLicense(t *testing.T) {
 			`while extracting enterprise details from the license: while decoding license file: EOF`,
 		},
 	}
+
+	// run these tests using the http endpoint
 	for _, tt := range tests {
 
 		// Apply the license
@@ -139,24 +140,47 @@ func TestEnterpriseLicense(t *testing.T) {
 		require.Equal(t, enterpriseResponse.Code, tt.code)
 
 		if enterpriseResponse.Code == `Success` {
-
 			// check the user information in case the license is applied
 			// Expired license should not be enabled even after it is applied
-
-			response, err := http.Get(stateURL)
-			require.NoError(t, err)
-
-			var stateResponse responseStruct
-			responseBody, err := ioutil.ReadAll(response.Body)
-			require.NoError(t, err)
-			err = json.Unmarshal(responseBody, &stateResponse)
-			require.NoError(t, err)
-
-			require.Equal(t, stateResponse.License["user"], tt.user)
-			require.Equal(t, stateResponse.License["enabled"], false)
+			assertLicenseNotEnabled(t, tt.user)
 		} else {
 			// check the error message in case the license is not applied
 			require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
 		}
 	}
+
+	// this time, run them using the GraphQL admin endpoint
+	for _, tt := range tests {
+
+		// Apply the license
+		resp := testutil.EnterpriseLicense(t, string(tt.licenseKey))
+
+		if tt.code == `Success` {
+			// Check if the license is applied
+			testutil.CompareJSON(t, `{"enterpriseLicense":{"response":{"code":"Success"}}}`,
+				string(resp.Data))
+
+			// check the user information in case the license is applied
+			// Expired license should not be enabled even after it is applied
+			assertLicenseNotEnabled(t, tt.user)
+		} else {
+			testutil.CompareJSON(t, `{"enterpriseLicense":null}`, string(resp.Data))
+			// check the error message in case the license is not applied
+			require.Contains(t, resp.Errors[0].Message, tt.message)
+		}
+	}
+}
+
+func assertLicenseNotEnabled(t *testing.T, user string) {
+	response, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/state")
+	require.NoError(t, err)
+
+	var stateResponse responseStruct
+	responseBody, err := ioutil.ReadAll(response.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(responseBody, &stateResponse)
+	require.NoError(t, err)
+
+	require.Equal(t, stateResponse.License["user"], user)
+	require.Equal(t, stateResponse.License["enabled"], false)
 }

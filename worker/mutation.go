@@ -525,7 +525,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	return nil
 }
 
-// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
+// AssignNsIdsOverNetwork sends a request to assign Namespace IDs to the current zero leader.
 func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {

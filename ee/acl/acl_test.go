@@ -2737,6 +2737,70 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			guardianData:       `{"restore": {"code": "Failure"}}`,
 		},
 		{
+			name: "removeNode has guardian auth",
+			query: `
+					mutation {
+					  removeNode(input: {nodeId: 1, groupId: 2147483640}) {
+						response {
+							code
+						}
+					  }
+					}`,
+			queryName:          "removeNode",
+			testGuardianAccess: true,
+			guardianErr:        "No group with groupId 2147483640 found",
+			guardianData:       `{"removeNode": null}`,
+		},
+		{
+			name: "moveTablet has guardian auth",
+			query: `
+					mutation {
+					  moveTablet(input: {tablet: "non_existent_pred", groupId: 2147483640}) {
+						response {
+							code
+							message
+						}
+					  }
+					}`,
+			queryName:          "moveTablet",
+			testGuardianAccess: true,
+			guardianErr:        "Group: [2147483640] is not a known group.",
+			guardianData:       `{"moveTablet": null}`,
+		},
+		{
+			name: "assign has guardian auth",
+			query: `
+					mutation {
+					  assign(input: {what: UID, num: 0}) {
+						response {
+							startId
+							endId
+							readOnly
+						}
+					  }
+					}`,
+			queryName:          "assign",
+			testGuardianAccess: true,
+			guardianErr:        "Nothing to be leased",
+			guardianData:       `{"assign": null}`,
+		},
+		{
+			name: "enterpriseLicense has guardian auth",
+			query: `
+					mutation {
+					  enterpriseLicense(input: {license: ""}) {
+						response {
+							code
+						}
+					  }
+					}`,
+			queryName:          "enterpriseLicense",
+			testGuardianAccess: true,
+			guardianErr: "while extracting enterprise details from the license: while decoding" +
+				" license file: EOF",
+			guardianData: `{"enterpriseLicense": null}`,
+		},
+		{
 			name: "getGQLSchema has guardian auth",
 			query: `
 					query {
