@@ -436,17 +436,22 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 
 // AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
 // it attaches the galaxy namespace.
-func AttachJWTNamespace(ctx context.Context) (context.Context, error) {
+func AttachJWTNamespace(ctx context.Context) context.Context {
 	if !WorkerConfig.AclEnabled {
-		return AttachNamespace(ctx, GalaxyNamespace), nil
+		return AttachNamespace(ctx, GalaxyNamespace)
 	}
 
 	ns, err := ExtractJWTNamespace(ctx)
 	if err != nil {
-		return ctx, err
+		glog.Errorf("Failed to get namespace from the accessJWT token: Error: %s", err)
+	} else {
+		// Attach the namespace only if we got one from JWT.
+		// This preserves any namespace directly present in the context which is needed for
+		// requests originating from dgraph internal code like server.go::GetGQLSchema() where
+		// context is created by hand.
+		ctx = AttachNamespace(ctx, ns)
 	}
-	ctx = AttachNamespace(ctx, ns)
-	return ctx, nil
+	return ctx
 }
 
 // AttachNamespace adds given namespace to the metadata of the context.

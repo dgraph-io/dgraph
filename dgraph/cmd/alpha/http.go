@@ -668,10 +668,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx, err := x.AttachJWTNamespace(ctx)
-	if err != nil {
-		return schema.ErrorResponse(err)
-	}
+	ctx = x.AttachJWTNamespace(ctx)
 
 	return adminServer.ResolveWithNs(ctx, x.GalaxyNamespace, gqlReq)
 }

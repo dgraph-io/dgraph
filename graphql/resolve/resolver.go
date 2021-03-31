@@ -502,6 +502,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 		return
 	}
 
+	ctx = x.AttachJWTNamespace(ctx)
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		resp.Errors = schema.AsGQLErrors(err)
@@ -520,13 +521,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n",
 				gqlReq.Query, string(b))
 		}
-	}
-
-	ctx, err = x.AttachJWTNamespace(ctx)
-	if err != nil && !(op.IsMutation() && op.Mutations()[0].Name() == "login") {
-		// For login request, JWT is not required.
-		resp.Errors = schema.AsGQLErrors(err)
-		return
 	}
 
 	// resolveQueries will resolve user's queries.
