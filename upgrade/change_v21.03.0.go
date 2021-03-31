@@ -152,7 +152,8 @@ func dropDeprecated(dg *dgo.Dgraph) error {
 }
 
 func upgradePersitentQuery() error {
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	login := len(Upgrade.Conf.GetString(user)) > 0
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, login)
 	defer cb()
 
 	jwt, err := getAccessJwt()
@@ -205,7 +206,8 @@ func upgradePersitentQuery() error {
 }
 
 func upgradeCORS() error {
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	login := len(Upgrade.Conf.GetString(user)) > 0
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, login)
 	defer cb()
 
 	jwt, err := getAccessJwt()
@@ -215,7 +217,7 @@ func upgradeCORS() error {
 
 	// Get CORS.
 	corsData := make(map[string][]cors)
-	if err = getQueryResult(dg, queryCORS_v21_03_0, &corsData); err != nil {
+	if err := getQueryResult(dg, queryCORS_v21_03_0, &corsData); err != nil {
 		return errors.Wrap(err, "error querying cors")
 	}
 
@@ -239,7 +241,7 @@ func upgradeCORS() error {
 
 	// Get GraphQL schema.
 	schemaData := make(map[string][]sch)
-	if err = getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
+	if err := getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
 		return errors.Wrap(err, "error querying graphql schema")
 	}
 

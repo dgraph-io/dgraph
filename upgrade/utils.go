@@ -35,6 +35,9 @@ import (
 
 // getAccessJwt gets the access jwt token from by logging into the cluster.
 func getAccessJwt() (*api.Jwt, error) {
+	if len(Upgrade.Conf.GetString(user)) == 0 {
+		return &api.Jwt{}, nil
+	}
 	user := Upgrade.Conf.GetString(user)
 	password := Upgrade.Conf.GetString(password)
 	header := http.Header{}
