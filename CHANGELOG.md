@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
+## [20.11.3] - 2021-03-31
+[20.11.3]: https://github.com/dgraph-io/dgraph/compare/v20.11.2...v20.11.3
+
+### Fixed
+- GraphQL
+  - Fix(GRAPHQL): fix query rewriting for multiple order on nested field ([#7523][]) ([#7536][])
+  - Fix(GRAPHQL): Added support for exact index on field having @id directive ([#7534][]) ([#7550][])
+  - Fix(GraphQL): Add extra checks for deleting UpdateTypeInput ([#7595][]) ([#7600][])
+  - Fix(GRAPHQL): Undo the breaking change and tag it as deprecated. ([#7607][])
+  - Fix(GraphQL): Log query along with the panic ([#7638][]) ([#7645][])
+  - Fix(GraphQL): Fix Execution Trace for Add and Update Mutations ([#7656][]) ([#7658][])
+
+
+- Core Dgraph
+  - Fix(schema): log error instead of panic if schema not found for predicate ([#7502][]) ([#7509][])
+  - Chore(cmd/debuginfo) add new metrics to be collected ([#7439][]) ([#7562][])
+  - Fix(vlog): Use Badger's value log threshold of 1MB ([#7415][]) ([#7474][])
+  - Chore(bulk): Improve perf of bulk loader with Reuse allocator and assinging tags to allocator ([#7360][]) ([#7547][])
+  - Fix(query): Fix pagination with match functions ([#7668][]) ([#7672][])
+
+[#7523]: https://github.com/dgraph-io/dgraph/issues/7523
+[#7536]: https://github.com/dgraph-io/dgraph/issues/7536
+[#7534]: https://github.com/dgraph-io/dgraph/issues/7534
+[#7550]: https://github.com/dgraph-io/dgraph/issues/7550
+[#7595]: https://github.com/dgraph-io/dgraph/issues/7595
+[#7600]: https://github.com/dgraph-io/dgraph/issues/7600
+[#7607]: https://github.com/dgraph-io/dgraph/issues/7607
+[#7638]: https://github.com/dgraph-io/dgraph/issues/7638
+[#7645]: https://github.com/dgraph-io/dgraph/issues/7645
+[#7656]: https://github.com/dgraph-io/dgraph/issues/7656
+[#7658]: https://github.com/dgraph-io/dgraph/issues/7658
+[#7502]: https://github.com/dgraph-io/dgraph/issues/7502
+[#7509]: https://github.com/dgraph-io/dgraph/issues/7509
+[#7439]: https://github.com/dgraph-io/dgraph/issues/7439
+[#7562]: https://github.com/dgraph-io/dgraph/issues/7562
+[#7415]: https://github.com/dgraph-io/dgraph/issues/7415
+[#7474]: https://github.com/dgraph-io/dgraph/issues/7474
+[#7360]: https://github.com/dgraph-io/dgraph/issues/7360
+[#7547]: https://github.com/dgraph-io/dgraph/issues/7547
+[#7668]: https://github.com/dgraph-io/dgraph/issues/7668
+[#7672]: https://github.com/dgraph-io/dgraph/issues/7672
+
 ## [20.11.2] - 2021-02-23
 [20.11.2]: https://github.com/dgraph-io/dgraph/compare/v20.11.1...v20.11.2
 
@@ -16,7 +58,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Fix(GraphQL): fix interface query with auth rules ([#7408][])
   - Fix(GraphQL): Added error for case when multiple filter functions are  used in filter. ([#7368][]) ([#7384][])
 
-- Core Dgraph 
+- Core Dgraph
   - Fix(sort): Fix multi-sort with nils ([#7432][]) ([#7444][])
   - Fix(GC): Reduce DiscardRatio from 0.9 to 0.7 ([#7412][]) ([#7421][])
 
