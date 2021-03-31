@@ -163,9 +163,9 @@ func applyMul(a, b, c *types.Val) error {
 		aVal, bVal := a.Value.(int64), b.Value.(int64)
 		c.Value = aVal * bVal
 
-		if aVal == 0 || bVal == 0 || aVal == 1 || bVal == 1 {
+		if aVal == 0 || bVal == 0 {
 			return nil
-		} else if aVal == math.MinInt64 || bVal == math.MinInt64 || c.Value.(int64)/bVal != aVal {
+		} else if c.Value.(int64)/bVal != aVal {
 			return ErrorIntOverflow
 		}
 
