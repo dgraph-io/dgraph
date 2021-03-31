@@ -997,10 +997,15 @@ func (n *node) updateRaftProgress() error {
 
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
+	lastSnapshotTime := time.Now()
 	defer slowTicker.Stop()
 
-	snapshotAfter := x.WorkerConfig.Raft.GetUint64("snapshot-after")
-	x.AssertTruef(snapshotAfter > 10, "raft.snapshot-after must be a number greater than 10")
+	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
+	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
+
+	snapshotAfterDuration, err := time.ParseDuration(x.WorkerConfig.Raft.GetString("snapshot-after-duration"))
+	x.AssertTruef(err == nil, "raft.snapshot-after-duration must be a duration, recieved: %s",
+		x.WorkerConfig.Raft.GetString("snapshot-after-duration"))
 
 	for {
 		select {
@@ -1026,16 +1031,17 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 				// If we don't have a snapshot, or if there are too many log files in Raft,
 				// calculate a new snapshot.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 ||
+					(snapshotAfterDuration != 0 && time.Since(lastSnapshotTime) > snapshotAfterDuration)
 
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = calculate || chk >= first+snapshotAfter
+						calculate = calculate || chk >= first+snapshotAfterEntries
 						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-							"snapshotAfter:%d snap:%v", first, chk, chk-first,
-							snapshotAfter, calculate)
+							"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
+							snapshotAfterEntries, calculate)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -1056,6 +1062,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
+					lastSnapshotTime = time.Now()
 				}
 				go n.abortOldTransactions()
 			}
