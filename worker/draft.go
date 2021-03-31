@@ -1003,9 +1003,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
-	snapshotAfterDuration, err := time.ParseDuration(x.WorkerConfig.Raft.GetString("snapshot-after-duration"))
-	x.AssertTruef(err == nil, "raft.snapshot-after-duration must be a duration, recieved: %s",
-		x.WorkerConfig.Raft.GetString("snapshot-after-duration"))
+	snapshotAfterDuration := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 
 	for {
 		select {
@@ -1031,6 +1029,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 				// If we don't have a snapshot, or if there are too many log files in Raft,
 				// calculate a new snapshot.
+				// For snapshotAfterDuration, 0 is a special value used to
+				// disable time based snapshots.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 ||
 					(snapshotAfterDuration != 0 && time.Since(lastSnapshotTime) > snapshotAfterDuration)
 
