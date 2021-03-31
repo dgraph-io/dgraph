@@ -162,8 +162,11 @@ func deleteUsingNQuad(userClient *dgo.Dgraph, sub, pred, val string) (*api.Respo
 
 func TestInvalidGetUser(t *testing.T) {
 	currentUser := getCurrentUser(t, &testutil.HttpToken{AccessJwt: "invalid Token"})
+	require.Equal(t, `{"getCurrentUser":null}`, string(currentUser.Data))
 	require.Equal(t, x.GqlErrorList{{
-		Message: "unable to parse jwt token: token contains an invalid number of segments",
+		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
+			" contains an invalid number of segments",
+		Path: []interface{}{"getCurrentUser"},
 	}}, currentUser.Errors)
 }
 

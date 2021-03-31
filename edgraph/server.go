@@ -354,7 +354,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	ctx, err := x.AttachJWTNamespace(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+		return nil, err
 	}
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
@@ -1118,7 +1118,7 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx, err := x.AttachJWTNamespace(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+		return nil, err
 	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
