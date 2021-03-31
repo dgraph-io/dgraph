@@ -20,7 +20,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Core Dgraph
   - Fix(schema): log error instead of panic if schema not found for predicate ([#7502][]) ([#7509][])
   - Chore(cmd/debuginfo) add new metrics to be collected ([#7439][]) ([#7562][])
-  - Fix(vlog): Use Badger's value log threshold of 1MB ([#7415][]). ([#7474][])
+  - Fix(vlog): Use Badger's value log threshold of 1MB ([#7415][]) ([#7474][])
   - Chore(bulk): Improve perf of bulk loader with Reuse allocator and assinging tags to allocator ([#7360][]) ([#7547][])
   - Fix(query): Fix pagination with match functions ([#7668][]) ([#7672][])
 
