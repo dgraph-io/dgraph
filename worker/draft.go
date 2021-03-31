@@ -1061,8 +1061,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					// or our checkpoint already crossed the SnapshotAfter threshold.
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
+					} else {
+						lastSnapshotTime = time.Now()
 					}
-					lastSnapshotTime = time.Now()
 				}
 				go n.abortOldTransactions()
 			}
