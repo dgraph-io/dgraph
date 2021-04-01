@@ -160,13 +160,11 @@ they form a Raft group and provide synchronous replication.
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		Flag("snapshot-after-entries",
 			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
-				"the more frequent snapshot creation will be. Snapshots are created if either "+
-				"snapshot-after-duration or snapshot-after-entries threshold is crossed.").
+				"the more frequent snapshot creation will be. Snapshots are created only if both "+
+				"snapshot-after-duration and snapshot-after-entries threshold are crossed.").
 		Flag("snapshot-after-duration",
 			"Frequency at which we should create a new raft snapshots. Set "+
-				"to 0 to disable duration based snapshot. Snapshots are "+
-				"created if either snapshot-after-duration or "+
-				"snapshot-after-entries threshold is crossed.").
+				"to 0 to disable duration based snapshot.").
 		Flag("pending-proposals",
 			"Number of pending mutation proposals. Useful for rate limiting.").
 		String())

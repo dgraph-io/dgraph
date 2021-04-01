@@ -1031,19 +1031,23 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// calculate a new snapshot.
 				// For snapshotAfterDuration, 0 is a special value used to
 				// disable time based snapshots.
-				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4 ||
-					(snapshotAfterDuration != 0 && time.Since(lastSnapshotTime) > snapshotAfterDuration)
+				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
-				if chk, err := n.Store.Checkpoint(); err == nil {
-					if first, err := n.Store.FirstIndex(); err == nil {
-						// Save some cycles by only calculating snapshot if the checkpoint has gone
-						// quite a bit further than the first index.
-						calculate = calculate || chk >= first+snapshotAfterEntries
-						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-							"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
-							snapshotAfterEntries, calculate)
+				// Only take snapshot if both snapshotAfterDuration and
+				// snapshotAfterEntries requirements are met.
+				if snapshotAfterDuration == 0 || time.Since(lastSnapshotTime) > snapshotAfterDuration {
+					if chk, err := n.Store.Checkpoint(); err == nil {
+						if first, err := n.Store.FirstIndex(); err == nil {
+							// Save some cycles by only calculating snapshot if the checkpoint has gone
+							// quite a bit further than the first index.
+							calculate = calculate || chk >= first+snapshotAfterEntries
+							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
+								snapshotAfterEntries, calculate)
+						}
 					}
 				}
+
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
