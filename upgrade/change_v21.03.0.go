@@ -152,8 +152,7 @@ func dropDeprecated(dg *dgo.Dgraph) error {
 }
 
 func upgradePersitentQuery() error {
-	login := len(Upgrade.Conf.GetString(user)) > 0
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, login)
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, hasAclCreds())
 	defer cb()
 
 	jwt, err := getAccessJwt()
@@ -206,8 +205,7 @@ func upgradePersitentQuery() error {
 }
 
 func upgradeCORS() error {
-	login := len(Upgrade.Conf.GetString(user)) > 0
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, login)
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, hasAclCreds())
 	defer cb()
 
 	jwt, err := getAccessJwt()
