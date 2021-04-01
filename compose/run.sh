@@ -89,7 +89,7 @@ launch_environment() {
   # No need to down existings containers, if any.
   # The up command handles that automatically
 
-  Info "bringing up containers"
+  Info "Bringing up containers"
   docker-compose -p dgraph down
   docker-compose --compatibility -p dgraph up --force-recreate --remove-orphans
 }
