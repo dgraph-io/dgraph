@@ -149,7 +149,7 @@ func UpdateCacheMb(memoryMB int64) error {
 		return errors.Errorf("cache_mb must be non-negative")
 	}
 
-	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 3)
 	if err != nil {
 		return err
 	}
@@ -164,6 +164,8 @@ func UpdateCacheMb(memoryMB int64) error {
 	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update index cache size")
 	}
+
+	Config.CacheMb = memoryMB
 	return nil
 }
 
