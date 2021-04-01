@@ -3972,9 +3972,13 @@ func queryMultipleLangFields(t *testing.T) {
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	queryPersonExpected := `{"queryPerson":[{"name":"Juliet","nameZh":"朱丽叶","nameHi":"जूलियट","nameHiZh":"जूलियट","nameZhHi":"朱丽叶","nameHi_Zh_Untag":"जूलियट","name_Untag_AnyLang":"Juliet","professionEn":"singer"},
-{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,"nameHi_Zh_Untag":"Bob","name_Untag_AnyLang":"Bob","professionEn":"writer"},
-{"name":"Alice","nameZh":"爱丽丝","nameHi":null,"nameHiZh":"爱丽丝","nameZhHi":"爱丽丝","nameHi_Zh_Untag":"爱丽丝","name_Untag_AnyLang":"Alice","professionEn":"cricketer"}]}`
+	queryPersonExpected := `{"queryPerson":[{"name":"Juliet","nameZh":"朱丽叶","nameHi":"जूलियट",
+"nameHiZh":"जूलियट","nameZhHi":"朱丽叶","nameHi_Zh_Untag":"जूलियट","name_Untag_AnyLang":"Juliet",
+"professionEn":"singer"},{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,
+"nameHi_Zh_Untag":"Bob","name_Untag_AnyLang":"Bob","professionEn":"writer"},
+{"name":"Alice","nameZh":"爱丽丝","nameHi":null,"nameHiZh":"爱丽丝","nameZhHi":"爱丽丝",
+"nameHi_Zh_Untag":"爱丽丝","name_Untag_AnyLang":"Alice","professionEn":"cricketer"}]}`
+
 	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
