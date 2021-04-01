@@ -3932,7 +3932,7 @@ func queryMultipleLangFields(t *testing.T) {
 		},
 		map[string]interface{}{
 			"name":         "Alice",
-			"nameZh":       "爱丽丝",
+			"nameHi":       "ऐलिस",
 			"professionEn": "cricketer",
 		},
 		map[string]interface{}{
@@ -3953,11 +3953,11 @@ func queryMultipleLangFields(t *testing.T) {
                filter: {
                  or: [
                    { name: { eq: "Bob" } }
-                   { nameHi: { eq: "जूलियट" } }
-                   { nameZh: { eq: "爱丽丝" } }
+                   { nameHi: { eq: "ऐलिस" } }
+                   { nameZh: { eq: "朱丽叶" } }
                  ]
                }
-               order: { asc: nameHi }
+               order: { desc: nameHi }
              ) {
                name
                nameZh
@@ -3974,10 +3974,10 @@ func queryMultipleLangFields(t *testing.T) {
 	RequireNoGQLErrors(t, gqlResponse)
 	queryPersonExpected := `{"queryPerson":[{"name":"Juliet","nameZh":"朱丽叶","nameHi":"जूलियट",
 "nameHiZh":"जूलियट","nameZhHi":"朱丽叶","nameHi_Zh_Untag":"जूलियट","name_Untag_AnyLang":"Juliet",
-"professionEn":"singer"},{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,
-"nameHi_Zh_Untag":"Bob","name_Untag_AnyLang":"Bob","professionEn":"writer"},
-{"name":"Alice","nameZh":"爱丽丝","nameHi":null,"nameHiZh":"爱丽丝","nameZhHi":"爱丽丝",
-"nameHi_Zh_Untag":"爱丽丝","name_Untag_AnyLang":"Alice","professionEn":"cricketer"}]}`
+"professionEn":"singer"},{"name":"Alice","nameZh":null,"nameHi":"ऐलिस","nameHiZh":"ऐलिस",
+"nameZhHi":"ऐलिस","nameHi_Zh_Untag":"ऐलिस","name_Untag_AnyLang":"Alice","professionEn":"cricketer"},
+{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,"nameHi_Zh_Untag":"Bob",
+"name_Untag_AnyLang":"Bob","professionEn":"writer"}]}`
 
 	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
