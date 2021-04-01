@@ -47,39 +47,59 @@ import (
 type backupReader struct {
 	toClose []io.Closer
 	r       io.Reader
+	err     error
+	once    sync.Once
 }
 
+func readerFrom(h UriHandler, file string) *backupReader {
+	br := &backupReader{}
+	reader, err := h.Stream(file)
+	br.setErr(err)
+	br.toClose = append(br.toClose, reader)
+	br.r = reader
+	return br
+}
 func (br *backupReader) Read(p []byte) (n int, err error) {
 	return br.r.Read(p)
 }
 func (br *backupReader) Close() (rerr error) {
-	for i := len(br.toClose) - 1; i >= 0; i-- {
-		if err := br.toClose[i].Close(); err != nil {
-			rerr = err
+	br.once.Do(func() {
+		// Close in reverse order.
+		for i := len(br.toClose) - 1; i >= 0; i-- {
+			if err := br.toClose[i].Close(); err != nil {
+				rerr = err
+			}
 		}
-	}
+	})
 	return rerr
 }
-func newBackupReader(h UriHandler, file string, encKey x.Sensitive) (*backupReader, error) {
-	br := &backupReader{}
-	reader, err := h.Stream(file)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to open %q", file)
+func (br *backupReader) setErr(err error) {
+	if br.err == nil {
+		br.err = err
 	}
-	br.toClose = append(br.toClose, reader)
-
-	encReader, err := enc.GetReader(encKey, reader)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get encrypted reader")
+}
+func (br *backupReader) WithEncryption(encKey x.Sensitive) *backupReader {
+	if len(encKey) == 0 {
+		return br
 	}
-	gzReader, err := gzip.NewReader(encReader)
-	if err != nil {
-		return nil, errors.Wrapf(err, "couldn't create gzip reader")
+	r, err := enc.GetReader(encKey, br.r)
+	br.setErr(err)
+	br.r = r
+	return br
+}
+func (br *backupReader) WithCompression(comp string) *backupReader {
+	switch comp {
+	case "snappy":
+		br.r = snappy.NewReader(br.r)
+	case "gzip", "":
+		r, err := gzip.NewReader(br.r)
+		br.setErr(err)
+		br.r = r
+		br.toClose = append(br.toClose, r)
+	default:
+		br.setErr(fmt.Errorf("Unknown compression for backup: %s", comp))
 	}
-	br.toClose = append(br.toClose, gzReader)
-
-	br.r = bufio.NewReaderSize(gzReader, 16<<10)
-	return br, nil
+	return br
 }
 
 type loadBackupInput struct {
@@ -564,24 +584,24 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			continue
 		}
-		path := manifest.Path
 		for gid := range manifest.Groups {
 			if gid != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
 				continue
 			}
-			file := filepath.Join(path, backupName(manifest.Since, gid))
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
-			predSet := manifests[0].getPredsInGroup(gid)
-			br, err := newBackupReader(h, file, encKey)
-			if err != nil {
-				return errors.Wrap(err, "newBackupReader")
+			file := filepath.Join(manifest.Path, backupName(manifest.Since, gid))
+			br := readerFrom(h, file).WithEncryption(encKey).WithCompression(manifest.Compression)
+			if br.err != nil {
+				return errors.Wrap(br.err, "newBackupReader")
 			}
+			defer br.Close()
 
 			// Only map the predicates which haven't been dropped yet.
+			predSet := manifests[0].getPredsInGroup(gid)
 			for p := range predSet {
 				if _, ok := dropAttr[p]; ok {
 					delete(predSet, p)

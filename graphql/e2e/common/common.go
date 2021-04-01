@@ -937,7 +937,8 @@ func gunzipData(data []byte) ([]byte, error) {
 
 func gzipData(data []byte) ([]byte, error) {
 	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestSpeed)
+	x.Check(err)
 
 	if _, err := gz.Write(data); err != nil {
 		return nil, err

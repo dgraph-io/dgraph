@@ -378,7 +378,7 @@ func (writer *ExportWriter) open(fpath string) error {
 	if err != nil {
 		return err
 	}
-	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestCompression)
+	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestSpeed)
 	return err
 }
 
