@@ -52,6 +52,8 @@ func init() {
 
 }
 
+var langUntaggedFields map[string]bool
+
 func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -1226,7 +1228,9 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 
-		tags := strings.Split(predArg.Value.Raw, "@")[1]
+		dgPredNameAndTag := strings.Split(predArg.Value.Raw, "@")
+		dgPredName := dgPredNameAndTag[0]
+		tags := dgPredNameAndTag[1]
 		if tags == "*" {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
 				" supported in GraphQL", typ.Name, field.Name))
@@ -1237,8 +1241,8 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				" tag not supported", typ.Name, field.Name))
 			return errs
 		}
+		langUntaggedFields[strings.Split(dgPredName, ".")[1]] = true
 	}
-
 	return nil
 }
 

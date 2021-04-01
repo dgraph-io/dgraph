@@ -299,6 +299,10 @@ type PersonAggregateResult {
 	nameHiMax: String
 	nameEnMin: String
 	nameEnMax: String
+	nameHiEnMin: String
+	nameHiEnMax: String
+	nameHi_En_UntagMin: String
+	nameHi_En_UntagMax: String
 	name_Untag_AnyLangMin: String
 	name_Untag_AnyLangMax: String
 	addressMin: String

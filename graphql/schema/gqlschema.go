@@ -854,6 +854,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 func postGQLValidation(schema *ast.Schema, definitions []string,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	var errs []*gqlerror.Error
+	langUntaggedFields = make(map[string]bool)
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
@@ -868,6 +869,17 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 					continue
 				}
 				errs = append(errs, directiveValidators[dir.Name](schema, typ, field, dir, secrets)...)
+			}
+		}
+	}
+
+	for _, defn := range definitions {
+		typ := schema.Types[defn]
+		for _, field := range typ.Fields {
+			if langUntaggedFields[field.Name] && field.Type.Name() != "String" {
+				errs = append(errs, gqlerror.ErrorPosf(field.Position, "Type %s; Field %s: "+
+					"Expected type `String` for untagged language field but got `%s`",
+					typ.Name, field.Name, field.Type.Name()))
 			}
 		}
 	}
@@ -1320,7 +1332,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap m
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if hasCustomOrLambda(fld) {
+		if hasCustomOrLambda(fld) || isMultiLangTag(fld, "addFilter") {
 			continue
 		}
 
@@ -1540,7 +1552,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive. If the field is an argument to `@provides` directive
 		// then it can't be ignored.
-		if externalAndNonKeyField(fld, defn, providesTypeMap) {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) || isMultiLangTag(fld, "addFilter") {
 			continue
 		}
 
@@ -1604,7 +1616,8 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
-			return len(getSearchArgs(fld)) != 0 || isID(fld) || !hasCustomOrLambda(fld)
+			return len(getSearchArgs(fld)) != 0 || isID(fld) ||
+				!hasCustomOrLambda(fld) || !isMultiLangTag(fld, "hasFilterable")
 		})
 }
 
@@ -1623,18 +1636,19 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 
 func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
-		return isOrderable(fld, defn, providesTypeMap)
+		return isOrderable(fld, defn, providesTypeMap, "addhashOderables")
 	})
 }
 
-func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool) bool {
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool, opType string) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
 	// the field is an argument in `@provides` directive.
 	//glog.Infof("%s--%v", fld.Name, isMultiLangTag(fld,false))
 	if !hasExternal(fld) {
-		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) && !isMultiLangTag(fld, "addOderables")
+		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) &&
+			(!isMultiLangTag(fld, "addOderables") || opType == "addAggregateFields")
 	}
 	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
@@ -1777,7 +1791,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 
 	for _, fld := range defn.Fields {
 
-		if isOrderable(fld, defn, providesTypeMap) {
+		if isOrderable(fld, defn, providesTypeMap, "addOderables") {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1894,7 +1908,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld, defn, providesTypeMap) {
+		if isOrderable(fld, defn, providesTypeMap, "addAggregateFields") {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
