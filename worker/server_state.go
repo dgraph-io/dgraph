@@ -96,10 +96,6 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
-	opt.Compression = Config.PostingDirCompression
-	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
-
 	// Settings for the data directory.
 	return opt
 }
@@ -131,10 +127,10 @@ func (s *ServerState) initStorage() {
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
 		opt := badger.DefaultOptions(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
-			WithNamespaceOffset(x.NamespaceOffset)
+			WithNamespaceOffset(x.NamespaceOffset).
+			FromSuperFlag(x.WorkerConfig.Badger.String())
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

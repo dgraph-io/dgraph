@@ -36,8 +36,8 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3"
-	bo "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/badger/v3/y"
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -85,12 +85,8 @@ type options struct {
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
 	EncryptionKey x.SensitiveByteSlice
-	// BadgerCompression is the compression algorithm to use while writing to badger.
-	BadgerCompression bo.CompressionType
-	// BadgerCompressionlevel is the compression level to use while writing to badger.
-	BadgerCompressionLevel int
-	BlockCacheSize         int64
-	IndexCacheSize         int64
+	// Super flag for various the badger options.
+	Badger *z.SuperFlag
 }
 
 type state struct {

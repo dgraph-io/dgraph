@@ -133,15 +133,16 @@ func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB 
 	opt := badger.DefaultOptions(dir).
 		WithSyncWrites(false).
 		WithEncryptionKey(key).
-		WithBlockCacheSize(r.opt.BlockCacheSize).
-		WithIndexCacheSize(r.opt.IndexCacheSize)
+		FromSuperFlag(r.state.opt.Badger.String())
 
 	opt.Compression = bo.None
 	opt.ZSTDCompressionLevel = 0
 	// Overwrite badger options based on the options provided by the user.
 	if compression {
-		opt.Compression = r.state.opt.BadgerCompression
-		opt.ZSTDCompressionLevel = r.state.opt.BadgerCompressionLevel
+		// TODO: Parse it once.
+		ctype, clevel := x.ParseCompression(r.state.opt.Badger.GetString("compression"))
+		opt.Compression = ctype
+		opt.ZSTDCompressionLevel = clevel
 	}
 
 	db, err := badger.OpenManaged(opt)

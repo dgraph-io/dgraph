@@ -620,6 +620,7 @@ func run() {
 	}
 
 	bindall = Alpha.Conf.GetBool("bindall")
+
 	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
 		worker.CacheDefaults)
 	totalCache := cache.GetInt64("size-mb")
@@ -631,23 +632,20 @@ func run() {
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-
 	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
 		worker.BadgerDefaults)
-	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
 
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
-		PostingDir:                 Alpha.Conf.GetString("postings"),
-		WALDir:                     Alpha.Conf.GetString("wal"),
-		PostingDirCompression:      ctype,
-		PostingDirCompressionLevel: clevel,
-		CacheMb:                    totalCache,
-		CachePercentage:            cachePercentage,
-		PBlockCacheSize:            pstoreBlockCacheSize,
-		PIndexCacheSize:            pstoreIndexCacheSize,
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
+
+		CacheMb:         totalCache,
+		CachePercentage: cachePercentage,
+		PBlockCacheSize: pstoreBlockCacheSize,
+		PIndexCacheSize: pstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
