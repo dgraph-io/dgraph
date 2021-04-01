@@ -76,7 +76,7 @@ build_dgraph_docker_image() {
 launch_environment() {
   # Detect if $GOPATH/bin/$GOOS_$GOARCH path
   if [[ -f $GOPATH/bin/linux_amd64/dgraph ]]; then
-    Info "Found '$GOPATH/bin/linux_amd64/dgraph'.  Updating $COMPOSE_FILE."
+    Info "Found '$GOPATH/bin/linux_amd64/dgraph'. Updating $COMPOSE_FILE."
     sed -i 's/\$GOPATH\/bin$/\$GOPATH\/bin\/linux_amd64/' $COMPOSE_FILE
   # if no dgraph binary found, abort
   elif ! [[ -f $GOPATH/bin/dgraph ]]; then
