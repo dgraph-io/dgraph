@@ -3923,116 +3923,38 @@ func queryMultipleLangFields(t *testing.T) {
 	       }
         }`,
 	}
+
 	// add three Persons
 	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
 		map[string]interface{}{
-			"name": "Bob",
-		}}}
-
-	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+			"name":         "Bob",
+			"professionEn": "writer",
+		},
 		map[string]interface{}{
-			"name":   "Alice",
-			"nameZh": "爱丽丝",
-		}}}
-
-	gqlResponse = addPersonParams.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+			"name":         "Alice",
+			"nameZh":       "爱丽丝",
+			"professionEn": "cricketer",
+		},
 		map[string]interface{}{
 			"name":         "Juliet",
 			"nameHi":       "जूलियट",
 			"nameZh":       "朱丽叶",
 			"professionEn": "singer",
 		},
-	},
-	}
-	gqlResponse = addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	}}
+
+	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
 	queryPerson := &GraphQLParams{
 		Query: `
 			query {
-	            queryPerson(filter:{name:{eq:"Bob"}}) {
-	            	name
-	            	nameZh
-	            	nameHi
-	            	nameHiZh
-                    nameZhHi
-	            	nameHi_Zh_Untag
-	            	name_Untag_AnyLang
-	            }
-        }`,
-	}
-	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-	// Only untag field is present
-	queryPersonExpected := `
-	  {
-        "queryPerson": [
-            {
-                "name": "Bob",
-                "nameZh": null,
-                "nameHi": null,
-                "nameHiZh": null,
-                "nameZhHi": null,
-                "nameHi_Zh_Untag": "Bob",
-                "name_Untag_AnyLang": "Bob"
-            }
-        ]
-      }`
-
-	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
-
-	queryPerson = &GraphQLParams{
-		Query: `
-			query {
-	            queryPerson(filter:{name:{eq:"Alice"}}) {
-	            	name
-	            	nameZh
-	            	nameHi
-	            	nameHiZh
-                    nameZhHi
-	            	nameHi_Zh_Untag
-	            	name_Untag_AnyLang
-	            }
-        }`,
-	}
-	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-	// untagged and chinese name is present
-	queryPersonExpected = `
-	  {
-        "queryPerson": [
-            {
-                "name": "Alice",
-                "nameZh": "爱丽丝",
-                "nameHi": null,
-                "nameHiZh": "爱丽丝",
-                "nameZhHi": "爱丽丝",
-                "nameHi_Zh_Untag": "爱丽丝",
-                "name_Untag_AnyLang": "Alice"
-            }
-        ]
-      }`
-
-	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
-	// untagged and all languages are present
-	// also filter and order by on language tag
-	// also using professionEn lang tagged field for which no untagged lang field is present
-	queryPerson = &GraphQLParams{
-		Query: `
-			query {
              queryPerson(
                filter: {
                  or: [
-                   { name: { eq: "Julliet" } }
+                   { name: { eq: "Bob" } }
                    { nameHi: { eq: "जूलियट" } }
-                   { nameZh: { eq: "朱丽叶" } }
-                   { name_Untag_AnyLang: { eq: "Juliet" } }
+                   { nameZh: { eq: "爱丽丝" } }
                  ]
                }
                order: { asc: nameHi }
@@ -4050,22 +3972,10 @@ func queryMultipleLangFields(t *testing.T) {
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	queryPersonExpected = `
-	  {
-        "queryPerson": [
-            {
-                "name": "Juliet",
-                "nameZh": "朱丽叶",
-                "nameHi": "जूलियट",
-                "nameHiZh": "जूलियट",
-                "nameZhHi": "朱丽叶",
-                "nameHi_Zh_Untag": "जूलियट",
-                "name_Untag_AnyLang": "Juliet",
-                "professionEn": "singer"
-            }
-        ]
-      }`
-	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
+	queryPersonExpected := `{"queryPerson":[{"name":"Juliet","nameZh":"朱丽叶","nameHi":"जूलियट","nameHiZh":"जूलियट","nameZhHi":"朱丽叶","nameHi_Zh_Untag":"जूलियट","name_Untag_AnyLang":"Juliet","professionEn":"singer"},
+{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,"nameHi_Zh_Untag":"Bob","name_Untag_AnyLang":"Bob","professionEn":"writer"},
+{"name":"Alice","nameZh":"爱丽丝","nameHi":null,"nameHiZh":"爱丽丝","nameZhHi":"爱丽丝","nameHi_Zh_Untag":"爱丽丝","name_Untag_AnyLang":"Alice","professionEn":"cricketer"}]}`
+	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
 	DeleteGqlType(t, "Person", map[string]interface{}{}, 3, nil)
 }

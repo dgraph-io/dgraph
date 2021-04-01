@@ -854,7 +854,6 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 func postGQLValidation(schema *ast.Schema, definitions []string,
 	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
 	var errs []*gqlerror.Error
-	langUntaggedFields = make(map[string]bool)
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
@@ -872,18 +871,6 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 			}
 		}
 	}
-	// all the untagged language fields should be of type string
-	for _, defn := range definitions {
-		typ := schema.Types[defn]
-		for _, field := range typ.Fields {
-			if langUntaggedFields[field.Name] && field.Type.Name() != "String" {
-				errs = append(errs, gqlerror.ErrorPosf(field.Position, "Type %s; Field %s: "+
-					"Expected type `String` for untagged language field but got `%s`",
-					typ.Name, field.Name, field.Type.Name()))
-			}
-		}
-	}
-
 	errs = append(errs, applySchemaValidations(schema, definitions)...)
 
 	return errs
@@ -1332,7 +1319,7 @@ func addFieldFilters(schema *ast.Schema, defn *ast.Definition, providesTypeMap m
 	for _, fld := range defn.Fields {
 		// Filtering and ordering for fields with @custom/@lambda directive is handled by the remote
 		// endpoint.
-		if hasCustomOrLambda(fld) || isMultiLangTag(fld, "addFilter") {
+		if hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 
@@ -1420,7 +1407,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangTag(fld, "addHasFilter") {
+		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangField(fld, false) {
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
@@ -1617,7 +1604,7 @@ func hasFilterable(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
 		func(fld *ast.FieldDefinition) bool {
 			return len(getSearchArgs(fld)) != 0 || isID(fld) ||
-				!hasCustomOrLambda(fld) || !isMultiLangTag(fld, "hasFilterable")
+				!hasCustomOrLambda(fld) || !isMultiLangField(fld, false)
 		})
 }
 
@@ -1636,12 +1623,12 @@ func isEnumList(fld *ast.FieldDefinition, sch *ast.Schema) bool {
 
 func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	return fieldAny(defn.Fields, func(fld *ast.FieldDefinition) bool {
-		return isOrderable(fld, defn, providesTypeMap, "addhashOderables")
+		return isOrderable(fld, defn, providesTypeMap)
 	})
 }
 
 func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition,
-	providesTypeMap map[string]bool, opType string) bool {
+	providesTypeMap map[string]bool) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
@@ -1650,7 +1637,7 @@ func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition,
 	// We allow to generate aggregate fields for multi language fields
 	if !hasExternal(fld) {
 		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) &&
-			(!isMultiLangTag(fld, "addOrderables") || opType == "addAggregateFields")
+			!isMultiLangField(fld, false)
 	}
 	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
@@ -1793,7 +1780,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 
 	for _, fld := range defn.Fields {
 
-		if isOrderable(fld, defn, providesTypeMap, "addOderables") {
+		if isOrderable(fld, defn, providesTypeMap) {
 			order.EnumValues = append(order.EnumValues,
 				&ast.EnumValueDefinition{Name: fld.Name})
 		}
@@ -1910,7 +1897,7 @@ func addAggregationResultType(schema *ast.Schema, defn *ast.Definition, provides
 		}
 
 		// Adds titleMax, titleMin fields for a field of name title.
-		if isOrderable(fld, defn, providesTypeMap, "addAggregateFields") {
+		if isOrderable(fld, defn, providesTypeMap) || isMultiLangField(fld, false) {
 			minField := &ast.FieldDefinition{
 				Name: fld.Name + "Min",
 				Type: aggregateFieldType,
@@ -2238,7 +2225,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap ma
 		// We don't include fields in update patch, which corresponds to multiple language tags in dgraph
 		// Example, nameHi_En:  String @dgraph(pred:"Person.name@hi:en")
 		// We don't add above field in update patch because it corresponds to multiple languages
-		if isMultiLangTag(fld, "updateMutation") {
+		if isMultiLangField(fld, true) {
 			continue
 		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
@@ -2289,7 +2276,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 			continue
 		}
 		// see the comment in getNonIDFields as well.
-		if isMultiLangTag(fld, "addMutation") && isAddingInput {
+		if isMultiLangField(fld, true) && isAddingInput {
 			continue
 		}
 		// Remove edges which have a reverse predicate as they should only be updated through their
@@ -2315,14 +2302,14 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 }
 
 // This function check if given gql field has multiple language tags
-func isMultiLangTag(fld *ast.FieldDefinition, opType string) bool {
+func isMultiLangField(fld *ast.FieldDefinition, isMutationInput bool) bool {
 	dgDirective := fld.Directives.ForName(dgraphDirective)
 	if dgDirective != nil {
 		pred := dgDirective.Arguments.ForName("pred")
 		if pred != nil {
 			if strings.Contains(pred.Value.Raw, "@") {
 				langs := strings.Split(pred.Value.Raw, "@")[1]
-				if opType == "addMutation" || opType == "updateMutation" {
+				if isMutationInput {
 					return strings.Contains(langs, ":") || langs == "."
 				}
 				return strings.Contains(langs, ":")

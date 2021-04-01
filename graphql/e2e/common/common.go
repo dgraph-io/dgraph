@@ -627,7 +627,6 @@ func JSONEqGraphQL(t *testing.T, expected, actual string) {
 	actual = strings.ReplaceAll(actual, "\r", "")
 	actual = strings.ReplaceAll(actual, "\n", "")
 	actual = strings.ReplaceAll(actual, "\t", "")
-
 	require.Equal(t, expected, actual)
 }
 

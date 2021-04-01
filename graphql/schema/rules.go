@@ -52,9 +52,6 @@ func init() {
 
 }
 
-// langUntaggedFields stores language untaggedc gql fields
-var langUntaggedFields map[string]bool
-
 func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
@@ -1231,7 +1228,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 
-		if field.Directives.ForName(searchDirective) != nil && isMultiLangTag(field, "addSearchDir") {
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
 			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
 				"Type %s; Field %s: @search directive not applicable"+
 					" on language tag field with multiple languages", typ.Name, field.Name))
@@ -1251,7 +1248,17 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				" tag not supported", typ.Name, field.Name))
 			return errs
 		}
-		langUntaggedFields[strings.Split(dgPredName, ".")[1]] = true
+		langUntaggedFieldName := strings.Split(dgPredName, ".")[1]
+		// untagged language field should be of type string
+		for _, fld := range typ.Fields {
+			if langUntaggedFieldName == fld.Name && fld.Type.Name() != "String" {
+				errs = append(errs, gqlerror.ErrorPosf(fld.Position, "Type %s; Field %s: "+
+					"Expected type `String` for untagged language field but got `%s`",
+					typ.Name, fld.Name, fld.Type.Name()))
+				return errs
+			}
+		}
+
 	}
 	return nil
 }

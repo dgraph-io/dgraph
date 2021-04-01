@@ -664,11 +664,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 
-					if strings.Contains(fname, "@") {
-						langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
-						continue
-					}
 					if parentInt == nil {
+						// if field name contains @ string in it, then it is language tag field.
+						// language tag field is associated with language untagged field
+						// so we don't add it in the dgraph schema explicitly
+						if strings.Contains(fname, "@") {
+							langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+							continue
+						}
 						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -752,7 +755,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 				}
 				if f.lang {
-					langStr = "@lang"
+					langStr = " @lang"
 				}
 				fmt.Fprintf(&preds, "%s: %s%s%s %s%s.\n", fld.name, f.typ, indexStr, langStr, f.upsert,
 					f.reverse)
