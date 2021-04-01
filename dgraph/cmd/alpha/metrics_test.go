@@ -39,14 +39,14 @@ func TestMetricTxnCommits(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second normal commit
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr, false))
 
@@ -66,14 +66,14 @@ func TestMetricTxnDiscards(t *testing.T) {
 	`
 
 	// first normal commit
-	mr, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr, false))
 
 	metrics := fetchMetrics(t, metricName)
 
 	// second commit discarded
-	mr, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr, true))
 
@@ -92,18 +92,18 @@ func TestMetricTxnAborts(t *testing.T) {
 	}
 	`
 
-	mr1, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err := mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err := mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr1, false))
 	require.Error(t, commitWithTs(mr2, false))
 
 	metrics := fetchMetrics(t, metricName)
 
-	mr1, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr1, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
-	mr2, err = mutationWithTs(mt, "application/rdf", false, false, 0)
+	mr2, err = mutationWithTs(mutationInp{body: mt, typ: "application/rdf"})
 	require.NoError(t, err)
 	require.NoError(t, commitWithTs(mr1, false))
 	require.Error(t, commitWithTs(mr2, false))

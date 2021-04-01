@@ -1117,6 +1117,16 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+		// A fresh StartTs is assigned if it is 0.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if req.GetHash() != getHash(ns, req.GetStartTs()) {
+			return nil, x.ErrHashMismatch
+		}
+	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
 	// "abort_older_than".
@@ -1497,7 +1507,7 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 		return err
 	}
 	if tc.Hash != getHash(ns, tc.StartTs) {
-		return errors.Errorf("hash mismatch the claimed startTs|namespace")
+		return x.ErrHashMismatch
 	}
 	return nil
 }
