@@ -3923,7 +3923,7 @@ func queryMultipleLangFields(t *testing.T) {
 	       }
         }`,
 	}
-	//add three Persons
+	// add three Persons
 	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
 		map[string]interface{}{
 			"name": "Bob",
