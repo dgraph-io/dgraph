@@ -108,6 +108,9 @@ type WorkerOptions struct {
 	HmacSecret Sensitive
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
+	// MaxRetries indicates the number of retries Dgraph do to prevent locking the worker in a
+	// failed state.
+	MaxRetries int64
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32
