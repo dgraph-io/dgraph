@@ -3923,7 +3923,7 @@ func queryMultipleLangFields(t *testing.T) {
 	       }
         }`,
 	}
-
+	//add three Persons
 	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
 		map[string]interface{}{
 			"name": "Bob",
@@ -3969,7 +3969,7 @@ func queryMultipleLangFields(t *testing.T) {
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-
+	// Only untag field is present
 	queryPersonExpected := `
 	  {
         "queryPerson": [
@@ -4003,7 +4003,7 @@ func queryMultipleLangFields(t *testing.T) {
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-
+	// untagged and chinese name is present
 	queryPersonExpected = `
 	  {
         "queryPerson": [
@@ -4020,7 +4020,9 @@ func queryMultipleLangFields(t *testing.T) {
       }`
 
 	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
-
+	// untagged and all languages are present
+	// also filter and order by on language tag
+	// also using professionEn lang tagged field for which no untagged lang field is present
 	queryPerson = &GraphQLParams{
 		Query: `
 			query {

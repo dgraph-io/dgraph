@@ -394,11 +394,7 @@ func NewHandler(input string, apolloServiceQuery bool) (Handler, error) {
 	}
 
 	metaInfo.extraCorsHeaders = getAllowedHeaders(sch, defns, authHeader)
-	dgSchema, gqlErr := genDgSchema(sch, typesToComplete, providesFieldsMap)
-	//glog.Info("%v",dgSchema)
-	if gqlErr != nil {
-		return nil, gqlerror.List{gqlErr}
-	}
+	dgSchema := genDgSchema(sch, typesToComplete, providesFieldsMap)
 	completeSchema(sch, typesToComplete, providesFieldsMap, apolloServiceQuery)
 	cleanSchema(sch)
 
@@ -515,7 +511,7 @@ func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string,
-	providesFieldsMap map[string]map[string]bool) (string, *gqlerror.Error) {
+	providesFieldsMap map[string]map[string]bool) string {
 	var typeStrings []string
 
 	type dgPred struct {
@@ -714,7 +710,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		dgPredAndTags := strings.Split(fname, "@")
 		unTaggedDgPredName := dgPredAndTags[0]
 		unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]
-
+		// if untagged language field is not present then we add it.
 		if !ok {
 			unTaggedDgPred = getUpdatedPred(unTaggedDgPredName, "string", "", nil)
 			for i, typ := range dgTypes {
@@ -725,7 +721,8 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 				}
 			}
 		}
-
+		// set the lang directive on language untagged field and combine all the indexes
+		// from lang tagged fields to corresponding untagged field
 		unTaggedDgPred.lang = true
 		for index := range langTagDgPred.indexes {
 			unTaggedDgPred.indexes[index] = true
@@ -757,7 +754,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 				if f.lang {
 					langStr = "@lang"
 				}
-
 				fmt.Fprintf(&preds, "%s: %s%s%s %s%s.\n", fld.name, f.typ, indexStr, langStr, f.upsert,
 					f.reverse)
 				predWritten[fld.name] = true
@@ -770,5 +766,5 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		)
 	}
 
-	return strings.Join(typeStrings, ""), nil
+	return strings.Join(typeStrings, "")
 }

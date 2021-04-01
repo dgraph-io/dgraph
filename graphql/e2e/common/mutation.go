@@ -6023,9 +6023,9 @@ func updateLangTagFields(t *testing.T) {
 	addPersonParams := &GraphQLParams{
 		Query: `
 		mutation addPerson($person: [AddPersonInput!]!) {
-	       addPerson(input: $person) {
-             numUids
-	       }
+          addPerson(input: $person) {
+            numUids
+          }
         }`,
 	}
 	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
@@ -6038,13 +6038,18 @@ func updateLangTagFields(t *testing.T) {
 	}
 	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-
+	// update Person using language tag field
 	updatePersonParams := &GraphQLParams{
 		Query: `
-		mutation updatePerson{
-            updatePerson(input: {filter: {nameHi: {eq:"जूलियट"}}, set:{nameHi:"जूली",nameZh:"朱丽叶"} }) {
-                numUids
-            }
+		mutation updatePerson {
+           updatePerson(
+             input: {
+               filter: { nameHi: { eq: "जूलियट" } }
+               set: { nameHi: "जूली", nameZh: "朱丽叶" }
+             }
+           ) {
+             numUids
+           }
         }`,
 	}
 	gqlResponse = updatePersonParams.ExecuteAsPost(t, GraphqlURL)
@@ -6053,12 +6058,12 @@ func updateLangTagFields(t *testing.T) {
 	queryPerson := &GraphQLParams{
 		Query: `
 			query {
-	            queryPerson(filter:{name:{eq:"Juliet"}}) {
-	            	name
-	            	nameZh
-	            	nameHi
-	            }
-        }`,
+              queryPerson(filter: { name: { eq: "Juliet" } }) {
+                name
+                nameZh
+                nameHi
+              }
+           }`,
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)

@@ -52,6 +52,7 @@ func init() {
 
 }
 
+// langUntaggedFields stores language untaggedc gql fields
 var langUntaggedFields map[string]bool
 
 func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {

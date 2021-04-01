@@ -872,7 +872,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 			}
 		}
 	}
-
+	// all the untagged language fields should be of type string
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
 		for _, field := range typ.Fields {
@@ -1645,10 +1645,11 @@ func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
 	// the field is an argument in `@provides` directive.
-	//glog.Infof("%s--%v", fld.Name, isMultiLangTag(fld,false))
+	// Multiple language fields(i.e. of type name@hi:en) are not orderable
+	// We allow to generate aggregate fields for multi language fields
 	if !hasExternal(fld) {
 		return orderable[fld.Type.NamedType] && !hasCustomOrLambda(fld) &&
-			(!isMultiLangTag(fld, "addOderables") || opType == "addAggregateFields")
+			(!isMultiLangTag(fld, "addOrderables") || opType == "addAggregateFields")
 	}
 	return isKeyField(fld, defn) || providesTypeMap[fld.Name]
 }
