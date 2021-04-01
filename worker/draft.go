@@ -999,10 +999,13 @@ func (n *node) updateRaftProgress() error {
 
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
+	lastSnapshotTime := time.Now()
 	defer slowTicker.Stop()
 
-	snapshotAfter := x.WorkerConfig.Raft.GetUint64("snapshot-after")
-	x.AssertTruef(snapshotAfter > 10, "raft.snapshot-after must be a number greater than 10")
+	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
+	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
+
+	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
 
 	for {
 		select {
@@ -1030,16 +1033,22 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// calculate a new snapshot.
 				calculate := raft.IsEmptySnap(snap) || n.Store.NumLogFiles() > 4
 
-				if chk, err := n.Store.Checkpoint(); err == nil {
-					if first, err := n.Store.FirstIndex(); err == nil {
-						// Save some cycles by only calculating snapshot if the checkpoint has gone
-						// quite a bit further than the first index.
-						calculate = calculate || chk >= first+snapshotAfter
-						glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
-							"snapshotAfter:%d snap:%v", first, chk, chk-first,
-							snapshotAfter, calculate)
+				// Only take snapshot if both snapshotFrequency and
+				// snapshotAfterEntries requirements are met. If set to 0,
+				// we consider duration condition to be disabled.
+				if snapshotFrequency == 0 || time.Since(lastSnapshotTime) > snapshotFrequency {
+					if chk, err := n.Store.Checkpoint(); err == nil {
+						if first, err := n.Store.FirstIndex(); err == nil {
+							// Save some cycles by only calculating snapshot if the checkpoint
+							// has gone quite a bit further than the first index.
+							calculate = calculate || chk >= first+snapshotAfterEntries
+							glog.V(3).Infof("Evaluating snapshot first:%d chk:%d (chk-first:%d) "+
+								"snapshotAfterEntries:%d snap:%v", first, chk, chk-first,
+								snapshotAfterEntries, calculate)
+						}
 					}
 				}
+
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -1057,6 +1066,8 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					// or our checkpoint already crossed the SnapshotAfter threshold.
 					if err := n.proposeSnapshot(); err != nil {
 						glog.Errorf("While calculating and proposing snapshot: %v", err)
+					} else {
+						lastSnapshotTime = time.Now()
 					}
 				}
 				go n.abortOldTransactions()
