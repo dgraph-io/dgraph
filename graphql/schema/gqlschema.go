@@ -1420,7 +1420,7 @@ func addTypeHasFilter(schema *ast.Schema, defn *ast.Definition, providesTypeMap 
 	}
 
 	for _, fld := range defn.Fields {
-		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangTag(fld, "addHashFilter") {
+		if isID(fld) || hasCustomOrLambda(fld) || isMultiLangTag(fld, "addHasFilter") {
 			continue
 		}
 		// Ignore Fields with @external directives also excluding those which are present
@@ -1552,7 +1552,7 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive. If the field is an argument to `@provides` directive
 		// then it can't be ignored.
-		if externalAndNonKeyField(fld, defn, providesTypeMap) || isMultiLangTag(fld, "addFilter") {
+		if externalAndNonKeyField(fld, defn, providesTypeMap) {
 			continue
 		}
 

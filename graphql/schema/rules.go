@@ -1231,6 +1231,13 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangTag(field, "addSearchDir") {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
+				"Type %s; Field %s: @search directive not applicable"+
+					" on language tag field with multiple languages", typ.Name, field.Name))
+			return errs
+		}
+
 		dgPredNameAndTag := strings.Split(predArg.Value.Raw, "@")
 		dgPredName := dgPredNameAndTag[0]
 		tags := dgPredNameAndTag[1]

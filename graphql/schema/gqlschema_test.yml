@@ -2911,6 +2911,18 @@ invalid_schemas:
         "locations": [ { "line": 3, "column": 51 } ] },
     ]
 
+  - name: "@search directive not supported on multiple language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: [exact])
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
+        field with multiple languages",
+        "locations": [ { "line": 3, "column": 56 } ] },
+    ]
+
   - name: "unsupported `*` language tag in graphql"
     input: |
       type Person  {
