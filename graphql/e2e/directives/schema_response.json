@@ -96,7 +96,16 @@
     },
     {
       "lang": true,
+      "predicate": "Person.profession",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "lang": true,
       "predicate": "Person.name",
+      "tokenizer": [
+        "hash"
+      ],
       "type": "string"
     },
     {
@@ -923,6 +932,9 @@
       "fields": [
         {
           "name": "Person.name"
+        },
+        {
+          "name": "Person.profession"
         }
       ],
       "name": "Person"

@@ -894,6 +894,7 @@ func RunAll(t *testing.T) {
 	t.Run("input coercion to list", inputCoerciontoList)
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
+	t.Run("Update language tag fields", updateLangTagFields)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

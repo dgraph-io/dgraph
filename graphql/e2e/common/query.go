@@ -4024,7 +4024,8 @@ func queryMultipleLangFields(t *testing.T) {
 	queryPerson = &GraphQLParams{
 		Query: `
 			query {
-	            queryPerson(filter:{name:{eq:"Juliet"}}) {
+	            queryPerson(filter:{or:[{name:{eq:"Julliet"}},{nameHi:{eq:"जूलियट"}},{nameZh:{eq:"朱丽叶"}},
+                {name_Untag_AnyLang:{eq:"Juliet"}}]}, order: { asc: nameHi }) {
 	            	name
 	            	nameZh
 	            	nameHi
