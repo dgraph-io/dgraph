@@ -54,8 +54,6 @@ type Options struct {
 	PBlockCacheSize int64
 	// PIndexCacheSize is the size of index cache for pstore
 	PIndexCacheSize int64
-	// WalCache is the size of block cache for wstore
-	WalCache int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.Sensitive

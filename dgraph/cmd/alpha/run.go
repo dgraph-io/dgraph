@@ -108,10 +108,6 @@ they form a Raft group and provide synchronous replication.
 	// --encryption_key_file
 	enc.RegisterFlags(flag)
 
-	flag.String("cache_percentage", "0,65,35,0",
-		`Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,`+
-			`PstoreBlockCache,PstoreIndexCache,WAL).`)
-
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
@@ -147,6 +143,16 @@ they form a Raft group and provide synchronous replication.
 		Flag("max-retries",
 			"Commits to disk will give up after these number of retries to prevent locking the "+
 				"worker in a failed state. Use -1 to retry infinitely.").
+		String())
+
+	// Cache flags.
+	flag.String("cache", worker.CacheDefaults, z.NewSuperFlagHelp(worker.CacheDefaults).
+		Head("Cache options").
+		Flag("size-mb",
+			"Total size of cache (in MB) to be used in Dgraph.").
+		Flag("percentage",
+			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
+				"PstoreBlockCache,PstoreIndexCache)").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -620,23 +626,17 @@ func run() {
 	}
 
 	bindall = Alpha.Conf.GetBool("bindall")
-
-	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
+		worker.CacheDefaults)
+	totalCache := cache.GetInt64("size-mb")
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	if Alpha.Conf.IsSet("lru_mb") {
-		glog.Warningln("--lru_mb is deprecated, use --cache_mb instead")
-		if !Alpha.Conf.IsSet("cache_mb") {
-			totalCache = int64(Alpha.Conf.GetFloat64("lru_mb"))
-		}
-	}
 
-	cachePercentage := Alpha.Conf.GetString("cache_percentage")
-	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
+	cachePercentage := cache.GetString("percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
 	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
 		worker.BadgerDefaults)
@@ -650,10 +650,10 @@ func run() {
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
+		CacheMb:                    totalCache,
 		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
-		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
