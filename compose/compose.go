@@ -311,7 +311,7 @@ func getAlpha(idx int, raft string) service {
 	}
 
 	if opts.SnapshotAfter != "" {
-		raft = fmt.Sprintf("%s; snapshot-after-entries=%s", raft, opts.SnapshotAfter)
+		raft = fmt.Sprintf("%s; %s", raft, opts.SnapshotAfter)
 	}
 	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
 
