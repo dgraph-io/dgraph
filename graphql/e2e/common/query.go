@@ -4026,18 +4026,27 @@ func queryMultipleLangFields(t *testing.T) {
 	queryPerson = &GraphQLParams{
 		Query: `
 			query {
-	            queryPerson(filter:{or:[{name:{eq:"Julliet"}},{nameHi:{eq:"जूलियट"}},{nameZh:{eq:"朱丽叶"}},
-                {name_Untag_AnyLang:{eq:"Juliet"}}]}, order: { asc: nameHi }) {
-	            	name
-	            	nameZh
-	            	nameHi
-	            	nameHiZh
-                    nameZhHi
-	            	nameHi_Zh_Untag
-	            	name_Untag_AnyLang
-                    professionEn
-	            }
-        }`,
+             queryPerson(
+               filter: {
+                 or: [
+                   { name: { eq: "Julliet" } }
+                   { nameHi: { eq: "जूलियट" } }
+                   { nameZh: { eq: "朱丽叶" } }
+                   { name_Untag_AnyLang: { eq: "Juliet" } }
+                 ]
+               }
+               order: { asc: nameHi }
+             ) {
+               name
+               nameZh
+               nameHi
+               nameHiZh
+               nameZhHi
+               nameHi_Zh_Untag
+               name_Untag_AnyLang
+               professionEn
+             }
+          }`,
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)

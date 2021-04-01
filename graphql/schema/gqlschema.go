@@ -1640,7 +1640,8 @@ func hasOrderables(defn *ast.Definition, providesTypeMap map[string]bool) bool {
 	})
 }
 
-func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition, providesTypeMap map[string]bool, opType string) bool {
+func isOrderable(fld *ast.FieldDefinition, defn *ast.Definition,
+	providesTypeMap map[string]bool, opType string) bool {
 	// lists can't be ordered and NamedType will be empty for lists,
 	// so it will return false for list fields
 	// External field can't be ordered except when it is a @key field or
@@ -2323,9 +2324,8 @@ func isMultiLangTag(fld *ast.FieldDefinition, opType string) bool {
 				langs := strings.Split(pred.Value.Raw, "@")[1]
 				if opType == "addMutation" || opType == "updateMutation" {
 					return strings.Contains(langs, ":") || langs == "."
-				} else {
-					return strings.Contains(langs, ":")
 				}
+				return strings.Contains(langs, ":")
 			}
 		}
 	}

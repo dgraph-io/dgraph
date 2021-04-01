@@ -1219,13 +1219,15 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 
 	if strings.Contains(predArg.Value.String(), "@") {
 		if field.Type.Name() != "String" {
-			errs = append(errs, gqlerror.ErrorPosf(field.Position, "Type %s; Field %s: Expected type `String`"+
-				" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
+			errs = append(errs, gqlerror.ErrorPosf(field.Position,
+				"Type %s; Field %s: Expected type `String`"+
+					" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
 			return errs
 		}
 		if field.Directives.ForName(idDirective) != nil {
-			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position, "Type %s; Field %s: @id "+
-				"directive not supported on language tag fields", typ.Name, field.Name))
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
+				"Type %s; Field %s: @id "+
+					"directive not supported on language tag fields", typ.Name, field.Name))
 			return errs
 		}
 
