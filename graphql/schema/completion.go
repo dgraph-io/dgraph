@@ -331,7 +331,7 @@ func mismatched(path []interface{}, field Field) ([]byte, x.GqlErrorList) {
 // defined in the GraphQL spec. If this is not possible, then it returns an error. The crux of
 // coercion rules defined in the spec is to not lose information during coercion.
 // Note that, admin server specifically uses these:
-//  * json.Number (Query.config.cacheMb)
+//  * json.Number
 //  * schema.Unmarshal() everywhere else
 // And, @custom(http: {...}) query/mutation would always use schema.Unmarshal().
 // Now, schema.Unmarshal() can only give one of the following types for scalars:

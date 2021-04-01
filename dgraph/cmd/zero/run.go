@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -52,6 +53,7 @@ import (
 type options struct {
 	raft              *z.SuperFlag
 	telemetry         *z.SuperFlag
+	limit             *z.SuperFlag
 	bindall           bool
 	portOffset        int
 	numReplicas       int
@@ -60,6 +62,7 @@ type options struct {
 	rebalanceInterval time.Duration
 	tlsClientConfig   *tls.Config
 	audit             *x.LoggerConf
+	limiterConfig     *x.LimiterConf
 }
 
 var opts options
@@ -98,6 +101,17 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	flag.Bool("disable_admin_http", false,
+		"Turn on/off the administrative endpoints exposed over Zero's HTTP port.")
+
+	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
+		Head("Limit options").
+		Flag("uid-lease",
+			`The maximum number of UIDs that can be leased by namespace (except default namespace)
+			in an interval specified by refill-interval. Set it to 0 to remove limiting.`).
+		Flag("refill-interval",
+			"The interval after which the tokens for UID lease are replenished.").
+		String())
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
 		Head("Raft options").
@@ -216,10 +230,21 @@ func run() {
 
 	raft := z.NewSuperFlag(Zero.Conf.GetString("raft")).MergeAndCheckDefault(
 		raftDefaults)
-	conf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
+	auditConf := audit.GetAuditConf(Zero.Conf.GetString("audit"))
+	limit := z.NewSuperFlag(Zero.Conf.GetString("limit")).MergeAndCheckDefault(
+		worker.ZeroLimitsDefaults)
+	limitConf := &x.LimiterConf{
+		UidLeaseLimit: limit.GetUint64("uid-lease"),
+		RefillAfter:   limit.GetDuration("refill-interval"),
+	}
+	if limitConf.UidLeaseLimit == 0 {
+		// Setting it to 0 removes the limit.
+		limitConf.UidLeaseLimit = math.MaxInt64
+	}
 	opts = options{
 		telemetry:         telemetry,
 		raft:              raft,
+		limit:             limit,
 		bindall:           Zero.Conf.GetBool("bindall"),
 		portOffset:        Zero.Conf.GetInt("port_offset"),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
@@ -227,7 +252,8 @@ func run() {
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 		tlsClientConfig:   tlsConf,
-		audit:             conf,
+		audit:             auditConf,
+		limiterConfig:     limitConf,
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
@@ -301,11 +327,14 @@ func run() {
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
 	baseMux.HandleFunc("/health", st.pingResponse)
-	baseMux.HandleFunc("/state", st.getState)
-	baseMux.HandleFunc("/removeNode", st.removeNode)
-	baseMux.HandleFunc("/moveTablet", st.moveTablet)
-	baseMux.HandleFunc("/assign", st.assign)
-	baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	// the following endpoints are disabled only if the flag is explicitly set to true
+	if !Zero.Conf.GetBool("disable_admin_http") {
+		baseMux.HandleFunc("/state", st.getState)
+		baseMux.HandleFunc("/removeNode", st.removeNode)
+		baseMux.HandleFunc("/moveTablet", st.moveTablet)
+		baseMux.HandleFunc("/assign", st.assign)
+		baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	}
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/debug/z")
 
