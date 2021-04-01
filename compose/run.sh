@@ -86,7 +86,7 @@ launch_environment() {
     Info "Found '$GOPATH/bin/dgraph'
   fi
 
-  # No need to down existings containers, if any.
+  # No need to down existing containers, if any.
   # The up command handles that automatically
 
   Info "Bringing up containers"
