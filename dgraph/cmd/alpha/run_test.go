@@ -88,22 +88,23 @@ func processToFastJSON(q string) string {
 }
 
 func runGraphqlQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, "application/dql", "", 0)
+	output, _, err := queryWithTs(queryInp{body: q, typ: "application/dql"})
 	return string(output), err
 }
 
 func runJSONQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, "application/json", "", 0)
+	output, _, err := queryWithTs(queryInp{body: q, typ: "application/json"})
 	return string(output), err
 }
 
 func runMutation(m string) error {
-	_, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(mutationInp{body: m, typ: "application/rdf", commitNow: true})
 	return err
 }
 
 func runJSONMutation(m string) error {
-	_, err := mutationWithTs(m, "application/json", true, true, 0)
+	_, err := mutationWithTs(
+		mutationInp{body: m, typ: "application/json", isJson: true, commitNow: true})
 	return err
 }
 

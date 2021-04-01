@@ -164,9 +164,13 @@ they form a Raft group and provide synchronous replication.
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
-		Flag("snapshot-after",
+		Flag("snapshot-after-entries",
 			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
-				"the more frequent snapshot creation will be.").
+				"the more frequent snapshot creation will be. Snapshots are created only if both "+
+				"snapshot-after-duration and snapshot-after-entries threshold are crossed.").
+		Flag("snapshot-after-duration",
+			"Frequency at which we should create a new raft snapshots. Set "+
+				"to 0 to disable duration based snapshot.").
 		Flag("pending-proposals",
 			"Number of pending mutation proposals. Useful for rate limiting.").
 		String())
@@ -620,7 +624,6 @@ func run() {
 	}
 
 	bindall = Alpha.Conf.GetBool("bindall")
-
 	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
 		worker.CacheDefaults)
 	totalCache := cache.GetInt64("size-mb")
@@ -639,13 +642,12 @@ func run() {
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
-
-		CacheMb:         totalCache,
-		CachePercentage: cachePercentage,
-		PBlockCacheSize: pstoreBlockCacheSize,
-		PIndexCacheSize: pstoreIndexCacheSize,
+		PostingDir:                 Alpha.Conf.GetString("postings"),
+		WALDir:                     Alpha.Conf.GetString("wal"),
+		CacheMb:                    totalCache,
+		CachePercentage:            cachePercentage,
+		PBlockCacheSize:            pstoreBlockCacheSize,
+		PIndexCacheSize:            pstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -712,6 +714,7 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              badger,
+		MaxRetries:          badger.GetInt64("max-retries"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -730,6 +733,7 @@ func run() {
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
+	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(

@@ -53,7 +53,7 @@ const (
 	scalar Int64
 
     """
-	The UInt64 scalar type represents a unsigned 64‐bit numeric non‐fractional value.
+	The UInt64 scalar type represents an unsigned 64‐bit numeric non‐fractional value.
 	UInt64 can represent values in range [0,(2^64 - 1)].
 	""" 
     scalar UInt64
@@ -284,6 +284,82 @@ const (
 		cacheMb: Float
 	}
 
+	input RemoveNodeInput {
+		"""
+		ID of the node to be removed.
+		"""
+		nodeId: UInt64!
+
+		"""
+		ID of the group from which the node is to be removed.
+		"""
+		groupId: UInt64!
+	}
+
+	type RemoveNodePayload {
+		response: Response
+	}
+
+	input MoveTabletInput {
+		"""
+		Namespace in which the predicate exists.
+		"""
+		namespace: UInt64
+
+		"""
+		Name of the predicate to move.
+		"""
+		tablet: String!
+
+		"""
+		ID of the destination group where the predicate is to be moved.
+		"""
+		groupId: UInt64!
+	}
+
+	type MoveTabletPayload {
+		response: Response
+	}
+
+	enum AssignKind {
+		UID
+		TIMESTAMP
+		NAMESPACE_ID
+	}
+
+	input AssignInput {
+		"""
+		Choose what to assign: UID, TIMESTAMP or NAMESPACE_ID.
+		"""
+		what: AssignKind!
+
+		"""
+		How many to assign.
+		"""
+		num: UInt64!
+	}
+
+	type AssignedIds {
+		"""
+		The first UID, TIMESTAMP or NAMESPACE_ID assigned.
+		"""
+		startId: UInt64
+
+		"""
+		The last UID, TIMESTAMP or NAMESPACE_ID assigned.
+		"""
+		endId: UInt64
+
+		"""
+		TIMESTAMP for read-only transactions.
+		"""
+		readOnly: UInt64
+	}
+
+	type AssignPayload {
+		response: AssignedIds
+	}
+
 	` + adminTypes + `
 
 	type Query {
@@ -324,82 +400,113 @@ const (
 		"""
 		config(input: ConfigInput!): ConfigPayload
 
+		"""
+		Remove a node from the cluster.
+		"""
+		removeNode(input: RemoveNodeInput!): RemoveNodePayload
+
+		"""
+		Move a predicate from one group to another.
+		"""
+		moveTablet(input: MoveTabletInput!): MoveTabletPayload
+
+		"""
+		Lease UIDs, Timestamps or Namespace IDs in advance.
+		"""
+		assign(input: AssignInput!): AssignPayload
+
 		` + adminMutations + `
 	}
  `
 )
 
 var (
-	// guardianOfTheGalaxyQueryMWs are the middlewares which should be applied to queries served by
+	// gogQryMWs are the middlewares which should be applied to queries served by
 	// admin server for guardian of galaxy unless some exceptional behaviour is required
-	guardianOfTheGalaxyQueryMWs = resolve.QueryMiddlewares{
+	gogQryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query,
 		resolve.GuardianOfTheGalaxyAuthMW4Query,
 		resolve.LoggingMWQuery,
 	}
-	// guardianOfTheGalaxyMutationMWs are the middlewares which should be applied to mutations
+	// gogMutMWs are the middlewares which should be applied to mutations
 	// served by admin server for guardian of galaxy unless some exceptional behaviour is required
-	guardianOfTheGalaxyMutationMWs = resolve.MutationMiddlewares{
+	gogMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
-	// guardianOfTheGalaxyMutaionWithAclMWs are the middlewares which should be applied to mutations
+	// gogAclMutMWs are the middlewares which should be applied to mutations
 	// served by the admin server for guardian of galaxy with ACL enabled.
-	guardianOfTheGalaxyMutaionWithAclMWs = resolve.MutationMiddlewares{
+	gogAclMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation,
 		resolve.AclOnlyMW4Mutation,
 		resolve.GuardianOfTheGalaxyAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
-	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
+	// stdAdminQryMWs are the middlewares which should be applied to queries served by admin
 	// server unless some exceptional behaviour is required
-	commonAdminQueryMWs = resolve.QueryMiddlewares{
+	stdAdminQryMWs = resolve.QueryMiddlewares{
 		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Query,
 		resolve.LoggingMWQuery,
 	}
-	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
+	// stdAdminMutMWs are the middlewares which should be applied to mutations served by
 	// admin server unless some exceptional behaviour is required
-	commonAdminMutationMWs = resolve.MutationMiddlewares{
+	stdAdminMutMWs = resolve.MutationMiddlewares{
 		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
 		resolve.GuardianAuthMW4Mutation,
 		resolve.LoggingMWMutation,
 	}
+	// minimalAdminQryMWs is the minimal set of middlewares that should be applied to any query
+	// served by the admin server
+	minimalAdminQryMWs = resolve.QueryMiddlewares{
+		resolve.IpWhitelistingMW4Query,
+		resolve.LoggingMWQuery,
+	}
+	// minimalAdminMutMWs is the minimal set of middlewares that should be applied to any mutation
+	// served by the admin server
+	minimalAdminMutMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation,
+		resolve.LoggingMWMutation,
+	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for health
-		"state":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery}, // dgraph checks Guardian auth for state
-		"config":       commonAdminQueryMWs,
-		"listBackups":  guardianOfTheGalaxyQueryMWs,
-		"getGQLSchema": commonAdminQueryMWs,
+		"health":       minimalAdminQryMWs, // dgraph checks Guardian auth for health
+		"state":        minimalAdminQryMWs, // dgraph checks Guardian auth for state
+		"config":       stdAdminQryMWs,
+		"listBackups":  gogQryMWs,
+		"getGQLSchema": stdAdminQryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"queryUser":      {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"queryGroup":     {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getUser":        {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getCurrentUser": {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
-		"getGroup":       {resolve.IpWhitelistingMW4Query, resolve.LoggingMWQuery},
+		"queryUser":      minimalAdminQryMWs,
+		"queryGroup":     minimalAdminQryMWs,
+		"getUser":        minimalAdminQryMWs,
+		"getCurrentUser": minimalAdminQryMWs,
+		"getGroup":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":          guardianOfTheGalaxyMutationMWs,
-		"config":          guardianOfTheGalaxyMutationMWs,
-		"draining":        guardianOfTheGalaxyMutationMWs,
-		"export":          commonAdminMutationMWs, // dgraph handles the export for other namespaces by guardian of galaxy
-		"login":           {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"restore":         guardianOfTheGalaxyMutationMWs,
-		"shutdown":        guardianOfTheGalaxyMutationMWs,
-		"updateGQLSchema": commonAdminMutationMWs,
-		"addNamespace":    guardianOfTheGalaxyMutaionWithAclMWs,
-		"deleteNamespace": guardianOfTheGalaxyMutaionWithAclMWs,
-		"resetPassword":   guardianOfTheGalaxyMutaionWithAclMWs,
+		"backup":            gogMutMWs,
+		"config":            gogMutMWs,
+		"draining":          gogMutMWs,
+		"export":            stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
+		"login":             minimalAdminMutMWs,
+		"restore":           gogMutMWs,
+		"shutdown":          gogMutMWs,
+		"removeNode":        gogMutMWs,
+		"moveTablet":        gogMutMWs,
+		"assign":            gogMutMWs,
+		"enterpriseLicense": gogMutMWs,
+		"updateGQLSchema":   stdAdminMutMWs,
+		"addNamespace":      gogAclMutMWs,
+		"deleteNamespace":   gogAclMutMWs,
+		"resetPassword":     gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
-		"addUser":     {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"addGroup":    {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateUser":  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"updateGroup": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteUser":  {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
-		"deleteGroup": {resolve.IpWhitelistingMW4Mutation, resolve.LoggingMWMutation},
+		"addUser":     minimalAdminMutMWs,
+		"addGroup":    minimalAdminMutMWs,
+		"updateUser":  minimalAdminMutMWs,
+		"updateGroup": minimalAdminMutMWs,
+		"deleteUser":  minimalAdminMutMWs,
+		"deleteGroup": minimalAdminMutMWs,
 	}
 	// mainHealthStore stores the health of the main GraphQL server.
 	mainHealthStore = &GraphQLHealthStore{}
@@ -613,16 +720,20 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"addNamespace":    resolveAddNamespace,
-		"backup":          resolveBackup,
-		"config":          resolveUpdateConfig,
-		"deleteNamespace": resolveDeleteNamespace,
-		"draining":        resolveDraining,
-		"export":          resolveExport,
-		"login":           resolveLogin,
-		"resetPassword":   resolveResetPassword,
-		"restore":         resolveRestore,
-		"shutdown":        resolveShutdown,
+		"addNamespace":      resolveAddNamespace,
+		"backup":            resolveBackup,
+		"config":            resolveUpdateConfig,
+		"deleteNamespace":   resolveDeleteNamespace,
+		"draining":          resolveDraining,
+		"export":            resolveExport,
+		"login":             resolveLogin,
+		"resetPassword":     resolveResetPassword,
+		"restore":           resolveRestore,
+		"shutdown":          resolveShutdown,
+		"removeNode":        resolveRemoveNode,
+		"moveTablet":        resolveMoveTablet,
+		"assign":            resolveAssign,
+		"enterpriseLicense": resolveEnterpriseLicense,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
@@ -917,6 +1028,10 @@ func (as *adminServer) lazyLoadSchema(namespace uint64) {
 
 func LazyLoadSchema(namespace uint64) {
 	adminServerVar.lazyLoadSchema(namespace)
+}
+
+func inputArgError(err error) error {
+	return schema.GQLWrapf(err, "couldn't parse input argument")
 }
 
 func response(code, msg string) map[string]interface{} {
