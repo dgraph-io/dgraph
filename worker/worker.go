@@ -149,7 +149,7 @@ func UpdateCacheMb(memoryMB int64) error {
 		return errors.Errorf("cache_mb must be non-negative")
 	}
 
-	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 4)
+	cachePercent, err := x.GetCachePercentages(Config.CachePercentage, 3)
 	if err != nil {
 		return err
 	}

@@ -152,7 +152,7 @@ they form a Raft group and provide synchronous replication.
 			"Total size of cache (in MB) to be used in Dgraph.").
 		Flag("percentage",
 			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
-				"PstoreBlockCache,PstoreIndexCache,WAL)").
+				"PstoreBlockCache,PstoreIndexCache)").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -626,12 +626,11 @@ func run() {
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	cachePercentage := cache.GetString("percentage")
-	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
 	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
 		worker.BadgerDefaults)
@@ -649,7 +648,6 @@ func run() {
 		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
-		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
