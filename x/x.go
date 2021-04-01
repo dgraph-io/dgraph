@@ -74,6 +74,8 @@ var (
 	ErrorInvalidLogin = errors.New("invalid username or password")
 	// ErrConflict is returned when commit couldn't succeed due to conflicts.
 	ErrConflict = errors.New("Transaction conflict")
+	// ErrHashMismatch is returned when the hash does not matches the startTs
+	ErrHashMismatch = errors.New("hash mismatch the claimed startTs|namespace")
 )
 
 const (
