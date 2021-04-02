@@ -83,7 +83,7 @@ launch_environment() {
     echo "ERROR: '$GOPATH/bin/dgraph' not found. Exiting" 1>&2
     exit 1
   else
-    Info "Found '$GOPATH/bin/dgraph'
+    Info "Found '$GOPATH/bin/dgraph'"
   fi
 
   # No need to down existing containers, if any.
