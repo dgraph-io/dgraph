@@ -60,7 +60,9 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	cache *LocalCache // This pointer does not get modified.
+	AppliedIndexSeen uint64
+	cache            *LocalCache // This pointer does not get modified.
+	ErrCh            chan error
 }
 
 // NewTxn returns a new Txn instance.
@@ -69,7 +71,15 @@ func NewTxn(startTs uint64) *Txn {
 		StartTs:    startTs,
 		cache:      NewLocalCache(startTs),
 		lastUpdate: time.Now(),
+		ErrCh:      make(chan error, 1),
 	}
+}
+
+func (txn *Txn) SetCacheStartTs(startTs uint64) {
+	txn.cache.startTs = startTs
+}
+func (txn *Txn) CacheStartTs() uint64 {
+	return txn.cache.startTs
 }
 
 // Get retrieves the posting list for the given list from the local cache.

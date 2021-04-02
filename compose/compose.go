@@ -308,6 +308,7 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
+	svc.Command += " --expose_trace=true"
 	if opts.LudicrousMode {
 		svc.Command += ` --ludicrous "enabled=true;"`
 	}

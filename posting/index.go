@@ -261,7 +261,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
+	// ostats.Record(ctx, x.NumEdges.M(1))
 
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
@@ -485,7 +485,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
+	// ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err

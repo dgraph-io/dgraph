@@ -59,10 +59,11 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh chan []raftpb.Entry
-	ctx     context.Context
-	gid     uint32
-	closer  *z.Closer
+	applyCh     chan []raftpb.Entry
+	concApplyCh chan []*pb.Proposal
+	ctx         context.Context
+	gid         uint32
+	closer      *z.Closer
 
 	checkpointTs uint64 // Timestamp corresponding to checkpoint.
 	streaming    int32  // Used to avoid calculating snapshot
@@ -74,7 +75,45 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
+	keysWritten *keysWritten
+
 	ex *executor
+}
+
+type keysWritten struct {
+	rejectBeforeIndex uint64
+	keyCommitTs       map[uint64]uint64
+	valid             int64
+	invalid           int64
+}
+
+func newKeysWritten() *keysWritten {
+	return &keysWritten{
+		keyCommitTs: make(map[uint64]uint64),
+	}
+}
+
+func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
+	if txn.AppliedIndexSeen < kw.rejectBeforeIndex {
+		kw.invalid++
+		return false
+	}
+	if txn.StartTs == txn.CacheStartTs() {
+		kw.valid++
+		return true
+	}
+	for hash := range txn.ReadKeys() {
+		ts := kw.keyCommitTs[hash]
+		// Determine if this key was modified between our allocated start Ts
+		// (txn.StartTs) and our chosen start ts (txn.CacheStartTs). If so, we
+		// return false. Otherwise, whatever we read is still valid.
+		if ts > txn.CacheStartTs() && ts < txn.StartTs {
+			kw.invalid++
+			return false
+		}
+	}
+	kw.valid++
+	return true
 }
 
 type op int
@@ -248,11 +287,13 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:    make(chan []raftpb.Entry, 1000),
-		elog:       trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:     z.NewCloser(4), // Matches CLOSER:1
-		ops:        make(map[op]*z.Closer),
-		cdcTracker: newCDC(),
+		applyCh:     make(chan []raftpb.Entry, 1000),
+		concApplyCh: make(chan []*pb.Proposal, 100),
+		elog:        trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:      z.NewCloser(4), // Matches CLOSER:1
+		ops:         make(map[op]*z.Closer),
+		cdcTracker:  newCDC(),
+		keysWritten: newKeysWritten(),
 	}
 	if x.WorkerConfig.LudicrousEnabled {
 		n.ex = newExecutor(&m.Applied, int(x.WorkerConfig.Ludicrous.GetInt64("concurrency")))
@@ -307,6 +348,119 @@ func detectPendingTxns(attr string) error {
 	return errHasPendingTxns
 }
 
+func (n *node) mutationWorker() {
+	handleEntry := func(p *pb.Proposal, cacheStartTs uint64) {
+		x.AssertTrue(len(p.Mutations.GetEdges()) > 0)
+		// TODO: Figure out the proposal ctx later.
+		n.processMutations(n.ctx, p.Mutations, cacheStartTs)
+	}
+
+	for {
+		select {
+		case muts, ok := <-n.concApplyCh:
+			if !ok {
+				return
+			}
+			cacheStartTs := posting.Oracle().MaxAssigned()
+			for _, p := range muts {
+				handleEntry(p, cacheStartTs)
+			}
+		case <-n.closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
+func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStartTs uint64) {
+	// It is possible that the user gives us multiple versions of the same edge, one with no facets
+	// and another with facets. In that case, use stable sort to maintain the ordering given to us
+	// by the user.
+	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
+	// different goroutines.
+	sort.SliceStable(m.Edges, func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return ei.GetAttr() < ej.GetAttr()
+		}
+		return ei.GetEntity() < ej.GetEntity()
+	})
+
+	// if x.WorkerConfig.LudicrousEnabled {
+	// 	n.ex.addEdges(ctx, proposal)
+	// 	return nil
+	// }
+
+	span := otrace.FromContext(ctx)
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	if txn.ShouldAbort() {
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
+		txn.ErrCh <- x.ErrConflict
+	}
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
+
+	// Update the applied index that we are seeing.
+	txn.AppliedIndexSeen = n.Applied.DoneUntil()
+	// This txn's Zero assigned start ts could be in the future, because we're
+	// trying to greedily run mutations concurrently as soon as we see them.
+	// So, we'll choose a start ts that the server already has access to, and
+	// run our mutations. We call it cache start ts.
+	// Later, when we reach the mutation in serial order, we
+	// can check if the read keys have changed between the cache start ts and
+	// the assigned start ts. If no change, we're good with the work done. If
+	// there is a change, we'll re-do the txn.
+	if cacheStartTs > 0 && cacheStartTs < txn.StartTs {
+		txn.SetCacheStartTs(cacheStartTs)
+	} else {
+		txn.SetCacheStartTs(txn.StartTs)
+	}
+
+	process := func(edges []*pb.DirectedEdge) error {
+		var retries int
+		for _, edge := range edges {
+			for {
+				err := runMutation(ctx, edge, txn)
+				if err == nil {
+					break
+				}
+				if err != posting.ErrRetry {
+					return err
+				}
+				retries++
+			}
+		}
+		if retries > 0 {
+			span.Annotatef(nil, "retries=true num=%d", retries)
+		}
+		return nil
+	}
+	numGo, width := x.DivideAndRule(len(m.Edges))
+	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
+
+	if numGo == 1 {
+		txn.ErrCh <- process(m.Edges)
+	}
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(m.Edges) {
+			end = len(m.Edges)
+		}
+		go func(start, end int) {
+			errCh <- process(m.Edges[start:end])
+		}(start, end)
+	}
+	var rerr error
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil && rerr == nil {
+			rerr = err
+		}
+	}
+	txn.ErrCh <- rerr
+}
+
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
@@ -315,6 +469,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
+		n.keysWritten.rejectBeforeIndex = proposal.Index
 		posting.Oracle().ResetTxns()
 		if err := posting.DeleteData(); err != nil {
 			return err
@@ -327,6 +482,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
+		n.keysWritten.rejectBeforeIndex = proposal.Index
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
 
@@ -356,6 +512,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
+		n.keysWritten.rejectBeforeIndex = proposal.Index
 		return schema.State().DeleteType(proposal.Mutations.DropValue)
 	}
 
@@ -364,6 +521,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		n.keysWritten.rejectBeforeIndex = proposal.Index
+
 		// MaxAssigned would ensure that everything that's committed up until this point
 		// would be picked up in building indexes. Any uncommitted txns would be cancelled
 		// by detectPendingTxns below.
@@ -460,76 +619,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-
-	// It is possible that the user gives us multiple versions of the same edge, one with no facets
-	// and another with facets. In that case, use stable sort to maintain the ordering given to us
-	// by the user.
-	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
-	// different goroutines.
-	sort.SliceStable(m.Edges, func(i, j int) bool {
-		ei := m.Edges[i]
-		ej := m.Edges[j]
-		if ei.GetAttr() != ej.GetAttr() {
-			return ei.GetAttr() < ej.GetAttr()
-		}
-		return ei.GetEntity() < ej.GetEntity()
-	})
-
-	if x.WorkerConfig.LudicrousEnabled {
-		n.ex.addEdges(ctx, proposal)
+	txn := posting.Oracle().GetTxn(m.StartTs)
+	if err := <-txn.ErrCh; err == nil {
+		return err
+	}
+	if n.keysWritten.StillValid(txn) {
 		return nil
 	}
-
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	if txn.ShouldAbort() {
-		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return x.ErrConflict
-	}
-	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
-
-	process := func(edges []*pb.DirectedEdge) error {
-		var retries int
-		for _, edge := range edges {
-			for {
-				err := runMutation(ctx, edge, txn)
-				if err == nil {
-					break
-				}
-				if err != posting.ErrRetry {
-					return err
-				}
-				retries++
-			}
-		}
-		if retries > 0 {
-			span.Annotatef(nil, "retries=true num=%d", retries)
-		}
-		return nil
-	}
-	numGo, width := x.DivideAndRule(len(m.Edges))
-	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
-
-	if numGo == 1 {
-		return process(m.Edges)
-	}
-	errCh := make(chan error, numGo)
-	for i := 0; i < numGo; i++ {
-		start := i * width
-		end := start + width
-		if end > len(m.Edges) {
-			end = len(m.Edges)
-		}
-		go func(start, end int) {
-			errCh <- process(m.Edges[start:end])
-		}(start, end)
-	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
-		}
-	}
-	return nil
+	n.processMutations(ctx, m, 0)
+	return <-txn.ErrCh
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
@@ -677,6 +775,10 @@ func (n *node) processApplyCh() {
 	}
 	previous := make(map[uint64]*P)
 
+	histograms := make(map[string]*z.HistogramData)
+	histograms["mutation"] = z.NewHistogramData(z.HistogramBounds(1, 32))
+	histograms["delta"] = z.NewHistogramData(z.HistogramBounds(1, 32))
+
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
 		var totalSize int64
@@ -705,8 +807,8 @@ func (n *node) processApplyCh() {
 			var perr error
 			p, ok := previous[key]
 			if ok && p.err == nil && p.size == psz {
-				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-					key, proposal.Index)
+				// n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
+				// 	key, proposal.Index)
 				previous[key].seen = time.Now() // Update the ts.
 				// Don't break here. We still need to call the Done below.
 
@@ -721,18 +823,23 @@ func (n *node) processApplyCh() {
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
 				}
-				n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
-					key, proposal.Index, perr)
+				// n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
+				// 	key, proposal.Index, perr)
 
-				var tags []tag.Mutator
+				// var tags []tag.Mutator
 				switch {
 				case proposal.Mutations != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+					// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+					if len(proposal.Mutations.Schema) == 0 {
+						// Don't capture schema updates.
+						histograms["mutation"].Update(time.Since(start).Milliseconds())
+					}
 				case proposal.Delta != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+					// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+					histograms["delta"].Update(time.Since(start).Milliseconds())
 				}
-				ms := x.SinceMs(start)
-				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				// ms := x.SinceMs(start)
+				// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(key, perr)
@@ -744,7 +851,7 @@ func (n *node) processApplyCh() {
 		}
 	}
 
-	maxAge := 10 * time.Minute
+	maxAge := 2 * time.Minute
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
 
@@ -764,6 +871,11 @@ func (n *node) processApplyCh() {
 				}
 			}
 			n.elog.Printf("Size of previous map: %d", len(previous))
+			for key, h := range histograms {
+				glog.Infof("Histogram for %s: %s\n", key, h)
+			}
+			kw := n.keysWritten
+			glog.Infof("Still valid: %d Invalid: %d\n", kw.valid, kw.invalid)
 		}
 	}
 }
@@ -778,6 +890,14 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
+		glog.Infof("Keys: Read: %d Written: %d CacheStartTs: %d %d -> %d\n", len(txn.ReadKeys()),
+			len(txn.Deltas()), txn.CacheStartTs(), start, commit)
+		for k := range txn.Deltas() {
+			h := z.MemHashString(k)
+			n.keysWritten.keyCommitTs[h] = commit
+			// glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
+			// 	h, start, txn.CacheStartTs(), commit)
+		}
 		err := x.RetryUntilSuccess(int(x.WorkerConfig.Badger.GetInt64("max-retries")),
 			10*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
@@ -1341,6 +1461,20 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
+
+				var muts []*pb.Proposal
+				for _, e := range entries {
+					var p pb.Proposal
+					x.Check(p.Unmarshal(e.Data[8:]))
+					if len(p.Mutations.GetEdges()) == 0 {
+						continue
+					}
+					startTs := p.Mutations.StartTs
+					// We should register this txn before sending it over for concurrent application.
+					posting.Oracle().RegisterStartTs(startTs)
+					muts = append(muts, &p)
+				}
+				n.concApplyCh <- muts
 				n.applyCh <- entries
 			}
 
@@ -1806,6 +1940,9 @@ func (n *node) InitAndStartNode() {
 	// not be the right thing to do.
 	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
+	for i := 0; i < 8; i++ {
+		go n.mutationWorker()
+	}
 	go n.Run()
 }
 
