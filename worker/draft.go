@@ -60,7 +60,7 @@ type node struct {
 
 	// Fields which are never changed after init.
 	applyCh     chan []raftpb.Entry
-	concApplyCh chan []*pb.Proposal
+	concApplyCh chan *pb.Proposal
 	ctx         context.Context
 	gid         uint32
 	closer      *z.Closer
@@ -75,7 +75,8 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
-	keysWritten *keysWritten
+	keysWritten  *keysWritten
+	usingCacheTs int64
 
 	ex *executor
 }
@@ -85,6 +86,7 @@ type keysWritten struct {
 	keyCommitTs       map[uint64]uint64
 	valid             int64
 	invalid           int64
+	totalKeys         int
 }
 
 func newKeysWritten() *keysWritten {
@@ -288,7 +290,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
 		applyCh:     make(chan []raftpb.Entry, 1000),
-		concApplyCh: make(chan []*pb.Proposal, 100),
+		concApplyCh: make(chan *pb.Proposal, 100),
 		elog:        trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:      z.NewCloser(4), // Matches CLOSER:1
 		ops:         make(map[op]*z.Closer),
@@ -348,23 +350,31 @@ func detectPendingTxns(attr string) error {
 	return errHasPendingTxns
 }
 
-func (n *node) mutationWorker() {
+func (n *node) mutationWorker(workerId int) {
 	handleEntry := func(p *pb.Proposal, cacheStartTs uint64) {
+		x.AssertTrue(p.Key != 0)
 		x.AssertTrue(len(p.Mutations.GetEdges()) > 0)
-		// TODO: Figure out the proposal ctx later.
-		n.processMutations(n.ctx, p.Mutations, cacheStartTs)
+
+		pctx := n.Proposals.Get(p.Key)
+		x.AssertTrue(pctx != nil)
+		span := otrace.FromContext(pctx.Ctx)
+		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
+
+		// if p.Mutations.StartTs > cacheStartTs {
+		// 	posting.Oracle().WaitForTs(pctx.Ctx, p.Mutations.StartTs)
+		// 	span.Annotatef(nil, "Done waiting to reach StartTs")
+		// }
+		n.processMutations(pctx.Ctx, p.Mutations, cacheStartTs)
 	}
 
 	for {
 		select {
-		case muts, ok := <-n.concApplyCh:
+		case mut, ok := <-n.concApplyCh:
 			if !ok {
 				return
 			}
 			cacheStartTs := posting.Oracle().MaxAssigned()
-			for _, p := range muts {
-				handleEntry(p, cacheStartTs)
-			}
+			handleEntry(mut, cacheStartTs)
 		case <-n.closer.HasBeenClosed():
 			return
 		}
@@ -392,7 +402,8 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 	// }
 
 	span := otrace.FromContext(ctx)
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	txn, has := posting.Oracle().RegisterStartTs(m.StartTs)
+	x.AssertTrue(has)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		txn.ErrCh <- x.ErrConflict
@@ -411,6 +422,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 	// the assigned start ts. If no change, we're good with the work done. If
 	// there is a change, we'll re-do the txn.
 	if cacheStartTs > 0 && cacheStartTs < txn.StartTs {
+		atomic.AddInt64(&n.usingCacheTs, 1)
 		txn.SetCacheStartTs(cacheStartTs)
 	} else {
 		txn.SetCacheStartTs(txn.StartTs)
@@ -439,7 +451,9 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
+		span.Annotate(nil, "process mutations done")
 		txn.ErrCh <- process(m.Edges)
+		return
 	}
 	errCh := make(chan error, numGo)
 	for i := 0; i < numGo; i++ {
@@ -458,6 +472,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 			rerr = err
 		}
 	}
+	span.Annotate(nil, "process mutations done")
 	txn.ErrCh <- rerr
 }
 
@@ -620,12 +635,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	m := proposal.Mutations
 	txn := posting.Oracle().GetTxn(m.StartTs)
-	if err := <-txn.ErrCh; err == nil {
-		return err
-	}
-	if n.keysWritten.StillValid(txn) {
+	err := <-txn.ErrCh
+	if err == nil && n.keysWritten.StillValid(txn) {
+		span.Annotate(nil, "mutation is still valid")
 		return nil
 	}
+	// If we have an error, re-run this.
+	span.Annotate(nil, "re-running mutation")
+	glog.Infof("Re-running mutation with start ts: %d cache ts: %d. Err: %v\n", txn.StartTs, txn.CacheStartTs(), err)
 	n.processMutations(ctx, m, 0)
 	return <-txn.ErrCh
 }
@@ -776,8 +793,8 @@ func (n *node) processApplyCh() {
 	previous := make(map[uint64]*P)
 
 	histograms := make(map[string]*z.HistogramData)
-	histograms["mutation"] = z.NewHistogramData(z.HistogramBounds(1, 32))
-	histograms["delta"] = z.NewHistogramData(z.HistogramBounds(1, 32))
+	histograms["mutation"] = z.NewHistogramData(z.Fibonacci(32))
+	histograms["delta"] = z.NewHistogramData(z.Fibonacci(32))
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
@@ -875,7 +892,8 @@ func (n *node) processApplyCh() {
 				glog.Infof("Histogram for %s: %s\n", key, h)
 			}
 			kw := n.keysWritten
-			glog.Infof("Still valid: %d Invalid: %d\n", kw.valid, kw.invalid)
+			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d. Total keys written: %d Used cache ts: %d\n",
+				kw.valid, kw.invalid, len(kw.keyCommitTs), kw.totalKeys, atomic.LoadInt64(&n.usingCacheTs))
 		}
 	}
 }
@@ -890,8 +908,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		glog.Infof("Keys: Read: %d Written: %d CacheStartTs: %d %d -> %d\n", len(txn.ReadKeys()),
-			len(txn.Deltas()), txn.CacheStartTs(), start, commit)
+		// glog.Infof("Keys: Read: %d Written: %d CacheStartTs: %d %d -> %d\n", len(txn.ReadKeys()),
+		// 	len(txn.Deltas()), txn.CacheStartTs(), start, commit)
+		n.keysWritten.totalKeys += len(txn.Deltas())
 		for k := range txn.Deltas() {
 			h := z.MemHashString(k)
 			n.keysWritten.keyCommitTs[h] = commit
@@ -1462,7 +1481,7 @@ func (n *node) Run() {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
 
-				var muts []*pb.Proposal
+				// var muts []*pb.Proposal
 				for _, e := range entries {
 					var p pb.Proposal
 					x.Check(p.Unmarshal(e.Data[8:]))
@@ -1471,10 +1490,13 @@ func (n *node) Run() {
 					}
 					startTs := p.Mutations.StartTs
 					// We should register this txn before sending it over for concurrent application.
-					posting.Oracle().RegisterStartTs(startTs)
-					muts = append(muts, &p)
+					_, has := posting.Oracle().RegisterStartTs(startTs)
+					x.AssertTruef(!has, "already has txn with start ts: %d\n", startTs)
+					p.Key = binary.BigEndian.Uint64(e.Data[:8])
+					n.concApplyCh <- &p
+					// muts = append(muts, &p)
 				}
-				n.concApplyCh <- muts
+				// n.concApplyCh <- muts
 				n.applyCh <- entries
 			}
 
@@ -1941,7 +1963,7 @@ func (n *node) InitAndStartNode() {
 	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
 	for i := 0; i < 8; i++ {
-		go n.mutationWorker()
+		go n.mutationWorker(i)
 	}
 	go n.Run()
 }

@@ -690,6 +690,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	if err != nil {
 		return tctx, err
 	}
+	span.Annotate(nil, "mutation map populated")
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
@@ -866,9 +867,9 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	// might be wrong because we might be missing out a commit which has updated the value. This
 	// wait here ensures that the proposal would only be registered after seeing txn status of all
 	// pending transactions. Thus, the ordering would be correct.
-	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
-		return err
-	}
+	// if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
+	// 	return err
+	// }
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})

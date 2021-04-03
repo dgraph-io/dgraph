@@ -125,7 +125,9 @@ func (o *oracle) init() {
 	o.pendingTxns = make(map[uint64]*Txn)
 }
 
-func (o *oracle) RegisterStartTs(ts uint64) *Txn {
+// RegisterStartTs would return a txn and a bool.
+// If the bool is true, the txn was already present. If false, it is new.
+func (o *oracle) RegisterStartTs(ts uint64) (*Txn, bool) {
 	o.Lock()
 	defer o.Unlock()
 	txn, ok := o.pendingTxns[ts]
@@ -135,7 +137,7 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 		txn = NewTxn(ts)
 		o.pendingTxns[ts] = txn
 	}
-	return txn
+	return txn, ok
 }
 
 func (o *oracle) CacheAt(ts uint64) *LocalCache {

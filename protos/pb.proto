@@ -323,6 +323,7 @@ message Proposal {
 	RestoreRequest restore 		= 12;
 	CDCState cdc_state 				= 13;
 	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+	uint64 key = 15;
 }
 
 message CDCState {
