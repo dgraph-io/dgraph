@@ -133,16 +133,13 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
-		Head("Badger options").
+		Head("Badger options (Other badger options are also supported, not shown for brevity.)").
 		Flag("compression",
 			`[none, zstd:level, snappy] Specifies the compression algorithm and
 			compression level (if applicable) for the postings directory."none" would disable
 			compression, while "zstd:1" would set zstd compression at level 1.`).
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
-		Flag("max-retries",
-			"Commits to disk will give up after these number of retries to prevent locking the "+
-				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	// Cache flags.
@@ -217,6 +214,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("query-timeout",
 			"Maximum time after which a query execution will fail. If set to"+
 				" 0, the timeout is infinite.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -635,19 +635,18 @@ func run() {
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
-		worker.BadgerDefaults)
+	badger := x.MergeAndCheckBadgerDefaults(worker.BadgerDefaults, Alpha.Conf.GetString("badger"))
 
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
-		PostingDir:                 Alpha.Conf.GetString("postings"),
-		WALDir:                     Alpha.Conf.GetString("wal"),
-		CacheMb:                    totalCache,
-		CachePercentage:            cachePercentage,
-		PBlockCacheSize:            pstoreBlockCacheSize,
-		PIndexCacheSize:            pstoreIndexCacheSize,
+		PostingDir:      Alpha.Conf.GetString("postings"),
+		WALDir:          Alpha.Conf.GetString("wal"),
+		CacheMb:         totalCache,
+		CachePercentage: cachePercentage,
+		PBlockCacheSize: pstoreBlockCacheSize,
+		PIndexCacheSize: pstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -714,7 +713,6 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              badger,
-		MaxRetries:          badger.GetInt64("max-retries"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -735,6 +733,7 @@ func run() {
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
+	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

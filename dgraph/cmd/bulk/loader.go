@@ -37,7 +37,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/y"
-	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -85,8 +84,8 @@ type options struct {
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
 	EncryptionKey x.SensitiveByteSlice
-	// Super flag for various the badger options.
-	Badger *z.SuperFlag
+	// Badger options.
+	Badger badger.Options
 }
 
 type state struct {
@@ -232,8 +231,8 @@ func (ld *loader) mapStage() {
 	}
 	ld.xids = xidmap.New(xidmap.XidMapOptions{
 		UidAssigner: ld.zero,
-		DB:   db,
-		Dir:  filepath.Join(ld.opt.TmpDir, bufferDir),
+		DB:          db,
+		Dir:         filepath.Join(ld.opt.TmpDir, bufferDir),
 	})
 
 	fs := filestore.NewFileStore(ld.opt.DataFiles)

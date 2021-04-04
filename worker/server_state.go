@@ -40,7 +40,7 @@ const (
 	//       breaks.
 	AclDefaults    = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
-	BadgerDefaults = `compression=snappy; goroutines=8; max-retries=-1;`
+	BadgerDefaults = `compression=snappy; goroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
 		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whitelist=;`
@@ -48,7 +48,7 @@ const (
 	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
 		`client_key=;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
-		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms;`
+		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; max-retries=-1;`
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
@@ -127,12 +127,12 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).
+		opt := x.WorkerConfig.Badger.
+			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithBlockCacheSize(Config.PBlockCacheSize).
 			WithIndexCacheSize(Config.PIndexCacheSize).
-			WithNamespaceOffset(x.NamespaceOffset).
-			FromSuperFlag(x.WorkerConfig.Badger.String())
+			WithNamespaceOffset(x.NamespaceOffset)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

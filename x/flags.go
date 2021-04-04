@@ -17,6 +17,7 @@
 package x
 
 import (
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/pflag"
 )
@@ -61,4 +62,10 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		Flag("sentry",
 			"Send crash events to Sentry.").
 		String())
+}
+
+// MergeAndCheckBadgerDefaults validates the user input for --badger flag. It also overwrites the
+// badger defaults with the dgraph defaults and then with the user input.
+func MergeAndCheckBadgerDefaults(dgraphDefaults, userInput string) badger.Options {
+	return badger.DefaultOptions("").FromSuperFlag(dgraphDefaults).FromSuperFlag(userInput)
 }

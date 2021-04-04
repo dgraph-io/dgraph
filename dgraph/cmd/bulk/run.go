@@ -122,16 +122,16 @@ func init() {
 		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
 	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
-		Head("Badger options").
+		Head("Badger options (Other badger options are also supported, not shown for brevity.)").
 		Flag("compression",
 			"Specifies the compression algorithm and compression level (if applicable) for the "+
 				`postings directory. "none" would disable compression, while "zstd:1" would set `+
 				"zstd compression at level 1.").
 		Flag("goroutines",
 			"The number of goroutines to use in badger.Stream.").
-		Flag("cache_mb",
+		Flag("cache-mb",
 			"Total size of cache (in MB) per shard in the reducer.").
-		Flag("cache_percentage",
+		Flag("cache-percentage",
 			"Cache percentages summing up to 100 for various caches. (FORMAT: BlockCacheSize,"+
 				"IndexCacheSize)").
 		String())
@@ -142,8 +142,7 @@ func init() {
 }
 
 func run() {
-	badger := z.NewSuperFlag(Bulk.Conf.GetString("badger")).MergeAndCheckDefault(
-		BulkBadgerDefaults)
+	badger := x.MergeAndCheckBadgerDefaults(BulkBadgerDefaults, Bulk.Conf.GetString("badger"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
