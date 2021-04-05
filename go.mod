@@ -16,7 +16,6 @@ require (
 	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/Shopify/sarama v1.27.2
-	github.com/aws/aws-sdk-go v1.38.12
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v3 v3.0.0-20210401200525-7d7d7908a001
