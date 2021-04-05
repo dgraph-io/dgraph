@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -151,7 +152,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(req))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(req))
 	if err != nil {
 		return err
 	}
@@ -347,6 +348,22 @@ type LoadResult struct {
 	Err error
 }
 
+func createBackupFile(h x.UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
+			return nil, errors.Wrap(err, "while creating backup file")
+		}
+	}
+	fileName := backupName(req.ReadTs, req.GroupId)
+	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
+	if err := h.CreateDir(dir); err != nil {
+		return nil, errors.Wrap(err, "while creating backup file")
+	}
+	backupFile := filepath.Join(dir, fileName)
+	w, err := h.CreateFile(backupFile)
+	return w, errors.Wrap(err, "while creating backup file")
+}
+
 // WriteBackup uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
@@ -359,7 +376,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	if err != nil {
 		return nil, err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +571,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 	if err != nil {
 		return err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return err
 	}

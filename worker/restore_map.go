@@ -51,7 +51,7 @@ type backupReader struct {
 	once    sync.Once
 }
 
-func readerFrom(h UriHandler, file string) *backupReader {
+func readerFrom(h x.UriHandler, file string) *backupReader {
 	br := &backupReader{}
 	reader, err := h.Stream(file)
 	br.setErr(err)
@@ -531,7 +531,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) error {
 	}
 
 	creds := getCredentialsFromRestoreRequest(req)
-	h, err := NewUriHandler(uri, creds)
+	h, err := x.NewUriHandler(uri, creds)
 	if err != nil {
 		return err
 	}

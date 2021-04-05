@@ -244,7 +244,7 @@ func runExportBackup() error {
 	if err != nil {
 		return errors.Wrapf(err, "runExportBackup")
 	}
-	handler, err := worker.NewUriHandler(uri, nil)
+	handler, err := x.NewUriHandler(uri, nil)
 	if err != nil {
 		return errors.Wrapf(err, "runExportBackup")
 	}
