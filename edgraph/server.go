@@ -1128,7 +1128,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	}
 	// Add a timeout for queries which don't have a deadline set. We don't want to
 	// apply a timeout if it's a mutation, that's currently handled by flag
-	// "abort_older_than".
+	// "txn-abort-after".
 	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
 		if d, _ := ctx.Deadline(); d.IsZero() {
 			var cancel context.CancelFunc

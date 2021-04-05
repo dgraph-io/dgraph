@@ -50,7 +50,7 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, err
 	}
-	config.Set("encryption_key_file", KeyFile)
+	config.Set("encryption", enc.BuildEncFlag(KeyFile))
 	_, encKey := ee.GetKeys(config)
 
 	opt := badger.DefaultOptions(pdir).

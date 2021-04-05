@@ -105,16 +105,11 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
-	// --encryption_key_file
+	// --encryption and --vault Superflag
 	enc.RegisterFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
-
-	// Snapshot and Transactions.
-	flag.String("abort_older_than", "5m",
-		"Abort any pending transactions older than this duration. The liveness of a"+
-			" transaction is determined by its last mutation.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.String("export", "export", "Folder in which to store exports.")
@@ -219,6 +214,8 @@ they form a Raft group and provide synchronous replication.
 				" 0, the timeout is infinite.").
 		Flag("max-pending-queries",
 			"Number of maximum pending queries before we reject them as too many requests.").
+		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
+			" The liveness of a transaction is determined by its last mutation.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -674,6 +671,7 @@ func run() {
 
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
+	abortDur := x.Config.Limit.GetDuration("txn-abort-after")
 	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
@@ -689,9 +687,6 @@ func run() {
 	worker.SetConfiguration(&opts)
 
 	ips, err := getIPsFromString(security.GetString("whitelist"))
-	x.Check(err)
-
-	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
 	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)

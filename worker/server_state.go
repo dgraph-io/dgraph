@@ -48,9 +48,9 @@ const (
 	CDCDefaults       = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
 		`client_key=;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
-		`mutations-nquad=1000000; disallow-drop=false; max-pending-queries=10000; query-timeout
-		=0ms;`
-	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s`
+		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m;` +
+		`max-pending-queries=10000;`
+	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 	CacheDefaults = `size-mb=1024; percentage=0,65,35;`

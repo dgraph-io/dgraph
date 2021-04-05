@@ -258,13 +258,15 @@ func runExportBackup() error {
 	defer os.RemoveAll(mapDir)
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
+	encFlag := z.NewSuperFlag(ExportBackup.Conf.GetString("encryption")).
+		MergeAndCheckDefault(enc.EncryptionDefaults)
 	// TODO: Can probably make this procesing concurrent.
 	for gid, _ := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
 		req := &pb.RestoreRequest{
 			GroupId:           gid,
 			Location:          opt.location,
-			EncryptionKeyFile: ExportBackup.Conf.GetString("encryption_key_file"),
+			EncryptionKeyFile: encFlag.GetPath("key-file"),
 			RestoreTs:         1,
 		}
 		if err := worker.RunMapper(req, mapDir); err != nil {

@@ -15,6 +15,7 @@ package ee
 import (
 	"io/ioutil"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -23,7 +24,7 @@ import (
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
+// through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function exits with an error.
 func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
@@ -43,10 +44,11 @@ func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
-	encKeyFile := config.GetString("encryption_key_file")
+	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(enc.EncryptionDefaults)
+	encKeyFile := encSuperFlag.GetPath("key-file")
 	if encKeyFile != "" {
 		if encKey != nil {
-			glog.Exit("flags: Encryption key set in both vault and encryption_key_file")
+			glog.Exit("flags: Encryption key set in both vault and encryption")
 		}
 		if encKey, err = ioutil.ReadFile(encKeyFile); err != nil {
 			glog.Exitf("error reading encryption key from file: %s: %s", encKeyFile, err)

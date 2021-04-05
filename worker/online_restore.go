@@ -385,7 +385,7 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	}
 
 	// Copy from the request.
-	config.Set("encryption_key_file", req.EncryptionKeyFile)
+	config.Set("encryption", enc.BuildEncFlag(req.EncryptionKeyFile))
 
 	vaultBuilder := new(strings.Builder)
 	if req.VaultRoleidFile != "" {

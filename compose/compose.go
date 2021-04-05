@@ -349,7 +349,7 @@ func getAlpha(idx int, raft string) service {
 		}
 	}
 	if opts.Encryption {
-		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Command += ` --encryption "key-file=/secret/enc_key;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./enc-secret",

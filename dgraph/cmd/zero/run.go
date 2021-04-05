@@ -102,8 +102,6 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 	flag.String("cid", "", "Cluster ID")
-	flag.Bool("disable_admin_http", false,
-		"Turn on/off the administrative endpoints exposed over Zero's HTTP port.")
 
 	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
 		Head("Limit options").
@@ -112,6 +110,8 @@ instances to achieve high-availability.
 			in an interval specified by refill-interval. Set it to 0 to remove limiting.`).
 		Flag("refill-interval",
 			"The interval after which the tokens for UID lease are replenished.").
+		Flag("disable-admin-http",
+			"Turn on/off the administrative endpoints exposed over Zero's HTTP port.").
 		String())
 
 	flag.String("raft", raftDefaults, z.NewSuperFlagHelp(raftDefaults).
@@ -329,7 +329,7 @@ func run() {
 
 	baseMux.HandleFunc("/health", st.pingResponse)
 	// the following endpoints are disabled only if the flag is explicitly set to true
-	if !Zero.Conf.GetBool("disable_admin_http") {
+	if !limit.GetBool("disable-admin-http") {
 		baseMux.HandleFunc("/state", st.getState)
 		baseMux.HandleFunc("/removeNode", st.removeNode)
 		baseMux.HandleFunc("/moveTablet", st.moveTablet)
