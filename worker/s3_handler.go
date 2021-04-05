@@ -222,7 +222,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, backupNum uint64, fn loa
 			continue
 		}
 
-		path := manifests[i].Path
+		path := filepath.Join(h.objectPrefix, manifests[i].Path)
 		for gid := range manifest.Groups {
 			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := h.mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
