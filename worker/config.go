@@ -43,11 +43,6 @@ type Options struct {
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
 
-	// PBlockCacheSize is the size of block cache for pstore
-	PBlockCacheSize int64
-	// PIndexCacheSize is the size of index cache for pstore
-	PIndexCacheSize int64
-
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.SensitiveByteSlice
 	// AccessJwtTtl is the TTL for the access JWT.

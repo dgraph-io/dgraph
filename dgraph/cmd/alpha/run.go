@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
@@ -128,12 +129,12 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
-		Head("Badger options (Other badger options are also supported, not shown for brevity.)").
+		Head("Badger options (Refer to badger documentation for all possible options)").
 		Flag("compression",
 			`[none, zstd:level, snappy] Specifies the compression algorithm and
 			compression level (if applicable) for the postings directory."none" would disable
 			compression, while "zstd:1" would set zstd compression at level 1.`).
-		Flag("goroutines",
+		Flag("numgoroutines",
 			"The number of goroutines to use in badger.Stream.").
 		String())
 
@@ -632,7 +633,11 @@ func run() {
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	badger := x.MergeAndCheckBadgerDefaults(worker.BadgerDefaults, Alpha.Conf.GetString("badger"))
+
+	cacheOpts := fmt.Sprintf("blockcachesize=%d; indexcachesize=%d; ",
+		pstoreBlockCacheSize, pstoreIndexCacheSize)
+	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
+		FromSuperFlag(Alpha.Conf.GetString("badger"))
 
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
@@ -642,8 +647,6 @@ func run() {
 		WALDir:          Alpha.Conf.GetString("wal"),
 		CacheMb:         totalCache,
 		CachePercentage: cachePercentage,
-		PBlockCacheSize: pstoreBlockCacheSize,
-		PIndexCacheSize: pstoreIndexCacheSize,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -707,7 +710,7 @@ func run() {
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
-		Badger:              badger,
+		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

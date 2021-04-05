@@ -131,7 +131,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 
 	flag.StringVarP(&opt.badger, "badger", "b", worker.BadgerDefaults,
 		z.NewSuperFlagHelp(worker.BadgerDefaults).
-			Head("Badger options (Other badger options are also supported, not shown for brevity.)").
+			Head("Badger options").
 			Flag("compression",
 				"Specifies the compression algorithm and compression level (if applicable) for the "+
 					`postings directory. "none" would disable compression, while "zstd:1" would set `+

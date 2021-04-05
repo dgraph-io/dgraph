@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -47,8 +48,7 @@ var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
 
-const BulkBadgerDefaults = "compression=snappy; goroutines=8;" +
-	" cache-mb=64; cache-percentage=70,30;"
+const BulkBadgerDefaults = "compression=snappy; numgoroutines=8;"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -122,18 +122,13 @@ func init() {
 		"Namespace onto which to load the data. If not set, will preserve the namespace.")
 
 	flag.String("badger", BulkBadgerDefaults, z.NewSuperFlagHelp(BulkBadgerDefaults).
-		Head("Badger options (Other badger options are also supported, not shown for brevity.)").
+		Head("Badger options (Refer to badger documentation for all possible options)").
 		Flag("compression",
 			"Specifies the compression algorithm and compression level (if applicable) for the "+
 				`postings directory. "none" would disable compression, while "zstd:1" would set `+
 				"zstd compression at level 1.").
-		Flag("goroutines",
+		Flag("numgoroutines",
 			"The number of goroutines to use in badger.Stream.").
-		Flag("cache-mb",
-			"Total size of cache (in MB) per shard in the reducer.").
-		Flag("cache-percentage",
-			"Cache percentages summing up to 100 for various caches. (FORMAT: BlockCacheSize,"+
-				"IndexCacheSize)").
 		String())
 
 	x.RegisterClientTLSFlags(flag)
@@ -142,7 +137,12 @@ func init() {
 }
 
 func run() {
-	badger := x.MergeAndCheckBadgerDefaults(BulkBadgerDefaults, Bulk.Conf.GetString("badger"))
+	cacheSize := 64 << 20 // These are the default values. User can overwrite them using --badger.
+	cacheDefaults := fmt.Sprintf("indexcachesize=%d; blockcachesize=%d; ",
+		(70*cacheSize)/100, (30*cacheSize)/100)
+
+	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
+		FromSuperFlag(Bulk.Conf.GetString("badger"))
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
@@ -170,7 +170,7 @@ func run() {
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
 		ClientDir:        Bulk.Conf.GetString("xidmap"),
 		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
-		Badger:           badger,
+		Badger:           bopts,
 	}
 
 	x.PrintVersion()
