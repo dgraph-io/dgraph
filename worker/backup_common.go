@@ -75,6 +75,9 @@ type Manifest struct {
 	Compression string `json:"compression"`
 }
 
+// ValidReadTs function returns the valid read timestamp. The backup can have
+// the readTs=0 if the backup was done on an older version of dgraph. The
+// SinceTsDecprecated is kept for backward compatibility.
 func (m *Manifest) ValidReadTs() uint64 {
 	if m.ReadTs == 0 {
 		return m.SinceTsDeprecated
