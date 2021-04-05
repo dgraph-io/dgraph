@@ -88,7 +88,7 @@ func verifyManifests(manifests []*Manifest) error {
 }
 
 func getManifestsToRestore(
-	h UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
+	h x.UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
 
 	if !h.DirExists("") {
 		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exists",
@@ -101,7 +101,7 @@ func getManifestsToRestore(
 	return getFilteredManifests(h, manifest.Manifests, req)
 }
 
-func getFilteredManifests(h UriHandler, manifests []*Manifest,
+func getFilteredManifests(h x.UriHandler, manifests []*Manifest,
 	req *pb.RestoreRequest) ([]*Manifest, error) {
 
 	// filter takes a list of manifests and returns the list of manifests
@@ -160,7 +160,7 @@ func getFilteredManifests(h UriHandler, manifests []*Manifest,
 }
 
 // getConsolidatedManifest walks over all the backup directories and generates a master manifest.
-func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+func getConsolidatedManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	// If there is a master manifest already, we just return it.
 	if h.FileExists(backupManifest) {
 		manifest, err := readMasterManifest(h, backupManifest)
@@ -197,7 +197,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 	return &MasterManifest{Manifests: mlist}, nil
 }
 
-func readManifest(h UriHandler, path string) (*Manifest, error) {
+func readManifest(h x.UriHandler, path string) (*Manifest, error) {
 	var m Manifest
 	b, err := h.Read(path)
 	if err != nil {
@@ -209,7 +209,7 @@ func readManifest(h UriHandler, path string) (*Manifest, error) {
 	return &m, nil
 }
 
-func GetLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
+func GetLatestManifest(h x.UriHandler, uri *url.URL) (*Manifest, error) {
 	manifest, err := GetManifest(h, uri)
 	if err != nil {
 		return &Manifest{}, errors.Wrap(err, "Fialed to get the manifest")
@@ -220,7 +220,7 @@ func GetLatestManifest(h UriHandler, uri *url.URL) (*Manifest, error) {
 	return manifest.Manifests[len(manifest.Manifests)-1], nil
 }
 
-func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
+func readMasterManifest(h x.UriHandler, path string) (*MasterManifest, error) {
 	var m MasterManifest
 	b, err := h.Read(path)
 	if err != nil {
@@ -232,7 +232,7 @@ func readMasterManifest(h UriHandler, path string) (*MasterManifest, error) {
 	return &m, nil
 }
 
-func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
+func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
 		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
 			uri.Path)
@@ -244,7 +244,7 @@ func GetManifest(h UriHandler, uri *url.URL) (*MasterManifest, error) {
 	return manifest, nil
 }
 
-func createManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error {
+func createManifest(h x.UriHandler, uri *url.URL, manifest *MasterManifest) error {
 	var err error
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {
@@ -278,7 +278,7 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, erro
 		return nil, err
 	}
 
-	h, err := NewUriHandler(uri, creds)
+	h, err := x.NewUriHandler(uri, creds)
 	if err != nil {
 		return nil, errors.Wrap(err, "ListBackupManifests")
 	}

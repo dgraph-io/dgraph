@@ -48,7 +48,7 @@ const (
 
 // verifyRequest verifies that the manifest satisfies the requirements to process the given
 // restore request.
-func verifyRequest(h UriHandler, uri *url.URL, req *pb.RestoreRequest,
+func verifyRequest(h x.UriHandler, uri *url.URL, req *pb.RestoreRequest,
 	currentGroups []uint32) error {
 
 	manifests, err := getManifestsToRestore(h, uri, req)
@@ -85,7 +85,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 		return err
 	}
 
-	h, err := NewUriHandler(uri, creds)
+	h, err := x.NewUriHandler(uri, creds)
 	if err != nil {
 		return errors.Wrap(err, "VerifyBackup")
 	}
@@ -297,7 +297,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot parse backup location")
 	}
-	handler, err := NewUriHandler(uri, creds)
+	handler, err := x.NewUriHandler(uri, creds)
 	if err != nil {
 		return errors.Wrapf(err, "cannot create backup handler")
 	}
@@ -435,7 +435,7 @@ func RunOfflineRestore(dir, location, backupId string, keyFile string,
 		return LoadResult{Err: err}
 	}
 
-	h, err := NewUriHandler(uri, nil)
+	h, err := x.NewUriHandler(uri, nil)
 	if err != nil {
 		return LoadResult{Err: errors.Errorf("Unsupported URI: %v", uri)}
 	}

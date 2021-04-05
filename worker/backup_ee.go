@@ -152,7 +152,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(req))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(req))
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ type LoadResult struct {
 	Err error
 }
 
-func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
+func createBackupFile(h x.UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
 	if !h.DirExists("./") {
 		if err := h.CreateDir("./"); err != nil {
 			return nil, errors.Wrap(err, "while creating backup file")
@@ -376,7 +376,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 	if err != nil {
 		return nil, err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return nil, err
 	}
@@ -571,7 +571,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 	if err != nil {
 		return err
 	}
-	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
+	handler, err := x.NewUriHandler(uri, GetCredentialsFromRequest(pr.Request))
 	if err != nil {
 		return err
 	}

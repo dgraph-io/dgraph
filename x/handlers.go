@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package worker
+package x
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
 
@@ -86,7 +85,7 @@ type UriHandler interface {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
+func NewUriHandler(uri *url.URL, creds *MinioCredentials) (UriHandler, error) {
 	switch uri.Scheme {
 	case "file", "":
 		return NewFileHandler(uri), nil
@@ -120,7 +119,7 @@ func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
 }
 func (h *fileHandler) ListPaths(path string) []string {
 	path = h.JoinPath(path)
-	return x.WalkPathFunc(path, func(path string, isDis bool) bool {
+	return WalkPathFunc(path, func(path string, isDis bool) bool {
 		return true
 	})
 }
@@ -172,20 +171,20 @@ func pathExist(path string) bool {
 // s3Handler is used for 's3:' and 'minio:' URI schemes.
 type s3Handler struct {
 	bucketName, objectPrefix string
-	creds                    *x.MinioCredentials
+	creds                    *MinioCredentials
 	uri                      *url.URL
-	mc                       *x.MinioClient
+	mc                       *MinioClient
 }
 
 // NewS3Handler creates a new session, checks valid bucket at uri.Path, and configures a
 // minio client. It also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
-func NewS3Handler(uri *url.URL, creds *x.MinioCredentials) (*s3Handler, error) {
+func NewS3Handler(uri *url.URL, creds *MinioCredentials) (*s3Handler, error) {
 	h := &s3Handler{
 		creds: creds,
 		uri:   uri,
 	}
-	mc, err := x.NewMinioClient(uri, creds)
+	mc, err := NewMinioClient(uri, creds)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +272,7 @@ func (sw *s3Writer) Close() error {
 }
 
 // upload will block until it's done or an error occurs.
-func (sw *s3Writer) upload(mc *x.MinioClient, object string) {
+func (sw *s3Writer) upload(mc *MinioClient, object string) {
 	f := func() error {
 		start := time.Now()
 
@@ -324,7 +323,7 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 		return errors.Wrap(err, "Rename failed to create dstInfo")
 	}
 	// We try copying 100 times, if it still fails, then the user should manually rename.
-	err = x.RetryUntilSuccess(100, time.Second, func() error {
+	err = RetryUntilSuccess(100, time.Second, func() error {
 		if err := h.mc.CopyObject(dst, src); err != nil {
 			return errors.Wrapf(err, "While renaming object in s3, copy failed")
 		}
