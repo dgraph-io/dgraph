@@ -2,7 +2,15 @@
 # Input Schema
 #######################
 
-type Person {
+interface Node {
+	f1: String
+}
+
+type Person implements Node {
+	f1: String
+	f1Hi: String @dgraph(pred: "Node.f1@hi")
+	f2: String @dgraph(pred: "T.f@no")
+	f3: String @dgraph(pred: "f3@en")
 	name: String! @id
 	nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term,exact])
 	nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
@@ -285,14 +293,34 @@ type AddPersonPayload {
 	numUids: Int
 }
 
+type DeleteNodePayload {
+	node(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
+	msg: String
+	numUids: Int
+}
+
 type DeletePersonPayload {
 	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	msg: String
 	numUids: Int
 }
 
+type NodeAggregateResult {
+	count: Int
+	f1Min: String
+	f1Max: String
+}
+
 type PersonAggregateResult {
 	count: Int
+	f1Min: String
+	f1Max: String
+	f1HiMin: String
+	f1HiMax: String
+	f2Min: String
+	f2Max: String
+	f3Min: String
+	f3Max: String
 	nameMin: String
 	nameMax: String
 	nameHiMin: String
@@ -313,6 +341,11 @@ type PersonAggregateResult {
 	professionEnMax: String
 }
 
+type UpdateNodePayload {
+	node(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
+	numUids: Int
+}
+
 type UpdatePersonPayload {
 	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	numUids: Int
@@ -322,7 +355,19 @@ type UpdatePersonPayload {
 # Generated Enums
 #######################
 
+enum NodeHasFilter {
+	f1
+}
+
+enum NodeOrderable {
+	f1
+}
+
 enum PersonHasFilter {
+	f1
+	f1Hi
+	f2
+	f3
 	name
 	nameHi
 	nameEn
@@ -333,6 +378,10 @@ enum PersonHasFilter {
 }
 
 enum PersonOrderable {
+	f1
+	f1Hi
+	f2
+	f3
 	name
 	nameHi
 	nameEn
@@ -347,12 +396,33 @@ enum PersonOrderable {
 #######################
 
 input AddPersonInput {
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
 	name: String!
 	nameHi: String
 	nameEn: String
 	address: String
 	addressHi: String
 	professionEn: String
+}
+
+input NodeFilter {
+	has: [NodeHasFilter]
+	and: [NodeFilter]
+	or: [NodeFilter]
+	not: NodeFilter
+}
+
+input NodeOrder {
+	asc: NodeOrderable
+	desc: NodeOrderable
+	then: NodeOrder
+}
+
+input NodePatch {
+	f1: String
 }
 
 input PersonFilter {
@@ -373,6 +443,10 @@ input PersonOrder {
 }
 
 input PersonPatch {
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
 	nameHi: String
 	nameEn: String
 	address: String
@@ -381,6 +455,10 @@ input PersonPatch {
 }
 
 input PersonRef {
+	f1: String
+	f1Hi: String
+	f2: String
+	f3: String
 	name: String
 	nameHi: String
 	nameEn: String
@@ -401,6 +479,12 @@ input StringExactFilter_StringTermFilter {
 	anyofterms: String
 }
 
+input UpdateNodeInput {
+	filter: NodeFilter!
+	set: NodePatch
+	remove: NodePatch
+}
+
 input UpdatePersonInput {
 	filter: PersonFilter!
 	set: PersonPatch
@@ -412,6 +496,8 @@ input UpdatePersonInput {
 #######################
 
 type Query {
+	queryNode(filter: NodeFilter, order: NodeOrder, first: Int, offset: Int): [Node]
+	aggregateNode(filter: NodeFilter): NodeAggregateResult
 	getPerson(name: String!): Person
 	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 	aggregatePerson(filter: PersonFilter): PersonAggregateResult
@@ -422,6 +508,8 @@ type Query {
 #######################
 
 type Mutation {
+	updateNode(input: UpdateNodeInput!): UpdateNodePayload
+	deleteNode(filter: NodeFilter!): DeleteNodePayload
 	addPerson(input: [AddPersonInput!]!, upsert: Boolean): AddPersonPayload
 	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 	deletePerson(filter: PersonFilter!): DeletePersonPayload

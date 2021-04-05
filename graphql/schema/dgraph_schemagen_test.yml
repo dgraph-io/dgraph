@@ -426,19 +426,30 @@ schemas:
 
   - name: "Schema with multiple language tags, indexes on language tag fields got merged on language untagged field"
     input: |
-      type Person {
-          name: String! @id
-          nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [term,exact])
-          nameEn: String @dgraph(pred:"Person.name@en") @search(by: [regexp])
-          nameHiEn: String @dgraph(pred:"Person.name@hi:en")
-          nameHi_En_Untag: String @dgraph(pred:"Person.name@hi:en:.")
-          name_Untag_AnyLang: String @dgraph(pred:"Person.name@.")
-          address: String  @search(by: [fulltext])
-          addressHi: String @dgraph(pred:"Person.address@hi")
-          professionEn: String @dgraph(pred:"Person.profession@en")
+      interface Node {
+        f1: String
+      }
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        f3: String @dgraph(pred: "f3@en")
+        name: String! @id
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
       }
     output: |
+      type Node {
+        Node.f1
+      }
+      Node.f1: string @lang .
       type Person {
+        Node.f1
         Person.name
         Person.address
         Person.profession

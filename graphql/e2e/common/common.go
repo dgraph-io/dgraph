@@ -627,6 +627,7 @@ func JSONEqGraphQL(t *testing.T, expected, actual string) {
 	actual = strings.ReplaceAll(actual, "\r", "")
 	actual = strings.ReplaceAll(actual, "\n", "")
 	actual = strings.ReplaceAll(actual, "\t", "")
+
 	require.Equal(t, expected, actual)
 }
 
@@ -836,6 +837,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	t.Run("query multiple language Fields", queryMultipleLangFields)
+
 	// mutation tests
 	t.Run("add mutation", addMutation)
 	t.Run("update mutation by ids", updateMutationByIds)

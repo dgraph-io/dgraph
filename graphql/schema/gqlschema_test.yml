@@ -2934,17 +2934,6 @@ invalid_schemas:
         "locations": [ { "line": 3, "column": 19 } ] },
     ]
 
-  - name: "untagged language field should be of type String"
-    input: |
-      type Person  {
-        name: Int!
-        nameHi: String @dgraph(pred:"Person.name@en:hi")
-      }
-    errlist: [
-      { "message": "Type Person; Field name: Expected type `String` for untagged language field but got `Int`",
-        "locations": [ { "line": 2, "column": 3 } ] },
-    ]
-
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3425,15 +3414,20 @@ valid_schemas:
 
   - name: "valid schema with multiple language tag fields"
     input: |
-      type Person {
-          name: String! @id
-          nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [term,exact])
-          nameEn: String @dgraph(pred:"Person.name@en") @search(by: [regexp])
-          nameHiEn: String @dgraph(pred:"Person.name@hi:en")
-          nameHi_En_Untag: String @dgraph(pred:"Person.name@hi:en:.")
-          name_Untag_AnyLang: String @dgraph(pred:"Person.name@.")
-          address: String  @search(by: [fulltext])
-          addressHi: String @dgraph(pred:"Person.address@hi")
-          professionEn: String @dgraph(pred:"Person.profession@en")
+      interface Node {
+        f1: String
       }
-
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        name: String! @id
+        f3: String @dgraph(pred: "f3@en")
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
+      }

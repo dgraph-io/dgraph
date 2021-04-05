@@ -3915,6 +3915,7 @@ func idDirectiveWithInt(t *testing.T) {
 }
 
 func queryMultipleLangFields(t *testing.T) {
+	// add three Persons
 	addPersonParams := &GraphQLParams{
 		Query: `
 		mutation addPerson($person: [AddPersonInput!]!) {
@@ -3922,26 +3923,24 @@ func queryMultipleLangFields(t *testing.T) {
              numUids
 	       }
         }`,
+		Variables: map[string]interface{}{"person": []interface{}{
+			map[string]interface{}{
+				"name":         "Bob",
+				"professionEn": "writer",
+			},
+			map[string]interface{}{
+				"name":         "Alice",
+				"nameHi":       "ऐलिस",
+				"professionEn": "cricketer",
+			},
+			map[string]interface{}{
+				"name":         "Juliet",
+				"nameHi":       "जूलियट",
+				"nameZh":       "朱丽叶",
+				"professionEn": "singer",
+			},
+		}},
 	}
-
-	// add three Persons
-	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
-		map[string]interface{}{
-			"name":         "Bob",
-			"professionEn": "writer",
-		},
-		map[string]interface{}{
-			"name":         "Alice",
-			"nameHi":       "ऐलिस",
-			"professionEn": "cricketer",
-		},
-		map[string]interface{}{
-			"name":         "Juliet",
-			"nameHi":       "जूलियट",
-			"nameZh":       "朱丽叶",
-			"professionEn": "singer",
-		},
-	}}
 
 	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
@@ -3972,12 +3971,40 @@ func queryMultipleLangFields(t *testing.T) {
 	}
 	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	queryPersonExpected := `{"queryPerson":[{"name":"Juliet","nameZh":"朱丽叶","nameHi":"जूलियट",
-"nameHiZh":"जूलियट","nameZhHi":"朱丽叶","nameHi_Zh_Untag":"जूलियट","name_Untag_AnyLang":"Juliet",
-"professionEn":"singer"},{"name":"Alice","nameZh":null,"nameHi":"ऐलिस","nameHiZh":"ऐलिस",
-"nameZhHi":"ऐलिस","nameHi_Zh_Untag":"ऐलिस","name_Untag_AnyLang":"Alice","professionEn":"cricketer"},
-{"name":"Bob","nameZh":null,"nameHi":null,"nameHiZh":null,"nameZhHi":null,"nameHi_Zh_Untag":"Bob",
-"name_Untag_AnyLang":"Bob","professionEn":"writer"}]}`
+	queryPersonExpected := `
+		{
+			"queryPerson":	[
+				{
+					"name":"Juliet",
+					"nameZh":"朱丽叶",
+					"nameHi":"जूलियट",
+					"nameHiZh":"जूलियट",
+					"nameZhHi":"朱丽叶",
+					"nameHi_Zh_Untag":"जूलियट",
+					"name_Untag_AnyLang":"Juliet",
+					"professionEn":"singer"
+				},
+				{
+					"name":"Alice",
+					"nameZh":null,
+					"nameHi":"ऐलिस",
+					"nameHiZh":"ऐलिस",
+					"nameZhHi":"ऐलिस",
+					"nameHi_Zh_Untag":"ऐलिस",
+					"name_Untag_AnyLang":"Alice",
+					"professionEn":"cricketer"
+				},
+				{	"name":"Bob",
+					"nameZh":null,
+					"nameHi":null,
+					"nameHiZh":null,
+					"nameZhHi":null,
+					"nameHi_Zh_Untag":"Bob",
+					"name_Untag_AnyLang":"Bob",
+					"professionEn":"writer"
+				}
+			]
+		}`
 
 	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup

@@ -1235,9 +1235,7 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 
-		dgPredNameAndTag := strings.Split(predArg.Value.Raw, "@")
-		dgPredName := dgPredNameAndTag[0]
-		tags := dgPredNameAndTag[1]
+		tags := strings.Split(predArg.Value.Raw, "@")[1]
 		if tags == "*" {
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
 				" supported in GraphQL", typ.Name, field.Name))
@@ -1247,16 +1245,6 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: empty language"+
 				" tag not supported", typ.Name, field.Name))
 			return errs
-		}
-		langUntaggedFieldName := strings.Split(dgPredName, ".")[1]
-		// untagged language field should be of type string
-		for _, fld := range typ.Fields {
-			if langUntaggedFieldName == fld.Name && fld.Type.Name() != "String" {
-				errs = append(errs, gqlerror.ErrorPosf(fld.Position, "Type %s; Field %s: "+
-					"Expected type `String` for untagged language field but got `%s`",
-					typ.Name, fld.Name, fld.Type.Name()))
-				return errs
-			}
 		}
 
 	}
