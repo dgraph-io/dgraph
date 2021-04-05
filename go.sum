@@ -117,13 +117,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Evo=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
-github.com/dgraph-io/badger/v3 v3.0.0-20210309075542-2245c18dfd1f h1:dZpGNLp9YUpq4h2DRcWAjW5dWj47SM3W3NK71z6FRa0=
-github.com/dgraph-io/badger/v3 v3.0.0-20210309075542-2245c18dfd1f/go.mod h1:GHMCYxuDWyzbHkh4k3yyg4PM61tJPFfEGSMbE3Vd5QE=
-github.com/dgraph-io/badger/v3 v3.0.0-20210401125755-247641b95e30 h1:mfjubR/ExHQfzKXaQf1hZWB9odAgPNxGqJuMnR6A7dM=
-github.com/dgraph-io/badger/v3 v3.0.0-20210401125755-247641b95e30/go.mod h1:GHMCYxuDWyzbHkh4k3yyg4PM61tJPFfEGSMbE3Vd5QE=
-github.com/dgraph-io/badger/v3 v3.0.0-20210401135229-49e68bb1ea60/go.mod h1:GHMCYxuDWyzbHkh4k3yyg4PM61tJPFfEGSMbE3Vd5QE=
-github.com/dgraph-io/badger/v3 v3.0.0-20210404174040-82aa9f5edfc7 h1:UlQhp/ZztBRQkh8p2s5XvKnOuvDBQStxaa10E4R1tqk=
-github.com/dgraph-io/badger/v3 v3.0.0-20210404174040-82aa9f5edfc7/go.mod h1:GHMCYxuDWyzbHkh4k3yyg4PM61tJPFfEGSMbE3Vd5QE=
+github.com/dgraph-io/badger/v3 v3.0.0-20210405131809-9b176f1b56e8 h1:zRzQj1hfaEtXlK3IoizRwohnFdpwlMw9uTMsgHSTBaU=
+github.com/dgraph-io/badger/v3 v3.0.0-20210405131809-9b176f1b56e8/go.mod h1:GHMCYxuDWyzbHkh4k3yyg4PM61tJPFfEGSMbE3Vd5QE=
 github.com/dgraph-io/dgo/v200 v200.0.0-20210401091508-95bfd74de60e h1:kdH2yqGYUl5xJARdI5kN1fjhVUV2sLC+vL1CVXhcAfo=
 github.com/dgraph-io/dgo/v200 v200.0.0-20210401091508-95bfd74de60e/go.mod h1:zCfS4R3E/UC/PhETXJYq/Blia0eCH1EQqKrWDvvimxE=
 github.com/dgraph-io/gqlgen v0.13.2 h1:TNhndk+eHKj5qE7BenKKSYdSIdOGhLqxR1rCiMso9KM=
