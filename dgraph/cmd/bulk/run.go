@@ -73,10 +73,10 @@ func init() {
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
 		"Flag to indicate whether schema and data files are encrypted. "+
-			"Must be specified with --encryption_key_file or vault option(s).")
+			"Must be specified with --encryption or vault option(s).")
 	flag.Bool("encrypted_out", false,
 		"Flag to indicate whether to encrypt the output. "+
-			"Must be specified with --encryption_key_file or vault option(s).")
+			"Must be specified with --encryption or vault option(s).")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -194,7 +194,7 @@ func run() {
 	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
-			fmt.Fprint(os.Stderr, "Must use --encryption_key_file or vault option(s).\n")
+			fmt.Fprint(os.Stderr, "Must use --encryption or vault option(s).\n")
 			os.Exit(1)
 		}
 	} else {
