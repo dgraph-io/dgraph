@@ -1,20 +1,23 @@
-// +build !oss
-
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2018-2021 Dgraph Labs, Inc. and Contributors
  *
- * Licensed under the Dgraph Community License (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -22,63 +25,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/credentials"
 
 	"github.com/pkg/errors"
 )
-
-const (
-	// backupPathFmt defines the path to store or index backup objects.
-	// The expected parameter is a date in string format.
-	backupPathFmt = `dgraph.%s`
-
-	// backupNameFmt defines the name of backups files or objects (remote).
-	// The first parameter is the read timestamp at the time of backup. This is used for
-	// incremental backups and partial restore.
-	// The second parameter is the group ID when backup happened. This is used for partitioning
-	// the posting directories 'p' during restore.
-	backupNameFmt = `r%d-g%d.backup`
-
-	// backupManifest is the name of backup manifests. This a JSON file that contains the
-	// details of the backup. A backup dir without a manifest is ignored.
-	//
-	// Example manifest:
-	// {
-	//   "since": 2280,
-	//   "groups": [ 1, 2, 3 ],
-	// }
-	//
-	// "since" is the read timestamp used at the backup request. This value is called "since"
-	// because it used by subsequent incremental backups.
-	// "groups" are the group IDs that participated.
-	backupManifest = `manifest.json`
-
-	tmpManifest = `manifest_tmp.json`
-)
-
-func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
-	if !h.DirExists("./") {
-		if err := h.CreateDir("./"); err != nil {
-			return nil, errors.Wrap(err, "while creating backup file")
-		}
-	}
-	fileName := backupName(req.ReadTs, req.GroupId)
-	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
-	if err := h.CreateDir(dir); err != nil {
-		return nil, errors.Wrap(err, "while creating backup file")
-	}
-	backupFile := filepath.Join(dir, fileName)
-	w, err := h.CreateFile(backupFile)
-	return w, errors.Wrap(err, "while creating backup file")
-}
-
-func backupName(since uint64, groupId uint32) string {
-	return fmt.Sprintf(backupNameFmt, since, groupId)
-}
 
 // UriHandler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
@@ -216,30 +168,6 @@ func pathExist(path string) bool {
 }
 
 // S3 Handler.
-
-// FillRestoreCredentials fills the empty values with the default credentials so that
-// a restore request is sent to all the groups with the same credentials.
-func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
-	uri, err := url.Parse(location)
-	if err != nil {
-		return err
-	}
-
-	defaultCreds := credentials.Value{
-		AccessKeyID:     req.AccessKey,
-		SecretAccessKey: req.SecretKey,
-		SessionToken:    req.SessionToken,
-	}
-	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
-
-	creds, _ := provider.Retrieve() // Error is always nil.
-
-	req.AccessKey = creds.AccessKeyID
-	req.SecretKey = creds.SecretAccessKey
-	req.SessionToken = creds.SessionToken
-
-	return nil
-}
 
 // s3Handler is used for 's3:' and 'minio:' URI schemes.
 type s3Handler struct {

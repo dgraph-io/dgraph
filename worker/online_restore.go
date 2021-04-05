@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
@@ -90,6 +91,30 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 	}
 
 	return verifyRequest(h, uri, req, currentGroups)
+}
+
+// FillRestoreCredentials fills the empty values with the default credentials so that
+// a restore request is sent to all the groups with the same credentials.
+func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
+	uri, err := url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	defaultCreds := credentials.Value{
+		AccessKeyID:     req.AccessKey,
+		SecretAccessKey: req.SecretKey,
+		SessionToken:    req.SessionToken,
+	}
+	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
+
+	creds, _ := provider.Retrieve() // Error is always nil.
+
+	req.AccessKey = creds.AccessKeyID
+	req.SecretKey = creds.SecretAccessKey
+	req.SessionToken = creds.SessionToken
+
+	return nil
 }
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.

@@ -14,6 +14,7 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"sort"
@@ -23,6 +24,39 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
+
+const (
+	// backupPathFmt defines the path to store or index backup objects.
+	// The expected parameter is a date in string format.
+	backupPathFmt = `dgraph.%s`
+
+	// backupNameFmt defines the name of backups files or objects (remote).
+	// The first parameter is the read timestamp at the time of backup. This is used for
+	// incremental backups and partial restore.
+	// The second parameter is the group ID when backup happened. This is used for partitioning
+	// the posting directories 'p' during restore.
+	backupNameFmt = `r%d-g%d.backup`
+
+	// backupManifest is the name of backup manifests. This a JSON file that contains the
+	// details of the backup. A backup dir without a manifest is ignored.
+	//
+	// Example manifest:
+	// {
+	//   "since": 2280,
+	//   "groups": [ 1, 2, 3 ],
+	// }
+	//
+	// "since" is the read timestamp used at the backup request. This value is called "since"
+	// because it used by subsequent incremental backups.
+	// "groups" are the group IDs that participated.
+	backupManifest = `manifest.json`
+
+	tmpManifest = `manifest_tmp.json`
+)
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
+}
 
 func verifyManifests(manifests []*Manifest) error {
 	if len(manifests) == 0 {

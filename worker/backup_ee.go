@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -345,6 +346,22 @@ type LoadResult struct {
 	MaxLeaseNsId uint64
 	// The error, if any, of the load operation.
 	Err error
+}
+
+func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {
+	if !h.DirExists("./") {
+		if err := h.CreateDir("./"); err != nil {
+			return nil, errors.Wrap(err, "while creating backup file")
+		}
+	}
+	fileName := backupName(req.ReadTs, req.GroupId)
+	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
+	if err := h.CreateDir(dir); err != nil {
+		return nil, errors.Wrap(err, "while creating backup file")
+	}
+	backupFile := filepath.Join(dir, fileName)
+	w, err := h.CreateFile(backupFile)
+	return w, errors.Wrap(err, "while creating backup file")
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data
