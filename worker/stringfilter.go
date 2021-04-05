@@ -29,14 +29,13 @@ import (
 type matchFunc func(types.Val, *stringFilter) bool
 
 type stringFilter struct {
-	funcName  string
-	funcType  FuncType
-	lang      string
-	tokens    []string
-	match     matchFunc
-	ineqValue types.Val
-	eqVals    []types.Val
-	tokName   string
+	funcName string
+	funcType FuncType
+	lang     string
+	tokens   []string
+	match    matchFunc
+	eqVals   []types.Val
+	tokName  string
 }
 
 func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb.List {

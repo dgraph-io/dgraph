@@ -39,7 +39,6 @@ type exportInput struct {
 }
 
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-
 	glog.Info("Got export request through GraphQL admin API")
 
 	input, err := getExportInput(m)
@@ -83,7 +82,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	files, err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
+	if err := worker.ExportOverNetwork(ctx, &pb.ExportRequest{
 		Format:       format,
 		Namespace:    exportNs,
 		Destination:  input.Destination,
@@ -91,28 +90,16 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
-	})
-	if err != nil {
+	}); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
-	responseData := response("Success", "Export completed.")
-	responseData["exportedFiles"] = toInterfaceSlice(files)
-
+	responseData := response("Success", "Export queued successfully.")
 	return resolve.DataResult(
 		m,
 		map[string]interface{}{m.Name(): responseData},
 		nil,
 	), true
-}
-
-// toInterfaceSlice converts []string to []interface{}
-func toInterfaceSlice(in []string) []interface{} {
-	out := make([]interface{}, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
-	}
-	return out
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {

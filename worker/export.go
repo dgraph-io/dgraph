@@ -221,7 +221,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprint(bp, uidFmtStrRdf, p.Uid)
 		} else {
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
 			str, err := valToStr(val)
@@ -540,9 +540,10 @@ func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, e
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
-	if in.GroupId != groups().groupId() {
-		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
-			groups().groupId(), in.GroupId)
+	g := groups()
+	if myId := g.groupId(); myId != in.GroupId {
+		return nil, errors.Errorf(
+			"Export request group mismatch. Mine: %d. Requested: %d", myId, in.GroupId)
 	}
 	glog.Infof("Export requested at %d for namespace %d.", in.ReadTs, in.Namespace)
 
@@ -551,6 +552,12 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		return nil, err
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
+
+	closer, err := g.Node.startTask(opExport)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Done()
 
 	return exportInternal(ctx, in, pstore, false)
 }
@@ -562,27 +569,27 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 // and types.
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
-	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := newExportStorage(in,
-		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	uts := time.Unix(in.UnixTs, 0).UTC().Format("0102.150405")
+	exportStorage, err := newExportStorage(
+		in, fmt.Sprintf("dgraph.n%d.r%d.u%s", in.GetNamespace(), in.ReadTs, uts))
 	if err != nil {
 		return nil, err
 	}
 
 	xfmt := exportFormats[in.Format]
 
-	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
+	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s.gz", in.GroupId, xfmt.ext))
 	if err != nil {
 		return nil, err
 	}
 
-	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
+	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d.schema.gz", in.GroupId))
 	if err != nil {
 		return nil, err
 	}
 
 	gqlSchemaWriter, err := exportStorage.openFile(
-		fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
+		fmt.Sprintf("g%02d.gql_schema.gz", in.GroupId))
 	if err != nil {
 		return nil, err
 	}
@@ -925,17 +932,17 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) (Exporte
 }
 
 // ExportOverNetwork sends export requests to all the known groups.
-func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFiles, error) {
+func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
-		return nil, err
+		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
-		return nil, err
+		return err
 	}
 	readTs := ts.ReadOnly
 	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
@@ -949,6 +956,9 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 		error
 	}
 	ch := make(chan filesAndError, len(gids))
+
+	// Create a background context, since exports will run asychronously in the background.
+	ctx = context.Background()
 	for _, gid := range gids {
 		go func(group uint32) {
 			req := &pb.ExportRequest{
@@ -969,19 +979,20 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 		}(gid)
 	}
 
-	var allFiles ExportedFiles
-	for i := 0; i < len(gids); i++ {
-		pair := <-ch
-		if pair.error != nil {
-			rerr := errors.Wrapf(pair.error, "Export failed at readTs %d", readTs)
-			glog.Errorln(rerr)
-			return nil, rerr
+	go func() {
+		var allFiles ExportedFiles
+		for i := 0; i < len(gids); i++ {
+			pair := <-ch
+			if pair.error != nil {
+				glog.Errorf("Export failed at readTs %d: %s", readTs, pair.error)
+				return
+			}
+			allFiles = append(allFiles, pair.ExportedFiles...)
 		}
-		allFiles = append(allFiles, pair.ExportedFiles...)
-	}
+		glog.Infof("Export at readTs %d DONE: %+v", readTs, allFiles)
+	}()
 
-	glog.Infof("Export at readTs %d DONE", readTs)
-	return allFiles, nil
+	return nil
 }
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an

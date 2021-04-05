@@ -55,9 +55,9 @@ const (
     """
 	The UInt64 scalar type represents an unsigned 64‐bit numeric non‐fractional value.
 	UInt64 can represent values in range [0,(2^64 - 1)].
-	""" 
+	"""
     scalar UInt64
-	
+
 	"""
 	The DateTime scalar type represents date and time as a string in RFC3339 format.
 	For example: "1985-04-12T23:20:50.52Z" represents 20 minutes and 50.52 seconds after the 23rd hour of April 12th, 1985 in UTC.
@@ -718,7 +718,6 @@ func newAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
-
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"addNamespace":      resolveAddNamespace,
 		"backup":            resolveBackup,

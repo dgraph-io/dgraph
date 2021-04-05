@@ -290,10 +290,10 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 			// Go over every change in the change set and check if it should be applied. If yes,
 			// apply it, otherwise skip it.
 			for i, change := range changeSet.changes {
-				fmt.Println(fmt.Sprintf(""+
+				fmt.Println(""+
 					"\tApplying change %d:\n"+
 					"\t\tName       : %s\n"+
-					"\t\tDescription: %s", i+1, change.name, change.description))
+					"\t\tDescription: %s", i+1, change.name, change.description)
 				// apply the change only if the min version from which it should be applied
 				// is <= the version from which we want to upgrade
 				if cmdInput.fromVersion.Compare(change.minFromVersion) != less {

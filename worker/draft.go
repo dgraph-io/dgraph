@@ -93,6 +93,8 @@ func (id op) String() string {
 		return "opBackup"
 	case opPredMove:
 		return "opPredMove"
+	case opExport:
+		return "opExport"
 	default:
 		return "opUnknown"
 	}
@@ -105,6 +107,7 @@ const (
 	opRestore
 	opBackup
 	opPredMove
+	opExport
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -116,21 +119,6 @@ const (
 func (n *node) startTask(id op) (*z.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
-
-	stopTask := func(id op) {
-		n.opsLock.Lock()
-		delete(n.ops, id)
-		n.opsLock.Unlock()
-		glog.Infof("Operation completed with id: %s", id)
-
-		// Resume rollups if another operation is being stopped.
-		if id != opRollup {
-			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
-			// If any other operation is running, this would error out. This error can
-			// be safely ignored because rollups will resume once that other task is done.
-			_, _ = n.startTask(opRollup)
-		}
-	}
 
 	closer := z.NewCloser(1)
 	switch id {
@@ -152,10 +140,21 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 		}
 	case opBackup:
 		// Backup cancels all other operations, except for other backups since
-		// only one restore operation should be active any given moment.
+		// only one backup operation should be active any given moment.
 		for otherId, otherCloser := range n.ops {
 			if otherId == opBackup {
 				return nil, errors.Errorf("another backup operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opExport:
+		// Export cancels all other operations, except for other exports since
+		// only one export operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opExport {
+				return nil, errors.Errorf("another export operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
@@ -180,7 +179,18 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 	glog.Infof("Operation started with id: %s", id)
 	go func(id op, closer *z.Closer) {
 		closer.Wait()
-		stopTask(id)
+		n.opsLock.Lock()
+		delete(n.ops, id)
+		n.opsLock.Unlock()
+		glog.Infof("Operation completed with id: %s", id)
+
+		// Resume rollups if another operation is being stopped.
+		if id != opRollup {
+			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
+			// If any other operation is running, this would error out. This error can
+			// be safely ignored because rollups will resume once that other task is done.
+			_, _ = n.startTask(opRollup)
+		}
 	}(id, closer)
 	return closer, nil
 }

@@ -369,7 +369,7 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles, numExpectedDirs int) []string {
 	testutil.StartBackupHttps(t, alphaBackupDir, forceFull)
-	testutil.WaitForBackup(t)
+	testutil.WaitForTask(t, "opBackup")
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)

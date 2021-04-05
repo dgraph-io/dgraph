@@ -50,8 +50,6 @@ type BackupProcessor struct {
 
 type threadLocal struct {
 	Request *pb.BackupRequest
-	// pre-allocated pb.PostingList object.
-	pl pb.PostingList
 	// pre-allocated pb.BackupPostingList object.
 	bpl   pb.BackupPostingList
 	alloc *z.Allocator
