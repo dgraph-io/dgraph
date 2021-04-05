@@ -18,8 +18,11 @@ package zero
 
 import (
 	"context"
+	"math/rand"
+	"time"
 
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -178,10 +181,39 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	ctx, span := otrace.StartSpan(ctx, "Zero.AssignIds")
 	defer span.End()
 
+	rateLimit := func() error {
+		if num.GetType() != pb.Num_UID {
+			// We only rate limit lease of UIDs.
+			return nil
+		}
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil || ns == x.GalaxyNamespace {
+			// There is no rate limiting for GalaxyNamespace. Also, we allow the requests which do
+			// not contain namespace into context.
+			return nil
+		}
+		if num.Val > opts.limiterConfig.UidLeaseLimit {
+			return errors.Errorf("Requested UID lease(%d) is greater than allowed(%d).",
+				num.Val, opts.limiterConfig.UidLeaseLimit)
+		}
+
+		if !s.rateLimiter.Allow(ns, int64(num.Val)) {
+			// Return error after random delay.
+			delay := rand.Intn(int(opts.limiterConfig.RefillAfter))
+			time.Sleep(time.Duration(delay) * time.Second)
+			return errors.Errorf("Cannot lease UID because UID lease for the namespace %#x is "+
+				"exhausted. Please retry after some time.", ns)
+		}
+		return nil
+	}
+
 	reply := &emptyAssignedIds
 	lease := func() error {
 		var err error
 		if s.Node.AmLeader() {
+			if err := rateLimit(); err != nil {
+				return err
+			}
 			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num)
 			return err
@@ -200,6 +232,10 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())
 		num.Forwarded = true
+		// pass on the incoming metadata to the zero leader.
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			ctx = metadata.NewOutgoingContext(ctx, md)
+		}
 		reply, err = zc.AssignIds(ctx, num)
 		return err
 	}

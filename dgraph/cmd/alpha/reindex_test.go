@@ -35,7 +35,7 @@ func TestReindexTerm(t *testing.T) {
       _:u3 <name> "Cd Da" .
     }
   }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
 	// perform re-indexing
@@ -46,7 +46,7 @@ func TestReindexTerm(t *testing.T) {
         name
       }
     }`
-	res, _, err := queryWithTs(q1, "application/dql", "", 0)
+	res, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.Contains(t, res, `{"name":"Ab Bc"}`)
 	require.Contains(t, res, `{"name":"Bc Cd"}`)
@@ -64,7 +64,7 @@ func TestReindexLang(t *testing.T) {
       <10231> <name>	"結婚って、幸せですか THE MOVIE"@ja	.
     }
   }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
 	// reindex
@@ -76,7 +76,7 @@ func TestReindexLang(t *testing.T) {
       name@en
     }
   }`
-	res, _, err := queryWithTs(q1, "application/dql", "", 0)
+	res, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -95,10 +95,10 @@ func TestReindexLang(t *testing.T) {
 
 	// adding another triplet
 	m2 := `{ set { <10400> <name>	"Runtime"@en	. }}`
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(mutationInp{body: m2, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
-	res, _, err = queryWithTs(q1, "application/dql", "", 0)
+	res, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -138,7 +138,7 @@ func TestReindexReverseCount(t *testing.T) {
       <3> <value>	<6>	.
     }
   }`
-	_, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
 	// reindex
@@ -149,7 +149,7 @@ func TestReindexReverseCount(t *testing.T) {
       uid
     }
   }`
-	res, _, err := queryWithTs(q1, "application/dql", "", 0)
+	res, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -166,10 +166,10 @@ func TestReindexReverseCount(t *testing.T) {
 
 	// adding another triplet
 	m2 := `{ set { <9> <value>	<4>	. }}`
-	_, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	_, err = mutationWithTs(mutationInp{body: m2, typ: "application/rdf", commitNow: true})
 	require.NoError(t, err)
 
-	res, _, err = queryWithTs(q1, "application/dql", "", 0)
+	res, _, err = queryWithTs(queryInp{body: q1, typ: "application/dql"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
     "data": {
@@ -191,7 +191,7 @@ func TestReindexReverseCount(t *testing.T) {
 func checkSchema(t *testing.T, query, key string) {
 	N := 10
 	for i := 0; i < N; i++ {
-		res, _, err := queryWithTs(query, "application/dql", "", 0)
+		res, _, err := queryWithTs(queryInp{body: query, typ: "application/dql"})
 		require.NoError(t, err)
 		if strings.Contains(res, key) {
 			return

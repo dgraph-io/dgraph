@@ -72,6 +72,52 @@ func (s *Server) rebalanceTablets() {
 	}
 }
 
+// MoveTablet can be used to move a tablet to a specific group.
+// It takes in tablet and destination group as argument.
+// It returns a *pb.Status to be used by the `/moveTablet` HTTP handler in Zero.
+func (s *Server) MoveTablet(ctx context.Context, req *pb.MoveTabletRequest) (*pb.Status, error) {
+	if !s.Node.AmLeader() {
+		return &pb.Status{Code: 1, Msg: x.Error}, errNotLeader
+	}
+
+	knownGroups := s.KnownGroups()
+	var isKnown bool
+	for _, grp := range knownGroups {
+		if grp == req.DstGroup {
+			isKnown = true
+			break
+		}
+	}
+	if !isKnown {
+		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
+			fmt.Errorf("Group: [%d] is not a known group.", req.DstGroup)
+	}
+
+	tablet := x.NamespaceAttr(req.Namespace, req.Tablet)
+	tab := s.ServingTablet(tablet)
+	if tab == nil {
+		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
+			fmt.Errorf("namespace: %d. No tablet found for: %s", req.Namespace, req.Tablet)
+	}
+
+	srcGroup := tab.GroupId
+	if srcGroup == req.DstGroup {
+		return &pb.Status{Code: 1, Msg: x.ErrorInvalidRequest},
+			fmt.Errorf("namespace: %d. Tablet: [%s] is already being served by group: [%d]",
+				req.Namespace, req.Tablet, srcGroup)
+	}
+
+	if err := s.movePredicate(tablet, srcGroup, req.DstGroup); err != nil {
+		glog.Errorf("namespace: %d. While moving predicate %s from %d -> %d. Error: %v",
+			req.Namespace, req.Tablet, srcGroup, req.DstGroup, err)
+		return &pb.Status{Code: 1, Msg: x.Error}, err
+	}
+
+	return &pb.Status{Code: 0, Msg: fmt.Sprintf("namespace: %d. "+
+		"Predicate: [%s] moved from group [%d] to [%d]", req.Namespace, req.Tablet, srcGroup,
+		req.DstGroup)}, nil
+}
+
 // movePredicate is the main entry point for move predicate logic. This Zero must remain the leader
 // for the entire duration of predicate move. If this Zero stops being the leader, the final
 // proposal of reassigning the tablet to the destination would fail automatically.

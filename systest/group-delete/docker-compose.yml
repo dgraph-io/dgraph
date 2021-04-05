@@ -16,7 +16,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr
-      -v=2 
+      -v=2 --raft "group=1"
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha2:
     image: dgraph/dgraph:latest
@@ -32,7 +32,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr
-      -v=2 
+      -v=2 --raft "group=2"
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   alpha3:
     image: dgraph/dgraph:latest
@@ -48,7 +48,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr
-      -v=2 
+      -v=2 --raft "group=3"
       --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   zero1:
     image: dgraph/dgraph:latest

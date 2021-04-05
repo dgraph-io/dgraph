@@ -19,6 +19,8 @@ package edgraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -857,7 +859,7 @@ func updateValInMutations(gmu *gql.Mutation, qc *queryContext) error {
 	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 	if qc.nquadsCount > x.Config.LimitMutationsNquad {
 		return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-			qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+			qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 	}
 	return nil
 }
@@ -909,9 +911,9 @@ func updateUIDInMutations(gmu *gql.Mutation, qc *queryContext) error {
 				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
 				qc.nquadsCount++
 			}
-			if qc.nquadsCount > int(x.Config.Limit.GetInt64("mutations-nquad")) {
+			if qc.nquadsCount > int(x.Config.LimitMutationsNquad) {
 				return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-					qc.nquadsCount, int(x.Config.Limit.GetInt64("mutations-nquad")))
+					qc.nquadsCount, int(x.Config.LimitMutationsNquad))
 			}
 		}
 	}
@@ -1115,6 +1117,26 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	ctx = x.AttachJWTNamespace(ctx)
+	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
+		// A fresh StartTs is assigned if it is 0.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if req.GetHash() != getHash(ns, req.GetStartTs()) {
+			return nil, x.ErrHashMismatch
+		}
+	}
+	// Add a timeout for queries which don't have a deadline set. We don't want to
+	// apply a timeout if it's a mutation, that's currently handled by flag
+	// "abort_older_than".
+	if req.GetMutations() == nil && x.Config.QueryTimeout != 0 {
+		if d, _ := ctx.Deadline(); d.IsZero() {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, x.Config.QueryTimeout)
+			defer cancel()
+		}
+	}
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
@@ -1250,6 +1272,14 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
+	}
+	if x.WorkerConfig.AclEnabled {
+		// attach the hash, user should send this hash when further operating on this startTs.
+		ns, err := x.ExtractNamespace(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp.Txn.Hash = getHash(ns, resp.Txn.StartTs)
 	}
 	md := metadata.Pairs(x.DgraphCostHeader, fmt.Sprint(resp.Metrics.NumUids["_total"]))
 	grpc.SendHeader(ctx, md)
@@ -1461,6 +1491,27 @@ func authorizeRequest(ctx context.Context, qc *queryContext) error {
 	return nil
 }
 
+func getHash(ns, startTs uint64) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%#x%#x%s", ns, startTs, x.WorkerConfig.HmacSecret)))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
+	ns, err := x.ExtractJWTNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	if tc.Hash != getHash(ns, tc.StartTs) {
+		return x.ErrHashMismatch
+	}
+	return nil
+}
+
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
@@ -1477,16 +1528,20 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 	annotateStartTs(span, tc.StartTs)
 
+	if err := validateNamespace(ctx, tc); err != nil {
+		return &api.TxnContext{}, err
+	}
+
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == dgo.ErrAborted {
 		// If err returned is dgo.ErrAborted and tc.Aborted was set, that means the client has
 		// aborted the transaction by calling txn.Discard(). Hence return a nil error.
+		tctx.Aborted = true
 		if tc.Aborted {
 			return tctx, nil
 		}
 
-		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs

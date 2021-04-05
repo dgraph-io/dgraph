@@ -108,10 +108,6 @@ they form a Raft group and provide synchronous replication.
 	// --encryption_key_file
 	enc.RegisterFlags(flag)
 
-	flag.String("cache_percentage", "0,65,35,0",
-		`Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,`+
-			`PstoreBlockCache,PstoreIndexCache,WAL).`)
-
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
 
@@ -149,6 +145,16 @@ they form a Raft group and provide synchronous replication.
 				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
+	// Cache flags.
+	flag.String("cache", worker.CacheDefaults, z.NewSuperFlagHelp(worker.CacheDefaults).
+		Head("Cache options").
+		Flag("size-mb",
+			"Total size of cache (in MB) to be used in Dgraph.").
+		Flag("percentage",
+			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
+				"PstoreBlockCache,PstoreIndexCache)").
+		String())
+
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
 		Head("Raft options").
 		Flag("idx",
@@ -158,9 +164,13 @@ they form a Raft group and provide synchronous replication.
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
-		Flag("snapshot-after",
+		Flag("snapshot-after-entries",
 			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
-				"the more frequent snapshot creation will be.").
+				"the more frequent snapshot creation will be. Snapshots are created only if both "+
+				"snapshot-after-duration and snapshot-after-entries threshold are crossed.").
+		Flag("snapshot-after-duration",
+			"Frequency at which we should create a new raft snapshots. Set "+
+				"to 0 to disable duration based snapshot.").
 		Flag("pending-proposals",
 			"Number of pending mutation proposals. Useful for rate limiting.").
 		String())
@@ -204,6 +214,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("disallow-drop",
 			"Set disallow-drop to true to block drop-all and drop-data operation. It still"+
 				" allows dropping attributes and types.").
+		Flag("query-timeout",
+			"Maximum time after which a query execution will fail. If set to"+
+				" 0, the timeout is infinite.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -498,7 +511,8 @@ func setupServer(closer *z.Closer) {
 	baseMux.HandleFunc("/alter", alterHandler)
 	baseMux.HandleFunc("/health", healthCheck)
 	baseMux.HandleFunc("/state", stateHandler)
-	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
+	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
+	zpages.Handle(baseMux, "/debug/z")
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -553,9 +567,6 @@ func setupServer(closer *z.Closer) {
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
 	glog.Infof("Bringing up GraphQL HTTP admin API at %s/admin", addr)
-
-	// Add OpenCensus z-pages.
-	zpages.Handle(baseMux, "/z")
 
 	baseMux.Handle("/", http.HandlerFunc(homeHandler))
 	baseMux.Handle("/ui/keywords", http.HandlerFunc(keywordHandler))
@@ -613,23 +624,17 @@ func run() {
 	}
 
 	bindall = Alpha.Conf.GetBool("bindall")
-
-	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
+		worker.CacheDefaults)
+	totalCache := cache.GetInt64("size-mb")
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	if Alpha.Conf.IsSet("lru_mb") {
-		glog.Warningln("--lru_mb is deprecated, use --cache_mb instead")
-		if !Alpha.Conf.IsSet("cache_mb") {
-			totalCache = int64(Alpha.Conf.GetFloat64("lru_mb"))
-		}
-	}
 
-	cachePercentage := Alpha.Conf.GetString("cache_percentage")
-	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
+	cachePercentage := cache.GetString("percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
 	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
 		worker.BadgerDefaults)
@@ -643,10 +648,10 @@ func run() {
 		WALDir:                     Alpha.Conf.GetString("wal"),
 		PostingDirCompression:      ctype,
 		PostingDirCompressionLevel: clevel,
+		CacheMb:                    totalCache,
 		CachePercentage:            cachePercentage,
 		PBlockCacheSize:            pstoreBlockCacheSize,
 		PIndexCacheSize:            pstoreIndexCacheSize,
-		WalCache:                   walCache,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -713,6 +718,7 @@ func run() {
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
 		Badger:              badger,
+		MaxRetries:          badger.GetInt64("max-retries"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -731,6 +737,8 @@ func run() {
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
+	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
+	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

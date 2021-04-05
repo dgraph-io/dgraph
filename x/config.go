@@ -36,10 +36,13 @@ type Options struct {
 	//                      normalize directive
 	// mutations-nquad int - maximum number of nquads that can be inserted in a mutation request
 	// BlockDropAll bool - if set to true, the drop all operation will be rejected by the server.
-	Limit               *z.SuperFlag
-	LimitMutationsNquad int
-	LimitQueryEdge      uint64
-	BlockClusterWideDrop        bool
+	// query-timeout duration - Maximum time after which a query execution will fail.
+	Limit                *z.SuperFlag
+	LimitMutationsNquad  int
+	LimitQueryEdge       uint64
+	BlockClusterWideDrop bool
+	LimitNormalizeNode   int
+	QueryTimeout         time.Duration
 
 	// GraphQL options:
 	//
@@ -105,6 +108,9 @@ type WorkerOptions struct {
 	HmacSecret SensitiveByteSlice
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
+	// MaxRetries indicates the number of retries Dgraph do to prevent locking the worker in a
+	// failed state.
+	MaxRetries int64
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32

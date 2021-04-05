@@ -30,6 +30,14 @@ type mathTree struct {
 	Child []*mathTree
 }
 
+var (
+	ErrorIntOverflow     = errors.New("Integer overflow")
+	ErrorDivisionByZero  = errors.New("Division by zero")
+	ErrorFractionalPower = errors.New("Fractional power of negative number")
+	ErrorNegativeLog     = errors.New("Log of negative number")
+	ErrorNegativeRoot    = errors.New("Root of negative number")
+)
+
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
 func processBinary(mNode *mathTree) error {

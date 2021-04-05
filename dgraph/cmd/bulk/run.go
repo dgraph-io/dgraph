@@ -48,7 +48,7 @@ var Bulk x.SubCommand
 var defaultOutDir = "./out"
 
 const BulkBadgerDefaults = "compression=snappy; goroutines=8;" +
-	" cache_mb=64; cache_percentage=70,30;"
+	" cache-mb=64; cache-percentage=70,30;"
 
 func init() {
 	Bulk.Cmd = &cobra.Command{

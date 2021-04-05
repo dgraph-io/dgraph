@@ -34,13 +34,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/admin"
 
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
@@ -165,6 +163,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startTs, err := parseUint64(r, "startTs")
+	hash := r.URL.Query().Get("hash")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -220,6 +219,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Vars:    params.Variables,
 		Query:   params.Query,
 		StartTs: startTs,
+		Hash:    hash,
 	}
 
 	if req.StartTs == 0 {
@@ -297,6 +297,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startTs, err := parseUint64(r, "startTs")
+	hash := r.URL.Query().Get("hash")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -407,6 +408,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseEnd := time.Now()
 
 	req.StartTs = startTs
+	req.Hash = hash
 	req.CommitNow = commitNow
 
 	ctx := x.AttachAccessJwt(context.Background(), r)
@@ -465,15 +467,17 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hash := r.URL.Query().Get("hash")
 	abort, err := parseBool(r, "abort")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
+	ctx := x.AttachAccessJwt(context.Background(), r)
 	var response map[string]interface{}
 	if abort {
-		response, err = handleAbort(startTs)
+		response, err = handleAbort(ctx, startTs, hash)
 	} else {
 		// Keys are sent as an array in the body.
 		reqText := readRequest(w, r)
@@ -481,7 +485,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response, err = handleCommit(startTs, reqText)
+		response, err = handleCommit(ctx, startTs, hash, reqText)
 	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -497,29 +501,32 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = x.WriteResponse(w, r, js)
 }
 
-func handleAbort(startTs uint64) (map[string]interface{}, error) {
+func handleAbort(ctx context.Context, startTs uint64, hash string) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 		Aborted: true,
+		Hash:    hash,
 	}
 
-	_, err := worker.CommitOverNetwork(context.Background(), tc)
-	switch err {
-	case dgo.ErrAborted:
+	tctx, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
+	switch {
+	case tctx.Aborted:
 		return map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 		}, nil
-	case nil:
+	case err == nil:
 		return nil, errors.Errorf("transaction could not be aborted")
 	default:
 		return nil, err
 	}
 }
 
-func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+func handleCommit(ctx context.Context,
+	startTs uint64, hash string, reqText []byte) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
+		Hash:    hash,
 	}
 
 	var reqList []string
@@ -540,14 +547,13 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 		tc.Preds = reqMap["preds"]
 	}
 
-	cts, err := worker.CommitOverNetwork(context.Background(), tc)
+	tc, err := (&edgraph.Server{}).CommitOrAbort(ctx, tc)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &api.Response{}
 	resp.Txn = tc
-	resp.Txn.CommitTs = cts
 	e := query.Extensions{
 		Txn: resp.Txn,
 	}

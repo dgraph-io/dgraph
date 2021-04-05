@@ -344,7 +344,7 @@ func recoveryHandler(next http.Handler) http.Handler {
 			func(err error) {
 				rr := schema.ErrorResponse(err)
 				write(w, rr, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))
-			})
+			}, "")
 
 		next.ServeHTTP(w, r)
 	})

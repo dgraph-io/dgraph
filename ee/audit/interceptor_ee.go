@@ -63,9 +63,8 @@ var skipApis = map[string]bool{
 
 var skipEPs = map[string]bool{
 	// list of endpoints that needs to be skipped
-	"/health":   true,
-	"/jemalloc": true,
-	"/state":    true,
+	"/health": true,
+	"/state":  true,
 }
 
 func AuditRequestGRPC(ctx context.Context, req interface{},

@@ -975,19 +975,22 @@ func calculateFirstN(sg *SubGraph) int32 {
 	//     name
 	//   }
 	// }
-	// - should be has function (Right now, I'm doing it for has, later it can be extended)
-	// {
-	//   q(func: has(name), first:1) {
-	//     name
-	//   }
-	// }
-	// isSupportedFunction := sg.SrcFunc != nil && sg.SrcFunc.Name == "has"
+	// - should not be one of those function which fetches some results and then do further
+	// processing to narrow down the result. For example: allofterm will fetch the index postings
+	// for each term and then do an intersection.
+	// TODO: Look into how we can optimize queries involving these functions.
 
-	// Manish: Shouldn't all functions allow this? If we don't have a order and we don't have a
-	// filter, then we can respect the first N, offset Y arguments when retrieving data.
-	isSupportedFunction := true
-	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 &&
-		isSupportedFunction {
+	shouldExclude := false
+	if sg.SrcFunc != nil {
+		switch sg.SrcFunc.Name {
+		case "regexp", "alloftext", "allofterms", "match":
+			shouldExclude = true
+		default:
+			shouldExclude = false
+		}
+	}
+
+	if len(sg.Filters) == 0 && len(sg.Params.Order) == 0 && !shouldExclude {
 		// Offset also added because, we need n results to trim the offset.
 		if sg.Params.Count != 0 {
 			count = sg.Params.Count + sg.Params.Offset
@@ -1380,7 +1383,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 
 		// Apply pagination after the @cascade.
-		if len(child.Params.Cascade.Fields) > 0 && child.Params.Cascade.First != 0 && child.Params.Cascade.Offset != 0 {
+		if len(child.Params.Cascade.Fields) > 0 && (child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				start, end := x.PageRange(child.Params.Cascade.First, child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
 				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
@@ -2406,7 +2409,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
-	if sg.Params.Count == 0 {
+	// if the @cascade directive is used then retrieve all the results.
+	if sg.Params.Count == 0 && len(sg.Params.Cascade.Fields) == 0 {
 		// Only retrieve up to 1000 results by default.
 		sg.Params.Count = 1000
 	}
@@ -2864,7 +2868,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// first time at the root here.
 
 			// Apply pagination at the root after @cascade.
-			if len(sg.Params.Cascade.Fields) > 0 && sg.Params.Cascade.First != 0 && sg.Params.Cascade.Offset != 0 {
+			if len(sg.Params.Cascade.Fields) > 0 && (sg.Params.Cascade.First != 0 || sg.Params.Cascade.Offset != 0) {
 				sg.updateUidMatrix()
 				for i := 0; i < len(sg.uidMatrix); i++ {
 					start, end := x.PageRange(sg.Params.Cascade.First, sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
