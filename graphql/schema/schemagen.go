@@ -520,7 +520,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		upsert  string
 		reverse string
 		lang    bool
-		gqlType string
 	}
 
 	type field struct {
@@ -537,21 +536,20 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
-	langTagDgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlType string) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, lang bool) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
 				typ:     typStr,
 				indexes: make(map[string]bool),
 				upsert:  upsertStr,
-				gqlType: gqlType,
 			}
 		}
 		for _, index := range indexes {
 			pred.indexes[index] = true
 		}
+		pred.lang = lang
 		return pred
 	}
 
@@ -609,7 +607,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, typName)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -667,14 +665,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					}
 
 					if parentInt == nil {
-						// if field name contains @ string in it, then it is language tag field.
-						// language tag field is associated with language untagged field
-						// so we don't add it in the dgraph schema explicitly
+						// if field name contains @ then it is a language tagged field.
+						isLang := false
 						if strings.Contains(fname, "@") {
-							langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, typName)
-							continue
+							fname = strings.Split(fname, "@")[0]
+							isLang = true
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, typName)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, isLang)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -689,7 +686,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, typName)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -711,49 +708,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		}
 	}
 
-	// iterate over map in sorted order to ensure consistency
-	fieldNames := make([]string, len(langTagDgPreds))
-	i := 0
-	for k := range langTagDgPreds {
-		fieldNames[i] = k
-		i++
-	}
-	sort.Strings(fieldNames)
-	for _, fname := range fieldNames {
-		dgPredAndTags := strings.Split(fname, "@")
-		typName := langTagDgPreds[fname].gqlType
-		unTaggedDgPredName := dgPredAndTags[0]
-		unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]
-		// if untagged language field is not present then we add it.
-		if !ok {
-			unTaggedDgPred = getUpdatedPred(unTaggedDgPredName, "string", "", nil, typName)
-			for i, typ := range dgTypes {
-				if typ.name == typName {
-					typ.fields = append(typ.fields, field{unTaggedDgPredName, false})
-					dgTypes[i] = typ
-					break
-				}
-			}
-		}
-		// set the lang directive on language untagged field and combine all the indexes
-		// from lang tagged fields to corresponding untagged field
-		unTaggedDgPred.lang = true
-		for index := range langTagDgPreds[fname].indexes {
-			unTaggedDgPred.indexes[index] = true
-		}
-		dgPreds[unTaggedDgPredName] = unTaggedDgPred
-	}
-
 	predWritten := make(map[string]bool, len(dgPreds))
 	for _, typ := range dgTypes {
+		// fieldAdded keeps track of whether a field has been added to typeDef
+		fieldAdded := make(map[string]bool, len(typ.fields))
 		var typeDef, preds strings.Builder
 		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
 		for _, fld := range typ.fields {
 			f, ok := dgPreds[fld.name]
-			if !ok {
+			if !ok || fieldAdded[fld.name] {
 				continue
 			}
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
+			fieldAdded[fld.name] = true
 			if !fld.inherited && !predWritten[fld.name] {
 				indexStr := ""
 				langStr := ""
