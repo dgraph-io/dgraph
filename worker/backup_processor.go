@@ -64,7 +64,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.NumGoroutines),
 	}
 	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)
@@ -147,7 +147,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.BackupResponse,
 
 	iwriter, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
-		return &response, err
+		return &response, errors.Wrap(err, "failed to get encWriter")
 	}
 	// Snappy is much faster than gzip compression. In fact, in my experiments, gzip compression
 	// caused the output speed to be ~30 MBps. Snappy can write at ~90 MBps, and overall the speed

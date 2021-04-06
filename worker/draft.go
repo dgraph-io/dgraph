@@ -778,7 +778,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		err := x.RetryUntilSuccess(int(x.WorkerConfig.MaxRetries),
+		err := x.RetryUntilSuccess(int(x.Config.MaxRetries),
 			10*time.Millisecond, func() error {
 				err := txn.CommitToDisk(writer, commit)
 				if err == badger.ErrBannedKey {

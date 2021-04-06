@@ -333,7 +333,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 	// Get key.
 	config := getEncConfig()
-	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
+	config.Set("encryption", enc.BuildEncFlag("../../../ee/enc/test-fixtures/enc-key"))
 	_, encKey := ee.GetKeys(config)
 	require.NotNil(t, encKey)
 
