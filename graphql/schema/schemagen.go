@@ -520,6 +520,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		upsert  string
 		reverse string
 		lang    bool
+		gqlType string
 	}
 
 	type field struct {
@@ -538,13 +539,14 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	dgPreds := make(map[string]dgPred)
 	langTagDgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, gqlType string) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
 				typ:     typStr,
 				indexes: make(map[string]bool),
 				upsert:  upsertStr,
+				gqlType: gqlType,
 			}
 		}
 		for _, index := range indexes {
@@ -607,7 +609,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, typName)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -669,10 +671,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						// language tag field is associated with language untagged field
 						// so we don't add it in the dgraph schema explicitly
 						if strings.Contains(fname, "@") {
-							langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+							langTagDgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, typName)
 							continue
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, typName)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -687,7 +689,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, typName)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -709,15 +711,24 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		}
 	}
 
-	for fname, langTagDgPred := range langTagDgPreds {
+	// iterate over map in sorted order to ensure consistency
+	fieldNames := make([]string, len(langTagDgPreds))
+	i := 0
+	for k := range langTagDgPreds {
+		fieldNames[i] = k
+		i++
+	}
+	sort.Strings(fieldNames)
+	for _, fname := range fieldNames {
 		dgPredAndTags := strings.Split(fname, "@")
+		typName := langTagDgPreds[fname].gqlType
 		unTaggedDgPredName := dgPredAndTags[0]
 		unTaggedDgPred, ok := dgPreds[unTaggedDgPredName]
 		// if untagged language field is not present then we add it.
 		if !ok {
-			unTaggedDgPred = getUpdatedPred(unTaggedDgPredName, "string", "", nil)
+			unTaggedDgPred = getUpdatedPred(unTaggedDgPredName, "string", "", nil, typName)
 			for i, typ := range dgTypes {
-				if typ.name == strings.Split(unTaggedDgPredName, ".")[0] {
+				if typ.name == typName {
 					typ.fields = append(typ.fields, field{unTaggedDgPredName, false})
 					dgTypes[i] = typ
 					break
@@ -727,7 +738,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		// set the lang directive on language untagged field and combine all the indexes
 		// from lang tagged fields to corresponding untagged field
 		unTaggedDgPred.lang = true
-		for index := range langTagDgPred.indexes {
+		for index := range langTagDgPreds[fname].indexes {
 			unTaggedDgPred.indexes[index] = true
 		}
 		dgPreds[unTaggedDgPredName] = unTaggedDgPred

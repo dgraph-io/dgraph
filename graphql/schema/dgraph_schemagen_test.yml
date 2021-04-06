@@ -453,10 +453,14 @@ schemas:
         Person.name
         Person.address
         Person.profession
+        T.f
+        f3
       }
       Person.name: string @index(exact, hash, term, trigram) @lang @upsert .
       Person.address: string @index(fulltext) @lang .
       Person.profession: string @lang .
+      T.f: string @lang .
+      f3: string @lang .
 
   - name: "Field with @id directive but no search directive gets hash index."
     input: |
