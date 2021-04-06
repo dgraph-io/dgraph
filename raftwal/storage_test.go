@@ -43,9 +43,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	pb "go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+	pb "go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 func TestStorageTerm(t *testing.T) {

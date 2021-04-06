@@ -30,8 +30,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3/y"

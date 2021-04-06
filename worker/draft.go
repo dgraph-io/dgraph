@@ -31,8 +31,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 	"golang.org/x/net/trace"
 
 	ostats "go.opencensus.io/stats"
@@ -1763,7 +1763,7 @@ func (n *node) InitAndStartNode() {
 
 			// TODO: Making connections here seems unnecessary, evaluate.
 			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
+			for _, id := range sp.Metadata.ConfState.Voters {
 				m, ok := members[id]
 				if ok {
 					n.Connect(id, m.Addr)
