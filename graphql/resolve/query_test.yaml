@@ -3383,3 +3383,30 @@
         }
       }
     }
+
+-
+  name: "query language tag fields with filter and order"
+  gqlquery: |
+    query {
+       queryPerson(filter:{or:[{name:{eq:"Alice"}},{nameHi:{eq:"ऐलिस"}},{nameZh:{eq:"爱丽丝"}},{name_Untag_AnyLang:{eq:"Alice"}}]}, order: { asc: nameHi })
+      {
+        name
+        nameZh
+        nameHi
+        nameHiZh
+        nameHi_Zh_Untag
+        name_Untag_AnyLang
+      }
+    }
+  dgquery: |-
+    query {
+      queryPerson(func: type(Person), orderasc: Person.name@hi) @filter((eq(Person.name, "Alice") OR eq(Person.name@hi, "ऐलिस") OR eq(Person.name@zh, "爱丽丝") OR eq(Person.name@., "Alice"))) {
+        Person.name : Person.name
+        Person.nameZh : Person.name@zh
+        Person.nameHi : Person.name@hi
+        Person.nameHiZh : Person.name@hi:zh
+        Person.nameHi_Zh_Untag : Person.name@hi:zh:.
+        Person.name_Untag_AnyLang : Person.name@.
+        dgraph.uid : uid
+      }
+    }

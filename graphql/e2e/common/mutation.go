@@ -6018,3 +6018,67 @@ func upsertMutationTests(t *testing.T) {
 	filter = GetXidFilter("xcode", []interface{}{"S1", "S10"})
 	deleteState(t, filter, 2, nil)
 }
+
+func updateLangTagFields(t *testing.T) {
+	addPersonParams := &GraphQLParams{
+		Query: `
+		mutation addPerson($person: [AddPersonInput!]!) {
+          addPerson(input: $person) {
+            numUids
+          }
+        }`,
+	}
+	addPersonParams.Variables = map[string]interface{}{"person": []interface{}{
+		map[string]interface{}{
+			"name":   "Juliet",
+			"nameHi": "जूलियट",
+			"nameZh": "朱丽叶",
+		},
+	},
+	}
+	gqlResponse := addPersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	// update Person using language tag field
+	updatePersonParams := &GraphQLParams{
+		Query: `
+		mutation updatePerson {
+           updatePerson(
+             input: {
+               filter: { nameHi: { eq: "जूलियट" } }
+               set: { nameHi: "जूली", nameZh: "朱丽叶" }
+             }
+           ) {
+             numUids
+           }
+        }`,
+	}
+	gqlResponse = updatePersonParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPerson := &GraphQLParams{
+		Query: `
+			query {
+              queryPerson(filter: { name: { eq: "Juliet" } }) {
+                name
+                nameZh
+                nameHi
+              }
+           }`,
+	}
+	gqlResponse = queryPerson.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	queryPersonExpected := `
+	  {
+        "queryPerson": [
+            {
+                "name": "Juliet",
+                "nameZh": "朱丽叶",
+                "nameHi": "जूली"
+            }
+        ]
+      }`
+
+	testutil.CompareJSON(t, queryPersonExpected, string(gqlResponse.Data))
+	DeleteGqlType(t, "Person", map[string]interface{}{}, 1, nil)
+}
