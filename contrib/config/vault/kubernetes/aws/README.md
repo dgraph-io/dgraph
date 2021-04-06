@@ -28,3 +28,12 @@ for POD in vault-{0..2}; do
   kubectl exec -it $POD -- vault operator init -n 1 -t 1
 done
 ```
+
+
+## Clean up
+
+```bash
+kubectl config set-context --current --namespace vault
+helm delete vault
+kubectl delete pvc -l app.kubernetes.io/name=vault
+```
