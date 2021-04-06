@@ -1,0 +1,62 @@
+server:
+  extraSecretEnvironmentVars:
+    - envName: AWS_ACCESS_KEY_ID
+      secretName: vault
+      secretKey: AWS_ACCESS_KEY_ID
+    - envName: AWS_SECRET_ACCESS_KEY
+      secretName: vault
+      secretKey: AWS_SECRET_ACCESS_KEY
+
+  ha:
+    enabled: true
+
+    {{- if eq (env "VAULT_STORAGE") "raft" }}
+    raft:
+      enabled: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          tls_disable = 1
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+        }
+
+        service_registration "kubernetes" {}
+
+        {{- if env "VAULT_KMS_KEY" }}
+        seal "awskms" {
+          region     = "{{ env "VAULT_AWS_REGION" }}"
+          kms_key_id = "{{ env "VAULT_KMS_KEY" }}"
+        }
+        {{- end }}
+    {{- end }}
+
+    {{- if eq (env "VAULT_STORAGE") "consul" }}
+    config: |
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+
+      storage "consul" {
+        path = "vault"
+        address = "HOST_IP:8500"
+      }
+
+      service_registration "kubernetes" {}
+
+      {{- if env "VAULT_KMS_KEY" }}
+      seal "awskms" {
+        region     = "{{ env "VAULT_AWS_REGION" }}"
+        kms_key_id = "{{ env "VAULT_KMS_KEY" }}"
+      }
+      {{- end }}
+    {{- end }}
