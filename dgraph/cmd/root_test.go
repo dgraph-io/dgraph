@@ -12,7 +12,7 @@ func TestConvertJSON(t *testing.T) {
 	  "mutations": "strict",
 	  "badger": {
 	    "compression": "zstd:1",
-	    "goroutines": 5
+	    "numgoroutines": 5
 	  },
       "raft": {
 	    "idx": 2,

@@ -18,7 +18,7 @@ require (
 	github.com/Shopify/sarama v1.27.2
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v3 v3.0.0-20210401200525-7d7d7908a001
+	github.com/dgraph-io/badger/v3 v3.0.0-20210405181011-d918b9904b2a
 	github.com/dgraph-io/dgo/v200 v200.0.0-20210401091508-95bfd74de60e
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0

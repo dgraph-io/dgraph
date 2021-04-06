@@ -40,7 +40,7 @@ const (
 	//       breaks.
 	AclDefaults    = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
-	BadgerDefaults = `compression=snappy; goroutines=8; max-retries=-1;`
+	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
 		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
 	SecurityDefaults  = `token=; whitelist=;`
@@ -49,7 +49,7 @@ const (
 		`client_key=;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m;` +
-		`max-pending-queries=10000;`
+		`max-pending-queries=10000;  max-retries=-1;`
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
@@ -99,10 +99,6 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// saved by disabling it.
 	opt.DetectConflicts = false
 
-	glog.Infof("Setting Posting Dir Compression Level: %d", Config.PostingDirCompressionLevel)
-	opt.Compression = Config.PostingDirCompression
-	opt.ZSTDCompressionLevel = Config.PostingDirCompressionLevel
-
 	// Settings for the data directory.
 	return opt
 }
@@ -132,11 +128,9 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).
+		opt := x.WorkerConfig.Badger.
+			WithDir(Config.PostingDir).WithValueDir(Config.PostingDir).
 			WithNumVersionsToKeep(math.MaxInt32).
-			WithNumGoroutines(int(x.WorkerConfig.Badger.GetUint64("goroutines"))).
-			WithBlockCacheSize(Config.PBlockCacheSize).
-			WithIndexCacheSize(Config.PIndexCacheSize).
 			WithNamespaceOffset(x.NamespaceOffset)
 		opt = setBadgerOptions(opt)
 

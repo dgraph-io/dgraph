@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"time"
 
-	bo "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -37,23 +36,12 @@ const (
 type Options struct {
 	// PostingDir is the path to the directory storing the postings..
 	PostingDir string
-	// PostingDirCompression is the compression algorithem used to compression Postings directory.
-	PostingDirCompression bo.CompressionType
-	// PostingDirCompressionLevel is the ZSTD compression level used by Postings directory. A
-	// higher value means more CPU intensive compression and better compression
-	// ratio.
-	PostingDirCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
 	MutationsMode int
 	// AuthToken is the token to be passed for Alter HTTP requests.
 	AuthToken string
-
-	// PBlockCacheSize is the size of block cache for pstore
-	PBlockCacheSize int64
-	// PIndexCacheSize is the size of index cache for pstore
-	PIndexCacheSize int64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
 	HmacSecret x.Sensitive

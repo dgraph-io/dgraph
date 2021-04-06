@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
 )
@@ -43,6 +44,7 @@ type Options struct {
 	BlockClusterWideDrop bool
 	LimitNormalizeNode   int
 	QueryTimeout         time.Duration
+	MaxRetries           int64
 
 	// GraphQL options:
 	//
@@ -96,8 +98,8 @@ type WorkerOptions struct {
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
 	Raft *z.SuperFlag
-	// Badger stores options related to Badger.
-	Badger *z.SuperFlag
+	// Badger stores the badger options.
+	Badger badger.Options
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.
@@ -108,9 +110,6 @@ type WorkerOptions struct {
 	HmacSecret Sensitive
 	// AbortOlderThan tells Dgraph to discard transactions that are older than this duration.
 	AbortOlderThan time.Duration
-	// MaxRetries indicates the number of retries Dgraph do to prevent locking the worker in a
-	// failed state.
-	MaxRetries int64
 	// ProposedGroupId will be used if there's a file in the p directory called group_id with the
 	// proposed group ID for this server.
 	ProposedGroupId uint32

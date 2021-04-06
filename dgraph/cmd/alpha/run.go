@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
@@ -128,16 +129,13 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
-		Head("Badger options").
+		Head("Badger options (Refer to badger documentation for all possible options)").
 		Flag("compression",
 			`[none, zstd:level, snappy] Specifies the compression algorithm and
 			compression level (if applicable) for the postings directory."none" would disable
 			compression, while "zstd:1" would set zstd compression at level 1.`).
-		Flag("goroutines",
+		Flag("numgoroutines",
 			"The number of goroutines to use in badger.Stream.").
-		Flag("max-retries",
-			"Commits to disk will give up after these number of retries to prevent locking the "+
-				"worker in a failed state. Use -1 to retry infinitely.").
 		String())
 
 	// Cache flags.
@@ -214,6 +212,9 @@ they form a Raft group and provide synchronous replication.
 				" 0, the timeout is infinite.").
 		Flag("max-pending-queries",
 			"Number of maximum pending queries before we reject them as too many requests.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
 		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
 			" The liveness of a transaction is determined by its last mutation.").
 		String())
@@ -635,22 +636,19 @@ func run() {
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
 
-	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
-		worker.BadgerDefaults)
-	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
+	cacheOpts := fmt.Sprintf("blockcachesize=%d; indexcachesize=%d; ",
+		pstoreBlockCacheSize, pstoreIndexCacheSize)
+	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
+		FromSuperFlag(Alpha.Conf.GetString("badger"))
 
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
-		PostingDir:                 Alpha.Conf.GetString("postings"),
-		WALDir:                     Alpha.Conf.GetString("wal"),
-		PostingDirCompression:      ctype,
-		PostingDirCompressionLevel: clevel,
-		CacheMb:                    totalCache,
-		CachePercentage:            cachePercentage,
-		PBlockCacheSize:            pstoreBlockCacheSize,
-		PIndexCacheSize:            pstoreIndexCacheSize,
+		PostingDir:      Alpha.Conf.GetString("postings"),
+		WALDir:          Alpha.Conf.GetString("wal"),
+		CacheMb:         totalCache,
+		CachePercentage: cachePercentage,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -714,8 +712,7 @@ func run() {
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
-		Badger:              badger,
-		MaxRetries:          badger.GetInt64("max-retries"),
+		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -736,6 +733,7 @@ func run() {
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
 	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
+	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)
