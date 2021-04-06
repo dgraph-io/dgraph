@@ -189,7 +189,7 @@ const (
 	}
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-	directive @id on FIELD_DEFINITION
+	directive @id(unique: Boolean) on FIELD_DEFINITION
 	directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 

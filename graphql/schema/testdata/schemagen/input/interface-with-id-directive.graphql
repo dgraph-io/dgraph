@@ -1,5 +1,6 @@
 interface LibraryItem {
     refID: String! @id
+    itemID: String! @id(unique:true)
 }
 
 type Book implements LibraryItem {

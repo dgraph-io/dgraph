@@ -2331,6 +2331,20 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
+func hasUniqueArg(fd *ast.FieldDefinition) bool {
+	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveUniqueArg)
+	if uniqueArg == nil {
+		return false
+	}
+
+	value, _ := uniqueArg.Value.Value(nil)
+	if val, ok := value.(bool); ok && val {
+		return true
+	}
+
+	return false
+}
+
 func isID(fd *ast.FieldDefinition) bool {
 	return fd.Type.Name() == "ID"
 }
