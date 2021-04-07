@@ -71,12 +71,12 @@ func vaultDefaults(aclEnabled, encEnabled bool) string {
 		flagVaultSecretIdFile, "",
 		flagVaultPath, "secret/data/dgraph")
 	if aclEnabled {
-		fmt.Fprintf(&configBuilder, "%s=%s; %s=%s",
+		fmt.Fprintf(&configBuilder, "; %s=%s; %s=%s",
 			flagVaultAclField, "",
 			flagVaultAclFormat, "base64")
 	}
 	if encEnabled {
-		fmt.Fprintf(&configBuilder, "%s=%s; %s=%s",
+		fmt.Fprintf(&configBuilder, "; %s=%s; %s=%s",
 			flagVaultEncField, "",
 			flagVaultEncFormat, "base64")
 	}
@@ -132,4 +132,8 @@ func registerEncFlag(flag *pflag.FlagSet) {
 			"The key size determines the chosen AES cipher (AES-128, AES-192, and AES-256 respectively).").
 		String()
 	flag.String(flagEnc, encDefaults, helpText)
+}
+
+func BuildEncFlag(filename string) string {
+	return fmt.Sprintf("key-file=%s;", filename)
 }

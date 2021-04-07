@@ -24,7 +24,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -292,7 +291,7 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	}
 
 	// Copy from the request.
-	config.Set("encryption", enc.BuildEncFlag(req.EncryptionKeyFile))
+	config.Set("encryption", ee.BuildEncFlag(req.EncryptionKeyFile))
 
 	vaultBuilder := new(strings.Builder)
 	if req.VaultRoleidFile != "" {
