@@ -345,7 +345,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 func getEncConfig() *viper.Viper {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	vault.RegisterEncFlag(flags)
 	config.BindPFlags(flags)
 	return config
 }

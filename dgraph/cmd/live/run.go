@@ -42,6 +42,7 @@ import (
 	bopt "github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
@@ -143,7 +144,7 @@ func init() {
 
 	flag := Live.Cmd.Flags()
 	// --vault SuperFlag and encryption flags
-	enc.RegisterFlags(flag)
+	vault.RegisterEncFlag(flag)
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 

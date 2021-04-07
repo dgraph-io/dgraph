@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/worker"
@@ -152,7 +152,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
 	x.RegisterClientTLSFlags(flag)
-	enc.RegisterFlags(flag)
+	vault.RegisterEncFlag(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -342,7 +342,7 @@ func initExportBackup() {
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
 		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
-	enc.RegisterFlags(flag)
+	vault.RegisterEncFlag(flag)
 }
 
 func runExportBackup() error {

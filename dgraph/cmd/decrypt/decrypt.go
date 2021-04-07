@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +55,7 @@ func init() {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")
-	enc.RegisterFlags(flag)
+	vault.RegisterEncFlag(flag)
 }
 func run() {
 	opts := options{

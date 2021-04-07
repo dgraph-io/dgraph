@@ -15,7 +15,6 @@ package ee
 import (
 	"io/ioutil"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -44,7 +43,7 @@ func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
 		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
-	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(enc.EncryptionDefaults)
+	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(vault.EncryptionDefaults)
 	encKeyFile := encSuperFlag.GetPath("key-file")
 	if encKeyFile != "" {
 		if encKey != nil {

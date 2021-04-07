@@ -32,7 +32,7 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 	}
 
 	vaultString := config.GetString(flagVault)
-	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(defaultConfig)
+	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(encConfig)
 	vaultConfig, err := parseFlags(vaultFlag)
 	if err != nil {
 		glog.Exit(err)

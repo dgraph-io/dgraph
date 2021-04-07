@@ -18,26 +18,14 @@ package enc
 
 import (
 	"fmt"
-
-	"github.com/dgraph-io/dgraph/ee/vault"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/spf13/pflag"
 )
-
-const EncryptionDefaults = `key-file=;`
 
 func BuildEncFlag(filename string) string {
 	return fmt.Sprintf("key-file=%s;", filename)
 }
 
-// RegisterFlags registers the required encryption flags.
-func RegisterFlags(flag *pflag.FlagSet) {
-	flag.String("encryption", EncryptionDefaults, z.NewSuperFlagHelp(EncryptionDefaults).
-		Head("[Enterprise Feature] Encryption At Rest options").
-		Flag("key-file",
-			"The file that stores the symmetric key of length 16, 24, or 32 bytes. The key size"+
-				" determines the chosen AES cipher (AES-128, AES-192, and AES-256 respectively).").
-		String())
+// // RegisterFlags registers the required encryption flags.
+// func RegisterFlags(flag *pflag.FlagSet) {
 
-	vault.RegisterFlags(flag)
-}
+// 	vault.RegisterFlags(flag)
+// }
