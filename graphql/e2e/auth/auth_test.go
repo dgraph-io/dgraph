@@ -1425,7 +1425,10 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
-            }
+            },
+			{
+				"name": "Region6"
+			}
          ]
       },
       {
@@ -1472,7 +1475,10 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
-            }
+            },
+			{
+				"name": "Region6"
+			}
          ]
       },
       {
@@ -1512,6 +1518,92 @@ func TestNestedFilter(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
+}
+
+func TestAuthPaginationWithCascade(t *testing.T) {
+	testCases := []TestCase{{
+		name: "Auth query with @cascade and pagination at top level",
+		user: "user2",
+		role: "USER",
+		query: `
+		query {	
+			queryMovie (order: {asc: content}, first: 1, offset: 0) @cascade{
+				content
+				regionsAvailable (order: {asc: name}){
+					name
+				}
+			}
+		}
+`,
+		result: `
+		{
+			"queryMovie": [
+			  {
+				"content": "Movie2",
+				"regionsAvailable": [
+				  {
+					"name": "Region1"
+				  }
+				]
+			  }
+			]
+		}
+`,
+	}, {
+		name: "Auth query with @cascade and pagination at deep level",
+		user: "user1",
+		role: "ADMIN",
+		query: `
+query {	
+	queryMovie (order: {asc: content}, first: 2, offset: 1) {
+		content
+		regionsAvailable (order: {asc: name}, first: 1) @cascade{
+			name
+			global
+		}
+	}
+}
+`,
+		result: `
+		{
+			"queryMovie": [
+			  {
+				"content": "Movie3",
+				"regionsAvailable": [
+				  {
+					"name": "Region6",
+					"global": true
+				  }
+				]
+			  },
+			  {
+				"content": "Movie4",
+				"regionsAvailable": [
+				  {
+					"name": "Region5",
+					"global": true
+				  }
+				]
+			  }
+			]
+		  },
+		`,
+	}}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   tcase.query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+
 }
 
 func TestDeleteAuthRule(t *testing.T) {

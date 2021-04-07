@@ -840,7 +840,6 @@ func (authRw *authRewriter) addAuthQueries(
 		},
 		Filter: filter,
 		Order:  dgQuery[0].Order, // we need the order here for pagination to work correctly
-		Args:   dgQuery[0].Args,  // this gets pagination from user query to root query
 	}
 
 	// The user query doesn't need the filter and pagination parameters anymore,
@@ -848,7 +847,13 @@ func (authRw *authRewriter) addAuthQueries(
 	// But, tt still needs the order parameter, even though it is also applied in root query.
 	// So, not setting order to nil.
 	dgQuery[0].Filter = nil
-	dgQuery[0].Args = nil
+
+	// if @cascade is not applied on the user query at root then shift pagination arguments
+	// from user query to root query for optimization.
+	if len(dgQuery[0].Cascade) == 0 {
+		rootQry.Args = dgQuery[0].Args // this gets pagination from user query to root query
+		dgQuery[0].Args = nil
+	}
 
 	// The user query starts from the root query generated above and so gets filtered
 	// input from auth processing, so now we build
