@@ -32,8 +32,9 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.SensitiveByteSlice) {
 	}
 
 	vaultString := config.GetString(flagVault)
-	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(encConfig)
-	vaultConfig, err := parseFlags(vaultFlag)
+	vaultStringDefault := vaultDefaults(true, true)
+	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(vaultStringDefault)
+	vaultConfig, err := parseVaultFlag(vaultFlag)
 	if err != nil {
 		glog.Exit(err)
 	}
@@ -166,8 +167,8 @@ type config struct {
 	encFormat    string
 }
 
-// parseFlags parses and validates a Vault SuperFlag.
-func parseFlags(flag *z.SuperFlag) (*config, error) {
+// parseVaultFlag parses and validates a Vault SuperFlag.
+func parseVaultFlag(flag *z.SuperFlag) (*config, error) {
 	// Helper functions to validate flags.
 	validateRequired := func(field, value string) error {
 		if value == "" {

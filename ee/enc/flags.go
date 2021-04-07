@@ -23,9 +23,3 @@ import (
 func BuildEncFlag(filename string) string {
 	return fmt.Sprintf("key-file=%s;", filename)
 }
-
-// // RegisterFlags registers the required encryption flags.
-// func RegisterFlags(flag *pflag.FlagSet) {
-
-// 	vault.RegisterFlags(flag)
-// }

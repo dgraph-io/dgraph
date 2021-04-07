@@ -43,7 +43,7 @@ func GetKeys(config *viper.Viper) (x.SensitiveByteSlice, x.SensitiveByteSlice) {
 		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
-	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(vault.EncryptionDefaults)
+	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(vault.EncDefaults)
 	encKeyFile := encSuperFlag.GetPath("key-file")
 	if encKeyFile != "" {
 		if encKey != nil {
