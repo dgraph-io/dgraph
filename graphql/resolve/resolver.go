@@ -1461,7 +1461,8 @@ func completeObject(
 				// case
 				val = nil
 			} else {
-				if count, ok = countVal.(json.Number); !ok {
+				var okCount bool
+				if count, okCount = countVal.(json.Number); !okCount {
 					// This is to handle case in which countVal is of any other type than
 					// json.Number. This should never happen. We return an error.
 					return nil, x.GqlErrorList{&x.GqlError{

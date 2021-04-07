@@ -19,7 +19,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/cast"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +27,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cast"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -2952,6 +2953,7 @@ func queryAggregateWithRepeatedFields(t *testing.T) {
 }
 
 func queryAggregateAtChildLevel(t *testing.T) {
+	// Also checks if __typename is properly returned.
 	queryNumberOfStates := &GraphQLParams{
 		Query: `query
 		{
@@ -2960,7 +2962,9 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				ag : statesAggregate {
 					count
 					nameMin
+					__typename
 				}
+				__typename
 			}
 		}`,
 	}
@@ -2973,8 +2977,10 @@ func queryAggregateAtChildLevel(t *testing.T) {
 				"name": "India",
 				"ag": { 
 					"count" : 3,
-					"nameMin": "Gujarat"
-				}
+					"nameMin": "Gujarat",
+					"__typename": "StateAggregateResult"
+				},
+				"__typename": "Country"
 			}]
 		}`,
 		string(gqlResponse.Data))
