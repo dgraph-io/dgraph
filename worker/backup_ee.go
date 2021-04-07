@@ -108,7 +108,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	if err := x.HealthCheck(); err != nil {
-		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
+		glog.Errorf("Backup canceled: not ready to accept requests: %s", err)
 		return err
 	}
 
@@ -117,11 +117,11 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		backupLock.Lock()
 		defer backupLock.Unlock()
 
-		LastBackupStatus.Store(fmt.Sprintf("STARTED: %s", time.Now().Format(time.RFC3339)))
+		glog.Infof("Backup started: %s", req.Destination)
 		if err := doBackup(ctx, req, forceFull); err != nil {
-			LastBackupStatus.Store(fmt.Sprintf("ERROR: %s: %s", time.Now().Format(time.RFC3339), err))
+			glog.Errorf("Backup error: %s: %s", err, req.Destination)
 		} else {
-			LastBackupStatus.Store(fmt.Sprintf("COMPLETED: %s", time.Now().Format(time.RFC3339)))
+			glog.Infof("Backup complete: %s", req.Destination)
 		}
 	}()
 

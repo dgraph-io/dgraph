@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/protos/pb"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -531,4 +532,35 @@ func GetAlphaClientConfig(t *testing.T) *tls.Config {
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
 	return tlsConf
+}
+
+func WaitForTask(t *testing.T, task string) {
+	healthUrl := "http://" + SockAddrHttp + "/health"
+	for {
+		time.Sleep(5 * time.Second)
+
+		var health []pb.HealthInfo
+		func() {
+			// #nosec G107
+			response, err := http.Get(healthUrl)
+			require.NoError(t, err)
+			defer response.Body.Close()
+
+			decoder := json.NewDecoder(response.Body)
+			err = decoder.Decode(&health)
+			require.NoError(t, err)
+			require.Len(t, health, 1)
+		}()
+
+		completed := true
+		for _, ongoingTask := range health[0].Ongoing {
+			if ongoingTask == task {
+				completed = false
+				break
+			}
+		}
+		if completed {
+			break
+		}
+	}
 }

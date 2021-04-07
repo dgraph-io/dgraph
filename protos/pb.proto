@@ -203,7 +203,6 @@ message HealthInfo {
     repeated string indexing = 9;
     repeated string ee_features = 10;
 	uint64 max_assigned = 11;
-	string last_backup = 12;
 }
 
 message Tablet {
