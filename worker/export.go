@@ -24,12 +24,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -221,7 +223,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	err := e.pl.IterateAll(e.readTs, 0, func(p *pb.Posting) error {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprintf(bp, uidFmtStrRdf, p.Uid)
 		} else {
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
 			str, err := valToStr(val)
@@ -304,9 +306,7 @@ func toSchema(attr string, update *pb.SchemaUpdate) *bpb.KV {
 	case update.GetDirective() == pb.SchemaUpdate_REVERSE:
 		x.Check2(buf.WriteString(" @reverse"))
 	case update.GetDirective() == pb.SchemaUpdate_INDEX && len(update.GetTokenizer()) > 0:
-		x.Check2(buf.WriteString(" @index("))
-		x.Check2(buf.WriteString(strings.Join(update.GetTokenizer(), ",")))
-		x.Check2(buf.WriteRune(')'))
+		x.Check2(fmt.Fprintf(&buf, " @index(%s)", strings.Join(update.GetTokenizer(), ",")))
 	}
 	if update.GetCount() {
 		x.Check2(buf.WriteString(" @count"))
@@ -360,20 +360,33 @@ func fieldToString(update *pb.SchemaUpdate) string {
 }
 
 type ExportWriter struct {
-	fd            *os.File
+	w             io.WriteCloser
 	bw            *bufio.Writer
 	gw            *gzip.Writer
 	relativePath  string
 	hasDataBefore bool
 }
 
+func newExportWriter(w io.WriteCloser) (*ExportWriter, error) {
+	writer := &ExportWriter{w: w}
+	writer.bw = bufio.NewWriterSize(writer.w, 1e6)
+	ew, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
+	if err != nil {
+		return nil, err
+	}
+	if writer.gw, err = gzip.NewWriterLevel(ew, gzip.BestSpeed); err != nil {
+		return nil, err
+	}
+	return writer, nil
+}
+
 func (writer *ExportWriter) open(fpath string) error {
 	var err error
-	writer.fd, err = os.Create(fpath)
+	writer.w, err = os.Create(fpath)
 	if err != nil {
 		return err
 	}
-	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
+	writer.bw = bufio.NewWriterSize(writer.w, 1e6)
 	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
 		return err
@@ -383,19 +396,20 @@ func (writer *ExportWriter) open(fpath string) error {
 }
 
 func (writer *ExportWriter) Close() error {
-	if err := writer.gw.Flush(); err != nil {
-		return err
+	if writer == nil {
+		return nil
 	}
-	if err := writer.gw.Close(); err != nil {
-		return err
+	var err1, err2, err3 error
+	if writer.gw != nil {
+		err1 = writer.gw.Close()
 	}
-	if err := writer.bw.Flush(); err != nil {
-		return err
+	if writer.bw != nil {
+		err2 = writer.bw.Flush()
 	}
-	if err := writer.fd.Sync(); err != nil {
-		return err
+	if writer.w != nil {
+		err3 = writer.w.Close()
 	}
-	return writer.fd.Close()
+	return x.MultiError(err1, err2, err3)
 }
 
 // ExportedFiles has the relative path of files that were written during export
@@ -544,7 +558,6 @@ func NewExportStorage(in *pb.ExportRequest, backupName string) (ExportStorage, e
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
-
 	if in.GroupId != groups().groupId() {
 		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
@@ -702,6 +715,24 @@ type Writers struct {
 	DataWriter      *ExportWriter
 	SchemaWriter    *ExportWriter
 	GqlSchemaWriter *ExportWriter
+	closeOnce       sync.Once
+}
+
+var _ io.Closer = &Writers{}
+
+// Closes the underlying writers.
+// This may be called multiple times.
+func (w *Writers) Close() error {
+	if w == nil {
+		return nil
+	}
+	var err1, err2, err3 error
+	w.closeOnce.Do(func() {
+		err1 = w.DataWriter.Close()
+		err2 = w.SchemaWriter.Close()
+		err3 = w.GqlSchemaWriter.Close()
+	})
+	return x.MultiError(err1, err2, err3)
 }
 
 func InitWriters(s ExportStorage, in *pb.ExportRequest) (*Writers, error) {
@@ -732,16 +763,55 @@ func InitWriters(s ExportStorage, in *pb.ExportRequest) (*Writers, error) {
 func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
 
-	uts := time.Unix(in.UnixTs, 0)
-	exportStorage, err := NewExportStorage(in,
-		fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	// Create a UriHandler for the given destination.
+	uri, err := url.Parse(in.GetDestination())
 	if err != nil {
 		return nil, err
 	}
-	writers, err := InitWriters(exportStorage, in)
-	if err != nil {
-		return nil, errors.Wrap(err, "exportInternal failed")
+	creds := &x.MinioCredentials{
+		AccessKey:    in.GetAccessKey(),
+		SecretKey:    in.GetSecretKey(),
+		SessionToken: in.GetSessionToken(),
+		Anonymous:    in.GetAnonymous(),
 	}
+	handler, err := x.NewUriHandler(uri, creds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the export directory.
+	if !handler.DirExists(".") {
+		if err := handler.CreateDir("."); err != nil {
+			return nil, errors.Wrap(err, "while creating export directory")
+		}
+	}
+	uts := time.Unix(in.UnixTs, 0).UTC().Format("0102.1504")
+	dirName := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts)
+	if err := handler.CreateDir(dirName); err != nil {
+		return nil, errors.Wrap(err, "while creating export directory")
+	}
+
+	// Create writers for each export file.
+	writers := &Writers{}
+	defer writers.Close()
+	getWriter := func(ext string) (*ExportWriter, error) {
+		fileName := filepath.Join(dirName, fmt.Sprintf("g%02d%s", in.GroupId, ext))
+		writer, err := handler.CreateFile(fileName)
+		if err != nil {
+			return nil, errors.Wrap(err, "while creating export file")
+		}
+		return newExportWriter(writer)
+	}
+	if writers.DataWriter, err = getWriter(exportFormats[in.Format].ext + ".gz"); err != nil {
+		return nil, err
+	}
+	if writers.SchemaWriter, err = getWriter(".schema.gz"); err != nil {
+		return nil, err
+	}
+	if writers.GqlSchemaWriter, err = getWriter(".gql_schema.gz"); err != nil {
+		return nil, err
+	}
+
 	// This stream exports only the data and the graphQL schema.
 	stream := db.NewStreamAt(in.ReadTs)
 	stream.Prefix = []byte{x.DefaultPrefix}
@@ -892,8 +962,16 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 		return nil, err
 	}
 
+	// Finish up export.
+	if err := writers.Close(); err != nil {
+		return nil, err
+	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return exportStorage.FinishWriting(writers)
+	files := ExportedFiles{
+		writers.DataWriter.relativePath,
+		writers.SchemaWriter.relativePath,
+		writers.GqlSchemaWriter.relativePath}
+	return files, nil
 }
 
 func SchemaExportKv(attr string, val []byte, skipZero bool) (*bpb.KV, error) {
