@@ -342,7 +342,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	}
 	require.NoError(t, json.Unmarshal(resp.Data, &result))
 	require.Contains(t, result.Backup.Response.Message, "Backup queued successfully")
-	testutil.WaitForBackup(t)
+	testutil.WaitForTask(t, "opBackup")
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)

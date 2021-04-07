@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -95,45 +93,8 @@ func StartBackupHttps(t *testing.T, backupDst string, forceFull bool) {
 	require.Contains(t, string(responseBody), "Backup queued successfully")
 }
 
-func WaitForBackup(t *testing.T) {
-	healthUrl := "http://" + SockAddrHttp + "/health"
-	for {
-		health := func() []pb.HealthInfo {
-			response, err := http.Get(healthUrl)
-			require.NoError(t, err)
-			defer response.Body.Close()
-
-			var health []pb.HealthInfo
-			decoder := json.NewDecoder(response.Body)
-			err = decoder.Decode(&health)
-			require.NoError(t, err)
-			require.Len(t, health, 1)
-
-			return health
-		}()
-
-		status := health[0].LastBackup
-		if strings.HasPrefix(status, "COMPLETED: ") {
-			break
-		}
-		require.True(t, status == "" || strings.HasPrefix(status, "STARTED: "),
-			"backup failed: status: %s", status)
-
-		time.Sleep(4 * time.Second)
-	}
-}
-
 func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
-	for {
-		resp, err := http.Get("http://" + SockAddrHttp + "/health")
-		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
-		require.NoError(t, err)
-		if !strings.Contains(string(buf), "opRestore") {
-			break
-		}
-		time.Sleep(4 * time.Second)
-	}
+	WaitForTask(t, "opRestore")
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
