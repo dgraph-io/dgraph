@@ -94,7 +94,7 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
-	txn.cache.UpdateDeltasAndDiscardLists()
+	txn.cache.UpdateDeltasAndDiscardLists(txn.StartTs)
 }
 
 // Store is used by tests.
@@ -138,6 +138,15 @@ func (o *oracle) RegisterStartTs(ts uint64) (*Txn, bool) {
 		o.pendingTxns[ts] = txn
 	}
 	return txn, ok
+}
+
+func (o *oracle) ResetTxn(ts uint64) *Txn {
+	o.Lock()
+	defer o.Unlock()
+
+	txn := NewTxn(ts)
+	o.pendingTxns[ts] = txn
+	return txn
 }
 
 func (o *oracle) CacheAt(ts uint64) *LocalCache {

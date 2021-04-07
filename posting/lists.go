@@ -100,7 +100,8 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 type LocalCache struct {
 	sync.RWMutex
 
-	startTs uint64
+	startTs    uint64
+	numWritten int
 
 	readKeys map[uint64]struct{}
 	// The keys for these maps is a string representation of the Badger key for the posting list.
@@ -192,6 +193,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	// apply it before returning the list.
 	lc.RLock()
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+		x.AssertTrue(false) // This needs to be fixed.
+		// TODO: Fix this up. The start ts won't match.
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
@@ -217,7 +220,7 @@ func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
 }
 
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
-func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
+func (lc *LocalCache) UpdateDeltasAndDiscardLists(startTs uint64) {
 	lc.Lock()
 	defer lc.Unlock()
 	if len(lc.plists) == 0 {
@@ -225,8 +228,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
-		data := pl.getMutation(lc.startTs)
-		if len(data) > 0 {
+		if data := pl.getMutation(startTs); len(data) > 0 {
 			lc.deltas[key] = data
 		}
 		lc.maxVersions[key] = pl.maxVersion()

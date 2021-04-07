@@ -360,10 +360,6 @@ func (n *node) mutationWorker(workerId int) {
 		span := otrace.FromContext(pctx.Ctx)
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
-		// if p.Mutations.StartTs > cacheStartTs {
-		// 	posting.Oracle().WaitForTs(pctx.Ctx, p.Mutations.StartTs)
-		// 	span.Annotatef(nil, "Done waiting to reach StartTs")
-		// }
 		n.processMutations(pctx.Ctx, p.Mutations, cacheStartTs)
 	}
 
@@ -402,8 +398,14 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 	// }
 
 	span := otrace.FromContext(ctx)
-	txn, has := posting.Oracle().RegisterStartTs(m.StartTs)
-	x.AssertTrue(has)
+	txn := posting.Oracle().GetTxn(m.StartTs)
+	x.AssertTrue(txn != nil)
+	defer func() {
+		glog.Infof("processMutations: %d -> %d. CacheStartTs: %d\n", txn.StartTs, len(txn.Deltas()), cacheStartTs)
+		// Avoid us re-using this txn object for processing mutations.
+		close(txn.ErrCh)
+	}()
+
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		txn.ErrCh <- x.ErrConflict
@@ -640,11 +642,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		span.Annotate(nil, "mutation is still valid")
 		return nil
 	}
+
 	// If we have an error, re-run this.
 	span.Annotate(nil, "re-running mutation")
 	glog.Infof("Re-running mutation with start ts: %d cache ts: %d. Err: %v\n", txn.StartTs, txn.CacheStartTs(), err)
+
+	txn2 := posting.Oracle().ResetTxn(m.StartTs)
 	n.processMutations(ctx, m, 0)
-	return <-txn.ErrCh
+	return <-txn2.ErrCh
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
@@ -908,8 +913,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		// glog.Infof("Keys: Read: %d Written: %d CacheStartTs: %d %d -> %d\n", len(txn.ReadKeys()),
-		// 	len(txn.Deltas()), txn.CacheStartTs(), start, commit)
+		glog.Infof("commitOrAbort: %d -> %d. Keys Read: %d CacheStartTs: %d\n",
+			txn.StartTs, len(txn.Deltas()), len(txn.ReadKeys()), txn.CacheStartTs())
+
 		n.keysWritten.totalKeys += len(txn.Deltas())
 		for k := range txn.Deltas() {
 			h := z.MemHashString(k)
@@ -1481,7 +1487,6 @@ func (n *node) Run() {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
 
-				// var muts []*pb.Proposal
 				for _, e := range entries {
 					var p pb.Proposal
 					x.Check(p.Unmarshal(e.Data[8:]))
@@ -1494,9 +1499,7 @@ func (n *node) Run() {
 					x.AssertTruef(!has, "already has txn with start ts: %d\n", startTs)
 					p.Key = binary.BigEndian.Uint64(e.Data[:8])
 					n.concApplyCh <- &p
-					// muts = append(muts, &p)
 				}
-				// n.concApplyCh <- muts
 				n.applyCh <- entries
 			}
 
