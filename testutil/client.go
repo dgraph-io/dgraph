@@ -541,6 +541,7 @@ func WaitForTask(t *testing.T, task string) {
 
 		var health []pb.HealthInfo
 		func() {
+			// #nosec G107
 			response, err := http.Get(healthUrl)
 			require.NoError(t, err)
 			defer response.Body.Close()
