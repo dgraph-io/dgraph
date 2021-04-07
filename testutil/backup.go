@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,7 +96,16 @@ func StartBackupHttps(t *testing.T, backupDst string, forceFull bool) {
 }
 
 func WaitForRestore(t *testing.T, dg *dgo.Dgraph) {
-	WaitForTask(t, "opRestore")
+	for {
+		resp, err := http.Get("http://" + SockAddrHttp + "/health")
+		require.NoError(t, err)
+		buf, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		if !strings.Contains(string(buf), "opRestore") {
+			break
+		}
+		time.Sleep(4 * time.Second)
+	}
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
