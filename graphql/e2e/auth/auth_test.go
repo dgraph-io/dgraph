@@ -1524,10 +1524,10 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 	testCases := []TestCase{{
 		name: "Auth query with @cascade and pagination at top level",
 		user: "user1",
-		role: "USER",
+		role: "ADMIN",
 		query: `
 		query {	
-			queryMovie (order: {asc: content}, first: 1, offset: 0) @cascade{
+			queryMovie (order: {asc: content}, first: 2, offset: 0) @cascade{
 				content
 				code
 				regionsAvailable (order: {asc: name}){
@@ -1551,6 +1551,15 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 				  },
 				  {
 					"name": "Region6"
+				  }
+				]
+			  },
+			  {
+				"content": "Movie4",
+				"code": "m4",
+				"regionsAvailable": [
+				  {
+					"name": "Region5"
 				  }
 				]
 			  }
