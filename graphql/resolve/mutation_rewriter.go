@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 	"reflect"
 	"sort"
 	"strconv"
@@ -133,9 +134,14 @@ func NewVariableGenerator() *VariableGenerator {
 // Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth bool) string {
+func (v *VariableGenerator) Next(typ schema.Type, flagDotXidName, xidVal string, auth bool) string {
 	// return previously allocated variable name for repeating xidVal
 	var key string
+	xidName := flagDotXidName
+	// here we are using the assertion that field name or type name can't have "." in them
+	if strings.Contains(flagDotXidName, ".") {
+		xidName = strings.Split(flagDotXidName, ".")[1]
+	}
 	if xidName == "" || xidVal == "" {
 		key = typ.Name()
 	} else {
@@ -152,7 +158,8 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 		// ABC.ab.cd and ABC.abc.d
 		// It also ensures that xids from different types gets different variable names
 		// here we are using the assertion that field name or type name can't have "." in them
-		key = typ.FieldOriginatedFrom(xidName) + "." + xidName + "." + xidVal
+		typDef, _ := typ.FieldOriginatedFrom(xidName)
+		key = typDef.Name + "." + flagDotXidName + "." + xidVal
 	}
 
 	if varName, ok := v.xidVarNameMap[key]; ok {
@@ -1245,7 +1252,7 @@ func queryFromFragments(frags []*mutationFragment) *gql.GraphQuery {
 	return qry
 }
 
-func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type) *gql.GraphQuery {
+func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type, inherited *ast.Definition) *gql.GraphQuery {
 	qry := &gql.GraphQuery{
 		Attr: xidVariable,
 		Func: &gql.Function{
@@ -1256,6 +1263,14 @@ func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema
 			},
 		},
 		Children: []*gql.GraphQuery{{Attr: "uid"}},
+	}
+
+	if inherited != nil {
+		thisFilter := &gql.FilterTree{
+			Func: buildTypeFunc(schema.TypeName(inherited)),
+		}
+		addToFilterTree(qry, thisFilter)
+		return qry
 	}
 	addTypeFilter(qry, typ)
 	return qry
@@ -1801,8 +1816,19 @@ func existenceQueries(
 
 					// Add the corresponding existence query. As this is the first time we have
 					// encountered this variable, the query is added only once per variable.
-					query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ)
+					query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ, nil)
 					ret = append(ret, query)
+
+					// Add the one more existence query if given xid field is inherited from interface and has
+					// unique argument set. This is added to ensure that this xid is unique across all the
+					// implementation of the interface.
+					typeDefinition, isInherited := typ.FieldOriginatedFrom(xid.Name())
+					fieldDef := typ.Field(xid.Name())
+					if isInherited && fieldDef.HasUniqueArg() {
+						varInterface := varGen.Next(typ, "Int."+xid.Name(), xidString, false)
+						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(), typ, typeDefinition)
+						ret = append(ret, queryInterface)
+					}
 					// Don't return just over here as there maybe more nodes in the children tree.
 				}
 			}

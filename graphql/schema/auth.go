@@ -221,7 +221,7 @@ func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	authRules := make(map[string]*TypeAuth)
 
 	for _, typ := range s.Types {
-		name := typeName(typ)
+		name := TypeName(typ)
 		authRules[name] = &TypeAuth{Fields: make(map[string]*AuthContainer)}
 		auth := typ.Directives.ForName(authDirective)
 		if auth != nil {
@@ -240,10 +240,10 @@ func authRules(sch *schema) (map[string]*TypeAuth, error) {
 
 	// Merge the Auth rules on interfaces into the implementing types
 	for _, typ := range s.Types {
-		name := typeName(typ)
+		name := TypeName(typ)
 		if typ.Kind == ast.Object {
 			for _, intrface := range typ.Interfaces {
-				interfaceName := typeName(s.Types[intrface])
+				interfaceName := TypeName(s.Types[intrface])
 				if authRules[interfaceName] != nil && authRules[interfaceName].Rules != nil {
 					authRules[name].Rules = mergeAuthRules(
 						authRules[name].Rules,
@@ -259,7 +259,7 @@ func authRules(sch *schema) (map[string]*TypeAuth, error) {
 	// will be broken into an operation on subsequent implementing types and auth rules
 	// will be verified against the types only.
 	for _, typ := range s.Types {
-		name := typeName(typ)
+		name := TypeName(typ)
 		if typ.Kind == ast.Interface {
 			authRules[name] = &TypeAuth{}
 		}

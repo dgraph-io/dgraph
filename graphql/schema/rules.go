@@ -159,7 +159,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
-			typName := typeName(def)
+			typName := TypeName(def)
 			if def.Kind == ast.Interface {
 				interfacePreds[def.Name] = make(map[string]bool)
 			} else {

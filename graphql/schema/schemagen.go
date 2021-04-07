@@ -476,7 +476,7 @@ func getAllSearchIndexes(val *ast.Value) []string {
 	return res
 }
 
-func typeName(def *ast.Definition) string {
+func TypeName(def *ast.Definition) string {
 	name := def.Name
 	dir := def.Directives.ForName(dgraphDirective)
 	if dir == nil {
@@ -558,7 +558,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
-			typName := typeName(def)
+			typName := TypeName(def)
 
 			typ := dgType{name: typName}
 			pwdField := getPasswordField(def)
@@ -579,13 +579,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					continue
 				}
 
-				typName = typeName(def)
+				typName = TypeName(def)
 				// This field could have originally been defined in an interface that this type
 				// implements. If we get a parent interface, then we should prefix the field name
 				// with it instead of def.Name.
 				parentInt := parentInterface(gqlSch, def, f.Name)
 				if parentInt != nil {
-					typName = typeName(parentInt)
+					typName = TypeName(parentInt)
 				}
 				fname := fieldName(f, typName)
 
@@ -686,7 +686,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 			if pwdField != nil {
 				parentInt := parentInterfaceForPwdField(gqlSch, def, pwdField.Name)
 				if parentInt != nil {
-					typName = typeName(parentInt)
+					typName = TypeName(parentInt)
 				}
 				fname := fieldName(pwdField, typName)
 

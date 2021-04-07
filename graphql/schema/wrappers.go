@@ -249,7 +249,7 @@ type Type interface {
 	Interfaces() []string
 	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
-	FieldOriginatedFrom(fieldName string) string
+	FieldOriginatedFrom(fieldName string) (*ast.Definition, bool)
 	AuthRules() *TypeAuth
 	IsGeo() bool
 	IsAggregateResult() bool
@@ -269,6 +269,7 @@ type FieldDefinition interface {
 	IsID() bool
 	IsExternal() bool
 	HasIDDirective() bool
+	HasUniqueArg() bool
 	Inverse() FieldDefinition
 	WithMemberType(string) FieldDefinition
 	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
@@ -595,10 +596,10 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 				// fixed i.e. uid.
 				continue
 			}
-			typName := typeName(inputTyp)
+			typName := TypeName(inputTyp)
 			parentInt := parentInterface(sch, inputTyp, fld.Name)
 			if parentInt != nil {
-				typName = typeName(parentInt)
+				typName = TypeName(parentInt)
 			}
 			// 1. For fields that have @dgraph(pred: xxxName) directive, field name would be
 			//    xxxName.
@@ -666,7 +667,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	typeNameAst := make(map[string][]*ast.Definition)
 
 	for _, typ := range s.Types {
-		name := typeName(typ)
+		name := TypeName(typ)
 		typeNameAst[name] = append(typeNameAst[name], typ)
 	}
 
@@ -2331,6 +2332,13 @@ func hasIDDirective(fd *ast.FieldDefinition) bool {
 	return id != nil
 }
 
+func (fd *fieldDefinition) HasUniqueArg() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	return hasUniqueArg(fd.fieldDef)
+}
+
 func hasUniqueArg(fd *ast.FieldDefinition) bool {
 	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveUniqueArg)
 	if uniqueArg == nil {
@@ -2468,7 +2476,7 @@ func (t *astType) Name() string {
 
 func (t *astType) DgraphName() string {
 	typeDef := t.inSchema.schema.Types[t.typ.Name()]
-	name := typeName(typeDef)
+	name := TypeName(typeDef)
 	if name != "" {
 		return name
 	}
@@ -2652,7 +2660,7 @@ func (t *astType) Interfaces() []string {
 	for _, intr := range interfaces {
 		i := t.inSchema.schema.Types[intr]
 		name := intr
-		if n := typeName(i); n != "" {
+		if n := TypeName(i); n != "" {
 			name = n
 		}
 		names = append(names, name)
@@ -3031,21 +3039,21 @@ func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interfa
 	return jsonTemplate
 }
 
-// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
-// If the field wasn't inherited, but belonged to this type, this type's name is returned.
-// Otherwise, empty string is returned.
-func (t *astType) FieldOriginatedFrom(fieldName string) string {
+// FieldOriginatedFrom returns the definition of the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type, this type's definition is returned.
+// Otherwise, nil is returned.
+func (t *astType) FieldOriginatedFrom(fieldName string) (*ast.Definition, bool) {
 	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
-			return implements.Name
+			return implements, true
 		}
 	}
 
 	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
-		return t.Name()
+		return t.inSchema.schema.Types[t.Name()], false
 	}
 
-	return ""
+	return nil, false
 }
 
 // buildGraphqlRequestFields will build graphql request body from ast.
