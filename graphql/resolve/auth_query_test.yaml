@@ -956,11 +956,11 @@
         regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) @cascade(fields: ["global"]) {
           name
           global
-          users(filter: { username: { eq: "User321" } },  order: { asc: username }, first: 10, offset: 10) {
+          users(filter: { username: { eq: "User321" } },  order: { asc: username }, first: 10, offset: 10) @cascade {
             username
             age
             isPublic
-            secrets(filter: { aSecret: { allofterms : "Secret132" } },  order: { asc: aSecret }, first: 10, offset: 10) {
+            secrets(filter: { aSecret: { allofterms : "Secret132" } },  order: { asc: aSecret }, first: 10, offset: 10) @cascade(fields: ["ownedBy"]){
               aSecret
               ownedBy
             }
@@ -977,11 +977,11 @@
         Movie.regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 10, offset: 10) @cascade(Region.global) {
           Region.name : Region.name
           Region.global : Region.global
-          Region.users : Region.users @filter(uid(User_3)) (orderasc: User.username, first: 10, offset: 10) {
+          Region.users : Region.users @filter(uid(User_3)) (orderasc: User.username, first: 10, offset: 10) @cascade {
             User.username : User.username
             User.age : User.age
             User.isPublic : User.isPublic
-            User.secrets : User.secrets @filter(uid(UserSecret_5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) {
+            User.secrets : User.secrets @filter(uid(UserSecret_5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) @cascade(UserSecret.ownedBy) {
               UserSecret.aSecret : UserSecret.aSecret
               UserSecret.ownedBy : UserSecret.ownedBy
               dgraph.uid : uid
