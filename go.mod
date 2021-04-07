@@ -19,7 +19,7 @@ require (
 	github.com/blevesearch/bleve v1.0.13
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v3 v3.0.0-20210405181011-d918b9904b2a
-	github.com/dgraph-io/dgo/v200 v200.0.0-20210401091508-95bfd74de60e
+	github.com/dgraph-io/dgo/v210 v210.0.0-20210407152819-261d1c2a6987
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.0
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210223074046-e5b8b80bb4ed

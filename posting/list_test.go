@@ -28,7 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgraph-io/roaring/roaring64"
 	"github.com/gogo/protobuf/proto"

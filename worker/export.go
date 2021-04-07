@@ -39,7 +39,7 @@ import (
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
