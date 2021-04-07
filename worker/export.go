@@ -367,14 +367,21 @@ type ExportWriter struct {
 	hasDataBefore bool
 }
 
-func newExportWriter(w io.WriteCloser) (*ExportWriter, error) {
-	writer := &ExportWriter{w: w}
+func newExportWriter(handler x.UriHandler, fileName string) (*ExportWriter, error) {
+	writer := &ExportWriter{relativePath: fileName}
+	var err error
+
+	writer.w, err = handler.CreateFile(fileName)
+	if err != nil {
+		return nil, err
+	}
 	writer.bw = bufio.NewWriterSize(writer.w, 1e6)
 	ew, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
 		return nil, err
 	}
-	if writer.gw, err = gzip.NewWriterLevel(ew, gzip.BestSpeed); err != nil {
+	writer.gw, err = gzip.NewWriterLevel(ew, gzip.BestSpeed)
+	if err != nil {
 		return nil, err
 	}
 	return writer, nil
@@ -794,21 +801,17 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	// Create writers for each export file.
 	writers := &Writers{}
 	defer writers.Close()
-	getWriter := func(ext string) (*ExportWriter, error) {
+	newWriter := func(ext string) (*ExportWriter, error) {
 		fileName := filepath.Join(dirName, fmt.Sprintf("g%02d%s", in.GroupId, ext))
-		writer, err := handler.CreateFile(fileName)
-		if err != nil {
-			return nil, errors.Wrap(err, "while creating export file")
-		}
-		return newExportWriter(writer)
+		return newExportWriter(handler, fileName)
 	}
-	if writers.DataWriter, err = getWriter(exportFormats[in.Format].ext + ".gz"); err != nil {
+	if writers.DataWriter, err = newWriter(exportFormats[in.Format].ext + ".gz"); err != nil {
 		return nil, err
 	}
-	if writers.SchemaWriter, err = getWriter(".schema.gz"); err != nil {
+	if writers.SchemaWriter, err = newWriter(".schema.gz"); err != nil {
 		return nil, err
 	}
-	if writers.GqlSchemaWriter, err = getWriter(".gql_schema.gz"); err != nil {
+	if writers.GqlSchemaWriter, err = newWriter(".gql_schema.gz"); err != nil {
 		return nil, err
 	}
 
