@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package vault
+package ee
 
 import (
 	"fmt"
@@ -25,17 +25,23 @@ import (
 )
 
 const (
-	flagVault = "vault"
+	flagAcl           = "acl"
+	flagAclAccessTtl  = "access-ttl"
+	flagAclRefreshTtl = "refresh-ttl"
+	flagAclSecretFile = "secret-file"
 
-	// Vault SubFlags.
-	flagAddr         = "addr"
-	flagRoleIdFile   = "role-id-file"
-	flagSecretIdFile = "secret-id-file"
-	flagPath         = "path"
-	flagAclField     = "acl-field"
-	flagAclFormat    = "acl-format"
-	flagEncField     = "enc-field"
-	flagEncFormat    = "enc-format"
+	flagEnc        = "encryption"
+	flagEncKeyFile = "key-file"
+
+	flagVault             = "vault"
+	flagVaultAddr         = "addr"
+	flagVaultRoleIdFile   = "role-id-file"
+	flagVaultSecretIdFile = "secret-id-file"
+	flagVaultPath         = "path"
+	flagVaultAclField     = "acl-field"
+	flagVaultAclFormat    = "acl-format"
+	flagVaultEncField     = "enc-field"
+	flagVaultEncFormat    = "enc-format"
 )
 
 func RegisterAclAndEncFlags(flag *pflag.FlagSet) {
@@ -49,27 +55,30 @@ func RegisterEncFlag(flag *pflag.FlagSet) {
 	registerVaultFlag(flag, false, true)
 }
 
-const (
-	AclDefaults = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
-	EncDefaults = `key-file=;`
+var (
+	AclDefaults = fmt.Sprintf("%s=%s; %s=%s; %s=%s",
+		flagAclAccessTtl, "6h",
+		flagAclRefreshTtl, "30d",
+		flagAclSecretFile, "")
+	encDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
 )
 
 func vaultDefaults(aclEnabled, encEnabled bool) string {
 	var configBuilder strings.Builder
 	fmt.Fprintf(&configBuilder, "%s=%s; %s=%s; %s=%s; %s=%s",
-		flagAddr, "http://localhost:8200",
-		flagRoleIdFile, "",
-		flagSecretIdFile, "",
-		flagPath, "secret/data/dgraph")
+		flagVaultAddr, "http://localhost:8200",
+		flagVaultRoleIdFile, "",
+		flagVaultSecretIdFile, "",
+		flagVaultPath, "secret/data/dgraph")
 	if aclEnabled {
 		fmt.Fprintf(&configBuilder, "%s=%s; %s=%s",
-			flagAclField, "",
-			flagAclFormat, "base64")
+			flagVaultAclField, "",
+			flagVaultAclFormat, "base64")
 	}
 	if encEnabled {
 		fmt.Fprintf(&configBuilder, "%s=%s; %s=%s",
-			flagEncField, "",
-			flagEncFormat, "base64")
+			flagVaultEncField, "",
+			flagVaultEncFormat, "base64")
 	}
 	return configBuilder.String()
 }
@@ -81,20 +90,20 @@ func registerVaultFlag(flag *pflag.FlagSet, aclEnabled, encEnabled bool) {
 	// Generate help text.
 	helpBuilder := z.NewSuperFlagHelp(config).
 		Head("Vault options").
-		Flag(flagAddr, "Vault server address (format: http://ip:port).").
-		Flag(flagRoleIdFile, "Vault RoleID file, used for AppRole authentication.").
-		Flag(flagSecretIdFile, "Vault SecretID file, used for AppRole authentication.").
-		Flag(flagPath, "Vault KV store path (e.g. 'secret/data/dgraph' for KV V2, "+
+		Flag(flagVaultAddr, "Vault server address (format: http://ip:port).").
+		Flag(flagVaultRoleIdFile, "Vault RoleID file, used for AppRole authentication.").
+		Flag(flagVaultSecretIdFile, "Vault SecretID file, used for AppRole authentication.").
+		Flag(flagVaultPath, "Vault KV store path (e.g. 'secret/data/dgraph' for KV V2, "+
 			"'kv/dgraph' for KV V1).")
 	if aclEnabled {
 		helpBuilder = helpBuilder.
-			Flag(flagAclField, "Vault field containing ACL key.").
-			Flag(flagAclFormat, "ACL key format, can be 'raw' or 'base64'.")
+			Flag(flagVaultAclField, "Vault field containing ACL key.").
+			Flag(flagVaultAclFormat, "ACL key format, can be 'raw' or 'base64'.")
 	}
 	if encEnabled {
 		helpBuilder = helpBuilder.
-			Flag(flagEncField, "Vault field containing encryption key.").
-			Flag(flagEncFormat, "Encryption key format, can be 'raw' or 'base64'.")
+			Flag(flagVaultEncField, "Vault field containing encryption key.").
+			Flag(flagVaultEncFormat, "Encryption key format, can be 'raw' or 'base64'.")
 	}
 	helpText := helpBuilder.String()
 
@@ -113,14 +122,14 @@ func registerAclFlag(flag *pflag.FlagSet) {
 		Flag("refresh-ttl",
 			"The TTL for the refresh JWT.").
 		String()
-	flag.String("acl", AclDefaults, helpText)
+	flag.String(flagAcl, AclDefaults, helpText)
 }
 
 func registerEncFlag(flag *pflag.FlagSet) {
-	helpText := z.NewSuperFlagHelp(EncDefaults).
+	helpText := z.NewSuperFlagHelp(encDefaults).
 		Head("[Enterprise Feature] Encryption At Rest options").
 		Flag("key-file", "The file that stores the symmetric key of length 16, 24, or 32 bytes."+
 			"The key size determines the chosen AES cipher (AES-128, AES-192, and AES-256 respectively).").
 		String()
-	flag.String("encryption", EncDefaults, helpText)
+	flag.String(flagEnc, encDefaults, helpText)
 }

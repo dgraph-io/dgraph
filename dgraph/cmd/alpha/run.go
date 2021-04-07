@@ -42,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/graphql/admin"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -108,7 +107,7 @@ they form a Raft group and provide synchronous replication.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 	// --encryption and --vault Superflag
-	vault.RegisterAclAndEncFlags(flag)
+	ee.RegisterAclAndEncFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -650,7 +649,7 @@ func run() {
 	if aclKey != nil {
 		opts.HmacSecret = aclKey
 
-		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(vault.AclDefaults)
+		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(ee.AclDefaults)
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 

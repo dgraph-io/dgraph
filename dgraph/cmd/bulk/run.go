@@ -32,7 +32,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/filestore"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -133,7 +132,7 @@ func init() {
 
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
-	vault.RegisterEncFlag(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func run() {
