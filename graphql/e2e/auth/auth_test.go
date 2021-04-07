@@ -1529,7 +1529,7 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 		query {	
 			queryMovie (order: {asc: content}, first: 1, offset: 0) @cascade{
 				content
-				random
+				code
 				regionsAvailable (order: {asc: name}){
 					name
 				}
@@ -1541,7 +1541,7 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 			"queryMovie": [
 			  {
 				"content": "Movie3",
-				"random": "random3",
+				"code": "m3",
 				"regionsAvailable": [
 				  {
 					"name": "Region1"
