@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,6 +115,8 @@ type params struct {
 	Count int
 	// Offset is the value of the "offset" parameter.
 	Offset int
+	// Random is the value of the "random" parameter
+	Random int
 	// AfterUID is the value of the "after" parameter.
 	AfterUID uint64
 	// DoCount is true if the count of the predicate is requested instead of its value.
@@ -745,6 +748,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
+
+	if v, ok := gq.Args["random"]; ok {
+		random_, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Random = int(random_)
+	}
+
 	return nil
 }
 
@@ -2298,6 +2310,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	if sg.Params.Random > 0 {
+		if err = sg.applyRandom(ctx); err != nil {
+			rch <- err
+			return
+		}
+	}
+
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -2393,6 +2412,34 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	rch <- childErr
+}
+
+// applies "random" to lists inside uidMatrix
+// Params.Random number of nodes are selected
+// duplicates are not removed i.e., random selection by replacement is done
+// TODO: error handling here
+func (sg *SubGraph) applyRandom(ctx context.Context) error {
+	sg.updateUidMatrix()
+
+	// store row id -> new uid list mapping
+	newUids := make(map[int][]uint64)
+	for i := 0; i < sg.Params.Random; i++ {
+		randomIdx := rand.Intn(len(sg.uidMatrix))
+		randomIdy := rand.Intn(len(sg.uidMatrix[randomIdx].Uids))
+
+		if newUids[randomIdx] == nil {
+			newUids[randomIdx] = make([]uint64, 0)
+		}
+
+		newUids[randomIdx] = append(newUids[randomIdx], sg.uidMatrix[randomIdx].Uids[randomIdy])
+	}
+
+	for idx, uids := range newUids {
+		sg.uidMatrix[idx].Uids = uids
+	}
+
+	sg.DestMap = codec.Merge(sg.uidMatrix)
+	return nil
 }
 
 // applyPagination applies count and offset to lists inside uidMatrix.
@@ -2638,7 +2685,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 func isValidArg(a string) bool {
 	switch a {
 	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+		"minweight", "maxweight", "random":
 		return true
 	}
 	return false
