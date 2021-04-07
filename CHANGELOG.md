@@ -18,7 +18,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - [BREAKING] Rename Badger metrics. ([#7507][])
 - [BREAKING] Fix(Backups): new badger Superflag, NumGoroutines option solves OOM crashes ([#7387][])
 - [BREAKING] Remove restore tracker as its not necessary ([#7148][])
-- [BREAKING] Opt(raftwal):  store only membership state to disk in the zero snapshot ([#7143][])
 - [BREAKING] Chore(GraphQL): Remove `dgraph.graphql.p_sha256hash` predicate and merge it into `dgraph.graphql.p_query` ([#7451][])
 
 ### Added
