@@ -539,18 +539,16 @@ func WaitForTask(t *testing.T, task string) {
 	for {
 		time.Sleep(5 * time.Second)
 
-		health := func() []pb.HealthInfo {
+		var health []pb.HealthInfo
+		func() {
 			response, err := http.Get(healthUrl)
 			require.NoError(t, err)
 			defer response.Body.Close()
 
-			var health []pb.HealthInfo
 			decoder := json.NewDecoder(response.Body)
 			err = decoder.Decode(&health)
 			require.NoError(t, err)
 			require.Len(t, health, 1)
-
-			return health
 		}()
 
 		completed := true
