@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
