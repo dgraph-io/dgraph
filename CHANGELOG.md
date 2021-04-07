@@ -19,6 +19,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - [BREAKING] Fix(Backups): new badger Superflag, NumGoroutines option solves OOM crashes ([#7387][])
 - [BREAKING] Remove restore tracker as its not necessary ([#7148][])
 - [BREAKING] Chore(GraphQL): Remove `dgraph.graphql.p_sha256hash` predicate and merge it into `dgraph.graphql.p_query` ([#7451][])
+- [BREAKING] Introducing Multi-Tenancy in dgraph ([#7293][]) ([#7400][]) ([#7397][]) ([#7399][]) ([#7377][]) ([#7414][]) ([#7418][])
 
 ### Added
 
@@ -68,7 +69,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Make backup API asynchronous
   - Perf(backups): Reduce latency of list backups ([#7435][])
   - Feat(acl): allow setting a password at the time of creation of namespace ([#7446][])
-  - Bring Multi-Tenancy Feature into master ([#7293][]) ([#7400][]) ([#7397][]) ([#7399][]) ([#7377][]) ([#7414][]) ([#7418][])
   - Feat(enterprise): audit logs for alpha and zero ([#7295][])
   - Feat(enterpise): Change data capture (CDC) integration with kafka ([#7395][])
   - Perf(dgraph) - Use badger sinceTs in backups ([#7392][])
