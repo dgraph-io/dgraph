@@ -638,11 +638,11 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 		{name: "Query auth field without JWT Token",
 			query: `
 			query {
-				queryMovie {
+				queryMovie(order: {asc: content}) {
 					content
 				}
 			}`,
-			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+			result: `{"queryMovie":[{"content":"Movie3"},{"content":"Movie4"}]}`,
 		},
 		{name: "Query empty auth field without JWT Token",
 			query: `
