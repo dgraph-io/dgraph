@@ -1523,7 +1523,7 @@ func TestNestedFilter(t *testing.T) {
 func TestAuthPaginationWithCascade(t *testing.T) {
 	testCases := []TestCase{{
 		name: "Auth query with @cascade and pagination at top level",
-		user: "user2",
+		user: "user1",
 		role: "USER",
 		query: `
 		query {	
@@ -1594,7 +1594,7 @@ query {
 				]
 			  }
 			]
-		  },
+		  }
 		`,
 	}}
 
