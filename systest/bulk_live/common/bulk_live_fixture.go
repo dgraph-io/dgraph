@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"

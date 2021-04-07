@@ -40,8 +40,8 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bopt "github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 

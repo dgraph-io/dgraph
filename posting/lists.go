@@ -25,7 +25,7 @@ import (
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 
