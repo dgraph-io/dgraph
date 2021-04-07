@@ -1,0 +1,11 @@
+vault:
+  addr: http://vault:8200
+  acl_field: hmac_secret_file
+  acl_format: raw
+  enc_field: enc_key
+  enc_format: raw
+  path: secret/data/dgraph/alpha
+  role_id_file: /dgraph/vault/role_id
+  secret_id_file: /dgraph/vault/secret_id
+security:
+  whitelist: 10.0.0.0/8,172.0.0.0/8,192.168.0.0/16
