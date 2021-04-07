@@ -72,9 +72,9 @@
 		"Region.global": true
 	},
 	{
-		"uid": "_:region5",
+		"uid": "_:region6",
 		"dgraph.type": "Region",
-		"Region.name": "Region5",
+		"Region.name": "Region6",
 		"Region.global": true
 	},
 	{
@@ -95,7 +95,7 @@
 		"dgraph.type": "Movie",
 		"Movie.content": "Movie3",
 		"Movie.random": "random3",
-		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}],
+		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}, {"uid": "_:region6"}],
 		"Movie.disabled": true
 	},
 	{

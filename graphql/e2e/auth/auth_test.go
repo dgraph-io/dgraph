@@ -1529,6 +1529,7 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 		query {	
 			queryMovie (order: {asc: content}, first: 1, offset: 0) @cascade{
 				content
+				random
 				regionsAvailable (order: {asc: name}){
 					name
 				}
@@ -1539,15 +1540,22 @@ func TestAuthPaginationWithCascade(t *testing.T) {
 		{
 			"queryMovie": [
 			  {
-				"content": "Movie2",
+				"content": "Movie3",
+				"random": "random3",
 				"regionsAvailable": [
 				  {
 					"name": "Region1"
+				  },
+				  {
+					"name": "Region4"
+				  },
+				  {
+					"name": "Region6"
 				  }
 				]
 			  }
 			]
-		}
+		  }
 `,
 	}, {
 		name: "Auth query with @cascade and pagination at deep level",
@@ -1591,7 +1599,7 @@ query {
 	}}
 
 	for _, tcase := range testCases {
-		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+		t.Run(tcase.name, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
 				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
 				Query:   tcase.query,
@@ -1600,7 +1608,7 @@ query {
 			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
 			common.RequireNoGQLErrors(t, gqlResponse)
 
-			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
 		})
 	}
 
