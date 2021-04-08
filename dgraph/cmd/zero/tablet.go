@@ -176,7 +176,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Predicate: predicate,
 		SourceGid: srcGroup,
 		DestGid:   dstGroup,
-		TxnTs:     ids.StartId,
+		ReadTs:    ids.StartId,
 		SinceTs:   0,
 	}
 
@@ -201,8 +201,8 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	}
 
 	// We have done a majority of move. Now transfer rest of the data.
-	in.SinceTs = in.TxnTs
-	in.TxnTs = ids.StartId
+	in.SinceTs = in.ReadTs
+	in.ReadTs = ids.StartId
 	span.Annotatef(nil, "Starting move [2]: %+v", in)
 	glog.Infof("Starting move [2]: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
@@ -216,7 +216,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		OnDiskBytes:       tab.OnDiskBytes,
 		UncompressedBytes: tab.UncompressedBytes,
 		Force:             true,
-		MoveTs:            in.TxnTs,
+		MoveTs:            in.ReadTs,
 	}
 	msg = fmt.Sprintf("Move at Alpha done. Now proposing: %+v", p)
 	span.Annotate(nil, msg)

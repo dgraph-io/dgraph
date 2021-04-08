@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -42,7 +41,14 @@ var (
 	errEmptyPredicate = errors.Errorf("Predicate not specified")
 	errNotLeader      = errors.Errorf("Server is not leader of this group")
 	emptyPayload      = api.Payload{}
-	cleanPredicate    = []byte("clean predicate")
+)
+
+const (
+	// NoCleanPredicate is used to indicate that we are in phase 2 of predicate move, so we should
+	// not clean the predicate.
+	NoCleanPredicate = iota
+	// CleanPredicate is used to indicate that we need to clean the predicate on receiver.
+	CleanPredicate
 )
 
 // size of kvs won't be too big, we would take care before proposing.
@@ -90,11 +96,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				}
 
 				glog.Infof("Predicate being received: %v", pk.Attr)
-				if len(kv.Meta) > 0 {
-					if !bytes.Equal(kv.Meta, cleanPredicate) {
-						return errors.Errorf("Expecting clean predicate instruction with schema key: %+v", kv)
-					}
-					kv.Meta = nil
+				if kv.StreamId == CleanPredicate {
 					// Delete on all nodes.
 					p := &pb.Proposal{CleanPredicate: pk.Attr}
 					if err := n.proposeAndWait(ctx, p); err != nil {
@@ -224,8 +226,9 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		p := &pb.Proposal{CleanPredicate: in.Predicate, ExpectedChecksum: in.ExpectedChecksum}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
-	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
-		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
+		return &emptyPayload,
+			errors.Errorf("While waiting for read ts: %d. Error: %v", in.ReadTs, err)
 	}
 
 	gid, err := groups().BelongsTo(in.Predicate)
@@ -273,7 +276,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
 	// because schema keys are always set at ts=1.
-	txn := pstore.NewTransactionAt(in.TxnTs, false)
+	txn := pstore.NewTransactionAt(in.ReadTs, false)
 	defer txn.Discard()
 
 	// Send schema first.
@@ -300,8 +303,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.UserMeta = []byte{item.UserMeta()}
 		if in.SinceTs == 0 {
 			// When doing phase 1 of predicate move, receiver should clean the predicate.
-			// We should clean this meta from KV at receiver.
-			kv.Meta = cleanPredicate
+			kv.StreamId = CleanPredicate
 		}
 		badger.KVToBuffer(kv, buf)
 
@@ -315,7 +317,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	stream := pstore.NewStreamAt(in.TxnTs)
+	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
 	stream.SinceTs = in.SinceTs
@@ -330,7 +332,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kvs, err := l.Rollup(itr.Alloc)
 		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
-			kv.Version = in.TxnTs
+			kv.Version = in.ReadTs
 		}
 		return &bpb.KVList{Kv: kvs}, err
 	}
