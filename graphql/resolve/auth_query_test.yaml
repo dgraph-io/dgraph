@@ -861,7 +861,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie_3), orderasc: Movie.content) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
+      MovieRoot as var(func: uid(Movie_3)) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
       Movie_3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
@@ -992,7 +992,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie_8), orderasc: Movie.content) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
+      MovieRoot as var(func: uid(Movie_8)) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
       Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
