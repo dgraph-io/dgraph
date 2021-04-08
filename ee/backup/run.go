@@ -270,6 +270,7 @@ func runExportBackup() error {
 		if err := worker.RunMapper(req, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to map the backups")
 		}
+
 		in := &pb.ExportRequest{
 			GroupId:     uint32(gid),
 			ReadTs:      latestManifest.Since,
@@ -277,14 +278,8 @@ func runExportBackup() error {
 			Format:      opt.format,
 			Destination: exportDir,
 		}
-		uts := time.Unix(in.UnixTs, 0)
-		destPath := fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504"))
-		exportStorage, err := worker.NewExportStorage(in, destPath)
-		if err != nil {
-			return err
-		}
-
-		writers, err := worker.InitWriters(exportStorage, in)
+		writers, err := worker.NewWriters(in)
+		defer writers.Close()
 		if err != nil {
 			return err
 		}
@@ -293,7 +288,7 @@ func runExportBackup() error {
 		if err := worker.RunReducer(w, mapDir); err != nil {
 			return errors.Wrap(err, "Failed to reduce the map")
 		}
-		if _, err := exportStorage.FinishWriting(writers); err != nil {
+		if err := writers.Close(); err != nil {
 			return errors.Wrap(err, "Failed to finish write")
 		}
 	}
