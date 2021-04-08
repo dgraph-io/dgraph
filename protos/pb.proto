@@ -488,6 +488,7 @@ message MovePredicatePayload {
 	uint32 dest_gid          = 3;
 	uint64 txn_ts            = 4;
 	uint64 expected_checksum = 5;
+	uint64 since_ts          = 6;
 }
 
 message TxnStatus {

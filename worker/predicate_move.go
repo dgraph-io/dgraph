@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -41,6 +42,7 @@ var (
 	errEmptyPredicate = errors.Errorf("Predicate not specified")
 	errNotLeader      = errors.Errorf("Server is not leader of this group")
 	emptyPayload      = api.Payload{}
+	cleanPredicate    = []byte("clean predicate")
 )
 
 // size of kvs won't be too big, we would take care before proposing.
@@ -87,12 +89,18 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
 				}
 
-				// Delete on all nodes.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)
-				if err := n.proposeAndWait(ctx, p); err != nil {
-					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
-					return err
+				if len(kv.Meta) > 0 {
+					if !bytes.Equal(kv.Meta, cleanPredicate) {
+						return errors.Errorf("Expecting clean predicate instruction with schema key: %+v", kv)
+					}
+					kv.Meta = nil
+					// Delete on all nodes.
+					p := &pb.Proposal{CleanPredicate: pk.Attr}
+					if err := n.proposeAndWait(ctx, p); err != nil {
+						glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+						return err
+					}
 				}
 			}
 
@@ -290,6 +298,11 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
+		if in.SinceTs == 0 {
+			// When doing phase 1 of predicate move, receiver should clean the predicate.
+			// We should clean this meta from KV at receiver.
+			kv.Meta = cleanPredicate
+		}
 		badger.KVToBuffer(kv, buf)
 
 		kvs := &pb.KVS{
@@ -305,6 +318,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	stream := pstore.NewStreamAt(in.TxnTs)
 	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
+	stream.SinceTs = in.SinceTs
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// For now, just send out full posting lists, because we use delete markers to delete older
 		// data in the prefix range. So, by sending only one version per key, and writing it at a
