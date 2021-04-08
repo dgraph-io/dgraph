@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package vault
+package ee
 
 import (
 	"encoding/base64"
@@ -25,15 +25,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
+func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 	// Avoid querying Vault unless the flag has been explicitly set.
 	if !config.IsSet(flagVault) {
 		return
 	}
 
 	vaultString := config.GetString(flagVault)
-	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(defaultConfig)
-	vaultConfig, err := parseFlags(vaultFlag)
+	vaultStringDefault := vaultDefaults(true, true)
+	vaultFlag := z.NewSuperFlag(vaultString).MergeAndCheckDefault(vaultStringDefault)
+	vaultConfig, err := vaultParseFlag(vaultFlag)
 	if err != nil {
 		glog.Exit(err)
 	}
@@ -43,12 +44,12 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 		return
 	}
 
-	client, err := newClient(vaultConfig.addr, vaultConfig.roleIdFile, vaultConfig.secretIdFile)
+	client, err := vaultNewClient(vaultConfig.addr, vaultConfig.roleIdFile, vaultConfig.secretIdFile)
 	if err != nil {
 		glog.Exit(err)
 	}
 
-	kv, err := getKvStore(client, vaultConfig.path)
+	kv, err := vaultGetKvStore(client, vaultConfig.path)
 	if err != nil {
 		glog.Exit(err)
 	}
@@ -67,11 +68,11 @@ func GetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
 	return
 }
 
-// kvStore represents a KV store retrieved from the Vault KV Secrets Engine.
-type kvStore map[string]interface{}
+// vaultKvStore represents a KV store retrieved from the Vault KV Secrets Engine.
+type vaultKvStore map[string]interface{}
 
-// getKvStore fetches a KV store from located at path.
-func getKvStore(client *api.Client, path string) (kvStore, error) {
+// vaultGetKvStore fetches a KV store from located at path.
+func vaultGetKvStore(client *api.Client, path string) (vaultKvStore, error) {
 	secret, err := client.Logical().Read(path)
 	if err != nil {
 		return nil, fmt.Errorf("vault: error retrieving path %s: %s", path, err)
@@ -80,7 +81,7 @@ func getKvStore(client *api.Client, path string) (kvStore, error) {
 		return nil, fmt.Errorf("vault: error retrieving path %s: empty response", path)
 	}
 
-	var kv kvStore
+	var kv vaultKvStore
 	kv, ok := secret.Data["data"].(map[string]interface{})
 	if !ok {
 		glog.Infof("vault: failed to parse response in KV V2 format, falling back to V1")
@@ -91,7 +92,7 @@ func getKvStore(client *api.Client, path string) (kvStore, error) {
 }
 
 // getSensitiveBytes retrieves a value from a kvStore, decoding it if necessary.
-func (kv kvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
+func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
 	value, ok := kv[field]
 	if !ok {
 		return nil, fmt.Errorf("vault: key '%s' not found", field)
@@ -118,8 +119,8 @@ func (kv kvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
 	return valueBytes, nil
 }
 
-// newClient creates an AppRole-authenticated Vault client using the provided credentials.
-func newClient(address, roleIdPath, secretIdPath string) (*api.Client, error) {
+// vaultNewClient creates an AppRole-authenticated Vault client using the provided credentials.
+func vaultNewClient(address, roleIdPath, secretIdPath string) (*api.Client, error) {
 	// Connect to Vault.
 	client, err := api.NewClient(&api.Config{Address: address})
 	if err != nil {
@@ -155,7 +156,7 @@ func newClient(address, roleIdPath, secretIdPath string) (*api.Client, error) {
 	return client, nil
 }
 
-type config struct {
+type vaultConfig struct {
 	addr         string
 	roleIdFile   string
 	secretIdFile string
@@ -166,8 +167,8 @@ type config struct {
 	encFormat    string
 }
 
-// parseFlags parses and validates a Vault SuperFlag.
-func parseFlags(flag *z.SuperFlag) (*config, error) {
+// vaultParseFlag parses and validates a Vault SuperFlag.
+func vaultParseFlag(flag *z.SuperFlag) (*vaultConfig, error) {
 	// Helper functions to validate flags.
 	validateRequired := func(field, value string) error {
 		if value == "" {
@@ -183,35 +184,36 @@ func parseFlags(flag *z.SuperFlag) (*config, error) {
 	}
 
 	// Parse and validate flags.
-	addr := flag.GetString(flagAddr)
-	if err := validateRequired(flagAddr, addr); err != nil {
+	addr := flag.GetString(flagVaultAddr)
+	if err := validateRequired(flagVaultAddr, addr); err != nil {
 		return nil, err
 	}
-	roleIdFile := flag.GetPath(flagRoleIdFile)
-	if err := validateRequired(flagRoleIdFile, roleIdFile); err != nil {
+	roleIdFile := flag.GetPath(flagVaultRoleIdFile)
+	if err := validateRequired(flagVaultRoleIdFile, roleIdFile); err != nil {
 		return nil, err
 	}
-	secretIdFile := flag.GetPath(flagSecretIdFile)
-	path := flag.GetString(flagPath)
-	if err := validateRequired(flagPath, path); err != nil {
+	secretIdFile := flag.GetPath(flagVaultSecretIdFile)
+	path := flag.GetString(flagVaultPath)
+	if err := validateRequired(flagVaultPath, path); err != nil {
 		return nil, err
 	}
-	aclFormat := flag.GetString(flagAclFormat)
-	if err := validateFormat(flagAclFormat, aclFormat); err != nil {
+	aclFormat := flag.GetString(flagVaultAclFormat)
+	if err := validateFormat(flagVaultAclFormat, aclFormat); err != nil {
 		return nil, err
 	}
-	encFormat := flag.GetString(flagEncFormat)
-	if err := validateFormat(flagEncFormat, encFormat); err != nil {
+	encFormat := flag.GetString(flagVaultEncFormat)
+	if err := validateFormat(flagVaultEncFormat, encFormat); err != nil {
 		return nil, err
 	}
-	aclField := flag.GetString(flagAclField)
-	encField := flag.GetString(flagEncField)
+	aclField := flag.GetString(flagVaultAclField)
+	encField := flag.GetString(flagVaultEncField)
 	if aclField == "" && encField == "" {
 		return nil, fmt.Errorf(
-			"vault: at least one of fields '%s' or '%s' must be provided", flagAclField, flagEncField)
+			"vault: at least one of fields '%s' or '%s' must be provided",
+			flagVaultAclField, flagVaultEncField)
 	}
 
-	config := &config{
+	config := &vaultConfig{
 		addr:         addr,
 		roleIdFile:   roleIdFile,
 		secretIdFile: secretIdFile,

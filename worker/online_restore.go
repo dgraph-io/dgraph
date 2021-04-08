@@ -30,7 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -379,13 +379,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	ee.RegisterEncFlag(flags)
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, errors.Wrapf(err, "bad config bind")
 	}
 
 	// Copy from the request.
-	config.Set("encryption", enc.BuildEncFlag(req.EncryptionKeyFile))
+	config.Set("encryption", ee.BuildEncFlag(req.EncryptionKeyFile))
 
 	vaultBuilder := new(strings.Builder)
 	if req.VaultRoleidFile != "" {

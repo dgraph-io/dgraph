@@ -15,8 +15,6 @@ package ee
 import (
 	"io/ioutil"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
-	"github.com/dgraph-io/dgraph/ee/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
@@ -28,7 +26,7 @@ import (
 // this function exits with an error.
 func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
-	aclKey, encKey := vault.GetKeys(config)
+	aclKey, encKey := vaultGetKeys(config)
 	var err error
 
 	aclKeyFile := aclSuperFlag.GetPath("secret-file")
@@ -44,7 +42,7 @@ func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
 	}
 
-	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(enc.EncryptionDefaults)
+	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(EncDefaults)
 	encKeyFile := encSuperFlag.GetPath("key-file")
 	if encKeyFile != "" {
 		if encKey != nil {

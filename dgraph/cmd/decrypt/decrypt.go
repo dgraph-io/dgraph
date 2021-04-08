@@ -54,7 +54,7 @@ func init() {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 func run() {
 	opts := options{

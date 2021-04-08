@@ -34,8 +34,8 @@ func TestConvertJSON(t *testing.T) {
 		t.Fatal("convertJSON mutating already flattened string")
 	}
 	// need both permutations because convertJSON iterates through Go hashmaps in undefined order
-	if (!strings.Contains(string(conv), "compression=zstd:1; goroutines=5;") &&
-		!strings.Contains(string(conv), "goroutines=5; compression=zstd:1;")) ||
+	if (!strings.Contains(string(conv), "compression=zstd:1; numgoroutines=5;") &&
+		!strings.Contains(string(conv), "numgoroutines=5; compression=zstd:1;")) ||
 		(!strings.Contains(string(conv), "idx=2; learner=true;") &&
 			!strings.Contains(string(conv), "learner=true; idx=2;")) ||
 		!strings.Contains(string(conv), "whitelist=127.0.0.1,0.0.0.0") {

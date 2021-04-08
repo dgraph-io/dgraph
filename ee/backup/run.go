@@ -25,7 +25,6 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -159,7 +158,7 @@ func initExportBackup() {
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
 		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 type bufWriter struct {
@@ -259,9 +258,9 @@ func runExportBackup() error {
 	glog.Infof("Created temporary map directory: %s\n", mapDir)
 
 	encFlag := z.NewSuperFlag(ExportBackup.Conf.GetString("encryption")).
-		MergeAndCheckDefault(enc.EncryptionDefaults)
+		MergeAndCheckDefault(ee.EncDefaults)
 	// TODO: Can probably make this procesing concurrent.
-	for gid, _ := range latestManifest.Groups {
+	for gid := range latestManifest.Groups {
 		glog.Infof("Exporting group: %d", gid)
 		req := &pb.RestoreRequest{
 			GroupId:           gid,
