@@ -466,15 +466,6 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			countAfter:  countAfter,
 			entity:      t.Entity,
 		}
-		glog.Infof("hasCountIndex. Before: %d After: %d start ts: %d key: %x\n", cp.countBefore, cp.countAfter, txn.StartTs, l.key)
-
-		if countAfter < countBefore {
-			bm, err := l.bitmap(ListOptions{ReadTs: txn.StartTs})
-			x.Check(err)
-			glog.Infof("------------ cp: %+v bitmap: %d StartTs: %d key: %#x", cp, bm.GetCardinality(), txn.StartTs, l.key)
-			panic("Stopping execution due to discrepancy in count")
-			x.AssertTrue(false)
-		}
 		return val, found, cp, nil
 	}
 	return val, found, emptyCountParams, nil

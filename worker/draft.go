@@ -111,8 +111,8 @@ func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 		// Determine if this key was modified between our allocated start Ts
 		// (txn.StartTs) and our chosen start ts (txn.CacheStartTs). If so, we
 		// return false. Otherwise, whatever we read is still valid.
-		glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
-			txn.StartTs, txn.CacheStartTs(), ts, hash)
+		// glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
+		// 	txn.StartTs, txn.CacheStartTs(), ts, hash)
 		if ts > txn.CacheStartTs() {
 			kw.invalid++
 			return false
@@ -359,12 +359,12 @@ func (n *node) mutationWorker(workerId int) {
 		x.AssertTrue(p.Key != 0)
 		x.AssertTrue(len(p.Mutations.GetEdges()) > 0)
 
-		pctx := n.Proposals.Get(p.Key)
+		pctx := n.Ctx(p.Key)
 		x.AssertTrue(pctx != nil)
-		span := otrace.FromContext(pctx.Ctx)
+		span := otrace.FromContext(pctx)
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
-		n.processMutations(pctx.Ctx, p.Mutations, cacheStartTs)
+		n.processMutations(pctx, p.Mutations, cacheStartTs)
 	}
 
 	for {
@@ -969,8 +969,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		n.keysWritten.totalKeys += len(txn.Deltas())
 		for k := range txn.Deltas() {
 			n.keysWritten.keyCommitTs[k] = commit
-			glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
-				k, start, txn.CacheStartTs(), commit)
+			// glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
+			// 	k, start, txn.CacheStartTs(), commit)
 		}
 		err := x.RetryUntilSuccess(int(x.WorkerConfig.Badger.GetInt64("max-retries")),
 			10*time.Millisecond, func() error {
