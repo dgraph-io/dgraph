@@ -359,12 +359,12 @@ func (n *node) mutationWorker(workerId int) {
 		x.AssertTrue(p.Key != 0)
 		x.AssertTrue(len(p.Mutations.GetEdges()) > 0)
 
-		pctx := n.Proposals.Get(p.Key)
-		x.AssertTrue(pctx != nil)
-		span := otrace.FromContext(pctx.Ctx)
+		ctx := n.Ctx(p.Key)
+		x.AssertTrue(ctx != nil)
+		span := otrace.FromContext(ctx)
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
-		n.processMutations(pctx.Ctx, p.Mutations, cacheStartTs)
+		n.processMutations(ctx, p.Mutations, cacheStartTs)
 	}
 
 	for {
