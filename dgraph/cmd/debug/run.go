@@ -39,7 +39,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -109,7 +108,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func toInt(o *pb.Posting) int {

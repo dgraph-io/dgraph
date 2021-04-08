@@ -38,7 +38,6 @@ const (
 	//       For easy readability, keep the options without default values (if any) at the end of
 	//       the *Defaults string. Also, since these strings are printed in --help text, avoid line
 	//       breaks.
-	AclDefaults    = `access-ttl=6h; refresh-ttl=30d; secret-file=;`
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +

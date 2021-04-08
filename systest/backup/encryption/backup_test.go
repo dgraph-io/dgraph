@@ -30,7 +30,6 @@ import (
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -333,7 +332,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 
 	// Get key.
 	config := getEncConfig()
-	config.Set("encryption", enc.BuildEncFlag("../../../ee/enc/test-fixtures/enc-key"))
+	config.Set("encryption", ee.BuildEncFlag("../../../ee/enc/test-fixtures/enc-key"))
 	_, encKey := ee.GetKeys(config)
 	require.NotNil(t, encKey)
 
@@ -345,7 +344,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 func getEncConfig() *viper.Viper {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
+	ee.RegisterEncFlag(flags)
 	config.BindPFlags(flags)
 	return config
 }

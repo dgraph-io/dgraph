@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -286,7 +286,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
 			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
 			"--encryption",
-			enc.BuildEncFlag(testDataDir + "/../../../../ee/enc/test-fixtures/enc-key"),
+			ee.BuildEncFlag(testDataDir + "/../../../../ee/enc/test-fixtures/enc-key"),
 			"--alpha", alphaService, "--zero", zeroService,
 			"--creds", "user=groot;password=password;"},
 	}

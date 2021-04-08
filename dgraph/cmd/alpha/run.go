@@ -107,7 +107,7 @@ they form a Raft group and provide synchronous replication.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 	// --encryption and --vault Superflag
-	enc.RegisterFlags(flag)
+	ee.RegisterAclAndEncFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -179,17 +179,6 @@ they form a Raft group and provide synchronous replication.
 				"to whitelist for performing admin actions (i.e., --security "+
 				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.`+
 				`internal").`).
-		String())
-
-	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("[Enterprise Feature] ACL options").
-		Flag("secret-file",
-			"The file that stores the HMAC secret, which is used for signing the JWT and "+
-				"should have at least 32 ASCII characters. Required to enable ACLs.").
-		Flag("access-ttl",
-			"The TTL for the access JWT.").
-		Flag("refresh-ttl",
-			"The TTL for the refresh JWT.").
 		String())
 
 	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
@@ -660,7 +649,7 @@ func run() {
 	if aclKey != nil {
 		opts.HmacSecret = aclKey
 
-		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
+		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(ee.AclDefaults)
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 

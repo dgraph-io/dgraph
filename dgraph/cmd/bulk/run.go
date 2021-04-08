@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -133,7 +132,7 @@ func init() {
 
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func run() {
