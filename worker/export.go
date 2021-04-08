@@ -771,7 +771,11 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 	skipZero bool) (ExportedFiles, error) {
 
 	// Create a UriHandler for the given destination.
-	uri, err := url.Parse(in.GetDestination())
+	destination := in.GetDestination()
+	if destination == "" {
+		destination = x.WorkerConfig.ExportPath
+	}
+	uri, err := url.Parse(destination)
 	if err != nil {
 		return nil, err
 	}
