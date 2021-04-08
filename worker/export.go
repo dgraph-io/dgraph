@@ -27,7 +27,6 @@ import (
 	"io"
 	"math"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -383,21 +382,6 @@ func newExportWriter(handler x.UriHandler, fileName string) (*ExportWriter, erro
 		return nil, err
 	}
 	return writer, nil
-}
-
-func (writer *ExportWriter) open(fpath string) error {
-	var err error
-	writer.w, err = os.Create(fpath)
-	if err != nil {
-		return err
-	}
-	writer.bw = bufio.NewWriterSize(writer.w, 1e6)
-	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
-	if err != nil {
-		return err
-	}
-	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestSpeed)
-	return err
 }
 
 func (writer *ExportWriter) Close() error {
