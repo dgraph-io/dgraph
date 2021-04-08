@@ -1435,44 +1435,72 @@ func rewriteObject(
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 
-				// Three cases:
-				// 1. If the queryResult UID exists. Add a reference.
+				// If this xid field is inherited from interface and have unique argument set, we have
+				// existence query for interface to make sure that this xid is unique across all
+				// implementation types of the interface.
+				// We have following cases
+				// 1. If the queryResult UID exists for any of existence query (type or interface). Add a reference.
 				// 2. If the queryResult UID does not exist and this is the first time we are seeing
 				//    this. Then, return error.
 				// 3. The queryResult UID does not exist. But, this could be a reference to an XID
 				//    node added during the mutation rewriting. This is handled by adding the new blank UID
 				//    to existenceQueryResult.
 
-				// Get whether node with XID exists or not from existenceQueriesResult
-				if uid, ok := idExistence[variable]; ok {
+				interfaceTypDef, interfaceVar := interfaceVariable(typ, varGen, xid.Name(), xidString)
+
+				// Get whether node with XID exists or not from existenceQueriesResults
+				_, interfaceUidExist := idExistence[interfaceVar]
+				typUid, typUidExist := idExistence[variable]
+
+				if interfaceUidExist || typUidExist {
 					// node with XID exists. This is a reference.
-					// We return an error if this is at toplevel. Else, we return the ID reference
+					// We return an error if this is at toplevel. Else, we return the ID reference if
+					// found node is of same type as xid field type. Because that node can be of some other
+					// type in case xidField is inherited from interface.
+
 					if atTopLevel {
 						if mutationType == AddWithUpsert {
-							// This means we are in Add Mutation with upsert: true.
-							// In this case, we don't return an error and continue updating this node.
-							// upsertVar is set to variable and srcUID is set to uid(variable) to continue
-							// updating this node.
-							upsertVar = variable
-							srcUID = fmt.Sprintf("uid(%s)", variable)
+							if typUidExist {
+								// This means we are in Add Mutation with upsert: true and node belong to type of the
+								// xid field.
+								// In this case, we don't return an error and continue updating this node.
+								// upsertVar is set to variable and srcUID is set to uid(variable) to continue
+								// updating this node.
+								upsertVar = variable
+								srcUID = fmt.Sprintf("uid(%s)", variable)
+							}
 						} else {
 							// We return an error as we are at top level of non-upsert mutation and the XID exists.
 							// We need to conceal the error because we might be leaking information to the user if it
 							// tries to add duplicate data to the field with @id.
 							var err error
-							if queryAuthSelector(typ) == nil {
-								err = x.GqlErrorf("id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
-							} else {
-								// This error will only be reported in debug mode.
-								err = x.GqlErrorf("GraphQL debug: id %s already exists for field %s inside type %s", xidString, xid.Name(), typ.Name())
+							if typUidExist {
+								if queryAuthSelector(typ) == nil {
+									err = x.GqlErrorf("Type %s; field %s: id %s already exists",
+										typ.Name(), xid.Name(), xidString)
+								} else {
+									// This error will only be reported in debug mode.
+									err = x.GqlErrorf("GraphQL Debug: Type %s; field %s: id %s already exists",
+										typ.Name(), xid.Name(), xidString)
+								}
+								retErrors = append(retErrors, err)
+								return nil, upsertVar, retErrors
 							}
-							retErrors = append(retErrors, err)
+							retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+								interfaceTypDef.Name))
 							return nil, upsertVar, retErrors
+
 						}
 					} else {
 						// As we are not at top level, we return the XID reference. We don't update this node
 						// further.
-						return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), upsertVar, nil
+						if typUidExist {
+							return asIDReference(ctx, typUid, srcField, srcUID, varGen,
+								mutationType == UpdateWithRemove), upsertVar, nil
+						}
+						retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+							interfaceTypDef.Name))
+						return nil, upsertVar, retErrors
 					}
 				} else {
 
@@ -1525,7 +1553,7 @@ func rewriteObject(
 					// This is handled in the for loop above
 					continue
 				} else if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
-					// When we reach this stage we are absoulutely sure that this is not a reference and is
+					// When we reach this stage we are absolutely sure that this is not a reference and is
 					// a new node and one of the XIDs is missing.
 					// There are two possibilities here:
 					// 1. This is an Add Mutation or we are at some deeper level inside Update Mutation:
@@ -1708,6 +1736,16 @@ func rewriteObject(
 	return frag, upsertVar, retErrors
 }
 
+func xidExistInterfaceTypeError(typ schema.Type, xidString string, xidName, interfaceName string) error {
+	if queryAuthSelector(typ) == nil {
+		return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
+			" type of interface", interfaceName, xidName, xidString)
+	}
+	// This error will only be reported in debug mode.
+	return x.GqlErrorf("GraphQL Debug: interface %s; field %s: id %s already exists for "+
+		"one of the implementing type of interface", interfaceName, xidName, xidString)
+}
+
 // existenceQueries takes a GraphQL JSON object as obj and creates queries to find
 // out if referenced nodes by XID and UID exist or not.
 // This is done in recursive fashion using a dfs.
@@ -1819,14 +1857,12 @@ func existenceQueries(
 					query := checkXIDExistsQuery(variable, xidString, xid.Name(), typ, nil)
 					ret = append(ret, query)
 
-					// Add the one more existence query if given xid field is inherited from interface and has
+					// Add one more existence query if given xid field is inherited from interface and has
 					// unique argument set. This is added to ensure that this xid is unique across all the
 					// implementation of the interface.
-					typeDefinition, isInherited := typ.FieldOriginatedFrom(xid.Name())
-					fieldDef := typ.Field(xid.Name())
-					if isInherited && fieldDef.HasUniqueArg() {
-						varInterface := varGen.Next(typ, "Int."+xid.Name(), xidString, false)
-						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(), typ, typeDefinition)
+					interfaceTypDef, varInterface := interfaceVariable(typ, varGen, xid.Name(), xidString)
+					if interfaceTypDef != nil {
+						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(), typ, interfaceTypDef)
 						ret = append(ret, queryInterface)
 					}
 					// Don't return just over here as there maybe more nodes in the children tree.
@@ -2366,4 +2402,16 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 		return "", fmt.Errorf("encountered an XID %s with %s that isn't"+
 			"allowed as Xid", xidName, typeName)
 	}
+}
+
+// This function will return interface definition and variable for existence query for interface,
+// if this xid is inherited from interface, otherwise it will return nil and empty string
+func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName string,
+	xidString string) (*ast.Definition, string) {
+	interfaceTypeDef, isInherited := typ.FieldOriginatedFrom(xidName)
+	fieldDef := typ.Field(xidName)
+	if isInherited && fieldDef.HasUniqueArg() {
+		return interfaceTypeDef, varGen.Next(typ, "Int."+xidName, xidString, false)
+	}
+	return nil, ""
 }
