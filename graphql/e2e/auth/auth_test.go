@@ -51,6 +51,7 @@ type Region struct {
 type Movie struct {
 	Id               string    `json:"id,omitempty"`
 	Content          string    `json:"content,omitempty"`
+	Code             string    `json:"code,omitempty"`
 	Hidden           bool      `json:"hidden,omitempty"`
 	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
 }
