@@ -95,7 +95,7 @@ func init() {
 		"Ignore key_. Only consider amount when calculating total.")
 	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
-	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
+	flag.BoolVarP(&opt.readOnly, "readonly", "o", false, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.Uint64VarP(&opt.namespace, "ns", "n", 0, "Which namespace to use.")
 	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")

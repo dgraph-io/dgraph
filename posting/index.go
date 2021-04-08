@@ -414,6 +414,18 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		if countBefore == -1 {
 			return val, false, emptyCountParams, ErrTsTooOld
 		}
+		// val := Oracle().beforeCount(string(l.key), countBefore)
+		// if countBefore < val {
+		// 	fromDisk, err := getNew(l.key, pstore, txn.CacheStartTs())
+
+		// 	txn.cache.getNoStore(string(l.key))
+		// 	bm, err := l.bitmap(ListOptions{ReadTs: txn.StartTs})
+		// 	x.Check(err)
+		// 	glog.Infof("------------ registered: %d now: %d bitmap: %d StartTs: %d key: %#x",
+		// 		val, countBefore, bm.GetCardinality(), txn.StartTs, l.key)
+		// 	panic("Stopping execution due to discrepancy in count")
+		// 	x.AssertTrue(false)
+		// }
 	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
@@ -448,12 +460,22 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, t.Op)
-		return val, found, countParams{
+		cp := countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      t.Entity,
-		}, nil
+		}
+		glog.Infof("hasCountIndex. Before: %d After: %d start ts: %d key: %x\n", cp.countBefore, cp.countAfter, txn.StartTs, l.key)
+
+		if countAfter < countBefore {
+			bm, err := l.bitmap(ListOptions{ReadTs: txn.StartTs})
+			x.Check(err)
+			glog.Infof("------------ cp: %+v bitmap: %d StartTs: %d key: %#x", cp, bm.GetCardinality(), txn.StartTs, l.key)
+			panic("Stopping execution due to discrepancy in count")
+			x.AssertTrue(false)
+		}
+		return val, found, cp, nil
 	}
 	return val, found, emptyCountParams, nil
 }
@@ -487,6 +509,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	}
 	// ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
+		// This is the one.
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}

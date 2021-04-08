@@ -103,7 +103,7 @@ type LocalCache struct {
 	startTs    uint64
 	numWritten int
 
-	readKeys map[uint64]struct{}
+	readKeys map[string]struct{}
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
 	// during commit.
@@ -123,7 +123,7 @@ func NewLocalCache(startTs uint64) *LocalCache {
 		deltas:      make(map[string][]byte),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
-		readKeys:    make(map[uint64]struct{}),
+		readKeys:    make(map[string]struct{}),
 	}
 }
 
@@ -205,9 +205,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	lc.Lock()
 	if lc.readKeys == nil {
-		lc.readKeys = make(map[uint64]struct{})
+		lc.readKeys = make(map[string]struct{})
 	}
-	lc.readKeys[z.MemHash(key)] = struct{}{}
+	lc.readKeys[string(key)] = struct{}{}
 	lc.Unlock()
 	return lc.getInternal(key, true)
 }

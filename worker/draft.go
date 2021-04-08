@@ -79,11 +79,13 @@ type node struct {
 	usingCacheTs int64
 
 	ex *executor
+
+	pendingProposals []pb.Proposal
 }
 
 type keysWritten struct {
 	rejectBeforeIndex uint64
-	keyCommitTs       map[uint64]uint64
+	keyCommitTs       map[string]uint64
 	valid             int64
 	invalid           int64
 	totalKeys         int
@@ -91,7 +93,7 @@ type keysWritten struct {
 
 func newKeysWritten() *keysWritten {
 	return &keysWritten{
-		keyCommitTs: make(map[uint64]uint64),
+		keyCommitTs: make(map[string]uint64),
 	}
 }
 
@@ -100,16 +102,18 @@ func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 		kw.invalid++
 		return false
 	}
-	if txn.StartTs == txn.CacheStartTs() {
-		kw.valid++
-		return true
-	}
+	// if txn.StartTs == txn.CacheStartTs() {
+	// 	kw.valid++
+	// 	return true
+	// }
 	for hash := range txn.ReadKeys() {
 		ts := kw.keyCommitTs[hash]
 		// Determine if this key was modified between our allocated start Ts
 		// (txn.StartTs) and our chosen start ts (txn.CacheStartTs). If so, we
 		// return false. Otherwise, whatever we read is still valid.
-		if ts > txn.CacheStartTs() && ts < txn.StartTs {
+		glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
+			txn.StartTs, txn.CacheStartTs(), ts, hash)
+		if ts > txn.CacheStartTs() {
 			kw.invalid++
 			return false
 		}
@@ -645,14 +649,16 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	// If we have an error, re-run this.
 	span.Annotate(nil, "re-running mutation")
-	glog.Infof("Re-running mutation with start ts: %d cache ts: %d. Err: %v\n", txn.StartTs, txn.CacheStartTs(), err)
+	txn = nil
 
 	txn2 := posting.Oracle().ResetTxn(m.StartTs)
+	glog.Infof("Re-running mutation with start ts: %d cache ts: %d. Err: %v\n", txn2.StartTs, txn2.CacheStartTs(), err)
 	n.processMutations(ctx, m, 0)
 	return <-txn2.ErrCh
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
+func (n *node) applyCommitted(proposal *pb.Proposal) error {
+	key := proposal.Key
 	ctx := n.Ctx(key)
 	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %d",
@@ -801,89 +807,133 @@ func (n *node) processApplyCh() {
 	histograms["mutation"] = z.NewHistogramData(z.Fibonacci(32))
 	histograms["delta"] = z.NewHistogramData(z.Fibonacci(32))
 
+	getProposal := func(e raftpb.Entry) pb.Proposal {
+		var p pb.Proposal
+		key := binary.BigEndian.Uint64(e.Data[:8])
+		x.Check(p.Unmarshal(e.Data[8:]))
+		p.Key = key
+		p.Index = e.Index
+		switch {
+		case p.Mutations != nil:
+			p.StartTs = p.Mutations.StartTs
+		case p.Snapshot != nil:
+			p.StartTs = p.Snapshot.ReadTs
+		case p.Delta != nil:
+			p.StartTs = 0 // Run this asap.
+		default:
+			// For now, not covering everything.
+		}
+		return p
+	}
+
 	// This function must be run serially.
-	handle := func(entries []raftpb.Entry) {
-		var totalSize int64
-		for _, entry := range entries {
-			x.AssertTrue(len(entry.Data) > 0)
+	handle := func(proposal pb.Proposal) {
+		// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
+		// commit ts.
+		// WARNING: This would cause the leader and the follower to diverge in the timestamp
+		// they use to commit the same thing.
+		// TODO: This is broken. We need to find a way to fix this.
+		if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
+			proposal.Mutations.StartTs = State.GetTimestamp(false)
+		}
 
-			// We use the size as a double check to ensure that we're
-			// working with the same proposal as before.
-			psz := entry.Size()
-			totalSize += int64(psz)
+		var perr error
+		p, ok := previous[proposal.Key]
+		if ok && p.err == nil {
+			// n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
+			// 	key, proposal.Index)
+			previous[proposal.Key].seen = time.Now() // Update the ts.
+			// Don't break here. We still need to call the Done below.
 
-			var proposal pb.Proposal
-			key := binary.BigEndian.Uint64(entry.Data[:8])
-			x.Check(proposal.Unmarshal(entry.Data[8:]))
-			proposal.Index = entry.Index
-
-			// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
-			// commit ts.
-			// WARNING: This would cause the leader and the follower to diverge in the timestamp
-			// they use to commit the same thing.
-			// TODO: This is broken. We need to find a way to fix this.
-			if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
-				proposal.Mutations.StartTs = State.GetTimestamp(false)
+		} else {
+			if max := posting.Oracle().MaxAssigned(); proposal.StartTs > max {
+				// Wait to run this proposal.
+				glog.Infof("loopOverPending: Add proposal with StartTs: %d > max assigned: %d",
+					proposal.StartTs, max)
+				n.pendingProposals = append(n.pendingProposals, proposal)
+				return
 			}
 
-			var perr error
-			p, ok := previous[key]
-			if ok && p.err == nil && p.size == psz {
-				// n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-				// 	key, proposal.Index)
-				previous[key].seen = time.Now() // Update the ts.
-				// Don't break here. We still need to call the Done below.
-
-			} else {
-				// if this applyCommited fails, how do we ensure
-				start := time.Now()
-				perr = n.applyCommitted(&proposal, key)
-				if key != 0 {
-					p := &P{err: perr, size: psz, seen: time.Now()}
-					previous[key] = p
-				}
-				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
-				}
-				// n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
-				// 	key, proposal.Index, perr)
-
-				// var tags []tag.Mutator
-				switch {
-				case proposal.Mutations != nil:
-					// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-					if len(proposal.Mutations.Schema) == 0 {
-						// Don't capture schema updates.
-						histograms["mutation"].Update(time.Since(start).Milliseconds())
-					}
-				case proposal.Delta != nil:
-					// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
-					histograms["delta"].Update(time.Since(start).Milliseconds())
-				}
-				// ms := x.SinceMs(start)
-				// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+			// if this applyCommited fails, how do we ensure
+			start := time.Now()
+			perr = n.applyCommitted(&proposal)
+			if proposal.Key != 0 {
+				p := &P{err: perr, seen: time.Now()}
+				previous[proposal.Key] = p
 			}
+			if perr != nil {
+				glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+			}
+			// n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
+			// 	key, proposal.Index, perr)
 
-			n.Proposals.Done(key, perr)
-			n.Applied.Done(proposal.Index)
-			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
+			// var tags []tag.Mutator
+			switch {
+			case proposal.Mutations != nil:
+				// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				if len(proposal.Mutations.Schema) == 0 {
+					// Don't capture schema updates.
+					histograms["mutation"].Update(time.Since(start).Milliseconds())
+				}
+			case proposal.Delta != nil:
+				// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+				histograms["delta"].Update(time.Since(start).Milliseconds())
+			}
+			// ms := x.SinceMs(start)
+			// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 		}
-		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
-			glog.Warningf("Pending size should remain above zero: %d", sz)
-		}
+
+		n.Proposals.Done(proposal.Key, perr)
+		n.Applied.Done(proposal.Index)
+		ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 	}
 
 	maxAge := 2 * time.Minute
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
 
+	loopOverPending := func(maxAssigned uint64) {
+		idx := 0
+		start := len(n.pendingProposals)
+		for idx < len(n.pendingProposals) {
+			p := n.pendingProposals[idx]
+			if maxAssigned >= p.StartTs {
+				glog.Infof("loopOverPending: Process proposal. Start ts: %d max assigned: %d\n", p.StartTs, maxAssigned)
+				handle(p)
+				n.pendingProposals = append(n.pendingProposals[:idx], n.pendingProposals[idx+1:]...)
+			} else {
+				idx++
+			}
+		}
+		glog.Infof("loopOverPending: Processed %d entries. Remaining: %d", start-len(n.pendingProposals), len(n.pendingProposals))
+	}
+
+	var maxAssigned uint64
+	orc := posting.Oracle()
 	for {
 		select {
 		case entries, ok := <-n.applyCh:
 			if !ok {
 				return
 			}
-			handle(entries)
+			var totalSize int64
+			for _, e := range entries {
+				x.AssertTrue(len(e.Data) > 0)
+				p := getProposal(e)
+				handle(p)
+
+				if p.Delta != nil && len(n.pendingProposals) > 0 {
+					// MaxAssigned would only change during deltas.
+					if max := orc.MaxAssigned(); max > maxAssigned {
+						loopOverPending(max)
+						maxAssigned = max
+					}
+				}
+				totalSize += int64(e.Size())
+			}
+			if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
+				glog.Warningf("Pending size should remain above zero: %d", sz)
+			}
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -913,15 +963,14 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		glog.Infof("commitOrAbort: %d -> %d. Keys Read: %d CacheStartTs: %d\n",
-			txn.StartTs, len(txn.Deltas()), len(txn.ReadKeys()), txn.CacheStartTs())
+		glog.Infof("commitOrAbort: %d -> %d with deltas %d. Keys Read: %d CacheStartTs: %d\n",
+			txn.StartTs, commit, len(txn.Deltas()), len(txn.ReadKeys()), txn.CacheStartTs())
 
 		n.keysWritten.totalKeys += len(txn.Deltas())
 		for k := range txn.Deltas() {
-			h := z.MemHashString(k)
-			n.keysWritten.keyCommitTs[h] = commit
-			// glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
-			// 	h, start, txn.CacheStartTs(), commit)
+			n.keysWritten.keyCommitTs[k] = commit
+			glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
+				k, start, txn.CacheStartTs(), commit)
 		}
 		err := x.RetryUntilSuccess(int(x.WorkerConfig.Badger.GetInt64("max-retries")),
 			10*time.Millisecond, func() error {

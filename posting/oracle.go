@@ -118,11 +118,23 @@ type oracle struct {
 	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
 	// uncommitted transaction.
 	waiters map[uint64][]chan struct{}
+
+	beforeCounts map[string]int
 }
 
 func (o *oracle) init() {
 	o.waiters = make(map[uint64][]chan struct{})
 	o.pendingTxns = make(map[uint64]*Txn)
+	o.beforeCounts = make(map[string]int)
+}
+
+func (o *oracle) beforeCount(key string, newVal int) int {
+	o.Lock()
+	defer o.Unlock()
+
+	has := o.beforeCounts[key]
+	o.beforeCounts[key] = newVal
+	return has
 }
 
 // RegisterStartTs would return a txn and a bool.
