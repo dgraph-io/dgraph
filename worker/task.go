@@ -1545,9 +1545,6 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			}
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				if uid < arg.q.AfterUid {
-					return nil
-				}
 				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
