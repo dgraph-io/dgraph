@@ -434,7 +434,7 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
+		Image:         "dgraph/dgraph:v20.11.3",
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
