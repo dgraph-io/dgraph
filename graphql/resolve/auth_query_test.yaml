@@ -852,7 +852,7 @@
     USER: "user1"
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
         Movie.content : Movie.content
         Movie.regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 10, offset: 10) {
           Region.name : Region.name
@@ -861,7 +861,7 @@
         }
         dgraph.uid : uid
       }
-      MovieRoot as var(func: uid(Movie_3), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
+      MovieRoot as var(func: uid(Movie_3)) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
       Movie_3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
@@ -923,6 +923,76 @@
         dgraph.uid : uid
       }
       MovieRoot as var(func: uid(Movie_8), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
+      Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable {
+          Region.users : Region.users @filter(eq(User.username, "user1"))
+        }
+      }
+      Movie_Auth11 as var(func: uid(Movie_8)) @cascade {
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+      }
+      var(func: uid(MovieRoot)) {
+        Region_2 as Movie.regionsAvailable @filter(eq(Region.name, "Region123"))
+      }
+      Region_1 as var(func: uid(Region_2))
+      var(func: uid(Region_1)) {
+        User_4 as Region.users @filter(eq(User.username, "User321"))
+      }
+      User_3 as var(func: uid(User_4))
+      var(func: uid(User_3)) {
+        UserSecret_6 as User.secrets @filter(allofterms(UserSecret.aSecret, "Secret132"))
+      }
+      UserSecret_5 as var(func: uid(UserSecret_6)) @filter(uid(UserSecret_Auth7))
+      UserSecret_Auth7 as var(func: uid(UserSecret_6)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Auth deep query with @cascade at all the levels - 3 level"
+  gqlquery: |
+    query {
+      queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10) @cascade {
+        content
+        regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) @cascade(fields: ["global"]) {
+          name
+          global
+          users(filter: { username: { eq: "User321" } },  order: { asc: username }, first: 10, offset: 10) @cascade {
+            username
+            age
+            isPublic
+            secrets(filter: { aSecret: { allofterms : "Secret132" } },  order: { asc: aSecret }, first: 10, offset: 10) @cascade(fields: ["ownedBy"]){
+              aSecret
+              ownedBy
+            }
+          }
+        }
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
+        Movie.content : Movie.content
+        Movie.regionsAvailable : Movie.regionsAvailable @filter(uid(Region_1)) (orderasc: Region.name, first: 10, offset: 10) @cascade(Region.global) {
+          Region.name : Region.name
+          Region.global : Region.global
+          Region.users : Region.users @filter(uid(User_3)) (orderasc: User.username, first: 10, offset: 10) @cascade {
+            User.username : User.username
+            User.age : User.age
+            User.isPublic : User.isPublic
+            User.secrets : User.secrets @filter(uid(UserSecret_5)) (orderasc: UserSecret.aSecret, first: 10, offset: 10) @cascade(UserSecret.ownedBy) {
+              UserSecret.aSecret : UserSecret.aSecret
+              UserSecret.ownedBy : UserSecret.ownedBy
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      MovieRoot as var(func: uid(Movie_8)) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
       Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
       Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
