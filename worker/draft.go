@@ -728,11 +728,11 @@ func (n *node) processApplyCh() {
 					if proposal.GetRestore() != nil {
 						if len(proposal.GetRestore().GetAccessKey()) != 0 {
 							ps = strings.Replace(ps, proposal.GetRestore().GetAccessKey(),
-							sensitiveString, 1)	
+								sensitiveString, 1)
 						}
 						if len(proposal.GetRestore().GetSecretKey()) != 0 {
 							ps = strings.Replace(ps, proposal.GetRestore().GetSecretKey(),
-							sensitiveString, 1)	
+								sensitiveString, 1)
 						}
 					}
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, ps)
