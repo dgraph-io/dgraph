@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -105,6 +106,10 @@ const (
 	opRestore
 	opBackup
 	opPredMove
+)
+
+const (
+	sensitiveString = "******"
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
@@ -719,7 +724,14 @@ func (n *node) processApplyCh() {
 					previous[key] = p
 				}
 				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					ps := proposal.String()
+					if proposal.GetRestore() != nil {
+						ps = strings.Replace(ps, proposal.GetRestore().GetAccessKey(),
+							sensitiveString, 1)
+						ps = strings.Replace(ps, proposal.GetRestore().GetSecretKey(),
+							sensitiveString, 1)
+					}
+					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, ps)
 				}
 				n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
 					key, proposal.Index, perr)
