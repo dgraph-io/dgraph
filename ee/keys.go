@@ -25,7 +25,7 @@ import (
 // GetKeys returns the ACL and encryption keys as configured by the user
 // through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function always returns an error.
-func GetKeys(config *viper.Viper) (Keys, error) {
+func GetKeys(config *viper.Viper) (*Keys, error) {
 	return nil, fmt.Errorf(
 		"flags: acl / encryption is an enterprise-only feature")
 }
