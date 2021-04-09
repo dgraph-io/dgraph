@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
 )
@@ -41,7 +42,9 @@ type Options struct {
 	LimitMutationsNquad  int
 	LimitQueryEdge       uint64
 	BlockClusterWideDrop bool
+	LimitNormalizeNode   int
 	QueryTimeout         time.Duration
+	MaxRetries           int64
 
 	// GraphQL options:
 	//
@@ -95,8 +98,8 @@ type WorkerOptions struct {
 	TLSServerConfig *tls.Config
 	// Raft stores options related to Raft.
 	Raft *z.SuperFlag
-	// Badger stores options related to Badger.
-	Badger *z.SuperFlag
+	// Badger stores the badger options.
+	Badger badger.Options
 	// WhiteListedIPRanges is a list of IP ranges from which requests will be allowed.
 	WhiteListedIPRanges []IPRange
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.

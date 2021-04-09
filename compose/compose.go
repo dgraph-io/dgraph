@@ -310,7 +310,7 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += " --expose_trace=true"
 
 	if opts.SnapshotAfter != "" {
-		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
+		raft = fmt.Sprintf("%s; %s", raft, opts.SnapshotAfter)
 	}
 	svc.Command += fmt.Sprintf(` --raft "%s"`, raft)
 
@@ -346,7 +346,7 @@ func getAlpha(idx int, raft string) service {
 		}
 	}
 	if opts.Encryption {
-		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Command += ` --encryption "key-file=/secret/enc_key;"`
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
 			Source:   "./enc-secret",

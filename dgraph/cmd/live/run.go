@@ -40,8 +40,8 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bopt "github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/dgryski/go-farm"
 
@@ -142,7 +142,7 @@ func init() {
 
 	flag := Live.Cmd.Flags()
 	// --vault SuperFlag and encryption flags
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
@@ -628,7 +628,12 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 	connzero, err := x.SetupConnection(opt.zero, tlsConfig, false, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db, "")
+	xopts := xidmap.XidMapOptions{UidAssigner: connzero, DB: db}
+	// Slash uses alpha to assign UIDs in live loader. Dgraph client is needed by xidmap to do
+	// authorization.
+	xopts.DgClient = dc
+
+	alloc := xidmap.New(xopts)
 	l := &loader{
 		opts:       opts,
 		dc:         dc,

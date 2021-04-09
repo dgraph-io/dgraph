@@ -31,7 +31,7 @@ import (
 )
 
 type options struct {
-	// keyfile comes from the encryption_key_file or Vault flags
+	// keyfile comes from the encryption or Vault flags
 	keyfile x.Sensitive
 	file    string
 	output  string
@@ -54,7 +54,7 @@ func init() {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 func run() {
 	opts := options{

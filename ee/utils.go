@@ -25,7 +25,7 @@ import (
 )
 
 // GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption_key_file, and --vault flags. On OSS builds,
+// through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function exits with an error.
 func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
 	glog.Exit("flags: acl / encryption is an enterprise-only feature")

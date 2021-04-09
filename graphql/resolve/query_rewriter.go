@@ -831,6 +831,8 @@ func (authRw *authRewriter) addAuthQueries(
 	// that has the order and pagination params from user query in it and filter set to auth
 	// queries built for this type. This is then used as the starting point for user query and
 	// auth queries for children.
+	// if @cascade directive is present in the user query then pagination and order are applied only
+	// on the user query and not on root query.
 	rootQry := &gql.GraphQuery{
 		Var:  authRw.parentVarName,
 		Attr: "var",
@@ -839,16 +841,22 @@ func (authRw *authRewriter) addAuthQueries(
 			Args: []gql.Arg{{Value: authRw.varName}},
 		},
 		Filter: filter,
-		Order:  dgQuery[0].Order, // we need the order here for pagination to work correctly
-		Args:   dgQuery[0].Args,  // this gets pagination from user query to root query
 	}
 
-	// The user query doesn't need the filter and pagination parameters anymore,
-	// as they have been taken care of by the var and root queries generated above.
-	// But, tt still needs the order parameter, even though it is also applied in root query.
+	// The user query doesn't need the filter parameter anymore,
+	// as it has been taken care of by the var and root queries generated above.
+	// But, it still needs the order parameter, even though it is also applied in root query.
 	// So, not setting order to nil.
 	dgQuery[0].Filter = nil
-	dgQuery[0].Args = nil
+
+	// if @cascade is not applied on the user query at root then shift pagination arguments
+	// from user query to root query for optimization and copy the order arguments for paginated
+	// query to work correctly.
+	if len(dgQuery[0].Cascade) == 0 {
+		rootQry.Args = dgQuery[0].Args
+		dgQuery[0].Args = nil
+		rootQry.Order = dgQuery[0].Order
+	}
 
 	// The user query starts from the root query generated above and so gets filtered
 	// input from auth processing, so now we build
