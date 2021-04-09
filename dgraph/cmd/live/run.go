@@ -738,7 +738,12 @@ func run() error {
 
 	z.SetTmpDir(opt.tmpDir)
 
-	_, opt.key = ee.GetKeys(Live.Conf)
+	keys, err := ee.GetKeys(Live.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
+
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)

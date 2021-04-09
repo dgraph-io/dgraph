@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
@@ -891,14 +892,17 @@ func run() {
 		}
 	}()
 
-	var err error
 	dir := opt.pdir
 	isWal := false
 	if len(dir) == 0 {
 		dir = opt.wdir
 		isWal = true
 	}
-	_, opt.key = ee.GetKeys(Debug.Conf)
+	keys, err := ee.GetKeys(Debug.Conf)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	opt.key = keys.EncKey
 
 	if isWal {
 		store, err := raftwal.InitEncrypted(dir, opt.key)

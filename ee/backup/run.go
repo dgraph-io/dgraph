@@ -226,7 +226,11 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 }
 
 func runExportBackup() error {
-	_, opt.key = ee.GetKeys(ExportBackup.Conf)
+	keys, err := ee.GetKeys(ExportBackup.Conf)
+	if err != nil {
+		return err
+	}
+	opt.key = keys.EncKey
 	if opt.format != "json" && opt.format != "rdf" {
 		return errors.Errorf("invalid format %s", opt.format)
 	}

@@ -645,14 +645,14 @@ func run() {
 		ChangeDataConf: Alpha.Conf.GetString("cdc"),
 	}
 
-	aclKey, encKey := ee.GetKeys(Alpha.Conf)
-	if aclKey != nil {
-		opts.HmacSecret = aclKey
-
-		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(ee.AclDefaults)
-		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
-		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
-
+	keys, err := ee.GetKeys(Alpha.Conf)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	if keys.AclKey != nil {
+		opts.HmacSecret = keys.AclKey
+		opts.AccessJwtTtl = keys.AclAccessTtl
+		opts.RefreshJwtTtl = keys.AclRefreshTtl
 		glog.Info("ACL secret key loaded successfully.")
 	}
 
@@ -691,7 +691,7 @@ func run() {
 		Raft:                raft,
 		WhiteListedIPRanges: ips,
 		StrictMutations:     opts.MutationsMode == worker.StrictMutations,
-		AclEnabled:          aclKey != nil,
+		AclEnabled:          keys.AclKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Ludicrous:           ludicrous,
@@ -712,7 +712,7 @@ func run() {
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
 
-	x.WorkerConfig.EncryptionKey = encKey
+	x.WorkerConfig.EncryptionKey = keys.EncKey
 
 	setupCustomTokenizers()
 	x.Init()

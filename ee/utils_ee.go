@@ -13,48 +13,64 @@
 package ee
 
 import (
+	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 	"github.com/spf13/viper"
 )
+
+type Keys struct {
+	AclKey        x.Sensitive
+	AclAccessTtl  time.Duration
+	AclRefreshTtl time.Duration
+	EncKey        x.Sensitive
+}
 
 // GetKeys returns the ACL and encryption keys as configured by the user
 // through the --acl, --encryption, and --vault flags. On OSS builds,
 // this function exits with an error.
-func GetKeys(config *viper.Viper) (x.Sensitive, x.Sensitive) {
-	aclSuperFlag := z.NewSuperFlag(config.GetString("acl"))
-	aclKey, encKey := vaultGetKeys(config)
+func GetKeys(config *viper.Viper) (*Keys, error) {
+	keys := &Keys{}
 	var err error
 
-	aclKeyFile := aclSuperFlag.GetPath("secret-file")
-	if aclKeyFile != "" {
-		if aclKey != nil {
-			glog.Exit("flags: ACL secret key set in both vault and acl flags")
-		}
-		if aclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
-			glog.Exitf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
-		}
-	}
-	if l := len(aclKey); aclKey != nil && l < 32 {
-		glog.Exitf("ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
-	}
-
+	aclSuperFlag := z.NewSuperFlag(config.GetString("acl")).MergeAndCheckDefault(AclDefaults)
 	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(EncDefaults)
-	encKeyFile := encSuperFlag.GetPath("key-file")
-	if encKeyFile != "" {
-		if encKey != nil {
-			glog.Exit("flags: Encryption key set in both vault and encryption")
+
+	// Get AclKey and EncKey from vault / acl / encryption SuperFlags
+	keys.AclKey, keys.EncKey = vaultGetKeys(config)
+	aclKeyFile := aclSuperFlag.GetPath(flagAclSecretFile)
+	if aclKeyFile != "" {
+		if keys.AclKey != nil {
+			return nil, fmt.Errorf("flags: ACL secret key set in both vault and acl flags")
 		}
-		if encKey, err = ioutil.ReadFile(encKeyFile); err != nil {
-			glog.Exitf("error reading encryption key from file: %s: %s", encKeyFile, err)
+		if keys.AclKey, err = ioutil.ReadFile(aclKeyFile); err != nil {
+			return nil, fmt.Errorf("error reading ACL secret key from file: %s: %s", aclKeyFile, err)
 		}
 	}
-	if l := len(encKey); encKey != nil && l != 16 && l != 32 && l != 64 {
-		glog.Exitf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
+	if l := len(keys.AclKey); keys.AclKey != nil && l < 32 {
+		return nil, fmt.Errorf(
+			"ACL secret key must have length of at least 32 bytes, got %d bytes instead", l)
+	}
+	encKeyFile := encSuperFlag.GetPath(flagEncKeyFile)
+	if encKeyFile != "" {
+		if keys.EncKey != nil {
+			return nil, fmt.Errorf("flags: Encryption key set in both vault and encryption flags")
+		}
+		if keys.EncKey, err = ioutil.ReadFile(encKeyFile); err != nil {
+			return nil, fmt.Errorf("error reading encryption key from file: %s: %s", encKeyFile, err)
+		}
+	}
+	if l := len(keys.EncKey); keys.EncKey != nil && l != 16 && l != 32 && l != 64 {
+		return nil, fmt.Errorf(
+			"encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
 	}
 
-	return aclKey, encKey
+	// Get remaining keys
+	keys.AclAccessTtl = aclSuperFlag.GetDuration(flagAclAccessTtl)
+	keys.AclRefreshTtl = aclSuperFlag.GetDuration(flagAclRefreshTtl)
+
+	return keys, nil
 }

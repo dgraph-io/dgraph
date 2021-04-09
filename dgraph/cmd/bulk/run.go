@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/ristretto/z"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -177,7 +178,11 @@ func run() {
 		os.Exit(0)
 	}
 
-	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
+	keys, err := ee.GetKeys(Bulk.Conf)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	opt.EncryptionKey = keys.EncKey
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must use --encryption or vault option(s).\n")
