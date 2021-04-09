@@ -162,6 +162,10 @@ const (
 	opPredMove
 )
 
+const (
+	sensitiveString = "******"
+)
+
 // startTask is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
 // If the same task is already running, this method returns an errror.
