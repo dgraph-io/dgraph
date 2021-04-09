@@ -19,6 +19,8 @@
 package ee
 
 import (
+	"fmt"
+
 	"github.com/spf13/viper"
 )
 
