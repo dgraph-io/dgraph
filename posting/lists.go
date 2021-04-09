@@ -103,7 +103,11 @@ type LocalCache struct {
 	startTs    uint64
 	numWritten int
 
-	readKeys map[string]struct{}
+	// Keep track of the keys that we have read. So, we can later check if the keys that we read
+	// were changed by a commit. This is useful to opportunistically run mutations before the server
+	// reaches txn's start timestamp.
+	readKeys map[uint64]struct{}
+
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
 	// during commit.
@@ -123,7 +127,7 @@ func NewLocalCache(startTs uint64) *LocalCache {
 		deltas:      make(map[string][]byte),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
-		readKeys:    make(map[string]struct{}),
+		readKeys:    make(map[uint64]struct{}),
 	}
 }
 
@@ -205,9 +209,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	lc.Lock()
 	if lc.readKeys == nil {
-		lc.readKeys = make(map[string]struct{})
+		lc.readKeys = make(map[uint64]struct{})
 	}
-	lc.readKeys[string(key)] = struct{}{}
+	lc.readKeys[z.MemHash(key)] = struct{}{}
 	lc.Unlock()
 	return lc.getInternal(key, true)
 }
@@ -220,7 +224,7 @@ func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
 }
 
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
-func (lc *LocalCache) UpdateDeltasAndDiscardLists(startTs uint64) {
+func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
 	defer lc.Unlock()
 	if len(lc.plists) == 0 {
@@ -228,7 +232,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists(startTs uint64) {
 	}
 
 	for key, pl := range lc.plists {
-		if data := pl.getMutation(startTs); len(data) > 0 {
+		if data := pl.getMutation(lc.startTs); len(data) > 0 {
 			lc.deltas[key] = data
 		}
 		lc.maxVersions[key] = pl.maxVersion()

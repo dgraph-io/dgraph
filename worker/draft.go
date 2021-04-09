@@ -75,50 +75,47 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
-	keysWritten  *keysWritten
-	usingCacheTs int64
-
 	ex *executor
 
+	keysWritten      *keysWritten
 	pendingProposals []pb.Proposal
 }
 
 type keysWritten struct {
 	rejectBeforeIndex uint64
-	keyCommitTs       map[string]uint64
-	valid             int64
-	invalid           int64
+	keyCommitTs       map[uint64]uint64
+	validTxns         int64
+	invalidTxns       int64
 	totalKeys         int
 }
 
 func newKeysWritten() *keysWritten {
 	return &keysWritten{
-		keyCommitTs: make(map[string]uint64),
+		keyCommitTs: make(map[uint64]uint64),
 	}
 }
 
 func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 	if txn.AppliedIndexSeen < kw.rejectBeforeIndex {
-		kw.invalid++
+		kw.invalidTxns++
 		return false
 	}
-	// if txn.StartTs == txn.CacheStartTs() {
-	// 	kw.valid++
-	// 	return true
-	// }
+	if txn.MaxAssignedSeen >= txn.StartTs {
+		kw.validTxns++
+		return true
+	}
 	for hash := range txn.ReadKeys() {
-		ts := kw.keyCommitTs[hash]
 		// Determine if this key was modified between our allocated start Ts
 		// (txn.StartTs) and our chosen start ts (txn.CacheStartTs). If so, we
 		// return false. Otherwise, whatever we read is still valid.
-		glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
-			txn.StartTs, txn.CacheStartTs(), ts, hash)
-		if ts > txn.CacheStartTs() {
-			kw.invalid++
+		// glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
+		// 	txn.StartTs, txn.CacheStartTs(), ts, hash)
+		if commitTs := kw.keyCommitTs[hash]; commitTs > txn.MaxAssignedSeen {
+			kw.invalidTxns++
 			return false
 		}
 	}
-	kw.valid++
+	kw.validTxns++
 	return true
 }
 
@@ -355,7 +352,7 @@ func detectPendingTxns(attr string) error {
 }
 
 func (n *node) mutationWorker(workerId int) {
-	handleEntry := func(p *pb.Proposal, cacheStartTs uint64) {
+	handleEntry := func(p *pb.Proposal) {
 		x.AssertTrue(p.Key != 0)
 		x.AssertTrue(len(p.Mutations.GetEdges()) > 0)
 
@@ -364,7 +361,7 @@ func (n *node) mutationWorker(workerId int) {
 		span := otrace.FromContext(ctx)
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
-		n.processMutations(ctx, p.Mutations, cacheStartTs)
+		n.processMutations(ctx, p.Mutations)
 	}
 
 	for {
@@ -373,15 +370,14 @@ func (n *node) mutationWorker(workerId int) {
 			if !ok {
 				return
 			}
-			cacheStartTs := posting.Oracle().MaxAssigned()
-			handleEntry(mut, cacheStartTs)
+			handleEntry(mut)
 		case <-n.closer.HasBeenClosed():
 			return
 		}
 	}
 }
 
-func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStartTs uint64) {
+func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
@@ -404,11 +400,6 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 	span := otrace.FromContext(ctx)
 	txn := posting.Oracle().GetTxn(m.StartTs)
 	x.AssertTrue(txn != nil)
-	defer func() {
-		glog.Infof("processMutations: %d -> %d. CacheStartTs: %d\n", txn.StartTs, len(txn.Deltas()), cacheStartTs)
-		// Avoid us re-using this txn object for processing mutations.
-		close(txn.ErrCh)
-	}()
 
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
@@ -419,20 +410,14 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations, cacheStart
 
 	// Update the applied index that we are seeing.
 	txn.AppliedIndexSeen = n.Applied.DoneUntil()
+	txn.MaxAssignedSeen = posting.Oracle().MaxAssigned()
+
 	// This txn's Zero assigned start ts could be in the future, because we're
 	// trying to greedily run mutations concurrently as soon as we see them.
-	// So, we'll choose a start ts that the server already has access to, and
-	// run our mutations. We call it cache start ts.
-	// Later, when we reach the mutation in serial order, we
-	// can check if the read keys have changed between the cache start ts and
-	// the assigned start ts. If no change, we're good with the work done. If
-	// there is a change, we'll re-do the txn.
-	if cacheStartTs > 0 && cacheStartTs < txn.StartTs {
-		atomic.AddInt64(&n.usingCacheTs, 1)
-		txn.SetCacheStartTs(cacheStartTs)
-	} else {
-		txn.SetCacheStartTs(txn.StartTs)
-	}
+	// In this case, MaxAssignedSeen could be < txn.StartTs. We'd
+	// opportunistically do the processing of this mutation anyway. And later,
+	// check if everything that we read is still valid, or was it changed. If
+	// it was indeed changed, we can re-do the work.
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
@@ -652,8 +637,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn = nil
 
 	txn2 := posting.Oracle().ResetTxn(m.StartTs)
-	glog.Infof("Re-running mutation with start ts: %d cache ts: %d. Err: %v\n", txn2.StartTs, txn2.CacheStartTs(), err)
-	n.processMutations(ctx, m, 0)
+	n.processMutations(ctx, m)
 	return <-txn2.ErrCh
 }
 
@@ -848,8 +832,6 @@ func (n *node) processApplyCh() {
 		} else {
 			if max := posting.Oracle().MaxAssigned(); proposal.StartTs > max {
 				// Wait to run this proposal.
-				glog.Infof("loopOverPending: Add proposal with StartTs: %d > max assigned: %d",
-					proposal.StartTs, max)
 				n.pendingProposals = append(n.pendingProposals, proposal)
 				return
 			}
@@ -894,18 +876,15 @@ func (n *node) processApplyCh() {
 
 	loopOverPending := func(maxAssigned uint64) {
 		idx := 0
-		start := len(n.pendingProposals)
 		for idx < len(n.pendingProposals) {
 			p := n.pendingProposals[idx]
 			if maxAssigned >= p.StartTs {
-				glog.Infof("loopOverPending: Process proposal. Start ts: %d max assigned: %d\n", p.StartTs, maxAssigned)
 				handle(p)
 				n.pendingProposals = append(n.pendingProposals[:idx], n.pendingProposals[idx+1:]...)
 			} else {
 				idx++
 			}
 		}
-		glog.Infof("loopOverPending: Processed %d entries. Remaining: %d", start-len(n.pendingProposals), len(n.pendingProposals))
 	}
 
 	var maxAssigned uint64
@@ -947,8 +926,8 @@ func (n *node) processApplyCh() {
 				glog.Infof("Histogram for %s: %s\n", key, h)
 			}
 			kw := n.keysWritten
-			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d. Total keys written: %d Used cache ts: %d\n",
-				kw.valid, kw.invalid, len(kw.keyCommitTs), kw.totalKeys, atomic.LoadInt64(&n.usingCacheTs))
+			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d. Total keys written: %d\n",
+				kw.validTxns, kw.invalidTxns, len(kw.keyCommitTs), kw.totalKeys)
 		}
 	}
 }
@@ -963,14 +942,10 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
-		glog.Infof("commitOrAbort: %d -> %d with deltas %d. Keys Read: %d CacheStartTs: %d\n",
-			txn.StartTs, commit, len(txn.Deltas()), len(txn.ReadKeys()), txn.CacheStartTs())
 
 		n.keysWritten.totalKeys += len(txn.Deltas())
 		for k := range txn.Deltas() {
-			n.keysWritten.keyCommitTs[k] = commit
-			glog.Infof("commitOrAbort. Key written: %x %d (%d) -> %d\n",
-				k, start, txn.CacheStartTs(), commit)
+			n.keysWritten.keyCommitTs[z.MemHashString(k)] = commit
 		}
 		err := x.RetryUntilSuccess(int(x.WorkerConfig.Badger.GetInt64("max-retries")),
 			10*time.Millisecond, func() error {

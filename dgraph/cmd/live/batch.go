@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -41,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/dgryski/go-farm"
+	"github.com/dustin/go-humanize"
 	"github.com/dustin/go-humanize/english"
 )
 
@@ -421,15 +423,15 @@ func (l *loader) printCounters() {
 	l.ticker = time.NewTicker(period)
 	start := time.Now()
 
-	var last Counter
+	r := y.NewRateMonitor(6) // Last 30 seconds of samples.
 	for range l.ticker.C {
-		counter := l.Counter()
-		rate := float64(counter.Nquads-last.Nquads) / period.Seconds()
+		c := l.Counter()
+		r.Capture(c.Nquads)
 		elapsed := time.Since(start).Round(time.Second)
 		timestamp := time.Now().Format("15:04:05Z0700")
-		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %d N-Quads/s [last 5s]: %5.0f Aborts: %d\n",
-			timestamp, x.FixedDuration(elapsed), counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
-		last = counter
+		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %s N-Quads/s: %s Aborts: %d\n",
+			timestamp, x.FixedDuration(elapsed), c.TxnsDone,
+			humanize.Comma(int64(c.Nquads)), humanize.Comma(int64(r.Rate())), c.Aborts)
 	}
 }
 

@@ -45,7 +45,8 @@ func init() {
 
 // Txn represents a transaction.
 type Txn struct {
-	StartTs uint64
+	StartTs         uint64
+	MaxAssignedSeen uint64
 
 	// atomic
 	shouldAbort uint32
@@ -75,13 +76,6 @@ func NewTxn(startTs uint64) *Txn {
 	}
 }
 
-func (txn *Txn) SetCacheStartTs(startTs uint64) {
-	txn.cache.startTs = startTs
-}
-func (txn *Txn) CacheStartTs() uint64 {
-	return txn.cache.startTs
-}
-
 // Get retrieves the posting list for the given list from the local cache.
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
@@ -94,7 +88,7 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
-	txn.cache.UpdateDeltasAndDiscardLists(txn.StartTs)
+	txn.cache.UpdateDeltasAndDiscardLists()
 }
 
 // Store is used by tests.

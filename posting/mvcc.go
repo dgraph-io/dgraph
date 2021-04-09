@@ -201,7 +201,7 @@ func (txn *Txn) addConflictKey(conflictKey uint64) {
 	}
 }
 
-func (txn *Txn) ReadKeys() map[string]struct{} {
+func (txn *Txn) ReadKeys() map[uint64]struct{} {
 	txn.Lock()
 	defer txn.Unlock()
 	return txn.cache.readKeys

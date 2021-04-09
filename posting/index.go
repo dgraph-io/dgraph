@@ -261,7 +261,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	// ostats.Record(ctx, x.NumEdges.M(1))
+	ostats.Record(ctx, x.NumEdges.M(1))
 
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
@@ -414,18 +414,6 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		if countBefore == -1 {
 			return val, false, emptyCountParams, ErrTsTooOld
 		}
-		// val := Oracle().beforeCount(string(l.key), countBefore)
-		// if countBefore < val {
-		// 	fromDisk, err := getNew(l.key, pstore, txn.CacheStartTs())
-
-		// 	txn.cache.getNoStore(string(l.key))
-		// 	bm, err := l.bitmap(ListOptions{ReadTs: txn.StartTs})
-		// 	x.Check(err)
-		// 	glog.Infof("------------ registered: %d now: %d bitmap: %d StartTs: %d key: %#x",
-		// 		val, countBefore, bm.GetCardinality(), txn.StartTs, l.key)
-		// 	panic("Stopping execution due to discrepancy in count")
-		// 	x.AssertTrue(false)
-		// }
 	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
@@ -497,9 +485,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	if err != nil {
 		return err
 	}
-	// ostats.Record(ctx, x.NumEdges.M(1))
+	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
-		// This is the one.
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
