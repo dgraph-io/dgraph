@@ -436,7 +436,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
-		span.Annotate(nil, "process mutations done")
+		span.Annotate(nil, "Process mutations done.")
 		txn.ErrCh <- process(m.Edges)
 		return
 	}
@@ -457,7 +457,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 			rerr = err
 		}
 	}
-	span.Annotate(nil, "process mutations done")
+	span.Annotate(nil, "Process mutations done.")
 	txn.ErrCh <- rerr
 }
 
@@ -614,7 +614,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if runs <= 1 {
 		err := <-txn.ErrCh
 		if err == nil && n.keysWritten.StillValid(txn) {
-			span.Annotate(nil, "mutation is still valid")
+			span.Annotate(nil, "Mutation is still valid.")
 			return nil
 		}
 		// If mutation is invalid or we got an error, reset the txn, so we can run again.
@@ -622,7 +622,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// If we have an error, re-run this.
-	span.Annotatef(nil, "re-running mutation. Runs: %d", runs)
+	span.Annotatef(nil, "Re-running mutation from applyCh. Runs: %d", runs)
 	n.processMutations(ctx, m)
 	return <-txn.ErrCh
 }
@@ -841,10 +841,6 @@ func (n *node) processApplyCh() {
 		ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 	}
 
-	maxAge := 2 * time.Minute
-	tick := time.NewTicker(maxAge / 2)
-	defer tick.Stop()
-
 	loopOverPending := func(maxAssigned uint64) {
 		idx := 0
 		for idx < len(n.pendingProposals) {
@@ -858,6 +854,11 @@ func (n *node) processApplyCh() {
 		}
 	}
 
+	maxAge := 2 * time.Minute
+	tick := time.NewTicker(maxAge / 2)
+	defer tick.Stop()
+
+	var counter int
 	var maxAssigned uint64
 	orc := posting.Oracle()
 	for {
@@ -886,6 +887,7 @@ func (n *node) processApplyCh() {
 			}
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
+			counter++
 			now := time.Now()
 			for key, p := range previous {
 				if now.Sub(p.seen) > maxAge {
@@ -905,9 +907,12 @@ func (n *node) processApplyCh() {
 					delete(kw.keyCommitTs, k)
 				}
 			}
-			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d -> %d."+
-				" Total keys written: %d\n",
-				kw.validTxns, kw.invalidTxns, before, len(kw.keyCommitTs), kw.totalKeys)
+			if counter%5 == 0 {
+				// Once in 5 minutes.
+				glog.V(2).Infof("Still valid: %d Invalid: %d. Size of commit map: %d -> %d."+
+					" Total keys written: %d\n",
+					kw.validTxns, kw.invalidTxns, before, len(kw.keyCommitTs), kw.totalKeys)
+			}
 		}
 	}
 }
