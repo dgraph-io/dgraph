@@ -831,7 +831,7 @@ func (authRw *authRewriter) addAuthQueries(
 	// that has the order and pagination params from user query in it and filter set to auth
 	// queries built for this type. This is then used as the starting point for user query and
 	// auth queries for children.
-	// if @cascade directive is present in the user query then pagination is applied and order are applied only
+	// if @cascade directive is present in the user query then pagination and order are applied only
 	// on the user query and not on root query.
 	rootQry := &gql.GraphQuery{
 		Var:  authRw.parentVarName,
