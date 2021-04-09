@@ -103,8 +103,9 @@ func newKeysWritten() *keysWritten {
 //    is registered as Tm-seen.
 // 6. The same mutation is also pushed to applyCh.
 // 7. When applyCh sees the mutation, it checks if any reads the txn incurred, have been written to
-// 	  with a commit ts in the range (Tm-seen, Ts]. If so, the mutation is re-run.
-// 8. If no commits have happened for the read key set, we are done.
+// 	  with a commit ts in the range (Tm-seen, Ts]. If so, the mutation is re-run. In 21M live load,
+// 	  this happens about 3.6% of the time.
+// 8. If no commits have happened for the read key set, we are done. This happens 96.4% of the time.
 // 9. If multiple mutations happen for the same txn, the sequential mutations are always run
 //    serially by applyCh. This is to avoid edge cases.
 func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
