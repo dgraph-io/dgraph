@@ -5,7 +5,7 @@ click==7.1.2
 clint==0.5.1
 docker==5.0.0
 embargo==0.1.1
-Flask==0.12.5
+Flask==1.0
 gevent==1.4.0
 greenlet==1.0.0
 idna==2.10
