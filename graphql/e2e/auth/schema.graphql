@@ -212,6 +212,7 @@ type Movie @auth(
   regionsAvailable: [Region]
   reviews: [Review]
   random: String
+  code: String
 }
 
 type Issue @auth(
