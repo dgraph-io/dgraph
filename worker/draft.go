@@ -94,6 +94,19 @@ func newKeysWritten() *keysWritten {
 	}
 }
 
+// We use keysWritten structure to allow mutations to be run concurrently. Consider this:
+// 1. We receive a txn with mutation at start ts = Ts.
+// 2. The server is at MaxAssignedTs Tm < Ts.
+// 3. Before, we would block proposing until Tm >= Ts.
+// 4. Now, we propose the mutation immediately.
+// 5. Once the mutation goes through raft, it is executed concurrently, and the "seen" MaxAssignedTs
+//    is registered as Tm-seen.
+// 6. The same mutation is also pushed to applyCh.
+// 7. When applyCh sees the mutation, it checks if any reads the txn incurred, have been written to
+// 	  with a commit ts in the range (Tm-seen, Ts]. If so, the mutation is re-run.
+// 8. If no commits have happened for the read key set, we are done.
+// 9. If multiple mutations happen for the same txn, the sequential mutations are always run
+//    serially by applyCh. This is to avoid edge cases.
 func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 	if txn.AppliedIndexSeen < kw.rejectBeforeIndex {
 		kw.invalidTxns++
