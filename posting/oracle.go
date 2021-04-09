@@ -45,8 +45,9 @@ func init() {
 
 // Txn represents a transaction.
 type Txn struct {
-	StartTs         uint64
-	MaxAssignedSeen uint64
+	StartTs          uint64
+	MaxAssignedSeen  uint64
+	AppliedIndexSeen uint64
 
 	// atomic
 	shouldAbort uint32
@@ -61,9 +62,8 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	AppliedIndexSeen uint64
-	cache            *LocalCache // This pointer does not get modified.
-	ErrCh            chan error
+	cache *LocalCache // This pointer does not get modified.
+	ErrCh chan error
 }
 
 // NewTxn returns a new Txn instance.
