@@ -6093,8 +6093,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		{
 			name: "adding new Library member shouldn't return any error",
 			queryParams: &GraphQLParams{
-				Query: `
-                  mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
                     addLibraryMember(input: $input, upsert: false) {
                       libraryMember {
                         refID
@@ -6113,8 +6112,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "update existing library member using upsert shouldn't return any error",
 			queryParams: &GraphQLParams{
-				Query: `
-                      mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
                         addLibraryMember(input: $input, upsert: true) {
                           libraryMember {
                             refID
@@ -6154,8 +6152,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Cricket Team shouldn't return any error",
 			queryParams: &GraphQLParams{
-				Query: `
-                 mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
                    addCricketTeam(input: $input, upsert: false) {
                      cricketTeam {
                        teamID
@@ -6174,8 +6171,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "add new LibraryManager,linking to existing library Member",
 			queryParams: &GraphQLParams{
-				Query: `
-                 mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
                    addLibraryManager(input: $input, upsert: false) {
                      libraryManager {
                        name
@@ -6209,8 +6205,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		{
 			name: "adding new Library member returns error as given id already exist in other node of type SportsMember which implements same interface",
 			queryParams: &GraphQLParams{
-				Query: `
-				  mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
                      addLibraryMember(input: $input, upsert: false) {
                        libraryMember {
                          refID
@@ -6230,8 +6225,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist in other node of type SportsMember which implements same interface",
 			queryParams: &GraphQLParams{
-				Query: `
-                   mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
                      addCricketTeam(input: $input, upsert: true) {
                        cricketTeam {
                          teamID
@@ -6251,8 +6245,7 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Library manager returns error when it try to links to LibraryMember but got id of some other implementing type which implements same interface as LibraryMember",
 			queryParams: &GraphQLParams{
-				Query: `
-				  mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
                     addLibraryManager(input: $input, upsert: false) {
                       libraryManager {
                         name
