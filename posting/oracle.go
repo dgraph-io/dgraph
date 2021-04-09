@@ -49,6 +49,9 @@ type Txn struct {
 	MaxAssignedSeen  uint64
 	AppliedIndexSeen uint64
 
+	// Runs keeps track of how many times this txn has been through applyCh.
+	Runs int32
+
 	// atomic
 	shouldAbort uint32
 	// Fields which can changed after init

@@ -399,11 +399,14 @@ func getJaeger() service {
 			toPort(16686),
 		},
 		Environment: []string{
-			"SPAN_STORAGE_TYPE=badger",
+			"SPAN_STORAGE_TYPE=memory",
+			// "SPAN_STORAGE_TYPE=badger",
+			// Note: Badger doesn't quite work as well in Jaeger. The integration isn't well
+			// written.
 		},
-		Command: "--badger.ephemeral=false" +
-			" --badger.directory-key /working/jaeger" +
-			" --badger.directory-value /working/jaeger",
+		// Command: "--badger.ephemeral=false" +
+		// 	" --badger.directory-key /working/jaeger" +
+		// 	" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
@@ -561,8 +564,8 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
-		"port offset for alpha and, if not 100, zero as well")
+	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 0,
+		"port offset for alpha and zero")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O",

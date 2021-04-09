@@ -408,8 +408,12 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 	defer txn.Update()
 
 	// Update the applied index that we are seeing.
-	txn.AppliedIndexSeen = n.Applied.DoneUntil()
-	txn.MaxAssignedSeen = posting.Oracle().MaxAssigned()
+	if txn.AppliedIndexSeen == 0 {
+		txn.AppliedIndexSeen = n.Applied.DoneUntil()
+	}
+	if txn.MaxAssignedSeen == 0 {
+		txn.MaxAssignedSeen = posting.Oracle().MaxAssigned()
+	}
 
 	// This txn's Zero assigned start ts could be in the future, because we're
 	// trying to greedily run mutations concurrently as soon as we see them.
@@ -625,15 +629,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	m := proposal.Mutations
 	txn := posting.Oracle().GetTxn(m.StartTs)
-	err := <-txn.ErrCh
-	if err == nil && n.keysWritten.StillValid(txn) {
-		span.Annotate(nil, "mutation is still valid")
-		return nil
+	runs := atomic.AddInt32(&txn.Runs, 1)
+	if runs <= 1 {
+		err := <-txn.ErrCh
+		if err == nil && n.keysWritten.StillValid(txn) {
+			span.Annotate(nil, "mutation is still valid")
+			return nil
+		}
+		// If mutation is invalid or we got an error, reset the txn, so we can run again.
+		txn = posting.Oracle().ResetTxn(m.StartTs)
 	}
 
 	// If we have an error, re-run this.
-	span.Annotate(nil, "re-running mutation")
-	txn = posting.Oracle().ResetTxn(m.StartTs)
+	span.Annotatef(nil, "re-running mutation. Runs: %d", runs)
 	n.processMutations(ctx, m)
 	return <-txn.ErrCh
 }
@@ -941,6 +949,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		txn.Update()
 
 		n.keysWritten.totalKeys += len(txn.Deltas())
+		ostats.Record(n.ctx, x.NumEdges.M(int64(len(txn.Deltas()))))
 		for k := range txn.Deltas() {
 			n.keysWritten.keyCommitTs[z.MemHashString(k)] = commit
 		}
@@ -1516,10 +1525,21 @@ func (n *node) Run() {
 					}
 					startTs := p.Mutations.StartTs
 					// We should register this txn before sending it over for concurrent application.
-					_, has := posting.Oracle().RegisterStartTs(startTs)
-					x.AssertTruef(!has, "already has txn with start ts: %d\n", startTs)
-					p.Key = binary.BigEndian.Uint64(e.Data[:8])
-					n.concApplyCh <- &p
+					if _, has := posting.Oracle().RegisterStartTs(startTs); has {
+						// We have already registered this txn before. That means, this txn would
+						// either have already been run via apply channel, or would be on its way.
+						// It could even be currently being executed via concurrent mutation
+						// workers.  Moreover, in concurrent execution, when MaxAssigned <
+						// txn.StartTs, we might have to waste the work done, and reset the txn.
+						// To avoid edge cases, it is just simpler to NOT run the txn mutation
+						// concurrently.
+						// There's an optimization here where if startTs < MaxAssigned, then we
+						// could run it concurrently. But, we won't use that to avoid complexity of
+						// figuring out whether we set it up for concurrent execution or serial.
+					} else {
+						p.Key = binary.BigEndian.Uint64(e.Data[:8])
+						n.concApplyCh <- &p
+					}
 				}
 				n.applyCh <- entries
 			}
