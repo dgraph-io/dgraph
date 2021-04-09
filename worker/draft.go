@@ -356,7 +356,10 @@ func (n *node) mutationWorker(workerId int) {
 		span := otrace.FromContext(ctx)
 		span.Annotatef(nil, "Executing mutation from worker id: %d", workerId)
 
-		n.processMutations(ctx, p.Mutations)
+		txn := posting.Oracle().GetTxn(p.Mutations.StartTs)
+		x.AssertTrue(txn != nil)
+		txn.ErrCh <- n.processMutations(ctx, p.Mutations)
+		close(txn.ErrCh)
 	}
 
 	for {
@@ -372,7 +375,7 @@ func (n *node) mutationWorker(workerId int) {
 	}
 }
 
-func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
+func (n *node) processMutations(ctx context.Context, m *pb.Mutations) error {
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
@@ -393,7 +396,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		txn.ErrCh <- x.ErrConflict
+		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
@@ -437,8 +440,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 
 	if numGo == 1 {
 		span.Annotate(nil, "Process mutations done.")
-		txn.ErrCh <- process(m.Edges)
-		return
+		return process(m.Edges)
 	}
 	errCh := make(chan error, numGo)
 	for i := 0; i < numGo; i++ {
@@ -458,7 +460,7 @@ func (n *node) processMutations(ctx context.Context, m *pb.Mutations) {
 		}
 	}
 	span.Annotate(nil, "Process mutations done.")
-	txn.ErrCh <- rerr
+	return rerr
 }
 
 // We don't support schema mutations across nodes in a transaction.
@@ -612,19 +614,20 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	txn := posting.Oracle().GetTxn(m.StartTs)
 	runs := atomic.AddInt32(&txn.Runs, 1)
 	if runs <= 1 {
-		err := <-txn.ErrCh
+		err, ok := <-txn.ErrCh
+		x.AssertTrue(ok)
 		if err == nil && n.keysWritten.StillValid(txn) {
 			span.Annotate(nil, "Mutation is still valid.")
 			return nil
 		}
 		// If mutation is invalid or we got an error, reset the txn, so we can run again.
 		txn = posting.Oracle().ResetTxn(m.StartTs)
+		atomic.AddInt32(&txn.Runs, 1) // We have already run this once via serial loop.
 	}
 
 	// If we have an error, re-run this.
 	span.Annotatef(nil, "Re-running mutation from applyCh. Runs: %d", runs)
-	n.processMutations(ctx, m)
-	return <-txn.ErrCh
+	return n.processMutations(ctx, m)
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
