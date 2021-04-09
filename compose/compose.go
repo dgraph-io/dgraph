@@ -106,7 +106,6 @@ type options struct {
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
-	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
 	AlphaVolumes   []string
@@ -309,9 +308,6 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
-	if opts.LudicrousMode {
-		svc.Command += ` --ludicrous "enabled=true;"`
-	}
 
 	if opts.SnapshotAfter != "" {
 		raft = fmt.Sprintf("%s; snapshot-after=%s", raft, opts.SnapshotAfter)
@@ -590,8 +586,6 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
-		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",
