@@ -1035,7 +1035,7 @@ func TestUpsertMutationsWithRBAC(t *testing.T) {
 				require.Error(t, gqlResponse.Errors)
 				require.Equal(t, len(gqlResponse.Errors), 1)
 				require.Contains(t, gqlResponse.Errors[0].Error(),
-					"GraphQL debug: id tweet1 already exists for field id inside type Tweets")
+					" GraphQL Debug: Type Tweets; field id: id tweet1 already exists")
 			} else {
 				common.RequireNoGQLErrors(t, gqlResponse)
 				require.JSONEq(t, tcase.result, string(gqlResponse.Data))

@@ -2918,7 +2918,7 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	gqlResponse := executeRequest(t, GraphqlURL, addStateParams)
 	require.NotNil(t, gqlResponse.Errors)
 	require.Contains(t, gqlResponse.Errors[0].Error(),
-		" because id cal already exists for field xcode inside type State")
+		" Type State; field xcode: id cal already exists")
 
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
 	deleteState(t, filter, 1, nil)
@@ -5554,7 +5554,7 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id 1 already exists for field reg_No inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field reg_No: id 1 already exists`,
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
@@ -5567,7 +5567,7 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field emp_Id: id E01 already exists`,
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5580,7 +5580,7 @@ func multipleXidsTests(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because id E01 already exists for field emp_Id inside type Worker`,
+			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field emp_Id: id E01 already exists`,
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
@@ -5978,7 +5978,7 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because id S1 already exists for field xcode inside type State",
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because Type State; field xcode: id S1 already exists",
 		gqlResponse.Errors[0].Error())
 
 	// Add Mutation with upsert true should succeed. It should link the state to

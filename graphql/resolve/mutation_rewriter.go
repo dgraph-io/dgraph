@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/golang/glog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -458,6 +459,7 @@ func (arw *AddRewriter) Rewrite(
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		fragment, upsertVar, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
+		glog.Infof("%v", errs)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -1457,7 +1459,6 @@ func rewriteObject(
 					// We return an error if this is at toplevel. Else, we return the ID reference if
 					// found node is of same type as xid field type. Because that node can be of some other
 					// type in case xidField is inherited from interface.
-
 					if atTopLevel {
 						if mutationType == AddWithUpsert {
 							if typUidExist {
@@ -1468,6 +1469,10 @@ func rewriteObject(
 								// updating this node.
 								upsertVar = variable
 								srcUID = fmt.Sprintf("uid(%s)", variable)
+							} else {
+								retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+									interfaceTypDef.Name))
+								return nil, "", retErrors
 							}
 						} else {
 							// We return an error as we are at top level of non-upsert mutation and the XID exists.
