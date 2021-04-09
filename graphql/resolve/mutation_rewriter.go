@@ -1697,16 +1697,14 @@ func rewriteObject(
 }
 
 func xidExistInterfaceTypeError(typ schema.Type, xidString string, xidName, interfaceName string) error {
-	queryAuth := typ.TypeNameToAuthRules(interfaceName)
-	if queryAuth != nil && queryAuth.Rules != nil {
-		if queryAuth.Rules.Query != nil {
-			return x.GqlErrorf("GraphQL Debug: interface %s; field %s: id %s already exists for "+
-				"one of the implementing type of interface", interfaceName, xidName, xidString)
-		}
+	if queryAuthSelector(typ) == nil {
+		// This error will only be reported in debug mode.
+		return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
+			" type of interface", interfaceName, xidName, xidString)
+
 	}
-	// This error will only be reported in debug mode.
-	return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
-		" type of interface", interfaceName, xidName, xidString)
+	return x.GqlErrorf("GraphQL debug: interface %s; field %s: id %s already exists for "+
+		"one of the implementing type of interface", interfaceName, xidName, xidString)
 }
 
 // existenceQueries takes a GraphQL JSON object as obj and creates queries to find
