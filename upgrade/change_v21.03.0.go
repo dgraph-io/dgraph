@@ -23,8 +23,8 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -152,7 +152,7 @@ func dropDeprecated(dg *dgo.Dgraph) error {
 }
 
 func upgradePersitentQuery() error {
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, hasAclCreds())
 	defer cb()
 
 	jwt, err := getAccessJwt()
@@ -205,7 +205,7 @@ func upgradePersitentQuery() error {
 }
 
 func upgradeCORS() error {
-	dg, cb := x.GetDgraphClient(Upgrade.Conf, true)
+	dg, cb := x.GetDgraphClient(Upgrade.Conf, hasAclCreds())
 	defer cb()
 
 	jwt, err := getAccessJwt()
@@ -215,7 +215,7 @@ func upgradeCORS() error {
 
 	// Get CORS.
 	corsData := make(map[string][]cors)
-	if err = getQueryResult(dg, queryCORS_v21_03_0, &corsData); err != nil {
+	if err := getQueryResult(dg, queryCORS_v21_03_0, &corsData); err != nil {
 		return errors.Wrap(err, "error querying cors")
 	}
 
@@ -239,7 +239,7 @@ func upgradeCORS() error {
 
 	// Get GraphQL schema.
 	schemaData := make(map[string][]sch)
-	if err = getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
+	if err := getQueryResult(dg, querySchema_v21_03_0, &schemaData); err != nil {
 		return errors.Wrap(err, "error querying graphql schema")
 	}
 

@@ -1213,6 +1213,41 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 			return errs
 		}
 	}
+
+	if strings.Contains(predArg.Value.String(), "@") {
+		if field.Type.Name() != "String" {
+			errs = append(errs, gqlerror.ErrorPosf(field.Position,
+				"Type %s; Field %s: Expected type `String`"+
+					" for language tag field but got `%s`", typ.Name, field.Name, field.Type.Name()))
+			return errs
+		}
+		if field.Directives.ForName(idDirective) != nil {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(idDirective).Position,
+				"Type %s; Field %s: @id "+
+					"directive not supported on language tag fields", typ.Name, field.Name))
+			return errs
+		}
+
+		if field.Directives.ForName(searchDirective) != nil && isMultiLangField(field, false) {
+			errs = append(errs, gqlerror.ErrorPosf(field.Directives.ForName(searchDirective).Position,
+				"Type %s; Field %s: @search directive not applicable"+
+					" on language tag field with multiple languages", typ.Name, field.Name))
+			return errs
+		}
+
+		tags := strings.Split(predArg.Value.Raw, "@")[1]
+		if tags == "*" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: `*` language tag not"+
+				" supported in GraphQL", typ.Name, field.Name))
+			return errs
+		}
+		if tags == "" {
+			errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: empty language"+
+				" tag not supported", typ.Name, field.Name))
+			return errs
+		}
+
+	}
 	return nil
 }
 

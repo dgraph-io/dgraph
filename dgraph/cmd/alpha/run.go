@@ -35,10 +35,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/ee/audit"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/graphql/admin"
@@ -105,20 +106,11 @@ they form a Raft group and provide synchronous replication.
 	x.FillCommonFlags(flag)
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
-	// --encryption_key_file
-	enc.RegisterFlags(flag)
-
-	flag.String("cache_percentage", "0,65,35,0",
-		`Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,`+
-			`PstoreBlockCache,PstoreIndexCache,WAL).`)
+	// --encryption and --vault Superflag
+	ee.RegisterAclAndEncFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
-
-	// Snapshot and Transactions.
-	flag.String("abort_older_than", "5m",
-		"Abort any pending transactions older than this duration. The liveness of a"+
-			" transaction is determined by its last mutation.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.String("export", "export", "Folder in which to store exports.")
@@ -137,16 +129,23 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.String("badger", worker.BadgerDefaults, z.NewSuperFlagHelp(worker.BadgerDefaults).
-		Head("Badger options").
+		Head("Badger options (Refer to badger documentation for all possible options)").
 		Flag("compression",
 			`[none, zstd:level, snappy] Specifies the compression algorithm and
 			compression level (if applicable) for the postings directory."none" would disable
 			compression, while "zstd:1" would set zstd compression at level 1.`).
-		Flag("goroutines",
+		Flag("numgoroutines",
 			"The number of goroutines to use in badger.Stream.").
-		Flag("max-retries",
-			"Commits to disk will give up after these number of retries to prevent locking the "+
-				"worker in a failed state. Use -1 to retry infinitely.").
+		String())
+
+	// Cache flags.
+	flag.String("cache", worker.CacheDefaults, z.NewSuperFlagHelp(worker.CacheDefaults).
+		Head("Cache options").
+		Flag("size-mb",
+			"Total size of cache (in MB) to be used in Dgraph.").
+		Flag("percentage",
+			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
+				"PstoreBlockCache,PstoreIndexCache)").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -158,9 +157,13 @@ they form a Raft group and provide synchronous replication.
 		Flag("learner",
 			`Make this Alpha a "learner" node. In learner mode, this Alpha will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
-		Flag("snapshot-after",
+		Flag("snapshot-after-entries",
 			"Create a new Raft snapshot after N number of Raft entries. The lower this number, "+
-				"the more frequent snapshot creation will be.").
+				"the more frequent snapshot creation will be. Snapshots are created only if both "+
+				"snapshot-after-duration and snapshot-after-entries threshold are crossed.").
+		Flag("snapshot-after-duration",
+			"Frequency at which we should create a new raft snapshots. Set "+
+				"to 0 to disable duration based snapshot.").
 		Flag("pending-proposals",
 			"Number of pending mutation proposals. Useful for rate limiting.").
 		String())
@@ -176,17 +179,6 @@ they form a Raft group and provide synchronous replication.
 				"to whitelist for performing admin actions (i.e., --security "+
 				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.`+
 				`internal").`).
-		String())
-
-	flag.String("acl", worker.AclDefaults, z.NewSuperFlagHelp(worker.AclDefaults).
-		Head("[Enterprise Feature] ACL options").
-		Flag("secret-file",
-			"The file that stores the HMAC secret, which is used for signing the JWT and "+
-				"should have at least 32 ASCII characters. Required to enable ACLs.").
-		Flag("access-ttl",
-			"The TTL for the access JWT.").
-		Flag("refresh-ttl",
-			"The TTL for the refresh JWT.").
 		String())
 
 	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
@@ -209,6 +201,11 @@ they form a Raft group and provide synchronous replication.
 				" 0, the timeout is infinite.").
 		Flag("max-pending-queries",
 			"Number of maximum pending queries before we reject them as too many requests.").
+		Flag("max-retries",
+			"Commits to disk will give up after these number of retries to prevent locking the "+
+				"worker in a failed state. Use -1 to retry infinitely.").
+		Flag("txn-abort-after", "Abort any pending transactions older than this duration."+
+			" The liveness of a transaction is determined by its last mutation.").
 		String())
 
 	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
@@ -616,40 +613,31 @@ func run() {
 	}
 
 	bindall = Alpha.Conf.GetBool("bindall")
-
-	totalCache := int64(Alpha.Conf.GetInt("cache_mb"))
+	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
+		worker.CacheDefaults)
+	totalCache := cache.GetInt64("size-mb")
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
-	if Alpha.Conf.IsSet("lru_mb") {
-		glog.Warningln("--lru_mb is deprecated, use --cache_mb instead")
-		if !Alpha.Conf.IsSet("cache_mb") {
-			totalCache = int64(Alpha.Conf.GetFloat64("lru_mb"))
-		}
-	}
 
-	cachePercentage := Alpha.Conf.GetString("cache_percentage")
-	cachePercent, err := x.GetCachePercentages(cachePercentage, 4)
+	cachePercentage := cache.GetString("percentage")
+	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
 	pstoreBlockCacheSize := (cachePercent[1] * (totalCache << 20)) / 100
 	pstoreIndexCacheSize := (cachePercent[2] * (totalCache << 20)) / 100
-	walCache := (cachePercent[3] * (totalCache << 20)) / 100
 
-	badger := z.NewSuperFlag(Alpha.Conf.GetString("badger")).MergeAndCheckDefault(
-		worker.BadgerDefaults)
-	ctype, clevel := x.ParseCompression(badger.GetString("compression"))
+	cacheOpts := fmt.Sprintf("blockcachesize=%d; indexcachesize=%d; ",
+		pstoreBlockCacheSize, pstoreIndexCacheSize)
+	bopts := badger.DefaultOptions("").FromSuperFlag(worker.BadgerDefaults + cacheOpts).
+		FromSuperFlag(Alpha.Conf.GetString("badger"))
 
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 	opts := worker.Options{
-		PostingDir:                 Alpha.Conf.GetString("postings"),
-		WALDir:                     Alpha.Conf.GetString("wal"),
-		PostingDirCompression:      ctype,
-		PostingDirCompressionLevel: clevel,
-		CachePercentage:            cachePercentage,
-		PBlockCacheSize:            pstoreBlockCacheSize,
-		PIndexCacheSize:            pstoreIndexCacheSize,
-		WalCache:                   walCache,
+		PostingDir:      Alpha.Conf.GetString("postings"),
+		WALDir:          Alpha.Conf.GetString("wal"),
+		CacheMb:         totalCache,
+		CachePercentage: cachePercentage,
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      security.GetString("token"),
@@ -661,7 +649,7 @@ func run() {
 	if aclKey != nil {
 		opts.HmacSecret = aclKey
 
-		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(worker.AclDefaults)
+		acl := z.NewSuperFlag(Alpha.Conf.GetString("acl")).MergeAndCheckDefault(ee.AclDefaults)
 		opts.AccessJwtTtl = acl.GetDuration("access-ttl")
 		opts.RefreshJwtTtl = acl.GetDuration("refresh-ttl")
 
@@ -670,6 +658,7 @@ func run() {
 
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
+	abortDur := x.Config.Limit.GetDuration("txn-abort-after")
 	switch strings.ToLower(x.Config.Limit.GetString("mutations")) {
 	case "allow":
 		opts.MutationsMode = worker.AllowMutations
@@ -685,9 +674,6 @@ func run() {
 	worker.SetConfiguration(&opts)
 
 	ips, err := getIPsFromString(security.GetString("whitelist"))
-	x.Check(err)
-
-	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
 	x.Check(err)
 
 	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
@@ -715,7 +701,7 @@ func run() {
 		TLSServerConfig:     tlsServerConf,
 		HmacSecret:          opts.HmacSecret,
 		Audit:               opts.Audit != nil,
-		Badger:              badger,
+		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
@@ -734,7 +720,9 @@ func run() {
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")
+	x.Config.LimitNormalizeNode = int(x.Config.Limit.GetInt64("normalize-node"))
 	x.Config.QueryTimeout = x.Config.Limit.GetDuration("query-timeout")
+	x.Config.MaxRetries = x.Config.Limit.GetInt64("max-retries")
 
 	x.Config.GraphQL = z.NewSuperFlag(Alpha.Conf.GetString("graphql")).MergeAndCheckDefault(
 		worker.GraphQLDefaults)

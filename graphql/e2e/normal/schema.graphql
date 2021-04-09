@@ -163,8 +163,15 @@ type Student implements People {
 }
 
 type Person @withSubscription{
-    id: ID!
-    name: String!
+        id: ID!
+        name: String! @search(by: [hash])
+        nameHi: String @dgraph(pred:"Person.name@hi") @search(by: [hash])
+        nameZh: String @dgraph(pred:"Person.name@zh") @search(by: [hash])
+        nameHiZh: String @dgraph(pred:"Person.name@hi:zh")
+        nameZhHi: String @dgraph(pred:"Person.name@zh:hi")
+        nameHi_Zh_Untag: String @dgraph(pred:"Person.name@hi:zh:.")
+        name_Untag_AnyLang: String @dgraph(pred:"Person.name@.") @search(by: [hash])
+        professionEn: String @dgraph(pred:"Person.profession@en")
 }
 
 """

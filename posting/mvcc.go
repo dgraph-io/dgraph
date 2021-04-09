@@ -27,7 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -437,12 +437,14 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				key:   key,
 				plist: l.plist,
 			}
+			l.RLock()
 			if l.mutationMap != nil {
 				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
 				for ts, pl := range l.mutationMap {
 					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 				}
 			}
+			l.RUnlock()
 			return lCopy, nil
 		}
 	}

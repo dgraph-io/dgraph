@@ -175,6 +175,20 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 				addError(validator.Message("Type mismatched for Value `%s`, expected: Int64, got: '%s'", value.Raw,
 					valueKindToString(value.Kind)), validator.At(value.Position))
 			}
+		case "UInt64":
+			// UInt64 exists only in admin schema
+			if value.Kind == ast.IntValue || value.Kind == ast.StringValue {
+				_, err := strconv.ParseUint(value.Raw, 10, 64)
+				if err != nil {
+					addError(validator.Message(err.Error()), validator.At(value.Position))
+				}
+				// UInt64 values parsed from query text would be propagated as strings internally
+				value.Kind = ast.StringValue
+			} else {
+				addError(validator.Message("Type mismatched for Value `%s`, expected: UInt64, "+
+					"got: '%s'", value.Raw,
+					valueKindToString(value.Kind)), validator.At(value.Position))
+			}
 		}
 	})
 }

@@ -51,6 +51,7 @@ type Region struct {
 type Movie struct {
 	Id               string    `json:"id,omitempty"`
 	Content          string    `json:"content,omitempty"`
+	Code             string    `json:"code,omitempty"`
 	Hidden           bool      `json:"hidden,omitempty"`
 	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
 }
@@ -638,11 +639,11 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 		{name: "Query auth field without JWT Token",
 			query: `
 			query {
-				queryMovie {
+				queryMovie(order: {asc: content}) {
 					content
 				}
 			}`,
-			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+			result: `{"queryMovie":[{"content":"Movie3"},{"content":"Movie4"}]}`,
 		},
 		{name: "Query empty auth field without JWT Token",
 			query: `
@@ -1425,7 +1426,10 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
-            }
+            },
+			{
+				"name": "Region6"
+			}
          ]
       },
       {
@@ -1472,7 +1476,10 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
-            }
+            },
+			{
+				"name": "Region6"
+			}
          ]
       },
       {
@@ -1512,6 +1519,109 @@ func TestNestedFilter(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
+}
+
+func TestAuthPaginationWithCascade(t *testing.T) {
+	testCases := []TestCase{{
+		name: "Auth query with @cascade and pagination at top level",
+		user: "user1",
+		role: "ADMIN",
+		query: `
+		query {	
+			queryMovie (order: {asc: content}, first: 2, offset: 0) @cascade{
+				content
+				code
+				regionsAvailable (order: {asc: name}){
+					name
+				}
+			}
+		}
+`,
+		result: `
+		{
+			"queryMovie": [
+			  {
+				"content": "Movie3",
+				"code": "m3",
+				"regionsAvailable": [
+				  {
+					"name": "Region1"
+				  },
+				  {
+					"name": "Region4"
+				  },
+				  {
+					"name": "Region6"
+				  }
+				]
+			  },
+			  {
+				"content": "Movie4",
+				"code": "m4",
+				"regionsAvailable": [
+				  {
+					"name": "Region5"
+				  }
+				]
+			  }
+			]
+		  }
+`,
+	}, {
+		name: "Auth query with @cascade and pagination at deep level",
+		user: "user1",
+		role: "ADMIN",
+		query: `
+query {	
+	queryMovie (order: {asc: content}, first: 2, offset: 1) {
+		content
+		regionsAvailable (order: {asc: name}, first: 1) @cascade{
+			name
+			global
+		}
+	}
+}
+`,
+		result: `
+		{
+			"queryMovie": [
+			  {
+				"content": "Movie3",
+				"regionsAvailable": [
+				  {
+					"name": "Region6",
+					"global": true
+				  }
+				]
+			  },
+			  {
+				"content": "Movie4",
+				"regionsAvailable": [
+				  {
+					"name": "Region5",
+					"global": true
+				  }
+				]
+			  }
+			]
+		  }
+		`,
+	}}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: common.GetJWT(t, tcase.user, tcase.role, metaInfo),
+				Query:   tcase.query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+
 }
 
 func TestDeleteAuthRule(t *testing.T) {

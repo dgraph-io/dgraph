@@ -519,6 +519,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		indexes map[string]bool
 		upsert  string
 		reverse string
+		lang    bool
 	}
 
 	type field struct {
@@ -536,7 +537,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
 
-	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string, lang bool) dgPred {
 		pred, ok := dgPreds[fname]
 		if !ok {
 			pred = dgPred{
@@ -548,6 +549,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 		for _, index := range indexes {
 			pred.indexes[index] = true
 		}
+		pred.lang = lang
 		return pred
 	}
 
@@ -605,7 +607,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 							indexes = append(indexes, supportedSearches[defaultSearches[f.Type.
 								Name()]].dgIndex)
 						}
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					} else {
 						typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 					}
@@ -663,7 +665,13 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					}
 
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
+						// if field name contains @ then it is a language tagged field.
+						isLang := false
+						if strings.Contains(fname, "@") {
+							fname = strings.Split(fname, "@")[0]
+							isLang = true
+						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes, isLang)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -678,7 +686,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes, false)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
@@ -702,16 +710,20 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 
 	predWritten := make(map[string]bool, len(dgPreds))
 	for _, typ := range dgTypes {
+		// fieldAdded keeps track of whether a field has been added to typeDef
+		fieldAdded := make(map[string]bool, len(typ.fields))
 		var typeDef, preds strings.Builder
 		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
 		for _, fld := range typ.fields {
 			f, ok := dgPreds[fld.name]
-			if !ok {
+			if !ok || fieldAdded[fld.name] {
 				continue
 			}
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
+			fieldAdded[fld.name] = true
 			if !fld.inherited && !predWritten[fld.name] {
 				indexStr := ""
+				langStr := ""
 				if len(f.indexes) > 0 {
 					indexes := make([]string, 0)
 					for index := range f.indexes {
@@ -720,7 +732,10 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string,
 					sort.Strings(indexes)
 					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 				}
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
+				if f.lang {
+					langStr = " @lang"
+				}
+				fmt.Fprintf(&preds, "%s: %s%s%s %s%s.\n", fld.name, f.typ, indexStr, langStr, f.upsert,
 					f.reverse)
 				predWritten[fld.name] = true
 			}

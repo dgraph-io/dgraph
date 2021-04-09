@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v210"
 	"github.com/stretchr/testify/require"
 )
 

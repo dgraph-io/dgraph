@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v3/options"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -337,7 +337,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	result := worker.RunRestore("./data/restore", localBackupDst, lastDir, "", options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", localBackupDst, lastDir, "", options.Snappy, 0)
 	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
@@ -359,7 +359,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
+	result := worker.RunOfflineRestore("./data/restore", backupLocation, lastDir, "", options.Snappy, 0)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

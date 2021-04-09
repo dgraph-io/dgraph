@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -3430,6 +3430,58 @@ func TestEqFilterWithoutIndex(t *testing.T) {
 	js := processQueryNoErr(t, test.query)
 	require.JSONEq(t, js, test.result)
 
+}
+
+func TestMatchingWithPagination(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected string
+	}{
+		{
+			`Test regexp matching with pagination`,
+			`{
+				me(func: regexp(tweet-a, /aaa.b/), first:1){
+					tweet-a
+				}
+			 }`,
+			`{"data":{"me":[{"tweet-a":"aaaab"}]}}`,
+		},
+		{
+			`Test term matching with pagination`,
+			`{
+				me(func: allofterms(tweet-b, "indiana jones"), first:1){
+					tweet-b
+				}
+			 }`,
+			`{"data":{"me":[{"tweet-b":"indiana jones"}]}}`,
+		},
+		{
+			`Test full-text matching with pagination`,
+			`{
+				me(func: alloftext(tweet-c, "I am a citizen of Paradis Island"), first:1){
+					tweet-c
+				}
+			 }`,
+			`{"data":{"me":[{"tweet-c":"I am a citizen of Paradis Island"}]}}`,
+		},
+		{
+			`Test match function with pagination`,
+			`{
+				me(func: match(tweet-d, "aaaaaa", 3), first:1) {
+					tweet-d
+				}
+			 }`,
+			`{"data":{"me":[{"tweet-d":"aaabcd"}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, tc.expected, result)
+		})
+	}
 }
 
 var client *dgo.Dgraph

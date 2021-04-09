@@ -129,6 +129,60 @@ func MakeGQLRequestWithAccessJwtAndTLS(t *testing.T, params *GraphQLParams, tls 
 	return &gqlResp
 }
 
+func AssertRemoveNode(t *testing.T, nodeId uint64, groupId uint32) {
+	params := &GraphQLParams{
+		Query: `mutation ($nodeId: UInt64!, $groupId: UInt64!) {
+		  removeNode(input: {nodeId: $nodeId, groupId: $groupId}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"nodeId":  nodeId,
+			"groupId": groupId,
+		},
+	}
+	resp := MakeGQLRequest(t, params)
+	resp.RequireNoGraphQLErrors(t)
+	CompareJSON(t, `{"removeNode":{"response":{"code":"Success"}}}`, string(resp.Data))
+}
+
+func AssertMoveTablet(t *testing.T, tablet string, groupId uint32) {
+	params := &GraphQLParams{
+		Query: `mutation ($tablet: String!, $groupId: UInt64!) {
+		  moveTablet(input: {tablet: $tablet, groupId: $groupId}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"tablet":  tablet,
+			"groupId": groupId,
+		},
+	}
+	resp := MakeGQLRequest(t, params)
+	resp.RequireNoGraphQLErrors(t)
+	CompareJSON(t, `{"moveTablet":{"response":{"code":"Success"}}}`, string(resp.Data))
+}
+
+func EnterpriseLicense(t *testing.T, license string) *GraphQLResponse {
+	params := &GraphQLParams{
+		Query: `mutation ($license: String!) {
+		  enterpriseLicense(input: {license: $license}) {
+			response {
+				code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{
+			"license": license,
+		},
+	}
+	return MakeGQLRequest(t, params)
+}
+
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}

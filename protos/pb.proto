@@ -535,6 +535,9 @@ service Zero {
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
 	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
+	rpc RemoveNode (RemoveNodeRequest) returns (Status) {}
+	rpc MoveTablet (MoveTabletRequest) returns (Status) {}
+	rpc ApplyLicense (ApplyLicenseRequest) returns (Status) {}
 }
 
 service Worker {
@@ -581,6 +584,21 @@ message AssignedIds {
 
 	// The following is used for read only transactions.
 	uint64 read_only = 5;
+}
+
+message RemoveNodeRequest {
+	uint64 nodeId = 1;
+	uint32 groupId = 2;
+}
+
+message MoveTabletRequest {
+	uint64 namespace = 1;
+	string tablet = 2;
+	uint32 dstGroup = 3;
+}
+
+message ApplyLicenseRequest {
+    bytes license = 1;
 }
 
 message SnapshotMeta {

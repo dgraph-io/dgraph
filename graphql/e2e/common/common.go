@@ -31,8 +31,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -836,6 +836,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int", idDirectiveWithInt)
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
+	t.Run("query multiple language Fields", queryMultipleLangFields)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -894,6 +895,7 @@ func RunAll(t *testing.T) {
 	t.Run("input coercion to list", inputCoerciontoList)
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
+	t.Run("Update language tag fields", updateLangTagFields)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -937,7 +939,8 @@ func gunzipData(data []byte) ([]byte, error) {
 
 func gzipData(data []byte) ([]byte, error) {
 	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestSpeed)
+	x.Check(err)
 
 	if _, err := gz.Write(data); err != nil {
 		return nil, err

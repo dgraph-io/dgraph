@@ -181,11 +181,7 @@ func RemoveRange(bm *roaring64.Bitmap, from, to uint64) {
 
 // DecodeToBuffer is the same as Decode but it returns a z.Buffer which is
 // calloc'ed and can be SHOULD be freed up by calling buffer.Release().
-func DecodeToBuffer(bm *roaring64.Bitmap) *z.Buffer {
-	buf, err := z.NewBufferWith(256<<20, 32<<30, z.UseCalloc, "Codec.DecodeToBuffer")
-	x.Check(err)
-	buf.AutoMmapAfter(1 << 30)
-
+func DecodeToBuffer(buf *z.Buffer, bm *roaring64.Bitmap) {
 	var last uint64
 	tmp := make([]byte, 16)
 	itr := bm.ManyIterator()
@@ -201,5 +197,4 @@ func DecodeToBuffer(bm *roaring64.Bitmap) *z.Buffer {
 			last = u
 		}
 	}
-	return buf
 }

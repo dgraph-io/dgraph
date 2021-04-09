@@ -2889,6 +2889,51 @@ invalid_schemas:
       { "message": "Type TwitterUser; @lambdaOnMutate directive not allowed along with @remote directive.", "locations": [{"line": 1, "column": 27}]}
     ]
 
+  - name: "language tag field should be of String type"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: Int @dgraph(pred:"Person.name@hi")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: Expected type `String` for language tag field but got `Int`",
+        "locations": [ { "line": 3, "column": 3 } ] },
+    ]
+
+  - name: "@id directive not supported on language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String! @dgraph(pred:"Person.name@hi") @id
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: @id directive not supported on language tag fields",
+        "locations": [ { "line": 3, "column": 51 } ] },
+    ]
+
+  - name: "@search directive not supported on multiple language tag field"
+    input: |
+      type Person  {
+        name: String!
+        nameHiEn: String! @dgraph(pred:"Person.name@hi:en") @search(by: [exact])
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHiEn: @search directive not applicable on language tag
+        field with multiple languages",
+        "locations": [ { "line": 3, "column": 56 } ] },
+    ]
+
+  - name: "unsupported `*` language tag in graphql"
+    input: |
+      type Person  {
+        name: String!
+        nameHi: String @dgraph(pred:"Person.name@*")
+      }
+    errlist: [
+      { "message": "Type Person; Field nameHi: `*` language tag not supported in GraphQL",
+        "locations": [ { "line": 3, "column": 19 } ] },
+    ]
+
 valid_schemas:
   - name: "Multiple fields with @id directive should be allowed"
     input: |
@@ -3367,3 +3412,22 @@ valid_schemas:
         questionText: String
       }
 
+  - name: "valid schema with multiple language tag fields"
+    input: |
+      interface Node {
+        f1: String
+      }
+      type Person implements Node {
+        f1Hi: String @dgraph(pred: "Node.f1@hi")
+        f2: String @dgraph(pred: "T.f@no")
+        name: String! @id
+        f3: String @dgraph(pred: "f3@en")
+        nameHi: String @dgraph(pred: "Person.name@hi") @search(by: [term, exact])
+        nameEn: String @dgraph(pred: "Person.name@en") @search(by: [regexp])
+        nameHiEn: String @dgraph(pred: "Person.name@hi:en")
+        nameHi_En_Untag: String @dgraph(pred: "Person.name@hi:en:.")
+        name_Untag_AnyLang: String @dgraph(pred: "Person.name@.")
+        address: String @search(by: [fulltext])
+        addressHi: String @dgraph(pred: "Person.address@hi")
+        professionEn: String @dgraph(pred: "Person.profession@en")
+      }
