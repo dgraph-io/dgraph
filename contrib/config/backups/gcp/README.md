@@ -62,10 +62,9 @@ export BACKUP_BUCKET_NAME=<gcs-bucket-name>
 docker-compose up --detach
 ```
 
-#### Access Minio and Ratel UI
+#### Access Minio
 
 * MinIO UI: http://localhost:9000
-* Ratel UI: http://localhost:8000
 
 #### Clean Up Docker Environment
 
@@ -174,18 +173,6 @@ export ALPHA_POD_NAME=$(
   --output jsonpath="{.items[0].metadata.name}"
 )
 kubectl --namespace default port-forward $ALPHA_POD_NAME 8080:8080
-```
-
-For Dgraph Ratel UI, you can use this to access it at http://localhost:8000:
-
-```bash
-export RATEL_POD_NAME=$(
- kubectl get pods \
-  --namespace default \
-  --selector "component=ratel,release=my-release" \
-  --output jsonpath="{.items[0].metadata.name}"
-)
-kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
 #### Cleanup Kubernetes Environment

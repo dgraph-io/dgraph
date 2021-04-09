@@ -1,5 +1,5 @@
 # This file can be used to setup a Dgraph cluster with 3 Dgraph Alphas and 1 Dgraph Zero node on a
-# Docker Swarm with replication.to
+# Docker Swarm with replication.
 # It expects three virtual machines with hostnames aws01, aws02, and aws03 to be part of the swarm.
 # There is a constraint to make sure that each Dgraph Alpha runs on a particular host.
 
@@ -72,13 +72,5 @@ services:
         constraints:
           - node.hostname == aws03
     command: dgraph alpha --my=alpha3:7082 --zero=zero:5080 -o 2
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
 volumes:
   data-volume:

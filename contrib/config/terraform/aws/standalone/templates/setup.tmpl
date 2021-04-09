@@ -14,11 +14,9 @@ mkdir -p /var/run/dgraph/
 chown -R dgraph:dgraph /var/run/dgraph
 chown -R dgraph:dgraph /var/log/dgraph
 
-echo "${dgraph_ui_service}" > /etc/systemd/system/dgraph-ui.service
 echo "${dgraph_zero_service}" > /etc/systemd/system/dgraph-zero.service
 echo "${dgraph_service}" > /etc/systemd/system/dgraph.service
 chmod +x /etc/systemd/system/dgraph*
 
 systemctl daemon-reload
 systemctl enable --now dgraph
-systemctl enable --now dgraph-ui

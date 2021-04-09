@@ -30,16 +30,3 @@ services:
       - 9080:9080
     ## configuration setup by ./compose-setup.sh
     command: dgraph alpha --config /dgraph/config/config.toml --my=alpha1:7080 --zero=zero1:5080
-
-  ratel:
-    ## DGRAPH_VERSION set by ./compose-setup.sh
-    image: dgraph/dgraph:$DGRAPH_VERSION
-    volumes:
-      - type: bind
-        source: ./data
-        target: /dgraph
-        read_only: false
-    ports:
-      - 8000:8000
-    command: dgraph-ratel
-    container_name: ratel

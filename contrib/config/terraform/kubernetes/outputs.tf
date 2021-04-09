@@ -12,8 +12,3 @@ output "alpha_indexzero_public_dns" {
   value       = module.dgraph.alpha_indexzero_public_dns
   description = "The hostname of the Alpha[0] service LB"
 }
-
-output "ratel_public_dns" {
-  value       = module.dgraph.ratel_public_dns
-  description = "The hostname of the Ratel service LB"
-}

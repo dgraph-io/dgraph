@@ -31,9 +31,9 @@ module "zero" {
 
   ami_id = var.ami_id
 
-  name   = local.deployment_name
-  vpc_id = module.aws_vpc.vpc_id
-  sg_id  = module.aws_vpc.sg_id
+  name           = local.deployment_name
+  vpc_id         = module.aws_vpc.vpc_id
+  sg_id          = module.aws_vpc.sg_id
   instance_count = var.zero_count
 
   subnet_id = module.aws_vpc.subnet_id
@@ -43,7 +43,7 @@ module "zero" {
   disk_size     = var.zero_disk_size
   disk_iops     = var.disk_iops
 
-  key_pair_name = var.key_pair_name
+  key_pair_name     = var.key_pair_name
   subnet_cidr_block = var.subnet_cidr_block
 
   dgraph_version = var.dgraph_version
@@ -54,9 +54,9 @@ module "alpha" {
 
   ami_id = var.ami_id
 
-  name   = local.deployment_name
-  vpc_id = module.aws_vpc.vpc_id
-  sg_id  = module.aws_vpc.sg_id
+  name           = local.deployment_name
+  vpc_id         = module.aws_vpc.vpc_id
+  sg_id          = module.aws_vpc.sg_id
   instance_count = var.alpha_count
 
   subnet_id = module.aws_vpc.subnet_id
@@ -75,31 +75,4 @@ module "alpha" {
   # we need the address of a healthy zero.
   # Terraform 0.12 does not support depends_on, use this later on.
   # depends_on = [module.zero]
-}
-
-module "ratel" {
-  source = "./ratel"
-
-  ami_id = var.ami_id
-
-  name   = local.deployment_name
-  vpc_id = module.aws_vpc.vpc_id
-  sg_id  = module.aws_vpc.sg_id
-
-  subnet_id = module.aws_vpc.subnet_id
-  lb_arn    = module.aws_lb.arn
-
-  instance_type = var.ratel_instance_type
-  disk_size     = var.ratel_disk_size
-  disk_iops     = var.disk_iops
-
-  key_pair_name     = var.key_pair_name
-  alpha_completed   = module.alpha.alpha_completed
-  subnet_cidr_block = var.subnet_cidr_block
-
-  dgraph_version = var.dgraph_version
-
-  # Temporary to create dependency among alpha and ratel, later use depends_on
-  # for explicit dependency specification.
-  # depends_on = [module.alpha]
 }

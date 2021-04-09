@@ -24,12 +24,6 @@ services:
         target: /data/backups
         volume:
           nocopy: true
-  ratel:
-    image: dgraph/dgraph:${DGRAPH_VERSION}
-    ports:
-      - 8000:8000
-    command: dgraph-ratel
-    container_name: ratel
 
 volumes:
   nfsmount:

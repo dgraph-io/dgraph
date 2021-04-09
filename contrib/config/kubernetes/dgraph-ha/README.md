@@ -4,7 +4,6 @@
 
 * 3 zero nodes
 * 3 alpha nodes
-* 1 ratel UI node
 
 You can deploy the manifest with `kubectl`:
 
@@ -17,8 +16,6 @@ kubectl apply --filename dgraph-ha.yaml
 You can access services deploy from `dgraph-ha.yaml` running each of these commands in a separate terminal window or tab:
 
 ```bash
-# port-forward to ratel ui
-kubectl port-forward svc/dgraph-ratel-public 8000:8000
 # port-forward to alpha
 kubectl port-forward svc/dgraph-alpha-public 8080:8080
 ```
@@ -29,7 +26,6 @@ There are three services specified in the manifest that can be used to expose se
 
 * `dgraph-zero-public` - To load data using Live & Bulk Loaders
 * `dgraph-alpha-public` - To connect clients and for HTTP APIs
-* `dgraph-ratel-public` - For Dgraph UI
 
 For security best practices, these are set as `ClusterIP` service type, so they are only accessible from within the Kubernetes cluster.  If you need to expose these to outside of the cluster, there are a few options:
 

@@ -226,7 +226,7 @@ logout
 
 ## Accessing Dgraph Services
 
-In the [Docker Compose Environment](#testing-nfs-with-docker-compose), Ratel UI will be accessible from http://localhost:8000 and Alpha from http://localhost:8080.  
+In the [Docker Compose Environment](#testing-nfs-with-docker-compose), Alpha will be accessible from http://localhost:8080.
 
 In a [Kubernetes Environment](#testing-nfs-with-kubernetes), you will need to use port-forward to access these from `localhost`.
 
@@ -242,20 +242,6 @@ export ALPHA_POD_NAME=$(
 )
 
 kubectl --namespace default port-forward $ALPHA_POD_NAME 8080:8080
-```
-
-For Dgraph Ratel UI, you can use this to access it at http://localhost:8000:
-
-```bash
-RELEASE="my-release"
-export RATEL_POD_NAME=$(
- kubectl get pods \
-  --namespace default \
-  --selector "component=ratel,release=$RELEASE" \
-  --output jsonpath="{.items[0].metadata.name}"
-)
-
-kubectl --namespace default port-forward $RATEL_POD_NAME 8000:8000
 ```
 
 ## Trigger a Backup
