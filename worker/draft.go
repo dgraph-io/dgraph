@@ -79,6 +79,7 @@ type node struct {
 	pendingProposals []pb.Proposal
 }
 
+// keysWritten is always accessed serially via applyCh. So, we don't need to make it thread-safe.
 type keysWritten struct {
 	rejectBeforeIndex uint64
 	keyCommitTs       map[uint64]uint64
@@ -772,10 +773,6 @@ func (n *node) processApplyCh() {
 	}
 	previous := make(map[uint64]*P)
 
-	histograms := make(map[string]*z.HistogramData)
-	histograms["mutation"] = z.NewHistogramData(z.Fibonacci(32))
-	histograms["delta"] = z.NewHistogramData(z.Fibonacci(32))
-
 	getProposal := func(e raftpb.Entry) pb.Proposal {
 		var p pb.Proposal
 		key := binary.BigEndian.Uint64(e.Data[:8])
@@ -828,17 +825,15 @@ func (n *node) processApplyCh() {
 			var tags []tag.Mutator
 			switch {
 			case prop.Mutations != nil:
-				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
 				if len(prop.Mutations.Schema) == 0 {
 					// Don't capture schema updates.
-					histograms["mutation"].Update(time.Since(start).Milliseconds())
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
 				}
 			case prop.Delta != nil:
 				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
-				histograms["delta"].Update(time.Since(start).Milliseconds())
 			}
 			ms := x.SinceMs(start)
-			_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+			ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 		}
 
 		n.Proposals.Done(prop.Key, perr)
@@ -898,12 +893,21 @@ func (n *node) processApplyCh() {
 				}
 			}
 			n.elog.Printf("Size of previous map: %d", len(previous))
-			for key, h := range histograms {
-				glog.Infof("Histogram for %s: %s\n", key, h)
-			}
+
 			kw := n.keysWritten
-			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d. Total keys written: %d\n",
-				kw.validTxns, kw.invalidTxns, len(kw.keyCommitTs), kw.totalKeys)
+			minSeen := posting.Oracle().MinMaxAssignedSeenTs()
+			before := len(kw.keyCommitTs)
+			for k, commitTs := range kw.keyCommitTs {
+				// If commitTs is less than the min of all pending Txn's MaxAssignedSeen, then we
+				// can safely delete the key. StillValid would only consider the commits with ts >
+				// MaxAssignedSeen.
+				if commitTs < minSeen {
+					delete(kw.keyCommitTs, k)
+				}
+			}
+			glog.Infof("Still valid: %d Invalid: %d. Size of commit map: %d -> %d."+
+				" Total keys written: %d\n",
+				kw.validTxns, kw.invalidTxns, before, len(kw.keyCommitTs), kw.totalKeys)
 		}
 	}
 }

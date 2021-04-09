@@ -169,6 +169,18 @@ func (o *oracle) MinPendingStartTs() uint64 {
 	return min
 }
 
+func (o *oracle) MinMaxAssignedSeenTs() uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	min := o.MaxAssigned()
+	for _, txn := range o.pendingTxns {
+		if txn.MaxAssignedSeen < min {
+			min = txn.MaxAssignedSeen
+		}
+	}
+	return min
+}
+
 func (o *oracle) NumPendingTxns() int {
 	o.RLock()
 	defer o.RUnlock()

@@ -53,7 +53,7 @@ func commitTs(startTs uint64) uint64 {
 
 func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
-	txn := posting.Oracle().RegisterStartTs(startTs)
+	txn, _ := posting.Oracle().RegisterStartTs(startTs)
 	l = txn.Store(l)
 	err := l.AddMutationWithIndex(context.Background(), edge, txn)
 	require.NoError(t, err)
