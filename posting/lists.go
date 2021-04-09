@@ -99,23 +99,17 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 // memory(for example before populating snapshot) or after calling syncAllMarks
 type LocalCache struct {
 	sync.RWMutex
-
-	startTs    uint64
-	numWritten int
-
+	startTs uint64
 	// Keep track of the keys that we have read. So, we can later check if the keys that we read
 	// were changed by a commit. This is useful to opportunistically run mutations before the server
 	// reaches txn's start timestamp.
 	readKeys map[uint64]struct{}
-
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
 	// during commit.
 	deltas map[string][]byte
-
 	// max committed timestamp of the read posting lists.
 	maxVersions map[string]uint64
-
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
 }
@@ -197,8 +191,6 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	// apply it before returning the list.
 	lc.RLock()
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		x.AssertTrue(false) // This needs to be fixed.
-		// TODO: Fix this up. The start ts won't match.
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()

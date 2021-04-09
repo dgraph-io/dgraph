@@ -206,22 +206,11 @@ func (txn *Txn) ReadKeys() map[uint64]struct{} {
 	defer txn.Unlock()
 	return txn.cache.readKeys
 }
+
 func (txn *Txn) Deltas() map[string][]byte {
 	txn.Lock()
 	defer txn.Unlock()
 	return txn.cache.deltas
-}
-func (txn *Txn) TouchedKeys() {
-	txn.Lock()
-	defer txn.Unlock()
-
-	glog.Infof("[%d] Read Keys: %d Wrote keys: %d\n", txn.StartTs, len(txn.cache.readKeys), len(txn.cache.deltas))
-	for k := range txn.cache.readKeys {
-		glog.Infof("[%d] read key: %x\n", txn.StartTs, k)
-	}
-	for k := range txn.cache.deltas {
-		glog.Infof("[%d] wrote key: %x\n", txn.StartTs, k)
-	}
 }
 
 // FillContext updates the given transaction context with data from this transaction.

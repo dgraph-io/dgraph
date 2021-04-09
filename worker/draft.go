@@ -105,12 +105,11 @@ func (kw *keysWritten) StillValid(txn *posting.Txn) bool {
 		return true
 	}
 	for hash := range txn.ReadKeys() {
-		// Determine if this key was modified between our allocated start Ts
-		// (txn.StartTs) and our chosen start ts (txn.CacheStartTs). If so, we
-		// return false. Otherwise, whatever we read is still valid.
-		// glog.Infof("StillValid. StartTs: %d CacheStartTs: %d Key Ts: %d %x\n",
-		// 	txn.StartTs, txn.CacheStartTs(), ts, hash)
-		if commitTs := kw.keyCommitTs[hash]; commitTs > txn.MaxAssignedSeen {
+		// If the commitTs is between (MaxAssignedSeen, StartTs], the txn reads were invalid. If the
+		// commitTs is > StartTs, then it doesn't matter for reads. If the commit ts is <
+		// MaxAssignedSeen, that means our reads are valid.
+		commitTs := kw.keyCommitTs[hash]
+		if commitTs > txn.MaxAssignedSeen && commitTs <= txn.StartTs {
 			kw.invalidTxns++
 			return false
 		}
@@ -634,11 +633,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	// If we have an error, re-run this.
 	span.Annotate(nil, "re-running mutation")
-	txn = nil
-
-	txn2 := posting.Oracle().ResetTxn(m.StartTs)
+	txn = posting.Oracle().ResetTxn(m.StartTs)
 	n.processMutations(ctx, m)
-	return <-txn2.ErrCh
+	return <-txn.ErrCh
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
@@ -811,62 +808,62 @@ func (n *node) processApplyCh() {
 	}
 
 	// This function must be run serially.
-	handle := func(proposal pb.Proposal) {
+	handle := func(prop pb.Proposal) {
 		// Ignore the start ts in case of ludicrous mode. We get a new ts and use that as the
 		// commit ts.
 		// WARNING: This would cause the leader and the follower to diverge in the timestamp
 		// they use to commit the same thing.
 		// TODO: This is broken. We need to find a way to fix this.
-		if x.WorkerConfig.LudicrousEnabled && proposal.Mutations != nil {
-			proposal.Mutations.StartTs = State.GetTimestamp(false)
+		if x.WorkerConfig.LudicrousEnabled && prop.Mutations != nil {
+			prop.Mutations.StartTs = State.GetTimestamp(false)
 		}
 
 		var perr error
-		p, ok := previous[proposal.Key]
-		if ok && p.err == nil {
-			// n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-			// 	key, proposal.Index)
-			previous[proposal.Key].seen = time.Now() // Update the ts.
+		prev, ok := previous[prop.Key]
+		if ok && prev.err == nil {
+			n.elog.Printf("Proposal with key: %d already applied. Skipping index: %d.\n",
+				prop.Key, prop.Index)
+			previous[prop.Key].seen = time.Now() // Update the ts.
 			// Don't break here. We still need to call the Done below.
 
 		} else {
-			if max := posting.Oracle().MaxAssigned(); proposal.StartTs > max {
+			if max := posting.Oracle().MaxAssigned(); prop.StartTs > max {
 				// Wait to run this proposal.
-				n.pendingProposals = append(n.pendingProposals, proposal)
+				n.pendingProposals = append(n.pendingProposals, prop)
 				return
 			}
 
 			// if this applyCommited fails, how do we ensure
 			start := time.Now()
-			perr = n.applyCommitted(&proposal)
-			if proposal.Key != 0 {
+			perr = n.applyCommitted(&prop)
+			if prop.Key != 0 {
 				p := &P{err: perr, seen: time.Now()}
-				previous[proposal.Key] = p
+				previous[prop.Key] = p
 			}
 			if perr != nil {
-				glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+				glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, prop)
 			}
-			// n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
-			// 	key, proposal.Index, perr)
+			n.elog.Printf("Applied proposal with key: %d, index: %d. Err: %v",
+				prop.Key, prop.Index, perr)
 
-			// var tags []tag.Mutator
+			var tags []tag.Mutator
 			switch {
-			case proposal.Mutations != nil:
-				// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-				if len(proposal.Mutations.Schema) == 0 {
+			case prop.Mutations != nil:
+				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				if len(prop.Mutations.Schema) == 0 {
 					// Don't capture schema updates.
 					histograms["mutation"].Update(time.Since(start).Milliseconds())
 				}
-			case proposal.Delta != nil:
-				// tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+			case prop.Delta != nil:
+				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				histograms["delta"].Update(time.Since(start).Milliseconds())
 			}
-			// ms := x.SinceMs(start)
-			// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+			ms := x.SinceMs(start)
+			_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 		}
 
-		n.Proposals.Done(proposal.Key, perr)
-		n.Applied.Done(proposal.Index)
+		n.Proposals.Done(prop.Key, perr)
+		n.Applied.Done(prop.Index)
 		ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 	}
 

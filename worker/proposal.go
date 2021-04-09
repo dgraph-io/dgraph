@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/pkg/errors"
@@ -118,17 +119,17 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
-	// startTime := time.Now()
+	startTime := time.Now()
 	ctx = x.WithMethod(ctx, "n.proposeAndWait")
-	// defer func() {
-	// 	v := x.TagValueStatusOK
-	// 	if perr != nil {
-	// 		v = x.TagValueStatusError
-	// 	}
-	// 	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-	// 	timeMs := x.SinceMs(startTime)
-	// 	ostats.Record(ctx, x.LatencyMs.M(timeMs))
-	// }()
+	defer func() {
+		v := x.TagValueStatusOK
+		if perr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+		timeMs := x.SinceMs(startTime)
+		ostats.Record(ctx, x.LatencyMs.M(timeMs))
+	}()
 
 	if n.Raft() == nil {
 		return errors.Errorf("Raft isn't initialized yet")
