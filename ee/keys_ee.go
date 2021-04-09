@@ -15,23 +15,14 @@ package ee
 import (
 	"fmt"
 	"io/ioutil"
-	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/viper"
 )
 
-type Keys struct {
-	AclKey        x.Sensitive
-	AclAccessTtl  time.Duration
-	AclRefreshTtl time.Duration
-	EncKey        x.Sensitive
-}
-
 // GetKeys returns the ACL and encryption keys as configured by the user
 // through the --acl, --encryption, and --vault flags. On OSS builds,
-// this function exits with an error.
+// this function always returns an error.
 func GetKeys(config *viper.Viper) (*Keys, error) {
 	keys := &Keys{}
 	var err error
