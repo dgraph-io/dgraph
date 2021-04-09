@@ -454,14 +454,24 @@ interface Member {
     fineAccumulated: Int
 }
 
+interface Team {
+    teamID: String! @id (unique:true)
+    teamName:  String! @id
+}
+
 type LibraryMember implements Member {
     interests: [String]
     readHours: String
 }
 
-type SportsMember implements Member {
+type SportsMember implements Member & Team {
     plays: String
     playerRating: Int
+}
+
+type CricketTeam implements Team {
+    numOfBatsmans: Int
+    numOfBowlers: Int
 }
 
 type LibraryManager  {

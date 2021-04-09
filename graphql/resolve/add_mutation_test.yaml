@@ -1526,6 +1526,73 @@
         }
 
 -
+  name: "Add mutation on implementation type which have inherited @id fields with unique argument from multiple interfaces"
+  explanation: "This mutation will generate six existence queries, 2 existence queries for each of the inherited unique @id fields
+  and one for each @id field,none of the existence query return uid,so we successfully add the object in this case"
+  gqlmutation: |
+    mutation addSportsMember($input: AddSportsMemberInput!) {
+      addSportsMember(input: [$input], upsert: false) {
+        sportsMember {
+          refID
+        }
+      }
+    }
+  gqlvariables: |
+    {
+        "input": {
+            "refID": "101",
+            "name": "Alice",
+            "teamID": "T01",
+            "teamName": "GraphQL",
+            "itemsIssued": [
+                "2-Bats",
+                "1-football"
+            ],
+            "plays": "football and cricket"
+        }
+    }
+  dgquery: |-
+    query {
+      SportsMember_1(func: eq(Member.name, "Alice")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_2(func: eq(Member.refID, "101")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_3(func: eq(Member.refID, "101")) @filter(type(Member)) {
+        uid
+      }
+      SportsMember_4(func: eq(Team.teamID, "T01")) @filter(type(SportsMember)) {
+        uid
+      }
+      SportsMember_5(func: eq(Team.teamID, "T01")) @filter(type(Team)) {
+        uid
+      }
+      SportsMember_6(func: eq(Team.teamName, "GraphQL")) @filter(type(SportsMember)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+            "Member.itemsIssued": [
+                "2-Bats",
+                "1-football"
+            ],
+            "Member.name": "Alice",
+            "Member.refID": "101",
+            "SportsMember.plays": "football and cricket",
+            "Team.teamID": "T01",
+            "Team.teamName": "GraphQL",
+            "dgraph.type": [
+                "SportsMember",
+                "Member",
+                "Team"
+            ],
+            "uid": "_:SportsMember_6"
+        }
+
+-
   name: "Add mutation using code on type which also has an ID field"
   gqlmutation: |
     mutation addEditor($input: AddEditorInput!) {

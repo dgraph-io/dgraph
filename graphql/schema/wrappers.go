@@ -250,6 +250,7 @@ type Type interface {
 	ImplementingTypes() []Type
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) (*ast.Definition, bool)
+	TypeNameToAuthRules(typeName string) *TypeAuth
 	AuthRules() *TypeAuth
 	IsGeo() bool
 	IsAggregateResult() bool
@@ -3054,6 +3055,10 @@ func (t *astType) FieldOriginatedFrom(fieldName string) (*ast.Definition, bool) 
 	}
 
 	return nil, false
+}
+
+func (t *astType) TypeNameToAuthRules(typeName string) *TypeAuth {
+	return t.inSchema.authRules[typeName]
 }
 
 // buildGraphqlRequestFields will build graphql request body from ast.
