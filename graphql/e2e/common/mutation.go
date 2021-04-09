@@ -6094,12 +6094,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Library member shouldn't return any error",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-							addLibraryMember(input: $input, upsert: false) {
-								libraryMember {
-									refID
-								}
-							}
-   						}`,
+                         addLibraryMember(input: $input, upsert: false) {
+                          libraryMember {
+                           refID
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"refID":       "101",
@@ -6113,12 +6113,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "update existing library member using upsert shouldn't return any error",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                        addLibraryMember(input: $input, upsert: true) {
+                         addLibraryMember(input: $input, upsert: true) {
                           libraryMember {
-                            refID
+                           refID
                           }
-                        }
-                      }`,
+                         }
+						}`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"refID":       "101",
@@ -6132,12 +6132,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Sports Member shouldn't return any error",
 			queryParams: &GraphQLParams{
 				Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
-                       addSportsMember(input: $input, upsert: false) {
-                         sportsMember {
+                         addSportsMember(input: $input, upsert: false) {
+                          sportsMember {
                            refID
+                          }
                          }
-                       }
-                     }`,
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"refID":       "102",
@@ -6153,12 +6153,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Cricket Team shouldn't return any error",
 			queryParams: &GraphQLParams{
 				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                   addCricketTeam(input: $input, upsert: false) {
-                     cricketTeam {
-                       teamID
-                     }
-                   }
-				 }`,
+                         addCricketTeam(input: $input, upsert: false) {
+                          cricketTeam {
+                           teamID
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"teamID":       "T02",
@@ -6172,12 +6172,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "add new LibraryManager,linking to existing library Member",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                   addLibraryManager(input: $input, upsert: false) {
-                     libraryManager {
-                       name
-                     }
-                   }
-                 }`,
+                         addLibraryManager(input: $input, upsert: false) {
+                          libraryManager {
+                           name
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"name":    "Juliet",
@@ -6206,12 +6206,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Library member returns error as given id already exist in other node of type SportsMember which implements same interface",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                     addLibraryMember(input: $input, upsert: false) {
-                       libraryMember {
-                         refID
-                       }
-                     }
-                   }`,
+                         addLibraryMember(input: $input, upsert: false) {
+                          libraryMember {
+                           refID
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"refID":       "102",
@@ -6226,12 +6226,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist in other node of type SportsMember which implements same interface",
 			queryParams: &GraphQLParams{
 				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                     addCricketTeam(input: $input, upsert: true) {
-                       cricketTeam {
-                         teamID
-                       }
-                     }
-                   }`,
+                         addCricketTeam(input: $input, upsert: true) {
+                          cricketTeam {
+                           teamID
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"teamID":       "T01",
@@ -6246,12 +6246,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Library manager returns error when it try to links to LibraryMember but got id of some other implementing type which implements same interface as LibraryMember",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                    addLibraryManager(input: $input, upsert: false) {
-                      libraryManager {
-                        name
-                      }
-                    }
-                  }`,
+                         addLibraryManager(input: $input, upsert: false) {
+                          libraryManager {
+                           name
+                          }
+                         }
+                        }`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"name":    "John",
