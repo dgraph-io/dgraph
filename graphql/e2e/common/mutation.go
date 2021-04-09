@@ -6094,12 +6094,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Library member shouldn't return any error",
 			queryParams: &GraphQLParams{
 				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                    addLibraryMember(input: $input, upsert: false) {
-                      libraryMember {
-                        refID
-                      }
-                    }
-                  }`,
+							addLibraryMember(input: $input, upsert: false) {
+								libraryMember {
+									refID
+								}
+							}
+   						}`,
 				Variables: map[string]interface{}{"input": []interface{}{
 					map[string]interface{}{
 						"refID":       "101",
