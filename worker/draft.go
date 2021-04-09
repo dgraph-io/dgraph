@@ -1479,7 +1479,8 @@ func (n *node) Run() {
 						continue
 					}
 					startTs := p.Mutations.StartTs
-					// We should register this txn before sending it over for concurrent application.
+					// We should register this txn before sending it over for concurrent
+					// application.
 					if _, has := posting.Oracle().RegisterStartTs(startTs); has {
 						// We have already registered this txn before. That means, this txn would
 						// either have already been run via apply channel, or would be on its way.
