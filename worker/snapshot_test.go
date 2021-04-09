@@ -74,6 +74,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	t.Logf("Mutations done.\n")
 	snapshotTs = waitForSnapshot(t, snapshotTs)
+	t.Logf("Took snapshot at ts: %d\n", snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)
@@ -98,7 +99,9 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
-	_ = waitForSnapshot(t, snapshotTs)
+	t.Logf("Mutations done.\n")
+	snapshotTs = waitForSnapshot(t, snapshotTs)
+	t.Logf("Took snapshot at ts: %d\n", snapshotTs)
 
 	t.Logf("Starting alpha2.\n")
 	err = testutil.DockerRun("alpha2", testutil.Start)

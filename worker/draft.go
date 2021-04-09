@@ -588,6 +588,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
+			n.keysWritten.rejectBeforeIndex = proposal.Index
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Don't derive schema when doing deletion.
@@ -1164,15 +1165,14 @@ func (n *node) updateRaftProgress() error {
 }
 
 func (n *node) checkpointAndClose(done chan struct{}) {
-	slowTicker := time.NewTicker(time.Minute)
-	lastSnapshotTime := time.Now()
-	defer slowTicker.Stop()
-
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
 
 	snapshotFrequency := x.WorkerConfig.Raft.GetDuration("snapshot-after-duration")
+	slowTicker := time.NewTicker(snapshotFrequency)
+	defer slowTicker.Stop()
 
+	lastSnapshotTime := time.Now()
 	for {
 		select {
 		case <-slowTicker.C:
@@ -1254,6 +1254,13 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 func (n *node) drainApplyChan() {
 	numDrained := 0
+	for _, p := range n.pendingProposals {
+		numDrained++
+		n.Proposals.Done(p.Key, nil)
+		n.Applied.Done(p.Index)
+	}
+	n.pendingProposals = n.pendingProposals[:0]
+
 	for {
 		select {
 		case entries := <-n.applyCh:
@@ -1504,6 +1511,14 @@ func (n *node) Run() {
 					p := getProposal(e)
 					if len(p.Mutations.GetEdges()) == 0 {
 						continue
+					}
+					if len(p.Mutations.GetEdges()) == 1 {
+						e := p.Mutations.Edges[0]
+						// This is a drop predicate mutation. We should not try to execute it
+						// concurrently.
+						if e.Entity == 0 && bytes.Equal(e.Value, []byte(x.Star)) {
+							continue
+						}
 					}
 					// We should register this txn before sending it over for concurrent
 					// application.
