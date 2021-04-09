@@ -1,18 +1,24 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertJSON(t *testing.T) {
-	hier := `{
+	config := `{
 	  "mutations": "strict",
 	  "badger": {
 	    "compression": "zstd:1",
 	    "numgoroutines": 5
+	  },
+	  "limit": {
+		"query_edge": 1000000
 	  },
       "raft": {
 	    "idx": 2,
@@ -22,26 +28,26 @@ func TestConvertJSON(t *testing.T) {
 	    "whitelist": "127.0.0.1,0.0.0.0"
 	  }
 	}`
-	conv, err := ioutil.ReadAll(convertJSON(hier))
-	if err != nil {
-		t.Fatal("error reading from convertJSON")
-	}
-	unchanged, err := ioutil.ReadAll(convertJSON(string(conv)))
-	if err != nil {
-		t.Fatal("error reading from convertJSON")
-	}
-	if string(unchanged) != string(conv) {
-		t.Fatal("convertJSON mutating already flattened string")
-	}
-	// need both permutations because convertJSON iterates through Go hashmaps in undefined order
-	if (!strings.Contains(string(conv), "compression=zstd:1; numgoroutines=5;") &&
-		!strings.Contains(string(conv), "numgoroutines=5; compression=zstd:1;")) ||
-		(!strings.Contains(string(conv), "idx=2; learner=true;") &&
-			!strings.Contains(string(conv), "learner=true; idx=2;")) ||
-		!strings.Contains(string(conv), "whitelist=127.0.0.1,0.0.0.0") {
-		fmt.Println(string(conv))
-		t.Fatal("convertJSON not converting properly")
-	}
+
+	var converted map[string]string
+	err := json.NewDecoder(convertJSON(config)).Decode(&converted)
+	require.NoError(t, err)
+
+	require.Equal(t, "strict", converted["mutations"])
+
+	badger := z.NewSuperFlag(converted["badger"])
+	require.Equal(t, "zstd:1", badger.GetString("compression"))
+	require.Equal(t, int64(5), badger.GetInt64("numgoroutines"))
+
+	limit := z.NewSuperFlag(converted["limit"])
+	require.Equal(t, int64(1000000), limit.GetInt64("query-edge"))
+
+	raft := z.NewSuperFlag(converted["raft"])
+	require.Equal(t, int64(2), raft.GetInt64("idx"))
+	require.Equal(t, true, raft.GetBool("learner"))
+
+	security := z.NewSuperFlag(converted["security"])
+	require.Equal(t, "127.0.0.1,0.0.0.0", security.GetString("whitelist"))
 }
 
 func TestConvertYAML(t *testing.T) {
