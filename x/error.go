@@ -119,3 +119,13 @@ func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
 func Fatalf(format string, args ...interface{}) {
 	log.Fatalf("%+v", errors.Errorf(format, args...))
 }
+
+// MultiError returns the first error in a list of errors.
+func MultiError(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
