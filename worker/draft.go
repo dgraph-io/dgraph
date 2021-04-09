@@ -779,6 +779,25 @@ func (n *node) processTabletSizes() {
 	}
 }
 
+func getProposal(e raftpb.Entry) pb.Proposal {
+	var p pb.Proposal
+	key := binary.BigEndian.Uint64(e.Data[:8])
+	x.Check(p.Unmarshal(e.Data[8:]))
+	p.Key = key
+	p.Index = e.Index
+	switch {
+	case p.Mutations != nil:
+		p.StartTs = p.Mutations.StartTs
+	case p.Snapshot != nil:
+		p.StartTs = p.Snapshot.ReadTs
+	case p.Delta != nil:
+		p.StartTs = 0 // Run this asap.
+	default:
+		// For now, not covering everything.
+	}
+	return p
+}
+
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -788,25 +807,6 @@ func (n *node) processApplyCh() {
 		seen time.Time
 	}
 	previous := make(map[uint64]*P)
-
-	getProposal := func(e raftpb.Entry) pb.Proposal {
-		var p pb.Proposal
-		key := binary.BigEndian.Uint64(e.Data[:8])
-		x.Check(p.Unmarshal(e.Data[8:]))
-		p.Key = key
-		p.Index = e.Index
-		switch {
-		case p.Mutations != nil:
-			p.StartTs = p.Mutations.StartTs
-		case p.Snapshot != nil:
-			p.StartTs = p.Snapshot.ReadTs
-		case p.Delta != nil:
-			p.StartTs = 0 // Run this asap.
-		default:
-			// For now, not covering everything.
-		}
-		return p
-	}
 
 	// This function must be run serially.
 	handle := func(prop pb.Proposal) {
@@ -1500,15 +1500,13 @@ func (n *node) Run() {
 				}
 
 				for _, e := range entries {
-					var p pb.Proposal
-					x.Check(p.Unmarshal(e.Data[8:]))
+					p := getProposal(e)
 					if len(p.Mutations.GetEdges()) == 0 {
 						continue
 					}
-					startTs := p.Mutations.StartTs
 					// We should register this txn before sending it over for concurrent
 					// application.
-					if _, has := posting.Oracle().RegisterStartTs(startTs); has {
+					if _, has := posting.Oracle().RegisterStartTs(p.StartTs); has {
 						// We have already registered this txn before. That means, this txn would
 						// either have already been run via apply channel, or would be on its way.
 						// It could even be currently being executed via concurrent mutation
@@ -1520,7 +1518,6 @@ func (n *node) Run() {
 						// could run it concurrently. But, we won't use that to avoid complexity of
 						// figuring out whether we set it up for concurrent execution or serial.
 					} else {
-						p.Key = binary.BigEndian.Uint64(e.Data[:8])
 						n.concApplyCh <- &p
 					}
 				}
@@ -1808,11 +1805,7 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 			if entry.Type != raftpb.EntryNormal || len(entry.Data) == 0 {
 				continue
 			}
-			var proposal pb.Proposal
-			if err := proposal.Unmarshal(entry.Data[8:]); err != nil {
-				span.Annotatef(nil, "Error: %v", err)
-				return nil, err
-			}
+			proposal := getProposal(entry)
 
 			var start uint64
 			if proposal.Mutations != nil {
