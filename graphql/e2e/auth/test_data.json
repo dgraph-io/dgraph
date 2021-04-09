@@ -72,6 +72,12 @@
 		"Region.global": true
 	},
 	{
+		"uid": "_:region6",
+		"dgraph.type": "Region",
+		"Region.name": "Region6",
+		"Region.global": true
+	},
+	{
 		"uid": "_:movie1",
 		"dgraph.type": "Movie",
 		"Movie.content": "Movie1",
@@ -88,13 +94,15 @@
 		"uid": "_:movie3",
 		"dgraph.type": "Movie",
 		"Movie.content": "Movie3",
-		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}],
+		"Movie.code": "m3",
+		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}, {"uid": "_:region6"}],
 		"Movie.disabled": true
 	},
 	{
 		"uid": "_:movie4",
 		"dgraph.type": "Movie",
 		"Movie.content": "Movie4",
+		"Movie.code": "m4",
 		"Movie.regionsAvailable": [{"uid": "_:region5"}],
 		"Movie.reviews" : [{"uid": "_:review1"}]
 	},
