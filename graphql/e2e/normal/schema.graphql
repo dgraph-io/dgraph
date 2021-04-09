@@ -411,7 +411,7 @@ type SportsMember implements Member & Team {
 }
 
 type CricketTeam implements Team {
-        numOfBatsmans: Int
+        numOfBatsmen: Int
         numOfBowlers: Int
 }
 
