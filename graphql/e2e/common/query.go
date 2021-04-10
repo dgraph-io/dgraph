@@ -4063,7 +4063,7 @@ func queryWithIDFieldAndUniqueArg(t *testing.T) {
               }
           }`
 
-	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
+	require.JSONEq(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup
 	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }
