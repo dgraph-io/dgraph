@@ -6101,12 +6101,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		{
 			name: "adding new Library member shouldn't return any error",
 			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                    	      addLibraryMember(input: $input, upsert: false) {
-                    	      	libraryMember {
-                    	      		refID
-                    	      	}
-                    	      }
-                    }`,
+                    addLibraryMember(input: $input, upsert: false) {
+                     libraryMember {
+                      refID
+                     }
+                    }
+                   }`,
 			variables: `{
                           "input": {
                               "refID": "101",
@@ -6215,8 +6215,9 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                              "readHours": "1d2hr"
                          }
                      }`,
-			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation payload because" +
-				" interface Member; field refID: id 102 already exists for one of the implementing type of interface",
+			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation" +
+				" payload because interface Member; field refID: id 102 already exists for one of" +
+				" the implementing type of interface",
 		}, {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
 				" in other node of type SportsMember which implements same interface",
@@ -6235,11 +6236,13 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                              "numOfBowlers": 4
                          }
                      }`,
-			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation payload because" +
-				" interface Team; field teamID: id T01 already exists for one of the implementing type of interface",
+			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation" +
+				" payload because interface Team; field teamID: id T01 already exists for" +
+				" one of the implementing type of interface",
 		}, {
 			name: "adding new Library manager returns error when it try to links to LibraryMember" +
-				" but got id of some other implementing type which implements same interface as LibraryMember",
+				" but got id of some other implementing type which implements " +
+				"same interface as LibraryMember",
 			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
                     	     addLibraryManager(input: $input, upsert: false) {
                     	     	libraryManager {
@@ -6255,8 +6258,9 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                               }
                           }
                        }`,
-			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation payload because" +
-				" interface Member; field refID: id 102 already exists for one of the implementing type of interface",
+			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation" +
+				" payload because interface Member; field refID: id 102 already exists for one" +
+				" of the implementing type of interface",
 		},
 	}
 

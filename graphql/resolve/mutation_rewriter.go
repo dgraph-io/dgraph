@@ -1212,7 +1212,8 @@ func mutationFromFragment(
 
 }
 
-func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type, inherited *ast.Definition) *gql.GraphQuery {
+func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema.Type,
+	inherited *ast.Definition) *gql.GraphQuery {
 	qry := &gql.GraphQuery{
 		Attr: xidVariable,
 		Func: &gql.Function{
@@ -1399,7 +1400,8 @@ func rewriteObject(
 				// have existence query for interface to make sure that this xid is unique across all
 				// implementation types of the interface.
 				// We have following cases
-				// 1. If the queryResult UID exists for any of existence query (type or interface). Add a reference.
+				// 1. If the queryResult UID exists for any of existence query (type or interface),
+				//    then add a reference.
 				// 2. If the queryResult UID does not exist and this is the first time we are seeing
 				//    this. Then, return error.
 				// 3. The queryResult UID does not exist. But, this could be a reference to an XID
@@ -1701,7 +1703,8 @@ func rewriteObject(
 	return frag, upsertVar, retErrors
 }
 
-func xidErrorForInterfaceType(typ schema.Type, xidString string, xidName, interfaceName string) error {
+func xidErrorForInterfaceType(typ schema.Type, xidString string, xidName,
+	interfaceName string) error {
 	if queryAuthSelector(typ) == nil {
 		// This error will only be reported in debug mode.
 		return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
@@ -1826,9 +1829,11 @@ func existenceQueries(
 					// Add one more existence query if given xid field is inherited from interface and has
 					// unique argument set. This is added to ensure that this xid is unique across all the
 					// implementation of the interface.
-					interfaceTypDef, varInterface := interfaceVariable(typ, varGen, xid.Name(), xidString)
+					interfaceTypDef, varInterface := interfaceVariable(typ, varGen,
+						xid.Name(), xidString)
 					if interfaceTypDef != nil {
-						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(), typ, interfaceTypDef)
+						queryInterface := checkXIDExistsQuery(varInterface, xidString, xid.Name(),
+							typ, interfaceTypDef)
 						ret = append(ret, queryInterface)
 					}
 					// Don't return just over here as there maybe more nodes in the children tree.
