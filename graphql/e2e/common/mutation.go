@@ -5554,7 +5554,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field reg_No: id 1 already exists`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
+				" because Type Worker; field reg_No: id 1 already exists",
 		},
 		{
 			name: "adding worker with same emp_Id will return error",
@@ -5567,7 +5568,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                     }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field emp_Id: id E01 already exists`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
+				" because Type Worker; field emp_Id: id E01 already exists",
 		},
 		{
 			name: "adding worker with same reg_No and emp_id will return error",
@@ -5580,7 +5582,8 @@ func multipleXidsTests(t *testing.T) {
 	                  	}
 	                  }
                   }`,
-			error: `couldn't rewrite mutation addWorker because failed to rewrite mutation payload because Type Worker; field emp_Id: id E01 already exists`,
+			error: "couldn't rewrite mutation addWorker because failed to rewrite mutation payload" +
+				" because Type Worker; field emp_Id: id E01 already exists",
 		},
 		{
 			name: "adding worker with different reg_No and emp_id will succeed",
@@ -5883,7 +5886,8 @@ func multipleXidsTests(t *testing.T) {
 	                   	}
 	                   }
                      }`,
-			error: `couldn't rewrite mutation updateEmployer because failed to rewrite mutation payload because field reg_No cannot be empty`,
+			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
+				" payload because field reg_No cannot be empty",
 		},
 	}
 
@@ -5978,7 +5982,8 @@ func upsertMutationTests(t *testing.T) {
 	}
 	gqlResponse = addStateParams.ExecuteAsPost(t, GraphqlURL)
 	require.NotNil(t, gqlResponse.Errors)
-	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation payload because Type State; field xcode: id S1 already exists",
+	require.Equal(t, "couldn't rewrite mutation addState because failed to rewrite mutation"+
+		" payload because Type State; field xcode: id S1 already exists",
 		gqlResponse.Errors[0].Error())
 
 	// Add Mutation with upsert true should succeed. It should link the state to
@@ -6087,187 +6092,192 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 
 	// add data successfully for different implementing types
 	tcases := []struct {
-		name        string
-		queryParams *GraphQLParams
+		name      string
+		query     string
+		expected  string
+		variables string
+		error     string
 	}{
 		{
 			name: "adding new Library member shouldn't return any error",
-			queryParams: &GraphQLParams{
-				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                         addLibraryMember(input: $input, upsert: false) {
-                          libraryMember {
-                           refID
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                    	addLibraryMember(input: $input, upsert: false) {
+                    		libraryMember {
+                    			refID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "101",
+                              "name": "Alice",
+                              "itemsIssued": [
+                                  "Intro to Go",
+                                  "Parallel Programming"
+                              ],
+                              "readHours": "4d2hr"
                           }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"refID":       "101",
-						"name":        "Alice",
-						"itemsIssued": []string{"Intro to Go", "Parallel Programming"},
-						"readHours":   "4d2hr",
-					}},
-				},
-			},
+                       }`,
 		}, {
 			name: "update existing library member using upsert shouldn't return any error",
-			queryParams: &GraphQLParams{
-				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                         addLibraryMember(input: $input, upsert: true) {
-                          libraryMember {
-                           refID
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                    	addLibraryMember(input: $input, upsert: true) {
+                    		libraryMember {
+                    			refID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "101",
+                              "name": "Alice",
+                              "itemsIssued": [
+                                  "Intro to Go",
+                                  "Parallel Programming",
+                                  "Computer Architecture"
+                              ],
+                              "readHours": "5d3hr"
                           }
-                         }
 						}`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"refID":       "101",
-						"name":        "Alice",
-						"itemsIssued": []string{"Intro to Go", "Parallel Programming", "Computer Architecture"},
-						"readHours":   "5d3hr",
-					}},
-				},
-			},
 		}, {
 			name: "adding new Sports Member shouldn't return any error",
-			queryParams: &GraphQLParams{
-				Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
-                         addSportsMember(input: $input, upsert: false) {
-                          sportsMember {
-                           refID
+			query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                    	addSportsMember(input: $input, upsert: false) {
+                    		sportsMember {
+                    			refID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                          "input": {
+                              "refID": "102",
+                              "name": "Bob",
+                              "teamID": "T01",
+                              "teamName": "GraphQL",
+                              "itemsIssued": [
+                                  "2-Bats",
+                                  "1-football"
+                              ],
+                              "plays": "football and cricket"
                           }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"refID":       "102",
-						"name":        "Bob",
-						"teamID":      "T01",
-						"teamName":    "GraphQL",
-						"itemsIssued": []string{"2-Bats", "1-football"},
-						"plays":       "football and cricket",
-					}},
-				},
-			},
+						}`,
 		}, {
 			name: "adding new Cricket Team shouldn't return any error",
-			queryParams: &GraphQLParams{
-				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                         addCricketTeam(input: $input, upsert: false) {
-                          cricketTeam {
-                           teamID
+			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                    	addCricketTeam(input: $input, upsert: false) {
+                    		cricketTeam {
+                    			teamID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                          "input": {
+                              "teamID": "T02",
+                              "teamName": "Dgraph",
+                              "numOfBatsmen": 5,
+                              "numOfBowlers": 3
                           }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"teamID":       "T02",
-						"teamName":     "Dgraph",
-						"numOfBatsmen": 5,
-						"numOfBowlers": 3,
-					}},
-				},
-			},
+						}`,
 		}, {
 			name: "add new LibraryManager,linking to existing library Member",
-			queryParams: &GraphQLParams{
-				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                         addLibraryManager(input: $input, upsert: false) {
-                          libraryManager {
-                           name
-                          }
+			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                    	addLibraryManager(input: $input, upsert: false) {
+                    		libraryManager {
+                    			name
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                           "input": {
+                               "name": "Juliet",
+                               "manages": {
+                                   "refID": "101"
+                               }
+                           }
+                       }`,
+		}, {
+			name: "adding new Library member returns error as given id already exist in other node of type" +
+				" SportsMember which implements same interface",
+			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                    	addLibraryMember(input: $input, upsert: false) {
+                    		libraryMember {
+                    			refID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                         "input": {
+                             "refID": "102",
+                             "name": "James",
+                             "itemsIssued": [
+                                 "Intro to C"
+                             ],
+                             "readHours": "1d2hr"
                          }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"name":    "Juliet",
-						"manages": map[string]interface{}{"refID": "101"},
-					}},
-				},
-			},
+                     }`,
+			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation payload because" +
+				" interface Member; field refID: id 102 already exists for one of the implementing type of interface",
+		}, {
+			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
+				" in other node of type SportsMember which implements same interface",
+			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                    	addCricketTeam(input: $input, upsert: true) {
+                    		cricketTeam {
+                    			teamID
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                         "input": {
+                             "teamID": "T01",
+                             "teamName": "Slash",
+                             "numOfBatsmen": 5,
+                             "numOfBowlers": 4
+                         }
+                     }`,
+			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation payload because" +
+				" interface Team; field teamID: id T01 already exists for one of the implementing type of interface",
+		}, {
+			name: "adding new Library manager returns error when it try to links to LibraryMember" +
+				" but got id of some other implementing type which implements same interface as LibraryMember",
+			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                    	addLibraryManager(input: $input, upsert: false) {
+                    		libraryManager {
+                    			name
+                    		}
+                    	}
+                    }`,
+			variables: `{
+                          "input": {
+                              "name": "John",
+                              "manages": {
+                                  "refID": "102"
+                              }
+                          }
+                       }`,
+			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation payload because" +
+				" interface Member; field refID: id 102 already exists for one of the implementing type of interface",
 		},
 	}
 
-	// above all mutations should run without any error
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			gqlResponse := tcase.queryParams.ExecuteAsPost(t, GraphqlURL)
-			RequireNoGQLErrors(t, gqlResponse)
-		})
-	}
+			var vars map[string]interface{}
+			if tcase.variables != "" {
+				err := json.Unmarshal([]byte(tcase.variables), &vars)
+				require.NoError(t, err)
+			}
+			params := &GraphQLParams{
+				Query:     tcase.query,
+				Variables: vars,
+			}
+			resp := params.ExecuteAsPost(t, GraphqlURL)
+			if tcase.error != "" {
+				require.Equal(t, tcase.error, resp.Errors[0].Error())
+			} else {
+				RequireNoGQLErrors(t, resp)
+			}
 
-	// error cases
-	tErrorCases := []struct {
-		name        string
-		queryParams *GraphQLParams
-		error       string
-	}{
-		{
-			name: "adding new Library member returns error as given id already exist in other node of type SportsMember which implements same interface",
-			queryParams: &GraphQLParams{
-				Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                         addLibraryMember(input: $input, upsert: false) {
-                          libraryMember {
-                           refID
-                          }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"refID":       "102",
-						"name":        "James",
-						"itemsIssued": []string{"Intro to C"},
-						"readHours":   "1d2hr",
-					}},
-				},
-			},
-			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation payload because interface Member; field refID: id 102 already exists for one of the implementing type of interface",
-		}, {
-			name: "adding new Cricket Team with upsert returns returns error as given id already exist in other node of type SportsMember which implements same interface",
-			queryParams: &GraphQLParams{
-				Query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                         addCricketTeam(input: $input, upsert: true) {
-                          cricketTeam {
-                           teamID
-                          }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"teamID":       "T01",
-						"teamName":     "Slash",
-						"numOfBatsmen": 5,
-						"numOfBowlers": 4,
-					}},
-				},
-			},
-			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation payload because interface Team; field teamID: id T01 already exists for one of the implementing type of interface",
-		}, {
-			name: "adding new Library manager returns error when it try to links to LibraryMember but got id of some other implementing type which implements same interface as LibraryMember",
-			queryParams: &GraphQLParams{
-				Query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                         addLibraryManager(input: $input, upsert: false) {
-                          libraryManager {
-                           name
-                          }
-                         }
-                        }`,
-				Variables: map[string]interface{}{"input": []interface{}{
-					map[string]interface{}{
-						"name":    "John",
-						"manages": map[string]interface{}{"refID": "102"},
-					}},
-				},
-			},
-			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation payload because interface Member; field refID: id 102 already exists for one of the implementing type of interface",
-		},
-	}
-
-	// above all cases should return the error
-	for _, tcase := range tErrorCases {
-		t.Run(tcase.name, func(t *testing.T) {
-			gqlResponse := tcase.queryParams.ExecuteAsPost(t, GraphqlURL)
-			require.Equal(t, tcase.error, gqlResponse.Errors[0].Error())
 		})
 	}
 
