@@ -221,7 +221,11 @@ func (o *oracle) MaxAssigned() uint64 {
 	return atomic.LoadUint64(&o.maxAssigned)
 }
 func (o *oracle) SetMaxAssigned(m uint64) {
-	glog.Infof("Setting Max Assigned: %d\n", m)
+	cur := atomic.LoadUint64(&o.maxAssigned)
+	glog.Infof("Current MaxAssigned: %d. SetMaxAssigned: %d.\n", cur, m)
+	if m < cur {
+		return
+	}
 	atomic.StoreUint64(&o.maxAssigned, m)
 }
 
