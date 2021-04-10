@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/golang/glog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -134,17 +133,22 @@ func NewVariableGenerator() *VariableGenerator {
 // Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, flagDotXidName, xidVal string, auth bool) string {
+func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth bool) string {
 	// return previously allocated variable name for repeating xidVal
 	var key string
-	xidName := flagDotXidName
-	// here we are using the assertion that field name or type name can't have "." in them
-	if strings.Contains(flagDotXidName, ".") {
-		xidName = strings.Split(flagDotXidName, ".")[1]
+	flagAndXidName := xidName
+
+	// We pass the xidName as "Int.xidName" to generate variable for existence query
+	// of interface type when id filed is inherited from interface and have unique Argument set
+	// Here we handle that case
+	if strings.Contains(flagAndXidName, ".") {
+		xidName = strings.Split(flagAndXidName, ".")[1]
 	}
+
 	if xidName == "" || xidVal == "" {
 		key = typ.Name()
 	} else {
+		// here we are using the assertion that field name or type name can't have "." in them
 		// We add "." between values while generating key to removes duplicate xidError from below type of cases
 		// mutation {
 		//  addABC(input: [{ ab: "cd", abc: "d" }]) {
@@ -159,7 +163,7 @@ func (v *VariableGenerator) Next(typ schema.Type, flagDotXidName, xidVal string,
 		// It also ensures that xids from different types gets different variable names
 		// here we are using the assertion that field name or type name can't have "." in them
 		typDef, _ := typ.FieldOriginatedFrom(xidName)
-		key = typDef.Name + "." + flagDotXidName + "." + xidVal
+		key = typDef.Name + "." + flagAndXidName + "." + xidVal
 	}
 
 	if varName, ok := v.xidVarNameMap[key]; ok {
@@ -468,7 +472,6 @@ func (arw *AddRewriter) Rewrite(
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		fragment, upsertVar, errs := rewriteObject(ctx, mutatedType, nil, "", varGen, obj, xidMetadata, idExistence, mutationType)
-		glog.Infof("%v", errs)
 		if len(errs) > 0 {
 			var gqlErrors x.GqlErrorList
 			for _, err := range errs {
@@ -1392,8 +1395,8 @@ func rewriteObject(
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 
-				// If this xid field is inherited from interface and have unique argument set, we have
-				// existence query for interface to make sure that this xid is unique across all
+				// If this xid field is inherited from interface and have unique argument set, we also
+				// have existence query for interface to make sure that this xid is unique across all
 				// implementation types of the interface.
 				// We have following cases
 				// 1. If the queryResult UID exists for any of existence query (type or interface). Add a reference.
@@ -1417,15 +1420,17 @@ func rewriteObject(
 					if atTopLevel {
 						if mutationType == AddWithUpsert {
 							if typUidExist {
-								// This means we are in Add Mutation with upsert: true and node belong to type of the
-								// xid field.
+								// This means we are in Add Mutation with upsert: true and node belong to
+								// same type as of the xid field.
 								// In this case, we don't return an error and continue updating this node.
 								// upsertVar is set to variable and srcUID is set to uid(variable) to continue
 								// updating this node.
 								upsertVar = variable
 								srcUID = fmt.Sprintf("uid(%s)", variable)
 							} else {
-								retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+								// if node is some other type as of xid Field then we can't upsert that
+								// and we returns error
+								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
 									interfaceTypDef.Name))
 								return nil, "", retErrors
 							}
@@ -1446,7 +1451,7 @@ func rewriteObject(
 								retErrors = append(retErrors, err)
 								return nil, upsertVar, retErrors
 							}
-							retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+							retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
 								interfaceTypDef.Name))
 							return nil, upsertVar, retErrors
 
@@ -1458,7 +1463,7 @@ func rewriteObject(
 							return asIDReference(ctx, typUid, srcField, srcUID, varGen,
 								mutationType == UpdateWithRemove), upsertVar, nil
 						}
-						retErrors = append(retErrors, xidExistInterfaceTypeError(typ, xidString, xid.Name(),
+						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
 							interfaceTypDef.Name))
 						return nil, upsertVar, retErrors
 					}
@@ -1696,7 +1701,7 @@ func rewriteObject(
 	return frag, upsertVar, retErrors
 }
 
-func xidExistInterfaceTypeError(typ schema.Type, xidString string, xidName, interfaceName string) error {
+func xidErrorForInterfaceType(typ schema.Type, xidString string, xidName, interfaceName string) error {
 	if queryAuthSelector(typ) == nil {
 		// This error will only be reported in debug mode.
 		return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
@@ -2365,8 +2370,8 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 	}
 }
 
-// This function will return interface definition and variable for existence query for interface,
-// if this xid is inherited from interface, otherwise it will return nil and empty string
+// This function will return interface definition and variable for existence query on interface,
+// if given xid is inherited from interface, otherwise it will return nil and empty string
 func interfaceVariable(typ schema.Type, varGen *VariableGenerator, xidName string,
 	xidString string) (*ast.Definition, string) {
 	interfaceTypeDef, isInherited := typ.FieldOriginatedFrom(xidName)

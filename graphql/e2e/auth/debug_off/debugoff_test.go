@@ -124,7 +124,8 @@ func TestAddMutationWithXid(t *testing.T) {
 	tweet.DeleteByID(t, user, metaInfo)
 }
 
-func TestAddMutationWithIDFieldHavingUniqueArg(t *testing.T) {
+func TestAddMutationWithAuthOnIDFieldHavingUniqueArg(t *testing.T) {
+
 	// add Library Member
 	addLibraryMemberParams := &common.GraphQLParams{
 		Query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
@@ -140,10 +141,12 @@ func TestAddMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			}},
 		},
 	}
+
 	gqlResponse := addLibraryMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	// add SportsMember should return error but in debug mode
 	// because interface type have auth rules defined on it
+
 	addSportsMemberParams := &common.GraphQLParams{
 		Query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
                          addSportsMember(input: $input, upsert: false) {
@@ -158,6 +161,7 @@ func TestAddMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			}},
 		},
 	}
+
 	gqlResponse = addSportsMemberParams.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 

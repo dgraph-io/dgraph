@@ -4036,30 +4036,32 @@ func queryWithIDFieldAndUniqueArg(t *testing.T) {
 
 	queryMember := &GraphQLParams{
 		Query: `
-          query {
-    	    getMember(refID: "101") {
-    		 refID
-    		 name
-			 itemsIssued		
-    		 ... on LibraryMember {
-               readHours
-             }
-    	   }
-       }`,
+			query {
+				getMember(refID: "101") {
+					refID
+					name
+					itemsIssued
+					... on LibraryMember {
+						readHours
+					}
+				}
+			}`,
 	}
 
 	gqlResponse = queryMember.ExecuteAsPost(t, GraphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
 	queryPersonExpected := `
-		{
-			"getMember":
-				{
-					"refID":"101",
-					"name":"Alice",
-					"itemsIssued":["Parallel Programming","Intro to Go"],
-					"readHours":"4d2hr"
-				}
-		}`
+		  {
+              "getMember": {
+                  "refID": "101",
+                  "name": "Alice",
+                  "itemsIssued": [
+                      "Parallel Programming",
+                      "Intro to Go"
+                  ],
+                  "readHours": "4d2hr"
+              }
+          }`
 
 	JSONEqGraphQL(t, queryPersonExpected, string(gqlResponse.Data))
 	// Cleanup

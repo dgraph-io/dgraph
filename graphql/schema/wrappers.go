@@ -2340,6 +2340,9 @@ func (fd *fieldDefinition) HasUniqueArg() bool {
 }
 
 func hasUniqueArg(fd *ast.FieldDefinition) bool {
+	if !hasIDDirective(fd) {
+		return false
+	}
 	uniqueArg := fd.Directives.ForName(idDirective).Arguments.ForName(idDirectiveUniqueArg)
 	if uniqueArg == nil {
 		return false
