@@ -106,7 +106,6 @@ type options struct {
 	MemLimit       string
 	ExposePorts    bool
 	Encryption     bool
-	LudicrousMode  bool
 	SnapshotAfter  string
 	ContainerNames bool
 	AlphaVolumes   []string
@@ -308,9 +307,7 @@ func getAlpha(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	if opts.LudicrousMode {
-		svc.Command += ` --ludicrous "enabled=true;"`
-	}
+	svc.Command += " --expose_trace=true"
 
 	if opts.SnapshotAfter != "" {
 		raft = fmt.Sprintf("%s; %s", raft, opts.SnapshotAfter)
@@ -398,11 +395,14 @@ func getJaeger() service {
 			toPort(16686),
 		},
 		Environment: []string{
-			"SPAN_STORAGE_TYPE=badger",
+			"SPAN_STORAGE_TYPE=memory",
+			// "SPAN_STORAGE_TYPE=badger",
+			// Note: Badger doesn't quite work as well in Jaeger. The integration isn't well
+			// written.
 		},
-		Command: "--badger.ephemeral=false" +
-			" --badger.directory-key /working/jaeger" +
-			" --badger.directory-value /working/jaeger",
+		// Command: "--badger.ephemeral=false" +
+		// 	" --badger.directory-key /working/jaeger" +
+		// 	" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
@@ -560,8 +560,8 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
-		"port offset for alpha and, if not 100, zero as well")
+	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 0,
+		"port offset for alpha and zero")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O",
@@ -586,8 +586,6 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
 		"enable encryption-at-rest feature.")
-	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous", false,
-		"enable zeros and alphas in ludicrous mode.")
 	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
 		"create a new Raft snapshot after this many number of Raft entries.")
 	cmd.PersistentFlags().StringVar(&opts.AlphaFlags, "extra_alpha_flags", "",

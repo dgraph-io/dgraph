@@ -597,16 +597,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Mutations are automatically committed in case of ludicrous mode, so we don't
-		// need to manually commit.
-		if resp.Txn == nil {
-			return errors.Wrapf(err, "Txn Context is nil")
-		}
-		resp.Txn.Keys = resp.Txn.Keys[:0]
-		resp.Txn.CommitTs = qc.req.StartTs
-		return err
-	}
 	// calculateMutationMetrics calculate cost for the mutation.
 	calculateMutationMetrics := func() {
 		cost := uint64(len(newUids) + len(edges))
@@ -1244,13 +1234,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.req.StartTs == 0 {
-		if x.WorkerConfig.LudicrousEnabled {
-			req.req.StartTs = posting.Oracle().MaxAssigned()
-		} else {
-			start := time.Now()
-			req.req.StartTs = worker.State.GetTimestamp(false)
-			qc.latency.AssignTimestamp = time.Since(start)
-		}
+		start := time.Now()
+		req.req.StartTs = worker.State.GetTimestamp(false)
+		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
 	var gqlErrs error
@@ -1309,9 +1295,6 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousEnabled {
-		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
 		Latency:  qc.latency,

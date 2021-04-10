@@ -208,14 +208,6 @@ they form a Raft group and provide synchronous replication.
 			" The liveness of a transaction is determined by its last mutation.").
 		String())
 
-	flag.String("ludicrous", worker.LudicrousDefaults, z.NewSuperFlagHelp(worker.LudicrousDefaults).
-		Head("Ludicrous options").
-		Flag("enabled",
-			"Set enabled to true to run Dgraph in Ludicrous mode.").
-		Flag("concurrency",
-			"The number of concurrent threads to use in Ludicrous mode.").
-		String())
-
 	flag.String("graphql", worker.GraphQLDefaults, z.NewSuperFlagHelp(worker.GraphQLDefaults).
 		Head("GraphQL options").
 		Flag("introspection",
@@ -681,8 +673,6 @@ func run() {
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 
-	ludicrous := z.NewSuperFlag(Alpha.Conf.GetString("ludicrous")).MergeAndCheckDefault(
-		worker.LudicrousDefaults)
 	raft := z.NewSuperFlag(Alpha.Conf.GetString("raft")).MergeAndCheckDefault(worker.RaftDefaults)
 	x.WorkerConfig = x.WorkerOptions{
 		TmpDir:              Alpha.Conf.GetString("tmp"),
@@ -694,8 +684,6 @@ func run() {
 		AclEnabled:          aclKey != nil,
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
-		Ludicrous:           ludicrous,
-		LudicrousEnabled:    ludicrous.GetBool("enabled"),
 		Security:            security,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,

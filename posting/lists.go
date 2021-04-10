@@ -99,17 +99,17 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 // memory(for example before populating snapshot) or after calling syncAllMarks
 type LocalCache struct {
 	sync.RWMutex
-
 	startTs uint64
-
+	// Keep track of the keys that we have read. So, we can later check if the keys that we read
+	// were changed by a commit. This is useful to opportunistically run mutations before the server
+	// reaches txn's start timestamp.
+	readKeys map[uint64]struct{}
 	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
 	// during commit.
 	deltas map[string][]byte
-
 	// max committed timestamp of the read posting lists.
 	maxVersions map[string]uint64
-
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
 }
@@ -121,6 +121,7 @@ func NewLocalCache(startTs uint64) *LocalCache {
 		deltas:      make(map[string][]byte),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
+		readKeys:    make(map[uint64]struct{}),
 	}
 }
 
@@ -198,6 +199,12 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 
 // Get retrieves the cached version of the list associated with the given key.
 func (lc *LocalCache) Get(key []byte) (*List, error) {
+	lc.Lock()
+	if lc.readKeys == nil {
+		lc.readKeys = make(map[uint64]struct{})
+	}
+	lc.readKeys[z.MemHash(key)] = struct{}{}
+	lc.Unlock()
 	return lc.getInternal(key, true)
 }
 
@@ -217,8 +224,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
-		data := pl.getMutation(lc.startTs)
-		if len(data) > 0 {
+		if data := pl.getMutation(lc.startTs); len(data) > 0 {
 			lc.deltas[key] = data
 		}
 		lc.maxVersions[key] = pl.maxVersion()

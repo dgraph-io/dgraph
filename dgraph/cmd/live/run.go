@@ -74,7 +74,6 @@ type options struct {
 	verbose         bool
 	httpAddr        string
 	bufferSize      int
-	ludicrousMode   bool
 	upsertPredicate string
 	tmpDir          string
 	key             x.Sensitive
@@ -181,8 +180,6 @@ func init() {
 	Sample flag could look like --creds user=username;password=mypass;namespace=2`)
 
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous", false, "Run live loader in ludicrous mode (Should "+
-		"only be done when alpha is under ludicrous mode)")
 	flag.StringP("upsertPredicate", "U", "", "run in upsertPredicate mode. the value would "+
 		"be used to store blank nodes as an xid")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -714,7 +711,6 @@ func run() error {
 		verbose:         Live.Conf.GetBool("verbose"),
 		httpAddr:        Live.Conf.GetString("http"),
 		bufferSize:      Live.Conf.GetInt("bufferSize"),
-		ludicrousMode:   Live.Conf.GetBool("ludicrous"),
 		upsertPredicate: Live.Conf.GetString("upsertPredicate"),
 		tmpDir:          Live.Conf.GetString("tmp"),
 	}

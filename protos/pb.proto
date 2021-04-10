@@ -277,6 +277,8 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+	// max_assigned stores the ts as seen as of snapshot read_ts.
+	uint64 max_assigned = 6;
 }
 
 message ZeroSnapshot {
@@ -323,6 +325,8 @@ message Proposal {
 	RestoreRequest restore 		= 12;
 	CDCState cdc_state 				= 13;
 	DeleteNsRequest delete_ns = 14; // Used to delete namespace.
+	uint64 key = 15;
+	uint64 start_ts = 16;
 }
 
 message CDCState {
