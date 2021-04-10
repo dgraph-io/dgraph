@@ -837,6 +837,7 @@ func RunAll(t *testing.T) {
 	t.Run("query id directive with int64", idDirectiveWithInt64)
 	t.Run("query filter ID values coercion to List", queryFilterWithIDInputCoercion)
 	t.Run("query multiple language Fields", queryMultipleLangFields)
+	t.Run("query @id field with unique arg on interface", queryWithIDFieldAndUniqueArg)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
