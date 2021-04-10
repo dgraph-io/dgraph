@@ -220,6 +220,10 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 func (o *oracle) MaxAssigned() uint64 {
 	return atomic.LoadUint64(&o.maxAssigned)
 }
+func (o *oracle) SetMaxAssigned(m uint64) {
+	glog.Infof("Setting Max Assigned: %d\n", m)
+	atomic.StoreUint64(&o.maxAssigned, m)
+}
 
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	ch, ok := o.addToWaiters(startTs)

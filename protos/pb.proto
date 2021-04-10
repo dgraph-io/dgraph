@@ -277,6 +277,8 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+	// max_assigned stores the ts as seen as of snapshot read_ts.
+	uint64 max_assigned = 6;
 }
 
 message ZeroSnapshot {
