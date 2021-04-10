@@ -6100,13 +6100,14 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 	}{
 		{
 			name: "adding new Library member shouldn't return any error",
-			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                    addLibraryMember(input: $input, upsert: false) {
-                     libraryMember {
-                      refID
-                     }
-                    }
-                   }`,
+			query: `
+				mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+				 addLibraryMember(input: $input, upsert: false) {
+				  libraryMember {
+				   refID
+				  }
+				 }
+				}`,
 			variables: `{
                           "input": {
                               "refID": "101",
@@ -6120,13 +6121,14 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                        }`,
 		}, {
 			name: "update existing library member using upsert shouldn't return any error",
-			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                    	     addLibraryMember(input: $input, upsert: true) {
-                    	     	libraryMember {
-                    	     		refID
-                    	     	}
-                    	     }
-                    }`,
+			query: `
+                   mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                    addLibraryMember(input: $input, upsert: true) {
+                     libraryMember {
+                      refID
+                     }
+                    }
+                   }`,
 			variables: `{
                           "input": {
                               "refID": "101",
@@ -6141,12 +6143,13 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 						}`,
 		}, {
 			name: "adding new Sports Member shouldn't return any error",
-			query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
-                    	     addSportsMember(input: $input, upsert: false) {
-                    	     	sportsMember {
-                    	     		refID
-                    	     	}
-                    	     }
+			query: `
+                    mutation addSportsMember($input: [AddSportsMemberInput!]!) {
+                     addSportsMember(input: $input, upsert: false) {
+                      sportsMember {
+                       refID
+                      }
+                     }
                     }`,
 			variables: `{
                           "input": {
@@ -6163,13 +6166,14 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 						}`,
 		}, {
 			name: "adding new Cricket Team shouldn't return any error",
-			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                    	     addCricketTeam(input: $input, upsert: false) {
-                    	     	cricketTeam {
-                    	     		teamID
-                    	     	}
-                    	     }
-                    }`,
+			query: `
+                   mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                    addCricketTeam(input: $input, upsert: false) {
+                     cricketTeam {
+                      teamID
+                     }
+                    }
+                   }`,
 			variables: `{
                           "input": {
                               "teamID": "T02",
@@ -6180,12 +6184,13 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 						}`,
 		}, {
 			name: "add new LibraryManager,linking to existing library Member",
-			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                    	     addLibraryManager(input: $input, upsert: false) {
-                    	     	libraryManager {
-                    	     		name
-                    	     	}
-                    	     }
+			query: `
+                    mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                     addLibraryManager(input: $input, upsert: false) {
+                      libraryManager {
+                       name
+                      }
+                     }
                     }`,
 			variables: `{
                            "input": {
@@ -6198,12 +6203,13 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Library member returns error as given id already exist in other node of type" +
 				" SportsMember which implements same interface",
-			query: `mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
-                    	     addLibraryMember(input: $input, upsert: false) {
-                    	     	libraryMember {
-                    	     		refID
-                    	     	}
-                    	     }
+			query: `
+                    mutation addLibraryMember($input: [AddLibraryMemberInput!]!) {
+                     addLibraryMember(input: $input, upsert: false) {
+                      libraryMember {
+                       refID
+                      }
+                     }
                     }`,
 			variables: `{
                          "input": {
@@ -6221,13 +6227,14 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
 				" in other node of type SportsMember which implements same interface",
-			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                    	     addCricketTeam(input: $input, upsert: true) {
-                    	     	cricketTeam {
-                    	     		teamID
-                    	     	}
-                    	     }
-                    }`,
+			query: `
+                   mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
+                    addCricketTeam(input: $input, upsert: true) {
+                     cricketTeam {
+                      teamID
+                     }
+                    }
+                   }`,
 			variables: `{
                          "input": {
                              "teamID": "T01",
@@ -6243,13 +6250,14 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Library manager returns error when it try to links to LibraryMember" +
 				" but got id of some other implementing type which implements " +
 				"same interface as LibraryMember",
-			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                    	     addLibraryManager(input: $input, upsert: false) {
-                    	     	libraryManager {
-                    	     		name
-                    	     	}
-                    	     }
-                    }`,
+			query: `
+                   mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
+                    addLibraryManager(input: $input, upsert: false) {
+                     libraryManager {
+                      name
+                     }
+                    }
+                   }`,
 			variables: `{
                           "input": {
                               "name": "John",
