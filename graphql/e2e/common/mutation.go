@@ -6142,12 +6142,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "adding new Sports Member shouldn't return any error",
 			query: `mutation addSportsMember($input: [AddSportsMemberInput!]!) {
-                     addSportsMember(input: $input, upsert: false) {
-                       sportsMember {
-                         refID
-                       }
-                     }
-                   }`,
+                      addSportsMember(input: $input, upsert: false) {
+                        sportsMember {
+                          refID
+                        }
+                      }
+                    }`,
 			variables: `{
                           "input": {
                               "refID": "102",
@@ -6168,7 +6168,8 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                         cricketTeam {
                           teamID
                         }
-                      }`,
+                      }
+					}`,
 			variables: `{
                           "input": {
                               "teamID": "T02",
@@ -6180,11 +6181,11 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 		}, {
 			name: "add new LibraryManager,linking to existing library Member",
 			query: `mutation addLibraryManager($input: [AddLibraryManagerInput!]!) {
-                     addLibraryManager(input: $input, upsert: false) {
-                       libraryManager {
-                         name
-                       }
-                     }
+                      addLibraryManager(input: $input, upsert: false) {
+                        libraryManager {
+                          name
+                        }
+                      }
                    }`,
 			variables: `{
                            "input": {
@@ -6221,12 +6222,12 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
 				" in other node of type SportsMember which implements same interface",
 			query: `mutation addCricketTeam($input: [AddCricketTeamInput!]!) {
-                     addCricketTeam(input: $input, upsert: true) {
-                       cricketTeam {
-                         teamID
-                       }
-                     }
-                   }`,
+                      addCricketTeam(input: $input, upsert: true) {
+                        cricketTeam {
+                          teamID
+                        }
+                      }
+                    }`,
 			variables: `{
                          "input": {
                              "teamID": "T01",
