@@ -262,10 +262,10 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			if !ok {
 				return nil
 			}
-			if err := rebuild.DropIndexes(ctx); err != nil {
+			if err := rebuild.DropIndexes(closer.Ctx()); err != nil {
 				return err
 			}
-			return rebuild.BuildData(ctx)
+			return rebuild.BuildData(closer.Ctx())
 		}
 		if err := setup(); err != nil {
 			glog.Errorf("error in building indexes, aborting :: %v\n", err)

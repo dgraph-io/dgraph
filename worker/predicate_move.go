@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
@@ -41,6 +42,7 @@ var (
 	errEmptyPredicate = errors.Errorf("Predicate not specified")
 	errNotLeader      = errors.Errorf("Server is not leader of this group")
 	emptyPayload      = api.Payload{}
+	moveCh            = make(chan *z.Closer, 1)
 )
 
 // size of kvs won't be too big, we would take care before proposing.
@@ -144,6 +146,12 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 	glog.Infof("Got ReceivePredicate. Group: %d. Am leader: %v",
 		groups().groupId(), groups().Node.AmLeader())
 
+	closer, err := groups().Node.startTask(opPredMove)
+	if err != nil {
+		return err
+	}
+	defer closer.Done()
+
 	go func() {
 		// Takes care of throttling and batching.
 		che <- batchAndProposeKeyValues(ctx, kvs)
@@ -177,13 +185,15 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			<-che
 			glog.Infof("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
+		case <-closer.Ctx().Done():
+			return closer.Ctx().Err()
 		case err := <-che:
 			glog.Infof("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
-	err := <-che
+	err = <-che
 	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
@@ -241,15 +251,44 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	return &emptyPayload, err
 }
 
+func processMoveCh() {
+	ticker := time.NewTicker(1 * time.Minute)
+	for range ticker.C {
+		select {
+		case c := <-moveCh:
+			c.Done()
+		default:
+		}
+	}
+}
+
 func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
 	// Note: Manish thinks it *should* be OK for a predicate receiver to not have to stop other
 	// operations like snapshots and rollups. Note that this is the sender. This should stop other
 	// operations.
-	closer, err := groups().Node.startTask(opPredMove)
-	if err != nil {
-		return errors.Wrapf(err, "unable to start task opPredMove")
+	// TODO: We need to also block the rollups and snapshots on other node as we need to start
+	// opPredMove there.
+
+	var err error
+	var closer *z.Closer
+	select {
+	case closer = <-moveCh:
+	default:
+		closer, err = groups().Node.startTask(opPredMove)
+		if err != nil {
+			return errors.Wrapf(err, "unable to start task opPredMove")
+		}
 	}
-	defer closer.Done()
+	defer func() {
+		select {
+		case <-ctx.Done():
+		case <-closer.Ctx().Done():
+		default:
+			moveCh <- closer
+			return
+		}
+		closer.Done()
+	}()
 
 	span := otrace.FromContext(ctx)
 
@@ -323,6 +362,12 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	stream.Send = func(buf *z.Buffer) error {
 		kvs := &pb.KVS{
 			Data: buf.Bytes(),
+		}
+
+		select {
+		case <-closer.Ctx().Done():
+			return closer.Ctx().Err()
+		default:
 		}
 		return out.Send(kvs)
 	}

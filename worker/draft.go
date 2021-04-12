@@ -148,6 +148,8 @@ func (id op) String() string {
 		return "opBackup"
 	case opPredMove:
 		return "opPredMove"
+	case opDrop:
+		return "opDrop"
 	default:
 		return "opUnknown"
 	}
@@ -157,15 +159,17 @@ const (
 	opRollup op = iota + 1
 	opSnapshot
 	opIndexing
-	opRestore
-	opBackup
 	opPredMove
+	opBackup
+	opRestore
+	opDrop
 )
 
 // startTask is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
 // If the same task is already running, this method returns an errror.
-// Restore operations have preference and cancel all other operations, not just rollups.
+// Drop operations have preference and cancels all the other operations.
+// Restore operations cancels all other operations except drop.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*z.Closer, error) {
@@ -194,23 +198,13 @@ func (n *node) startTask(id op) (*z.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
-	case opRestore:
-		// Restores cancel all other operations, except for other restores since
+	case opDrop, opRestore, opBackup:
+		// Drop operation cancels all other operations, except for other drop operations.
+		// Restores cancel all other operations, except for other restores and drops since
 		// only one restore operation should be active any given moment.
 		for otherId, otherCloser := range n.ops {
-			if otherId == opRestore {
-				return nil, errors.Errorf("another restore operation is already running")
-			}
-			// Remove from map and signal the closer to cancel the operation.
-			delete(n.ops, otherId)
-			otherCloser.SignalAndWait()
-		}
-	case opBackup:
-		// Backup cancels all other operations, except for other backups since
-		// only one restore operation should be active any given moment.
-		for otherId, otherCloser := range n.ops {
-			if otherId == opBackup {
-				return nil, errors.Errorf("another backup operation is already running")
+			if otherId >= id {
+				return nil, errors.Errorf("operation %s is already running", otherId)
 			}
 			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
@@ -483,6 +477,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		closer, err := n.startTask(opDrop)
+		if err != nil {
+		}
+		defer closer.Done()
+
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
 		posting.Oracle().ResetTxns()
@@ -496,6 +495,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
+		closer, err := n.startTask(opDrop)
+		if err != nil {
+		}
+		defer closer.Done()
+
 		// Ensures nothing get written to disk due to commit proposals.
 		n.keysWritten.rejectBeforeIndex = proposal.Index
 		posting.Oracle().ResetTxns()
@@ -744,9 +748,19 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		x.UpdateDrainingMode(true)
 		defer x.UpdateDrainingMode(false)
 
-		var err error
-		var closer *z.Closer
-		closer, err = n.startTask(opRestore)
+		// Drop all the current data. This also cancels all existing transactions.
+		dropProposal := pb.Proposal{
+			Mutations: &pb.Mutations{
+				GroupId: proposal.Restore.GroupId,
+				StartTs: proposal.Restore.RestoreTs,
+				DropOp:  pb.Mutations_ALL,
+			},
+		}
+		if err := groups().Node.applyMutations(ctx, &dropProposal); err != nil {
+			return err
+		}
+
+		closer, err := n.startTask(opRestore)
 		if err != nil {
 			return errors.Wrapf(err, "cannot start restore task")
 		}
