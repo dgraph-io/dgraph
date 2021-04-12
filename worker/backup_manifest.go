@@ -91,7 +91,7 @@ func getManifestsToRestore(
 	h x.UriHandler, uri *url.URL, req *pb.RestoreRequest) ([]*Manifest, error) {
 
 	if !h.DirExists("") {
-		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exists",
+		return nil, errors.Errorf("getManifestsToRestore: The uri path: %q doesn't exist",
 			uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)
@@ -212,7 +212,7 @@ func readManifest(h x.UriHandler, path string) (*Manifest, error) {
 func GetLatestManifest(h x.UriHandler, uri *url.URL) (*Manifest, error) {
 	manifest, err := GetManifest(h, uri)
 	if err != nil {
-		return &Manifest{}, errors.Wrap(err, "Fialed to get the manifest")
+		return &Manifest{}, errors.Wrap(err, "Failed to get manifest")
 	}
 	if len(manifest.Manifests) == 0 {
 		return &Manifest{}, nil
@@ -234,7 +234,7 @@ func readMasterManifest(h x.UriHandler, path string) (*MasterManifest, error) {
 
 func GetManifest(h x.UriHandler, uri *url.URL) (*MasterManifest, error) {
 	if !h.DirExists("") {
-		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exists",
+		return &MasterManifest{}, errors.Errorf("getManifest: The uri path: %q doesn't exist",
 			uri.Path)
 	}
 	manifest, err := getConsolidatedManifest(h, uri)

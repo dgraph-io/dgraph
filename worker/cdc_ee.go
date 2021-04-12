@@ -45,9 +45,6 @@ const (
 // With Badger Subscribe, if we lose the connection, we would have no way to send over the "missed"
 // events. Even if we scan over Badger, we'd still not get those events in the right order, i.e.
 // order of their commit timestamp. So, this approach would be tricky to get right.
-//
-// Now, with ludicrous mode, Raft WAL does not help as well. It does NOT contain the commit
-// timestamps. So, for now we're going to not support it.
 type CDC struct {
 	sync.Mutex
 	sink             Sink
@@ -66,9 +63,6 @@ type CDC struct {
 func newCDC() *CDC {
 	if Config.ChangeDataConf == "" || Config.ChangeDataConf == CDCDefaults {
 		return nil
-	}
-	if x.WorkerConfig.LudicrousEnabled {
-		x.Fatalf("cdc is not supported in ludicrous mode")
 	}
 
 	cdcFlag := z.NewSuperFlag(Config.ChangeDataConf).MergeAndCheckDefault(CDCDefaults)
@@ -233,10 +227,6 @@ func (cdc *CDC) processCDCEvents() {
 			if len(events) == 0 {
 				return
 			}
-			// In ludicrous, we execute the mutations as soon as we get the proposal.
-			// TODO: We should get a confirmation from ludicrous scheduler about this.
-			// It should tell you what the commit ts used was.
-			// TODO: For now, do NOT support ludicrous mode.
 			edges := proposal.Mutations.Edges
 			switch {
 			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation

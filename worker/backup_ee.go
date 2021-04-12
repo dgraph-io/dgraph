@@ -300,7 +300,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	bp := &BackupProcessor{
 		DB:      db,
 		Request: req,
-		threads: make([]*threadLocal, x.WorkerConfig.Badger.GetUint64("goroutines")),
+		threads: make([]*threadLocal, x.WorkerConfig.Badger.NumGoroutines),
 	}
 	if req.SinceTs > 0 && db != nil {
 		bp.txn = db.NewTransactionAt(req.ReadTs, false)

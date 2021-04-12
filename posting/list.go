@@ -452,11 +452,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 			hex.EncodeToString(l.key), mpost)
 	}
 
-	if x.WorkerConfig.LudicrousEnabled {
-		// Conflict detection is not required for ludicrous mode.
-		return nil
-	}
-
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.

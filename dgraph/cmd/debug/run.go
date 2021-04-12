@@ -39,7 +39,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -68,6 +67,7 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
+	namespace     uint64
 	key           x.Sensitive
 
 	// Options related to the WAL.
@@ -94,8 +94,9 @@ func init() {
 		"Ignore key_. Only consider amount when calculating total.")
 	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
-	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
+	flag.BoolVarP(&opt.readOnly, "readonly", "o", false, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
+	flag.Uint64VarP(&opt.namespace, "ns", "", 0, "Which namespace to use.")
 	flag.StringVarP(&opt.prefix, "prefix", "", "", "Uses a hex prefix.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.StringVar(&opt.rollupKey, "rollup", "", "Hex of key to rollup.")
@@ -109,7 +110,7 @@ func init() {
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
-	enc.RegisterFlags(flag)
+	ee.RegisterEncFlag(flag)
 }
 
 func toInt(o *pb.Posting) int {
@@ -312,7 +313,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 	}
 	for uid, acc := range keys {
-		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
+		fmt.Fprintf(&buf, "Uid: %#x Key: %d Amount: %d\n", uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }
@@ -425,7 +426,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 					break
 				}
 				for _, uid := range uids[:num] {
-					fmt.Fprintf(&buf, " Uid = %d\n", uid)
+					fmt.Fprintf(&buf, " Uid = %#x\n", uid)
 				}
 			}
 		}
@@ -435,7 +436,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 }
 
 func appendPosting(w io.Writer, o *pb.Posting) {
-	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
+	fmt.Fprintf(w, " Uid: %#x Op: %d ", o.Uid, o.Op)
 
 	if len(o.Value) > 0 {
 		fmt.Fprintf(w, " Type: %v. ", o.ValType)
@@ -546,7 +547,8 @@ func lookup(db *badger.DB) {
 func printKeys(db *badger.DB) {
 	var prefix []byte
 	if len(opt.predicate) > 0 {
-		prefix = x.PredicatePrefix(opt.predicate)
+		pred := x.NamespaceAttr(opt.namespace, opt.predicate)
+		prefix = x.PredicatePrefix(pred)
 	} else if len(opt.prefix) > 0 {
 		p, err := hex.DecodeString(opt.prefix)
 		x.Check(err)
@@ -584,11 +586,14 @@ func printKeys(db *badger.DB) {
 		if len(pk.Term) > 0 {
 			fmt.Fprintf(&buf, " term: [%d] %s ", pk.Term[0], pk.Term[1:])
 		}
+		if pk.Count > 0 {
+			fmt.Fprintf(&buf, " count: %d ", pk.Count)
+		}
 		if pk.Uid > 0 {
-			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
+			fmt.Fprintf(&buf, " uid: %#x ", pk.Uid)
 		}
 		if pk.StartUid > 0 {
-			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
+			fmt.Fprintf(&buf, " startUid: %#x ", pk.StartUid)
 		}
 
 		if opt.itemMeta {

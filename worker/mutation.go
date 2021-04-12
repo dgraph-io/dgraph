@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3/y"
+	"google.golang.org/grpc/metadata"
 
 	ostats "go.opencensus.io/stats"
 
@@ -33,8 +34,8 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -540,6 +541,10 @@ func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 // AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -690,6 +695,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	if err != nil {
 		return tctx, err
 	}
+	span.Annotate(nil, "mutation map populated")
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
@@ -861,15 +867,9 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 		}
 	}
 
-	// We should wait to ensure that we have seen all the updates until the StartTs of this mutation
-	// transaction. Otherwise, when we read the posting list value for calculating the indices, we
-	// might be wrong because we might be missing out a commit which has updated the value. This
-	// wait here ensures that the proposal would only be registered after seeing txn status of all
-	// pending transactions. Thus, the ordering would be correct.
-	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
-		return err
-	}
-
+	// We used to WaitForTs(ctx, m.StartTs) here. But, with concurrent mutation execution, we can do
+	// the re-arranging of mutations post Raft proposals to ensure that they get run after server's
+	// MaxAssignedTs >= m.StartTs.
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)

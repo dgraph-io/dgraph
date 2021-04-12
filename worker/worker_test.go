@@ -29,8 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgo/v210"
+	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -53,7 +53,7 @@ func commitTs(startTs uint64) uint64 {
 
 func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
-	txn := posting.Oracle().RegisterStartTs(startTs)
+	txn, _ := posting.Oracle().RegisterStartTs(startTs)
 	l = txn.Store(l)
 	err := l.AddMutationWithIndex(context.Background(), edge, txn)
 	require.NoError(t, err)
