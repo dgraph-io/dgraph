@@ -315,7 +315,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		}
 	}
 
-	itrs := make([]*badger.Iterator, x.WorkerConfig.Badger.GetUint64("goroutines"))
+	itrs := make([]*badger.Iterator, x.WorkerConfig.Badger.NumGoroutines)
 	if in.SinceTs > 0 {
 		iopt := badger.DefaultIteratorOptions
 		iopt.AllVersions = true
