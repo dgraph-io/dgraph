@@ -57,9 +57,7 @@ func init() {
 }
 func run() {
 	keys, err := ee.GetKeys(Decrypt.Conf)
-	if err != nil {
-		glog.Fatal(err)
-	}
+	x.Check(err)
 	if len(keys.EncKey) == 0 {
 		glog.Fatal("Error while reading encryption key: Key is empty")
 	}

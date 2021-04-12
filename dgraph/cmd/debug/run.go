@@ -36,7 +36,6 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/ee"
@@ -899,9 +898,7 @@ func run() {
 		isWal = true
 	}
 	keys, err := ee.GetKeys(Debug.Conf)
-	if err != nil {
-		glog.Fatal(err)
-	}
+	x.Check(err)
 	opt.key = keys.EncKey
 
 	if isWal {

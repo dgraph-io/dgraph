@@ -646,9 +646,8 @@ func run() {
 	}
 
 	keys, err := ee.GetKeys(Alpha.Conf)
-	if err != nil {
-		glog.Fatal(err)
-	}
+	x.Check(err)
+
 	if keys.AclKey != nil {
 		opts.HmacSecret = keys.AclKey
 		opts.AccessJwtTtl = keys.AclAccessTtl

@@ -143,9 +143,7 @@ func run() {
 	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
 		FromSuperFlag(Bulk.Conf.GetString("badger"))
 	keys, err := ee.GetKeys(Bulk.Conf)
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
