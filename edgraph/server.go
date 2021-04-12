@@ -285,7 +285,15 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		return nil, err
 	}
 
+	preds := make(map[string]struct{})
+
 	for _, update := range result.Preds {
+		if _, ok := preds[update.Predicate]; ok {
+			return nil, errors.Errorf("predicate %s defined multiple times",
+				x.ParseAttr(update.Predicate))
+		}
+		preds[update.Predicate] = struct{}{}
+
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefPredChanged(update) {
@@ -308,7 +316,14 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (*sch
 		}
 	}
 
+	types := make(map[string]struct{})
+
 	for _, typ := range result.Types {
+		if _, ok := types[typ.TypeName]; ok {
+			return nil, errors.Errorf("type %s defined multiple times", x.ParseAttr(typ.TypeName))
+		}
+		types[typ.TypeName] = struct{}{}
+
 		// Pre-defined types cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefTypeChanged(typ) {

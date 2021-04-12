@@ -34,28 +34,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// isValidSchemaChange check if the mutation has valid schema changes. In case the mutation
-// has multiple entries for the same predicate we error out.
-func isValidSchemaChange(m *pb.Mutations) error {
-	if m.Schema == nil || len(m.Schema) == 0 {
-		return nil
-	}
-	preds := make(map[string]struct{})
-	for _, s := range m.Schema {
-		if _, ok := preds[s.Predicate]; ok {
-			return errors.Errorf("Multiple entries for same predicate are not allowed")
-		}
-		preds[s.Predicate] = struct{}{}
-	}
-	return nil
-}
-
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	if err := isValidSchemaChange(m); err != nil {
-		return nil, err
-	}
 	// In expandEdges, for non * type prredicates, we prepend the namespace directly and for
 	// * type predicates, we fetch the predicates and prepend the namespace.
 	edges, err := expandEdges(ctx, m)
