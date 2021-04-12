@@ -54,7 +54,7 @@ Phase II:
 • Zero would propose that G1 is read-only for predicate P. This would propagate to the cluster.
 • Zero would tell G1 to move rest of the P's data (with T1<=ts<=T2) to G2 (Endpoint: Zero → G1)
 • G2 acceps the data, but this time does not clean the current keys for P.
-• G1 should tell Zero whetjer it succeeded or failed. (Endpoint G1 → Zero)
+• G1 should tell Zero whether it succeeded or failed. (Endpoint G1 → Zero)
 • Zero would then propose that G2 is serving P (or G1 is, if fail above) P would RW.
 • G1 gets this, G2 gets this.
 • Both propagate this to their followers.
@@ -180,7 +180,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		SinceTs:   0,
 	}
 
-	// Move the predicate. Commits on this predicate is not blocked yet. Any data after TxnTs
+	// Move the predicate. Commits on this predicate are not blocked yet. Any data after ReadTs
 	// will be moved in the phase II below.
 	span.Annotatef(nil, "Starting move [1]: %+v", in)
 	glog.Infof("Starting move [1]: %+v", in)
