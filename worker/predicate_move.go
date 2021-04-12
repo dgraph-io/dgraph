@@ -315,6 +315,16 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		}
 	}
 
+	itrs := make([]*badger.Iterator, x.WorkerConfig.Badger.GetUint64("goroutines"))
+	if in.SinceTs > 0 {
+		iopt := badger.DefaultIteratorOptions
+		iopt.AllVersions = true
+		for i := range itrs {
+			itrs[i] = txn.NewIterator(iopt)
+			defer itrs[i].Close()
+		}
+	}
+
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
 	stream := pstore.NewStreamAt(in.ReadTs)
@@ -322,10 +332,18 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
 	stream.SinceTs = in.SinceTs
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		bitr := itr
+		// Use the threadlocal iterator because "itr" has the sinceTs set and
+		// it will not be able to read all the data.
+		if itrs[itr.ThreadId] != nil {
+			bitr = itrs[itr.ThreadId]
+			bitr.Seek(key)
+		}
+
 		// For now, just send out full posting lists, because we use delete markers to delete older
 		// data in the prefix range. So, by sending only one version per key, and writing it at a
 		// provided timestamp, we can ensure that these writes are above all the delete markers.
-		l, err := posting.ReadPostingList(key, itr)
+		l, err := posting.ReadPostingList(key, bitr)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +373,6 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	if err != nil {
 		return err
 	}
-
 	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
 	span.Annotate(nil, msg)
 	glog.Infof(msg)
