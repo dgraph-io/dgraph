@@ -51,12 +51,6 @@ variable "dgraph_version" {
   default     = "1.1.0"
 }
 
-variable "dgraph_ui_port" {
-  type        = string
-  description = "Port number of ratel interface"
-  default     = "8000"
-}
-
 variable "assign_public_ip" {
   type        = string
   default     = "true"
