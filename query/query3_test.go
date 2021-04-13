@@ -3216,3 +3216,17 @@ func TestMultiRegexInFilter2(t *testing.T) {
 		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)
 	}
 }
+
+func TestRegexFuncWithAfter(t *testing.T) {
+	query := `
+		{
+			q(func: regexp(name, /^Ali/i), after: 0x2710) {
+				uid
+				name
+			}
+		}
+	`
+
+	res := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": [{"name": "Alice", "uid": "0x2712"}, {"name": "Alice", "uid": "0x2714"}]}}`, res)
+}
