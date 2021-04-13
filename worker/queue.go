@@ -18,131 +18,139 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	tasks         = newTaskQueue()
-	taskKeyPrefix = []byte("!dgraphTask!")
+type taskStatus []byte
 
+var (
 	taskStatusQueued   = taskStatus("Queued")
 	taskStatusRunning  = taskStatus("Running")
 	taskStatusCanceled = taskStatus("Canceled")
 	taskStatusError    = taskStatus("Error")
 	taskStatusSuccess  = taskStatus("Success")
+
+	pendingTasks  = newTaskQueue()
+	taskKeyPrefix = []byte("!dgraphTask!")
 )
 
-func init() {
-	if err := tasks.cleanup(); err != nil {
-		glog.Error(err)
+func InitTaskQueue() {
+	if err := cancelQueuedTasks(); err != nil {
+		glog.Errorf("tasks: failed to cancel unfinished tasks: %v", err)
 	}
-	go tasks.run()
+	go pendingTasks.run()
 }
 
-type taskStatus []byte
+// cancelQueuedTasks marks all queued tasks in Badger as canceled.
+func cancelQueuedTasks() error {
+	txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
 
-type taskQueue struct {
-	tasks chan task
-	db    *badger.DB
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = taskKeyPrefix
+
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+
+		isQueued := false
+		if err := item.Value(func(status []byte) error {
+			isQueued = bytes.Equal(status, taskStatusQueued)
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		if isQueued {
+			entry := newTaskEntry(key, taskStatusCanceled)
+			if err := txn.SetEntry(entry); err != nil {
+				return err
+			}
+		}
+	}
+
+	return txn.CommitAt(math.MaxUint64, nil)
 }
+
+type taskQueue chan task
 
 func newTaskQueue() taskQueue {
 	const maxQueueSize = 16
-	return taskQueue{
-		tasks: make(chan task, maxQueueSize),
-		db:    nil, // TODO(ajeet): get badger handle from somewhere
-	}
+	return make(chan task, maxQueueSize)
 }
 
-// run loops forever, running queued tasks one at a time.
-// Any returned errors are logged.
+// run loops forever, running queued tasks one at a time. Any returned errors are logged.
 func (q taskQueue) run() {
 	for {
-		task := <-q.tasks
+		// Fetch a task from the queue. If the server is shutting down, break out of the loop.
+		var task task
+		select {
+		case <-x.ServerCloser.HasBeenClosed():
+			break
+		case task = <-q:
+		}
 		key := task.id.getKey()
 
-		if err := q.db.View(func(txn *badger.Txn) error {
-			// Fetch task from Badger. If the task isn't found, this means it has
-			// expired (older than taskTTL).
+		if err := func() error {
+			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
+			defer txn.Discard()
+
+			// Fetch task from Badger. If the task isn't found, this means it has expired (older
+			// than taskTTL).
 			item, err := txn.Get(key)
 			if err != nil {
 				if err == badger.ErrKeyNotFound {
-					return fmt.Errorf(
-						"skipping task #%d: task is expired", task.id)
+					return fmt.Errorf("task is expired, skipping")
 				}
 				return err
 			}
 
-			// Only proceed if the task is still queued. It's possible that the
-			// user has cancelled it elsewhere, before we were able to run it.
+			// Only proceed if the task is still queued. It's possible that the task got canceled
+			// before we were able to run it.
 			if err := item.Value(func(status []byte) error {
 				if !bytes.Equal(status, taskStatusQueued) {
-					return fmt.Errorf(
-						"skipping task #%d: status is set to %s", task.id, status)
+					return fmt.Errorf("status is set to %s, skipping", status)
 				}
 				return nil
 			}); err != nil {
 				return err
 			}
 
-			// Mark the task as started.
+			// Change the task status to "running".
 			entry := newTaskEntry(key, taskStatusRunning)
-			return txn.SetEntry(entry)
+			if err := txn.SetEntry(entry); err != nil {
+				return err
+			}
+			return txn.CommitAt(math.MaxUint64, nil)
 
-		}); err != nil {
-			glog.Error(err)
+		}(); err != nil {
+			glog.Errorf("task %d: error: %v", task.id, err)
 			continue
 		}
 
+		// Run the task.
 		var status taskStatus
 		if err := task.run(); err != nil {
-			glog.Errorf("task #%d: error: %v", task.id, err)
+			glog.Errorf("task %d: error: %v", task.id, err)
 			status = taskStatusError
 		} else {
-			glog.Infof("task #%d: complete", task.id)
+			glog.Infof("task %d: complete", task.id)
 			status = taskStatusSuccess
 		}
 
+		// Change the task status to "complete" / "error".
 		entry := newTaskEntry(key, status)
-		if err := q.db.View(func(txn *badger.Txn) error {
-			return txn.SetEntry(entry)
-		}); err != nil {
-			glog.Errorf("task #%d: could not save status: %v", task.id, err)
-		}
-	}
-}
-
-// cleanup marks all queued tasks as cancelled. This should be run once when
-// Dgraph starts up.
-func (q taskQueue) cleanup() error {
-	err := q.db.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Prefix = taskKeyPrefix
-
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			key := item.Key()
-
-			isQueued := false
-			if err := item.Value(func(status []byte) error {
-				isQueued = bytes.Equal(status, taskStatusQueued)
-				return nil
-			}); err != nil {
+		if err := func() error {
+			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
+			defer txn.Discard()
+			if err := txn.SetEntry(entry); err != nil {
 				return err
 			}
-
-			if isQueued {
-				entry := newTaskEntry(key, taskStatusCanceled)
-				if err := txn.SetEntry(entry); err != nil {
-					return err
-				}
-			}
+			return txn.CommitAt(math.MaxUint64, nil)
+		}(); err != nil {
+			glog.Errorf("task %d: error: could not save status: %v", task.id, err)
 		}
-
-		return nil
-	})
-
-	return errors.Wrapf(err, "tasks: cleanup failed")
+	}
 }
 
 func (q taskQueue) queueBackup(req *pb.BackupRequest) (taskId, error) {
@@ -157,13 +165,18 @@ func (q taskQueue) queueExport(req *pb.ExportRequest) (taskId, error) {
 func (q taskQueue) _queueTask(req interface{}) (taskId, error) {
 	task := task{newTaskId(), req}
 	select {
-	case q.tasks <- task:
+	case q <- task:
 		key := task.id.getKey()
 		entry := newTaskEntry(key, taskStatusQueued)
-		if err := q.db.View(func(txn *badger.Txn) error {
-			return txn.SetEntry(entry)
-		}); err != nil {
-			return 0, fmt.Errorf("could not save task")
+		if err := func() error {
+			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
+			defer txn.Discard()
+			if err := txn.SetEntry(entry); err != nil {
+				return err
+			}
+			return txn.CommitAt(math.MaxUint64, nil)
+		}(); err != nil {
+			return 0, errors.Wrapf(err, "could not save task status")
 		}
 		return task.id, nil
 	default:
@@ -189,7 +202,7 @@ func (t task) run() error {
 		if err != nil {
 			return err
 		}
-		glog.Infof("task #%d: exported files: %v", t.id, files)
+		glog.Infof("task %d: exported files: %v", t.id, files)
 	default:
 		err := fmt.Errorf(
 			"a request of unknown type (%T) was queued", reflect.TypeOf(t.req))
@@ -231,6 +244,6 @@ func (id taskId) getKey() []byte {
 }
 
 func newTaskEntry(key []byte, status taskStatus) *badger.Entry {
-	const ttl = 24 * 7 * time.Hour // 1 week
+	const ttl = 7 * 24 * time.Hour // 1 week
 	return badger.NewEntry(key, status).WithDiscard().WithTTL(ttl)
 }
