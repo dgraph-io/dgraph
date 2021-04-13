@@ -362,12 +362,6 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
-	// Propose a snapshot immediately after all the work is done to prevent the restore
-	// from being replayed.
-	if err := groups().Node.proposeSnapshot(); err != nil {
-		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
-	}
-
 	// Update the membership state to re-compute the group checksums.
 	if err := UpdateMembershipState(ctx); err != nil {
 		return errors.Wrapf(err, "cannot update membership state after restore")

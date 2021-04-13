@@ -752,6 +752,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		defer closer.Done()
 
+		glog.Infof("Restoring proposal at Index:%d, ReadTs:%d",
+			proposal.Index, proposal.Restore.RestoreTs)
 		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
 			return err
 		}
@@ -821,6 +823,23 @@ func (n *node) processApplyCh() {
 	}
 	previous := make(map[uint64]*P)
 
+	snapshotCh := make(chan uint64, 3)
+	go func() {
+		for {
+			select {
+			case idx := <-snapshotCh:
+				// Wait for the applied index to reach the restore proposal's index. Note that this
+				// still does not ensures that snapshot will cover the restore proposal.
+				n.Applied.WaitForMark(context.Background(), idx)
+				if err := n.proposeSnapshot(); err != nil {
+					glog.Errorf("cannot propose snapshot after processing restore proposal %q", err)
+				}
+			case <-n.closer.HasBeenClosed():
+				return
+			}
+		}
+	}()
+
 	// This function must be run serially.
 	handle := func(prop pb.Proposal) {
 		var perr error
@@ -844,6 +863,11 @@ func (n *node) processApplyCh() {
 			// if this applyCommited fails, how do we ensure
 			start := time.Now()
 			perr = n.applyCommitted(&prop)
+			if prop.Restore != nil && perr == nil {
+				// Propose a snapshot immediately after all the work is done to prevent the restore
+				// from being replayed.
+				snapshotCh <- prop.Index
+			}
 			if prop.Key != 0 {
 				p := &P{err: perr, seen: time.Now()}
 				previous[prop.Key] = p
