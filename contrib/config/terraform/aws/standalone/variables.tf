@@ -57,7 +57,7 @@ variable "instance_name" {
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation"
-  default     = "1.1.0"
+  default     = "21.03.0"
 }
 
 variable "dgraph_alpha_port" {
