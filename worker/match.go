@@ -83,6 +83,7 @@ func uidsForMatch(attr string, arg funcArgs) (*roaring64.Bitmap, error) {
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 		First:  int(arg.q.First),
+		AfterUid: arg.q.AfterUid,
 	}
 	uidsForNgram := func(ngram string) (*roaring64.Bitmap, error) {
 		key := x.IndexKey(attr, ngram)
