@@ -197,8 +197,6 @@ type fldArgument struct {
 	Value *fldValue
 }
 
-type fldValueList []*fldValue
-
 type fldValue struct {
 	Raw      string
 	Children fldChildValueList

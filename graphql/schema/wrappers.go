@@ -3103,10 +3103,10 @@ func (f *field) GetField() ast.Field {
 	return *f.field
 }
 
-func (f *query) GetField() ast.Field {
-	return *f.field
+func (q *query) GetField() ast.Field {
+	return *q.field
 }
 
-func (f *mutation) GetField() ast.Field {
-	return *f.field
+func (m *mutation) GetField() ast.Field {
+	return *m.field
 }
