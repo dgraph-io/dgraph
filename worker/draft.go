@@ -752,7 +752,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		defer closer.Done()
 
-		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
+			proposal.Index, proposal.Restore.RestoreTs)
+		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
 		}
 
