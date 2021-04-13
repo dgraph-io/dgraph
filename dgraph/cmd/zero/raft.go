@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dgraph-io/dgraph/worker"
+	"go.uber.org/zap"
 	"log"
 	"math"
 	"sort"
@@ -54,6 +56,8 @@ type node struct {
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
 	lastQuorum time.Time
+
+	forceNewCluster bool
 }
 
 func (n *node) amLeader() bool {
@@ -549,20 +553,20 @@ func (n *node) proposeNewCID() {
 	}
 }
 
-func (n *node) checkForCIDInEntries() (bool, error) {
+func (n *node) checkForCIDInEntries() (string, bool, error) {
 	first, err := n.Store.FirstIndex()
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	last, err := n.Store.LastIndex()
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 
 	for batch := first; batch <= last; {
 		entries, err := n.Store.Entries(batch, last+1, 64<<20)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 
 		// Exit early from the loop if no entries were found.
@@ -579,14 +583,140 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 			}
 			var proposal pb.ZeroProposal
 			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
-				return false, err
+				return "", false, err
 			}
 			if len(proposal.Cid) > 0 {
-				return true, err
+				return proposal.Cid, true, err
 			}
 		}
 	}
-	return false, err
+	return "", false, err
+}
+
+func (n *node) restartNode() error {
+	glog.Infoln("Restarting node for dgraphzero")
+	sp, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+	if !raft.IsEmptySnap(sp) {
+		// It is important that we pick up the conf state here.
+		n.SetConfState(&sp.Metadata.ConfState)
+
+		var zs pb.ZeroSnapshot
+		x.Check(zs.Unmarshal(sp.Data))
+		n.server.SetMembershipState(zs.State)
+		for _, id := range sp.Metadata.ConfState.Nodes {
+			n.Connect(id, zs.State.Zeros[id].Addr)
+		}
+	}
+
+	n.SetRaft(raft.RestartNode(n.Cfg))
+	_, foundCID, err := n.checkForCIDInEntries()
+	if err != nil {
+		return err
+	}
+	if !foundCID {
+		go n.proposeNewCID()
+	}
+
+	return nil
+}
+
+func (n *node) restartAsStandaloneNode() error {
+	glog.Infoln("Force restarting node for dgraphzero.")
+	snapshot, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+
+	firstIndex, err := n.Store.FirstIndex()
+	if err != nil {
+		return err
+	}
+	lastIndex, err := n.Store.LastIndex()
+	if err != nil {
+		return err
+	}
+	ents, err := n.Store.Entries(firstIndex, lastIndex+1, math.MaxInt64)
+	if err != nil {
+		return err
+	}
+	hardState, err := n.Store.HardState()
+	if err != nil {
+		return err
+	}
+
+	// discard the previously uncommitted entries
+	for i, ent := range ents {
+		if ent.Index > hardState.Commit {
+			glog.Info(
+				"discarding uncommitted WAL entries",
+				zap.Uint64("entry-index", ent.Index),
+				zap.Uint64("commit-index-from-wal", hardState.Commit),
+				zap.Int("number-of-discarded-entries", len(ents)-i),
+			)
+			ents = ents[:i]
+			break
+		}
+	}
+
+	// force append the configuration change entries
+	toAppEnts, _, err := worker.CreateConfigChangeEnts(
+		worker.GetIDs(&snapshot, ents),
+		n.Id,
+		hardState.Term,
+		hardState.Commit,
+		0,
+		x.WorkerConfig.MyAddr,
+		false,
+	)
+	if err != nil {
+		return err
+	}
+
+	ents = append(ents, toAppEnts...)
+	if len(ents) != 0 {
+		hardState.Commit = ents[len(ents)-1].Index
+	}
+	// force commit newly appended entries
+	err = n.Store.Save(&hardState, toAppEnts, nil)
+	if err != nil {
+		glog.Fatal("failed to save hard state and entries", zap.Error(err))
+	}
+	if len(toAppEnts) != 0 {
+		err = n.Store.Sync()
+		if err != nil {
+			return err
+		}
+	}
+	/******** disaster recover changeConfig end************/
+
+	if !raft.IsEmptySnap(snapshot) {
+		// It is important that we pick up the conf state here.
+		n.SetConfState(&snapshot.Metadata.ConfState)
+
+		var zs pb.ZeroSnapshot
+		x.Check(zs.Unmarshal(snapshot.Data))
+		n.server.SetMembershipState(zs.State)
+		for _, id := range snapshot.Metadata.ConfState.Nodes {
+			n.Connect(id, zs.State.Zeros[id].Addr)
+		}
+	}
+
+	n.SetRaft(raft.RestartNode(n.Cfg))
+	cid, foundCID, err := n.checkForCIDInEntries()
+	if err != nil {
+		return err
+	}
+	if !foundCID {
+		go n.proposeNewCID()
+	}
+
+	glog.Info(
+		"forcing restart member",
+		zap.String("cluster-id", cid),
+		zap.Uint64("local-member-id", n.Id),
+		zap.Uint64("commit-index", hardState.Commit),
+	)
+
+	return nil
 }
 
 func (n *node) initAndStartNode() error {
@@ -595,28 +725,10 @@ func (n *node) initAndStartNode() error {
 
 	switch {
 	case restart:
-		glog.Infoln("Restarting node for dgraphzero")
-		sp, err := n.Store.Snapshot()
-		x.Checkf(err, "Unable to get existing snapshot")
-		if !raft.IsEmptySnap(sp) {
-			// It is important that we pick up the conf state here.
-			n.SetConfState(&sp.Metadata.ConfState)
-
-			var zs pb.ZeroSnapshot
-			x.Check(zs.Unmarshal(sp.Data))
-			n.server.SetMembershipState(zs.State)
-			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, zs.State.Zeros[id].Addr)
-			}
-		}
-
-		n.SetRaft(raft.RestartNode(n.Cfg))
-		foundCID, err := n.checkForCIDInEntries()
-		if err != nil {
-			return err
-		}
-		if !foundCID {
-			go n.proposeNewCID()
+		if !n.forceNewCluster {
+			n.restartNode()
+		} else {
+			n.restartAsStandaloneNode()
 		}
 
 	case len(opts.peer) > 0:

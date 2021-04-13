@@ -112,6 +112,8 @@ instances to achieve high-availability.
 	size=100 is the size of each file in mb after which it will be rolled over (default 100).
 	Sample flag would be --audit dir=aa;encrypt-file=/filepath;compress=true;days=10;size=100`)
 
+	flag.Bool("force_new_cluster", false, "Force to create a new one member cluster.")
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -296,6 +298,7 @@ func run() {
 	baseMux.HandleFunc("/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/z")
 
+	st.node.forceNewCluster = Zero.Conf.GetBool("force_new_cluster")
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
 

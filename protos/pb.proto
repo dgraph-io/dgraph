@@ -553,6 +553,7 @@ service Zero {
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
 	rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
+	rpc RemoveAlphaNode (Member)       returns (Status) {}
 }
 
 service Worker {

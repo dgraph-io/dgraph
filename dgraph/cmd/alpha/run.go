@@ -219,6 +219,8 @@ they form a Raft group and provide synchronous replication.
 	client-key=/path/to/client/key/file to define the client key for tls encryption.
 	`)
 
+	flag.Bool("force_new_cluster", false, "Force to create a new one member cluster.")
+
 	// TLS configurations
 	x.RegisterServerTLSFlags(flag)
 }
@@ -731,6 +733,7 @@ func run() {
 		TLSServerConfig:      tlsServerConf,
 		HmacSecret:           opts.HmacSecret,
 		Audit:                opts.Audit != nil,
+		ForceNewCluster:      Alpha.Conf.GetBool("force_new_cluster"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 

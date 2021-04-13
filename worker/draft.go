@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"go.uber.org/zap"
 	"math"
 	"sort"
 	"sync"
@@ -75,6 +76,8 @@ type node struct {
 	elog        trace.EventLog
 
 	ex *executor
+
+	forceNewCluster bool
 }
 
 type op int
@@ -1723,6 +1726,166 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 	}
 }
 
+func (n *node) restartNode() error {
+	glog.Infof("Restarting node for group: %d\n", n.gid)
+	sp, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+	if !raft.IsEmptySnap(sp) {
+		// It is important that we pick up the conf state here.
+		// Otherwise, we'll lose the store conf state, and it would get
+		// overwritten with an empty state when a new snapshot is taken.
+		// This causes a node to just hang on restart, because it finds a
+		// zero-member Raft group.
+		n.SetConfState(&sp.Metadata.ConfState)
+
+		members := groups().members(n.gid)
+		for _, id := range sp.Metadata.ConfState.Nodes {
+			m, ok := members[id]
+			if ok {
+				n.Connect(id, m.Addr)
+			}
+		}
+	}
+	n.SetRaft(raft.RestartNode(n.Cfg))
+	glog.V(2).Infoln("Restart node complete")
+	return nil
+}
+
+func (n *node) removeAlphaNodeNotifyZeroLeader(req *pb.Member) error {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return errNoConnection
+	}
+	zc := pb.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	status, err := zc.RemoveAlphaNode(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if status.Code != 0 {
+		glog.Error(status.Msg)
+		return errors.New("removeAlphaNodeNotifyZeroLeader error")
+	}
+
+	return nil
+}
+
+func (n *node) restartAsStandaloneNode() error {
+	glog.Infof("Force restarting node for group: %d\n", n.gid)
+	snapshot, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+
+	firstIndex, err := n.Store.FirstIndex()
+	if err != nil {
+		return err
+	}
+	lastIndex, err := n.Store.LastIndex()
+	if err != nil {
+		return err
+	}
+	ents, err := n.Store.Entries(firstIndex, lastIndex+1, math.MaxInt64)
+	if err != nil {
+		return err
+	}
+	hardState, err := n.Store.HardState()
+	if err != nil {
+		return err
+	}
+
+	// discard the previously uncommitted entries
+	for i, ent := range ents {
+		if ent.Index > hardState.Commit {
+			glog.Info(
+				"discarding uncommitted WAL entries",
+				zap.Uint64("entry-index", ent.Index),
+				zap.Uint64("commit-index-from-wal", hardState.Commit),
+				zap.Int("number-of-discarded-entries", len(ents)-i),
+			)
+			ents = ents[:i]
+			break
+		}
+	}
+
+	// force append the configuration change entries
+	toAppEnts, removeMembers, err := CreateConfigChangeEnts(
+		GetIDs(&snapshot, ents),
+		n.Id,
+		hardState.Term,
+		hardState.Commit,
+		n.gid,
+		x.WorkerConfig.MyAddr,
+		false,
+	)
+	if err != nil {
+		return err
+	}
+
+	ents = append(ents, toAppEnts...)
+	if len(ents) != 0 {
+		hardState.Commit = ents[len(ents)-1].Index
+	}
+
+	for _, removeMember := range removeMembers {
+		retryTimes := 1
+		for {
+			err = n.removeAlphaNodeNotifyZeroLeader(removeMember)
+			if err == nil {
+				break
+			}
+
+			retryTimes++
+			if retryTimes > 5 {
+				glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero failed, try next member, current member need user remove manually!!! remove member: [%v], retry times: %d", removeMember, retryTimes)
+				break
+			}
+			time.Sleep(1 * time.Second)
+			glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero, remove member: [%v], retry times: %d", removeMember, retryTimes)
+		}
+	}
+
+	// force commit newly appended entries
+	err = n.Store.Save(&hardState, toAppEnts, nil)
+	if err != nil {
+		glog.Fatal("failed to save hard state and entries", zap.Error(err))
+	}
+	if len(toAppEnts) != 0 {
+		err = n.Store.Sync()
+		if err != nil {
+			return err
+		}
+	}
+	/******** disaster recover changeConfig end************/
+
+	if !raft.IsEmptySnap(snapshot) {
+		// It is important that we pick up the conf state here.
+		// Otherwise, we'll lose the store conf state, and it would get
+		// overwritten with an empty state when a new snapshot is taken.
+		// This causes a node to just hang on restart, because it finds a
+		// zero-member Raft group.
+		n.SetConfState(&snapshot.Metadata.ConfState)
+
+		members := groups().members(n.gid)
+		for _, id := range snapshot.Metadata.ConfState.Nodes {
+			m, ok := members[id]
+			if ok {
+				n.Connect(id, m.Addr)
+			}
+		}
+	}
+	n.SetRaft(raft.RestartNode(n.Cfg))
+
+	glog.Info(
+		"forcing restart member",
+		zap.Uint64("local-member-id", n.Id),
+		zap.Uint64("commit-index", hardState.Commit),
+	)
+	glog.V(2).Infoln("Force restart node complete")
+	return nil
+}
+
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode() {
 	_, restart, err := n.PastLife()
@@ -1742,27 +1905,11 @@ func (n *node) InitAndStartNode() {
 	}
 
 	if restart {
-		glog.Infof("Restarting node for group: %d\n", n.gid)
-		sp, err := n.Store.Snapshot()
-		x.Checkf(err, "Unable to get existing snapshot")
-		if !raft.IsEmptySnap(sp) {
-			// It is important that we pick up the conf state here.
-			// Otherwise, we'll lose the store conf state, and it would get
-			// overwritten with an empty state when a new snapshot is taken.
-			// This causes a node to just hang on restart, because it finds a
-			// zero-member Raft group.
-			n.SetConfState(&sp.Metadata.ConfState)
-
-			members := groups().members(n.gid)
-			for _, id := range sp.Metadata.ConfState.Nodes {
-				m, ok := members[id]
-				if ok {
-					n.Connect(id, m.Addr)
-				}
-			}
+		if !n.forceNewCluster {
+			n.restartNode()
+		} else {
+			n.restartAsStandaloneNode()
 		}
-		n.SetRaft(raft.RestartNode(n.Cfg))
-		glog.V(2).Infoln("Restart node complete")
 
 	} else {
 		glog.Infof("New Node for group: %d\n", n.gid)
