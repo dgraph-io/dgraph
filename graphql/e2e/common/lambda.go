@@ -159,6 +159,41 @@ func lambdaOnQueryUsingDql(t *testing.T) {
 	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
 }
 
+func lambdaOnQueryWithFilters(t *testing.T) {
+	// Skipping for Now, enable it after making change in @lambda codebase.
+	t.Skip()
+	query := `
+		query {
+			authorsByName(name: "Ann Author") {
+				name
+				dob
+				reputation
+				posts(filter: {numLikes: {eq: 100}}){
+					title
+				}
+			}
+		}`
+	params := &GraphQLParams{Query: query}
+	resp := params.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, resp)
+
+	expectedResponse := `{
+			"authorsByName": [
+				{
+					"name":"Ann Author",
+					"dob":"2000-01-01T00:00:00Z",
+					"reputation":6.6,
+					"posts": [
+						{
+							"title": "Introducing GraphQL in Dgraph"
+						}
+					]
+				}
+			]
+		}`
+	testutil.CompareJSON(t, expectedResponse, string(resp.Data))
+}
+
 func lambdaOnMutationUsingGraphQL(t *testing.T) {
 	// first, add the author using @lambda
 	query := `
