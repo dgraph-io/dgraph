@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -40,22 +41,23 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		return resolve.EmptyResult(m, err), false
 	}
 
-	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
+	req := &pb.BackupRequest{
 		Destination:  input.Destination,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
 		ForceFull:    input.ForceFull,
-	})
-
+	}
+	taskId, err := worker.PendingTasks.QueueBackup(req)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
+	msg := fmt.Sprintf("Backup started with ID %d.", taskId)
 	return resolve.DataResult(
 		m,
-		map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
+		map[string]interface{}{m.Name(): response("Success", msg)},
 		nil,
 	), true
 }

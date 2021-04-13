@@ -27,7 +27,7 @@ var (
 	taskStatusError    = taskStatus("Error")
 	taskStatusSuccess  = taskStatus("Success")
 
-	pendingTasks  = newTaskQueue()
+	PendingTasks  = newTaskQueue()
 	taskKeyPrefix = []byte("!dgraphTask!")
 )
 
@@ -35,7 +35,7 @@ func InitTaskQueue() {
 	if err := cancelQueuedTasks(); err != nil {
 		glog.Errorf("tasks: failed to cancel unfinished tasks: %v", err)
 	}
-	go pendingTasks.run()
+	go PendingTasks.run()
 }
 
 // cancelQueuedTasks marks all queued tasks in Badger as canceled.
@@ -153,16 +153,16 @@ func (q taskQueue) run() {
 	}
 }
 
-func (q taskQueue) queueBackup(req *pb.BackupRequest) (taskId, error) {
-	return q._queueTask(req)
+func (q taskQueue) QueueBackup(req *pb.BackupRequest) (TaskId, error) {
+	return q.queueTask(req)
 }
 
-func (q taskQueue) queueExport(req *pb.ExportRequest) (taskId, error) {
-	return q._queueTask(req)
+func (q taskQueue) QueueExport(req *pb.ExportRequest) (TaskId, error) {
+	return q.queueTask(req)
 }
 
-// _queueTask queues a task of any type. Don't use this function directly.
-func (q taskQueue) _queueTask(req interface{}) (taskId, error) {
+// queueTask queues a task of any type. Don't use this function directly.
+func (q taskQueue) queueTask(req interface{}) (TaskId, error) {
 	task := task{newTaskId(), req}
 	select {
 	case q <- task:
@@ -185,7 +185,7 @@ func (q taskQueue) _queueTask(req interface{}) (taskId, error) {
 }
 
 type task struct {
-	id  taskId
+	id  TaskId
 	req interface{} // *pb.BackupRequest, *pb.ExportRequest
 }
 
@@ -212,7 +212,7 @@ func (t task) run() error {
 	return nil
 }
 
-type taskId int64
+type TaskId int64
 
 // newTaskId returns a unique, random, unguessable, non-negative int64.
 //
@@ -220,14 +220,14 @@ type taskId int64
 // bit [0,1):   always 0
 // bit [1,33):  32-bit UNIX timestamp (in seconds)
 // bit [33,64): 31-bit cryptographically secure random number
-func newTaskId() taskId {
+func newTaskId() TaskId {
 	// Overflows on 2106-02-07
 	now := int64(time.Now().Unix()) & math.MaxUint32
 	rnd, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 	if err != nil {
 		panic(err)
 	}
-	return taskId(now<<31 | rnd.Int64())
+	return TaskId(now<<31 | rnd.Int64())
 }
 
 // getKey generates a Badger key for the given taskId.
@@ -235,7 +235,7 @@ func newTaskId() taskId {
 // The format of this is:
 // byte [0, l):   taskKeyPrefix
 // byte [l, l+8]: taskId
-func (id taskId) getKey() []byte {
+func (id TaskId) getKey() []byte {
 	l := len(taskKeyPrefix)
 	key := make([]byte, l+8)
 	x.AssertTrue(copy(key[0:l], []byte(taskKeyPrefix)) == l)
