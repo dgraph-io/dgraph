@@ -754,7 +754,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 		glog.Infof("Got restore proposal at Index:%d, ReadTs:%d",
 			proposal.Index, proposal.Restore.RestoreTs)
-		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+		if err := handleRestoreProposal(ctx, proposal.Restore, proposal.Index); err != nil {
 			return err
 		}
 
@@ -869,18 +869,9 @@ func (n *node) processApplyCh() {
 			ms := x.SinceMs(start)
 			ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 		}
+
 		n.Proposals.Done(prop.Key, perr)
 		n.Applied.Done(prop.Index)
-		if !ok && prop.Restore != nil && perr == nil {
-			// Propose a snapshot immediately after all the work is done to prevent the restore
-			// from being replayed.
-			if err := n.Applied.WaitForMark(context.Background(), prop.Index); err != nil {
-				glog.Errorf("Error waiting for mark for index %d: %+v", prop.Index, err)
-			}
-			if err := n.proposeSnapshot(); err != nil {
-				glog.Errorf("cannot propose snapshot after processing restore proposal %q", err)
-			}
-		}
 		ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 	}
 
