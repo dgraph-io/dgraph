@@ -750,11 +750,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 	}
 
 	if v, ok := gq.Args["random"]; ok {
-		random_, err := strconv.ParseInt(v, 0, 32)
+		random, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
 			return err
 		}
-		args.Random = int(random_)
+		args.Random = int(random)
 	}
 
 	return nil
@@ -2414,6 +2414,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- childErr
 }
 
+// stores index of a uid as the index in the uidMatrix (x)
+// and index in the corresponding list of the uidMatrix (y)
+type UidKey struct {
+	x int
+	y int
+}
+
 // applies "random" to lists inside uidMatrix
 // Params.Random number of nodes are selected
 // duplicates are not removed i.e., random selection by replacement is done
@@ -2421,11 +2428,37 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 func (sg *SubGraph) applyRandom(ctx context.Context) error {
 	sg.updateUidMatrix()
 
+	// calculate total number of nodes
+	totalNodes := 0
+	for i := range sg.uidMatrix {
+		totalNodes += len(sg.uidMatrix[i].Uids)
+	}
+	// and if the required number of nodes is more (or equal) to that
+	// then just return all the nodes
+	// (this can cause an infinite loop if not checked)
+	if sg.Params.Random >= totalNodes {
+		return nil
+	}
+
 	// store row id -> new uid list mapping
 	newUids := make(map[int][]uint64)
-	for i := 0; i < sg.Params.Random; i++ {
+
+	// to keep track of UIDs already selected
+	selected := make(map[UidKey]bool)
+
+	// keep track of number of nodes selected
+	numSelected := 0
+
+	for numSelected < sg.Params.Random {
 		randomIdx := rand.Intn(len(sg.uidMatrix))
 		randomIdy := rand.Intn(len(sg.uidMatrix[randomIdx].Uids))
+
+		if present := selected[UidKey{randomIdx, randomIdy}]; present {
+			continue
+		} else {
+			selected[UidKey{randomIdx, randomIdy}] = true
+			numSelected += 1
+		}
 
 		if newUids[randomIdx] == nil {
 			newUids[randomIdx] = make([]uint64, 0)
