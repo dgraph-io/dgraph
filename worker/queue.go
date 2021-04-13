@@ -194,7 +194,7 @@ func (t task) run() error {
 	switch req := t.req.(type) {
 	case *pb.BackupRequest:
 		// TODO(ajeet): shouldn't forceFull be part of pb.BackupRequest?
-		if err := ProcessBackupRequest(context.Background(), req, true); err != nil {
+		if err := ProcessBackupRequest(context.Background(), req); err != nil {
 			return err
 		}
 	case *pb.ExportRequest:

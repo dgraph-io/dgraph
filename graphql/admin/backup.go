@@ -46,7 +46,8 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
-	}, input.ForceFull)
+		ForceFull:    input.ForceFull,
+	})
 
 	if err != nil {
 		return resolve.EmptyResult(m, err), false

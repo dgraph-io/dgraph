@@ -109,7 +109,7 @@ type BackupRes struct {
 	err error
 }
 
-func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if !EnterpriseEnabled() {
 		return errors.New("you must enable enterprise features first. " +
 			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
@@ -162,7 +162,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	}
 
 	req.SinceTs = latestManifest.Since
-	if forceFull {
+	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
 		if x.WorkerConfig.EncryptionKey != nil {

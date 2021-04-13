@@ -634,6 +634,8 @@ message BackupRequest {
 	// The predicates to backup. All other predicates present in the group (e.g
 	// stale data from a predicate move) will be ignored.
 	repeated string predicates = 10;
+
+	bool force_full = 11;
 }
 
 message BackupResponse {
