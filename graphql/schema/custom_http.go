@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/gqlparser/v2/ast"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -177,5 +178,83 @@ func GetBodyForLambda(ctx context.Context, field Field, parents,
 	if args != nil {
 		body["args"] = args
 	}
+	body["info"] = convert(field.GetField())
 	return body
+}
+
+type selectionField struct {
+	Alias        string           `json:"alias"`
+	Name         string           `json:"name"`
+	Arguments    fldArgumentList  `json:"arguments"`
+	Directives   fldDirectiveList `json:"directives"`
+	SelectionSet fldSelectionSet  `json:"selectionSet"`
+}
+
+type fldArgumentList []*fldArgument
+
+type fldArgument struct {
+	Name  string
+	Value *fldValue
+}
+
+type fldValueList []*fldValue
+
+type fldValue struct {
+	Raw      string
+	Children fldChildValueList
+}
+
+type fldChildValueList []*fldChildValue
+
+type fldChildValue struct {
+	Name  string
+	Value *fldValue
+}
+
+type fldDirectiveList []*fldDirective
+
+type fldDirective struct {
+	Name      string          `json:"name"`
+	Arguments fldArgumentList `json:"arguments"`
+}
+
+type fldSelectionSet []fldSelection
+type fldSelection interface{}
+
+func convertDirectiveList(dirList ast.DirectiveList) fldDirectiveList {
+	outDirList := make(fldDirectiveList, len(dirList))
+	for i, dir := range dirList {
+		outDirList[i] = &fldDirective{Name: dir.Name, Arguments: convertArgumentList(dir.Arguments)}
+	}
+	return outDirList
+}
+
+func convertChildValueList(childValueList ast.ChildValueList) fldChildValueList {
+	outChildValueList := make(fldChildValueList, len(childValueList))
+	for i, childValue := range childValueList {
+		outChildValueList[i] = &fldChildValue{Name: childValue.Name, Value: &fldValue{Raw: childValue.Value.Raw, Children: convertChildValueList(childValue.Value.Children)}}
+	}
+	return outChildValueList
+}
+
+func convertArgumentList(argList ast.ArgumentList) fldArgumentList {
+	outArgList := make(fldArgumentList, len(argList))
+	for i, arg := range argList {
+		outArgList[i] = &fldArgument{Name: arg.Name, Value: &fldValue{Raw: arg.Value.Raw, Children: convertChildValueList(arg.Value.Children)}}
+	}
+	return outArgList
+}
+
+func convert(f ast.Field) selectionField {
+	outField := selectionField{
+		Alias:      f.Alias,
+		Name:       f.Name,
+		Arguments:  convertArgumentList(f.Arguments),
+		Directives: convertDirectiveList(f.Directives),
+	}
+	outField.SelectionSet = make(fldSelectionSet, len(f.SelectionSet))
+	for i, sel := range f.SelectionSet {
+		outField.SelectionSet[i] = convert(*sel.(*ast.Field))
+	}
+	return outField
 }
