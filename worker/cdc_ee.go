@@ -191,11 +191,13 @@ func (cdc *CDC) processCDCEvents() {
 			e.Meta.CommitTs = commitTs
 			b, err := json.Marshal(e)
 			x.Check(err)
+			key := make([]byte, 8)
+			binary.BigEndian.PutUint64(key, e.Meta.Namespace)
 			batch[i] = SinkMessage{
 				Meta: SinkMeta{
 					Topic: defaultEventTopic,
 				},
-				Key:   e.Meta.Namespace,
+				Key:   key,
 				Value: b,
 			}
 		}
@@ -360,7 +362,7 @@ type CDCEvent struct {
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
-	Namespace []byte `json:"namespace"`
+	Namespace uint64 `json:"namespace"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
@@ -394,12 +396,11 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 	// todo (aman): right now drop all and data operations are still cluster wide.
 	// Fix these once we have namespace specific operations.
 	if mutation.DropOp != pb.Mutations_NONE {
-		ns := make([]byte, 8)
-		binary.BigEndian.PutUint64(ns, x.GalaxyNamespace)
+		ns := x.GalaxyNamespace
 		var t string
 		if mutation.DropOp == pb.Mutations_TYPE {
 			// drop type are namespace specific.
-			ns, t = x.ParseNamespaceBytes(mutation.DropValue)
+			ns, t = x.ParseNamespaceAttr(mutation.DropValue)
 		}
 
 		return []CDCEvent{
@@ -422,7 +423,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		if x.IsReservedPredicate(edge.Attr) {
 			continue
 		}
-		ns, attr := x.ParseNamespaceBytes(edge.Attr)
+		ns, attr := x.ParseNamespaceAttr(edge.Attr)
 		// Handle drop attr event.
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			return []CDCEvent{
