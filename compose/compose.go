@@ -175,6 +175,10 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
+	if basename == "alpha" {
+		svc.Ports = append(svc.Ports, toPort(grpcPort-1000))
+	}
+
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
