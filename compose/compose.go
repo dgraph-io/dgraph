@@ -116,6 +116,8 @@ type options struct {
 	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
+	Cdc            bool
+	CdcConsumer    bool
 
 	// Extra flags
 	AlphaFlags string
@@ -354,6 +356,9 @@ func getAlpha(idx int, raft string) service {
 			ReadOnly: true,
 		})
 	}
+	if opts.Cdc {
+		svc.Command += " --cdc='kafka=kafka:9092'"
+	}
 	if len(opts.AlphaVolumes) > 0 {
 		for _, vol := range opts.AlphaVolumes {
 			svc.Volumes = append(svc.Volumes, getVolume(vol))
@@ -503,6 +508,32 @@ func addMetrics(cfg *composeConfig) {
 	}
 }
 
+func addCdc(cfg *composeConfig) {
+	cfg.Services["zookeeper"] = service{
+		Image:         "bitnami/zookeeper:3.7.0",
+		ContainerName: containerName("zookeeper"),
+		Environment: []string{
+			"ALLOW_ANONYMOUS_LOGIN=yes",
+		},
+	}
+	cfg.Services["kafka"] = service{
+		Image:         "bitnami/kafka:2.7.0",
+		ContainerName: containerName("kafka"),
+		Environment: []string{
+			"ALLOW_PLAINTEXT_LISTENER=yes",
+			"KAFKA_BROKER_ID=1",
+			"KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181",
+		},
+	}
+	if opts.CdcConsumer {
+		cfg.Services["kafka-consumer"] = service{
+			Image:         "bitnami/kafka:2.7.0",
+			ContainerName: containerName("kafka-consumer"),
+			Command:       "kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic dgraph-cdc",
+		}
+	}
+}
+
 func semverCompare(constraint, version string) (bool, error) {
 	c, err := sv.NewConstraint(constraint)
 	if err != nil {
@@ -610,6 +641,10 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
+		"run Kafka and push CDC data to it")
+	cmd.PersistentFlags().BoolVar(&opts.CdcConsumer, "cdc_consumer", false,
+		"run Kafka consumer that prints out CDC events")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
@@ -638,7 +673,9 @@ func main() {
 	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
 		fatal(errors.Errorf("--ratel_port option requires --ratel"))
 	}
-
+	if cmd.Flags().Changed("cdc-consumer") && !opts.Cdc {
+		fatal(errors.Errorf("--cdc_consumer requires --cdc"))
+	}
 	services := make(map[string]service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
@@ -731,6 +768,10 @@ func main() {
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
+	}
+
+	if opts.Cdc {
+		addCdc(&cfg)
 	}
 
 	yml, err := yaml.Marshal(cfg)
