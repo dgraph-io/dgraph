@@ -871,7 +871,10 @@ func (n *node) processApplyCh() {
 				tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 			}
 			ms := x.SinceMs(start)
-			ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+			if err := ostats.RecordWithTags(context.Background(),
+				tags, x.LatencyMs.M(ms)); err != nil {
+				glog.Errorf("Error recording stats: %+v", err)
+			}
 		}
 
 		n.Proposals.Done(prop.Key, perr)
