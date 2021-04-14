@@ -49,7 +49,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		Anonymous:    input.Anonymous,
 		ForceFull:    input.ForceFull,
 	}
-	taskId, err := worker.PendingTasks.QueueBackup(req)
+	taskId, err := worker.Tasks.QueueBackup(req)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}

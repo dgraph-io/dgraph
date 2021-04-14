@@ -17,191 +17,141 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"math"
-	"math/big"
+	"math/rand"
 	"reflect"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
-
-type taskStatus []byte
 
 var (
-	taskStatusQueued   = taskStatus("Queued")
-	taskStatusRunning  = taskStatus("Running")
-	taskStatusCanceled = taskStatus("Canceled")
-	taskStatusError    = taskStatus("Error")
-	taskStatusSuccess  = taskStatus("Success")
-
-	PendingTasks  = newTaskQueue()
-	taskKeyPrefix = []byte("!dgraphTask!")
+	Tasks   tasks
+	taskRng *rand.Rand
 )
 
-func InitTaskQueue() {
-	if err := cancelQueuedTasks(); err != nil {
-		glog.Errorf("tasks: failed to cancel unfinished tasks: %v", err)
-	}
-	go PendingTasks.run()
+func InitTasks() {
+	Tasks = newTasks()
+	taskRng = rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
+
+	Tasks.deleteExpired()
+	Tasks.cancelQueued()
+
+	go Tasks.run()
 }
 
-// cancelQueuedTasks marks all queued tasks in Badger as canceled.
-func cancelQueuedTasks() error {
-	txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	opts := badger.DefaultIteratorOptions
-	opts.Prefix = taskKeyPrefix
-
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	for it.Rewind(); it.Valid(); it.Next() {
-		item := it.Item()
-		key := item.Key()
-
-		isQueued := false
-		if err := item.Value(func(status []byte) error {
-			isQueued = bytes.Equal(status, taskStatusQueued)
-			return nil
-		}); err != nil {
-			return err
-		}
-
-		if isQueued {
-			entry := newTaskEntry(key, taskStatusCanceled)
-			if err := txn.SetEntry(entry); err != nil {
-				return err
-			}
-		}
-	}
-
-	return txn.CommitAt(math.MaxUint64, nil)
+type tasks struct {
+	queue chan task
+	log   *z.Tree
 }
 
-type taskQueue chan task
-
-func newTaskQueue() taskQueue {
+func newTasks() tasks {
 	const maxQueueSize = 16
-	return make(chan task, maxQueueSize)
+	return tasks{
+		queue: make(chan task, maxQueueSize),
+		log:   z.NewTree(),
+	}
+}
+
+// cancelQueuedTasks marks all queued tasks in the log as canceled.
+func (t *tasks) cancelQueued() {
+	t.log.IterateKV(func(key, val uint64) uint64 {
+		if getTaskStatus(val) == taskStatusQueued {
+			return newTaskValue(taskStatusCanceled)
+		}
+		return 0
+	})
+}
+
+// deleteExpired deletes all expired tasks in the log.
+func (t *tasks) deleteExpired() {
+	const ttl = 7 * 24 * time.Hour // 1 week
+	minTs := time.Now().UTC().Add(-ttl).Unix()
+	minKey := uint64(minTs) << 32
+	t.log.DeleteBelow(minKey)
 }
 
 // run loops forever, running queued tasks one at a time. Any returned errors are logged.
-func (q taskQueue) run() {
+func (t tasks) run() {
 	for {
-		// Fetch a task from the queue. If the server is shutting down, break out of the loop.
+		// If the server is shutting down, return immediately. Else, fetch a task from the queue.
 		var task task
 		select {
 		case <-x.ServerCloser.HasBeenClosed():
 			break
-		case task = <-q:
+		case task = <-t.queue:
 		}
-		key := task.id.getKey()
 
-		if err := func() error {
-			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
-			defer txn.Discard()
-
-			// Fetch task from Badger. If the task isn't found, this means it has expired (older
-			// than taskTTL).
-			item, err := txn.Get(key)
-			if err != nil {
-				if err == badger.ErrKeyNotFound {
-					return fmt.Errorf("task is expired, skipping")
-				}
-				return err
-			}
-
-			// Only proceed if the task is still queued. It's possible that the task got canceled
-			// before we were able to run it.
-			if err := item.Value(func(status []byte) error {
-				if !bytes.Equal(status, taskStatusQueued) {
-					return fmt.Errorf("status is set to %s, skipping", status)
-				}
-				return nil
-			}); err != nil {
-				return err
-			}
-
-			// Change the task status to "running".
-			entry := newTaskEntry(key, taskStatusRunning)
-			if err := txn.SetEntry(entry); err != nil {
-				return err
-			}
-			return txn.CommitAt(math.MaxUint64, nil)
-
-		}(); err != nil {
-			glog.Errorf("task %d: error: %v", task.id, err)
+		value := t.log.Get(task.key)
+		// Fetch the task from the log. If the task isn't found, this means it has expired (older
+		// than taskTtl.
+		if value == 0 {
+			glog.Errorf("task %d is expired, skipping", task.key)
 			continue
 		}
+		// Only proceed if the task is still queued. It's possible that the task got canceled
+		// before we were able to run it.
+		if status := getTaskStatus(value); status != taskStatusQueued {
+			glog.Errorf("task %d is set to %s, skipping", task.key, status)
+		}
+		// Change the task status to "running".
+		t.log.Set(task.key, newTaskValue(taskStatusRunning))
 
 		// Run the task.
 		var status taskStatus
 		if err := task.run(); err != nil {
-			glog.Errorf("task %d: error: %v", task.id, err)
 			status = taskStatusError
+			glog.Errorf("task %d: %s: %v", task.key, status, err)
 		} else {
-			glog.Infof("task %d: complete", task.id)
 			status = taskStatusSuccess
+			glog.Infof("task %d: %s", task.key, status)
 		}
 
 		// Change the task status to "complete" / "error".
-		entry := newTaskEntry(key, status)
-		if err := func() error {
-			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
-			defer txn.Discard()
-			if err := txn.SetEntry(entry); err != nil {
-				return err
-			}
-			return txn.CommitAt(math.MaxUint64, nil)
-		}(); err != nil {
-			glog.Errorf("task %d: error: could not save status: %v", task.id, err)
-		}
+		t.log.Set(task.key, newTaskValue(status))
 	}
 }
 
-func (q taskQueue) QueueBackup(req *pb.BackupRequest) (TaskId, error) {
-	return q.queueTask(req)
+func (t tasks) QueueBackup(req *pb.BackupRequest) (int64, error) {
+	return t.queueTask(req)
 }
 
-func (q taskQueue) QueueExport(req *pb.ExportRequest) (TaskId, error) {
-	return q.queueTask(req)
+func (t tasks) QueueExport(req *pb.ExportRequest) (int64, error) {
+	return t.queueTask(req)
 }
 
 // queueTask queues a task of any type. Don't use this function directly.
-func (q taskQueue) queueTask(req interface{}) (TaskId, error) {
-	task := task{newTaskId(), req}
-	select {
-	case q <- task:
-		key := task.id.getKey()
-		entry := newTaskEntry(key, taskStatusQueued)
-		if err := func() error {
-			txn := State.Pstore.NewTransactionAt(math.MaxUint64, true)
-			defer txn.Discard()
-			if err := txn.SetEntry(entry); err != nil {
-				return err
-			}
-			return txn.CommitAt(math.MaxUint64, nil)
-		}(); err != nil {
-			return 0, errors.Wrapf(err, "could not save task status")
+func (t tasks) queueTask(req interface{}) (int64, error) {
+	task := task{req: req}
+	for attempt := 0; ; attempt++ {
+		task.key = newTaskKey()
+		if t.log.Get(task.key) == 0 {
+			break
 		}
-		return task.id, nil
+		// Unable to generate a unique random number.
+		if attempt >= 8 {
+			taskRng.Seed(time.Now().UnixNano())
+			return 0, fmt.Errorf("unable to generate unique task ID")
+		}
+	}
+
+	select {
+	case t.queue <- task:
+		t.log.Set(task.key, newTaskValue(taskStatusQueued))
+		// Casting to int64 is safe here because task.key is always < math.MaxInt64
+		return int64(task.key), nil
 	default:
 		return 0, fmt.Errorf("too many pending tasks, please try again later")
 	}
 }
 
 type task struct {
-	id  TaskId
+	key uint64
 	req interface{} // *pb.BackupRequest, *pb.ExportRequest
 }
 
@@ -209,7 +159,6 @@ type task struct {
 func (t task) run() error {
 	switch req := t.req.(type) {
 	case *pb.BackupRequest:
-		// TODO(ajeet): shouldn't forceFull be part of pb.BackupRequest?
 		if err := ProcessBackupRequest(context.Background(), req); err != nil {
 			return err
 		}
@@ -218,48 +167,56 @@ func (t task) run() error {
 		if err != nil {
 			return err
 		}
-		glog.Infof("task %d: exported files: %v", t.id, files)
+		glog.Infof("task %d: exported files: %v", t.key, files)
 	default:
 		err := fmt.Errorf(
-			"a request of unknown type (%T) was queued", reflect.TypeOf(t.req))
+			"task %d: received request of unknown type (%T)", t.key, reflect.TypeOf(t.req))
 		panic(err)
 	}
-
 	return nil
 }
 
-type TaskId int64
+// newTaskKey returns a new task key in the range [1, math.MaxInt64].
+func newTaskKey() uint64 {
+	rnd := taskRng.Int31()
+	raftId := 1 // TODO(ajeet)
+	return uint64(rnd)<<32 | uint64(raftId)
+}
 
-// newTaskId returns a unique, random, unguessable, non-negative int64.
-//
-// The format of this is (from MSB to LSB):
-// bit [0,1):   always 0
-// bit [1,33):  32-bit UNIX timestamp (in seconds)
-// bit [33,64): 31-bit cryptographically secure random number
-func newTaskId() TaskId {
-	// Overflows on 2106-02-07
-	now := int64(time.Now().Unix()) & math.MaxUint32
-	rnd, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
-	if err != nil {
-		panic(err)
+// newTaskValue returns a new task value with the given status.
+func newTaskValue(status taskStatus) uint64 {
+	now := time.Now().UTC().Unix()
+	return uint64(now)<<32 | uint64(status)
+}
+
+// newTaskValue extracts a taskStatus from a task value.
+func getTaskStatus(value uint64) taskStatus {
+	return taskStatus(value) & math.MaxUint32
+}
+
+type taskStatus uint64
+
+const (
+	taskStatusQueued taskStatus = iota + 1
+	taskStatusRunning
+	taskStatusCanceled
+	taskStatusError
+	taskStatusSuccess
+)
+
+func (status taskStatus) String() string {
+	switch status {
+	case taskStatusQueued:
+		return "QUEUED"
+	case taskStatusRunning:
+		return "RUNNING"
+	case taskStatusCanceled:
+		return "CANCELED"
+	case taskStatusError:
+		return "ERROR"
+	case taskStatusSuccess:
+		return "SUCCESS"
+	default:
+		return "UNKNOWN"
 	}
-	return TaskId(now<<31 | rnd.Int64())
-}
-
-// getKey generates a Badger key for the given taskId.
-//
-// The format of this is:
-// byte [0, l):   taskKeyPrefix
-// byte [l, l+8]: taskId
-func (id TaskId) getKey() []byte {
-	l := len(taskKeyPrefix)
-	key := make([]byte, l+8)
-	x.AssertTrue(copy(key[0:l], []byte(taskKeyPrefix)) == l)
-	binary.LittleEndian.PutUint64(key[l:l+8], uint64(id))
-	return key
-}
-
-func newTaskEntry(key []byte, status taskStatus) *badger.Entry {
-	const ttl = 7 * 24 * time.Hour // 1 week
-	return badger.NewEntry(key, status).WithDiscard().WithTTL(ttl)
 }
