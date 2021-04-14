@@ -160,6 +160,13 @@ func getOffset(idx int) int {
 	return idx
 }
 
+func getHost(basename string) string {
+	if opts.Hostname != "" {
+		return opts.Hostname
+	}
+	return basename
+}
+
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
@@ -243,11 +250,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
 	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
-	if opts.Hostname != "" {
-		svc.Command += fmt.Sprintf(" --my=%s:%d", opts.Hostname, grpcPort)
-	} else {
-		svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
-	}
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
@@ -259,10 +262,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
 		peerHost := name(basename, 1)
-		if opts.Hostname != "" {
-			peerHost = opts.Hostname
-		}
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", peerHost, basePort)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", getHost(peerHost), basePort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -306,18 +306,12 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
-	if opts.Hostname != "" {
-		zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, zeroBasePort+opts.PortOffset)
-	}
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
 		port := zeroBasePort + opts.PortOffset + getOffset(i)
-		if opts.Hostname != "" {
-			zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, port)
-		} else {
-			zeroHostAddr = fmt.Sprintf("zero%d:%d", i, port)
-		}
+		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -327,11 +321,7 @@ func getAlpha(idx int, raft string) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	if opts.Hostname != "" {
-		svc.Command += fmt.Sprintf(" --my=%s:%d", opts.Hostname, internalPort)
-	} else {
-		svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
-	}
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
