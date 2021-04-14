@@ -116,6 +116,7 @@ type options struct {
 	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
+	Hostname       string
 
 	// Extra flags
 	AlphaFlags string
@@ -236,7 +237,11 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
 	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	if opts.Hostname != "" {
+		svc.Command += fmt.Sprintf(" --my=%s:%d", opts.Hostname, grpcPort)
+	} else {
+		svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	}
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
@@ -247,7 +252,11 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerHost := name(basename, 1)
+		if opts.Hostname != "" {
+			peerHost = opts.Hostname
+		}
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", peerHost, basePort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -292,9 +301,16 @@ func getAlpha(idx int, raft string) service {
 	}
 
 	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
+	if opts.Hostname != "" {
+		zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, zeroBasePort+opts.PortOffset)
+	}
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		if opts.Hostname != "" {
+			zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, zeroBasePort+opts.PortOffset+getOffset(i))
+		} else {
+			zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		}
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -304,7 +320,12 @@ func getAlpha(idx int, raft string) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	if opts.Hostname != "" {
+		svc.Command += fmt.Sprintf(" --my=%s:%d", opts.Hostname, internalPort)
+	} else {
+		svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	}
+	// svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
@@ -610,6 +631,8 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
+		"hostname for the alpha and zero servers")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
