@@ -160,11 +160,11 @@ func getOffset(idx int) int {
 	return idx
 }
 
-func getHost(basename string) string {
+func getHost(host string) string {
 	if opts.Hostname != "" {
 		return opts.Hostname
 	}
-	return basename
+	return host
 }
 
 func initService(basename string, idx, grpcPort int) service {
