@@ -116,6 +116,7 @@ type options struct {
 	MinioDataDir   string
 	MinioPort      uint16
 	MinioEnvFile   []string
+	Hostname       string
 	Cdc            bool
 	CdcConsumer    bool
 
@@ -159,6 +160,13 @@ func getOffset(idx int) int {
 	return idx
 }
 
+func getHost(host string) string {
+	if opts.Hostname != "" {
+		return opts.Hostname
+	}
+	return host
+}
+
 func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
@@ -176,6 +184,10 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
+	// If hostname is specified then expose the internal grpc port (7080) of alpha.
+	if basename == "alpha" && opts.Hostname != "" {
+		svc.Ports = append(svc.Ports, toPort(grpcPort-1000))
+	}
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
@@ -238,7 +250,7 @@ func getZero(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
 	svc.Command += fmt.Sprintf(" --raft='%s'", raft)
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), grpcPort)
 	if opts.NumAlphas > 1 {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
@@ -249,7 +261,8 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerHost := name(basename, 1)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", getHost(peerHost), basePort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -293,10 +306,12 @@ func getAlpha(idx int, raft string) service {
 		maxZeros = opts.NumZeros
 	}
 
-	zeroHostAddr := fmt.Sprintf("zero%d:%d", 1, zeroBasePort+opts.PortOffset)
+	zeroHostAddr := fmt.Sprintf("%s:%d", getHost("zero1"), zeroBasePort+opts.PortOffset)
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
-		zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+		port := zeroBasePort + opts.PortOffset + getOffset(i)
+		zeroHost := fmt.Sprintf("zero%d", i)
+		zeroHostAddr = fmt.Sprintf("%s:%d", getHost(zeroHost), port)
 		zeros = append(zeros, zeroHostAddr)
 	}
 
@@ -306,7 +321,7 @@ func getAlpha(idx int, raft string) service {
 	if (opts.PortOffset + offset) != 0 {
 		svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+offset)
 	}
-	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", getHost(svc.name), internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
@@ -641,6 +656,8 @@ func main() {
 		"minio service port")
 	cmd.PersistentFlags().StringArrayVar(&opts.MinioEnvFile, "minio_env_file", nil,
 		"minio service env_file")
+	cmd.PersistentFlags().StringVar(&opts.Hostname, "hostname", "",
+		"hostname for the alpha and zero servers")
 	cmd.PersistentFlags().BoolVar(&opts.Cdc, "cdc", false,
 		"run Kafka and push CDC data to it")
 	cmd.PersistentFlags().BoolVar(&opts.CdcConsumer, "cdc_consumer", false,
