@@ -6216,8 +6216,8 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                          }
                      }`,
 			error: "couldn't rewrite mutation addLibraryMember because failed to rewrite mutation" +
-				" payload because interface Member; field refID: id 102 already exists for one of" +
-				" the implementing type of interface",
+				" payload because Type LibraryMember; field refID: id 102 already exists in some" +
+				" other implementing type of interface Member",
 		}, {
 			name: "adding new Cricket Team with upsert returns returns error as given id already exist" +
 				" in other node of type SportsMember which implements same interface",
@@ -6237,8 +6237,8 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                          }
                      }`,
 			error: "couldn't rewrite mutation addCricketTeam because failed to rewrite mutation" +
-				" payload because interface Team; field teamID: id T01 already exists for" +
-				" one of the implementing type of interface",
+				" payload because Type CricketTeam; field teamID: id T01 already exists in some" +
+				" other implementing type of interface Team",
 		}, {
 			name: "adding new Library manager returns error when it try to links to LibraryMember" +
 				" but got id of some other implementing type which implements " +
@@ -6259,8 +6259,8 @@ func addMutationWithIDFieldHavingUniqueArg(t *testing.T) {
                           }
                        }`,
 			error: "couldn't rewrite mutation addLibraryManager because failed to rewrite mutation" +
-				" payload because interface Member; field refID: id 102 already exists for one" +
-				" of the implementing type of interface",
+				" payload because Type LibraryMember; field refID: id 102 already" +
+				" exists in some other implementing type of interface Member",
 		},
 	}
 

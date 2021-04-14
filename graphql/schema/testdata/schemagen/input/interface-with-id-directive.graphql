@@ -1,5 +1,5 @@
 interface LibraryItem {
-    refID: String! @id
+    refID: String! @id(unique:false)
     itemID: String! @id(unique:true)
 }
 

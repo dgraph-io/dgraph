@@ -1195,8 +1195,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because interface Member; field refID: id 101 already exists
-       for one of the implementing type of interface"
+      "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
+       id 101 already exists in some other implementing type of interface Member"
     }
 
 -
@@ -1278,6 +1278,16 @@
         uid
       }
     }
+  dgquerysec: |-
+    query {
+      LibraryMember_1 as LibraryMember_1(func: uid(0x11)) @filter(type(LibraryMember)) {
+        uid
+      }
+    }
+  qnametouid: |-
+    {
+      "LibraryMember_1": "0x11"
+    }
   dgmutations:
     - setjson: |
         {
@@ -1286,15 +1296,9 @@
                 "Intro to Go",
                 "Parallel Programming"
             ],
-            "Member.name": "Alice",
-            "Member.refID": "101",
-            "dgraph.type": [
-                "LibraryMember",
-                "Member"
-            ],
-            "uid": "_:LibraryMember_2"
+            "uid": "uid(LibraryMember_1)"
         }
-
+      cond: "@if(gt(len(LibraryMember_1), 0))"
 -
   name: "Add upsert mutation on implementation type which have inherited @id field with unique argument -2"
   explanation: "node with @id field already exist in one of the implementing type, returns error"
@@ -1336,8 +1340,8 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because interface Member; field refID: id
-       101 already exists for one of the implementing type of interface"
+      "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
+       id 101 already exists in some other implementing type of interface Member"
     }
 
 -
@@ -1459,8 +1463,8 @@
     }
   error2:
     {
-        "message": "failed to rewrite mutation payload because interface Member; field refID: id
-            101 already exists for one of the implementing type of interface"
+        "message": "failed to rewrite mutation payload because Type LibraryMember; field refID:
+         id 101 already exists in some other implementing type of interface Member"
     }
 
 -
@@ -1508,7 +1512,8 @@
     }
   qnametouid: |-
     {
-      "LibraryMember_3": "0x11"
+      "LibraryMember_3": "0x11",
+      "LibraryMember_4": "0x11"
     }
   dgmutations:
     - setjson: |

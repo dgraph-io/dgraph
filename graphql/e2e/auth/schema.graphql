@@ -852,7 +852,7 @@ interface Member @auth(
     query: { rule: "{$ROLE: { eq: \"ADMIN\" } }" },
 ){
     refID: String! @id (unique:true)
-    name:  String! @id
+    name:  String! @id (unique:false)
 }
 
 type SportsMember implements Member {

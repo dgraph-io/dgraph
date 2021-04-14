@@ -1964,11 +1964,11 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 	}
 
 	if hasXIDField {
-		var idWithoutUniqueArgExist bool
+		var idWithoutUniqueArgExists bool
 		for _, fld := range defn.Fields {
 			if hasIDDirective(fld) {
 				if !hasUniqueArg(fld) {
-					idWithoutUniqueArgExist = true
+					idWithoutUniqueArgExists = true
 				}
 				qry.Arguments = append(qry.Arguments, &ast.ArgumentDefinition{
 					Name: fld.Name,
@@ -1979,7 +1979,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[s
 				})
 			}
 		}
-		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExist {
+		if defn.Kind == "INTERFACE" && idWithoutUniqueArgExists {
 			qry.Directives = append(
 				qry.Directives, &ast.Directive{Name: deprecatedDirective,
 					Arguments: ast.ArgumentList{&ast.Argument{Name: "reason",

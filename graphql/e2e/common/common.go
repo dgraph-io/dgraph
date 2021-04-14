@@ -897,7 +897,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple external Id's tests", multipleXidsTests)
 	t.Run("Upsert Mutation Tests", upsertMutationTests)
 	t.Run("Update language tag fields", updateLangTagFields)
-	t.Run("add mutation with @id field and unique directory", addMutationWithIDFieldHavingUniqueArg)
+	t.Run("add mutation with @id field and unique arg", addMutationWithIDFieldHavingUniqueArg)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

@@ -1226,6 +1226,9 @@ func checkXIDExistsQuery(xidVariable, xidString, xidPredicate string, typ schema
 		Children: []*gql.GraphQuery{{Attr: "uid"}},
 	}
 
+	// Below filter is added to generate existence query for interface
+	// If given xid field is inherited from interface and
+	// have unique arg set then we add interface type in filter
 	if inherited != nil {
 		thisFilter := &gql.FilterTree{
 			Func: buildTypeFunc(schema.TypeName(inherited)),
@@ -1432,7 +1435,7 @@ func rewriteObject(
 							} else {
 								// if node is some other type as of xid Field then we can't upsert that
 								// and we returns error
-								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
+								retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
 									interfaceTypDef.Name))
 								return nil, "", retErrors
 							}
@@ -1447,13 +1450,14 @@ func rewriteObject(
 										typ.Name(), xid.Name(), xidString)
 								} else {
 									// This error will only be reported in debug mode.
-									err = x.GqlErrorf("GraphQL debug: Type %s; field %s: id %s already exists",
-										typ.Name(), xid.Name(), xidString)
+									err = x.GqlErrorf("GraphQL debug: Type %s; field %s:"+
+										" id %s already exists", typ.Name(), xid.Name(), xidString)
 								}
 								retErrors = append(retErrors, err)
 								return nil, upsertVar, retErrors
 							}
-							retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
+
+							retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
 								interfaceTypDef.Name))
 							return nil, upsertVar, retErrors
 
@@ -1465,7 +1469,7 @@ func rewriteObject(
 							return asIDReference(ctx, typUid, srcField, srcUID, varGen,
 								mutationType == UpdateWithRemove), upsertVar, nil
 						}
-						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid.Name(),
+						retErrors = append(retErrors, xidErrorForInterfaceType(typ, xidString, xid,
 							interfaceTypDef.Name))
 						return nil, upsertVar, retErrors
 					}
@@ -1703,16 +1707,18 @@ func rewriteObject(
 	return frag, upsertVar, retErrors
 }
 
-func xidErrorForInterfaceType(typ schema.Type, xidString string, xidName,
+func xidErrorForInterfaceType(typ schema.Type, xidString string, xid schema.FieldDefinition,
 	interfaceName string) error {
 	if queryAuthSelector(typ) == nil {
 		// This error will only be reported in debug mode.
-		return x.GqlErrorf("interface %s; field %s: id %s already exists for one of the implementing"+
-			" type of interface", interfaceName, xidName, xidString)
+		return x.GqlErrorf("Type %s; field %s: id %s already exists in some other"+
+			" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
+			xidString, interfaceName)
 
 	}
-	return x.GqlErrorf("GraphQL debug: interface %s; field %s: id %s already exists for "+
-		"one of the implementing type of interface", interfaceName, xidName, xidString)
+	return x.GqlErrorf("Type %s; field %s: id %s already exists in some other"+
+		" implementing type of interface %s", xid.ParentType().Name(), xid.Name(),
+		xidString, interfaceName)
 }
 
 // existenceQueries takes a GraphQL JSON object as obj and creates queries to find
@@ -1793,7 +1799,13 @@ func existenceQueries(
 				if xidMetadata.variableObjMap[variable] != nil {
 					// if we already encountered an object with same xid earlier, and this object is
 					// considered a duplicate of the existing object, then return error.
+
 					if xidMetadata.isDuplicateXid(atTopLevel, variable, obj, srcField) {
+						// TODO(GRAPHQL): Add this error for inherited @id field with unique arg.
+						//  Currently we don't return this error for the nested case when
+						//  at both root and nested level we have same value of @id fields
+						//  which have unique arg set and are inherited from same interface
+						//  but are in different implementing type, we currently treat that as reference.
 						err := errors.Errorf("duplicate XID found: %s", xidString)
 						retErrors = append(retErrors, err)
 						return nil, retErrors

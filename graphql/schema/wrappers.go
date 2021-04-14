@@ -2328,7 +2328,7 @@ func (fd *fieldDefinition) HasIDDirective() bool {
 }
 
 func hasIDDirective(fd *ast.FieldDefinition) bool {
-	id := fd.Directives.ForName("id")
+	id := fd.Directives.ForName(idDirective)
 	return id != nil
 }
 
@@ -3043,8 +3043,9 @@ func SubstituteVarsInBody(jsonTemplate interface{}, variables map[string]interfa
 }
 
 // FieldOriginatedFrom returns the definition of the interface from which given field was inherited.
-// If the field wasn't inherited, but belonged to this type, this type's definition is returned.
-// Otherwise, nil is returned.
+// If the field wasn't inherited, but belonged to this type,then type's definition is returned.
+// Otherwise, nil is returned. Along with type definition we return boolean flag true if field
+// is inherited from interface.
 func (t *astType) FieldOriginatedFrom(fieldName string) (*ast.Definition, bool) {
 	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
