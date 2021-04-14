@@ -345,6 +345,11 @@ type UpdateAuthorPayload {
 	numUids: Int
 }
 
+type UpdateGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	numUids: Int
+}
+
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	numUids: Int
@@ -419,6 +424,7 @@ input AuthorOrder {
 }
 
 input AuthorPatch {
+	name: String
 	pen_name: String
 	posts: [PostRef]
 }
@@ -442,6 +448,10 @@ input GenreOrder {
 	asc: GenreOrderable
 	desc: GenreOrderable
 	then: GenreOrder
+}
+
+input GenrePatch {
+	name: String
 }
 
 input GenreRef {
@@ -487,6 +497,12 @@ input UpdateAuthorInput {
 	remove: AuthorPatch
 }
 
+input UpdateGenreInput {
+	filter: GenreFilter!
+	set: GenrePatch
+	remove: GenrePatch
+}
+
 input UpdatePostInput {
 	filter: PostFilter!
 	set: PostPatch
@@ -521,6 +537,7 @@ type Mutation {
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: [AddGenreInput!]!, upsert: Boolean): AddGenrePayload
+	updateGenre(input: UpdateGenreInput!): UpdateGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 

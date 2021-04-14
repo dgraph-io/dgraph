@@ -336,6 +336,11 @@ type UpdateBookPayload {
 	numUids: Int
 }
 
+type UpdateLibraryItemPayload {
+	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	numUids: Int
+}
+
 type UpdateLibraryPayload {
 	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
 	numUids: Int
@@ -398,6 +403,7 @@ input BookOrder {
 }
 
 input BookPatch {
+	refID: String
 	title: String
 	author: String
 }
@@ -429,6 +435,10 @@ input LibraryItemOrder {
 	then: LibraryItemOrder
 }
 
+input LibraryItemPatch {
+	refID: String
+}
+
 input LibraryItemRef {
 	refID: String!
 }
@@ -453,6 +463,12 @@ input UpdateLibraryInput {
 	remove: LibraryPatch
 }
 
+input UpdateLibraryItemInput {
+	filter: LibraryItemFilter!
+	set: LibraryItemPatch
+	remove: LibraryItemPatch
+}
+
 #######################
 # Generated Query
 #######################
@@ -473,6 +489,7 @@ type Query {
 #######################
 
 type Mutation {
+	updateLibraryItem(input: UpdateLibraryItemInput!): UpdateLibraryItemPayload
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
 	addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload

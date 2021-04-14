@@ -622,7 +622,7 @@ invalid_schemas:
         f1: [String] @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not [String]",
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not [String]",
       "locations":[{"line":2, "column":17}]}
       ]
 
@@ -633,7 +633,7 @@ invalid_schemas:
         f1: Float! @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not Float!",
+      {"message": "Type X; Field f1: with @id directive must be of type String!, Int or Int64, not Float",
       "locations":[{"line":2, "column":15}]}
       ]
 
@@ -644,7 +644,7 @@ invalid_schemas:
         f1: String @id
       }
     errlist: [
-      {"message": "Type X; Field f1: with @id directive must be of type String!, Int! or Int64!, not String",
+      {"message": "Type X; Field f1: with @id directive must be of type String, Int or Int64, not String",
       "locations":[{"line":2, "column":15}]}
       ]
 

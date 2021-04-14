@@ -571,6 +571,7 @@ input CountryOrder {
 }
 
 input CountryPatch {
+	code: String
 	name: String
 }
 
@@ -720,6 +721,7 @@ input UserOrder {
 }
 
 input UserPatch {
+	name: String
 	age: Int
 	reviews: [ReviewsRef]
 }

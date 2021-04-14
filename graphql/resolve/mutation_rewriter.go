@@ -604,6 +604,7 @@ func (urw *UpdateRewriter) Rewrite(
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
+
 	srcUID := MutationQueryVarUID
 	objDel, okDelArg := delArg.(map[string]interface{})
 	objSet, okSetArg := setArg.(map[string]interface{})
@@ -649,6 +650,7 @@ func (urw *UpdateRewriter) Rewrite(
 			}
 		}
 	}
+
 	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
 		queries := upsertQuery
@@ -985,7 +987,6 @@ func RewriteUpsertQueryFromMutation(
 		addTypeFilter(dgQuery[0], m.MutatedType())
 	}
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
-
 	return dgQuery
 }
 
@@ -1409,6 +1410,7 @@ func rewriteObject(
 	}
 
 	xids := typ.XIDFields()
+	var existenceNodeUid string
 	if len(xids) != 0 {
 		// nonExistingXIDs stores number of uids for which there exist no nodes
 		var nonExistingXIDs int
@@ -1440,6 +1442,13 @@ func rewriteObject(
 							// updating this node.
 							upsertVar = variable
 							srcUID = fmt.Sprintf("uid(%s)", variable)
+							if existenceNodeUid == "" {
+								existenceNodeUid = uid
+							} else if existenceNodeUid != uid {
+								err := x.GqlErrorf("multiple nodes found for existence queries,upsert not possible")
+								retErrors = append(retErrors, err)
+								return nil, "", retErrors
+							}
 						} else {
 							// We return an error as we are at top level of non-upsert mutation and the XID exists.
 							// We need to conceal the error because we might be leaking information to the user if it
@@ -1526,15 +1535,16 @@ func rewriteObject(
 					return nil, upsertVar, retErrors
 				}
 			}
-		} else {
-			// In case this is known to be an Upsert. We delete all entries of XIDs
-			// from obj. This is done to prevent any XID entries in the json which is returned
-			// by rewriteObject and ensure that no XID value gets rewritten due to upsert.
-			for _, xid := range xids {
-				// To ensure that xid is not added to the output json in case of upsert
-				delete(obj, xid.Name())
-			}
 		}
+		//else {
+		//	// In case this is known to be an Upsert. We delete all entries of XIDs
+		//	// from obj. This is done to prevent any XID entries in the json which is returned
+		//	// by rewriteObject and ensure that no XID value gets rewritten due to upsert.
+		//	for _, xid := range xids {
+		//		// To ensure that xid is not added to the output json in case of upsert
+		//		delete(obj, xid.Name())
+		//	}
+		//}
 	}
 
 	// This is not an XID reference. This is also not a UID reference.

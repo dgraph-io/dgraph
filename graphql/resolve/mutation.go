@@ -384,6 +384,32 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	for _, upsert := range upserts {
 		req.Query = dgraph.AsString(upsert.Query)
+		if mutation.MutationType() == schema.UpdateMutation {
+			upsertWithoutVar := upsert.Query
+			upsertWithoutVar[0].Var = ""
+			resp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(upsertWithoutVar),
+				ReadOnly: true}, nil)
+			if err != nil {
+				return emptyResult(schema.GQLWrapf(err, "couldn't execute query for mutation %s",
+					mutation.Name())), resolverFailed
+			}
+			ResultMap := make(map[string][]map[string]string)
+			err = json.Unmarshal(resp.Json, &ResultMap)
+			if err != nil {
+				gqlErr := schema.GQLWrapLocationf(
+					err, mutation.Location(), "mutation %s failed", mutation.Name())
+				return emptyResult(gqlErr), resolverFailed
+			}
+			if len(queries) != 0 && len(ResultMap[upsert.Query[0].Attr]) > 1 {
+				return emptyResult(
+
+						schema.GQLWrapf(errors.Errorf("update mutation failed: multiple nodes are selected in filter of,"+
+							"update mutation failed: multiple nodes are selected in filter of update mutation which set @id field"),
+							"mutation %s failed", mutation.Name())),
+					resolverFailed
+			}
+		}
+
 		req.Mutations = upsert.Mutations
 		mutResp, err = mr.executor.Execute(ctx, req, nil)
 		if err != nil {
