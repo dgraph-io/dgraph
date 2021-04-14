@@ -672,7 +672,7 @@ func (n *node) processApplyCh() {
 
 	type P struct {
 		err  error
-		size int
+		hash uint64
 		seen time.Time
 	}
 	previous := make(map[uint64]*P)
@@ -683,10 +683,10 @@ func (n *node) processApplyCh() {
 		for _, entry := range entries {
 			x.AssertTrue(len(entry.Data) > 0)
 
-			// We use the size as a double check to ensure that we're
+			// We use the hash as a double check to ensure that we're
 			// working with the same proposal as before.
-			psz := entry.Size()
-			totalSize += int64(psz)
+			hash := z.MemHash(entry.Data)
+			totalSize += int64(entry.Size())
 
 			var proposal pb.Proposal
 			key := binary.BigEndian.Uint64(entry.Data[:8])
@@ -704,7 +704,7 @@ func (n *node) processApplyCh() {
 
 			var perr error
 			p, ok := previous[key]
-			if ok && p.err == nil && p.size == psz {
+			if ok && p.err == nil && p.hash == hash {
 				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
 					key, proposal.Index)
 				previous[key].seen = time.Now() // Update the ts.
@@ -715,7 +715,7 @@ func (n *node) processApplyCh() {
 				start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
-					p := &P{err: perr, size: psz, seen: time.Now()}
+					p := &P{err: perr, hash: hash, seen: time.Now()}
 					previous[key] = p
 				}
 				if perr != nil {
