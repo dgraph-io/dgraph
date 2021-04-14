@@ -106,7 +106,6 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		// We couldn't service it. So, let's request an extra timestamp for
 		// readonly transactions, if needed.
 	}
-
 	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 ||
 		s.nextLease[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
@@ -127,6 +126,10 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		if num.Val > leaseBandwidth {
 			howMany = num.Val + leaseBandwidth
 		}
+		if howMany < num.Val || maxLease+howMany < maxLease { // check for overflow.
+			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached", typ)
+		}
+
 		var proposal pb.ZeroProposal
 		switch typ {
 		case pb.Num_TXN_TS:
@@ -135,9 +138,6 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 			proposal.MaxUID = maxLease + howMany
 		case pb.Num_NS_ID:
 			proposal.MaxNsID = maxLease + howMany
-		}
-		if maxLease+howMany < maxLease { // check for overflow.
-			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached", typ)
 		}
 		// Blocking propose to get more ids or timestamps.
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
