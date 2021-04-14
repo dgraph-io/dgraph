@@ -177,10 +177,10 @@ func initService(basename string, idx, grpcPort int) service {
 		toPort(grpcPort + 1000), // http port
 	}
 
-	if basename == "alpha" {
+	// If hostname is specified then expose the internal grpc port (7080) of alpha.
+	if basename == "alpha" && opts.Hostname != "" {
 		svc.Ports = append(svc.Ports, toPort(grpcPort-1000))
 	}
-
 	if opts.LocalBin {
 		svc.Volumes = append(svc.Volumes, volume{
 			Type:     "bind",
@@ -312,10 +312,11 @@ func getAlpha(idx int, raft string) service {
 	}
 	zeros := []string{zeroHostAddr}
 	for i := 2; i <= maxZeros; i++ {
+		port := zeroBasePort + opts.PortOffset + getOffset(i)
 		if opts.Hostname != "" {
-			zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, zeroBasePort+opts.PortOffset+getOffset(i))
+			zeroHostAddr = fmt.Sprintf("%s:%d", opts.Hostname, port)
 		} else {
-			zeroHostAddr = fmt.Sprintf("zero%d:%d", i, zeroBasePort+opts.PortOffset+getOffset(i))
+			zeroHostAddr = fmt.Sprintf("zero%d:%d", i, port)
 		}
 		zeros = append(zeros, zeroHostAddr)
 	}
@@ -331,7 +332,6 @@ func getAlpha(idx int, raft string) service {
 	} else {
 		svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	}
-	// svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --zero=%s", zerosOpt)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --expose_trace=true"
