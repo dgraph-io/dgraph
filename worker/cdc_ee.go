@@ -360,7 +360,7 @@ type CDCEvent struct {
 
 type EventMeta struct {
 	RaftIndex uint64 `json:"-"`
-	Namespace []byte `json:"-"`
+	Namespace []byte `json:"namespace"`
 	CommitTs  uint64 `json:"commit_ts"`
 }
 
