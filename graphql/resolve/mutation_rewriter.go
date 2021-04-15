@@ -1412,7 +1412,7 @@ func rewriteObject(
 	xids := typ.XIDFields()
 	var existenceNodeUid string
 	if len(xids) != 0 {
-		// nonExistingXIDs stores number of uids for which there exist no nodes
+		// nonExistingXIDs stores number of xids for which there exist no nodes
 		var nonExistingXIDs int
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
@@ -1513,12 +1513,14 @@ func rewriteObject(
 				}
 			}
 		}
+		// no xid exist in db, create new node either at nested or at root
 		if upsertVar == "" {
+			notPresentXids := 0
 			for _, xid := range xids {
 				if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 					// This is handled in the for loop above
 					continue
-				} else if mutationType == Add || mutationType == AddWithUpsert || !atTopLevel {
+				} else {
 					// When we reach this stage we are absoulutely sure that this is not a reference and is
 					// a new node and one of the XIDs is missing.
 					// There are two possibilities here:
@@ -1531,20 +1533,14 @@ func rewriteObject(
 					//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 					//    with the function.
 					err := errors.Errorf("field %s cannot be empty", xid.Name())
-					retErrors = append(retErrors, err)
-					return nil, upsertVar, retErrors
+					notPresentXids++
+					if (mutationType == AddWithUpsert && notPresentXids == len(xids)) || !atTopLevel {
+						retErrors = append(retErrors, err)
+						return nil, upsertVar, retErrors
+					}
 				}
 			}
 		}
-		//else {
-		//	// In case this is known to be an Upsert. We delete all entries of XIDs
-		//	// from obj. This is done to prevent any XID entries in the json which is returned
-		//	// by rewriteObject and ensure that no XID value gets rewritten due to upsert.
-		//	for _, xid := range xids {
-		//		// To ensure that xid is not added to the output json in case of upsert
-		//		delete(obj, xid.Name())
-		//	}
-		//}
 	}
 
 	// This is not an XID reference. This is also not a UID reference.

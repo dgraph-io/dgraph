@@ -393,6 +393,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				return emptyResult(schema.GQLWrapf(err, "couldn't execute query for mutation %s",
 					mutation.Name())), resolverFailed
 			}
+
+			// we will execute upsert query to see if it results into multiple xids
 			ResultMap := make(map[string][]map[string]string)
 			err = json.Unmarshal(resp.Json, &ResultMap)
 			if err != nil {
@@ -400,11 +402,13 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					err, mutation.Location(), "mutation %s failed", mutation.Name())
 				return emptyResult(gqlErr), resolverFailed
 			}
+
+			// if there are existence queries for update query it means we
+			// are setting an xid in set
 			if len(queries) != 0 && len(ResultMap[upsert.Query[0].Attr]) > 1 {
 				return emptyResult(
-
-						schema.GQLWrapf(errors.Errorf("update mutation failed: multiple nodes are selected in filter of,"+
-							"update mutation failed: multiple nodes are selected in filter of update mutation which set @id field"),
+						schema.GQLWrapf(errors.Errorf("multiple nodes are selected"+
+							" in filter while updating @id field "),
 							"mutation %s failed", mutation.Name())),
 					resolverFailed
 			}
