@@ -19,10 +19,20 @@ package ee
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/spf13/pflag"
 )
+
+// Keys holds the configuration for ACL and encryption.
+type Keys struct {
+	AclKey        x.Sensitive
+	AclAccessTtl  time.Duration
+	AclRefreshTtl time.Duration
+	EncKey        x.Sensitive
+}
 
 const (
 	flagAcl           = "acl"
@@ -60,7 +70,7 @@ var (
 		flagAclAccessTtl, "6h",
 		flagAclRefreshTtl, "30d",
 		flagAclSecretFile, "")
-	encDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
+	EncDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
 )
 
 func vaultDefaults(aclEnabled, encEnabled bool) string {
@@ -126,12 +136,12 @@ func registerAclFlag(flag *pflag.FlagSet) {
 }
 
 func registerEncFlag(flag *pflag.FlagSet) {
-	helpText := z.NewSuperFlagHelp(encDefaults).
+	helpText := z.NewSuperFlagHelp(EncDefaults).
 		Head("[Enterprise Feature] Encryption At Rest options").
 		Flag("key-file", "The file that stores the symmetric key of length 16, 24, or 32 bytes."+
 			"The key size determines the chosen AES cipher (AES-128, AES-192, and AES-256 respectively).").
 		String()
-	flag.String(flagEnc, encDefaults, helpText)
+	flag.String(flagEnc, EncDefaults, helpText)
 }
 
 func BuildEncFlag(filename string) string {
