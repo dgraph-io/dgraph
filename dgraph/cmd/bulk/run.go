@@ -142,9 +142,13 @@ func run() {
 
 	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
 		FromSuperFlag(Bulk.Conf.GetString("badger"))
+	keys, err := ee.GetKeys(Bulk.Conf)
+	x.Check(err)
+
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
+		EncryptionKey:    keys.EncKey,
 		SchemaFile:       Bulk.Conf.GetString("schema"),
 		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:        Bulk.Conf.GetBool("encrypted"),
@@ -177,7 +181,6 @@ func run() {
 		os.Exit(0)
 	}
 
-	_, opt.EncryptionKey = ee.GetKeys(Bulk.Conf)
 	if len(opt.EncryptionKey) == 0 {
 		if opt.Encrypted || opt.EncryptedOut {
 			fmt.Fprint(os.Stderr, "Must use --encryption or vault option(s).\n")
@@ -187,11 +190,13 @@ func run() {
 		requiredFlags := Bulk.Cmd.Flags().Changed("encrypted") &&
 			Bulk.Cmd.Flags().Changed("encrypted_out")
 		if !requiredFlags {
-			fmt.Fprint(os.Stderr, "Must specify --encrypted and --encrypted_out when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must specify --encrypted and --encrypted_out when providing encryption key.\n")
 			os.Exit(1)
 		}
 		if !opt.Encrypted && !opt.EncryptedOut {
-			fmt.Fprint(os.Stderr, "Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
+			fmt.Fprint(os.Stderr,
+				"Must set --encrypted and/or --encrypted_out to true when providing encryption key.\n")
 			os.Exit(1)
 		}
 
