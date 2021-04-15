@@ -22,12 +22,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"go.uber.org/zap"
 	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
@@ -1838,11 +1839,14 @@ func (n *node) restartAsStandaloneNode() error {
 
 			retryTimes++
 			if retryTimes > 5 {
-				glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero failed, try next member, current member need user remove manually!!! remove member: [%v], retry times: %d", removeMember, retryTimes)
+				glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero failed after"+
+					" mutiple attempts. remove member: [%v], retry times: %d", removeMember,
+					retryTimes)
 				break
 			}
 			time.Sleep(1 * time.Second)
-			glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero, remove member: [%v], retry times: %d", removeMember, retryTimes)
+			glog.Errorf("invoke removeAlphaNodeNotifyZeroLeader() to zero, remove member: [%v],"+
+				" retry times: %d", removeMember, retryTimes)
 		}
 	}
 
