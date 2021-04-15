@@ -433,6 +433,11 @@
       "list": true
     },
     {
+      "predicate": "Person1.closeFriends",
+      "type": "uid",
+      "list": true
+    },
+    {
       "predicate": "Person1.name",
       "type": "string"
     },
@@ -1119,6 +1124,9 @@
         },
         {
           "name": "Person1.friends"
+        },
+        {
+          "name": "Person1.closeFriends"
         }
       ],
       "name": "Person1"

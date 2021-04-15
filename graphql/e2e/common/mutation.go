@@ -4143,7 +4143,7 @@ func intWithList(t *testing.T) {
 
 }
 
-func nestedAddMutationWithHasInverse(t *testing.T) {
+func nestedAddMutationWithMultipleLinkedListsAndHasInverse(t *testing.T) {
 	params := &GraphQLParams{
 		Query: `mutation addPerson1($input: [AddPerson1Input!]!) {
             addPerson1(input: $input) {
@@ -4151,6 +4151,9 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
                     name
                     friends {
                         name
+						closeFriends {
+							name
+						}
                         friends {
                             name
                         }
@@ -4186,6 +4189,7 @@ func nestedAddMutationWithHasInverse(t *testing.T) {
             {
               "friends": [
                 {
+				  "closeFriends": [],
                   "friends": [
                     {
                       "name": "Or"
