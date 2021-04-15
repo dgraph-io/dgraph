@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -604,7 +605,6 @@ func (urw *UpdateRewriter) Rewrite(
 	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw, MutationQueryVar, m.Name(), "")
-
 	srcUID := MutationQueryVarUID
 	objDel, okDelArg := delArg.(map[string]interface{})
 	objSet, okSetArg := setArg.(map[string]interface{})
@@ -650,7 +650,6 @@ func (urw *UpdateRewriter) Rewrite(
 			}
 		}
 	}
-
 	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
 		queries := upsertQuery
@@ -987,6 +986,7 @@ func RewriteUpsertQueryFromMutation(
 		addTypeFilter(dgQuery[0], m.MutatedType())
 	}
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
+
 	return dgQuery
 }
 
@@ -1411,8 +1411,10 @@ func rewriteObject(
 
 	xids := typ.XIDFields()
 	var existenceNodeUid string
+	nestedLevel := 0
 	if len(xids) != 0 {
 		// nonExistingXIDs stores number of xids for which there exist no nodes
+		existenceXids := existingXidsInObject(xids, obj, typ, varGen, idExistence)
 		var nonExistingXIDs int
 		// xidVariables stores the variable names for each XID.
 		var xidVariables []string
@@ -1429,11 +1431,18 @@ func rewriteObject(
 				// 3. The queryResult UID does not exist. But, this could be a reference to an XID
 				//    node added during the mutation rewriting. This is handled by adding the new blank UID
 				//    to existenceQueryResult.
-
 				// Get whether node with XID exists or not from existenceQueriesResult
 				if uid, ok := idExistence[variable]; ok {
 					// node with XID exists. This is a reference.
 					// We return an error if this is at toplevel. Else, we return the ID reference
+					if existenceNodeUid == "" {
+						existenceNodeUid = uid
+					} else if existenceNodeUid != uid {
+						existenceError := x.GqlErrorf("multiple nodes found for existence queries,updation not possible")
+						retErrors = append(retErrors, existenceError)
+						return nil, "", retErrors
+					}
+
 					if atTopLevel {
 						if mutationType == AddWithUpsert {
 							// This means we are in Add Mutation with upsert: true.
@@ -1442,13 +1451,6 @@ func rewriteObject(
 							// updating this node.
 							upsertVar = variable
 							srcUID = fmt.Sprintf("uid(%s)", variable)
-							if existenceNodeUid == "" {
-								existenceNodeUid = uid
-							} else if existenceNodeUid != uid {
-								err := x.GqlErrorf("multiple nodes found for existence queries,upsert not possible")
-								retErrors = append(retErrors, err)
-								return nil, "", retErrors
-							}
 						} else {
 							// We return an error as we are at top level of non-upsert mutation and the XID exists.
 							// We need to conceal the error because we might be leaking information to the user if it
@@ -1466,7 +1468,10 @@ func rewriteObject(
 					} else {
 						// As we are not at top level, we return the XID reference. We don't update this node
 						// further.
-						return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), upsertVar, nil
+						nestedLevel++
+						if nestedLevel == existenceXids {
+							return asIDReference(ctx, uid, srcField, srcUID, varGen, mutationType == UpdateWithRemove), upsertVar, nil
+						}
 					}
 				} else {
 
@@ -1513,14 +1518,15 @@ func rewriteObject(
 				}
 			}
 		}
-		// no xid exist in db, create new node either at nested or at root
 		if upsertVar == "" {
-			notPresentXids := 0
 			for _, xid := range xids {
+				glog.Infof("%s--%s", xid.Name(), xid.Type().String())
+				xidType := xid.Type().String()
 				if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
 					// This is handled in the for loop above
 					continue
-				} else {
+				} else if (mutationType == Add || mutationType == AddWithUpsert || !atTopLevel) && (xidType == "String!" ||
+					xidType == "Int!" || xidType == "Int64!") {
 					// When we reach this stage we are absoulutely sure that this is not a reference and is
 					// a new node and one of the XIDs is missing.
 					// There are two possibilities here:
@@ -1532,12 +1538,10 @@ func rewriteObject(
 					//    In this case this is not an error as the UID at top level of Update Mutation is
 					//    referenced as uid(x) in mutations. We don't throw an error in this case and continue
 					//    with the function.
+
 					err := errors.Errorf("field %s cannot be empty", xid.Name())
-					notPresentXids++
-					if (mutationType == AddWithUpsert && notPresentXids == len(xids)) || !atTopLevel {
-						retErrors = append(retErrors, err)
-						return nil, upsertVar, retErrors
-					}
+					retErrors = append(retErrors, err)
+					return nil, upsertVar, retErrors
 				}
 			}
 		}
@@ -2346,4 +2350,20 @@ func extractVal(xidVal interface{}, xidName, typeName string) (string, error) {
 		return "", fmt.Errorf("encountered an XID %s with %s that isn't"+
 			"allowed as Xid", xidName, typeName)
 	}
+}
+
+func existingXidsInObject(xids []schema.FieldDefinition, obj map[string]interface{}, typ schema.Type,
+	varGen *VariableGenerator, idExistence map[string]string) int {
+	var existingXids int
+	for _, xid := range xids {
+		if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+			xidString, _ := extractVal(xidVal, xid.Name(), xid.Type().Name())
+			variable := varGen.Next(typ, xid.Name(), xidString, false)
+			if _, ok := idExistence[variable]; ok {
+				existingXids++
+			}
+		}
+
+	}
+	return existingXids
 }
