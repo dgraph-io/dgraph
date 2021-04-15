@@ -25,41 +25,38 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
 var (
-	Tasks   tasks
-	taskRng *rand.Rand
+	Tasks tasks
 )
 
 func InitTasks() {
-	Tasks = newTasks()
-	taskRng = rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
-
+	// #nosec G404: weak RNG
+	Tasks = tasks{
+		queue:  make(chan task, 16),
+		log:    z.NewTree(),
+		raftId: State.WALstore.Uint(raftwal.RaftId),
+		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
 	Tasks.deleteExpired()
 	Tasks.cancelQueued()
-
 	go Tasks.run()
 }
 
 type tasks struct {
-	queue chan task
-	log   *z.Tree
-}
-
-func newTasks() tasks {
-	const maxQueueSize = 16
-	return tasks{
-		queue: make(chan task, maxQueueSize),
-		log:   z.NewTree(),
-	}
+	queue  chan task
+	log    *z.Tree
+	raftId uint64
+	rng    *rand.Rand
 }
 
 // cancelQueuedTasks marks all queued tasks in the log as canceled.
-func (t *tasks) cancelQueued() {
+func (t tasks) cancelQueued() {
 	t.log.IterateKV(func(key, val uint64) uint64 {
 		if getTaskStatus(val) == taskStatusQueued {
 			return newTaskValue(taskStatusCanceled)
@@ -69,7 +66,7 @@ func (t *tasks) cancelQueued() {
 }
 
 // deleteExpired deletes all expired tasks in the log.
-func (t *tasks) deleteExpired() {
+func (t tasks) deleteExpired() {
 	const ttl = 7 * 24 * time.Hour // 1 week
 	minTs := time.Now().UTC().Add(-ttl).Unix()
 	minKey := uint64(minTs) << 32
@@ -87,9 +84,9 @@ func (t tasks) run() {
 		case task = <-t.queue:
 		}
 
-		value := t.log.Get(task.key)
 		// Fetch the task from the log. If the task isn't found, this means it has expired (older
 		// than taskTtl.
+		value := t.log.Get(task.key)
 		if value == 0 {
 			glog.Errorf("task %d is expired, skipping", task.key)
 			continue
@@ -99,7 +96,7 @@ func (t tasks) run() {
 		if status := getTaskStatus(value); status != taskStatusQueued {
 			glog.Errorf("task %d is set to %s, skipping", task.key, status)
 		}
-		// Change the task status to "running".
+		// Change the task status to RUNNING.
 		t.log.Set(task.key, newTaskValue(taskStatusRunning))
 
 		// Run the task.
@@ -112,7 +109,7 @@ func (t tasks) run() {
 			glog.Infof("task %d: %s", task.key, status)
 		}
 
-		// Change the task status to "complete" / "error".
+		// Change the task status to SUCCESS / ERROR.
 		t.log.Set(task.key, newTaskValue(status))
 	}
 }
@@ -129,13 +126,13 @@ func (t tasks) QueueExport(req *pb.ExportRequest) (int64, error) {
 func (t tasks) queueTask(req interface{}) (int64, error) {
 	task := task{req: req}
 	for attempt := 0; ; attempt++ {
-		task.key = newTaskKey()
+		task.key = t.newKey()
 		if t.log.Get(task.key) == 0 {
 			break
 		}
 		// Unable to generate a unique random number.
 		if attempt >= 8 {
-			taskRng.Seed(time.Now().UnixNano())
+			t.rng.Seed(time.Now().UnixNano())
 			return 0, fmt.Errorf("unable to generate unique task ID")
 		}
 	}
@@ -148,6 +145,12 @@ func (t tasks) queueTask(req interface{}) (int64, error) {
 	default:
 		return 0, fmt.Errorf("too many pending tasks, please try again later")
 	}
+}
+
+// newTaskKey returns a new task key in the range [1, math.MaxInt64].
+func (t tasks) newKey() uint64 {
+	rnd := t.rng.Int31()
+	return uint64(rnd)<<32 | uint64(t.raftId)
 }
 
 type task struct {
@@ -176,16 +179,10 @@ func (t task) run() error {
 	return nil
 }
 
-// newTaskKey returns a new task key in the range [1, math.MaxInt64].
-func newTaskKey() uint64 {
-	rnd := taskRng.Int31()
-	raftId := 1 // TODO(ajeet)
-	return uint64(rnd)<<32 | uint64(raftId)
-}
-
 // newTaskValue returns a new task value with the given status.
 func newTaskValue(status taskStatus) uint64 {
 	now := time.Now().UTC().Unix()
+	// It's safe to use a 32-bit timestamp, this will only overflow on 2106-02-07.
 	return uint64(now)<<32 | uint64(status)
 }
 
@@ -197,6 +194,8 @@ func getTaskStatus(value uint64) taskStatus {
 type taskStatus uint64
 
 const (
+	// newTaskValue must never return zero, since z.Tree does not support zero values.
+	// Starting taskStatus at 1 guarantees this.
 	taskStatusQueued taskStatus = iota + 1
 	taskStatusRunning
 	taskStatusCanceled
