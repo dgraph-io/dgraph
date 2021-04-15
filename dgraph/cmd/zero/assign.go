@@ -106,38 +106,39 @@ func (s *Server) lease(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error
 		// We couldn't service it. So, let's request an extra timestamp for
 		// readonly transactions, if needed.
 	}
-
-	// If we're asking for more ids than the standard lease bandwidth, then we
-	// should set howMany generously, so we can service future requests from
-	// memory, without asking for another lease. Only used if we need to renew
-	// our lease.
-	howMany := leaseBandwidth
-	if num.Val > leaseBandwidth {
-		howMany = num.Val + leaseBandwidth
-	}
-
 	if s.nextLease[pb.Num_UID] == 0 || s.nextLease[pb.Num_TXN_TS] == 0 ||
 		s.nextLease[pb.Num_NS_ID] == 0 {
 		return nil, errors.New("Server not initialized")
 	}
 
-	var proposal pb.ZeroProposal
-
 	// Calculate how many ids do we have available in memory, before we need to
 	// renew our lease.
 	maxLease := s.maxLease(typ)
 	available := maxLease - s.nextLease[typ] + 1
-	switch typ {
-	case pb.Num_TXN_TS:
-		proposal.MaxTxnTs = maxLease + howMany
-	case pb.Num_UID:
-		proposal.MaxUID = maxLease + howMany
-	case pb.Num_NS_ID:
-		proposal.MaxNsID = maxLease + howMany
-	}
 
 	// If we have less available than what we need, we need to renew our lease.
 	if available < num.Val+1 { // +1 for a potential readonly ts.
+		// If we're asking for more ids than the standard lease bandwidth, then we
+		// should set howMany generously, so we can service future requests from
+		// memory, without asking for another lease. Only used if we need to renew
+		// our lease.
+		howMany := leaseBandwidth
+		if num.Val > leaseBandwidth {
+			howMany = num.Val + leaseBandwidth
+		}
+		if howMany < num.Val || maxLease+howMany < maxLease { // check for overflow.
+			return &emptyAssignedIds, errors.Errorf("Cannot lease %s as the limit has reached", typ)
+		}
+
+		var proposal pb.ZeroProposal
+		switch typ {
+		case pb.Num_TXN_TS:
+			proposal.MaxTxnTs = maxLease + howMany
+		case pb.Num_UID:
+			proposal.MaxUID = maxLease + howMany
+		case pb.Num_NS_ID:
+			proposal.MaxNsID = maxLease + howMany
+		}
 		// Blocking propose to get more ids or timestamps.
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
