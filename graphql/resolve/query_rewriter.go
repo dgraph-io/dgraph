@@ -310,6 +310,13 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*gql.GraphQuery 
 					// var(func: type(Tweets)) {
 					//        scoreVar as Tweets.score
 					// }
+
+					// Add type filter in case the Dgraph predicate for which the aggregate
+					// field belongs is a reverse edge
+					if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+						addTypeFilter(child, f.ConstructedFor())
+					}
+
 					mainQuery.Children = append(mainQuery.Children, child)
 					isAggregateVarAdded[constructedForField] = true
 				}
@@ -1148,6 +1155,12 @@ func buildAggregateFields(
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
 	_ = addFilter(mainField, constructedForType, fieldFilter)
 
+	// Add type filter in case the Dgraph predicate for which the aggregate
+	// field belongs to is a reverse edge
+	if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+		addTypeFilter(mainField, f.ConstructedFor())
+	}
+
 	// isAggregateVarAdded is a map from field name to boolean. It is used to
 	// ensure that a field is added to Var query at maximum once.
 	// Eg. Even if scoreMax and scoreMin are queried, the corresponding field will
@@ -1165,6 +1178,13 @@ func buildAggregateFields(
 			}
 			// Add filter to count aggregation field.
 			_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+
+			// Add type filter in case the Dgraph predicate for which the aggregate
+			// field belongs to is a reverse edge
+			if strings.HasPrefix(constructedForDgraphPredicate, "~") {
+				addTypeFilter(mainField, f.ConstructedFor())
+			}
+
 			aggregateChildren = append(aggregateChildren, aggregateChild)
 			continue
 		}
@@ -1363,6 +1383,12 @@ func addSelectionSetFrom(
 		if includeField := addFilter(child, f.Type(), filter); !includeField {
 			continue
 		}
+
+		// Add type filter in case the Dgraph predicate is a reverse edge
+		if strings.HasPrefix(f.DgraphPredicate(), "~") {
+			addTypeFilter(child, f.Type())
+		}
+
 		addOrder(child, f)
 		addPagination(child, f)
 		addCascadeDirective(child, f)
