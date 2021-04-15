@@ -311,14 +311,14 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	m.schema.checkAndSetInitialSchema(nq.Namespace)
 
 	// Appropriate schema must exist for the nquad's namespace by this time.
-	attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+	de.Attr = x.NamespaceAttr(de.Namespace, de.Attr)
 	fwd, rev := m.createPostings(nq, de)
-	shard := m.state.shards.shardFor(attr)
-	key := x.DataKey(attr, sid)
+	shard := m.state.shards.shardFor(de.Attr)
+	key := x.DataKey(de.Attr, sid)
 	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(attr, oid)
+		key = x.ReverseKey(de.Attr, oid)
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
@@ -374,7 +374,7 @@ func (m *mapper) lookupUid(xid string, ns uint64) uint64 {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
 
-	m.schema.validateType(de, nq.Namespace, nq.ObjectValue == nil)
+	m.schema.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
 	sch := m.schema.getSchema(x.NamespaceAttr(nq.GetNamespace(), nq.GetPredicate()))
@@ -399,7 +399,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.schema.validateType(de, nq.Namespace, true)
+	m.schema.validateType(de, true)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
