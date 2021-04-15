@@ -3375,7 +3375,6 @@ valid_schemas:
         name: String
       }
 
-<<<<<<< HEAD
   - name: "A valid federation schema"
     input: |
       type Review {
