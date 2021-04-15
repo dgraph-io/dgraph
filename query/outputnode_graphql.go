@@ -449,7 +449,8 @@ func (genc *graphQLEncoder) encode(encInp encodeInput) bool {
 		// 2. We are at the end of json encoding process and there is no fastjson node ahead (next == nil)
 		// 3. We are at the end of list writing and the type of next fastJSON node is not equal to
 		//    type of curr fastJSON node.
-		// 4. The current selection set which we are encoding is not equal to the type of current fastJSON node.
+		// 4. The current selection set which we are encoding is not equal to the type of
+		//    current fastJSON node.
 		if !curSelectionIsDgList || next == nil ||
 			genc.getAttr(cur) != genc.getAttr(next) ||
 			curSelection.DgraphAlias() != genc.attrForID(genc.getAttr(cur)) {
