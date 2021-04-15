@@ -290,12 +290,14 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 // BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
 // ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
-	var curMax uint64
-	bump := func(num uint64) bool {
-		curMax = atomic.LoadUint64(&m.maxUidSeen)
-		if uid <= curMax {
-			return true
-		}
+	curMax := atomic.LoadUint64(&m.maxUidSeen)
+	if uid <= curMax {
+		return
+	}
+
+	for {
+		glog.V(1).Infof("Bumping up to %v", uid)
+		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		ctx = m.attachNamespace(ctx)
 		assigned, err := m.zc.AssignIds(ctx, &pb.Num{Val: num, Type: pb.Num_UID})
@@ -303,27 +305,13 @@ func (m *XidMap) BumpTo(uid uint64) {
 		if err == nil {
 			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
 			m.updateMaxSeen(assigned.EndId)
-			return true
+			return
 		}
 		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
 		if x.IsJwtExpired(err) {
 			if err := m.relogin(); err != nil {
 				glog.Errorf("While trying to relogin: %v", err)
 			}
-		}
-		return false
-	}
-
-	for {
-		glog.V(1).Infof("Bumping up to %v", uid)
-		if ok := bump(1); !ok {
-			// Before bumping the uids to a large number, update the maxSeenUid by leasing a
-			// single uid to check if cluster is already above the required level.
-			continue
-		}
-		num := x.Max(uid-curMax, 1e4)
-		if ok := bump(num); ok {
-			return
 		}
 	}
 }
